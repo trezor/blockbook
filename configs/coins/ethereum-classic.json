@@ -14,7 +14,8 @@
         "blockbook_public": 9137
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 25
     },
     "backend": {
@@ -27,7 +28,7 @@
         "verification_source": "2382a15a53ce364cb41d3985ff3c2941392d8898c6f869666a8d7d7914a5748a",
         "extract_command": "unzip -d backend",
         "exclude_files": [],
-        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --classic --ipcdisable --txlookuplimit 0 --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --http --http.port {{.Ports.BackendHttp}} --http.addr 127.0.0.1 --http.corsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --classic --ipcdisable --txlookuplimit 0 --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr {{.Env.RPCBindHost}} --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --http --http.port {{.Ports.BackendHttp}} --http.addr {{.Env.RPCBindHost}} --http.corsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",

@@ -88,6 +88,7 @@ func (b *EthereumRPC) everstakePoolData(addr, contract, name string) (*bchain.St
 	allZeros := true
 
 	value, err := b.everstakeContractCallSimpleNumeric(everstakePendingBalanceOfMethodSignature, addr, contract)
+	b.observeEthCallStakingPool("pending_balance")
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +96,7 @@ func (b *EthereumRPC) everstakePoolData(addr, contract, name string) (*bchain.St
 	allZeros = allZeros && isZeroBigInt(value)
 
 	value, err = b.everstakeContractCallSimpleNumeric(everstakePendingDepositedBalanceOfMethodSignature, addr, contract)
+	b.observeEthCallStakingPool("pending_deposited_balance")
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +104,7 @@ func (b *EthereumRPC) everstakePoolData(addr, contract, name string) (*bchain.St
 	allZeros = allZeros && isZeroBigInt(value)
 
 	value, err = b.everstakeContractCallSimpleNumeric(everstakeDepositedBalanceOfMethodSignature, addr, contract)
+	b.observeEthCallStakingPool("deposited_balance")
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +112,7 @@ func (b *EthereumRPC) everstakePoolData(addr, contract, name string) (*bchain.St
 	allZeros = allZeros && isZeroBigInt(value)
 
 	data, err := b.everstakeBalanceTypeContractCall(everstakeWithdrawRequestMethodSignature, addr, contract)
+	b.observeEthCallStakingPool("withdraw_request")
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +130,7 @@ func (b *EthereumRPC) everstakePoolData(addr, contract, name string) (*bchain.St
 	allZeros = allZeros && isZeroBigInt(value)
 
 	value, err = b.everstakeContractCallSimpleNumeric(everstakeRestakedRewardOfMethodSignature, addr, contract)
+	b.observeEthCallStakingPool("restaked_reward")
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +138,7 @@ func (b *EthereumRPC) everstakePoolData(addr, contract, name string) (*bchain.St
 	allZeros = allZeros && isZeroBigInt(value)
 
 	value, err = b.everstakeContractCallSimpleNumeric(everstakeAutocompoundBalanceOfMethodSignature, addr, contract)
+	b.observeEthCallStakingPool("autocompound_balance")
 	if err != nil {
 		return nil, err
 	}

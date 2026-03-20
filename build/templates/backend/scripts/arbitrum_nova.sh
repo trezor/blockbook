@@ -9,6 +9,7 @@ DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
 
 NITRO_BIN=$INSTALL_DIR/nitro
 
+# Bind RPC endpoints based on BB_RPC_BIND_HOST_* so defaults remain local unless explicitly overridden.
 $NITRO_BIN \
   --chain.name nova \
   --init.latest pruned \
@@ -17,12 +18,12 @@ $NITRO_BIN \
   --persistent.chain $DATA_DIR \
   --parent-chain.connection.url http://127.0.0.1:8136 \
   --parent-chain.blob-client.beacon-url http://127.0.0.1:7536 \
-  --http.addr 127.0.0.1 \
+  --http.addr {{.Env.RPCBindHost}} \
   --http.port {{.Ports.BackendHttp}} \
   --http.api eth,net,web3,debug,txpool,arb \
   --http.vhosts '*' \
   --http.corsdomain '*' \
-  --ws.addr 127.0.0.1 \
+  --ws.addr {{.Env.RPCBindHost}} \
   --ws.api eth,net,web3,debug,txpool,arb \
   --ws.port {{.Ports.BackendRPC}} \
   --ws.origins '*' \

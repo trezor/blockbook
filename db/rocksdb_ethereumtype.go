@@ -15,6 +15,7 @@ import (
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/common"
 )
 
 const InternalTxIndexOffset = 1
@@ -418,7 +419,16 @@ func addToContract(c *unpackedAddrContract, contractIndex int, index int32, cont
 		}
 	}
 	if transfer.Standard == bchain.FungibleToken {
-		aggregate(c.Value.get(), &transfer.Value)
+		// Skip ERC20 balance aggregation; ensure a zero value is available for packing.
+		if c.Value.Value == nil { // no decoded bigint yet; normalize before first use
+			if len(c.Value.Slice) != 0 { // packed value exists; drop it so we don't re-pack stale data
+				c.Value.Slice = nil
+			}
+			c.Value.Value = new(big.Int) // initialize zero value
+		} else if len(c.Value.Slice) != 0 || c.Value.Value.Sign() != 0 { // packed or non-zero decoded value present; force zero
+			c.Value.Slice = nil
+			c.Value.Value.SetUint64(0)
+		}
 	} else if transfer.Standard == bchain.NonFungibleToken {
 		if index < 0 {
 			c.Ids.remove(transfer.Value)
@@ -465,13 +475,14 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		// do not store contracts for 0x0000000000000000000000000000000000000000 address
 		if !isZeroAddress(addrDesc) {
 			// locate the contract and set i to the index in the array of contracts
-			contractIndex, found := findContractInAddressContracts(contract, ac.Contracts)
+			contractIndex, found := ac.findContractIndex(addrDesc, contract, d.hotAddrTracker)
 			if !found {
 				contractIndex = len(ac.Contracts)
 				ac.Contracts = append(ac.Contracts, unpackedAddrContract{
 					Contract: contract,
 					Standard: transfer.Standard,
 				})
+				ac.addContractIndex(contract, contractIndex)
 			}
 			c := &ac.Contracts[contractIndex]
 			index = addToContract(c, contractIndex, index, contract, transfer, addTxCount)
@@ -678,6 +689,9 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 }
 
 func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts) ([]ethBlockTx, error) {
+	if d.hotAddrTracker != nil {
+		d.hotAddrTracker.BeginBlock()
+	}
 	blockTxs := make([]ethBlockTx, len(block.Txs))
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
@@ -714,6 +728,9 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	defer wb.Destroy()
 	if d.chainParser.GetChainType() != bchain.ChainEthereumType {
 		return errors.New("Unsupported chain type")
+	}
+	if d.hotAddrTracker != nil {
+		d.hotAddrTracker.BeginBlock()
 	}
 
 	addresses := make(addressesMap)
@@ -1346,7 +1363,7 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 				}
 			}
 		} else {
-			contractIndex, found := findContractInAddressContracts(btxContract.contract, addrContracts.Contracts)
+			contractIndex, found := addrContracts.findContractIndex(addrDesc, btxContract.contract, nil)
 			if found {
 				addrContract := &addrContracts.Contracts[contractIndex]
 				if addrContract.Txs > 0 {
@@ -1354,6 +1371,7 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 					if addrContract.Txs == 0 {
 						// no transactions, remove the contract
 						addrContracts.Contracts = append(addrContracts.Contracts[:contractIndex], addrContracts.Contracts[contractIndex+1:]...)
+						addrContracts.markContractIndexDirty()
 					} else {
 						// update the values of the contract, reverse the direction
 						var index int32
@@ -1593,6 +1611,74 @@ type unpackedAddrContracts struct {
 	NonContractTxs uint
 	InternalTxs    uint
 	Contracts      []unpackedAddrContract
+	// contractIndex lazily maps contract address -> index for large contract lists.
+	contractIndex      map[contractIndexKey]int
+	contractIndexDirty bool
+}
+
+type contractIndexKey [eth.EthereumTypeAddressDescriptorLen]byte
+
+func contractIndexKeyFromDesc(addr bchain.AddressDescriptor) (contractIndexKey, bool) {
+	var key contractIndexKey
+	if len(addr) != len(key) {
+		return key, false
+	}
+	copy(key[:], addr)
+	return key, true
+}
+
+func (acs *unpackedAddrContracts) rebuildContractIndex() {
+	m := make(map[contractIndexKey]int, len(acs.Contracts))
+	for i := range acs.Contracts {
+		if key, ok := contractIndexKeyFromDesc(acs.Contracts[i].Contract); ok {
+			m[key] = i
+		}
+	}
+	acs.contractIndex = m
+	acs.contractIndexDirty = false
+}
+
+func (acs *unpackedAddrContracts) findContractIndex(addrDesc, contract bchain.AddressDescriptor, hot *addressHotness) (int, bool) {
+	useIndex := false
+	if hot != nil && len(acs.Contracts) >= hot.minContracts {
+		// Rule B: use the index only for addresses that are "hot" in this block,
+		// so mid-size lists stay on a cheap linear scan unless we see repeated lookups.
+		if addrKey, ok := addressHotnessKeyFromDesc(addrDesc); ok {
+			useIndex = hot.ShouldUseIndex(addrKey, len(acs.Contracts))
+		}
+	}
+	if useIndex {
+		if acs.contractIndex == nil || acs.contractIndexDirty {
+			acs.rebuildContractIndex()
+		}
+		if acs.contractIndex != nil {
+			if key, ok := contractIndexKeyFromDesc(contract); ok {
+				if idx, found := acs.contractIndex[key]; found {
+					return idx, true
+				}
+				return 0, false
+			}
+		}
+	}
+	return findContractInAddressContracts(contract, acs.Contracts)
+}
+
+func (acs *unpackedAddrContracts) addContractIndex(contract bchain.AddressDescriptor, idx int) {
+	if acs.contractIndex == nil || acs.contractIndexDirty {
+		return
+	}
+	key, ok := contractIndexKeyFromDesc(contract)
+	if !ok {
+		acs.contractIndexDirty = true
+		return
+	}
+	acs.contractIndex[key] = idx
+}
+
+func (acs *unpackedAddrContracts) markContractIndexDirty() {
+	if acs.contractIndex != nil {
+		acs.contractIndexDirty = true
+	}
 }
 
 func (s *unpackedIds) search(id big.Int) int {
@@ -1665,7 +1751,13 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 	rv, found := d.addrContractsCache[string(addrDesc)]
 	d.addrContractsCacheMux.Unlock()
 	if found && rv != nil {
+		if d.metrics != nil {
+			d.metrics.AddrContractsCacheHits.Inc()
+		}
 		return rv, nil
+	}
+	if d.metrics != nil {
+		d.metrics.AddrContractsCacheMisses.Inc()
 	}
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
 	if err != nil {
@@ -1677,10 +1769,35 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 		return nil, nil
 	}
 	rv, err = partiallyUnpackAddrContracts(buf)
-	if err == nil && rv != nil && len(buf) > addrContractsCacheMinSize {
+	minSize := d.addrContractsCacheMinSize
+	if minSize <= 0 {
+		minSize = addrContractsCacheMinSize
+	}
+	if err == nil && rv != nil && len(buf) > minSize {
+		var cacheEntries int
+		var cacheBytes int64
+		shouldFlush := false
 		d.addrContractsCacheMux.Lock()
-		d.addrContractsCache[string(addrDesc)] = rv
+		key := string(addrDesc)
+		if _, exists := d.addrContractsCache[key]; !exists {
+			d.addrContractsCache[key] = rv
+			// Track bytes based on the packed size at insertion time; later growth isn't accounted for.
+			d.addrContractsCacheBytes += int64(len(buf))
+			if d.addrContractsCacheMaxBytes > 0 && d.addrContractsCacheBytes > d.addrContractsCacheMaxBytes {
+				shouldFlush = true
+			}
+		}
+		cacheEntries = len(d.addrContractsCache)
+		cacheBytes = d.addrContractsCacheBytes
 		d.addrContractsCacheMux.Unlock()
+		if d.metrics != nil {
+			d.metrics.AddrContractsCacheEntries.Set(float64(cacheEntries))
+			d.metrics.AddrContractsCacheBytes.Set(float64(cacheBytes))
+		}
+		if shouldFlush {
+			// Flush early when we exceed the cap to avoid unbounded memory growth.
+			d.flushAddrContractsCache()
+		}
 	}
 	return rv, err
 }
@@ -1811,7 +1928,10 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
 			// do not store large address contracts found in cache
-			if _, found := d.addrContractsCache[addrDesc]; !found {
+			d.addrContractsCacheMux.Lock()
+			_, found := d.addrContractsCache[addrDesc]
+			d.addrContractsCacheMux.Unlock()
+			if !found {
 				buf := packUnpackedAddrContracts(acs)
 				wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 			}
@@ -1834,10 +1954,47 @@ func (d *RocksDB) writeContractsCache() {
 	}
 }
 
+func (d *RocksDB) writeContractsCacheSnapshot(cache map[string]*unpackedAddrContracts) {
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	for addrDesc, acs := range cache {
+		buf := packUnpackedAddrContracts(acs)
+		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
+	}
+}
+
+func (d *RocksDB) flushAddrContractsCache() {
+	start := time.Now()
+	d.addrContractsCacheMux.Lock()
+	cache := d.addrContractsCache
+	count := len(cache)
+	d.addrContractsCache = make(map[string]*unpackedAddrContracts)
+	d.addrContractsCacheBytes = 0
+	d.addrContractsCacheMux.Unlock()
+	if d.metrics != nil {
+		d.metrics.AddrContractsCacheEntries.Set(0)
+		d.metrics.AddrContractsCacheBytes.Set(0)
+		if count > 0 {
+			d.metrics.AddrContractsCacheFlushes.With(common.Labels{"reason": "cap"}).Inc()
+		}
+	}
+	if count > 0 {
+		d.writeContractsCacheSnapshot(cache)
+	}
+	glog.Info("storeAddrContractsCache: store ", count, " entries in ", time.Since(start))
+}
+
 func (d *RocksDB) storeAddrContractsCache() {
 	start := time.Now()
-	if len(d.addrContractsCache) > 0 {
+	count := len(d.addrContractsCache)
+	if count > 0 {
 		d.writeContractsCache()
+	}
+	if d.metrics != nil && count > 0 {
+		d.metrics.AddrContractsCacheFlushes.With(common.Labels{"reason": "timer"}).Inc()
 	}
 	glog.Info("storeAddrContractsCache: store ", len(d.addrContractsCache), " entries in ", time.Since(start))
 }

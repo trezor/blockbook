@@ -21,6 +21,44 @@ const (
 	MainNet eth.Network = 43114
 )
 
+func dialRPC(rawURL string) (*rpc.Client, error) {
+	if rawURL == "" {
+		return nil, errors.New("empty rpc url")
+	}
+	opts := []rpc.ClientOption{}
+	if parsed, err := url.Parse(rawURL); err == nil {
+		if parsed.Scheme == "ws" || parsed.Scheme == "wss" {
+			opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
+		}
+	}
+	return rpc.DialOptions(context.Background(), rawURL, opts...)
+}
+
+// OpenRPC opens RPC connections for Avalanche to separate HTTP and WS endpoints.
+var OpenRPC = func(httpURL, wsURL string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
+	callURL, subURL, err := eth.NormalizeRPCURLs(httpURL, wsURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	callClient, err := dialRPC(callURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	callRPC := &AvalancheRPCClient{Client: callClient}
+	subRPC := callRPC
+	if subURL != callURL {
+		subClient, err := dialRPC(subURL)
+		if err != nil {
+			callClient.Close()
+			return nil, nil, err
+		}
+		subRPC = &AvalancheRPCClient{Client: subClient}
+	}
+	rc := &AvalancheDualRPCClient{CallClient: callRPC, SubClient: subRPC}
+	c := &AvalancheClient{Client: ethclient.NewClient(callClient), AvalancheRPCClient: callRPC}
+	return rc, c, nil
+}
+
 // AvalancheRPC is an interface to JSON-RPC avalanche service.
 type AvalancheRPC struct {
 	*eth.EthereumRPC
@@ -43,17 +81,9 @@ func NewAvalancheRPC(config json.RawMessage, pushHandler func(bchain.Notificatio
 
 // Initialize avalanche rpc interface
 func (b *AvalancheRPC) Initialize() error {
-	b.OpenRPC = func(url string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
-		r, err := rpc.Dial(url)
-		if err != nil {
-			return nil, nil, err
-		}
-		rc := &AvalancheRPCClient{Client: r}
-		c := &AvalancheClient{Client: ethclient.NewClient(r), AvalancheRPCClient: rc}
-		return rc, c, nil
-	}
+	b.OpenRPC = OpenRPC
 
-	rpcClient, client, err := b.OpenRPC(b.ChainConfig.RPCURL)
+	rpcClient, client, err := b.OpenRPC(b.ChainConfig.RPCURL, b.ChainConfig.RPCURLWS)
 	if err != nil {
 		return err
 	}

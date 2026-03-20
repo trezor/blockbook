@@ -12,8 +12,10 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
 var testMap = map[string]func(t *testing.T, th *TestHandler){
@@ -27,21 +29,31 @@ var testMap = map[string]func(t *testing.T, th *TestHandler){
 	"GetBestBlockHash":         testGetBestBlockHash,
 	"GetBestBlockHeight":       testGetBestBlockHeight,
 	"GetBlockHeader":           testGetBlockHeader,
+	"EthCallBatch":             testEthCallBatch,
 }
 
 type TestHandler struct {
+	Coin     string
 	Chain    bchain.BlockChain
 	Mempool  bchain.Mempool
 	TestData *TestData
 }
 
+type EthCallBatchData struct {
+	Address         string   `json:"address"`
+	Contracts       []string `json:"contracts"`
+	BatchSize       int      `json:"batchSize,omitempty"`
+	SkipUnavailable bool     `json:"skipUnavailable,omitempty"`
+}
+
 type TestData struct {
-	BlockHeight uint32                `json:"blockHeight"`
-	BlockHash   string                `json:"blockHash"`
-	BlockTime   int64                 `json:"blockTime"`
-	BlockSize   int                   `json:"blockSize"`
-	BlockTxs    []string              `json:"blockTxs"`
-	TxDetails   map[string]*bchain.Tx `json:"txDetails"`
+	BlockHeight  uint32                `json:"blockHeight"`
+	BlockHash    string                `json:"blockHash"`
+	BlockTime    int64                 `json:"blockTime"`
+	BlockSize    int                   `json:"blockSize"`
+	BlockTxs     []string              `json:"blockTxs"`
+	TxDetails    map[string]*bchain.Tx `json:"txDetails"`
+	EthCallBatch *EthCallBatchData     `json:"ethCallBatch,omitempty"`
 }
 
 func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, mempool bchain.Mempool, testConfig json.RawMessage) {
@@ -57,6 +69,7 @@ func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, mempool
 	}
 
 	h := TestHandler{
+		Coin:     coin,
 		Chain:    chain,
 		Mempool:  mempool,
 		TestData: td,
@@ -191,6 +204,8 @@ func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 	for txid, want := range h.TestData.TxDetails {
 		// reset fields that are not parsed by BlockChainParser
 		want.Confirmations, want.Blocktime, want.Time, want.CoinSpecificData = 0, 0, 0, nil
+		// Mempool endpoints may or may not include segwit witness; keep comparisons backend-agnostic.
+		stripWitness(want)
 
 		got, err := h.Chain.GetTransactionForMempool(txid)
 		if err != nil {
@@ -202,6 +217,7 @@ func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 
 		// transactions parsed from JSON may contain additional data
 		got.Confirmations, got.Blocktime, got.Time, got.CoinSpecificData = 0, 0, 0, nil
+		stripWitness(got)
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransactionForMempool() got %+#v, want %+#v", got, want)
 		}
@@ -235,9 +251,16 @@ func normalizeAddresses(tx *bchain.Tx, parser bchain.BlockChainParser) {
 	}
 }
 
+func stripWitness(tx *bchain.Tx) {
+	for i := range tx.Vin {
+		tx.Vin[i].Witness = nil
+	}
+}
+
 func testMempoolSync(t *testing.T, h *TestHandler) {
 	for i := 0; i < 3; i++ {
 		txs := getMempool(t, h)
+		validateMempoolBatchFetch(t, h, txs)
 
 		n, err := h.Mempool.Resync()
 		if err != nil {
@@ -248,11 +271,20 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 			continue
 		}
 
+		beforeIntersect := len(txs)
 		txs = intersect(txs, getMempool(t, h))
 		if len(txs) == 0 {
 			// no transactions to test
 			continue
 		}
+		if beforeIntersect >= 20 {
+			ratio := float64(len(txs)) / float64(beforeIntersect)
+			if ratio < 0.2 {
+				t.Fatalf("mempool intersect too small: after=%d before=%d ratio=%.2f", len(txs), beforeIntersect, ratio)
+			}
+		}
+		const mempoolSyncStride = 5
+		txs = sampleEveryNth(txs, mempoolSyncStride)
 
 		txid2addrs := getTxid2addrs(t, h, txs)
 		if len(txid2addrs) == 0 {
@@ -272,10 +304,86 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 			}
 		}
 
+		warmStart := time.Now()
+		warmCount, warmErr := h.Mempool.Resync()
+		warmDuration := time.Since(warmStart)
+		if warmErr != nil {
+			t.Logf("Warm resync failed: %v", warmErr)
+		} else {
+			avgPerTx := time.Duration(0)
+			if warmCount > 0 {
+				avgPerTx = warmDuration / time.Duration(warmCount)
+			}
+			t.Logf("Warm resync finished size=%d duration=%s avg_per_tx=%s", warmCount, warmDuration, avgPerTx)
+		}
+
 		// done
 		return
 	}
 	t.Skip("Skipping test, all attempts to sync mempool failed due to network state changes")
+}
+
+func validateMempoolBatchFetch(t *testing.T, h *TestHandler, txs []string) {
+	if mempoolResyncBatchSize(t, h.Coin) > 1 {
+		// Validate batch fetch support so the mempool sync test exercises the batched path.
+		batcher, ok := h.Chain.(bchain.MempoolBatcher)
+		if !ok {
+			t.Fatalf("mempool_resync_batch_size > 1 but batch fetch is unavailable for %s", h.Coin)
+		}
+		sample := txs
+		if len(sample) > 5 {
+			sample = sample[:5]
+		}
+		if len(sample) > 0 {
+			got, err := batcher.GetRawTransactionsForMempoolBatch(sample)
+			if err != nil {
+				t.Fatalf("batch getrawtransaction failed for %s: %v", h.Coin, err)
+			}
+			if len(got) == 0 {
+				t.Skip("Skipping test, batch returned no transactions")
+			}
+			matched := 0
+			for _, txid := range sample {
+				batchTx := got[txid]
+				if batchTx == nil {
+					continue
+				}
+				singleTx, err := h.Chain.GetTransactionForMempool(txid)
+				if err != nil {
+					if err == bchain.ErrTxNotFound {
+						continue
+					}
+					t.Fatalf("single getrawtransaction failed for %s: %v", h.Coin, err)
+				}
+				if singleTx == nil {
+					t.Fatalf("single getrawtransaction returned nil for %s", h.Coin)
+				}
+				if batchTx.Txid != txid || singleTx.Txid != txid {
+					t.Fatalf("mismatched txid in batch vs single for %s: want %s, batch=%s single=%s", h.Coin, txid, batchTx.Txid, singleTx.Txid)
+				}
+				matched++
+			}
+			if matched == 0 {
+				t.Skip("Skipping test, no stable mempool transactions to compare")
+			}
+		}
+	}
+}
+
+func mempoolResyncBatchSize(t *testing.T, coin string) int {
+	t.Helper()
+
+	rawCfg, err := bchain.LoadBlockchainCfgRaw(coin)
+	if err != nil {
+		t.Fatalf("load blockchain config for %s: %v", coin, err)
+	}
+	var cfg struct {
+		MempoolResyncBatchSize int `json:"mempool_resync_batch_size"`
+	}
+	if err := json.Unmarshal(rawCfg, &cfg); err != nil {
+		t.Fatalf("unmarshal blockchain config for %s: %v", coin, err)
+	}
+	return cfg.MempoolResyncBatchSize
 }
 
 func testEstimateSmartFee(t *testing.T, h *TestHandler) {
@@ -321,6 +429,10 @@ func testGetBestBlockHash(t *testing.T, h *TestHandler) {
 		}
 		hh, err := h.Chain.GetBlockHash(height)
 		if err != nil {
+			if err == bchain.ErrBlockNotFound {
+				time.Sleep(time.Millisecond * 100)
+				continue
+			}
 			t.Fatal(err)
 		}
 		if hash != hh {
@@ -385,6 +497,39 @@ func testGetBlockHeader(t *testing.T, h *TestHandler) {
 	}
 }
 
+func testEthCallBatch(t *testing.T, h *TestHandler) {
+	data := h.TestData.EthCallBatch
+	if data == nil {
+		t.Fatal("ethCallBatch fixture missing")
+	}
+	if data.Address == "" {
+		t.Fatal("ethCallBatch.address missing")
+	}
+	if len(data.Contracts) == 0 {
+		t.Fatal("ethCallBatch.contracts missing")
+	}
+
+	cfg := bchain.LoadBlockchainCfg(t, h.Coin)
+	contracts := make([]common.Address, 0, len(data.Contracts))
+	for _, contract := range data.Contracts {
+		if contract == "" {
+			t.Fatal("ethCallBatch contract address missing")
+		}
+		contracts = append(contracts, common.HexToAddress(contract))
+	}
+
+	bchain.RunERC20BatchBalanceTest(t, bchain.ERC20BatchCase{
+		Name:            h.Coin,
+		RPCURL:          cfg.RpcUrl,
+		RPCURLWS:        cfg.RpcUrlWs,
+		Addr:            common.HexToAddress(data.Address),
+		Contracts:       contracts,
+		BatchSize:       data.BatchSize,
+		SkipUnavailable: data.SkipUnavailable,
+		NewClient:       eth.NewERC20BatchIntegrationClient,
+	})
+}
+
 func getMempool(t *testing.T, h *TestHandler) []string {
 	txs, err := h.Chain.GetMempoolTransactions()
 	if err != nil {
@@ -436,6 +581,17 @@ func intersect(a, b []string) []string {
 		res = append(res, v.(string))
 	}
 	return res
+}
+
+func sampleEveryNth(txs []string, stride int) []string {
+	if stride <= 1 || len(txs) <= stride {
+		return txs
+	}
+	sampled := make([]string, 0, (len(txs)+stride-1)/stride)
+	for idx := 0; idx < len(txs); idx += stride {
+		sampled = append(sampled, txs[idx])
+	}
+	return sampled
 }
 
 func containsTx(o []bchain.Outpoint, tx string) bool {

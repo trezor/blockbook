@@ -34,6 +34,7 @@ const mempoolTxsOnPage = 50
 const txsInAPI = 1000
 const maxPageNumber = 1000000
 const maxGapValue = 10000
+const maxSendTxBodyBytes int64 = 8 * 1024 * 1024
 
 const secondaryCoinCookieName = "secondary_coin"
 
@@ -236,9 +237,9 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 }
 
 // OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
-func (s *PublicServer) OnNewBlock(hash string, height uint32) {
-	s.socketio.OnNewBlockHash(hash)
-	s.websocket.OnNewBlock(hash, height)
+func (s *PublicServer) OnNewBlock(block *bchain.Block) {
+	s.socketio.OnNewBlockHash(block.Hash)
+	s.websocket.OnNewBlock(block)
 }
 
 // OnNewFiatRatesTicker notifies users subscribed to bitcoind/fiatrates about new ticker
@@ -704,12 +705,12 @@ func addressAliasSpan(a string, td *TemplateData) template.HTML {
 	alias := getAddressAlias(a, td)
 	if alias == nil {
 		rv.WriteString(`<span class="copyable">`)
-		rv.WriteString(a)
+		rv.WriteString(html.EscapeString(a))
 	} else {
 		rv.WriteString(`<span class="copyable" cc="`)
 		rv.WriteString(html.EscapeString(a))
 		rv.WriteString(`" alias-type="`)
-		rv.WriteString(alias.Type)
+		rv.WriteString(html.EscapeString(alias.Type))
 		rv.WriteString(`">`)
 		rv.WriteString(html.EscapeString(alias.Alias))
 	}
@@ -1038,6 +1039,23 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
+		// Check if this is an ENS name for Ethereum chains and check if it is not expired and unique
+		if s.chainParser.GetChainType() == bchain.ChainEthereumType &&
+			strings.HasSuffix(strings.ToLower(q), ".eth") {
+			if ensResolver, ok := s.chain.(interface {
+				ResolveENS(string) (*bchain.ENSResolution, error)
+				CheckENSExpiration(string) (bool, error)
+			}); ok {
+				expired, err := ensResolver.CheckENSExpiration(q)
+				if err == nil && !expired {
+					ensRes, err := ensResolver.ResolveENS(q)
+					if err == nil && ensRes.Address != "" {
+						http.Redirect(w, r, joinURL("/address/", ensRes.Address), http.StatusFound)
+						return noTpl, nil, nil
+					}
+				}
+			}
+		}
 		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0, "")
 		if err == nil {
 			http.Redirect(w, r, joinURL("/xpub/", url.QueryEscape(address.AddrStr)), http.StatusFound)
@@ -1483,17 +1501,31 @@ type resultSendTransaction struct {
 	Result string `json:"result"`
 }
 
+func readSendTxHexFromBody(body io.Reader, maxBodyBytes int64) (string, error) {
+	var hex strings.Builder
+	n, err := io.Copy(&hex, io.LimitReader(body, maxBodyBytes+1))
+	if err != nil {
+		return "", api.NewAPIError("Missing tx blob", true)
+	}
+	if n > maxBodyBytes {
+		return "", api.NewAPIError("Tx blob too large", true)
+	}
+	return hex.String(), nil
+}
+
 func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, error) {
 	var err error
 	var res resultSendTransaction
 	var hex string
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-sendtx"}).Inc()
 	if r.Method == http.MethodPost {
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			return nil, api.NewAPIError("Missing tx blob", true)
+		if r.ContentLength > maxSendTxBodyBytes {
+			return nil, api.NewAPIError("Tx blob too large", true)
 		}
-		hex = string(data)
+		hex, err = readSendTxHexFromBody(r.Body, maxSendTxBodyBytes)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 			hex = r.URL.Path[i+1:]

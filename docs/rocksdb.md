@@ -107,6 +107,20 @@ Column families used only by **Ethereum type** coins:
                          <(nr_values vuint)+[]((id bigInt)+(value bigInt)) if ERC1155>
   ```
 
+  - Contract ordering & hotness lookup
+
+  Contract entries are appended in discovery order (they are not sorted). Lookups are normally a linear scan, but for
+  mid-size lists we lazily build an in-memory index map when an address becomes "hot" (frequently looked up within the
+  current block). A size-limited LRU keeps hot addresses; once the cache is full, the least-recently used hot address is
+  evicted and will fall back to linear scans until it becomes hot again.
+
+  - Large addressContracts cache
+
+  To reduce repeated RocksDB reads/writes for very large entries, Blockbook caches addressContracts blobs whose packed
+  size exceeds `address_contracts_cache_min_size`. The cache is flushed periodically, and also flushed early when its
+  total size crosses `address_contracts_cache_max_bytes`. Early flush avoids unbounded memory growth at the cost of
+  more frequent writes.
+
 - **internalData** (used only by Ethereum type coins)
 
   Maps _txid_ to _type (CALL 0 | CREATE 1)_, _addrDesc of created contract for CREATE type_, array of _type (CALL 0 | CREATE 1 | SELFDESTRUCT 2)_, _from addrDesc_, _to addrDesc_, _value bigInt_ and possible _error_.

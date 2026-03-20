@@ -4,7 +4,8 @@
         "shortcut": "ETH",
         "network": "OP",
         "label": "Optimism",
-        "alias": "optimism_archive"
+        "alias": "optimism_archive",
+        "test_name": "optimism"
     },
     "ports": {
         "backend_rpc": 8202,
@@ -15,7 +16,8 @@
         "blockbook_public": 9302
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 25
     },
     "backend": {

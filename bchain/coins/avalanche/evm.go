@@ -48,6 +48,37 @@ type AvalancheRPCClient struct {
 	*rpc.Client
 }
 
+// AvalancheDualRPCClient routes calls and subscriptions to separate RPC clients.
+type AvalancheDualRPCClient struct {
+	CallClient *AvalancheRPCClient
+	SubClient  *AvalancheRPCClient
+}
+
+// CallContext forwards JSON-RPC calls to the HTTP client with Avalanche-specific handling.
+func (c *AvalancheDualRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	return c.CallClient.CallContext(ctx, result, method, args...)
+}
+
+// BatchCallContext forwards batch JSON-RPC calls to the HTTP client.
+func (c *AvalancheDualRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
+	return c.CallClient.BatchCallContext(ctx, batch)
+}
+
+// EthSubscribe forwards subscriptions to the WebSocket client.
+func (c *AvalancheDualRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
+	return c.SubClient.EthSubscribe(ctx, channel, args...)
+}
+
+// Close shuts down both underlying clients.
+func (c *AvalancheDualRPCClient) Close() {
+	if c.SubClient != nil {
+		c.SubClient.Close()
+	}
+	if c.CallClient != nil && c.CallClient != c.SubClient {
+		c.CallClient.Close()
+	}
+}
+
 // EthSubscribe subscribes to events and returns a client subscription that implements the EVMClientSubscription interface
 func (c *AvalancheRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
 	sub, err := c.Client.EthSubscribe(ctx, channel, args...)

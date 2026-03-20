@@ -287,8 +287,15 @@ type MempoolTxidFilterEntries struct {
 	UsedZeroedKey bool              `json:"usedZeroedKey,omitempty" ts_doc:"Indicates if a zeroed key was used in filter calculation."`
 }
 
+// ENSResolution represents the result of resolving an ENS name to an Ethereum address.
+type ENSResolution struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	Error   string `json:"error,omitempty"`
+}
+
 // OnNewBlockFunc is used to send notification about a new block
-type OnNewBlockFunc func(hash string, height uint32)
+type OnNewBlockFunc func(block *Block)
 
 // OnNewTxAddrFunc is used to send notification about a new transaction/address
 type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
@@ -298,6 +305,11 @@ type OnNewTxFunc func(tx *MempoolTx)
 
 // AddrDescForOutpointFunc returns address descriptor and value for given outpoint or nil if outpoint not found
 type AddrDescForOutpointFunc func(outpoint Outpoint) (AddressDescriptor, *big.Int)
+
+// MempoolBatcher allows batch fetching of mempool transactions when supported.
+type MempoolBatcher interface {
+	GetRawTransactionsForMempoolBatch(txids []string) (map[string]*Tx, error)
+}
 
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
@@ -342,10 +354,12 @@ type BlockChain interface {
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetEip1559Fees() (*Eip1559Fees, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
+	EthereumTypeGetErc20ContractBalances(addrDesc AddressDescriptor, contractDescs []AddressDescriptor) ([]*big.Int, error)
 	EthereumTypeGetSupportedStakingPools() []string
 	EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) ([]StakingPoolData, error)
 	EthereumTypeRpcCall(data, to, from string) (string, error)
 	EthereumTypeGetRawTransaction(txid string) (string, error)
+	EthereumTypeGetTransactionReceipt(txid string) (*RpcReceipt, error)
 	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 

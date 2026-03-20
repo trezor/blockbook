@@ -7,6 +7,8 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 )
@@ -28,6 +30,8 @@ const contractNameSignature = "0x06fdde03"
 const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"
 const contractBalanceOfSignature = "0x70a08231"
+
+const ENSRegistryAddress = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" // ENSRegistryAddress is the mainnet ENS registry contract address
 
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
@@ -275,6 +279,11 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 
 // EthereumTypeRpcCall calls eth_call with given data and to address
 func (b *EthereumRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
+	return b.EthereumTypeRpcCallAtBlock(data, to, from, nil)
+}
+
+// EthereumTypeRpcCallAtBlock calls eth_call with given data and to address at a specific block.
+func (b *EthereumRPC) EthereumTypeRpcCallAtBlock(data, to, from string, blockNumber *big.Int) (string, error) {
 	args := map[string]interface{}{
 		"data": data,
 		"to":   to,
@@ -283,18 +292,31 @@ func (b *EthereumRPC) EthereumTypeRpcCall(data, to, from string) (string, error)
 		args["from"] = from
 	}
 
+	b.observeEthCall("single", 1)
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var r string
-	err := b.RPC.CallContext(ctx, &r, "eth_call", args, "latest")
+	blockArg := bchain.ToBlockNumArg(blockNumber)
+	err := b.RPC.CallContext(ctx, &r, "eth_call", args, blockArg)
 	if err != nil {
+		b.observeEthCallError("single", "rpc")
 		return "", err
 	}
 	return r, nil
 }
 
+func erc20BalanceOfCallData(addrDesc bchain.AddressDescriptor) string {
+	addr := hexutil.Encode(addrDesc)
+	if len(addr) > 1 {
+		addr = addr[2:]
+	}
+	padded := "0000000000000000000000000000000000000000000000000000000000000000"
+	return contractBalanceOfSignature + padded[len(addr):] + addr
+}
+
 func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, error) {
 	var contract bchain.ContractInfo
+	b.observeEthCallContractInfo("name")
 	data, err := b.EthereumTypeRpcCall(contractNameSignature, address, "")
 	if err != nil {
 		// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
@@ -306,6 +328,7 @@ func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, e
 	}
 	name := strings.TrimSpace(parseSimpleStringProperty(data))
 	if name != "" {
+		b.observeEthCallContractInfo("symbol")
 		data, err = b.EthereumTypeRpcCall(contractSymbolSignature, address, "")
 		if err != nil {
 			// glog.Warning(errors.Annotatef(err, "Contract SymbolSignature %v", address))
@@ -313,6 +336,7 @@ func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, e
 			// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
 		}
 		symbol := strings.TrimSpace(parseSimpleStringProperty(data))
+		b.observeEthCallContractInfo("decimals")
 		data, _ = b.EthereumTypeRpcCall(contractDecimalsSignature, address, "")
 		// if err != nil {
 		// 	glog.Warning(errors.Annotatef(err, "Contract DecimalsSignature %v", address))
@@ -343,18 +367,142 @@ func (b *EthereumRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*b
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
 func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
-	addr := hexutil.Encode(addrDesc)[2:]
+	return b.EthereumTypeGetErc20ContractBalanceAtBlock(addrDesc, contractDesc, nil)
+}
+
+// EthereumTypeGetErc20ContractBalanceAtBlock returns balance of ERC20 contract for given address at a specific block.
+func (b *EthereumRPC) EthereumTypeGetErc20ContractBalanceAtBlock(addrDesc, contractDesc bchain.AddressDescriptor, blockNumber *big.Int) (*big.Int, error) {
 	contract := hexutil.Encode(contractDesc)
-	req := contractBalanceOfSignature + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr):] + addr
-	data, err := b.EthereumTypeRpcCall(req, contract, "")
+	req := erc20BalanceOfCallData(addrDesc)
+	data, err := b.EthereumTypeRpcCallAtBlock(req, contract, "", blockNumber)
 	if err != nil {
 		return nil, err
 	}
 	r := parseSimpleNumericProperty(data)
 	if r == nil {
+		b.observeEthCallError("single", "invalid")
 		return nil, errors.New("Invalid balance")
 	}
 	return r, nil
+}
+
+type batchCaller interface {
+	BatchCallContext(context.Context, []rpc.BatchElem) error
+}
+
+func (b *EthereumRPC) erc20BatchSize() int {
+	if b.ChainConfig != nil && b.ChainConfig.Erc20BatchSize > 0 {
+		return b.ChainConfig.Erc20BatchSize
+	}
+	return defaultErc20BatchSize
+}
+
+// EthereumTypeGetErc20ContractBalances returns balances of multiple ERC20 contracts for given address.
+// It uses RPC batch calls and returns nil entries for failed/invalid results.
+func (b *EthereumRPC) EthereumTypeGetErc20ContractBalances(addrDesc bchain.AddressDescriptor, contractDescs []bchain.AddressDescriptor) ([]*big.Int, error) {
+	return b.EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc, contractDescs, nil)
+}
+
+// EthereumTypeGetErc20ContractBalancesAtBlock returns balances of multiple ERC20 contracts for given address at a specific block.
+// It uses RPC batch calls and returns nil entries for failed/invalid results.
+func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchain.AddressDescriptor, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, error) {
+	if len(contractDescs) == 0 {
+		return nil, nil
+	}
+	batcher, ok := b.RPC.(batchCaller)
+	if !ok {
+		// Some RPC clients do not support batching; caller will fall back to single calls.
+		return nil, errors.New("BatchCallContext not supported")
+	}
+	batchSize := b.erc20BatchSize()
+	// Same calldata for all balanceOf calls; only the contract address varies per element.
+	callData := erc20BalanceOfCallData(addrDesc)
+	balances := make([]*big.Int, len(contractDescs))
+	for start := 0; start < len(contractDescs); start += batchSize {
+		end := start + batchSize
+		if end > len(contractDescs) {
+			end = len(contractDescs)
+		}
+		// Process a bounded slice to keep batch RPC requests within size limits.
+		batchBalances, err := b.erc20BalancesBatchAtBlock(batcher, callData, contractDescs[start:end], blockNumber)
+		if err != nil {
+			return nil, err
+		}
+		// Preserve original ordering when merging per-batch results.
+		copy(balances[start:end], batchBalances)
+	}
+	return balances, nil
+}
+
+func (b *EthereumRPC) erc20BalancesBatch(batcher batchCaller, callData string, contractDescs []bchain.AddressDescriptor) ([]*big.Int, error) {
+	return b.erc20BalancesBatchAtBlock(batcher, callData, contractDescs, nil)
+}
+
+func (b *EthereumRPC) erc20BalancesBatchAtBlock(batcher batchCaller, callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, error) {
+	results := make([]string, len(contractDescs))
+	batch := make([]rpc.BatchElem, len(contractDescs))
+	blockArg := bchain.ToBlockNumArg(blockNumber)
+	for i, contractDesc := range contractDescs {
+		args := map[string]interface{}{
+			"data": callData,
+			"to":   hexutil.Encode(contractDesc),
+		}
+		batch[i] = rpc.BatchElem{
+			Method: "eth_call",
+			Args:   []interface{}{args, blockArg},
+			Result: &results[i],
+		}
+	}
+	b.observeEthCall("batch", len(contractDescs))
+	b.observeEthCallBatch(len(contractDescs))
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	if err := batcher.BatchCallContext(ctx, batch); err != nil {
+		b.observeEthCallError("batch", "rpc")
+		return nil, err
+	}
+	balances := make([]*big.Int, len(contractDescs))
+	for i := range batch {
+		if batch[i].Error != nil {
+			b.observeEthCallError("batch", "elem")
+			if isNonRetriableEthCallError(batch[i].Error) {
+				continue
+			}
+			glog.Warningf("erc20 batch eth_call failed for %s: %v", hexutil.Encode(contractDescs[i]), batch[i].Error)
+			// In case of batch failure, retry missing/failed elements as single calls.
+			data, err := b.EthereumTypeRpcCallAtBlock(callData, hexutil.Encode(contractDescs[i]), "", blockNumber)
+			if err != nil {
+				glog.Warningf("erc20 single eth_call fallback failed for %s: %v", hexutil.Encode(contractDescs[i]), err)
+				continue
+			}
+			balances[i] = parseSimpleNumericProperty(data)
+			if balances[i] == nil {
+				b.observeEthCallError("single", "invalid")
+				glog.Warningf("erc20 single eth_call invalid result for %s: %q", hexutil.Encode(contractDescs[i]), data)
+			}
+			continue
+		}
+		// Leave nil on parse failures so callers can retry per contract if needed.
+		balances[i] = parseSimpleNumericProperty(results[i])
+		if balances[i] == nil {
+			b.observeEthCallError("batch", "invalid")
+			glog.Warningf("erc20 batch eth_call invalid result for %s: %q", hexutil.Encode(contractDescs[i]), results[i])
+		}
+	}
+	return balances, nil
+}
+
+func isNonRetriableEthCallError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// These errors are deterministic for the given call data and won't succeed on retry.
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "execution reverted") ||
+		strings.Contains(msg, "invalid opcode") ||
+		strings.Contains(msg, "out of gas") ||
+		strings.Contains(msg, "stack underflow") ||
+		strings.Contains(msg, "revert")
 }
 
 // GetTokenURI returns URI of non fungible or multi token defined by token id
@@ -370,6 +518,11 @@ func (b *EthereumRPC) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID
 	}
 	// try ERC721 tokenURI method and  ERC1155 uri method
 	for _, method := range []string{erc721TokenURIMethodSignature, erc1155URIMethodSignature} {
+		if method == erc721TokenURIMethodSignature {
+			b.observeEthCallTokenURI("erc721_token_uri")
+		} else {
+			b.observeEthCallTokenURI("erc1155_uri")
+		}
 		data, err := b.EthereumTypeRpcCall(method+id, address, "")
 		if err == nil && data != "" {
 			uri := parseSimpleStringProperty(data)

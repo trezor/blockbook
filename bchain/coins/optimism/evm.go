@@ -39,6 +39,11 @@ func (c *OptimismRPCClient) CallContext(ctx context.Context, result interface{},
 	return nil
 }
 
+// BatchCallContext forwards batch JSON-RPC calls to the underlying client.
+func (c *OptimismRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
+	return c.Client.BatchCallContext(ctx, batch)
+}
+
 // OptimismClientSubscription wraps a client subcription to implement the EVMClientSubscription interface
 type OptimismClientSubscription struct {
 	*rpc.ClientSubscription

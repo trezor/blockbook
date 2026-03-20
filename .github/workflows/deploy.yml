@@ -1,0 +1,197 @@
+name: Build / Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Workflow mode"
+        type: choice
+        options:
+          - deploy
+          - build
+        required: true
+        default: deploy
+      env:
+        description: "Build environment; used only when mode=build"
+        type: choice
+        options:
+          - dev
+          - prod
+        required: true
+        default: dev
+      always_build_backend:
+        description: "Build backend packages for all selected coins; used only when mode=build"
+        type: boolean
+        required: true
+        default: false
+      coins:
+        description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
+        required: true
+      branch_or_tag:
+        description: "Branch or tag to check out and deploy (leave empty for current ref)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  prepare_build:
+    name: Prepare Build Plan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.mode == 'build' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    outputs:
+      runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
+      coins_csv: ${{ steps.plan.outputs.coins_csv }}
+    steps:
+      - name: Checkout workflow code
+        uses: actions/checkout@v4
+
+      - name: Validate branch or tag
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+
+      - name: Checkout requested branch or tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+
+      - name: Build build plan
+        id: plan
+        env:
+          VARS_JSON: ${{ toJSON(vars) }}
+          COINS_INPUT: ${{ inputs.coins }}
+          BUILD_ENV: ${{ inputs.env }}
+        run: ./.github/scripts/build_plan.py
+
+  prepare_deploy:
+    name: Prepare Deploy Plan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.mode == 'deploy' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    outputs:
+      runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
+      e2e_regex: ${{ steps.plan.outputs.e2e_regex }}
+      coins_csv: ${{ steps.plan.outputs.coins_csv }}
+      test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
+    steps:
+      - name: Checkout workflow code
+        uses: actions/checkout@v4
+
+      - name: Validate branch or tag
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+
+      - name: Checkout requested branch or tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+
+      - name: Build deploy/e2e plan
+        id: plan
+        env:
+          VARS_JSON: ${{ toJSON(vars) }}
+          COINS_INPUT: ${{ inputs.coins }}
+        run: ./.github/scripts/deploy_plan.py
+
+  build:
+    name: Build (${{ matrix.runner }})
+    needs: prepare_build
+    if: ${{ inputs.mode == 'build' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare_build.outputs.runner_matrix || '[]') }}
+    runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-env-vars
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Build packages
+        env:
+          BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          BB_PACKAGE_ROOT: /opt/blockbook-builds
+        run: python3 ./.github/scripts/build_packages.py ${{ inputs.always_build_backend && '--always-build-backend' || '' }} ${{ join(matrix.coins, ' ') }}
+
+  deploy:
+    name: Deploy (${{ matrix.coin }})
+    needs: prepare_deploy
+    if: ${{ inputs.mode == 'deploy' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare_deploy.outputs.runner_matrix || '[]') }}
+    runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-env-vars
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Deploy blockbook package
+        env:
+          BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+        run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}"
+
+  wait-for-sync:
+    name: Wait For Sync
+    needs: [prepare_deploy, deploy]
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 31
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+      COINS_INPUT: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
+      SYNC_TIMEOUT_SECONDS: "1800"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-env-vars
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Wait for Blockbook sync
+        run: python3 ./.github/scripts/wait_for_sync.py
+
+  e2e-tests:
+    name: E2E Tests (post-deploy)
+    needs: [prepare_deploy, deploy, wait-for-sync]
+    if: ${{ needs.deploy.result == 'success' && needs.wait-for-sync.result == 'success' }}
+    runs-on: [self-hosted, bb-dev-selfhosted]
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+      E2E_REGEX: ${{ needs.prepare_deploy.outputs.e2e_regex }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-env-vars
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Run e2e tests
+        run: make test-e2e ARGS="-v"

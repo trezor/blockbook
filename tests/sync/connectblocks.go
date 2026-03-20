@@ -13,6 +13,17 @@ import (
 	"github.com/trezor/blockbook/db"
 )
 
+// blockingChain delays GetBlock so shutdown can be asserted deterministically.
+type blockingChain struct {
+	bchain.BlockChain
+	gate chan struct{}
+}
+
+func (c *blockingChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	<-c.gate
+	return nil, bchain.ErrBlockNotFound
+}
+
 func testConnectBlocks(t *testing.T, h *TestHandler) {
 	for _, rng := range h.TestData.ConnectBlocks.SyncRanges {
 		withRocksDBAndSyncWorker(t, h, rng.Lower, func(d *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
@@ -21,11 +32,11 @@ func testConnectBlocks(t *testing.T, h *TestHandler) {
 				t.Fatal(err)
 			}
 
-			err = db.ConnectBlocks(sw, func(hash string, height uint32) {
-				if hash == upperHash {
-					close(ch)
-				}
-			}, true)
+				err = db.ConnectBlocks(sw, func(block *bchain.Block) {
+					if block != nil && block.Hash == upperHash {
+						close(ch)
+					}
+				}, true)
 			if err != nil && err != db.ErrOperationInterrupted {
 				t.Fatal(err)
 			}
@@ -43,6 +54,20 @@ func testConnectBlocks(t *testing.T, h *TestHandler) {
 			t.Run("verifyAddresses", func(t *testing.T) { verifyAddresses(t, d, h, rng) })
 		})
 	}
+
+	t.Run("shutdownDuringRegularSync", func(t *testing.T) {
+		withRocksDBAndSyncWorker(t, h, 0, func(_ *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
+			gate := make(chan struct{})
+			db.SetBlockChain(sw, &blockingChain{BlockChain: h.Chain, gate: gate})
+			close(ch)
+			err := db.ConnectBlocks(sw, nil, false)
+			if err != db.ErrOperationInterrupted {
+				t.Fatalf("expected ErrOperationInterrupted, got %v", err)
+			}
+			// Allow the worker goroutine to exit cleanly.
+			close(gate)
+		})
+	})
 }
 
 func testConnectBlocksParallel(t *testing.T, h *TestHandler) {

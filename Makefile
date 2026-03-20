@@ -7,34 +7,42 @@ NO_CACHE = false
 TCMALLOC =
 PORTABLE = 0
 ARGS ?=
+# Forward BB_RPC_* and BB_TEST_API_* overrides into Docker for build/test tooling.
+BB_RPC_ENV := $(shell env | awk -F= '/^BB_RPC_(URL_HTTP|URL_WS|BIND_HOST|ALLOW_IP)_|^BB_TEST_API_URL_(HTTP|WS)_/ {print "-e " $$1}')
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 
-.PHONY: build build-debug test deb
+.PHONY: build build-debug test test-connectivity test-integration test-e2e test-all deb
 
 build: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
 
 build-debug: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build-debug ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build-debug ARGS="$(ARGS)"
 
 test: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test ARGS="$(ARGS)"
 
 test-integration: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
+
+test-e2e: .bin-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e E2E_REGEX $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-e2e ARGS="$(ARGS)"
+
+test-connectivity: .bin-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-connectivity ARGS="$(ARGS)"
 
 test-all: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
 
 deb-backend-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
 
 deb-blockbook-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
 
 deb-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
 
 deb-blockbook-all: clean-deb $(addprefix deb-blockbook-, $(TARGETS))
 

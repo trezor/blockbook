@@ -36,6 +36,14 @@ type Worker struct {
 	metrics           *common.Metrics
 }
 
+var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
+	return fr.GetTickersForTimestamps(timestamps, vsCurrency, token)
+}
+
+var getCurrentTicker = func(fr *fiat.FiatRates, vsCurrency string, token string) *common.CurrencyRatesTicker {
+	return fr.GetCurrentTicker(vsCurrency, token)
+}
+
 // contractInfoCache is a temporary cache of contract information for ethereum token transfers
 type contractInfoCache = map[string]*bchain.ContractInfo
 
@@ -221,7 +229,7 @@ func (w *Worker) getTransaction(txid string, spendingTxs bool, specificJSON bool
 		}
 		return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found (%v)", txid, err), true)
 	}
-	return w.getTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
+	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
 }
 
 func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedInputData {
@@ -284,8 +292,8 @@ func (w *Worker) getConfirmationETA(tx *Tx) (int64, uint32) {
 	return etaSeconds, etaBlocks
 }
 
-// getTransactionFromBchainTx reads transaction data from txid
-func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
+// GetTransactionFromBchainTx reads transaction data from txid
+func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	var err error
 	var ta *db.TxAddresses
 	var tokens []TokenTransfer
@@ -991,7 +999,7 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string) (*Token, error) {
+func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int) (*Token, error) {
 	standard := bchain.EthereumTokenStandardMap[c.Standard]
 	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standard)
 	if err != nil {
@@ -1011,11 +1019,16 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 	if details >= AccountDetailsTokenBalances && validContract {
 		if c.Standard == bchain.FungibleToken {
 			// get Erc20 Contract Balance from blockchain, balance obtained from adding and subtracting transfers is not correct
-			b, err := w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
-			if err != nil {
-				// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-				glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
-			} else {
+			// Prefer pre-fetched batch balance when available to avoid redundant RPC calls.
+			b := erc20Balance
+			if b == nil {
+				b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
+				if err != nil {
+					// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
+					glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+				}
+			}
+			if b != nil {
 				t.BalanceSat = (*Amount)(b)
 				if secondaryCoin != "" {
 					baseRate, found := w.GetContractBaseRate(ticker, t.Contract, 0)
@@ -1053,6 +1066,19 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 	}
 
 	return &t, nil
+}
+
+func hasEthereumTokenHoldingsField(t *Token) bool {
+	if t == nil {
+		return false
+	}
+	if t.BalanceSat != nil {
+		return true
+	}
+	if len(t.Ids) > 0 {
+		return true
+	}
+	return len(t.MultiTokenValues) > 0
 }
 
 // a fallback method in case internal transactions are not processed and there is no indexed info about contract balance for an address
@@ -1123,27 +1149,40 @@ type ethereumTypeAddressData struct {
 	stakingPools         []StakingPool
 }
 
+func (w *Worker) getSecondaryTicker(secondaryCoin string) *common.CurrencyRatesTicker {
+	// Secondary fiat values are computed only when a secondary currency is
+	// requested, so skip ticker lookup otherwise.
+	if secondaryCoin == "" || w.fiatRates == nil {
+		return nil
+	}
+	return getCurrentTicker(w.fiatRates, "", "")
+}
+
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
 	var n uint64
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
+	// Load cached contract list and totals from the index; this drives token lookups.
 	ca, err := w.db.GetAddrDescContracts(addrDesc)
 	if err != nil {
 		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
+	// Always fetch the native balance from the backend.
 	b, err := w.chain.EthereumTypeGetBalance(addrDesc)
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 	}
 	var filterDesc bchain.AddressDescriptor
 	if filter.Contract != "" {
+		// Optional contract filter narrows token balances and tx paging to a single contract.
 		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
 		if err != nil {
 			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
 		}
 	}
 	if ca != nil {
+		// Address has indexed contract/tx data; include totals and nonce.
 		ba = &db.AddrBalance{
 			Txs: uint32(ca.TotalTxs),
 		}
@@ -1154,7 +1193,37 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
-		ticker := w.fiatRates.GetCurrentTicker("", "")
+		ticker := w.getSecondaryTicker(secondaryCoin)
+		var erc20Balances map[string]*big.Int
+		if details >= AccountDetailsTokenBalances && len(ca.Contracts) > 1 {
+			// Batch ERC20 balanceOf calls to cut per-contract RPC; fallback is single-call per contract.
+			erc20Contracts := make([]bchain.AddressDescriptor, 0, len(ca.Contracts))
+			for i := range ca.Contracts {
+				c := &ca.Contracts[i]
+				// Only fungible tokens are eligible; respect a contract filter if present.
+				if c.Standard != bchain.FungibleToken {
+					continue
+				}
+				if len(filterDesc) > 0 && !bytes.Equal(filterDesc, c.Contract) {
+					continue
+				}
+				erc20Contracts = append(erc20Contracts, c.Contract)
+			}
+			if len(erc20Contracts) > 1 {
+				balances, err := w.chain.EthereumTypeGetErc20ContractBalances(addrDesc, erc20Contracts)
+				if err != nil {
+					glog.Warningf("EthereumTypeGetErc20ContractBalances addr %v: %v", addrDesc, err)
+				} else if len(balances) == len(erc20Contracts) {
+					// Keep only successful batch results; missing entries will trigger per-contract calls.
+					erc20Balances = make(map[string]*big.Int, len(erc20Contracts))
+					for i, bal := range balances {
+						if bal != nil {
+							erc20Balances[string(erc20Contracts[i])] = bal
+						}
+					}
+				}
+			}
+		}
 		if details > AccountDetailsBasic {
 			d.tokens = make([]Token, len(ca.Contracts))
 			var j int
@@ -1167,9 +1236,19 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					// filter only transactions of this contract
 					filter.Vout = i + db.ContractIndexOffset
 				}
-				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin)
+				// Use prefetched batch balances when available; nil triggers per-contract RPC in helper.
+				var erc20Balance *big.Int
+				if erc20Balances != nil {
+					erc20Balance = erc20Balances[string(c.Contract)]
+				}
+				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance)
 				if err != nil {
 					return nil, nil, err
+				}
+				// tokenBalances responses should not contain metadata-only tokens
+				// without any holdings field.
+				if details >= AccountDetailsTokenBalances && !hasEthereumTokenHoldingsField(t) {
+					continue
 				}
 				d.tokens[j] = *t
 				d.tokensBaseValue += t.BaseValue
@@ -1217,6 +1296,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	d.nonce = strconv.Itoa(int(n))
 	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
 	if len(d.tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
+		// Query the backend directly to return contract metadata/balance for filtered views.
 		t, err := w.getEthereumContractBalanceFromBlockchain(addrDesc, filterDesc, details)
 		if err != nil {
 			return nil, nil, err
@@ -1229,6 +1309,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	// if staking pool enabled, fetch the staking pool details
 	if details >= AccountDetailsBasic {
 		if len(w.chain.EthereumTypeGetSupportedStakingPools()) > 0 {
+			// Staking pools are fetched separately and do not participate in ERC20 batching.
 			d.stakingPools, err = w.getStakingPoolsData(addrDesc)
 			if err != nil {
 				return nil, nil, err
@@ -1347,6 +1428,38 @@ func setIsOwnAddress(tx *Tx, address string) {
 
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, secondaryCoin string) (*Address, error) {
+	if w.chainType == bchain.ChainEthereumType && strings.HasSuffix(strings.ToLower(address), ".eth") {
+		ensResolver, ok := w.chain.(interface {
+			ResolveENS(string) (*bchain.ENSResolution, error)
+			CheckENSExpiration(string) (bool, error)
+		})
+		if !ok {
+			return nil, fmt.Errorf("ENS resolution not supported for this chain")
+		}
+
+		expired, err := ensResolver.CheckENSExpiration(address)
+		if err != nil {
+			glog.Errorf("ENS expiration check failed for %s: %v", address, err)
+			return nil, errors.New("ENS name not found")
+		}
+		if expired {
+			return nil, errors.New("ENS name expired")
+		}
+
+		ensRes, err := ensResolver.ResolveENS(address)
+		if err != nil {
+			glog.Errorf("ENS resolution failed for %s: %v", address, err)
+			return nil, errors.New("ENS name not found")
+		}
+
+		if ensRes == nil || ensRes.Address == "" {
+			return nil, fmt.Errorf("ENS name not found: %s", address)
+		}
+
+		ensName := address
+		address = ensRes.Address
+		glog.Infof("ENS resolved %s to %s", ensName, ensRes.Address)
+	}
 	start := time.Now()
 	page--
 	if page < 0 {
@@ -1462,6 +1575,15 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				setIsOwnAddress(tx, address)
 				txs = append(txs, tx)
 			}
+		}
+	}
+	// On page 1, mempool items are prepended before confirmed history.
+	// Keep response bounded by requested page size for txid/txs details.
+	if page == 0 && txsOnPage > 0 {
+		if option == AccountDetailsTxidHistory && len(txids) > txsOnPage {
+			txids = txids[:txsOnPage]
+		} else if option >= AccountDetailsTxHistoryLight && len(txs) > txsOnPage {
+			txs = txs[:txsOnPage]
 		}
 	}
 	if w.chainType == bchain.ChainBitcoinType {
@@ -1694,36 +1816,6 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
-func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string) error {
-	for i := range histories {
-		bh := &histories[i]
-		tickers, err := w.fiatRates.GetTickersForTimestamps([]int64{int64(bh.Time)}, "", "")
-		if err != nil || tickers == nil || len(*tickers) == 0 {
-			glog.Errorf("Error finding ticker by date %v. Error: %v", bh.Time, err)
-			continue
-		}
-		ticker := (*tickers)[0]
-		if ticker == nil {
-			continue
-		}
-		if len(currencies) == 0 {
-			bh.FiatRates = ticker.Rates
-		} else {
-			rates := make(map[string]float32)
-			for _, currency := range currencies {
-				currency = strings.ToLower(currency)
-				if rate, found := ticker.Rates[currency]; found {
-					rates[currency] = rate
-				} else {
-					rates[currency] = -1
-				}
-			}
-			bh.FiatRates = rates
-		}
-	}
-	return nil
-}
-
 // GetBalanceHistory returns history of balance for given address
 func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32) (BalanceHistories, error) {
 	currencies = removeEmpty(currencies)
@@ -1763,7 +1855,10 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 		}
 	}
 	bha := bhs.SortAndAggregate(groupBy)
-	err = w.setFiatRateToBalanceHistories(bha, currencies)
+	if w.metrics != nil {
+		w.metrics.BalanceHistoryPoints.With(common.Labels{"path": "address"}).Observe(float64(len(bha)))
+	}
+	err = w.setFiatRateToBalanceHistories(bha, currencies, "address")
 	if err != nil {
 		return nil, err
 	}
@@ -1786,7 +1881,8 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 	w.waitForBackendSync()
 	var err error
 	utxos := make(Utxos, 0, 8)
-	// store txids from mempool so that they are not added twice in case of import of new block while processing utxos, issue #275
+	// Store mempool outpoints so they are not duplicated from index in case of
+	// import of new block while processing utxos, issue #275.
 	inMempool := make(map[string]struct{})
 	// outputs could be spent in mempool, record and check mempool spends
 	spentInMempool := make(map[string]struct{})
@@ -1809,7 +1905,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 					// get outputs spent by the mempool tx
 					for i := range bchainTx.Vin {
 						vin := &bchainTx.Vin[i]
-						spentInMempool[vin.Txid+strconv.Itoa(int(vin.Vout))] = struct{}{}
+						spentInMempool[vin.Txid+":"+strconv.Itoa(int(vin.Vout))] = struct{}{}
 					}
 				}
 			}
@@ -1820,7 +1916,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 						vad, err := w.chainParser.GetAddrDescFromVout(vout)
 						if err == nil && bytes.Equal(addrDesc, vad) {
 							// report only outpoints that are not spent in mempool
-							_, e := spentInMempool[bchainTx.Txid+strconv.Itoa(i)]
+							_, e := spentInMempool[bchainTx.Txid+":"+strconv.Itoa(i)]
 							if !e {
 								coinbase := false
 								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
@@ -1833,7 +1929,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 								})
-								inMempool[bchainTx.Txid] = struct{}{}
+								inMempool[bchainTx.Txid+":"+strconv.Itoa(i)] = struct{}{}
 							}
 						}
 					}
@@ -1865,7 +1961,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				if err != nil {
 					return nil, err
 				}
-				_, e := spentInMempool[txid+strconv.Itoa(int(utxo.Vout))]
+				_, e := spentInMempool[txid+":"+strconv.Itoa(int(utxo.Vout))]
 				if !e {
 					confirmations := bestheight - int(utxo.Height) + 1
 					coinbase := false
@@ -1879,7 +1975,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 							coinbase = true
 						}
 					}
-					_, e = inMempool[txid]
+					_, e = inMempool[txid+":"+strconv.Itoa(int(utxo.Vout))]
 					if !e {
 						utxos = append(utxos, Utxo{
 							Txid:          txid,
@@ -1947,186 +2043,6 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	}
 	glog.Info("GetBlocks page ", page, ", ", time.Since(start))
 	return r, nil
-}
-
-// removeEmpty removes empty strings from a slice
-func removeEmpty(stringSlice []string) []string {
-	var ret []string
-	for _, str := range stringSlice {
-		if str != "" {
-			ret = append(ret, str)
-		}
-	}
-	return ret
-}
-
-// getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
-func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.CurrencyRatesTicker, token string) (*FiatTicker, error) {
-	if token != "" {
-		rates := make(map[string]float32)
-		if len(currencies) == 0 {
-			for currency := range ticker.Rates {
-				currency = strings.ToLower(currency)
-				rate := ticker.TokenRateInCurrency(token, currency)
-				if rate <= 0 {
-					rate = -1
-				}
-				rates[currency] = rate
-			}
-		} else {
-			for _, currency := range currencies {
-				currency = strings.ToLower(currency)
-				rate := ticker.TokenRateInCurrency(token, currency)
-				if rate <= 0 {
-					rate = -1
-				}
-				rates[currency] = rate
-			}
-		}
-		return &FiatTicker{
-			Timestamp: ticker.Timestamp.UTC().Unix(),
-			Rates:     rates,
-		}, nil
-	}
-	if len(currencies) == 0 {
-		// Return all available ticker rates
-		return &FiatTicker{
-			Timestamp: ticker.Timestamp.UTC().Unix(),
-			Rates:     ticker.Rates,
-		}, nil
-	}
-	// Check if currencies from the list are available in the ticker rates
-	rates := make(map[string]float32)
-	for _, currency := range currencies {
-		currency = strings.ToLower(currency)
-		if rate, found := ticker.Rates[currency]; found {
-			rates[currency] = rate
-		} else {
-			rates[currency] = -1
-		}
-	}
-	return &FiatTicker{
-		Timestamp: ticker.Timestamp.UTC().Unix(),
-		Rates:     rates,
-	}, nil
-}
-
-// GetCurrentFiatRates returns last available fiat rates
-func (w *Worker) GetCurrentFiatRates(currencies []string, token string) (*FiatTicker, error) {
-	vsCurrency := ""
-	currencies = removeEmpty(currencies)
-	if len(currencies) == 1 {
-		vsCurrency = currencies[0]
-	}
-	ticker := w.fiatRates.GetCurrentTicker(vsCurrency, token)
-	var err error
-	if ticker == nil {
-		if token == "" {
-			// fallback - get last fiat rate from db if not in current ticker
-			// not for tokens, many tokens do not have fiat rates at all and it is very costly to do DB search for token without an exchange rate
-			ticker, err = w.db.FiatRatesFindLastTicker(vsCurrency, token)
-		}
-		if err != nil {
-			return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
-		} else if ticker == nil {
-			return nil, NewAPIError("No tickers found!", true)
-		}
-	}
-	result, err := w.getFiatRatesResult(currencies, ticker, token)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// makeErrorRates returns a map of currencies, with each value equal to -1
-// used when there was an error finding ticker
-func makeErrorRates(currencies []string) map[string]float32 {
-	rates := make(map[string]float32)
-	for _, currency := range currencies {
-		rates[strings.ToLower(currency)] = -1
-	}
-	return rates
-}
-
-// GetFiatRatesForTimestamps returns fiat rates for each of the provided dates
-func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []string, token string) (*FiatTickers, error) {
-	if len(timestamps) == 0 {
-		return nil, NewAPIError("No timestamps provided", true)
-	}
-	vsCurrency := ""
-	currencies = removeEmpty(currencies)
-	if len(currencies) == 1 {
-		vsCurrency = currencies[0]
-	}
-	tickers, err := w.fiatRates.GetTickersForTimestamps(timestamps, vsCurrency, token)
-	if err != nil {
-		return nil, err
-	}
-	if tickers == nil {
-		return nil, NewAPIError("No tickers found", true)
-	}
-	if len(*tickers) != len(timestamps) {
-		glog.Error("GetFiatRatesForTimestamps: number of tickers does not match timestamps ", len(*tickers), ", ", len(timestamps))
-		return nil, NewAPIError("No tickers found", false)
-	}
-	fiatTickers := make([]FiatTicker, len(*tickers))
-	for i, t := range *tickers {
-		if t == nil {
-			fiatTickers[i] = FiatTicker{Timestamp: timestamps[i], Rates: makeErrorRates(currencies)}
-			continue
-		}
-		result, err := w.getFiatRatesResult(currencies, t, token)
-		if err != nil {
-			if apiErr, ok := err.(*APIError); ok {
-				if apiErr.Public {
-					return nil, err
-				}
-			}
-			fiatTickers[i] = FiatTicker{Timestamp: timestamps[i], Rates: makeErrorRates(currencies)}
-			continue
-		}
-		fiatTickers[i] = *result
-	}
-	return &FiatTickers{Tickers: fiatTickers}, nil
-}
-
-// GetFiatRatesForBlockID returns fiat rates for block height or block hash
-func (w *Worker) GetFiatRatesForBlockID(blockID string, currencies []string, token string) (*FiatTicker, error) {
-	bi, err := w.getBlockInfoFromBlockID(blockID)
-	if err != nil {
-		if err == bchain.ErrBlockNotFound {
-			return nil, NewAPIError(fmt.Sprintf("Block %v not found", blockID), true)
-		}
-		return nil, NewAPIError(fmt.Sprintf("Block %v not found, error: %v", blockID, err), false)
-	}
-	tickers, err := w.GetFiatRatesForTimestamps([]int64{bi.Time}, currencies, token)
-	if err != nil || tickers == nil || len(tickers.Tickers) == 0 {
-		return nil, err
-	}
-	return &tickers.Tickers[0], nil
-}
-
-// GetAvailableVsCurrencies returns the list of available versus currencies for exchange rates
-func (w *Worker) GetAvailableVsCurrencies(timestamp int64, token string) (*AvailableVsCurrencies, error) {
-	tickers, err := w.fiatRates.GetTickersForTimestamps([]int64{timestamp}, "", token)
-	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
-	}
-	if tickers == nil || len(*tickers) == 0 {
-		return nil, NewAPIError("No tickers found", true)
-	}
-	ticker := (*tickers)[0]
-	keys := make([]string, 0, len(ticker.Rates))
-	for k := range ticker.Rates {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys) // sort to get deterministic results
-
-	return &AvailableVsCurrencies{
-		Timestamp: ticker.Timestamp.Unix(),
-		Tickers:   keys,
-	}, nil
 }
 
 // getBlockHashBlockID returns block hash from block height or block hash

@@ -147,7 +147,8 @@ type WsSendTransactionReq struct {
 
 // WsSubscribeAddressesReq is used to subscribe to updates on a list of addresses.
 type WsSubscribeAddressesReq struct {
-	Addresses []string `json:"addresses" ts_doc:"List of addresses to subscribe for updates (e.g., new transactions)."`
+	Addresses   []string `json:"addresses" ts_doc:"List of addresses to subscribe for updates (e.g., new transactions)."`
+	NewBlockTxs bool     `json:"newBlockTxs,omitempty" ts_doc:"If true, also publish confirmed transactions for subscribed addresses when new blocks are connected."`
 }
 
 // WsSubscribeFiatRatesReq subscribes to updates of fiat rates for a specific currency or set of tokens.

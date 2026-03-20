@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
@@ -39,29 +40,121 @@ func (p *BaseParser) GetAddrDescForUnknownInput(tx *Tx, input int) AddressDescri
 	return nil
 }
 
-const zeros = "0000000000000000000000000000000000000000"
+const (
+	zeros                   = "0000000000000000000000000000000000000000"
+	maxAmountExpandedDigits = 1024
+)
 
 // AmountToBigInt converts amount in common.JSONNumber (string) to big.Int
 // it uses string operations to avoid problems with rounding
 func (p *BaseParser) AmountToBigInt(n common.JSONNumber) (big.Int, error) {
 	var r big.Int
-	s := string(n)
-	i := strings.IndexByte(s, '.')
 	d := min(p.AmountDecimalPoint, len(zeros))
-	if i == -1 {
-		s = s + zeros[:d]
+	if d < 0 {
+		d = 0
+	}
+	s := string(n)
+	if strings.IndexAny(s, "eE") == -1 {
+		s = normalizePlainAmountToIntString(s, d)
 	} else {
-		z := d - len(s) + i + 1
-		if z > 0 {
-			s = s[:i] + s[i+1:] + zeros[:z]
-		} else {
-			s = s[:i] + s[i+1:len(s)+z]
+		var err error
+		s, err = normalizeScientificAmountToIntString(s, d)
+		if err != nil {
+			return r, errors.New("AmountToBigInt: failed to convert")
 		}
 	}
 	if _, ok := r.SetString(s, 10); !ok {
 		return r, errors.New("AmountToBigInt: failed to convert")
 	}
 	return r, nil
+}
+
+func normalizePlainAmountToIntString(s string, decimalPoint int) string {
+	i := strings.IndexByte(s, '.')
+	if i == -1 {
+		return s + zeros[:decimalPoint]
+	}
+	z := decimalPoint - len(s) + i + 1
+	if z > 0 {
+		return s[:i] + s[i+1:] + zeros[:z]
+	}
+	return s[:i] + s[i+1:len(s)+z]
+}
+
+func normalizeScientificAmountToIntString(s string, decimalPoint int) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		s = "0"
+	}
+
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign = "-"
+		s = s[1:]
+	} else if strings.HasPrefix(s, "+") {
+		s = s[1:]
+	}
+	if s == "" {
+		return "", errors.New("empty mantissa")
+	}
+
+	exponent := 0
+	if i := strings.IndexAny(s, "eE"); i != -1 {
+		if strings.IndexAny(s[i+1:], "eE") != -1 {
+			return "", errors.New("invalid scientific notation")
+		}
+		var err error
+		exponent, err = strconv.Atoi(s[i+1:])
+		if err != nil {
+			return "", err
+		}
+		s = s[:i]
+		if s == "" {
+			return "", errors.New("empty mantissa")
+		}
+	}
+
+	fractionDigits := 0
+	if i := strings.IndexByte(s, '.'); i != -1 {
+		if strings.IndexByte(s[i+1:], '.') != -1 {
+			return "", errors.New("invalid decimal notation")
+		}
+		fractionDigits = len(s) - i - 1
+		s = s[:i] + s[i+1:]
+	}
+	if s == "" {
+		return "", errors.New("empty value")
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return "", errors.New("invalid value")
+		}
+	}
+
+	s = strings.TrimLeft(s, "0")
+	if s == "" {
+		return "0", nil
+	}
+
+	shift := exponent - fractionDigits + decimalPoint
+	if shift >= 0 {
+		if shift > maxAmountExpandedDigits || len(s) > maxAmountExpandedDigits-shift {
+			return "", errors.New("expanded value too large")
+		}
+		s = s + strings.Repeat("0", shift)
+	} else {
+		keep := len(s) + shift
+		if keep > 0 {
+			s = s[:keep]
+		} else {
+			s = "0"
+		}
+	}
+
+	if sign == "-" && s != "0" {
+		s = sign + s
+	}
+	return s, nil
 }
 
 // AmountToDecimalString converts amount in big.Int to string with decimal point in the place defined by the parameter d

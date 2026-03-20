@@ -47,7 +47,7 @@ func NewBNBSmartChainRPC(config json.RawMessage, pushHandler func(bchain.Notific
 func (b *BNBSmartChainRPC) Initialize() error {
 	b.OpenRPC = eth.OpenRPC
 
-	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)
+	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL, b.ChainConfig.RPCURLWS)
 	if err != nil {
 		return err
 	}

@@ -82,6 +82,7 @@ func (p *UnobtaniumParser) ParseBlock(b []byte) (*bchain.Block, error) {
 
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
+			Prev: h.PrevBlock.String(), // needed for fork detection when parsing raw blocks
 			Size: len(b),
 			Time: h.Timestamp.Unix(),
 		},

@@ -297,6 +297,7 @@ func (p *BitcoinLikeParser) ParseBlock(b []byte) (*bchain.Block, error) {
 
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
+			Prev: w.Header.PrevBlock.String(), // needed for fork detection when parsing raw blocks
 			Size: len(b),
 			Time: w.Header.Timestamp.Unix(),
 		},

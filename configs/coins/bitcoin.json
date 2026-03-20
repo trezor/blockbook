@@ -13,6 +13,7 @@
     },
     "ipc": {
         "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_user": "rpc",
         "rpc_pass": "rpc",
         "rpc_timeout": 25,
@@ -59,6 +60,7 @@
             "parse": true,
             "mempool_workers": 8,
             "mempool_sub_workers": 2,
+            "mempool_resync_batch_size": 100,
             "block_addresses_to_keep": 300,
             "xpub_magic": 76067358,
             "xpub_magic_segwit_p2sh": 77429938,

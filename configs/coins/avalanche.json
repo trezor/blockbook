@@ -12,7 +12,8 @@
         "blockbook_public": 9198
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}/ext/bc/C/ws",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}/ext/bc/C/rpc",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}/ext/bc/C/ws",
         "rpc_timeout": 25
     },
     "backend": {
@@ -25,7 +26,7 @@
         "verification_source": "https://github.com/ava-labs/avalanchego/releases/download/v1.13.2/avalanchego-linux-amd64-v1.13.2.tar.gz.sig",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": [],
-        "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/avalanchego --data-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --http-port {{.Ports.BackendRPC}} --staking-port {{.Ports.BackendP2P}} --public-ip 127.0.0.1 --staking-ephemeral-cert-enabled --chain-config-content ewogICJDIjp7CiAgICAiY29uZmlnIjoiZXdvZ0lDSmxkR2d0WVhCcGN5STZXd29nSUNBZ0ltVjBhQ0lzQ2lBZ0lDQWlaWFJvTFdacGJIUmxjaUlzQ2lBZ0lDQWlibVYwSWl3S0lDQWdJQ0prWldKMVp5MTBjbUZqWlhJaUxBb2dJQ0FnSW5kbFlqTWlMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXVjBhQ0lzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RZbXh2WTJ0amFHRnBiaUlzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RkSEpoYm5OaFkzUnBiMjRpTEFvZ0lDQWdJbWx1ZEdWeWJtRnNMWFI0TFhCdmIyd2lMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXUmxZblZuSWdvZ0lGMHNDaUFnSW5OMFlYUmxMWE41Ym1NdFpXNWhZbXhsWkNJNklHWmhiSE5sQ24wPSIKICB9Cn0=",
+        "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/avalanchego --data-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --http-port {{.Ports.BackendRPC}} --http-host {{.Env.RPCBindHost}} --staking-port {{.Ports.BackendP2P}} --public-ip 127.0.0.1 --staking-ephemeral-cert-enabled --chain-config-content ewogICJDIjp7CiAgICAiY29uZmlnIjoiZXdvZ0lDSmxkR2d0WVhCcGN5STZXd29nSUNBZ0ltVjBhQ0lzQ2lBZ0lDQWlaWFJvTFdacGJIUmxjaUlzQ2lBZ0lDQWlibVYwSWl3S0lDQWdJQ0prWldKMVp5MTBjbUZqWlhJaUxBb2dJQ0FnSW5kbFlqTWlMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXVjBhQ0lzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RZbXh2WTJ0amFHRnBiaUlzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RkSEpoYm5OaFkzUnBiMjRpTEFvZ0lDQWdJbWx1ZEdWeWJtRnNMWFI0TFhCdmIyd2lMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXUmxZblZuSWdvZ0lGMHNDaUFnSW5OMFlYUmxMWE41Ym1NdFpXNWhZbXhsWkNJNklHWmhiSE5sQ24wPSIKICB9Cn0=",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",

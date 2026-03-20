@@ -12,6 +12,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -134,7 +135,24 @@ func mainWithExitCode() int {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	chanOsSignal = make(chan os.Signal, 1)
-	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	shutdownSigCh := make(chan os.Signal, 1)
+	signalCh := make(chan os.Signal, 1)
+	// Use a single signal listener and fan out shutdown signals to avoid races
+	// where long-running workers consume the OS signal before main shutdown runs.
+	signal.Notify(signalCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	var shutdownOnce sync.Once
+	go func() {
+		sig := <-signalCh
+		shutdownOnce.Do(func() {
+			// Flip global shutdown state and close chanOsSignal to broadcast shutdown.
+			// Closing the channel unblocks select loops that only receive from it.
+			common.SetInShutdown()
+			close(chanOsSignal)
+			// Ensure waitForSignalAndShutdown can proceed even if the OS signal
+			// was already consumed by another goroutine in previous versions.
+			shutdownSigCh <- sig
+		})
+	}()
 
 	glog.Infof("Blockbook: %+v, debug mode %v", common.GetVersionInfo(), *debugMode)
 
@@ -174,7 +192,13 @@ func mainWithExitCode() int {
 		glog.Error("rocksDB: ", err)
 		return exitCodeFatal
 	}
-	defer index.Close()
+	defer func() {
+		glog.Info("shutdown: rocksdb close start")
+		if err := index.Close(); err != nil {
+			glog.Error("shutdown: rocksdb close error: ", err)
+		}
+		glog.Info("shutdown: rocksdb close finished")
+	}()
 
 	internalState, err = newInternalState(config, index, *enableSubNewTx)
 	if err != nil {
@@ -358,17 +382,18 @@ func mainWithExitCode() int {
 	if internalServer != nil || publicServer != nil || chain != nil {
 		// start fiat rates downloader only if not shutting down immediately
 		initDownloaders(index, chain, config)
-		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
+		waitForSignalAndShutdown(internalServer, publicServer, chain, shutdownSigCh, 10*time.Second)
 	}
 
+	// Always stop periodic state storage to prevent writes during shutdown.
+	close(chanStoreInternalState)
 	if *synchronize {
 		close(chanSyncIndex)
 		close(chanSyncMempool)
-		close(chanStoreInternalState)
 		<-chanSyncIndexDone
 		<-chanSyncMempoolDone
-		<-chanStoreInternalStateDone
 	}
+	<-chanStoreInternalStateDone
 	return exitCodeOK
 }
 
@@ -520,11 +545,17 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
-		if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
+		if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
+			if err == db.ErrOperationInterrupted || common.IsInShutdown() {
+				return
+			}
 			glog.Error("syncIndexLoop ", errors.ErrorStack(err), ", will retry...")
 			// retry once in case of random network error, after a slight delay
 			time.Sleep(time.Millisecond * 2500)
-			if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
+			if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
+				if err == db.ErrOperationInterrupted || common.IsInShutdown() {
+					return
+				}
 				glog.Error("syncIndexLoop ", errors.ErrorStack(err))
 			}
 		}
@@ -532,14 +563,14 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop stopped")
 }
 
-func onNewBlockHash(hash string, height uint32) {
+func onNewBlock(block *bchain.Block) {
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error("onNewBlockHash recovered from panic: ", r)
 		}
 	}()
 	for _, c := range callbacksOnNewBlock {
-		c(hash, height)
+		c(block)
 	}
 }
 
@@ -572,12 +603,11 @@ func syncMempoolLoop() {
 }
 
 func storeInternalStateLoop() {
-	stopCompute := make(chan os.Signal)
 	defer func() {
-		close(stopCompute)
 		close(chanStoreInternalStateDone)
 	}()
-	signal.Notify(stopCompute, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	// Reuse the global shutdown channel so compute work stops when shutdown begins.
+	stopCompute := chanOsSignal
 	var computeRunning bool
 	lastCompute := time.Now()
 	lastAppInfo := time.Now()
@@ -653,11 +683,17 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 	}
 }
 
-func waitForSignalAndShutdown(internal *server.InternalServer, public *server.PublicServer, chain bchain.BlockChain, timeout time.Duration) {
-	sig := <-chanOsSignal
+func waitForSignalAndShutdown(internal *server.InternalServer, public *server.PublicServer, chain bchain.BlockChain, shutdownSig <-chan os.Signal, timeout time.Duration) {
+	// Read the first OS signal from the dedicated channel to avoid races with worker shutdown paths.
+	sig := <-shutdownSig
 	common.SetInShutdown()
-	glog.Infof("shutdown: %v", sig)
+	if sig != nil {
+		glog.Infof("shutdown: %v", sig)
+	} else {
+		glog.Info("shutdown: signal received")
+	}
 
+	// Bound server/RPC shutdown; RocksDB close happens after main returns via defer.
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

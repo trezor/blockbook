@@ -1,0 +1,56 @@
+{
+    "blockHeight": 423965490,
+    "blockHash": "0x2f2bccf48e643efcbfcca668868303aaf576b31b4d7d3d21d3b6ade88fd6feb4",
+    "blockTime": 1769067867,
+    "blockSize": 3790,
+    "blockTxs": [
+        "0x3fe83860a6732de961e4d0f3679de1a6761dcf7dc0290b7caba452c44100c531",
+        "0x3d2fddc39cf04c6c1727fec0b19fa9bbca4922fe5ca6b8aa6e1f8189ee7becaf",
+        "0xd6255893cf0b60a2425421822b2137200eb32edb345ce502e5c83c393fdf4845",
+        "0x67d497582571a24ba0c05079827159c34801d598120180c515162570ed0b775c",
+        "0xe2763421cc1800264b310cc9648c65c6b37bf73abce08af3cf056a1d23ad2b9a",
+        "0x0d905c5db014ba53dd87079cebf13c9d04ed5c5f7fd6b5698ac146873ce4e7ba",
+        "0x1271324532f2d74bf452ca33710ff180e618b9e4c5fdee0aabc0c54852d6c771",
+        "0x985a3cfe3d4e4549f7d541d123af4d82fb1f8066ac73dfc36ae925c0ca80589e",
+        "0x55d0fb614deee810467a5923435f6366d7c3d3f4b20d5efa1af5cda8dba9f157",
+        "0xda8d5ee6592b485a5a9d678aaf50c2aa953c017cf35cdc5ed16a5966c2b823e3",
+        "0x759cdeeb1d1ce970510c6ea550baa6056039f80c0ac643068d9297abe97c540a",
+        "0x48edb1def9d7acf6d2aba6910e6fb3360f5701f3c5965fdc41e3ca349686178a",
+        "0xf136aeb46630fa2b67c7ccce742555ab483fa5c03476ac4666dc169aa7fc860c",
+        "0x4905c5f124342aa2f18e0db56f40328737b2f6ed230dbdd39b596ac660a0ca82",
+        "0xde9ac37615f9d13c957dac39ebf36ce58e14e0bed639911cb7422c7046cd8a76"
+    ],
+    "ethCallBatch": {
+        "address": "0xf70da97812cb96acdf810712aa562db8dfa3dbef",
+        "contracts": [
+            "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+            "0xFF970A61A04b1cA14834A43f5de4533eBDDB5CC8",
+            "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+            "0xDA10009cBD5D07dd0CeCc66161FC93D7c9000da1"
+        ]
+    },
+    "txDetails": {
+        "0x67d497582571a24ba0c05079827159c34801d598120180c515162570ed0b775c": {
+            "txid": "0x67d497582571a24ba0c05079827159c34801d598120180c515162570ed0b775c",
+            "blockTime": 1769067867,
+            "time": 1769067867,
+            "vin": [
+                {
+                    "addresses": [
+                        "0xf70da97812cb96acdf810712aa562db8dfa3dbef"
+                    ]
+                }
+            ],
+            "vout": [
+                {
+                    "value": "0.003489801916499072",
+                    "scriptPubKey": {
+                        "addresses": [
+                            "0x8c432d3ad05afaa7238f2786e324a30b21e63d31"
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

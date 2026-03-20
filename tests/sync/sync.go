@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
@@ -162,6 +163,16 @@ func makeRocksDB(parser bchain.BlockChainParser, m *common.Metrics, is *common.I
 
 var metricsRegistry = map[string]*common.Metrics{}
 
+// Lower thresholds speed up integration tests that intentionally trigger
+// missing-block retries.
+var testSyncWorkerConfig = &db.SyncWorkerConfig{
+	MissingBlockRetry: db.MissingBlockRetryConfig{
+		RecheckThreshold:    3,
+		TipRecheckThreshold: 2,
+		RetryDelay:          50 * time.Millisecond,
+	},
+}
+
 func getMetrics(name string) (*common.Metrics, error) {
 	if m, found := metricsRegistry[name]; found {
 		return m, nil
@@ -190,7 +201,7 @@ func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, startHeight uint32, 
 
 	ch := make(chan os.Signal)
 
-	sw, err := db.NewSyncWorker(d, h.Chain, 8, 0, int(startHeight), false, ch, m, is)
+	sw, err := db.NewSyncWorkerWithConfig(d, h.Chain, 8, 0, int(startHeight), false, ch, m, is, testSyncWorkerConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

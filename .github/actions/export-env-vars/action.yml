@@ -1,0 +1,48 @@
+name: Export Repository Variables
+description: Export all repository/environment variables from a JSON map into GITHUB_ENV.
+
+inputs:
+  vars_json:
+    description: JSON object map of repository/environment variables.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Export variables to GITHUB_ENV
+      shell: bash
+      env:
+        VARS_JSON: ${{ inputs.vars_json }}
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        import uuid
+
+        vars_map = json.loads(os.environ.get("VARS_JSON", "{}"))
+        env_path = os.environ["GITHUB_ENV"]
+        alias_prefixes = (
+            "BB_RPC_URL_HTTP_",
+            "BB_RPC_URL_WS_",
+            "BB_RPC_BIND_HOST_",
+            "BB_RPC_ALLOW_IP_",
+            "BB_TEST_API_URL_HTTP_",
+            "BB_TEST_API_URL_WS_",
+        )
+
+        def write_env_var(env_file, key, value):
+            delimiter = f"__{uuid.uuid4().hex}__"
+            env_file.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
+
+        with open(env_path, "a", encoding="utf-8") as env_file:
+            for key, value in vars_map.items():
+                text = "" if value is None else str(value)
+                normalized = key
+                for prefix in alias_prefixes:
+                    if key.startswith(prefix):
+                        alias = key[len(prefix):]
+                        # Blockbook env lookups use lowercase coin aliases from configs/coins.
+                        normalized = prefix + alias.lower()
+                        break
+                write_env_var(env_file, normalized, text)
+        PY

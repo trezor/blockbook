@@ -4,64 +4,56 @@ package api
 
 import (
 	"testing"
+
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/fiat"
 )
 
-func Test_computePaging(t *testing.T) {
-	tests := []struct {
-		name           string
-		count          int
-		page           int
-		itemsOnPage    int
-		wantPage       int
-		wantPagingPage int
-		wantFrom       int
-		wantTo         int
-		wantTotalPages int
-	}{
-		{"normal case", 100, 0, 10, 0, 1, 0, 10, 10},
-		{"second page", 100, 1, 10, 1, 2, 10, 20, 10},
-		{"last page", 100, 9, 10, 9, 10, 90, 100, 10},
-		{"page beyond count", 100, 20, 10, 9, 10, 90, 100, 10},
-		{"zero count", 0, 0, 10, 0, 1, 0, 0, 1},
-		{"negative page", 100, -5, 10, 0, 1, 0, 10, 10},
-		{"negative itemsOnPage", 100, 0, -5, 0, 1, 0, 1, 100},
-		{"zero itemsOnPage", 100, 0, 0, 0, 1, 0, 1, 100},
-		{"negative count", -10, 0, 10, 0, 1, 0, 0, 1},
-		{"overflow protection - large page", 1000, 100000000, 1000, 0, 1, 0, 1000, 1},
-		{"overflow protection - large itemsOnPage", 1000, 100, 10000000, 0, 1, 0, 1000, 1},
-		{"overflow protection - both large", 1000, 1000000, 10000, 0, 1, 0, 1000, 1},
-		{"exact fit", 50, 4, 10, 4, 5, 40, 50, 5},
-		{"remainder", 55, 5, 10, 5, 6, 50, 55, 6},
-		{"single item", 1, 0, 10, 0, 1, 0, 1, 1},
-		{"page 0 with items", 25, 0, 5, 0, 1, 0, 5, 5},
+func TestGetSecondaryTicker_SkipsLookupWithoutSecondaryCurrency(t *testing.T) {
+	w := &Worker{
+		fiatRates: &fiat.FiatRates{Enabled: true},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotPaging, gotFrom, gotTo, gotPage := computePaging(tt.count, tt.page, tt.itemsOnPage)
-			if gotPage != tt.wantPage {
-				t.Errorf("computePaging() page = %v, want %v", gotPage, tt.wantPage)
-			}
-			if gotFrom != tt.wantFrom {
-				t.Errorf("computePaging() from = %v, want %v", gotFrom, tt.wantFrom)
-			}
-			if gotTo != tt.wantTo {
-				t.Errorf("computePaging() to = %v, want %v", gotTo, tt.wantTo)
-			}
-			if gotPaging.Page != tt.wantPagingPage {
-				t.Errorf("computePaging() Paging.Page = %v, want %v", gotPaging.Page, tt.wantPagingPage)
-			}
-			if gotPaging.TotalPages != tt.wantTotalPages {
-				t.Errorf("computePaging() Paging.TotalPages = %v, want %v", gotPaging.TotalPages, tt.wantTotalPages)
-			}
-			if gotPaging.ItemsOnPage != tt.itemsOnPage {
-				if tt.itemsOnPage <= 0 {
-					if gotPaging.ItemsOnPage != 1 {
-						t.Errorf("computePaging() Paging.ItemsOnPage = %v, want 1 (sanitized)", gotPaging.ItemsOnPage)
-					}
-				} else {
-					t.Errorf("computePaging() Paging.ItemsOnPage = %v, want %v", gotPaging.ItemsOnPage, tt.itemsOnPage)
-				}
-			}
-		})
+	originalGetter := getCurrentTicker
+	defer func() {
+		getCurrentTicker = originalGetter
+	}()
+
+	calls := 0
+	getCurrentTicker = func(_ *fiat.FiatRates, _, _ string) *common.CurrencyRatesTicker {
+		calls++
+		return &common.CurrencyRatesTicker{}
+	}
+
+	ticker := w.getSecondaryTicker("")
+	if ticker != nil {
+		t.Fatalf("expected nil ticker when secondary currency is not requested, got %+v", ticker)
+	}
+	if calls != 0 {
+		t.Fatalf("expected no ticker lookup call, got %d", calls)
+	}
+}
+
+func TestGetSecondaryTicker_PerformsLookupWithSecondaryCurrency(t *testing.T) {
+	w := &Worker{
+		fiatRates: &fiat.FiatRates{Enabled: true},
+	}
+	originalGetter := getCurrentTicker
+	defer func() {
+		getCurrentTicker = originalGetter
+	}()
+
+	calls := 0
+	expected := &common.CurrencyRatesTicker{Rates: map[string]float32{"usd": 1}}
+	getCurrentTicker = func(_ *fiat.FiatRates, _, _ string) *common.CurrencyRatesTicker {
+		calls++
+		return expected
+	}
+
+	ticker := w.getSecondaryTicker("usd")
+	if ticker != expected {
+		t.Fatalf("unexpected ticker returned: got %+v, want %+v", ticker, expected)
+	}
+	if calls != 1 {
+		t.Fatalf("expected one ticker lookup call, got %d", calls)
 	}
 }

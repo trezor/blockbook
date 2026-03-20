@@ -4,7 +4,8 @@
         "shortcut": "BNB",
         "network": "BSC",
         "label": "BNB Smart Chain",
-        "alias": "bsc_archive"
+        "alias": "bsc_archive",
+        "test_name": "bsc"
     },
     "ports": {
         "backend_rpc": 8065,
@@ -14,7 +15,8 @@
         "blockbook_public": 9165
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 240
     },
     "backend": {

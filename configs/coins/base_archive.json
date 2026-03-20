@@ -4,7 +4,8 @@
         "shortcut": "ETH",
         "network": "BASE",
         "label": "Base",
-        "alias": "base_archive"
+        "alias": "base_archive",
+        "test_name": "base"
     },
     "ports": {
         "backend_rpc": 8211,
@@ -15,7 +16,8 @@
         "blockbook_public": 9311
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 25
     },
     "backend": {

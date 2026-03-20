@@ -154,6 +154,10 @@ func init() {
 	BlockChainFactories["Base Archive"] = base.NewBaseRPC
 }
 
+type metricsSetter interface {
+	SetMetrics(*common.Metrics)
+}
+
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin
 func NewBlockChain(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics) (bchain.BlockChain, bchain.Mempool, error) {
 	data, err := os.ReadFile(configfile)
@@ -172,6 +176,9 @@ func NewBlockChain(coin string, configfile string, pushHandler func(bchain.Notif
 	bc, err := bcf(config, pushHandler)
 	if err != nil {
 		return nil, nil, err
+	}
+	if withMetrics, ok := bc.(metricsSetter); ok {
+		withMetrics.SetMetrics(metrics)
 	}
 	err = bc.Initialize()
 	if err != nil {
@@ -348,6 +355,11 @@ func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, co
 	return c.b.EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalances(addrDesc bchain.AddressDescriptor, contractDescs []bchain.AddressDescriptor) (v []*big.Int, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractBalances", s, err) }(time.Now())
+	return c.b.EthereumTypeGetErc20ContractBalances(addrDesc, contractDescs)
+}
+
 // GetTokenURI returns URI of non fungible or multi token defined by token id
 func (c *blockChainWithMetrics) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTokenURI", s, err) }(time.Now())
@@ -374,9 +386,25 @@ func (c *blockChainWithMetrics) EthereumTypeGetRawTransaction(txid string) (v st
 	return c.b.EthereumTypeGetRawTransaction(txid)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetTransactionReceipt(txid string) (v *bchain.RpcReceipt, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetTransactionReceipt", s, err) }(time.Now())
+	return c.b.EthereumTypeGetTransactionReceipt(txid)
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics
+}
+
+func (c *mempoolWithMetrics) chainTypeLabel() string {
+	switch c.mempool.(type) {
+	case *bchain.MempoolBitcoinType:
+		return "utxo"
+	case *bchain.MempoolEthereumType:
+		return "evm"
+	default:
+		return "other"
+	}
 }
 
 func (c *mempoolWithMetrics) observeRPCLatency(method string, start time.Time, err error) {
@@ -388,8 +416,26 @@ func (c *mempoolWithMetrics) observeRPCLatency(method string, start time.Time, e
 }
 
 func (c *mempoolWithMetrics) Resync() (count int, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(time.Now())
+	start := time.Now()
+	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(start)
 	count, err = c.mempool.Resync()
+	duration := time.Since(start)
+	c.m.MempoolResyncDuration.Observe(float64(duration) / 1e6) // in milliseconds
+	status := "success"
+	if err != nil {
+		status = "failure"
+	}
+	throughput := 0.0
+	if err == nil {
+		seconds := duration.Seconds()
+		if seconds > 0 {
+			throughput = float64(count) / seconds
+		}
+	}
+	c.m.MempoolResyncThroughput.With(common.Labels{
+		"chain":  c.chainTypeLabel(),
+		"status": status,
+	}).Observe(throughput)
 	if err == nil {
 		c.m.MempoolSize.Set(float64(count))
 	}
@@ -417,4 +463,22 @@ func (c *mempoolWithMetrics) GetTransactionTime(txid string) uint32 {
 
 func (c *mempoolWithMetrics) GetTxidFilterEntries(filterScripts string, fromTimestamp uint32) (bchain.MempoolTxidFilterEntries, error) {
 	return c.mempool.GetTxidFilterEntries(filterScripts, fromTimestamp)
+}
+
+func (c *blockChainWithMetrics) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	if ensResolver, ok := c.b.(interface {
+		ResolveENS(string) (*bchain.ENSResolution, error)
+	}); ok {
+		return ensResolver.ResolveENS(name)
+	}
+	return nil, errors.New("ENS resolution not supported by underlying chain")
+}
+
+func (c *blockChainWithMetrics) CheckENSExpiration(name string) (bool, error) {
+	if ensResolver, ok := c.b.(interface {
+		CheckENSExpiration(string) (bool, error)
+	}); ok {
+		return ensResolver.CheckENSExpiration(name)
+	}
+	return false, errors.New("ENS expiration check not supported by underlying chain")
 }

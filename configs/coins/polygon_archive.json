@@ -4,7 +4,8 @@
         "shortcut": "POL",
         "network": "POL",
         "label": "Polygon",
-        "alias": "polygon_archive_bor"
+        "alias": "polygon_archive_bor",
+        "test_name": "polygon"
     },
     "ports": {
         "backend_rpc": 8072,
@@ -14,7 +15,8 @@
         "blockbook_public": 9172
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 25
     },
     "backend": {

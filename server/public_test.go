@@ -4,11 +4,14 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -182,6 +185,35 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
+type repeatedByteReader struct {
+	remaining int64
+}
+
+func (r *repeatedByteReader) Read(p []byte) (int, error) {
+	if r.remaining <= 0 {
+		return 0, io.EOF
+	}
+	n := int64(len(p))
+	if n > r.remaining {
+		n = r.remaining
+	}
+	for i := int64(0); i < n; i++ {
+		p[i] = '0'
+	}
+	r.remaining -= n
+	return int(n), nil
+}
+
+func newPostRequestWithContentLength(u string, contentLength int64) *http.Request {
+	r, err := http.NewRequest("POST", u, &repeatedByteReader{remaining: contentLength})
+	if err != nil {
+		glog.Fatal(err)
+	}
+	r.Header.Add("Content-Type", "application/octet-stream")
+	r.ContentLength = contentLength
+	return r
+}
+
 func insertFiatRate(date string, rates map[string]float32, tokenRates map[string]float32, d *db.RocksDB) error {
 	convertedDate, err := time.Parse("20060102150405", date)
 	if err != nil {
@@ -246,6 +278,29 @@ type httpTests struct {
 	body        []string
 }
 
+type fiatTickerResponse struct {
+	Timestamp int64              `json:"ts"`
+	Rates     map[string]float32 `json:"rates"`
+}
+
+type fiatTickersListResponse struct {
+	Timestamp int64    `json:"ts"`
+	Tickers   []string `json:"available_currencies"`
+}
+
+type balanceHistoryResponse struct {
+	Time       uint32             `json:"time"`
+	Txs        uint32             `json:"txs"`
+	Received   string             `json:"received"`
+	Sent       string             `json:"sent"`
+	SentToSelf string             `json:"sentToSelf"`
+	Rates      map[string]float32 `json:"rates"`
+}
+
+type apiErrorResponse struct {
+	Error string `json:"error"`
+}
+
 func performHttpTests(tests []httpTests, t *testing.T, ts *httptest.Server) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -273,6 +328,58 @@ func performHttpTests(tests []httpTests, t *testing.T, ts *httptest.Server) {
 			}
 		})
 	}
+}
+
+func mustGetJSON(t *testing.T, endpointURL string, statusCode int, out interface{}) {
+	t.Helper()
+
+	resp, err := http.DefaultClient.Do(newGetRequest(endpointURL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != statusCode {
+		t.Fatalf("StatusCode = %v, want %v, body = %s", resp.StatusCode, statusCode, string(body))
+	}
+	if contentType := resp.Header.Get("Content-Type"); contentType != "application/json; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", contentType, "application/json; charset=utf-8")
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		t.Fatalf("failed to decode JSON body %q: %v", string(body), err)
+	}
+}
+
+func TestReadSendTxHexFromBody(t *testing.T) {
+	const maxBodyLen int64 = 6
+	assertAPIError := func(t *testing.T, err error, want string) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("expected error %q, got nil", want)
+		}
+		if err.Error() != want {
+			t.Fatalf("unexpected error %q, want %q", err.Error(), want)
+		}
+	}
+
+	t.Run("accepts body exactly at limit", func(t *testing.T) {
+		got, err := readSendTxHexFromBody(strings.NewReader("123456"), maxBodyLen)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "123456" {
+			t.Fatalf("got %q, want %q", got, "123456")
+		}
+	})
+
+	t.Run("rejects body larger than limit by one byte", func(t *testing.T) {
+		_, err := readSendTxHexFromBody(strings.NewReader("1234567"), maxBodyLen)
+		assertAPIError(t, err, "Tx blob too large")
+	})
 }
 
 func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
@@ -393,7 +500,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,shrink-to-fit=no"><link rel="stylesheet" href="/static/css/bootstrap.5.2.2.min.css"><link rel="stylesheet" href="/static/css/main.min.4.css"><script>var hasSecondary=false;</script><script src="/static/js/bootstrap.bundle.5.2.2.min.js"></script><script src="/static/js/main.min.4.js"></script><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="description" content="Trezor Fake Coin Explorer"><title>Trezor Fake Coin Explorer</title></head><body><header id="header"><nav class="navbar navbar-expand-lg"><div class="container"><a class="navbar-brand" href="/" title="Home"><span class="trezor-logo"></span><span style="padding-left: 140px;">Fake Coin Explorer</span></a><button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="navbarSupportedContent"><ul class="navbar-nav m-md-auto"><li class="nav-item pe-xl-4"><a href="/blocks" class="nav-link">Blocks</a></li><li class="nav-item"><a href="/" class="nav-link">Status</a></li></ul><span class="navbar-form"><form class="d-flex" id="search" action="/search" method="get"><input name="q" type="text" class="form-control form-control-lg" placeholder="Search for block, transaction, address or xpub" focus="true"><button class="btn" type="submit"><span class="search-icon"></span></button></form></span></div></div></nav></header><main id="wrap"><div class="container"><div class="row"><div class="col-md-10 order-2 order-md-1"><h1>XPUB</h1><h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">tr([5c9e228d/86&#39;/1&#39;/0&#39;]tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/{0,1}/*)#4rqwxvej</span></h5><h4 class="row"><div class="col-lg-6"><span class="copyable">0 FAKE</span></div></h4></div><div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0"><div id="qrcode"></div><script type="text/javascript" src="/static/js/qrcode.min.js"></script><script type="text/javascript">new QRCode(document.getElementById("qrcode"), { text: "tr([5c9e228d\/86\u0027\/1\u0027\/0\u0027]tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN\/{0,1}\/*)#4rqwxvej", width: 120, height: 120 });</script></div></div><table class="table data-table info-table"><tbody><tr><td style="white-space: nowrap;"><h5>Confirmed</h5></td><td></td></tr><tr><td style="width: 25%;">Total Received</td><td><span class="amt copyable" cc="0 FAKE"><span class="prim-amt">0 FAKE</span></span></td></tr><tr><td>Total Sent</td><td><span class="amt copyable" cc="0 FAKE"><span class="prim-amt">0 FAKE</span></span></td></tr><tr><td>Final Balance</td><td><span class="amt copyable" cc="0 FAKE"><span class="prim-amt">0 FAKE</span></span></td></tr><tr><td>No. Transactions</td><td>0</td></tr><tr><td>Used XPUB Addresses</td><td>0</td></tr></tbody></table><table class="table data-table"><tbody><tr><td style="white-space: nowrap; width: 50%;"><h5>XPUB Addresses with Balance</h5></td><td colspan="3"></td></tr><tr><td colspan="4">No addresses</td></tr></tbody></table><div class="row mb-4"><div class="col-12"><a href="?tokens=used" class="ms-3 me-3">Show used XPUB addresses</a><a href="?tokens=derived">Show all derived XPUB addresses</a></div></div></div></main><footer id="footer"><div class="container"><nav class="navbar navbar-dark"><span class="navbar-nav"><a class="nav-link" href="https://satoshilabs.com/" target="_blank" rel="noopener noreferrer">Created by SatoshiLabs</a></span><span class="navbar-nav ml-md-auto"><a class="nav-link" href="https://trezor.io/terms-of-use" target="_blank" rel="noopener noreferrer">Terms of Use</a></span><span class="navbar-nav ml-md-auto d-md-flex d-none"><a class="nav-link" href="https://trezor.io/" target="_blank" rel="noopener noreferrer">Trezor</a></span><span class="navbar-nav ml-md-auto d-md-flex d-none"><a class="nav-link" href="https://trezor.io/trezor-suite" target="_blank" rel="noopener noreferrer">Suite</a></span><span class="navbar-nav ml-md-auto d-md-flex d-none"><a class="nav-link" href="https://trezor.io/support" target="_blank" rel="noopener noreferrer">Support</a></span><span class="navbar-nav ml-md-auto"><a class="nav-link" href="/sendtx">Send Transaction</a></span><span class="navbar-nav ml-md-auto d-lg-flex d-none"><a class="nav-link" href="https://trezor.io/compare" target="_blank" rel="noopener noreferrer">Don't have a Trezor? Get one!</a></span></nav></div></footer></body></html>`,
+				`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,shrink-to-fit=no"><link rel="stylesheet" href="/static/css/bootstrap.5.2.2.min.css"><link rel="stylesheet" href="/static/css/main.min.4.css"><script>var hasSecondary=false;</script><script src="/static/js/bootstrap.bundle.5.2.2.min.js"></script><script src="/static/js/main.min.4.js"></script><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="description" content="Trezor Fake Coin Explorer"><title>Trezor Fake Coin Explorer</title></head><body><header id="header"><nav class="navbar navbar-expand-lg"><div class="container"><a class="navbar-brand" href="/" title="Home"><span class="trezor-logo"></span><span style="padding-left: 140px;">Fake Coin Explorer</span></a><button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="navbarSupportedContent"><ul class="navbar-nav m-md-auto"><li class="nav-item pe-xl-4"><a href="/blocks" class="nav-link">Blocks</a></li><li class="nav-item"><a href="/" class="nav-link">Status</a></li></ul><span class="navbar-form"><form class="d-flex" id="search" action="/search" method="get"><input name="q" type="text" class="form-control form-control-lg" placeholder="Search for block, transaction, address or xpub" focus="true"><button class="btn" type="submit"><span class="search-icon"></span></button></form></span></div></div></nav></header><main id="wrap"><div class="container"><div class="row"><div class="col-md-10 order-2 order-md-1"><h1>XPUB</h1><h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">tr([5c9e228d/86&#39;/1&#39;/0&#39;]tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/{0,1}/*)#4rqwxvej</span></h5><h4 class="row"><div class="col-lg-6"><span class="copyable">0 FAKE</span></div></h4></div><div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0"><div id="qrcode"></div><script type="text/javascript" src="/static/js/qrcode.min.js"></script><script type="text/javascript">new QRCode(document.getElementById("qrcode"), { text: "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/{0,1}/*)#4rqwxvej", width: 120, height: 120 });</script></div></div><table class="table data-table info-table"><tbody><tr><td style="white-space: nowrap;"><h5>Confirmed</h5></td><td></td></tr><tr><td style="width: 25%;">Total Received</td><td><span class="amt copyable" cc="0 FAKE"><span class="prim-amt">0 FAKE</span></span></td></tr><tr><td>Total Sent</td><td><span class="amt copyable" cc="0 FAKE"><span class="prim-amt">0 FAKE</span></span></td></tr><tr><td>Final Balance</td><td><span class="amt copyable" cc="0 FAKE"><span class="prim-amt">0 FAKE</span></span></td></tr><tr><td>No. Transactions</td><td>0</td></tr><tr><td>Used XPUB Addresses</td><td>0</td></tr></tbody></table><table class="table data-table"><tbody><tr><td style="white-space: nowrap; width: 50%;"><h5>XPUB Addresses with Balance</h5></td><td colspan="3"></td></tr><tr><td colspan="4">No addresses</td></tr></tbody></table><div class="row mb-4"><div class="col-12"><a href="?tokens=used" class="ms-3 me-3">Show used XPUB addresses</a><a href="?tokens=derived">Show all derived XPUB addresses</a></div></div></div></main><footer id="footer"><div class="container"><nav class="navbar navbar-dark"><span class="navbar-nav"><a class="nav-link" href="https://satoshilabs.com/" target="_blank" rel="noopener noreferrer">Created by SatoshiLabs</a></span><span class="navbar-nav ml-md-auto"><a class="nav-link" href="https://trezor.io/terms-of-use" target="_blank" rel="noopener noreferrer">Terms of Use</a></span><span class="navbar-nav ml-md-auto d-md-flex d-none"><a class="nav-link" href="https://trezor.io/" target="_blank" rel="noopener noreferrer">Trezor</a></span><span class="navbar-nav ml-md-auto d-md-flex d-none"><a class="nav-link" href="https://trezor.io/trezor-suite" target="_blank" rel="noopener noreferrer">Suite</a></span><span class="navbar-nav ml-md-auto d-md-flex d-none"><a class="nav-link" href="https://trezor.io/support" target="_blank" rel="noopener noreferrer">Support</a></span><span class="navbar-nav ml-md-auto"><a class="nav-link" href="/sendtx">Send Transaction</a></span><span class="navbar-nav ml-md-auto d-lg-flex d-none"><a class="nav-link" href="https://trezor.io/compare" target="_blank" rel="noopener noreferrer">Don't have a Trezor? Get one!</a></span></nav></div></footer></body></html>`,
 			},
 		},
 		{
@@ -623,6 +730,42 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"ts":1574380800,"available_currencies":["eur","usd"]}`,
+			},
+		},
+		{
+			name:        "apiTickerList missing timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers-list"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter \"timestamp\" is not a valid Unix timestamp."}`,
+			},
+		},
+		{
+			name:        "apiTickerList invalid timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers-list?timestamp=abc"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter \"timestamp\" is not a valid Unix timestamp."}`,
+			},
+		},
+		{
+			name:        "apiMultiFiatRates missing timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter 'timestamp' is missing."}`,
+			},
+		},
+		{
+			name:        "apiMultiFiatRates invalid timestamp item",
+			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers?timestamp=1574344800,abc&currency=usd"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter 'timestamp' does not contain a valid Unix timestamp."}`,
 			},
 		},
 		{
@@ -887,6 +1030,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiSendTx POST too large",
+			r:           newPostRequestWithContentLength(ts.URL+"/api/v2/sendtx/", maxSendTxBodyBytes+1),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Tx blob too large"}`,
+			},
+		},
+		{
 			name:        "apiEstimateFee",
 			r:           newGetRequest(ts.URL + "/api/estimatefee/123?conservative=false"),
 			status:      http.StatusOK,
@@ -975,6 +1127,30 @@ func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"result":["7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25"]}`,
 		},
 		{
+			name: "socketio getAddressTxids invalid start",
+			req: socketioReq{"getAddressTxids", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        -1,
+					"end":          0,
+					"queryMempool": false,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter start"}}`,
+		},
+		{
+			name: "socketio getAddressTxids invalid end",
+			req: socketioReq{"getAddressTxids", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        2000000,
+					"end":          -1,
+					"queryMempool": false,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter end"}}`,
+		},
+		{
 			name: "socketio getAddressHistory",
 			req: socketioReq{"getAddressHistory", []interface{}{
 				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
@@ -987,6 +1163,48 @@ func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 				},
 			}},
 			want: `{"result":{"totalCount":2,"items":[{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[1],"outputIndexes":[]}},"satoshis":-12345,"confirmations":1,"tx":{"hex":"","height":225494,"blockTimestamp":1521595678,"version":0,"hash":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","inputs":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":0,"script":"","sequence":0,"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","satoshis":1234567890123},{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","outputIndex":1,"script":"","sequence":0,"address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz","satoshis":12345}],"inputSatoshis":1234567902468,"outputs":[{"satoshis":317283951061,"script":"76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac","address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"},{"satoshis":917283951061,"script":"76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac","address":"mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"},{"satoshis":0,"script":"6a072020f1686f6a20","address":"OP_RETURN 2020f1686f6a20"}],"outputSatoshis":1234567902122,"feeSatoshis":346}},{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[],"outputIndexes":[1,2]}},"satoshis":24690,"confirmations":2,"tx":{"hex":"","height":225493,"blockTimestamp":1521515026,"version":0,"hash":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","inputs":[],"outputs":[{"satoshis":100000000,"script":"76a914010d39800f86122416e28f485029acf77507169288ac","address":"mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"},{"satoshis":12345,"script":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},{"satoshis":12345,"script":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"}],"outputSatoshis":100024690}}]}}`,
+		},
+		{
+			name: "socketio getAddressHistory invalid from",
+			req: socketioReq{"getAddressHistory", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        2000000,
+					"end":          0,
+					"queryMempool": false,
+					"from":         -1,
+					"to":           5,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter from"}}`,
+		},
+		{
+			name: "socketio getAddressHistory invalid to",
+			req: socketioReq{"getAddressHistory", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        2000000,
+					"end":          0,
+					"queryMempool": false,
+					"from":         0,
+					"to":           -1,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter to"}}`,
+		},
+		{
+			name: "socketio getAddressHistory invalid start",
+			req: socketioReq{"getAddressHistory", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        -1,
+					"end":          0,
+					"queryMempool": false,
+					"from":         0,
+					"to":           5,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter start"}}`,
 		},
 		{
 			name: "socketio getBlockHeader",
@@ -1027,10 +1245,103 @@ type websocketResp struct {
 	ID string `json:"id"`
 }
 
+type websocketRespWithData struct {
+	ID   string          `json:"id"`
+	Data json.RawMessage `json:"data"`
+}
+
 type websocketTest struct {
 	name string
 	req  websocketReq
 	want string
+}
+
+func connectWebsocket(t *testing.T, ts *httptest.Server) *websocket.Conn {
+	t.Helper()
+	url := strings.Replace(ts.URL, "http://", "ws://", 1) + "/websocket"
+	s, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func readWebsocketResponse(t *testing.T, s *websocket.Conn, timeout time.Duration) websocketRespWithData {
+	t.Helper()
+	if err := s.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		t.Fatal(err)
+	}
+	defer s.SetReadDeadline(time.Time{})
+
+	_, message, err := s.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp websocketRespWithData
+	if err := json.Unmarshal(message, &resp); err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func assertNoWebsocketMessage(t *testing.T, s *websocket.Conn, timeout time.Duration) {
+	t.Helper()
+	if err := s.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := s.ReadMessage()
+	s.SetReadDeadline(time.Time{})
+	if err == nil {
+		t.Fatal("expected no websocket message, got one")
+	}
+	var netErr net.Error
+	if !errors.As(err, &netErr) || !netErr.Timeout() {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+}
+
+func Test_WebsocketRejectsOversizedMessage(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	// Verify the connection is healthy before sending an oversized frame.
+	if err := ws.WriteJSON(websocketReq{ID: "0", Method: "getInfo"}); err != nil {
+		t.Fatal(err)
+	}
+	resp := readWebsocketResponse(t, ws, time.Second)
+	if resp.ID != "0" {
+		t.Fatalf("got response id %q, want %q", resp.ID, "0")
+	}
+
+	payload := strings.Repeat("a", int(maxWebsocketMessageBytes)+1)
+	if err := ws.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ws.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := ws.ReadMessage()
+	ws.SetReadDeadline(time.Time{})
+	if err == nil {
+		t.Fatal("expected websocket read error after oversized message")
+	}
+	if websocket.IsCloseError(err, websocket.CloseMessageTooBig, websocket.CloseAbnormalClosure) {
+		return
+	}
+	if errors.Is(err, io.EOF) {
+		return
+	}
+	t.Fatalf("unexpected websocket error after oversized message: %v", err)
 }
 
 var websocketTestsBitcoinType = []websocketTest{
@@ -1589,6 +1900,249 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 	httpTestsBitcoinType(t, ts)
 	socketioTestsBitcoinType(t, ts)
 	runWebsocketTests(t, ts, websocketTestsBitcoinType)
+}
+
+func Test_HTTPFiatRates_CrossEndpointConsistency_BitcoinType(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	var singleByTimestamp fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?timestamp=1574344800&currency=eur", http.StatusOK, &singleByTimestamp)
+
+	var multiByTimestamp []fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/multi-tickers?timestamp=1574344800&currency=eur", http.StatusOK, &multiByTimestamp)
+	if len(multiByTimestamp) != 1 {
+		t.Fatalf("unexpected multi ticker count: got %d, want %d", len(multiByTimestamp), 1)
+	}
+	if !reflect.DeepEqual(singleByTimestamp, multiByTimestamp[0]) {
+		t.Fatalf("tickers and multi-tickers mismatch: got %v vs %v", singleByTimestamp, multiByTimestamp[0])
+	}
+
+	var byBlock fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?block=225494&currency=usd", http.StatusOK, &byBlock)
+
+	var byBlockTime fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?timestamp=1521595678&currency=usd", http.StatusOK, &byBlockTime)
+	if !reflect.DeepEqual(byBlock, byBlockTime) {
+		t.Fatalf("block and timestamp ticker mismatch: got %v vs %v", byBlock, byBlockTime)
+	}
+}
+
+func Test_HTTPBalanceHistory_GroupByAndInvalidCurrency_BitcoinType(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	addr := "2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"
+
+	var grouped []balanceHistoryResponse
+	mustGetJSON(
+		t,
+		ts.URL+"/api/v2/balancehistory/"+addr+"?groupBy=200000&fiatcurrency=eur",
+		http.StatusOK,
+		&grouped,
+	)
+	wantGrouped := []balanceHistoryResponse{
+		{
+			Time:       1521400000,
+			Txs:        2,
+			Received:   "18876",
+			Sent:       "9876",
+			SentToSelf: "9000",
+			Rates:      map[string]float32{"eur": 1300},
+		},
+	}
+	if !reflect.DeepEqual(grouped, wantGrouped) {
+		t.Fatalf("unexpected grouped balance history: got %v, want %v", grouped, wantGrouped)
+	}
+
+	var invalidCurrency []balanceHistoryResponse
+	mustGetJSON(
+		t,
+		ts.URL+"/api/v2/balancehistory/"+addr+"?fiatcurrency=does_not_exist",
+		http.StatusOK,
+		&invalidCurrency,
+	)
+	if len(invalidCurrency) != 2 {
+		t.Fatalf("unexpected invalid-currency balance history count: got %d, want %d", len(invalidCurrency), 2)
+	}
+	for i := range invalidCurrency {
+		if !reflect.DeepEqual(invalidCurrency[i].Rates, map[string]float32{"does_not_exist": -1}) {
+			t.Fatalf("unexpected invalid-currency rates at index %d: got %v", i, invalidCurrency[i].Rates)
+		}
+	}
+}
+
+func Test_WebsocketFiatRates_SubscribeBroadcastAndUnsubscribe(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	token := "0xa4dd6bc15be95af55f0447555c8b6aa3088562f3"
+	subscribe := websocketReq{
+		ID:     "sub-fiat",
+		Method: "subscribeFiatRates",
+		Params: map[string]interface{}{
+			"currency": "USD",
+			"tokens":   []string{strings.ToUpper(token)},
+		},
+	}
+	if err := ws.WriteJSON(subscribe); err != nil {
+		t.Fatal(err)
+	}
+	ack := readWebsocketResponse(t, ws, time.Second)
+	if ack.ID != subscribe.ID {
+		t.Fatalf("unexpected subscribe response id: got %q, want %q", ack.ID, subscribe.ID)
+	}
+	var ackData struct {
+		Subscribed bool `json:"subscribed"`
+	}
+	if err := json.Unmarshal(ack.Data, &ackData); err != nil {
+		t.Fatal(err)
+	}
+	if !ackData.Subscribed {
+		t.Fatalf("expected subscribed=true, got false")
+	}
+
+	ticker := &common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000000, 0),
+		Rates: map[string]float32{
+			"usd": 2.5,
+			"eur": 1.1,
+		},
+		TokenRates: map[string]float32{
+			token: 4,
+		},
+	}
+	expectedTokenRate := ticker.TokenRateInCurrency(token, "usd")
+	s.OnNewFiatRatesTicker(ticker)
+
+	push := readWebsocketResponse(t, ws, time.Second)
+	if push.ID != subscribe.ID {
+		t.Fatalf("unexpected push response id: got %q, want %q", push.ID, subscribe.ID)
+	}
+	var pushData struct {
+		Rates      map[string]float32 `json:"rates"`
+		TokenRates map[string]float32 `json:"tokenRates,omitempty"`
+	}
+	if err := json.Unmarshal(push.Data, &pushData); err != nil {
+		t.Fatal(err)
+	}
+	if len(pushData.Rates) != 1 || pushData.Rates["usd"] != 2.5 {
+		t.Fatalf("unexpected pushed rates: %v", pushData.Rates)
+	}
+	if len(pushData.TokenRates) != 1 || pushData.TokenRates[token] != expectedTokenRate {
+		t.Fatalf("unexpected pushed token rates: %v", pushData.TokenRates)
+	}
+
+	unsubscribe := websocketReq{
+		ID:     "unsub-fiat",
+		Method: "unsubscribeFiatRates",
+	}
+	if err := ws.WriteJSON(unsubscribe); err != nil {
+		t.Fatal(err)
+	}
+	unsubAck := readWebsocketResponse(t, ws, time.Second)
+	if unsubAck.ID != unsubscribe.ID {
+		t.Fatalf("unexpected unsubscribe response id: got %q, want %q", unsubAck.ID, unsubscribe.ID)
+	}
+	var unsubData struct {
+		Subscribed bool `json:"subscribed"`
+	}
+	if err := json.Unmarshal(unsubAck.Data, &unsubData); err != nil {
+		t.Fatal(err)
+	}
+	if unsubData.Subscribed {
+		t.Fatalf("expected subscribed=false after unsubscribe")
+	}
+
+	s.OnNewFiatRatesTicker(&common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000060, 0),
+		Rates: map[string]float32{
+			"usd": 3.5,
+		},
+		TokenRates: map[string]float32{
+			token: 5,
+		},
+	})
+	assertNoWebsocketMessage(t, ws, 300*time.Millisecond)
+}
+
+func Test_WebsocketFiatRates_ResubscribeReplacesPreviousCurrency(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	subscribeUSD := websocketReq{
+		ID:     "sub-usd",
+		Method: "subscribeFiatRates",
+		Params: map[string]interface{}{
+			"currency": "usd",
+		},
+	}
+	if err := ws.WriteJSON(subscribeUSD); err != nil {
+		t.Fatal(err)
+	}
+	_ = readWebsocketResponse(t, ws, time.Second)
+
+	subscribeEUR := websocketReq{
+		ID:     "sub-eur",
+		Method: "subscribeFiatRates",
+		Params: map[string]interface{}{
+			"currency": "eur",
+		},
+	}
+	if err := ws.WriteJSON(subscribeEUR); err != nil {
+		t.Fatal(err)
+	}
+	_ = readWebsocketResponse(t, ws, time.Second)
+
+	s.OnNewFiatRatesTicker(&common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000120, 0),
+		Rates: map[string]float32{
+			"usd": 100,
+			"eur": 200,
+		},
+	})
+
+	push := readWebsocketResponse(t, ws, time.Second)
+	if push.ID != subscribeEUR.ID {
+		t.Fatalf("unexpected push response id: got %q, want %q", push.ID, subscribeEUR.ID)
+	}
+	var pushData struct {
+		Rates map[string]float32 `json:"rates"`
+	}
+	if err := json.Unmarshal(push.Data, &pushData); err != nil {
+		t.Fatal(err)
+	}
+	if len(pushData.Rates) != 1 || pushData.Rates["eur"] != 200 {
+		t.Fatalf("unexpected pushed rates after resubscribe: %v", pushData.Rates)
+	}
+
+	assertNoWebsocketMessage(t, ws, 300*time.Millisecond)
 }
 
 func httpTestsBitcoinTypeExtendedIndex(t *testing.T, ts *httptest.Server) {
