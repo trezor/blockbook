@@ -149,6 +149,24 @@ func (c *fakeBlockChainTronType) GetContractInfo(contractDesc bchain.AddressDesc
 	}, nil
 }
 
+func (c *fakeBlockChainTronType) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (json.RawMessage, error) {
+	seed := int64(0)
+	if len(addrDesc) > 0 {
+		seed = int64(addrDesc[0])
+	}
+
+	payload, err := json.Marshal(&bchain.TronAccountExtraData{
+		AvailableBandwidth: seed,
+		TotalBandwidth:     seed + 1000,
+		AvailableEnergy:    seed * 100,
+		TotalEnergy:        seed*100 + 10000,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(payload), nil
+}
+
 // EthereumTypeRpcCall validates address parameters similarly to Tron RPC and accepts both Base58 and hex.
 func (c *fakeBlockChainTronType) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	type tronAddressNormalizer interface {
