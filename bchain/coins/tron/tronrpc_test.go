@@ -25,7 +25,8 @@ func TestTronRPC_EthereumTypeGetRawTransaction(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	rawHex, err := tronRPC.EthereumTypeGetRawTransaction("0x7c2d4206c03a883dd9066d620335dc1be272a8dc733cfa3f6d10308faa37facc")
@@ -44,7 +45,8 @@ func TestTronRPC_EthereumTypeGetRawTransaction_Empty(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	_, err := tronRPC.EthereumTypeGetRawTransaction("0xabc")
@@ -60,13 +62,14 @@ func TestTronRPC_GetTransactionByID_EmptyObjectMeansNotFound(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	tx, err := tronRPC.getTransactionByID("0x788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803", true)
 	require.Error(t, err)
 	require.Nil(t, tx)
-	require.Equal(t, "/wallet/gettransactionbyid", mockHTTP.LastPath)
+	require.Equal(t, "/walletsolidity/gettransactionbyid", mockHTTP.LastPath)
 	require.Equal(t, map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"}, mockHTTP.LastBody)
 }
 
@@ -79,13 +82,14 @@ func TestTronRPC_GetTransactionInfoByID_EmptyObjectMeansNoData(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	txInfo, err := tronRPC.getTransactionInfoByID("0x788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803", true)
 	require.Error(t, err)
 	require.Nil(t, txInfo)
-	require.Equal(t, "/wallet/gettransactioninfobyid", mockHTTP.LastPath)
+	require.Equal(t, "/walletsolidity/gettransactioninfobyid", mockHTTP.LastPath)
 	require.Equal(t, map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"}, mockHTTP.LastBody)
 }
 
@@ -100,14 +104,15 @@ func TestTronRPC_GetTransactionInfoByID_NonEmptyObjectReturned(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	txInfo, err := tronRPC.getTransactionInfoByID("0x123", true)
 	require.NoError(t, err)
 	require.NotNil(t, txInfo)
 	require.Equal(t, "tx1", txInfo.ID)
-	require.Equal(t, "/wallet/gettransactioninfobyid", mockHTTP.LastPath)
+	require.Equal(t, "/walletsolidity/gettransactioninfobyid", mockHTTP.LastPath)
 }
 
 func TestTronRPC_SendRawTransaction(t *testing.T) {
@@ -125,7 +130,8 @@ func TestTronRPC_SendRawTransaction(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	gotTxID, err := tronRPC.SendRawTransaction(txHex, false)
@@ -149,7 +155,8 @@ func TestTronRPC_SendRawTransaction_StripsPrefixFromResponse(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	gotTxID, err := tronRPC.SendRawTransaction(txHex, false)
@@ -170,7 +177,8 @@ func TestTronRPC_SendRawTransaction_Failed(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	_, err := tronRPC.SendRawTransaction("deadbeef", false)
@@ -191,7 +199,8 @@ func TestTronRPC_GetMempoolTransactions(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	txs, err := tronRPC.GetMempoolTransactions()
@@ -213,7 +222,8 @@ func TestTronRPC_GetMempoolTransactions_Error(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	_, err := tronRPC.GetMempoolTransactions()
@@ -239,7 +249,8 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
@@ -250,7 +261,7 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 		"availableEnergy":7766,
 		"totalEnergy":9000
 	}`, string(payload))
-	require.Equal(t, "/wallet/getaccountresource", mockHTTP.LastPath)
+	require.Equal(t, "/walletsolidity/getaccountresource", mockHTTP.LastPath)
 	require.Equal(t, map[string]any{
 		"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
 		"visible": true,
@@ -272,7 +283,8 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 		EthereumRPC: &eth.EthereumRPC{
 			Timeout: time.Second,
 		},
-		http: mockHTTP,
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
 	}
 
 	payload, err := tronRPC.GetAddressChainExtraData(bchain.AddressDescriptor{

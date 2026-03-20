@@ -1,6 +1,7 @@
 package tron
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 
@@ -32,25 +33,32 @@ type tronGetBlockResponse struct {
 	Transactions []tronGetTransactionByIDResponse `json:"transactions,omitempty"`
 }
 
-func (b *TronRPC) getTransactionByID(txid string, isMempool bool) (*tronGetTransactionByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	return requestTransactionByID(ctx, b.http, txid, isMempool)
+func (b *TronRPC) getLookupHTTPClient(isSolidified bool) TronHTTP {
+	if isSolidified {
+		return b.solidityNodeHTTP
+	}
+	return b.fullNodeHTTP
 }
 
-func (b *TronRPC) getTransactionInfoByID(txid string, isMempool bool) (*tronGetTransactionInfoByIDResponse, error) {
+func (b *TronRPC) getTransactionByID(txid string, isSolidified bool) (*tronGetTransactionByIDResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	return requestTransactionInfoByID(ctx, b.http, txid, isMempool)
+	return b.requestTransactionByID(ctx, txid, isSolidified)
+}
+
+func (b *TronRPC) getTransactionInfoByID(txid string, isSolidified bool) (*tronGetTransactionInfoByIDResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	return b.requestTransactionInfoByID(ctx, txid, isSolidified)
 }
 
 func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	return requestMempoolTransactions(ctx, b.http)
+	return b.requestMempoolTransactions(ctx)
 }
 
 // GetAddressChainExtraData returns normalized Tron-specific account/address data.
@@ -58,7 +66,7 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	resp, err := requestAccountResource(ctx, b.http, ToTronAddressFromDesc(addrDesc))
+	resp, err := b.requestAccountResource(ctx, ToTronAddressFromDesc(addrDesc), true)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +87,7 @@ func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (str
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	resp, err := requestBroadcastHex(ctx, b.http, strip0xPrefix(tx))
+	resp, err := b.requestBroadcastHex(ctx, strip0xPrefix(tx))
 	if err != nil {
 		return "", err
 	}
@@ -97,11 +105,12 @@ func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (str
 	return txID, nil
 }
 
-func requestTransactionByID(ctx context.Context, http TronHTTP, txid string, isMempool bool) (*tronGetTransactionByIDResponse, error) {
+func (b *TronRPC) requestTransactionByID(ctx context.Context, txid string, isSolidified bool) (*tronGetTransactionByIDResponse, error) {
+	http := b.getLookupHTTPClient(isSolidified)
 	raw, err := requestRawMessage(
 		ctx,
 		http,
-		tronLookupPath(isMempool, "/wallet/gettransactionbyid", "/walletsolidity/gettransactionbyid"),
+		tronLookupPath(isSolidified, "/wallet/gettransactionbyid", "/walletsolidity/gettransactionbyid"),
 		map[string]string{"value": strip0xPrefix(txid)},
 	)
 	if err != nil {
@@ -118,11 +127,12 @@ func requestTransactionByID(ctx context.Context, http TronHTTP, txid string, isM
 	return &resp, nil
 }
 
-func requestTransactionInfoByID(ctx context.Context, http TronHTTP, txid string, isMempool bool) (*tronGetTransactionInfoByIDResponse, error) {
+func (b *TronRPC) requestTransactionInfoByID(ctx context.Context, txid string, isSolidified bool) (*tronGetTransactionInfoByIDResponse, error) {
+	http := b.getLookupHTTPClient(isSolidified)
 	raw, err := requestRawMessage(
 		ctx,
 		http,
-		tronLookupPath(isMempool, "/wallet/gettransactioninfobyid", "/walletsolidity/gettransactioninfobyid"),
+		tronLookupPath(isSolidified, "/wallet/gettransactioninfobyid", "/walletsolidity/gettransactioninfobyid"),
 		map[string]string{"value": strip0xPrefix(txid)},
 	)
 	if err != nil {
@@ -140,7 +150,11 @@ func requestTransactionInfoByID(ctx context.Context, http TronHTTP, txid string,
 	return &resp, nil
 }
 
-func requestMempoolTransactions(ctx context.Context, http TronHTTP) ([]string, error) {
+func (b *TronRPC) requestMempoolTransactions(ctx context.Context) ([]string, error) {
+	http := b.fullNodeHTTP
+	if http == nil {
+		http = b.getLookupHTTPClient(false)
+	}
 	var resp tronGetTransactionListFromPendingResponse
 	if err := http.Request(ctx, "/wallet/gettransactionlistfrompending", map[string]any{}, &resp); err != nil {
 		return nil, err
@@ -151,21 +165,26 @@ func requestMempoolTransactions(ctx context.Context, http TronHTTP) ([]string, e
 	return resp.TxID, nil
 }
 
-func requestAccountResource(ctx context.Context, http TronHTTP, address string) (*tronGetAccountResourceResponse, error) {
+func (b *TronRPC) requestAccountResource(ctx context.Context, address string, isSolidified bool) (*tronGetAccountResourceResponse, error) {
 	req := map[string]any{
 		"address": address,
 		"visible": true,
 	}
+	http := b.getLookupHTTPClient(isSolidified)
 	var resp tronGetAccountResourceResponse
-	if err := http.Request(ctx, "/wallet/getaccountresource", req, &resp); err != nil {
+	if err := http.Request(ctx, tronLookupPath(isSolidified, "/wallet/getaccountresource", "/walletsolidity/getaccountresource"), req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func requestBroadcastHex(ctx context.Context, http TronHTTP, tx string) (*tronBroadcastHexResponse, error) {
+func (b *TronRPC) requestBroadcastHex(ctx context.Context, tx string) (*tronBroadcastHexResponse, error) {
 	req := map[string]string{
 		"transaction": tx,
+	}
+	http := b.fullNodeHTTP
+	if http == nil {
+		http = b.getLookupHTTPClient(false)
 	}
 	var resp tronBroadcastHexResponse
 	if err := http.Request(ctx, "/wallet/broadcasthex", req, &resp); err != nil {
@@ -174,41 +193,32 @@ func requestBroadcastHex(ctx context.Context, http TronHTTP, tx string) (*tronBr
 	return &resp, nil
 }
 
-func requestTransactionInfoByBlockNum(ctx context.Context, http TronHTTP, blockNum uint32) ([]tronGetTransactionInfoByIDResponse, error) {
-	raw, err := requestRawMessage(ctx, http, "/wallet/gettransactioninfobyblocknum", map[string]any{
-		"num": blockNum,
-	})
-	if err != nil {
-		return nil, err
+func (b *TronRPC) requestTransactionInfoByBlockNum(ctx context.Context, blockNum uint32, isSolidified bool) ([]tronGetTransactionInfoByIDResponse, error) {
+	if b.internalDataProvider != nil {
+		return b.internalDataProvider.GetTransactionInfoByBlockNum(ctx, blockNum, isSolidified)
 	}
-	if tronIsEmptyObject(raw) {
-		return nil, nil
-	}
-
-	var resp []tronGetTransactionInfoByIDResponse
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return nil, errors.New("Tron internal data provider is not initialized")
 }
 
-func requestBlockByNum(ctx context.Context, http TronHTTP, blockNum uint32) (*tronGetBlockResponse, error) {
+func (b *TronRPC) requestBlockByNum(ctx context.Context, blockNum uint32, isSolidified bool) (*tronGetBlockResponse, error) {
 	req := map[string]any{
 		"num": blockNum,
 	}
+	http := b.getLookupHTTPClient(isSolidified)
 	var resp tronGetBlockResponse
-	if err := http.Request(ctx, "/wallet/getblockbynum", req, &resp); err != nil {
+	if err := http.Request(ctx, tronLookupPath(isSolidified, "/wallet/getblockbynum", "/walletsolidity/getblockbynum"), req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func requestBlockByID(ctx context.Context, http TronHTTP, blockHash string) (*tronGetBlockResponse, error) {
+func (b *TronRPC) requestBlockByID(ctx context.Context, blockHash string, isSolidified bool) (*tronGetBlockResponse, error) {
 	req := map[string]string{
 		"value": strip0xPrefix(blockHash),
 	}
+	http := b.getLookupHTTPClient(isSolidified)
 	var resp tronGetBlockResponse
-	if err := http.Request(ctx, "/wallet/getblockbyid", req, &resp); err != nil {
+	if err := http.Request(ctx, tronLookupPath(isSolidified, "/wallet/getblockbyid", "/walletsolidity/getblockbyid"), req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -222,15 +232,23 @@ func requestRawMessage(ctx context.Context, http TronHTTP, path string, reqBody 
 	return raw, nil
 }
 
-func tronLookupPath(isMempool bool, walletPath, walletSolidityPath string) string {
-	if isMempool {
-		return walletPath
+func tronLookupPath(isSolidified bool, walletPath, walletSolidityPath string) string {
+	if isSolidified {
+		return walletSolidityPath
 	}
-	return walletSolidityPath
+	return walletPath
 }
 
 func tronIsEmptyObject(raw json.RawMessage) bool {
-	return string(raw) == "{}"
+	return bytes.Equal(bytes.TrimSpace(raw), []byte("{}"))
+}
+
+func tronIsEmptyArray(raw json.RawMessage) bool {
+	return bytes.Equal(bytes.TrimSpace(raw), []byte("[]"))
+}
+
+func tronIsEmptyResponse(raw json.RawMessage) bool {
+	return tronIsEmptyObject(raw) || tronIsEmptyArray(raw)
 }
 
 func tronAvailableResource(limit, used int64) int64 {

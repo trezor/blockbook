@@ -9,7 +9,6 @@
         "backend_rpc": 8545,
         "backend_message_queue": 5555,
         "backend_p2p": 18888,
-        "backend_http": 8090,
         "blockbook_internal": 19090,
         "blockbook_public": 19190
     },
@@ -51,7 +50,8 @@
             "mempool_sub_workers": 0,
             "block_addresses_to_keep": 10000,
             "additional_params": {
-                "tron_http_url_template": "http://127.0.0.1:8090",
+                "tron_fullnode_http_url_template": "http://127.0.0.1:8090",
+                "tron_solidity_http_url_template": "http://127.0.0.1:8091",
                 "address_aliases": true,
                 "mempoolTxTimeoutHours": 4,
                 "queryBackendOnMempoolResync": true,

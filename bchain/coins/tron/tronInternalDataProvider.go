@@ -2,6 +2,7 @@ package tron
 
 import (
 	"context"
+	"encoding/json"
 	"math/big"
 	"time"
 
@@ -10,8 +11,9 @@ import (
 )
 
 type TronInternalDataProvider struct {
-	http    TronHTTP
-	timeout time.Duration
+	fullNodeHTTP     TronHTTP
+	solidityNodeHTTP TronHTTP
+	timeout          time.Duration
 }
 
 type tronCallValueInfo struct {
@@ -40,10 +42,14 @@ type tronTxInfo struct {
 	Receipt              tronReceipt               `json:"receipt"`
 }
 
-func NewTronInternalDataProvider(http TronHTTP, timeout time.Duration) *TronInternalDataProvider {
+func NewTronInternalDataProvider(fullNodeHTTP, solidityNodeHTTP TronHTTP, timeout time.Duration) *TronInternalDataProvider {
+	if solidityNodeHTTP == nil {
+		solidityNodeHTTP = fullNodeHTTP
+	}
 	return &TronInternalDataProvider{
-		http:    http,
-		timeout: timeout,
+		fullNodeHTTP:     fullNodeHTTP,
+		solidityNodeHTTP: solidityNodeHTTP,
+		timeout:          timeout,
 	}
 }
 
@@ -65,7 +71,7 @@ func (p *TronInternalDataProvider) GetInternalDataForBlock(
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
 
-	responses, err := requestTransactionInfoByBlockNum(ctx, p.http, blockHeight)
+	responses, err := p.GetTransactionInfoByBlockNum(ctx, blockHeight, false)
 	if err != nil {
 		glog.Errorf("GetInternalDataForBlock: error calling gettransactioninfobyblocknum: %v", err)
 		return nil, nil, err
@@ -73,6 +79,41 @@ func (p *TronInternalDataProvider) GetInternalDataForBlock(
 	infos := tronTxInfosFromResponses(responses)
 
 	return buildInternalDataFromTronInfos(infos, transactions, blockHeight)
+}
+
+func (p *TronInternalDataProvider) getLookupHTTPClient(isSolidified bool) TronHTTP {
+	if isSolidified {
+		if p.solidityNodeHTTP != nil {
+			return p.solidityNodeHTTP
+		}
+		return p.fullNodeHTTP
+	}
+	if p.fullNodeHTTP != nil {
+		return p.fullNodeHTTP
+	}
+	return p.solidityNodeHTTP
+}
+
+func (p *TronInternalDataProvider) GetTransactionInfoByBlockNum(ctx context.Context, blockNum uint32, isSolidified bool) ([]tronGetTransactionInfoByIDResponse, error) {
+	return p.requestTransactionInfoByBlockNumWithHTTP(ctx, p.getLookupHTTPClient(isSolidified), blockNum, isSolidified)
+}
+
+func (p *TronInternalDataProvider) requestTransactionInfoByBlockNumWithHTTP(ctx context.Context, http TronHTTP, blockNum uint32, isSolidified bool) ([]tronGetTransactionInfoByIDResponse, error) {
+	var raw json.RawMessage
+	if err := http.Request(ctx, tronLookupPath(isSolidified, "/wallet/gettransactioninfobyblocknum", "/walletsolidity/gettransactioninfobyblocknum"), map[string]any{
+		"num": blockNum,
+	}, &raw); err != nil {
+		return nil, err
+	}
+	if tronIsEmptyResponse(raw) {
+		return nil, nil
+	}
+
+	var resp []tronGetTransactionInfoByIDResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func tronTxInfosFromResponses(responses []tronGetTransactionInfoByIDResponse) []tronTxInfo {
