@@ -17,6 +17,18 @@ import (
 func httpTestsTron(t *testing.T, ts *httptest.Server) {
 	tests := []httpTests{
 		{
+			name:        "explorerAddress " + dbtestdata.TronAddrTZ,
+			r:           newGetRequest(ts.URL + "/address/" + dbtestdata.TronAddrTZ),
+			status:      http.StatusOK,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`<span class="ellipsis copyable">TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt</span>`,
+				`<h5>Resources</h5>`,
+				`Bandwidth</td><td>255 / 1`,
+				`Energy</td><td>25`,
+			},
+		},
+		{
 			name:        "apiBlock",
 			r:           newGetRequest(ts.URL + "/api/v2/block/" + strconv.Itoa(dbtestdata.Block1)),
 			status:      http.StatusOK,
@@ -127,7 +139,7 @@ var websocketTestsTron = []websocketTest{
 		req: websocketReq{
 			Method: "getInfo",
 		},
-		want: `{"id":"0","data":{"name":"Fakecoin","shortcut":"FAKE","network":"FAKE","decimals":6,"version":"unknown","bestHeight":100000,"bestHash":"11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff","block0Hash":"","testnet":true,"backend":{"version":"tron_test_1.0","subversion":"MockTron"}}}`,
+		want: `{"id":"0","data":{"name":"Fakecoin","shortcut":"TRX","network":"TRX","decimals":6,"version":"unknown","bestHeight":100000,"bestHash":"11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff","block0Hash":"","testnet":true,"backend":{"version":"tron_test_1.0","subversion":"MockTron"}}}`,
 	},
 	{
 		name: "websocket rpcCall",
@@ -163,6 +175,8 @@ func Test_PublicServer_Tron(t *testing.T) {
 
 	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
 	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.is.CoinShortcut = "TRX"
+	s.templates = s.parseTemplates()
 	s.ConnectFullPublicInterface()
 
 	ts := httptest.NewServer(s.https.Handler)

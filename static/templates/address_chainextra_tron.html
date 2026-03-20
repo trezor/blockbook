@@ -1,0 +1,16 @@
+{{define "addressChainExtra"}}{{$addr := .Address}}{{$data := .}}{{$chainExtra := accountChainExtra $addr}}
+{{if $chainExtra}}
+<tr>
+    <td style="white-space: nowrap;"><h5>Resources</h5></td>
+    <td></td>
+</tr>
+<tr>
+    <td>Bandwidth</td>
+    <td>{{formatInt64 $chainExtra.AvailableBandwidth}} / {{formatInt64 $chainExtra.TotalBandwidth}}</td>
+</tr>
+<tr>
+    <td>Energy</td>
+    <td>{{formatInt64 $chainExtra.AvailableEnergy}} / {{formatInt64 $chainExtra.TotalEnergy}}</td>
+</tr>
+{{end}}
+{{end}}

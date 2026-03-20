@@ -36,12 +36,14 @@ const txsInAPI = 1000
 const secondaryCoinCookieName = "secondary_coin"
 const templatesDir = "./static/templates"
 const (
-	txBitcoinTypeTemplate        = templatesDir + "/tx_bitcointype.html"
-	txEthereumTypeTemplate       = templatesDir + "/tx_ethereumtype.html"
-	txTronTemplate               = templatesDir + "/tx_tron.html"
-	txBitcoinTypeDetailTemplate  = templatesDir + "/txdetail.html"
-	txEthereumTypeDetailTemplate = templatesDir + "/txdetail_ethereumtype.html"
-	txTronDetailTemplate         = templatesDir + "/txdetail_tron.html"
+	txBitcoinTypeTemplate         = templatesDir + "/tx_bitcointype.html"
+	txEthereumTypeTemplate        = templatesDir + "/tx_ethereumtype.html"
+	txTronTemplate                = templatesDir + "/tx_tron.html"
+	txBitcoinTypeDetailTemplate   = templatesDir + "/txdetail.html"
+	txEthereumTypeDetailTemplate  = templatesDir + "/txdetail_ethereumtype.html"
+	txTronDetailTemplate          = templatesDir + "/txdetail_tron.html"
+	addressChainExtraTemplate     = templatesDir + "/address_chainextra.html"
+	addressChainExtraTronTemplate = templatesDir + "/address_chainextra_tron.html"
 )
 
 const (
@@ -457,6 +459,13 @@ func resolveTxDetailTemplate(chainType bchain.ChainType, coinShortcut string) st
 	return defaultTxDetailTemplate(chainType)
 }
 
+func resolveAddressChainExtraTemplate(coinShortcut string) string {
+	if strings.EqualFold(strings.TrimSpace(coinShortcut), "TRX") {
+		return addressChainExtraTronTemplate
+	}
+	return addressChainExtraTemplate
+}
+
 func (s *PublicServer) parseTemplates() []*template.Template {
 	templateFuncMap := template.FuncMap{
 		"timeSpan":                 timeSpan,
@@ -526,6 +535,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 	t := make([]*template.Template, publicTplCount)
 	txTemplate := resolveTxTemplate(s.chainParser.GetChainType(), s.is.CoinShortcut)
 	txDetailTemplate := resolveTxDetailTemplate(s.chainParser.GetChainType(), s.is.CoinShortcut)
+	resolvedAddressChainExtraTemplate := resolveAddressChainExtraTemplate(s.is.CoinShortcut)
 	t[errorTpl] = createTemplate("./static/templates/error.html", "./static/templates/base.html")
 	t[errorInternalTpl] = createTemplate("./static/templates/error.html", "./static/templates/base.html")
 	t[indexTpl] = createTemplate("./static/templates/index.html", "./static/templates/base.html")
@@ -533,12 +543,12 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 	t[sendTransactionTpl] = createTemplate("./static/templates/sendtx.html", "./static/templates/base.html")
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 		t[txTpl] = createTemplate(txTemplate, txDetailTemplate, "./static/templates/base.html")
-		t[addressTpl] = createTemplate("./static/templates/address.html", txDetailTemplate, "./static/templates/paging.html", "./static/templates/base.html")
+		t[addressTpl] = createTemplate("./static/templates/address.html", resolvedAddressChainExtraTemplate, txDetailTemplate, "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", txDetailTemplate, "./static/templates/paging.html", "./static/templates/base.html")
 		t[nftDetailTpl] = createTemplate("./static/templates/tokenDetail.html", "./static/templates/base.html")
 	} else {
 		t[txTpl] = createTemplate(txTemplate, txDetailTemplate, "./static/templates/base.html")
-		t[addressTpl] = createTemplate("./static/templates/address.html", txDetailTemplate, "./static/templates/paging.html", "./static/templates/base.html")
+		t[addressTpl] = createTemplate("./static/templates/address.html", resolvedAddressChainExtraTemplate, txDetailTemplate, "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", txDetailTemplate, "./static/templates/paging.html", "./static/templates/base.html")
 	}
 	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
