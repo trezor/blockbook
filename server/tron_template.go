@@ -14,11 +14,6 @@ func init() {
 	registerTemplateFunc("accountChainExtra", accountChainExtra)
 }
 
-type tronTxExtraVote struct {
-	Address string `json:"address,omitempty"`
-	Count   string `json:"count,omitempty"`
-}
-
 type tronTxExtraTemplateData struct {
 	bchain.TronChainExtraData
 	TotalFeeAmount     *api.Amount `json:"-"`
@@ -38,10 +33,7 @@ func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
 	if err := json.Unmarshal(tx.ChainExtraData.Payload, &extra); err != nil {
 		return nil
 	}
-	extra.Operation = strings.TrimSpace(extra.Operation)
-	extra.ContractType = strings.TrimSpace(extra.ContractType)
-	extra.Resource = strings.TrimSpace(extra.Resource)
-	extra.Result = strings.TrimSpace(extra.Result)
+
 	rv := &tronTxExtraTemplateData{
 		TronChainExtraData: extra,
 		TotalFeeAmount:     parseTronSunAmount(extra.TotalFee),
