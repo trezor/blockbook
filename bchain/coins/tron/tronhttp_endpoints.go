@@ -33,6 +33,14 @@ type tronGetBlockResponse struct {
 	Transactions []tronGetTransactionByIDResponse `json:"transactions,omitempty"`
 }
 
+type tronGetBlockHeaderResponse struct {
+	BlockHeader struct {
+		RawData struct {
+			Number *uint64 `json:"number"`
+		} `json:"raw_data"`
+	} `json:"block_header"`
+}
+
 func (b *TronRPC) getLookupHTTPClient(isSolidified bool) TronHTTP {
 	if isSolidified {
 		return b.solidityNodeHTTP
@@ -194,10 +202,25 @@ func (b *TronRPC) requestBroadcastHex(ctx context.Context, tx string) (*tronBroa
 }
 
 func (b *TronRPC) requestTransactionInfoByBlockNum(ctx context.Context, blockNum uint32, isSolidified bool) ([]tronGetTransactionInfoByIDResponse, error) {
-	if b.internalDataProvider != nil {
-		return b.internalDataProvider.GetTransactionInfoByBlockNum(ctx, blockNum, isSolidified)
+	if isSolidified && b.internalDataProvider != nil {
+		return b.internalDataProvider.GetTransactionInfoByBlockNum(ctx, blockNum)
 	}
-	return nil, errors.New("Tron internal data provider is not initialized")
+	http := b.getLookupHTTPClient(isSolidified)
+	raw, err := requestRawMessage(ctx, http, tronLookupPath(isSolidified, "/wallet/gettransactioninfobyblocknum", "/walletsolidity/gettransactioninfobyblocknum"), map[string]any{
+		"num": blockNum,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if tronIsEmptyResponse(raw) {
+		return nil, nil
+	}
+
+	var resp []tronGetTransactionInfoByIDResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (b *TronRPC) requestBlockByNum(ctx context.Context, blockNum uint32, isSolidified bool) (*tronGetBlockResponse, error) {
@@ -222,6 +245,21 @@ func (b *TronRPC) requestBlockByID(ctx context.Context, blockHash string, isSoli
 		return nil, err
 	}
 	return &resp, nil
+}
+
+func (b *TronRPC) requestLatestSolidifiedBlockHeight(ctx context.Context) (uint64, error) {
+	http := b.solidityNodeHTTP
+	if http == nil {
+		http = b.getLookupHTTPClient(true)
+	}
+	var resp tronGetBlockHeaderResponse
+	if err := http.Request(ctx, "/walletsolidity/getblock", map[string]any{"detail": false}, &resp); err != nil {
+		return 0, err
+	}
+	if resp.BlockHeader.RawData.Number == nil {
+		return 0, errors.New("Tron /walletsolidity/getblock returned missing block_header.raw_data.number")
+	}
+	return *resp.BlockHeader.RawData.Number, nil
 }
 
 func requestRawMessage(ctx context.Context, http TronHTTP, path string, reqBody interface{}) (json.RawMessage, error) {

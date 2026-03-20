@@ -3,6 +3,7 @@
 package tron
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -301,4 +302,51 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 		AvailableEnergy:    0,
 		TotalEnergy:        0,
 	}, extra)
+}
+
+func TestTronRPC_RequestLatestSolidifiedBlockHeight(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Resp: map[string]any{
+			"block_header": map[string]any{
+				"raw_data": map[string]any{
+					"number": uint64(123456),
+				},
+			},
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	height, err := tronRPC.requestLatestSolidifiedBlockHeight(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, uint64(123456), height)
+	require.Equal(t, "/walletsolidity/getblock", mockHTTP.LastPath)
+	require.Equal(t, map[string]any{"detail": false}, mockHTTP.LastBody)
+}
+
+func TestTronRPC_RequestLatestSolidifiedBlockHeight_MissingNumber(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Resp: map[string]any{
+			"block_header": map[string]any{
+				"raw_data": map[string]any{},
+			},
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	_, err := tronRPC.requestLatestSolidifiedBlockHeight(context.Background())
+	require.Error(t, err)
 }
