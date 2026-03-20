@@ -67,7 +67,7 @@ func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify HTTP call
-	require.Equal(t, "/wallet/gettransactioninfobyblocknum", mockHTTP.LastPath)
+	require.Equal(t, "/walletsolidity/gettransactioninfobyblocknum", mockHTTP.LastPath)
 	require.Equal(t, map[string]any{"num": uint32(99)}, mockHTTP.LastBody)
 
 	// verify parsed internal data
