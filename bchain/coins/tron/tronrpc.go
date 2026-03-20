@@ -31,8 +31,9 @@ const (
 
 type TronConfiguration struct {
 	eth.Configuration
-	MessageQueueBinding string `json:"message_queue_binding"`
-	HttpUrlTemplate     string `json:"tron_http_url_template"`
+	MessageQueueBinding     string `json:"message_queue_binding"`
+	FullNodeHTTPURLTemplate string `json:"tron_fullnode_http_url_template"`
+	SolidityHTTPURLTemplate string `json:"tron_solidity_http_url_template"`
 }
 
 type tronResourceCode int64
@@ -76,15 +77,17 @@ type tronGetTransactionByIDResponse struct {
 
 type TronRPC struct {
 	*eth.EthereumRPC
-	Parser             *TronParser
-	ChainConfig        *TronConfiguration
-	mq                 *bchain.MQ
-	http               TronHTTP
-	bestHeaderLock     sync.Mutex
-	bestHeader         bchain.EVMHeader
-	bestHeaderTime     time.Time
-	newBlockNotifyCh   chan struct{}
-	newBlockNotifyOnce sync.Once
+	Parser               *TronParser
+	ChainConfig          *TronConfiguration
+	mq                   *bchain.MQ
+	fullNodeHTTP         TronHTTP
+	solidityNodeHTTP     TronHTTP
+	internalDataProvider *TronInternalDataProvider
+	bestHeaderLock       sync.Mutex
+	bestHeader           bchain.EVMHeader
+	bestHeaderTime       time.Time
+	newBlockNotifyCh     chan struct{}
+	newBlockNotifyOnce   sync.Once
 }
 
 func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
@@ -120,14 +123,26 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.ChainConfig = &cfg
 	tronRpc.PushHandler = pushHandler
 
-	tronHTTP := NewTronHTTPClient(cfg.HttpUrlTemplate, time.Duration(cfg.RPCTimeout)*time.Second)
-	tronRpc.http = tronHTTP
+	fullNodeURL := cfg.FullNodeHTTPURLTemplate
+	if fullNodeURL == "" {
+		return nil, errors.New("missing Tron full node HTTP URL: set tron_fullnode_http_url_template")
+	}
+	solidityURL := cfg.SolidityHTTPURLTemplate
+	if solidityURL == "" {
+		solidityURL = fullNodeURL
+	}
+
+	timeout := time.Duration(cfg.RPCTimeout) * time.Second
+	tronRpc.fullNodeHTTP = NewTronHTTPClient(fullNodeURL, timeout)
+	tronRpc.solidityNodeHTTP = NewTronHTTPClient(solidityURL, timeout)
 
 	internalProvider := NewTronInternalDataProvider(
-		tronHTTP,
-		time.Duration(cfg.RPCTimeout)*time.Second,
+		tronRpc.fullNodeHTTP,
+		tronRpc.solidityNodeHTTP,
+		timeout,
 	)
 
+	tronRpc.internalDataProvider = internalProvider
 	tronRpc.EthereumRPC.InternalDataProvider = internalProvider
 
 	return tronRpc, nil
@@ -495,9 +510,9 @@ func (b *TronRPC) getTransactionByIDMapForBlockWithContext(ctx context.Context, 
 		err       error
 	)
 	if hash != "" && hash != "pending" {
-		blockResp, err = requestBlockByID(ctx, b.http, hash)
+		blockResp, err = b.requestBlockByID(ctx, hash, false)
 	} else {
-		blockResp, err = requestBlockByNum(ctx, b.http, blockHeight)
+		blockResp, err = b.requestBlockByNum(ctx, blockHeight, false)
 	}
 	if err != nil {
 		return nil, err
@@ -583,7 +598,7 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		txByIDCh := make(chan txByIDResult, 1)
 
 		go func() {
-			infos, err := requestTransactionInfoByBlockNum(ctx, b.http, bbh.Height)
+			infos, err := b.requestTransactionInfoByBlockNum(ctx, bbh.Height, false)
 			infosCh <- txInfosResult{infos: infos, err: err}
 		}()
 		go func() {
@@ -667,26 +682,23 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 }
 
 func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	var isMempool bool
-
+	isSolidified := true
 	if b.Mempool != nil && b.Mempool.GetTransactionTime(txid) != 0 {
-		isMempool = true
-	} else {
-		isMempool = false
+		isSolidified = false
 	}
 
-	txByID, err := b.getTransactionByID(txid, isMempool)
+	txByID, err := b.getTransactionByID(txid, isSolidified)
 	if err != nil {
 		return nil, err
 	}
-	txInfo, err := b.getTransactionInfoByID(txid, isMempool)
+	txInfo, err := b.getTransactionInfoByID(txid, isSolidified)
 	if err != nil {
 		return nil, err
 	}
 
 	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
 	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
-	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, isMempool)
+	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, !isSolidified)
 }
 
 // GetTransactionSpecific returns tx-specific JSON in Tron API format (without 0x in tx hash fields).
@@ -791,15 +803,12 @@ func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchai
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
-	var isMempool bool
-
+	isSolidified := true
 	if b.Mempool != nil && b.Mempool.GetTransactionTime(txid) != 0 {
-		isMempool = true
-	} else {
-		isMempool = false
+		isSolidified = false
 	}
 
-	resp, err := b.getTransactionByID(txid, isMempool)
+	resp, err := b.getTransactionByID(txid, isSolidified)
 	if err != nil {
 		return "", err
 	}
