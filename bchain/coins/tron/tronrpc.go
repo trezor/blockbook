@@ -86,6 +86,8 @@ type TronRPC struct {
 	bestHeaderLock       sync.Mutex
 	bestHeader           bchain.EVMHeader
 	bestHeaderTime       time.Time
+	bestSolidifiedHeight uint64
+	hasSolidifiedHeight  bool
 	newBlockNotifyCh     chan struct{}
 	newBlockNotifyOnce   sync.Once
 }
@@ -340,6 +342,19 @@ func (b *TronRPC) setBestHeader(h bchain.EVMHeader) bool {
 	return changed
 }
 
+func (b *TronRPC) setBestSolidifiedHeight(height uint64) {
+	b.bestHeaderLock.Lock()
+	defer b.bestHeaderLock.Unlock()
+	b.bestSolidifiedHeight = height
+	b.hasSolidifiedHeight = true
+}
+
+func (b *TronRPC) getBestSolidifiedHeight() (uint64, bool) {
+	b.bestHeaderLock.Lock()
+	defer b.bestHeaderLock.Unlock()
+	return b.bestSolidifiedHeight, b.hasSolidifiedHeight
+}
+
 func (b *TronRPC) refreshBestHeaderFromChain() (bool, error) {
 	if b.Client == nil {
 		return false, errors.New("rpc client not initialized")
@@ -353,7 +368,16 @@ func (b *TronRPC) refreshBestHeaderFromChain() (bool, error) {
 	if h == nil || h.Number() == nil {
 		return false, errors.New("best header is nil")
 	}
-	return b.setBestHeader(h), nil
+	updated := b.setBestHeader(h)
+
+	solidifiedHeight, err := b.requestLatestSolidifiedBlockHeight(ctx)
+	if err != nil {
+		glog.V(1).Infof("TronRPC: failed to refresh solidified head: %v", err)
+	} else {
+		b.setBestSolidifiedHeight(solidifiedHeight)
+	}
+
+	return updated, nil
 }
 
 func (b *TronRPC) signalNewBlock() {
