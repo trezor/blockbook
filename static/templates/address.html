@@ -50,6 +50,7 @@
             <td>Nonce</td>
             <td>{{$addr.Nonce}}</td>
         </tr>
+        {{template "addressChainExtra" .}}
         {{if $addr.ContractInfo}}
         {{if $addr.ContractInfo.Standard}}
         <tr>

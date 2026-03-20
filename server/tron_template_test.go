@@ -50,37 +50,59 @@ func TestChainExtra(t *testing.T) {
 
 	t.Run("empty object", func(t *testing.T) {
 		tx := &api.Tx{ChainExtraData: &api.TxChainExtraData{PayloadType: "tron", Payload: json.RawMessage(`{}`)}}
-		if got := chainExtra(tx); got != nil {
-			t.Fatalf("expected nil for empty extra, got %+v", got)
+		if got := chainExtra(tx); got == nil {
+			t.Fatal("expected non-nil for valid empty extra")
 		}
 	})
 
-	t.Run("wrong type", func(t *testing.T) {
-		tx := &api.Tx{ChainExtraData: &api.TxChainExtraData{PayloadType: "ethereum", Payload: json.RawMessage(`{"operation":"vote"}`)}}
-		if got := chainExtra(tx); got != nil {
-			t.Fatalf("expected nil for non-tron extra, got %+v", got)
-		}
-	})
-
-	t.Run("invalid fee amount", func(t *testing.T) {
+	t.Run("only feeLimit", func(t *testing.T) {
 		tx := &api.Tx{
 			ChainExtraData: &api.TxChainExtraData{
 				PayloadType: "tron",
-				Payload:     json.RawMessage(`{"operation":"vote","totalFee":"x","energyFee":"x","bandwidthFee":"345000"}`),
+				Payload:     json.RawMessage(`{"feeLimit":"5000000"}`),
 			},
 		}
 		got := chainExtra(tx)
 		if got == nil {
 			t.Fatal("expected extra data")
 		}
-		if got.EnergyFeeAmount != nil {
-			t.Fatalf("expected nil energyFeeAmount, got %+v", got.EnergyFeeAmount)
+		if got.FeeLimit != "5000000" {
+			t.Fatalf("unexpected feeLimit %q", got.FeeLimit)
 		}
-		if got.TotalFeeAmount != nil {
-			t.Fatalf("expected nil totalFeeAmount, got %+v", got.TotalFeeAmount)
+	})
+}
+
+func TestAccountChainExtra(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		addr := &api.Address{
+			ChainExtraData: &api.AccountChainExtraData{
+				PayloadType: "tron",
+				Payload:     json.RawMessage(`{"availableBandwidth":600,"totalBandwidth":1000,"availableEnergy":1234,"totalEnergy":9000}`),
+			},
 		}
-		if got.BandwidthFeeAmount == nil || got.BandwidthFeeAmount.DecimalString(6) != "0.345" {
-			t.Fatalf("unexpected bandwidthFeeAmount %+v", got.BandwidthFeeAmount)
+		got := accountChainExtra(addr)
+		if got == nil {
+			t.Fatal("expected extra data")
+		}
+		if got.AvailableBandwidth != 600 || got.TotalBandwidth != 1000 {
+			t.Fatalf("unexpected bandwidth values %+v", got)
+		}
+		if got.AvailableEnergy != 1234 || got.TotalEnergy != 9000 {
+			t.Fatalf("unexpected energy values %+v", got)
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		addr := &api.Address{ChainExtraData: &api.AccountChainExtraData{PayloadType: "tron", Payload: json.RawMessage("{")}}
+		if got := accountChainExtra(addr); got != nil {
+			t.Fatalf("expected nil for invalid json, got %+v", got)
+		}
+	})
+
+	t.Run("empty object", func(t *testing.T) {
+		addr := &api.Address{ChainExtraData: &api.AccountChainExtraData{PayloadType: "tron", Payload: json.RawMessage(`{}`)}}
+		if got := accountChainExtra(addr); got == nil {
+			t.Fatal("expected non-nil for valid empty extra")
 		}
 	})
 }

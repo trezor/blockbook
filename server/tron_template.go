@@ -11,6 +11,7 @@ import (
 
 func init() {
 	registerTemplateFunc("chainExtra", chainExtra)
+	registerTemplateFunc("accountChainExtra", accountChainExtra)
 }
 
 type tronTxExtraVote struct {
@@ -25,27 +26,12 @@ type tronTxExtraTemplateData struct {
 	BandwidthFeeAmount *api.Amount `json:"-"`
 }
 
-func (e *tronTxExtraTemplateData) hasData() bool {
-	return e.ContractType != "" ||
-		e.Operation != "" ||
-		e.Resource != "" ||
-		e.StakeAmount != "" ||
-		e.UnstakeAmount != "" ||
-		e.DelegateAmount != "" ||
-		e.DelegateTo != "" ||
-		e.AssetIssueID != "" ||
-		e.TotalFee != "" ||
-		e.EnergyUsage != "" ||
-		e.EnergyUsageTotal != "" ||
-		e.EnergyFee != "" ||
-		e.BandwidthUsage != "" ||
-		e.BandwidthFee != "" ||
-		e.Result != "" ||
-		len(e.Votes) > 0
+type tronAccountExtraTemplateData struct {
+	bchain.TronAccountExtraData
 }
 
 func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
-	if tx == nil || tx.ChainExtraData == nil || tx.ChainExtraData.PayloadType != "tron" || len(tx.ChainExtraData.Payload) == 0 {
+	if tx == nil || tx.ChainExtraData == nil {
 		return nil
 	}
 	var extra bchain.TronChainExtraData
@@ -62,8 +48,19 @@ func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
 		EnergyFeeAmount:    parseTronSunAmount(extra.EnergyFee),
 		BandwidthFeeAmount: parseTronSunAmount(extra.BandwidthFee),
 	}
-	if !rv.hasData() {
+	return rv
+}
+
+func accountChainExtra(addr *api.Address) *tronAccountExtraTemplateData {
+	if addr == nil || addr.ChainExtraData == nil {
 		return nil
+	}
+	var extra bchain.TronAccountExtraData
+	if err := json.Unmarshal(addr.ChainExtraData.Payload, &extra); err != nil {
+		return nil
+	}
+	rv := &tronAccountExtraTemplateData{
+		TronAccountExtraData: extra,
 	}
 	return rv
 }
