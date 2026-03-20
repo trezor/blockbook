@@ -137,7 +137,6 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.solidityNodeHTTP = NewTronHTTPClient(solidityURL, timeout)
 
 	internalProvider := NewTronInternalDataProvider(
-		tronRpc.fullNodeHTTP,
 		tronRpc.solidityNodeHTTP,
 		timeout,
 	)
