@@ -32,6 +32,8 @@ const txsOnPage = 25
 const blocksOnPage = 50
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
+const maxPageNumber = 1000000
+const maxGapValue = 10000
 const maxSendTxBodyBytes int64 = 8 * 1024 * 1024
 
 const secondaryCoinCookieName = "secondary_coin"
@@ -808,24 +810,42 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 	return errorTpl, nil, err
 }
 
+// validateIntParam validates and sanitizes integer parameters from query strings
+func validateIntParam(value string, defaultValue int, min int, max int) int {
+	if value == "" {
+		return defaultValue
+	}
+	val, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	if val < min {
+		return defaultValue
+	}
+	if max > 0 && val > max {
+		return max
+	}
+	return val
+}
+
 func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int) {
 	var voutFilter = api.AddressFilterVoutOff
-	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-	if ec != nil {
-		page = 0
-	}
-	pageSize, ec := strconv.Atoi(r.URL.Query().Get("pageSize"))
-	if ec != nil || pageSize > maxPageSize {
+	page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
+	pageSize := validateIntParam(r.URL.Query().Get("pageSize"), maxPageSize, 0, maxPageSize)
+	if pageSize == 0 {
 		pageSize = maxPageSize
 	}
-	from, ec := strconv.Atoi(r.URL.Query().Get("from"))
-	if ec != nil {
-		from = 0
+	from := validateIntParam(r.URL.Query().Get("from"), 0, 0, 10000000000)
+	to := validateIntParam(r.URL.Query().Get("to"), 0, 0, 10000000000)
+
+	// Check for overflow in page * pageSize calculation
+	const maxSafeOffset = 1000000000
+	if page > 0 && pageSize > 0 {
+		if page > maxSafeOffset/pageSize {
+			page = maxSafeOffset / pageSize
+		}
 	}
-	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
-	if ec != nil {
-		to = 0
-	}
+
 	filterParam := r.URL.Query().Get("filter")
 	if len(filterParam) > 0 {
 		if filterParam == "inputs" {
@@ -833,7 +853,7 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		} else if filterParam == "outputs" {
 			voutFilter = api.AddressFilterVoutOutputs
 		} else {
-			voutFilter, ec = strconv.Atoi(filterParam)
+			voutFilter, ec := strconv.Atoi(filterParam)
 			if ec != nil || voutFilter < 0 {
 				voutFilter = api.AddressFilterVoutOff
 			}
@@ -862,10 +882,8 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	case "nonzero":
 		tokensToReturn = api.TokensToReturnNonzeroBalance
 	}
-	gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
-	if ec != nil {
-		gap = 0
-	}
+	// Validate gap: non-negative, reasonable max (gap limit typically small, maxGapValue)
+	gap := validateIntParam(r.URL.Query().Get("gap"), 0, 0, maxGapValue)
 	contract := r.URL.Query().Get("contract")
 	return page, pageSize, accountDetails, &api.AddressFilter{
 		Vout:           voutFilter,
@@ -965,10 +983,7 @@ func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (t
 	var blocks *api.Blocks
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "blocks"}).Inc()
-	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-	if ec != nil {
-		page = 0
-	}
+	page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
 	blocks, err = s.api.GetBlocks(page, blocksOnPage)
 	if err != nil {
 		return errorTpl, nil, err
@@ -985,10 +1000,7 @@ func (s *PublicServer) explorerBlock(w http.ResponseWriter, r *http.Request) (tp
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "block"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
+		page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
 		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsOnPage)
 		if err != nil {
 			return errorTpl, nil, err
@@ -1094,10 +1106,7 @@ func (s *PublicServer) explorerMempool(w http.ResponseWriter, r *http.Request) (
 	var mempoolTxids *api.MempoolTxids
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "mempool"}).Inc()
-	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-	if ec != nil {
-		page = 0
-	}
+	page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
 	mempoolTxids, err = s.api.GetMempool(page, mempoolTxsOnPage)
 	if err != nil {
 		return errorTpl, nil, err
@@ -1214,19 +1223,9 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 		BlockFilters map[int]blockFilterResult `json:"blockFilters"`
 	}
 
-	// Parse parameters
-	lastN, ec := strconv.Atoi(r.URL.Query().Get("lastN"))
-	if ec != nil {
-		lastN = 0
-	}
-	from, ec := strconv.Atoi(r.URL.Query().Get("from"))
-	if ec != nil {
-		from = 0
-	}
-	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
-	if ec != nil {
-		to = 0
-	}
+	lastN := validateIntParam(r.URL.Query().Get("lastN"), 0, 0, 10000)
+	from := validateIntParam(r.URL.Query().Get("from"), 0, 0, 10000000000)
+	to := validateIntParam(r.URL.Query().Get("to"), 0, 0, 10000000000)
 	scriptType := r.URL.Query().Get("scriptType")
 	if scriptType != s.is.BlockFilterScripts {
 		return nil, api.NewAPIError(fmt.Sprintf("Invalid scriptType %s. Use %s", scriptType, s.is.BlockFilterScripts), true)
@@ -1408,10 +1407,7 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 				return nil, api.NewAPIError("Parameter 'confirmed' cannot be converted to boolean", true)
 			}
 		}
-		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
-		if ec != nil {
-			gap = 0
-		}
+		gap := validateIntParam(r.URL.Query().Get("gap"), 0, 0, maxGapValue)
 		utxo, err = s.api.GetXpubUtxo(desc, onlyConfirmed, gap)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-utxo"}).Inc()
@@ -1431,10 +1427,7 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 	var fromTimestamp, toTimestamp int64
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
-		if ec != nil {
-			gap = 0
-		}
+		gap := validateIntParam(r.URL.Query().Get("gap"), 0, 0, maxGapValue)
 		from := r.URL.Query().Get("from")
 		if from != "" {
 			fromTimestamp, err = strconv.ParseInt(from, 10, 64)
@@ -1475,10 +1468,7 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
+		page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
 		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.BlockToV1(block), nil
