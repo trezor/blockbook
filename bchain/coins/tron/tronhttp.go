@@ -46,7 +46,7 @@ func (c *TronHTTPClient) Request(ctx context.Context, path string, reqBody inter
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("Tron API returned status %d", resp.StatusCode)
+		return fmt.Errorf("Tron API returned status %d at path: %s %s", resp.StatusCode, c.baseURL, path)
 	}
 
 	if respBody != nil {
