@@ -254,6 +254,7 @@ type EthereumSpecific struct {
 	GasLimit             *big.Int                               `json:"gasLimit" ts_doc:"Maximum gas allowed by the sender for this transaction."`
 	GasUsed              *big.Int                               `json:"gasUsed,omitempty" ts_doc:"Actual gas consumed by the transaction execution."`
 	GasPrice             *Amount                                `json:"gasPrice,omitempty" ts_doc:"Price (in Wei or base units) per gas unit."`
+    EffectiveGasPrice    *Amount                                `json:"effectiveGasPrice,omitempty" ts_doc:"Actual gas price paid (for EIP-1559 and L2 networks)."`
 	MaxPriorityFeePerGas *Amount                                `json:"maxPriorityFeePerGas,omitempty"`
 	MaxFeePerGas         *Amount                                `json:"maxFeePerGas,omitempty"`
 	BaseFeePerGas        *Amount                                `json:"baseFeePerGas,omitempty"`
