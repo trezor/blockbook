@@ -9,10 +9,18 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	buildcfg "github.com/trezor/blockbook/build/tools"
 )
+
+const (
+	testBuildEnvVar = "BB_BUILD_ENV"
+	testBuildEnvDev = "dev"
+)
+
+var testEnvMu sync.Mutex
 
 // BlockchainCfg contains fields read from blockbook's blockchaincfg.json after being rendered from templates.
 type BlockchainCfg struct {
@@ -63,7 +71,12 @@ func loadBlockchainCfgBytes(coinAlias string) ([]byte, error) {
 		return nil, fmt.Errorf("integration templates path error: %w", err)
 	}
 
-	config, err := buildcfg.LoadConfig(configsDir, coinAlias)
+	var config *buildcfg.Config
+	err = withDefaultTestBuildEnv(func() error {
+		var loadErr error
+		config, loadErr = buildcfg.LoadConfig(configsDir, coinAlias)
+		return loadErr
+	})
 	if err != nil {
 		return nil, fmt.Errorf("load config for %s: %w", coinAlias, err)
 	}
@@ -87,6 +100,22 @@ func loadBlockchainCfgBytes(coinAlias string) ([]byte, error) {
 		return nil, fmt.Errorf("read blockchain config for %s: %w", coinAlias, err)
 	}
 	return rawCfg, nil
+}
+
+func withDefaultTestBuildEnv(fn func() error) error {
+	testEnvMu.Lock()
+	defer testEnvMu.Unlock()
+
+	if _, ok := os.LookupEnv(testBuildEnvVar); ok {
+		return fn()
+	}
+	if err := os.Setenv(testBuildEnvVar, testBuildEnvDev); err != nil {
+		return err
+	}
+	defer func() {
+		_ = os.Unsetenv(testBuildEnvVar)
+	}()
+	return fn()
 }
 
 // repoTemplatesDir locates build/templates relative to the repo root.

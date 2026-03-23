@@ -5,7 +5,13 @@ die() { echo "error: $1" >&2; exit 1; }
 
 [[ $# -ge 1 ]] || die "missing coin argument. usage: blockbook_backend_status.sh <coin>"
 coin="$1"
-var="BB_RPC_URL_HTTP_${coin}"
+build_env="${BB_BUILD_ENV:-dev}"
+build_env="${build_env,,}"
+case "$build_env" in
+  dev) var="BB_DEV_RPC_URL_HTTP_${coin}" ;;
+  prod) var="BB_PROD_RPC_URL_HTTP_${coin}" ;;
+  *) die "invalid BB_BUILD_ENV value '$build_env', expected 'dev' or 'prod'" ;;
+esac
 url="${!var-}"
 [[ -n "$url" ]] || die "environment variable ${var} is not set"
 user_var="BB_RPC_USER"

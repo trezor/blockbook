@@ -61,8 +61,9 @@ For simplicity, URLs and credentials of back-end services, where are tests going
 from *blockbook/configs/coins*, the same place from where are production configuration files generated. There are general
 URLs that link to *localhost*. If you need run tests against remote servers, there are few options how to do it:
 
-* set `BB_RPC_URL_HTTP_<coin alias>` to override `rpc_url_template` during template generation (forwarded into Docker by the root `Makefile`)
-* set `BB_RPC_URL_WS_<coin alias>` to override `rpc_url_ws_template` for WebSocket subscriptions when needed
+* tests use `BB_BUILD_ENV=dev`
+* set `BB_DEV_RPC_URL_HTTP_<coin alias>` to override `rpc_url_template` during template generation (forwarded into Docker by the root `Makefile`)
+* set `BB_DEV_RPC_URL_WS_<coin alias>` to override `rpc_url_ws_template` for WebSocket subscriptions when needed
 * temporarily change config
 * SSH tunneling – `ssh -nNT -L 8030:localhost:8030 remote-server`
 * HTTP proxy

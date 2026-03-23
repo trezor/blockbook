@@ -121,6 +121,7 @@ jobs:
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_PACKAGE_ROOT: /opt/blockbook-builds
+          BB_BUILD_ENV: ${{ inputs.env }}
         run: python3 ./.github/scripts/build_packages.py ${{ inputs.always_build_backend && '--always-build-backend' || '' }} ${{ join(matrix.coins, ' ') }}
 
   deploy:
@@ -148,6 +149,7 @@ jobs:
       - name: Deploy blockbook package
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          BB_BUILD_ENV: dev
         run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}"
 
   wait-for-sync:
@@ -172,6 +174,8 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Wait for Blockbook sync
+        env:
+          BB_BUILD_ENV: dev
         run: python3 ./.github/scripts/wait_for_sync.py
 
   e2e-tests:
@@ -194,4 +198,6 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Run e2e tests
+        env:
+          BB_BUILD_ENV: dev
         run: make test-e2e ARGS="-v"
