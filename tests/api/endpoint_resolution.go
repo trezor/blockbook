@@ -15,7 +15,7 @@ import (
 )
 
 // ResolveEndpoints resolves Blockbook API endpoints for a coin alias using
-// exact BB_TEST_API_URL_* overrides first and coin config fallbacks.
+// exact BB_DEV_API_URL_* overrides first and coin config fallbacks.
 func ResolveEndpoints(coin string) (string, string, error) {
 	ep, err := resolveAPIEndpoints(coin)
 	if err != nil {
@@ -36,7 +36,7 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 	}
 
 	httpURL := ""
-	if v, ok := os.LookupEnv("BB_TEST_API_URL_HTTP_" + alias); ok {
+	if v, ok := os.LookupEnv("BB_DEV_API_URL_HTTP_" + alias); ok {
 		httpURL = strings.TrimSpace(v)
 	}
 	if httpURL == "" {
@@ -51,7 +51,7 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 	}
 
 	wsURL := ""
-	if v, ok := os.LookupEnv("BB_TEST_API_URL_WS_" + alias); ok {
+	if v, ok := os.LookupEnv("BB_DEV_API_URL_WS_" + alias); ok {
 		wsURL = strings.TrimSpace(v)
 	}
 	if wsURL == "" {

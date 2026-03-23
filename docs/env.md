@@ -42,8 +42,8 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.
 
--   `BB_TEST_API_URL_HTTP_<test name>` - Overrides the HTTP Blockbook API endpoint used by API/e2e tests and the
+-   `BB_DEV_API_URL_HTTP_<test name>` - Overrides the HTTP Blockbook API endpoint used by API/e2e tests and the
     post-deploy sync wait step. Uses the test identity (`coin.test_name`, or config filename fallback), not `coin.alias`.
 
--   `BB_TEST_API_URL_WS_<test name>` - Overrides the WebSocket Blockbook API endpoint used by API/e2e tests. Uses the
-    same test identity as `BB_TEST_API_URL_HTTP_<test name>`.
+-   `BB_DEV_API_URL_WS_<test name>` - Overrides the WebSocket Blockbook API endpoint used by API/e2e tests. Uses the
+    same test identity as `BB_DEV_API_URL_HTTP_<test name>`.

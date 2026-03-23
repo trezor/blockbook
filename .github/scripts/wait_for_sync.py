@@ -69,9 +69,9 @@ def upgrade_http_base_to_https(raw: str) -> str:
 
 
 def resolve_http_base(coin: str) -> str:
-    value = os.environ.get("BB_TEST_API_URL_HTTP_" + coin, "").strip()
+    value = os.environ.get("BB_DEV_API_URL_HTTP_" + coin, "").strip()
     if not value:
-        fail(f"missing BB_TEST_API_URL_HTTP_{coin} for selected test coin {coin!r}")
+        fail(f"missing BB_DEV_API_URL_HTTP_{coin} for selected test coin {coin!r}")
     return normalize_http_base(value)
 
 
