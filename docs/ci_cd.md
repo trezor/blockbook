@@ -99,7 +99,7 @@ Special cases:
 | Built backend .deb filename   | build/<backend.package_name>_*.deb     | build/backend-polygon_*.deb          |
 | Staged artifact path identity | workflow/config coin name              | {branch_or_tag}/polygon_archive/...  |
 | API/e2e test identity         | coin.test_name or config filename      | polygon                              |
-| API test env identity         | BB_TEST_API_URL_* from test identity   | BB_TEST_API_URL_HTTP_polygon         |
+| API test env identity         | BB_DEV_API_URL_* from test identity    | BB_DEV_API_URL_HTTP_polygon          |
 +-------------------------------+----------------------------------------+--------------------------------------+
 ```
 

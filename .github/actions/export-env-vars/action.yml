@@ -28,8 +28,8 @@ runs:
             "BB_PROD_RPC_URL_WS_",
             "BB_RPC_BIND_HOST_",
             "BB_RPC_ALLOW_IP_",
-            "BB_TEST_API_URL_HTTP_",
-            "BB_TEST_API_URL_WS_",
+            "BB_DEV_API_URL_HTTP_",
+            "BB_DEV_API_URL_WS_",
         )
 
         def write_env_var(env_file, key, value):

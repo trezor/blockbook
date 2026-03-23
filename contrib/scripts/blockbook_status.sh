@@ -10,7 +10,7 @@ else
   host="localhost"
 fi
 
-var="BB_TEST_API_URL_HTTP_${coin}"
+var="BB_DEV_API_URL_HTTP_${coin}"
 base_url="${!var-}"
 [[ -n "$base_url" ]] || die "environment variable ${var} is not set"
 command -v curl >/dev/null 2>&1 || die "curl is not installed"
