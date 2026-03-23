@@ -425,7 +425,7 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 		"availableEnergy":7766,
 		"totalEnergy":9000
 	}`, string(payload))
-	require.Equal(t, "/walletsolidity/getaccountresource", mockHTTP.LastPath)
+	require.Equal(t, "/wallet/getaccountresource", mockHTTP.LastPath)
 	require.Equal(t, map[string]any{
 		"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
 		"visible": true,
