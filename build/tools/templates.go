@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -107,6 +109,7 @@ type Config struct {
 		Architecture         string `json:"architecture"`
 		RPCBindHost          string `json:"-"` // Derived from BB_RPC_BIND_HOST_* to keep default RPC exposure local.
 		RPCAllowIP           string `json:"-"` // Derived to align rpcallowip with RPC bind host intent.
+		WantsBackendService  bool   `json:"-"` // Derived from the effective RPC URL so systemd only wants a local backend.
 	} `json:"-"`
 }
 
@@ -259,6 +262,41 @@ func rpcURLPrefixesForBuildEnv(buildEnv string) (string, string) {
 	}
 }
 
+func renderConfigTemplate(config *Config, name string) (string, error) {
+	templ := config.ParseTemplate()
+	var out bytes.Buffer
+	if err := templ.ExecuteTemplate(&out, name, config); err != nil {
+		return "", err
+	}
+	return out.String(), nil
+}
+
+func rpcURLUsesLoopback(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func wantsBackendService(config *Config) (bool, error) {
+	if isEmpty(config, "backend") {
+		return false, nil
+	}
+
+	renderedRPCURL, err := renderConfigTemplate(config, "IPC.RPCURLTemplate")
+	if err != nil {
+		return false, err
+	}
+
+	return rpcURLUsesLoopback(renderedRPCURL), nil
+}
+
 // ParseTemplate parses the template
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
@@ -378,6 +416,11 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 		default:
 			return nil, fmt.Errorf("Invalid verification type: %s", config.Backend.VerificationType)
 		}
+	}
+
+	config.Env.WantsBackendService, err = wantsBackendService(config)
+	if err != nil {
+		return nil, err
 	}
 
 	return config, nil
