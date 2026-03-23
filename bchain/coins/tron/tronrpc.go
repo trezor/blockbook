@@ -131,7 +131,7 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	}
 	solidityURL := cfg.SolidityHTTPURLTemplate
 	if solidityURL == "" {
-		solidityURL = fullNodeURL
+		return nil, errors.New("missing Tron solidity node HTTP URL: set tron_solidity_http_url_template")
 	}
 
 	timeout := time.Duration(cfg.RPCTimeout) * time.Second
