@@ -79,7 +79,7 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	resp, err := b.requestAccountResource(ctx, ToTronAddressFromDesc(addrDesc), true)
+	resp, err := b.requestAccountResource(ctx, ToTronAddressFromDesc(addrDesc))
 	if err != nil {
 		return nil, err
 	}
@@ -178,14 +178,13 @@ func (b *TronRPC) requestMempoolTransactions(ctx context.Context) ([]string, err
 	return resp.TxID, nil
 }
 
-func (b *TronRPC) requestAccountResource(ctx context.Context, address string, isSolidified bool) (*tronGetAccountResourceResponse, error) {
+func (b *TronRPC) requestAccountResource(ctx context.Context, address string) (*tronGetAccountResourceResponse, error) {
 	req := map[string]any{
 		"address": address,
 		"visible": true,
 	}
-	http := b.getLookupHTTPClient(isSolidified)
 	var resp tronGetAccountResourceResponse
-	if err := http.Request(ctx, tronLookupPath(isSolidified, "/wallet/getaccountresource", "/walletsolidity/getaccountresource"), req, &resp); err != nil {
+	if err := b.fullNodeHTTP.Request(ctx, "/wallet/getaccountresource", req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
