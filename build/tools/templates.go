@@ -110,6 +110,16 @@ type Config struct {
 	} `json:"-"`
 }
 
+const (
+	buildEnvVar          = "BB_BUILD_ENV"
+	buildEnvDev          = "dev"
+	buildEnvProd         = "prod"
+	devRPCURLHTTPPrefix  = "BB_DEV_RPC_URL_HTTP_"
+	devRPCURLWSPrefix    = "BB_DEV_RPC_URL_WS_"
+	prodRPCURLHTTPPrefix = "BB_PROD_RPC_URL_HTTP_"
+	prodRPCURLWSPrefix   = "BB_PROD_RPC_URL_WS_"
+)
+
 func jsonToString(msg json.RawMessage) (string, error) {
 	d, err := msg.MarshalJSON()
 	if err != nil {
@@ -140,7 +150,7 @@ func validateRPCEnvVars(configsDir string) error {
 		return nil
 	}
 	sort.Strings(unknown)
-	return fmt.Errorf("BB_RPC_* env vars reference unknown coin aliases: %s", strings.Join(unknown, ", "))
+	return fmt.Errorf("RPC env vars reference unknown coin aliases: %s", strings.Join(unknown, ", "))
 }
 
 type coinAliasHolder struct {
@@ -153,7 +163,7 @@ func loadCoinAliases(configsDir string) (map[string]struct{}, error) {
 	coinsDir := filepath.Join(configsDir, "coins")
 	entries, err := os.ReadDir(coinsDir)
 	if err != nil {
-		return nil, fmt.Errorf("read coins directory for BB_RPC_* validation: %w", err)
+		return nil, fmt.Errorf("read coins directory for RPC env validation: %w", err)
 	}
 
 	validAliases := make(map[string]struct{}, len(entries))
@@ -195,7 +205,14 @@ func readCoinAlias(path string) (string, error) {
 }
 
 func rpcEnvPrefixes() []string {
-	return []string{"BB_RPC_URL_WS_", "BB_RPC_URL_HTTP_", "BB_RPC_BIND_HOST_", "BB_RPC_ALLOW_IP_"}
+	return []string{
+		devRPCURLWSPrefix,
+		devRPCURLHTTPPrefix,
+		prodRPCURLWSPrefix,
+		prodRPCURLHTTPPrefix,
+		"BB_RPC_BIND_HOST_",
+		"BB_RPC_ALLOW_IP_",
+	}
 }
 
 func collectUnknownRPCEnvVars(validAliases map[string]struct{}, prefixes []string) []string {
@@ -218,6 +235,28 @@ func collectUnknownRPCEnvVars(validAliases map[string]struct{}, prefixes []strin
 		}
 	}
 	return unknown
+}
+
+func resolveBuildEnv() (string, error) {
+	buildEnv := strings.ToLower(strings.TrimSpace(os.Getenv(buildEnvVar)))
+	if buildEnv == "" {
+		return buildEnvDev, nil
+	}
+	switch buildEnv {
+	case buildEnvDev, buildEnvProd:
+		return buildEnv, nil
+	default:
+		return "", fmt.Errorf("invalid %s value %q, expected %q or %q", buildEnvVar, buildEnv, buildEnvDev, buildEnvProd)
+	}
+}
+
+func rpcURLPrefixesForBuildEnv(buildEnv string) (string, string) {
+	switch buildEnv {
+	case buildEnvProd:
+		return prodRPCURLHTTPPrefix, prodRPCURLWSPrefix
+	default:
+		return devRPCURLHTTPPrefix, devRPCURLWSPrefix
+	}
 }
 
 // ParseTemplate parses the template
@@ -262,8 +301,12 @@ func copyNonZeroBackendFields(toValue *Backend, fromValue *Backend) {
 func LoadConfig(configsDir, coin string) (*Config, error) {
 	config := new(Config)
 
-	// Fail fast if BB_RPC_* variables reference coins that do not exist in configs/coins.
+	// Fail fast if RPC override variables reference coins that do not exist in configs/coins.
 	if err := validateRPCEnvVars(configsDir); err != nil {
+		return nil, err
+	}
+	buildEnv, err := resolveBuildEnv()
+	if err != nil {
 		return nil, err
 	}
 
@@ -301,12 +344,14 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 		config.Env.RPCAllowIP = allowIP
 	}
 
+	rpcURLHTTPPrefix, rpcURLWSPrefix := rpcURLPrefixesForBuildEnv(buildEnv)
+
 	// Resolve RPC env by exact alias first and fall back to *_archive for shared test/deploy wiring.
-	if rpcURL, ok := lookupEnvWithArchiveFallback("BB_RPC_URL_HTTP_", config.Coin.Alias); ok {
+	if rpcURL, ok := lookupEnvWithArchiveFallback(rpcURLHTTPPrefix, config.Coin.Alias); ok {
 		// Prefer explicit env override so package generation/tests can target hosted RPC endpoints without editing JSON.
 		config.IPC.RPCURLTemplate = rpcURL
 	}
-	if rpcURLWS, ok := lookupEnvWithArchiveFallback("BB_RPC_URL_WS_", config.Coin.Alias); ok {
+	if rpcURLWS, ok := lookupEnvWithArchiveFallback(rpcURLWSPrefix, config.Coin.Alias); ok {
 		config.IPC.RPCURLWSTemplate = rpcURLWS
 	}
 

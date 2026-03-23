@@ -1,6 +1,40 @@
 package build
 
-import "testing"
+import (
+	"testing"
+)
+
+func TestResolveBuildEnvDefaultsToDev(t *testing.T) {
+	t.Setenv(buildEnvVar, "")
+
+	got, err := resolveBuildEnv()
+	if err != nil {
+		t.Fatalf("resolveBuildEnv() error = %v", err)
+	}
+	if got != buildEnvDev {
+		t.Fatalf("resolveBuildEnv() = %q, want %q", got, buildEnvDev)
+	}
+}
+
+func TestResolveBuildEnvUsesExplicitProd(t *testing.T) {
+	t.Setenv(buildEnvVar, buildEnvProd)
+
+	got, err := resolveBuildEnv()
+	if err != nil {
+		t.Fatalf("resolveBuildEnv() error = %v", err)
+	}
+	if got != buildEnvProd {
+		t.Fatalf("resolveBuildEnv() = %q, want %q", got, buildEnvProd)
+	}
+}
+
+func TestResolveBuildEnvRejectsInvalidValue(t *testing.T) {
+	t.Setenv(buildEnvVar, "staging")
+
+	if _, err := resolveBuildEnv(); err == nil {
+		t.Fatal("expected invalid BB_BUILD_ENV to fail")
+	}
+}
 
 func TestLookupEnvWithArchiveFallback_PrefersExactAlias(t *testing.T) {
 	const prefix = "TEST_LOOKUP_PREFIX_"

@@ -49,9 +49,10 @@ Inputs:
   - `dev` keeps the current per-coin dev runner mapping
   - `prod` builds selected coins on the `production-builder` runner regardless of `BB_RUNNER_*`
   - default is `dev`
+  - selected value is exported downstream as `BB_BUILD_ENV`
   - ignored when `mode=deploy`
 - `always_build_backend`:
-  - `false` derives backend builds per coin from `BB_RPC_URL_HTTP_<coin_alias>`
+  - `false` derives backend builds per coin from the selected `BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>` value
   - backend is built when that env var is unset, empty, or resolves to `localhost`, `127.0.0.1`, or `::1`
   - backend is skipped only when the env var is present and points to a non-loopback target
   - `true` forces backend builds for all selected coins
@@ -62,6 +63,7 @@ Inputs:
 
 In `mode=build`, selected coins are grouped by runner so one build job can build multiple
 `deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.
+Deploy and test-related workflow steps use `BB_BUILD_ENV=dev`.
 
 Env vars :
 
@@ -88,7 +90,8 @@ Special cases:
 +-------------------------------+----------------------------------------+--------------------------------------+
 | Workflow/build/deploy identity| configs/coins/<coin>.json filename     | polygon_archive                      |
 | Runner mapping                | BB_RUNNER_<coin>                       | BB_RUNNER_POLYGON_ARCHIVE            |
-| Backend RPC env identity      | coin.alias                             | BB_RPC_URL_HTTP_polygon_archive_bor  |
+| Build env selector            | BB_BUILD_ENV                           | dev                                  |
+| Backend RPC env identity      | coin.alias                             | BB_DEV_RPC_URL_HTTP_polygon_archive_bor |
 | Blockbook package name        | blockbook.package_name                 | blockbook-polygon                    |
 | Backend package name          | backend.package_name                   | backend-polygon                      |
 | Build target identity         | workflow/config coin name              | deb-blockbook-polygon_archive        |

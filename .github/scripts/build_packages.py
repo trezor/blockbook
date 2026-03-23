@@ -15,6 +15,9 @@ from urllib.parse import urlparse
 LOG_PREFIX = "CI/CD Pipeline:"
 SCRIPT_NAME = "[build-packages]"
 DEFAULT_PACKAGE_ROOT = "/opt/blockbook-builds"
+BUILD_ENV_VAR = "BB_BUILD_ENV"
+BUILD_ENV_DEV = "dev"
+BUILD_ENV_PROD = "prod"
 
 
 def log(message: str) -> None:
@@ -49,8 +52,20 @@ def get_coin_alias(config: dict, coin: str) -> str:
         fail(f"coin '{coin}' does not define coin.alias")
     return value.strip().lower()
 
-def rpc_url_env_name(alias: str) -> str:
-    return f"BB_RPC_URL_HTTP_{alias}"
+
+def resolve_build_env() -> str:
+    build_env = os.environ.get(BUILD_ENV_VAR, "").strip().lower()
+    if not build_env:
+        return BUILD_ENV_DEV
+    if build_env in {BUILD_ENV_DEV, BUILD_ENV_PROD}:
+        return build_env
+    fail(f"invalid {BUILD_ENV_VAR} value '{build_env}', expected 'dev' or 'prod'")
+    return ""
+
+
+def rpc_url_env_name(alias: str, build_env: str) -> str:
+    prefix = "BB_DEV_RPC_URL_HTTP_" if build_env == BUILD_ENV_DEV else "BB_PROD_RPC_URL_HTTP_"
+    return f"{prefix}{alias}"
 
 
 def rpc_hostname(url: str) -> str:
@@ -135,6 +150,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parsed.coins
 
     always_build_backend = parsed.always_build_backend
+    build_env = resolve_build_env()
 
     package_root = os.environ.get("BB_PACKAGE_ROOT", "").strip() or DEFAULT_PACKAGE_ROOT
     if not os.path.isabs(package_root):
@@ -144,7 +160,8 @@ def main(argv: list[str] | None = None) -> None:
 
     log("requested coins: " + " ".join(args))
     log(f"always_build_backend={int(always_build_backend)}")
-    log("backend build rule: build unless BB_RPC_URL_HTTP is non-empty and non-local")
+    log(f"{BUILD_ENV_VAR}={build_env}")
+    log("backend build rule: build unless the selected BB_{DEV|PROD}_RPC_URL_HTTP is non-empty and non-local")
     log(f"branch_or_tag={branch_or_tag} -> path={branch_or_tag_path}")
     log(f"package_root={package_root}")
 
@@ -163,7 +180,7 @@ def main(argv: list[str] | None = None) -> None:
         blockbook_package_name = get_package_name(config, "blockbook", coin)
         backend_package_name = get_package_name(config, "backend", coin)
         coin_alias = get_coin_alias(config, coin)
-        rpc_env = rpc_url_env_name(coin_alias)
+        rpc_env = rpc_url_env_name(coin_alias, build_env)
         rpc_url = os.environ.get(rpc_env, "").strip()
         build_backend, reason = should_build_backend(
             always_build_backend=always_build_backend,
