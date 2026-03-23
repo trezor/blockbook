@@ -47,8 +47,8 @@ class BuildPackagesTest(unittest.TestCase):
         self,
         *,
         coin: str,
-        rpc_env: str,
-        rpc_url: str,
+        rpc_env: str | None = None,
+        rpc_url: str | None = None,
         always_build_backend: bool,
     ) -> tuple[list[str], str]:
         commands: list[list[str]] = []
@@ -76,14 +76,14 @@ class BuildPackagesTest(unittest.TestCase):
         env = {
             "BRANCH_OR_TAG": "feature/test-branch",
             "BB_PACKAGE_ROOT": str(self.package_root),
-            "BB_BACKEND_DOMAIN": "backend.example.test",
-            rpc_env: rpc_url,
         }
+        if rpc_env is not None and rpc_url is not None:
+            env[rpc_env] = rpc_url
         stdout = io.StringIO()
         old_cwd = Path.cwd()
         try:
             os.chdir(self.workspace)
-            with patch.dict(os.environ, env, clear=False), patch("build_packages.subprocess.run", side_effect=fake_run):
+            with patch.dict(os.environ, env, clear=True), patch("build_packages.subprocess.run", side_effect=fake_run):
                 with contextlib.redirect_stdout(stdout):
                     argv = [coin]
                     if always_build_backend:
@@ -94,11 +94,11 @@ class BuildPackagesTest(unittest.TestCase):
 
         return commands[-1], stdout.getvalue().strip()
 
-    def test_builds_backend_when_rpc_url_matches_backend_domain(self) -> None:
+    def test_builds_backend_when_rpc_url_uses_localhost(self) -> None:
         make_cmd, output = self.run_build(
             coin="base_archive",
             rpc_env="BB_RPC_URL_HTTP_base_archive",
-            rpc_url="http://backend.example.test:18026",
+            rpc_url="http://localhost:18026",
             always_build_backend=False,
         )
 
@@ -108,7 +108,21 @@ class BuildPackagesTest(unittest.TestCase):
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
         self.assertTrue((staged_dir / "backend-base_1.0_amd64.deb").is_file())
 
-    def test_skips_backend_when_rpc_url_does_not_match_backend_domain(self) -> None:
+    def test_builds_backend_when_rpc_url_uses_loopback_ip(self) -> None:
+        make_cmd, output = self.run_build(
+            coin="base_archive",
+            rpc_env="BB_RPC_URL_HTTP_base_archive",
+            rpc_url="http://127.0.0.1:18026",
+            always_build_backend=False,
+        )
+
+        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
+        staged_dir = self.package_root / "feature-test-branch" / "base_archive"
+        self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
+        self.assertTrue((staged_dir / "backend-base_1.0_amd64.deb").is_file())
+
+    def test_skips_backend_when_rpc_url_host_is_remote(self) -> None:
         make_cmd, output = self.run_build(
             coin="base_archive",
             rpc_env="BB_RPC_URL_HTTP_base_archive",
@@ -122,11 +136,11 @@ class BuildPackagesTest(unittest.TestCase):
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
         self.assertFalse((staged_dir / "backend-base_1.0_amd64.deb").exists())
 
-    def test_skips_backend_when_domain_only_appears_in_rpc_path(self) -> None:
+    def test_skips_backend_when_localhost_only_appears_in_rpc_path(self) -> None:
         make_cmd, output = self.run_build(
             coin="base_archive",
             rpc_env="BB_RPC_URL_HTTP_base_archive",
-            rpc_url="https://rpc.example.invalid/backend.example.test",
+            rpc_url="https://rpc.example.invalid/localhost",
             always_build_backend=False,
         )
 
@@ -136,7 +150,47 @@ class BuildPackagesTest(unittest.TestCase):
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
         self.assertFalse((staged_dir / "backend-base_1.0_amd64.deb").exists())
 
-    def test_always_build_backend_overrides_domain_matching(self) -> None:
+    def test_builds_backend_when_rpc_url_env_is_missing(self) -> None:
+        make_cmd, output = self.run_build(
+            coin="base_archive",
+            always_build_backend=False,
+        )
+
+        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
+        staged_dir = self.package_root / "feature-test-branch" / "base_archive"
+        self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
+        self.assertTrue((staged_dir / "backend-base_1.0_amd64.deb").is_file())
+
+    def test_builds_backend_when_rpc_url_env_is_empty(self) -> None:
+        make_cmd, output = self.run_build(
+            coin="base_archive",
+            rpc_env="BB_RPC_URL_HTTP_base_archive",
+            rpc_url="",
+            always_build_backend=False,
+        )
+
+        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
+        staged_dir = self.package_root / "feature-test-branch" / "base_archive"
+        self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
+        self.assertTrue((staged_dir / "backend-base_1.0_amd64.deb").is_file())
+
+    def test_skips_backend_when_rpc_url_env_is_non_empty_but_invalid(self) -> None:
+        make_cmd, output = self.run_build(
+            coin="base_archive",
+            rpc_env="BB_RPC_URL_HTTP_base_archive",
+            rpc_url="not-a-loopback-url",
+            always_build_backend=False,
+        )
+
+        self.assertEqual(make_cmd, ["make", "deb-blockbook-base_archive"])
+        self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
+        staged_dir = self.package_root / "feature-test-branch" / "base_archive"
+        self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
+        self.assertFalse((staged_dir / "backend-base_1.0_amd64.deb").exists())
+
+    def test_always_build_backend_overrides_localhost_detection(self) -> None:
         make_cmd, output = self.run_build(
             coin="base_archive",
             rpc_env="BB_RPC_URL_HTTP_base_archive",
@@ -153,7 +207,7 @@ class BuildPackagesTest(unittest.TestCase):
         make_cmd, output = self.run_build(
             coin="polygon_archive",
             rpc_env="BB_RPC_URL_HTTP_polygon_archive_bor",
-            rpc_url="http://backend.example.test:8545",
+            rpc_url="http://localhost:8545",
             always_build_backend=False,
         )
 

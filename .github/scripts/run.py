@@ -384,7 +384,8 @@ def create_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.Argumen
         help=(
             "Build backend packages for every selected coin. "
             "If omitted, backend builds are derived from "
-            "BB_RPC_URL_HTTP_<coin_alias> hostname matching BB_BACKEND_DOMAIN"
+            "BB_RPC_URL_HTTP_<coin_alias>; backend is skipped only for "
+            "present non-local values"
         ),
     )
     build_parser.set_defaults(func=handle_build)

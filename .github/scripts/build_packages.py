@@ -49,16 +49,6 @@ def get_coin_alias(config: dict, coin: str) -> str:
         fail(f"coin '{coin}' does not define coin.alias")
     return value.strip().lower()
 
-
-def resolve_backend_domain(always_build_backend: bool) -> str:
-    domain = os.environ.get("BB_BACKEND_DOMAIN", "").strip()
-    if always_build_backend:
-        return domain
-    if not domain:
-        fail("BB_BACKEND_DOMAIN must be set unless --always-build-backend is used")
-    return domain
-
-
 def rpc_url_env_name(alias: str) -> str:
     return f"BB_RPC_URL_HTTP_{alias}"
 
@@ -75,16 +65,18 @@ def rpc_hostname(url: str) -> str:
 def should_build_backend(
     *,
     always_build_backend: bool,
-    backend_domain: str,
-    rpc_host: str,
+    rpc_url: str,
 ) -> tuple[bool, str]:
     if always_build_backend:
         return True, "always-build-backend"
-    if backend_domain and backend_domain == rpc_host:
-        return True, f"rpc-host-matches-{backend_domain}"
+    if not rpc_url:
+        return True, "rpc-url-env-missing-or-empty"
+    rpc_host = rpc_hostname(rpc_url)
     if not rpc_host:
         return False, "rpc-host-missing"
-    return False, f"rpc-host-does-not-match-{backend_domain}"
+    if rpc_host in {"localhost", "127.0.0.1", "::1"}:
+        return True, f"rpc-host-is-local-{rpc_host}"
+    return False, f"rpc-host-is-remote-{rpc_host}"
 
 
 def resolve_branch_or_tag() -> str:
@@ -143,7 +135,6 @@ def main(argv: list[str] | None = None) -> None:
     args = parsed.coins
 
     always_build_backend = parsed.always_build_backend
-    backend_domain = resolve_backend_domain(always_build_backend)
 
     package_root = os.environ.get("BB_PACKAGE_ROOT", "").strip() or DEFAULT_PACKAGE_ROOT
     if not os.path.isabs(package_root):
@@ -153,7 +144,7 @@ def main(argv: list[str] | None = None) -> None:
 
     log("requested coins: " + " ".join(args))
     log(f"always_build_backend={int(always_build_backend)}")
-    log(f"BB_BACKEND_DOMAIN={backend_domain or '<unset>'}")
+    log("backend build rule: build unless BB_RPC_URL_HTTP is non-empty and non-local")
     log(f"branch_or_tag={branch_or_tag} -> path={branch_or_tag_path}")
     log(f"package_root={package_root}")
 
@@ -174,12 +165,11 @@ def main(argv: list[str] | None = None) -> None:
         coin_alias = get_coin_alias(config, coin)
         rpc_env = rpc_url_env_name(coin_alias)
         rpc_url = os.environ.get(rpc_env, "").strip()
-        host = rpc_hostname(rpc_url)
         build_backend, reason = should_build_backend(
             always_build_backend=always_build_backend,
-            backend_domain=backend_domain,
-            rpc_host=host,
+            rpc_url=rpc_url,
         )
+        host = rpc_hostname(rpc_url)
 
         coins.append(coin)
         blockbook_package_names.append(blockbook_package_name)
