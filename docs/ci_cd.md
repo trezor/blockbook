@@ -52,6 +52,8 @@ Inputs:
   - ignored when `mode=deploy`
 - `always_build_backend`:
   - `false` derives backend builds per coin from `BB_RPC_URL_HTTP_<coin_alias>`
+  - backend is built when that env var is unset, empty, or resolves to `localhost`, `127.0.0.1`, or `::1`
+  - backend is skipped only when the env var is present and points to a non-loopback target
   - `true` forces backend builds for all selected coins
   - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
@@ -70,9 +72,6 @@ See also [CI/CD workflow variables](env.md#cicd-workflow-variables).
   - `/opt/blockbook-builds/{branch_or_tag}/{coin}/blockbook-*.deb`
   - `/opt/blockbook-builds/{branch_or_tag}/{coin}/backend-*.deb`
   - `{coin}` here is the workflow/config name from `configs/coins/<coin>.json`, not `coin.alias`
-- `BB_BACKEND_DOMAIN=<backend-domain>`
-  - if `always_build_backend=true`, backend is built for every selected coin
-  - otherwise, backend is built only when `BB_RPC_URL_HTTP_<coin_alias>` has a hostname matching `BB_BACKEND_DOMAIN`
 
 Special cases:
 

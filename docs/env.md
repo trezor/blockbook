@@ -38,9 +38,6 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.
 
--   `BB_BACKEND_DOMAIN` - Backend hostname used by workflow package builds when `always_build_backend=false`. A backend
-    package is built only when `BB_RPC_URL_HTTP_<coin alias>` resolves to a hostname matching `BB_BACKEND_DOMAIN`.
-
 -   `BB_TEST_API_URL_HTTP_<test name>` - Overrides the HTTP Blockbook API endpoint used by API/e2e tests and the
     post-deploy sync wait step. Uses the test identity (`coin.test_name`, or config filename fallback), not `coin.alias`.
 
