@@ -30,13 +30,13 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 		return nil, err
 	}
 
-	alias := cfg.Coin.Alias
-	if alias == "" {
-		alias = coin
+	testIdentity := strings.TrimSpace(cfg.Coin.TestName)
+	if testIdentity == "" {
+		testIdentity = coin
 	}
 
 	httpURL := ""
-	if v, ok := os.LookupEnv("BB_DEV_API_URL_HTTP_" + alias); ok {
+	if v, ok := os.LookupEnv("BB_DEV_API_URL_HTTP_" + testIdentity); ok {
 		httpURL = strings.TrimSpace(v)
 	}
 	if httpURL == "" {
@@ -51,7 +51,7 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 	}
 
 	wsURL := ""
-	if v, ok := os.LookupEnv("BB_DEV_API_URL_WS_" + alias); ok {
+	if v, ok := os.LookupEnv("BB_DEV_API_URL_WS_" + testIdentity); ok {
 		wsURL = strings.TrimSpace(v)
 	}
 	if wsURL == "" {
