@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -856,17 +857,12 @@ func (b *TronRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*bi
 	return b.Client.BalanceAt(ctx, addrDesc, nil)
 }
 
-// EthereumTypeEstimateGas supports both EVM hex and Tron Base58 in `from`/`to`.
+// EthereumTypeEstimateGas supports both EVM hex and Tron Base58 in `from`/`to`
+// and calls eth_estimateGas using Tron-compatible params: from, to, value, data.
 func (b *TronRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
-	normalizedParams := params
-	if len(params) > 0 {
-		normalizedParams = make(map[string]interface{}, len(params))
-		for k, v := range params {
-			normalizedParams[k] = v
-		}
-	}
+	req := make(map[string]interface{}, 4)
 	for _, field := range []string{"from", "to"} {
-		address, ok := eth.GetStringFromMap(field, normalizedParams)
+		address, ok := eth.GetStringFromMap(field, params)
 		if !ok || address == "" {
 			continue
 		}
@@ -874,11 +870,23 @@ func (b *TronRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64
 		if err != nil {
 			return 0, err
 		}
-		if hexAddress != "" {
-			normalizedParams[field] = hexAddress
-		}
+		req[field] = hexAddress
 	}
-	return b.EthereumRPC.EthereumTypeEstimateGas(normalizedParams)
+	if value, ok := eth.GetStringFromMap("value", params); ok && value != "" {
+		req["value"] = value
+	}
+	if data, ok := eth.GetStringFromMap("data", params); ok && data != "" {
+		req["data"] = data
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	var result string
+	if err := b.RPC.CallContext(ctx, &result, "eth_estimateGas", req); err != nil {
+		return 0, err
+	}
+	return hexutil.DecodeUint64(result)
 }
 
 // EthereumTypeRpcCall supports both EVM hex and Tron Base58 in `to`/`from`.
