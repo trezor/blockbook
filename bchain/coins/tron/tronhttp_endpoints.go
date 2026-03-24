@@ -164,12 +164,8 @@ func (b *TronRPC) requestTransactionInfoByID(ctx context.Context, txid string, i
 }
 
 func (b *TronRPC) requestMempoolTransactions(ctx context.Context) ([]string, error) {
-	http := b.fullNodeHTTP
-	if http == nil {
-		http = b.getLookupHTTPClient(false)
-	}
 	var resp tronGetTransactionListFromPendingResponse
-	if err := http.Request(ctx, "/wallet/gettransactionlistfrompending", map[string]any{}, &resp); err != nil {
+	if err := b.fullNodeHTTP.Request(ctx, "/wallet/gettransactionlistfrompending", map[string]any{}, &resp); err != nil {
 		return nil, err
 	}
 	if len(resp.TxID) == 0 {
