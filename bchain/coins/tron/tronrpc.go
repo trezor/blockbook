@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"net"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +24,9 @@ const (
 	// MainNet is production network
 	MainNet     eth.Network = 11111
 	TestNetNile eth.Network = 201910292
+
+	tronDefaultFullNodeHTTPPort = "8090"
+	tronDefaultSolidityHTTPPort = "8091"
 
 	TRC10TokenType   bchain.TokenStandardName = "TRC10"
 	TRC20TokenType   bchain.TokenStandardName = "TRC20"
@@ -126,13 +132,13 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.ChainConfig = &cfg
 	tronRpc.PushHandler = pushHandler
 
-	fullNodeURL := cfg.FullNodeHTTPURLTemplate
-	if fullNodeURL == "" {
-		return nil, errors.New("missing Tron full node HTTP URL: set tron_fullnode_http_url_template")
+	fullNodeURL, err := resolveTronHTTPURL(cfg.FullNodeHTTPURLTemplate, cfg.RPCURL, tronDefaultFullNodeHTTPPort)
+	if err != nil {
+		return nil, errors.Annotate(err, "resolve Tron full node HTTP URL")
 	}
-	solidityURL := cfg.SolidityHTTPURLTemplate
-	if solidityURL == "" {
-		return nil, errors.New("missing Tron solidity node HTTP URL: set tron_solidity_http_url_template")
+	solidityURL, err := resolveTronHTTPURL(cfg.SolidityHTTPURLTemplate, cfg.RPCURL, tronDefaultSolidityHTTPPort)
+	if err != nil {
+		return nil, errors.Annotate(err, "resolve Tron solidity node HTTP URL")
 	}
 
 	timeout := time.Duration(cfg.RPCTimeout) * time.Second
@@ -148,6 +154,33 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.EthereumRPC.InternalDataProvider = internalProvider
 
 	return tronRpc, nil
+}
+
+func resolveTronHTTPURL(explicitURL, rpcURL, defaultPort string) (string, error) {
+	explicitURL = strings.TrimSpace(explicitURL)
+	if explicitURL != "" {
+		return explicitURL, nil
+	}
+
+	parsed, err := url.Parse(strings.TrimSpace(rpcURL))
+	if err != nil {
+		return "", errors.Annotate(err, "invalid rpc_url")
+	}
+	if parsed.Scheme == "" {
+		return "", errors.New("missing scheme in rpc_url")
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return "", errors.New("missing host in rpc_url")
+	}
+
+	parsed.Host = net.JoinHostPort(host, defaultPort)
+	parsed.Path = ""
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
 }
 
 // OpenRPC opens an RPC connection to the Tron backend (wsURL is unused – Tron has no WS subscriptions)

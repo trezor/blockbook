@@ -14,6 +14,27 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
+func TestResolveTronHTTPURL_UsesExplicitURL(t *testing.T) {
+	got, err := resolveTronHTTPURL("http://fullnode.example:8090", "http://backend.example:8545/jsonrpc", tronDefaultFullNodeHTTPPort)
+	require.NoError(t, err)
+	require.Equal(t, "http://fullnode.example:8090", got)
+}
+
+func TestResolveTronHTTPURL_DerivesFromRPCURL(t *testing.T) {
+	got, err := resolveTronHTTPURL("", "https://tron-node.example:8545/jsonrpc", tronDefaultFullNodeHTTPPort)
+	require.NoError(t, err)
+	require.Equal(t, "https://tron-node.example:8090", got)
+
+	got, err = resolveTronHTTPURL("", "http://tron-node.example:8545/jsonrpc", tronDefaultSolidityHTTPPort)
+	require.NoError(t, err)
+	require.Equal(t, "http://tron-node.example:8091", got)
+}
+
+func TestResolveTronHTTPURL_InvalidRPCURL(t *testing.T) {
+	_, err := resolveTronHTTPURL("", "://missing", tronDefaultFullNodeHTTPPort)
+	require.Error(t, err)
+}
+
 type tronTestMempool struct {
 	txTimes map[string]uint32
 }
