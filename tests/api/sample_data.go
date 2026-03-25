@@ -113,7 +113,7 @@ func (h *TestHandler) getSampleAddress(t *testing.T) (string, bool) {
 		return "", false
 	}
 
-	if isEVMTxID(txid) {
+	if h.isEVMTxID(txid) {
 		h.sampleAddress = firstAddressFromTxPreferVin(tx)
 	} else {
 		h.sampleAddress = firstAddressFromTx(tx)
@@ -154,7 +154,7 @@ func (h *TestHandler) getSampleAddressWithScientificNotationTx(t *testing.T) (ad
 			if !ok {
 				continue
 			}
-			if isEVMTxID(txid) {
+			if h.isEVMTxID(txid) {
 				address = firstAddressFromTxPreferVin(tx)
 			} else {
 				address = firstAddressFromTx(tx)
@@ -618,8 +618,8 @@ func (h *TestHandler) probeUTXOSupport(t *testing.T) (bool, string) {
 	if !found {
 		return false, fmt.Sprintf("no sample transaction in last %d blocks", txSearchWindow)
 	}
-	if isEVMTxID(txid) {
-		return false, "detected EVM-style transaction ids (0x prefix)"
+	if h.isEVMTxID(txid) {
+		return false, "detected EVM-style transaction ids"
 	}
 
 	address, found := h.getSampleAddress(t)
@@ -648,8 +648,8 @@ func (h *TestHandler) probeEVMSupport(t *testing.T) (bool, string) {
 	if !found {
 		return false, fmt.Sprintf("no sample transaction in last %d blocks", txSearchWindow)
 	}
-	if !isEVMTxID(txid) {
-		return false, "detected non-EVM transaction ids (missing 0x prefix)"
+	if !h.isEVMTxID(txid) {
+		return false, "detected non-EVM transaction ids"
 	}
 
 	address, found := h.getSampleAddress(t)
@@ -670,18 +670,64 @@ func (h *TestHandler) probeEVMSupport(t *testing.T) (bool, string) {
 	return true, "EVM tokenBalances endpoint probe succeeded"
 }
 
-func isEVMTxID(txid string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(txid)), "0x")
+func (h *TestHandler) isEVMTxID(txid string) bool {
+	txid = strings.TrimSpace(txid)
+	if strings.HasPrefix(strings.ToLower(txid), "0x") {
+		return true
+	}
+	return h.Coin == "tron" && isFixedHex(txid, 64)
 }
 
-func isEVMAddress(address string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(address)), "0x")
+func (h *TestHandler) isEVMAddress(address string) bool {
+	address = strings.TrimSpace(address)
+	if strings.HasPrefix(strings.ToLower(address), "0x") {
+		return true
+	}
+	return h.Coin == "tron" && isTronAddress(address)
+}
+
+func isFixedHex(s string, length int) bool {
+	if len(s) != length {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		case c >= 'A' && c <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isTronAddress(address string) bool {
+	if len(address) != 34 || address[0] != 'T' {
+		return false
+	}
+	for i := 0; i < len(address); i++ {
+		c := address[i]
+		switch {
+		case c >= '1' && c <= '9':
+		case c >= 'A' && c <= 'H':
+		case c == 'J' || c == 'K':
+		case c >= 'L' && c <= 'N':
+		case c >= 'P' && c <= 'Z':
+		case c >= 'a' && c <= 'k':
+		case c >= 'm' && c <= 'z':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (h *TestHandler) sampleEVMTxIDOrSkip(t *testing.T) string {
 	t.Helper()
 	txid := h.sampleTxIDOrSkip(t)
-	if !isEVMTxID(txid) {
+	if !h.isEVMTxID(txid) {
 		t.Skipf("Skipping test, sample txid %s does not look EVM-like", txid)
 	}
 	return txid
@@ -690,7 +736,7 @@ func (h *TestHandler) sampleEVMTxIDOrSkip(t *testing.T) string {
 func (h *TestHandler) sampleEVMAddressOrSkip(t *testing.T) string {
 	t.Helper()
 	address := h.sampleAddressOrSkip(t)
-	if !isEVMAddress(address) {
+	if !h.isEVMAddress(address) {
 		t.Skipf("Skipping test, sample address %s does not look EVM-like", address)
 	}
 	return address
@@ -703,7 +749,7 @@ func (h *TestHandler) getSampleEVMContract(t *testing.T) (string, bool) {
 
 	address, found := h.getSampleAddress(t)
 	h.sampleContractResolved = true
-	if !found || !isEVMAddress(address) {
+	if !found || !h.isEVMAddress(address) {
 		return "", false
 	}
 
