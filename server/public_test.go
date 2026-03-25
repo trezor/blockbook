@@ -185,6 +185,35 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
+type repeatedByteReader struct {
+	remaining int64
+}
+
+func (r *repeatedByteReader) Read(p []byte) (int, error) {
+	if r.remaining <= 0 {
+		return 0, io.EOF
+	}
+	n := int64(len(p))
+	if n > r.remaining {
+		n = r.remaining
+	}
+	for i := int64(0); i < n; i++ {
+		p[i] = '0'
+	}
+	r.remaining -= n
+	return int(n), nil
+}
+
+func newPostRequestWithContentLength(u string, contentLength int64) *http.Request {
+	r, err := http.NewRequest("POST", u, &repeatedByteReader{remaining: contentLength})
+	if err != nil {
+		glog.Fatal(err)
+	}
+	r.Header.Add("Content-Type", "application/octet-stream")
+	r.ContentLength = contentLength
+	return r
+}
+
 func insertFiatRate(date string, rates map[string]float32, tokenRates map[string]float32, d *db.RocksDB) error {
 	convertedDate, err := time.Parse("20060102150405", date)
 	if err != nil {
@@ -323,6 +352,34 @@ func mustGetJSON(t *testing.T, endpointURL string, statusCode int, out interface
 	if err := json.Unmarshal(body, out); err != nil {
 		t.Fatalf("failed to decode JSON body %q: %v", string(body), err)
 	}
+}
+
+func TestReadSendTxHexFromBody(t *testing.T) {
+	const maxBodyLen int64 = 6
+	assertAPIError := func(t *testing.T, err error, want string) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("expected error %q, got nil", want)
+		}
+		if err.Error() != want {
+			t.Fatalf("unexpected error %q, want %q", err.Error(), want)
+		}
+	}
+
+	t.Run("accepts body exactly at limit", func(t *testing.T) {
+		got, err := readSendTxHexFromBody(strings.NewReader("123456"), maxBodyLen)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "123456" {
+			t.Fatalf("got %q, want %q", got, "123456")
+		}
+	})
+
+	t.Run("rejects body larger than limit by one byte", func(t *testing.T) {
+		_, err := readSendTxHexFromBody(strings.NewReader("1234567"), maxBodyLen)
+		assertAPIError(t, err, "Tx blob too large")
+	})
 }
 
 func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
@@ -973,6 +1030,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiSendTx POST too large",
+			r:           newPostRequestWithContentLength(ts.URL+"/api/v2/sendtx/", maxSendTxBodyBytes+1),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Tx blob too large"}`,
+			},
+		},
+		{
 			name:        "apiEstimateFee",
 			r:           newGetRequest(ts.URL + "/api/estimatefee/123?conservative=false"),
 			status:      http.StatusOK,
@@ -1232,6 +1298,50 @@ func assertNoWebsocketMessage(t *testing.T, s *websocket.Conn, timeout time.Dura
 	if !errors.As(err, &netErr) || !netErr.Timeout() {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
+}
+
+func Test_WebsocketRejectsOversizedMessage(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	// Verify the connection is healthy before sending an oversized frame.
+	if err := ws.WriteJSON(websocketReq{ID: "0", Method: "getInfo"}); err != nil {
+		t.Fatal(err)
+	}
+	resp := readWebsocketResponse(t, ws, time.Second)
+	if resp.ID != "0" {
+		t.Fatalf("got response id %q, want %q", resp.ID, "0")
+	}
+
+	payload := strings.Repeat("a", int(maxWebsocketMessageBytes)+1)
+	if err := ws.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ws.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := ws.ReadMessage()
+	ws.SetReadDeadline(time.Time{})
+	if err == nil {
+		t.Fatal("expected websocket read error after oversized message")
+	}
+	if websocket.IsCloseError(err, websocket.CloseMessageTooBig, websocket.CloseAbnormalClosure) {
+		return
+	}
+	if errors.Is(err, io.EOF) {
+		return
+	}
+	t.Fatalf("unexpected websocket error after oversized message: %v", err)
 }
 
 var websocketTestsBitcoinType = []websocketTest{
@@ -2214,4 +2324,39 @@ func Test_PublicServer_BitcoinType_ExtendedIndex(t *testing.T) {
 
 	httpTestsBitcoinTypeExtendedIndex(t, ts)
 	runWebsocketTests(t, ts, websocketTestsBitcoinTypeExtendedIndex)
+}
+
+func Test_validateIntParam(t *testing.T) {
+	tests := []struct {
+		name         string
+		value        string
+		defaultValue int
+		min          int
+		max          int
+		want         int
+	}{
+		{"empty string", "", 0, 0, 100, 0},
+		{"empty string with default", "", 42, 0, 100, 42},
+		{"valid value", "10", 0, 0, 100, 10},
+		{"value at min", "0", 0, 0, 100, 0},
+		{"value at max", "100", 0, 0, 100, 100},
+		{"value exceeds max", "150", 0, 0, 100, 100},
+		{"negative value", "-5", 0, 0, 100, 0},
+		{"negative value below min", "-10", 0, 0, 100, 0},
+		{"invalid string", "abc", 0, 0, 100, 0},
+		{"invalid string with default", "xyz", 42, 0, 100, 42},
+		{"zero max (no limit)", "1000", 0, 0, 0, 1000},
+		{"very large number", "9223372036854775807", 0, 0, maxPageNumber, maxPageNumber},
+		{"negative with min constraint", "-5", 0, 5, 100, 0},
+		{"whitespace", "  10  ", 0, 0, 100, 0},
+		{"zero value", "0", 0, 0, 100, 0},
+		{"max int32", "2147483647", 0, 0, 0, 2147483647},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := validateIntParam(tt.value, tt.defaultValue, tt.min, tt.max); got != tt.want {
+				t.Errorf("validateIntParam(%q, %d, %d, %d) = %d, want %d", tt.value, tt.defaultValue, tt.min, tt.max, got, tt.want)
+			}
+		})
+	}
 }

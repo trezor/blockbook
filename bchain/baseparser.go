@@ -408,7 +408,26 @@ func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers
 	return nil, errors.New("Not supported")
 }
 
+// GetEthereumTxData returns default pending status for non-Ethereum-like chains.
+func (p *BaseParser) GetEthereumTxData(tx *Tx) *EthereumTxData {
+	return &EthereumTxData{Status: TxStatusPending}
+}
+
+// GetChainExtraData returns optional normalized chain-specific transaction data.
+func (p *BaseParser) GetChainExtraData(tx *Tx) (json.RawMessage, error) {
+	return nil, nil
+}
+
+// GetChainExtraPayloadType identifies the shape of normalized chain-specific transaction data.
+func (p *BaseParser) GetChainExtraPayloadType() ChainExtraPayloadType {
+	return ChainExtraPayloadTypeUnknown
+}
+
 // FormatAddressAlias makes possible to do coin specific formatting to an address alias
 func (p *BaseParser) FormatAddressAlias(address string, name string) string {
 	return name
+}
+
+func (b *BaseParser) ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData {
+	return nil
 }

@@ -27,6 +27,8 @@ const upgradeFailed = "Upgrade failed: "
 const outChannelSize = 500
 const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
+const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
+const websocketLogPreviewBytes = 256
 
 // allRates is a special "currency" parameter that means all available currencies
 const allFiatRates = "!ALL!"
@@ -199,6 +201,13 @@ func getIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
+func getWebsocketPayloadPreview(d []byte) string {
+	if len(d) <= websocketLogPreviewBytes {
+		return string(d)
+	}
+	return string(d[:websocketLogPreviewBytes]) + "...(truncated)"
+}
+
 // ServeHTTP sets up handler of websocket channel
 func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -210,6 +219,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	conn.SetReadLimit(maxWebsocketMessageBytes)
 	c := &websocketChannel{
 		id:            atomic.AddUint64(&connectionCounter, 1),
 		conn:          conn,
@@ -299,7 +309,7 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 			var req WsReq
 			err := json.Unmarshal(d, &req)
 			if err != nil {
-				glog.Error("Error parsing message from ", c.id, ", ", string(d), ", ", err)
+				glog.Error("Error parsing message from ", c.id, ", len ", len(d), ", preview ", getWebsocketPayloadPreview(d), ", ", err)
 				s.closeChannel(c, "protocol_error")
 				return
 			}

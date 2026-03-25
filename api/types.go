@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
@@ -269,7 +268,7 @@ type EthereumInternalTransfer struct {
 type EthereumSpecific struct {
 	Type                 bchain.EthereumInternalTransactionType `json:"type,omitempty" ts_doc:"High-level type of the Ethereum tx (e.g., 'call', 'create')."`
 	CreatedContract      string                                 `json:"createdContract,omitempty" ts_doc:"Address of contract created by this transaction, if any."`
-	Status               eth.TxStatus                           `json:"status" ts_doc:"Execution status of the transaction (1: success, 0: fail, -1: pending)."`
+	Status               bchain.TxStatus                        `json:"status" ts_doc:"Execution status of the transaction (1: success, 0: fail, -1: pending)."`
 	Error                string                                 `json:"error,omitempty" ts_doc:"Error encountered during execution, if any."`
 	Nonce                uint64                                 `json:"nonce" ts_doc:"Transaction nonce (sequential number from the sender)."`
 	GasLimit             *big.Int                               `json:"gasLimit" ts_doc:"Maximum gas allowed by the sender for this transaction."`
@@ -317,6 +316,7 @@ type Tx struct {
 	Hex                    string            `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
 	Rbf                    bool              `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
 	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
+	ChainExtraData         *TxChainExtraData `json:"chainExtraData,omitempty" ts_type:"{ payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any }" ts_doc:"Additional normalized chain-specific transaction data. Use payloadType as discriminator for payload."`
 	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
 	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
 	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
@@ -410,9 +410,10 @@ type Address struct {
 	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty" ts_doc:"Address's entire value in secondary currency, including tokens."`
 	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty" ts_doc:"Extra info if the address is a contract (ABI, type)."`
 	// Deprecated: replaced by ContractInfo
-	Erc20Contract  *bchain.ContractInfo `json:"erc20Contract,omitempty" ts_doc:"@deprecated: replaced by contractInfo"`
-	AddressAliases AddressAliasesMap    `json:"addressAliases,omitempty" ts_doc:"Aliases assigned to this address."`
-	StakingPools   []StakingPool        `json:"stakingPools,omitempty" ts_doc:"List of staking pool data if address interacts with staking."`
+	Erc20Contract  *bchain.ContractInfo   `json:"erc20Contract,omitempty" ts_doc:"@deprecated: replaced by contractInfo"`
+	AddressAliases AddressAliasesMap      `json:"addressAliases,omitempty" ts_doc:"Aliases assigned to this address."`
+	StakingPools   []StakingPool          `json:"stakingPools,omitempty" ts_doc:"List of staking pool data if address interacts with staking."`
+	ChainExtraData *AccountChainExtraData `json:"chainExtraData,omitempty" ts_type:"{ payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any }" ts_doc:"Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload."`
 	// helpers for explorer
 	Filter        string              `json:"-" ts_doc:"Filter used internally for data retrieval."`
 	XPubAddresses map[string]struct{} `json:"-" ts_doc:"Set of derived XPUB addresses (internal usage)."`

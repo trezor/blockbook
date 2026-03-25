@@ -186,7 +186,8 @@
     <div class="row footer">
         <div class="col-sm-12 col-md-6">
             {{if $tx.FeesSat}}
-            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}} <span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
+            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}}
+            {{" "}}<span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
             {{end}}
         </div>
         <div class="col-sm-12 col-md-6 text-end">

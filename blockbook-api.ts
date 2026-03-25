@@ -1,11 +1,42 @@
 /* Do not change, this code is generated from Golang structs */
 
+
 export interface APIError {
     /** Human-readable error message describing the issue. */
     Text: string;
     /** Whether the error message can safely be shown to the end user. */
     Public: boolean;
 }
+export interface TronVoteExtra {
+    address?: string;
+    count?: string;
+}
+export interface TronChainExtraData {
+    contractType?: string;
+    operation?: string;
+    resource?: string;
+    stakeAmount?: string;
+    unstakeAmount?: string;
+    delegateAmount?: string;
+    delegateTo?: string;
+    assetIssueID?: string;
+    totalFee?: string;
+    energyUsage?: string;
+    energyUsageTotal?: string;
+    energyFee?: string;
+    bandwidthUsage?: string;
+    bandwidthFee?: string;
+    result?: string;
+    votes?: TronVoteExtra[];
+}
+export interface TronAccountExtraData {
+    availableBandwidth: number;
+    totalBandwidth: number;
+    availableEnergy: number;
+    totalEnergy: number;
+}
+export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
+export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any };
 export interface AddressAlias {
     /** Type of alias, e.g., user-defined name or contract name. */
     Type: string;
@@ -20,7 +51,7 @@ export interface EthereumInternalTransfer {
     /** Address to which the transfer was sent. */
     to: string;
     /** Value transferred internally (in Wei or base units). */
-    value: string;
+    value?: string;
 }
 export interface EthereumParsedInputParam {
     /** Parameter type (e.g. 'uint256'). */
@@ -50,7 +81,7 @@ export interface EthereumSpecific {
     /** Transaction nonce (sequential number from the sender). */
     nonce: number;
     /** Maximum gas allowed by the sender for this transaction. */
-    gasLimit: number;
+    gasLimit?: number;
     /** Actual gas consumed by the transaction execution. */
     gasUsed?: number;
     /** Price (in Wei or base units) per gas unit. */
@@ -94,7 +125,7 @@ export interface TokenTransfer {
     /** Token symbol. */
     symbol?: string;
     /** Number of decimals for this token (if applicable). */
-    decimals: number;
+    decimals?: number;
     /** Amount (in base units) of tokens transferred. */
     value?: string;
     /** List of multiple ID-value pairs for ERC1155 transfers. */
@@ -178,7 +209,7 @@ export interface Tx {
     /** Virtual size in bytes, for SegWit-enabled chains. */
     vsize?: number;
     /** Total value of all outputs (in satoshi or base units). */
-    value: string;
+    value?: string;
     /** Total value of all inputs (in satoshi or base units). */
     valueIn?: string;
     /** Transaction fee (inputs - outputs). */
@@ -189,18 +220,20 @@ export interface Tx {
     rbf?: boolean;
     /** Blockchain-specific extended data. */
     coinSpecificData?: any;
+    /** Additional normalized chain-specific transaction data. Use payloadType as discriminator for payload. */
+    chainExtraData?: TxChainExtraData;
     /** List of token transfers that occurred in this transaction. */
     tokenTransfers?: TokenTransfer[];
     /** Ethereum-like blockchain specific data (if applicable). */
     ethereumSpecific?: EthereumSpecific;
     /** Aliases for addresses involved in this transaction. */
-    addressAliases?: { [key: string]: AddressAlias };
+    addressAliases?: {[key: string]: AddressAlias};
 }
 export interface FeeStats {
     /** Number of transactions in the given block. */
     txCount: number;
     /** Sum of all fees in satoshi or base units. */
-    totalFeesSat: string;
+    totalFeesSat?: string;
     /** Average fee per kilobyte in satoshi or base units. */
     averageFeePerKb: number;
     /** Fee distribution deciles (0%..100%) in satoshi or base units per kB. */
@@ -212,19 +245,19 @@ export interface StakingPool {
     /** Name of the staking pool contract. */
     name: string;
     /** Balance pending deposit or withdrawal, if any. */
-    pendingBalance: string;
+    pendingBalance?: string;
     /** Any pending deposit that is not yet finalized. */
-    pendingDepositedBalance: string;
+    pendingDepositedBalance?: string;
     /** Currently deposited/staked balance. */
-    depositedBalance: string;
+    depositedBalance?: string;
     /** Total amount withdrawn from this pool by the address. */
-    withdrawTotalAmount: string;
+    withdrawTotalAmount?: string;
     /** Rewards or principal currently claimable by the address. */
-    claimableAmount: string;
+    claimableAmount?: string;
     /** Total rewards that have been restaked automatically. */
-    restakedReward: string;
+    restakedReward?: string;
     /** Any balance automatically reinvested into the pool. */
-    autocompoundBalance: string;
+    autocompoundBalance?: string;
 }
 export interface ContractInfo {
     /** @deprecated: Use standard instead. */
@@ -258,7 +291,7 @@ export interface Token {
     /** Symbol for the token (e.g., 'ETH', 'USDT'). */
     symbol?: string;
     /** Number of decimals for this token. */
-    decimals: number;
+    decimals?: number;
     /** Current token balance (in minimal base units). */
     balance?: string;
     /** Value in the base currency (e.g. ETH for ERC20 tokens). */
@@ -284,13 +317,13 @@ export interface Address {
     /** The address string in standard format. */
     address: string;
     /** Current confirmed balance (in satoshi or base units). */
-    balance: string;
+    balance?: string;
     /** Total amount ever received by this address. */
     totalReceived?: string;
     /** Total amount ever sent by this address. */
     totalSent?: string;
     /** Unconfirmed balance for this address. */
-    unconfirmedBalance: string;
+    unconfirmedBalance?: string;
     /** Number of unconfirmed transactions for this address. */
     unconfirmedTxs: number;
     /** Unconfirmed outgoing balance for this address. */
@@ -330,9 +363,11 @@ export interface Address {
     /** @deprecated: replaced by contractInfo */
     erc20Contract?: ContractInfo;
     /** Aliases assigned to this address. */
-    addressAliases?: { [key: string]: AddressAlias };
+    addressAliases?: {[key: string]: AddressAlias};
     /** List of staking pool data if address interacts with staking. */
     stakingPools?: StakingPool[];
+    /** Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload. */
+    chainExtraData?: AccountChainExtraData;
 }
 export interface Utxo {
     /** Transaction ID in which this UTXO was created. */
@@ -340,7 +375,7 @@ export interface Utxo {
     /** Index of the output in that transaction. */
     vout: number;
     /** Value of this UTXO (in satoshi or base units). */
-    value: string;
+    value?: string;
     /** Block height in which the UTXO was confirmed. */
     height?: number;
     /** Number of confirmations for this UTXO. */
@@ -360,13 +395,13 @@ export interface BalanceHistory {
     /** Number of transactions in this interval. */
     txs: number;
     /** Amount received in this interval (in satoshi or base units). */
-    received: string;
+    received?: string;
     /** Amount sent in this interval (in satoshi or base units). */
-    sent: string;
+    sent?: string;
     /** Amount sent to the same address (self-transfer). */
-    sentToSelf: string;
+    sentToSelf?: string;
     /** Exchange rates at this point in time, if available. */
-    rates?: { [key: string]: number };
+    rates?: {[key: string]: number};
     /** Transaction ID if the time corresponds to a specific tx. */
     txid?: string;
 }
@@ -425,7 +460,7 @@ export interface Block {
     /** List of full transaction details (if requested). */
     txs?: Tx[];
     /** Optional aliases for addresses found in this block. */
-    addressAliases?: { [key: string]: AddressAlias };
+    addressAliases?: {[key: string]: AddressAlias};
 }
 export interface BlockRaw {
     /** Hex-encoded block data. */
@@ -529,15 +564,15 @@ export interface BlockbookInfo {
 }
 export interface SystemInfo {
     /** Blockbook instance information. */
-    blockbook: BlockbookInfo;
+    blockbook?: BlockbookInfo;
     /** Information about the connected backend node. */
-    backend: BackendInfo;
+    backend?: BackendInfo;
 }
 export interface FiatTicker {
     /** Unix timestamp for these fiat rates. */
     ts?: number;
     /** Map of currency codes to their exchange rate. */
-    rates: { [key: string]: number };
+    rates: {[key: string]: number};
     /** Any error message encountered while fetching rates. */
     error?: string;
 }
@@ -557,30 +592,7 @@ export interface WsReq {
     /** Unique request identifier. */
     id: string;
     /** Requested method name. */
-    method:
-        | 'getAccountInfo'
-        | 'getInfo'
-        | 'getBlockHash'
-        | 'getBlock'
-        | 'getAccountUtxo'
-        | 'getBalanceHistory'
-        | 'getTransaction'
-        | 'getTransactionSpecific'
-        | 'estimateFee'
-        | 'sendTransaction'
-        | 'subscribeNewBlock'
-        | 'unsubscribeNewBlock'
-        | 'subscribeNewTransaction'
-        | 'unsubscribeNewTransaction'
-        | 'subscribeAddresses'
-        | 'unsubscribeAddresses'
-        | 'subscribeFiatRates'
-        | 'unsubscribeFiatRates'
-        | 'ping'
-        | 'getCurrentFiatRates'
-        | 'getFiatRatesForTimestamps'
-        | 'getFiatRatesTickersList'
-        | 'getMempoolFilters';
+    method: 'getAccountInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
     /** Parameters for the requested method in raw JSON format. */
     params: any;
 }
@@ -708,18 +720,11 @@ export interface WsEstimateFeeReq {
     /** Block confirmations targets for which fees should be estimated. */
     blocks?: number[];
     /** Additional chain-specific parameters (e.g. for Ethereum). */
-    specific?: {
-        conservative?: boolean;
-        txsize?: number;
-        from?: string;
-        to?: string;
-        data?: string;
-        value?: string;
-    };
+    specific?: {conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string;};
 }
 export interface Eip1559Fee {
-    maxFeePerGas: string;
-    maxPriorityFeePerGas: string;
+    maxFeePerGas?: string;
+    maxPriorityFeePerGas?: string;
     minWaitTimeEstimate?: number;
     maxWaitTimeEstimate?: number;
 }
@@ -752,14 +757,15 @@ export interface WsLongTermFeeRateRes {
     blocks: number;
 }
 export interface WsSendTransactionReq {
-    /** Hex-encoded transaction data to broadcast. */
-    hex: string;
+    /** Hex-encoded transaction data to broadcast (string format). */
+    hex?: string;
     /** Use alternative RPC method to broadcast transaction. */
-    disableAlternativeRPC?: boolean;
+    disableAlternativeRpc: boolean;
 }
 export interface WsSubscribeAddressesReq {
     /** List of addresses to subscribe for updates (e.g., new transactions). */
     addresses: string[];
+    /** If true, also publish confirmed transactions for subscribed addresses when new blocks are connected. */
     newBlockTxs?: boolean;
 }
 export interface WsSubscribeFiatRatesReq {
@@ -810,7 +816,7 @@ export interface WsRpcCallRes {
 }
 export interface MempoolTxidFilterEntries {
     /** Map of txid to filter data (hex-encoded). */
-    entries?: { [key: string]: string };
+    entries?: {[key: string]: string};
     /** Indicates if a zeroed key was used in filter calculation. */
     usedZeroedKey?: boolean;
 }

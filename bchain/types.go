@@ -340,6 +340,7 @@ type BlockChain interface {
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
 	GetTransactionSpecific(tx *Tx) (json.RawMessage, error)
+	GetAddressChainExtraData(addrDesc AddressDescriptor) (json.RawMessage, error)
 	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
 	EstimateFee(blocks int) (big.Int, error)
 	LongTermFeeRate() (*LongTermFeeRate, error)
@@ -409,6 +410,10 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
+	GetEthereumTxData(tx *Tx) *EthereumTxData
+	GetChainExtraPayloadType() ChainExtraPayloadType
+	GetChainExtraData(tx *Tx) (json.RawMessage, error)
+	ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData
 	// AddressAlias
 	FormatAddressAlias(address string, name string) string
 }

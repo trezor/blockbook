@@ -278,7 +278,8 @@ type evmTxShapeResponse struct {
 
 type coinConfig struct {
 	Coin struct {
-		Alias string `json:"alias"`
+		Alias    string `json:"alias"`
+		TestName string `json:"test_name"`
 	} `json:"coin"`
 	Ports struct {
 		BlockbookPublic int `json:"blockbook_public"`

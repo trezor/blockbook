@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"encoding/json"
 	"errors"
 	"math/big"
 )
@@ -37,6 +38,11 @@ func (b *BaseChain) GetBlockRaw(hash string) (string, error) {
 // GetMempoolEntry is not supported by default
 func (b *BaseChain) GetMempoolEntry(txid string) (*MempoolEntry, error) {
 	return nil, errors.New("GetMempoolEntry: not supported")
+}
+
+// GetAddressChainExtraData returns no chain-specific account/address data by default.
+func (b *BaseChain) GetAddressChainExtraData(addrDesc AddressDescriptor) (json.RawMessage, error) {
+	return nil, nil
 }
 
 // LongTermFeeRate returns smallest fee rate from historic blocks.

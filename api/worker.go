@@ -169,6 +169,36 @@ func (w *Worker) newAddressesMapForAliases() map[string]struct{} {
 	return nil
 }
 
+func (w *Worker) getTxChainExtraData(tx *bchain.Tx) (*TxChainExtraData, error) {
+	payload, err := w.chainParser.GetChainExtraData(tx)
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) == 0 {
+		return nil, nil
+	}
+
+	return &TxChainExtraData{
+		PayloadType: w.chainParser.GetChainExtraPayloadType(),
+		Payload:     payload,
+	}, nil
+}
+
+func (w *Worker) getAccountChainExtraData(addrDesc bchain.AddressDescriptor) (*AccountChainExtraData, error) {
+	payload, err := w.chain.GetAddressChainExtraData(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) == 0 {
+		return nil, nil
+	}
+
+	return &AccountChainExtraData{
+		PayloadType: w.chainParser.GetChainExtraPayloadType(),
+		Payload:     payload,
+	}, nil
+}
+
 func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliasesMap {
 	if len(addresses) > 0 {
 		aliases := make(AddressAliasesMap)
@@ -246,7 +276,7 @@ func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedI
 			return nil
 		}
 	}
-	return eth.ParseInputData(signatures, data)
+	return w.chainParser.ParseInputData(signatures, data)
 }
 
 // getConfirmationETA returns confirmation ETA in seconds and blocks
@@ -436,10 +466,10 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			glog.Errorf("GetTokenTransfersFromTx error %v, %v", err, bchainTx)
 		}
 		tokens = w.getEthereumTokensTransfers(tokenTransfers, addresses)
-		ethTxData := eth.GetEthereumTxData(bchainTx)
+		ethTxData := w.chainParser.GetEthereumTxData(bchainTx)
 
 		var internalData *bchain.EthereumInternalData
-		if eth.ProcessInternalTransactions {
+		if bchain.ProcessInternalTransactions {
 			internalData, err = w.db.GetEthereumInternalData(bchainTx.Txid)
 			if err != nil {
 				return nil, err
@@ -493,12 +523,17 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 	}
 	var sj json.RawMessage
+	var chainExtraData *TxChainExtraData
 	// return CoinSpecificData for all mempool transactions or if requested
 	if specificJSON || bchainTx.Confirmations == 0 {
 		sj, err = w.chain.GetTransactionSpecific(bchainTx)
 		if err != nil {
 			return nil, err
 		}
+	}
+	chainExtraData, err = w.getTxChainExtraData(bchainTx)
+	if err != nil {
+		glog.Warningf("GetTxChainExtraData error %v, %v", err, bchainTx)
 	}
 	r := &Tx{
 		Blockhash:        blockhash,
@@ -518,6 +553,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		Vin:              vins,
 		Vout:             vouts,
 		CoinSpecificData: sj,
+		ChainExtraData:   chainExtraData,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 	}
@@ -536,6 +572,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var pValInSat *big.Int
 	var tokens []TokenTransfer
 	var ethSpecific *EthereumSpecific
+	var chainExtraData *TxChainExtraData
 	addresses := w.newAddressesMapForAliases()
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
@@ -601,7 +638,10 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			valOutSat = mempoolTx.Vout[0].ValueSat
 		}
 		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers, addresses)
-		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
+		ethTxData := w.chainParser.GetEthereumTxData(&bchain.Tx{
+			Txid:             mempoolTx.Txid,
+			CoinSpecificData: mempoolTx.CoinSpecificData,
+		})
 		ethSpecific = &EthereumSpecific{
 			GasLimit:             ethTxData.GasLimit,
 			GasPrice:             (*Amount)(ethTxData.GasPrice),
@@ -613,6 +653,13 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			Status:               ethTxData.Status,
 			Data:                 ethTxData.Data,
 		}
+	}
+	chainExtraData, err = w.getTxChainExtraData(&bchain.Tx{
+		Txid:             mempoolTx.Txid,
+		CoinSpecificData: mempoolTx.CoinSpecificData,
+	})
+	if err != nil {
+		glog.Warningf("GetTxChainExtraData error %v, %v", err, mempoolTx.Txid)
 	}
 	r := &Tx{
 		Blocktime:        mempoolTx.Blocktime,
@@ -628,6 +675,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		Rbf:              rbf,
 		Vin:              vins,
 		Vout:             vouts,
+		ChainExtraData:   chainExtraData,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 		AddressAliases:   w.getAddressAliases(addresses),
@@ -653,7 +701,7 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 	}
 	if contractInfo == nil {
 		// log warning only if the contract should have been known from processing of the internal data
-		if eth.ProcessInternalTransactions {
+		if bchain.ProcessInternalTransactions {
 			glog.Warningf("Contract %v %v not found in DB", cd, standardFromContext)
 		}
 		contractInfo, err = w.chain.GetContractInfo(cd)
@@ -953,19 +1001,45 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 }
 
 func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
-	from := page * itemsOnPage
+
+	if page < 0 {
+		page = 0
+	}
+	if itemsOnPage <= 0 {
+		itemsOnPage = 1
+	}
+	if count < 0 {
+		count = 0
+	}
+
+	safeMultiply := func(a, b int) int {
+		const maxSafeInt = 1000000000
+		if a > 0 && b > 0 {
+			if a > maxSafeInt/b {
+				return maxSafeInt
+			}
+			return a * b
+		}
+		return 0
+	}
+
 	totalPages := (count - 1) / itemsOnPage
 	if totalPages < 0 {
 		totalPages = 0
 	}
+
+	from := safeMultiply(page, itemsOnPage)
+
 	if from >= count {
 		page = totalPages
+		from = safeMultiply(page, itemsOnPage)
 	}
-	from = page * itemsOnPage
-	to := (page + 1) * itemsOnPage
+
+	to := safeMultiply(page+1, itemsOnPage)
 	if to > count {
 		to = count
 	}
+
 	return Paging{
 		ItemsOnPage: itemsOnPage,
 		Page:        page + 1,
@@ -1447,6 +1521,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		txm                      []string
 		txs                      []*Tx
 		txids                    []string
+		accountChainExtraData    *AccountChainExtraData
 		pg                       Paging
 		uBalSat                  big.Int
 		uBalSending              big.Int
@@ -1459,6 +1534,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	addrDesc, address, err := w.getAddrDescAndNormalizeAddress(address)
 	if err != nil {
 		return nil, err
+	}
+	accountChainExtraData, err = w.getAccountChainExtraData(addrDesc)
+	if err != nil {
+		glog.Warningf("GetAccountChainExtraData error %v, %v", err, address)
 	}
 	if w.chainType == bchain.ChainEthereumType {
 		ba, ed, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter, secondaryCoin)
@@ -1609,6 +1688,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Nonce:                 ed.nonce,
 		AddressAliases:        w.getAddressAliases(addresses),
 		StakingPools:          ed.stakingPools,
+		ChainExtraData:        accountChainExtraData,
 	}
 	// keep address backward compatible, set deprecated Erc20Contract value if ERC20 token
 	if ed.contractInfo != nil && ed.contractInfo.Standard == bchain.ERC20TokenStandard {
@@ -1714,9 +1794,9 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 		}
 	} else if w.chainType == bchain.ChainEthereumType {
 		var value big.Int
-		ethTxData := eth.GetEthereumTxData(bchainTx)
+		ethTxData := w.chainParser.GetEthereumTxData(bchainTx)
 		// add received amount only for OK or unknown status (old) transactions
-		if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
+		if ethTxData.Status == bchain.TxStatusOK || ethTxData.Status == bchain.TxStatusUnknown {
 			if len(bchainTx.Vout) > 0 {
 				bchainVout := &bchainTx.Vout[0]
 				value = bchainVout.ValueSat
@@ -1734,7 +1814,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 				}
 			}
 			// process internal transactions
-			if eth.ProcessInternalTransactions {
+			if bchain.ProcessInternalTransactions {
 				internalData, err := w.db.GetEthereumInternalData(txid)
 				if err != nil {
 					return nil, err
@@ -1772,7 +1852,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 				}
 				if bytes.Equal(addrDesc, txAddrDesc) {
 					// add received amount only for OK or unknown status (old) transactions, fees always
-					if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
+					if ethTxData.Status == bchain.TxStatusOK || ethTxData.Status == bchain.TxStatusUnknown {
 						(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
 						if countSentToSelf {
 							if _, found := selfAddrDesc[string(txAddrDesc)]; found {

@@ -61,8 +61,9 @@ For simplicity, URLs and credentials of back-end services, where are tests going
 from *blockbook/configs/coins*, the same place from where are production configuration files generated. There are general
 URLs that link to *localhost*. If you need run tests against remote servers, there are few options how to do it:
 
-* set `BB_RPC_URL_HTTP_<coin alias>` to override `rpc_url_template` during template generation (forwarded into Docker by the root `Makefile`)
-* set `BB_RPC_URL_WS_<coin alias>` to override `rpc_url_ws_template` for WebSocket subscriptions when needed
+* tests use `BB_BUILD_ENV=dev`
+* set `BB_DEV_RPC_URL_HTTP_<coin alias>` to override `rpc_url_template` during template generation (forwarded into Docker by the root `Makefile`)
+* set `BB_DEV_RPC_URL_WS_<coin alias>` to override `rpc_url_ws_template` for WebSocket subscriptions when needed
 * temporarily change config
 * SSH tunneling – `ssh -nNT -L 8030:localhost:8030 remote-server`
 * HTTP proxy
@@ -89,12 +90,12 @@ Example:
 HTTP connectivity verifies both back-end and Blockbook accessibility:
 
 * back-end: UTXO chains call `getblockchaininfo`, EVM chains call `web3_clientVersion`
-* Blockbook: calls `GET /api/status` (resolved from `BB_API_URL_HTTP_<coin alias>` or local `ports.blockbook_public`)
+* Blockbook: calls `GET /api/status` (resolved from `BB_DEV_API_URL_HTTP_<test name>` or local `ports.blockbook_public`)
 
 WebSocket connectivity also verifies both surfaces:
 
 * back-end: validates `web3_clientVersion` and opens a `newHeads` subscription
-* Blockbook: connects to `/websocket` (or `BB_API_URL_WS_<coin alias>`) and calls `getInfo`
+* Blockbook: connects to `/websocket` (or `BB_DEV_API_URL_WS_<test name>`) and calls `getInfo`
 
 ### Blockbook API end-to-end tests
 
@@ -107,9 +108,10 @@ Phase 1 covers smoke checks for:
 * HTTP: `Status`, `GetBlockIndex`, `GetBlockByHeight`, `GetBlock`, `GetTransaction`, `GetTransactionSpecific`, `GetAddress`, `GetAddressTxids`, `GetAddressTxs`, `GetUtxo`, `GetUtxoConfirmedFilter`
 * WebSocket: `WsGetInfo`, `WsGetBlockHash`, `WsGetTransaction`, `WsGetAccountInfo`, `WsGetAccountUtxo`, `WsPing`
 
-Endpoint resolution uses coin alias and this precedence:
+Endpoint resolution uses the test name from `coin.test_name` in `configs/coins/<coin>.json`
+(or the config file name when `test_name` is omitted) and this precedence:
 
-1. `BB_API_URL_HTTP_<coin alias>` and `BB_API_URL_WS_<coin alias>`
+1. `BB_DEV_API_URL_HTTP_<test name>` and `BB_DEV_API_URL_WS_<test name>`
 2. localhost fallback from coin config port `ports.blockbook_public`
 3. when WS env var is missing, WS URL is derived from HTTP URL with `/websocket` path
 

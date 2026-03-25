@@ -53,6 +53,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/ritocoin"
 	"github.com/trezor/blockbook/bchain/coins/snowgem"
 	"github.com/trezor/blockbook/bchain/coins/trezarcoin"
+	"github.com/trezor/blockbook/bchain/coins/tron"
 	"github.com/trezor/blockbook/bchain/coins/unobtanium"
 	"github.com/trezor/blockbook/bchain/coins/vertcoin"
 	"github.com/trezor/blockbook/bchain/coins/viacoin"
@@ -152,6 +153,8 @@ func init() {
 	BlockChainFactories["Arbitrum Nova Archive"] = arbitrum.NewArbitrumRPC
 	BlockChainFactories["Base"] = base.NewBaseRPC
 	BlockChainFactories["Base Archive"] = base.NewBaseRPC
+	BlockChainFactories["Tron"] = tron.NewTronRPC
+	BlockChainFactories["Tron Testnet Nile"] = tron.NewTronRPC
 }
 
 type metricsSetter interface {
@@ -289,6 +292,11 @@ func (c *blockChainWithMetrics) GetTransaction(txid string) (v *bchain.Tx, err e
 func (c *blockChainWithMetrics) GetTransactionSpecific(tx *bchain.Tx) (v json.RawMessage, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTransactionSpecific", s, err) }(time.Now())
 	return c.b.GetTransactionSpecific(tx)
+}
+
+func (c *blockChainWithMetrics) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (v json.RawMessage, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetAddressChainExtraData", s, err) }(time.Now())
+	return c.b.GetAddressChainExtraData(addrDesc)
 }
 
 func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {

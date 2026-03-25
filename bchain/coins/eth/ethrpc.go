@@ -93,7 +93,7 @@ type EthereumRPC struct {
 	RPC                bchain.EVMRPCClient
 	MainNetChainID     Network
 	Timeout            time.Duration
-	Parser             *EthereumParser
+	Parser             EthereumLikeParser
 	PushHandler        func(bchain.NotificationType)
 	OpenRPC            func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error)
 	Mempool            *bchain.MempoolEthereumType
@@ -116,10 +116,8 @@ type EthereumRPC struct {
 	stakingPoolContracts      []string
 	alternativeFeeProvider    alternativeFeeProviderInterface
 	alternativeSendTxProvider *AlternativeSendTxProvider
+	InternalDataProvider      bchain.EthereumInternalDataProvider
 }
-
-// ProcessInternalTransactions specifies if internal transactions are processed
-var ProcessInternalTransactions bool
 
 // NewEthereumRPC returns new EthRPC instance.
 func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
@@ -165,15 +163,16 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	// 1-slot buffer ensures we only queue one "refresh tip" signal at a time.
 	s.newBlockNotifyCh = make(chan struct{}, 1)
 
-	ProcessInternalTransactions = c.ProcessInternalTransactions
+	bchain.ProcessInternalTransactions = c.ProcessInternalTransactions
 
 	// always create parser
-	s.Parser = NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
-	s.Parser.HotAddressMinContracts = c.HotAddressMinContracts
-	s.Parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
-	s.Parser.HotAddressMinHits = c.HotAddressMinHits
-	s.Parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
-	s.Parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
+	parser := NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
+	parser.HotAddressMinContracts = c.HotAddressMinContracts
+	parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
+	parser.HotAddressMinHits = c.HotAddressMinHits
+	parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
+	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
+	s.Parser = parser
 	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
 	s.PushHandler = pushHandler
 
@@ -189,6 +188,14 @@ func (b *EthereumRPC) observeEthCall(mode string, count int) {
 		return
 	}
 	b.metrics.EthCallRequests.With(common.Labels{"mode": mode}).Add(float64(count))
+}
+
+// ObserveChainDataFallback increments a metric for chain-data fallback paths.
+func (b *EthereumRPC) ObserveChainDataFallback(component, reason string) {
+	if b.metrics == nil || component == "" || reason == "" {
+		return
+	}
+	b.metrics.ChainDataFallbacks.With(common.Labels{"component": component, "reason": reason}).Inc()
 }
 
 func (b *EthereumRPC) observeEthCallError(mode, errType string) {
@@ -882,6 +889,11 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	return raw, nil
 }
 
+// GetBlockRawByHashOrHeight returns raw block JSON by hash or height.
+func (b *EthereumRPC) GetBlockRawByHashOrHeight(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
+	return b.getBlockRaw(hash, height, fullTxs)
+}
+
 func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
@@ -978,9 +990,13 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 
 // getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers/creations/destructions; ctx controls cancellation.
 func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash string, blockHeight uint32, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, []bchain.ContractInfo, error) {
+	if b.InternalDataProvider != nil {
+		return b.InternalDataProvider.GetInternalDataForBlock(blockHash, blockHeight, transactions)
+	}
+
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	contracts := make([]bchain.ContractInfo, 0)
-	if ProcessInternalTransactions {
+	if bchain.ProcessInternalTransactions {
 		var trace []rpcTraceResult
 		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"}) // Use caller-provided ctx for timeout/cancel.
 		if err != nil {
@@ -1126,7 +1142,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
 		tx := &body.Transactions[i]
-		btx, err := b.Parser.ethTxToTx(tx, &bchain.RpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
+		btx, err := b.Parser.EthTxToTx(tx, &bchain.RpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
@@ -1209,7 +1225,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = b.Parser.ethTxToTx(tx, nil, nil, 0, 0, true)
+		btx, err = b.Parser.EthTxToTx(tx, nil, nil, 0, 0, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -1243,7 +1259,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, receipt, nil, time, confirmations, true)
+		btx, err = b.Parser.EthTxToTx(tx, receipt, nil, time, confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}

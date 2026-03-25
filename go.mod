@@ -6,6 +6,7 @@ require (
 	github.com/ava-labs/avalanchego v1.14.0
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
 	github.com/deckarep/golang-set v1.8.0
+	github.com/decred/base58 v1.0.3
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
 	github.com/decred/dcrd/chaincfg/v3 v3.0.0
 	github.com/decred/dcrd/dcrec v1.0.0
@@ -27,6 +28,7 @@ require (
 	github.com/pirk/ecashutil v0.0.0-20220124103933-d37f548d249e
 	github.com/prometheus/client_golang v1.23.2
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
+	github.com/stretchr/testify v1.11.1
 	github.com/tkrajina/typescriptify-golang-structs v0.1.11
 	golang.org/x/crypto v0.43.0
 	google.golang.org/protobuf v1.36.10
@@ -46,11 +48,10 @@ require (
 	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.4.0 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
-	github.com/crate-crypto/go-kzg-4844 v1.1.0 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dchest/blake256 v1.0.0 // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
-	github.com/decred/base58 v1.0.3 // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
 	github.com/decred/dcrd/crypto/ripemd160 v1.0.1 // indirect
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.1 // indirect
@@ -58,7 +59,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/decred/dcrd/wire v1.4.0 // indirect
 	github.com/decred/slog v1.1.0 // indirect
-	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.5 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -69,6 +69,7 @@ require (
 	github.com/kkdai/bstream v0.0.0-20171226095907-f71540b9dfdc // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.3 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
@@ -82,6 +83,7 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 // replace github.com/martinboehm/btcutil => ../btcutil

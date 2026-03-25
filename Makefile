@@ -7,8 +7,8 @@ NO_CACHE = false
 TCMALLOC =
 PORTABLE = 0
 ARGS ?=
-# Forward BB_RPC_* and BB_API_* overrides into Docker for build/test tooling.
-BB_RPC_ENV := $(shell env | awk -F= '/^BB_RPC_(URL_HTTP|URL_WS|BIND_HOST|ALLOW_IP)_|^BB_API_URL_(HTTP|WS)_/ {print "-e " $$1}')
+# Forward BB_BUILD_ENV, BB_*_RPC_URL_*, BB_RPC_*, and BB_DEV_API_* overrides into Docker for build/test tooling.
+BB_RPC_ENV := $(shell env | awk -F= '/^BB_BUILD_ENV$$|^BB_(DEV|PROD)_RPC_URL_(HTTP|WS)_|^BB_RPC_(BIND_HOST|ALLOW_IP)_|^BB_DEV_API_URL_(HTTP|WS)_/ {print "-e " $$1}')
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 
@@ -27,7 +27,7 @@ test-integration: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
 
 test-e2e: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-e2e ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e E2E_REGEX $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-e2e ARGS="$(ARGS)"
 
 test-connectivity: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-connectivity ARGS="$(ARGS)"

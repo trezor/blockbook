@@ -22,12 +22,14 @@ runs:
         vars_map = json.loads(os.environ.get("VARS_JSON", "{}"))
         env_path = os.environ["GITHUB_ENV"]
         alias_prefixes = (
-            "BB_RPC_URL_HTTP_",
-            "BB_RPC_URL_WS_",
+            "BB_DEV_RPC_URL_HTTP_",
+            "BB_DEV_RPC_URL_WS_",
+            "BB_PROD_RPC_URL_HTTP_",
+            "BB_PROD_RPC_URL_WS_",
             "BB_RPC_BIND_HOST_",
             "BB_RPC_ALLOW_IP_",
-            "BB_API_URL_HTTP_",
-            "BB_API_URL_WS_",
+            "BB_DEV_API_URL_HTTP_",
+            "BB_DEV_API_URL_WS_",
         )
 
         def write_env_var(env_file, key, value):

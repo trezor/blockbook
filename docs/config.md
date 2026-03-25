@@ -36,11 +36,13 @@ Good examples of coin configuration are
 
 * `ipc` – Defines how Blockbook connects its back-end service.
     * `rpc_url_template` – Template that defines URL of back-end RPC service. See note on templates below. You can
-      override it at build time by setting `BB_RPC_URL_HTTP_<coin alias>` (for example,
-      `BB_RPC_URL_HTTP_ethereum=http://backend_hostname:1234`), which is used as-is during template generation.
+      override it at build time by setting the selected `BB_DEV_RPC_URL_HTTP_<coin alias>` or
+      `BB_PROD_RPC_URL_HTTP_<coin alias>` variable (for example,
+      `BB_BUILD_ENV=dev BB_DEV_RPC_URL_HTTP_ethereum=http://backend_hostname:1234`), which is used as-is during
+      template generation. `BB_BUILD_ENV` defaults to `dev`.
     * `rpc_url_ws_template` – Template that defines URL of back-end WebSocket RPC service for subscriptions. You can
-      override it at build time by setting `BB_RPC_URL_WS_<coin alias>` and it should point to the same host as
-      `rpc_url_template`.
+      override it at build time by setting the selected `BB_DEV_RPC_URL_WS_<coin alias>` or
+      `BB_PROD_RPC_URL_WS_<coin alias>` variable and it should point to the same host as `rpc_url_template`.
     * `rpc_user` – User name of back-end RPC service, used by both Blockbook and back-end configuration templates.
     * `rpc_pass` – Password of back-end RPC service, used by both Blockbook and back-end configuration templates.
     * `rpc_timeout` – RPC timeout used by Blockbook.

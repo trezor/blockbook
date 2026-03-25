@@ -17,3 +17,6 @@ build/*.deb
 \.idea/
 __debug*
 .gocache/
+__pycache__/
+.dev/
+.spec/

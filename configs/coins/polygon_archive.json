@@ -4,7 +4,8 @@
         "shortcut": "POL",
         "network": "POL",
         "label": "Polygon",
-        "alias": "polygon_archive_bor"
+        "alias": "polygon_archive_bor",
+        "test_name": "polygon"
     },
     "ports": {
         "backend_rpc": 8072,

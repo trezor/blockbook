@@ -4,7 +4,8 @@
         "shortcut": "ETH",
         "network": "ARB",
         "label": "Arbitrum",
-        "alias": "arbitrum_archive"
+        "alias": "arbitrum_archive",
+        "test_name": "arbitrum"
     },
     "ports": {
         "backend_rpc": 8306,

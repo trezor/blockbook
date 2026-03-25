@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,6 +52,7 @@ type Config struct {
 		Network  string `json:"network,omitempty"`
 		Label    string `json:"label"`
 		Alias    string `json:"alias"`
+		TestName string `json:"test_name,omitempty"`
 	} `json:"coin"`
 	Ports struct {
 		BackendRPC          int `json:"backend_rpc"`
@@ -106,8 +109,19 @@ type Config struct {
 		Architecture         string `json:"architecture"`
 		RPCBindHost          string `json:"-"` // Derived from BB_RPC_BIND_HOST_* to keep default RPC exposure local.
 		RPCAllowIP           string `json:"-"` // Derived to align rpcallowip with RPC bind host intent.
+		WantsBackendService  bool   `json:"-"` // Derived from the effective RPC URL so systemd only wants a local backend.
 	} `json:"-"`
 }
+
+const (
+	buildEnvVar          = "BB_BUILD_ENV"
+	buildEnvDev          = "dev"
+	buildEnvProd         = "prod"
+	devRPCURLHTTPPrefix  = "BB_DEV_RPC_URL_HTTP_"
+	devRPCURLWSPrefix    = "BB_DEV_RPC_URL_WS_"
+	prodRPCURLHTTPPrefix = "BB_PROD_RPC_URL_HTTP_"
+	prodRPCURLWSPrefix   = "BB_PROD_RPC_URL_WS_"
+)
 
 func jsonToString(msg json.RawMessage) (string, error) {
 	d, err := msg.MarshalJSON()
@@ -139,7 +153,7 @@ func validateRPCEnvVars(configsDir string) error {
 		return nil
 	}
 	sort.Strings(unknown)
-	return fmt.Errorf("BB_RPC_* env vars reference unknown coin aliases: %s", strings.Join(unknown, ", "))
+	return fmt.Errorf("RPC env vars reference unknown coin aliases: %s", strings.Join(unknown, ", "))
 }
 
 type coinAliasHolder struct {
@@ -152,7 +166,7 @@ func loadCoinAliases(configsDir string) (map[string]struct{}, error) {
 	coinsDir := filepath.Join(configsDir, "coins")
 	entries, err := os.ReadDir(coinsDir)
 	if err != nil {
-		return nil, fmt.Errorf("read coins directory for BB_RPC_* validation: %w", err)
+		return nil, fmt.Errorf("read coins directory for RPC env validation: %w", err)
 	}
 
 	validAliases := make(map[string]struct{}, len(entries))
@@ -194,7 +208,14 @@ func readCoinAlias(path string) (string, error) {
 }
 
 func rpcEnvPrefixes() []string {
-	return []string{"BB_RPC_URL_WS_", "BB_RPC_URL_HTTP_", "BB_RPC_BIND_HOST_", "BB_RPC_ALLOW_IP_"}
+	return []string{
+		devRPCURLWSPrefix,
+		devRPCURLHTTPPrefix,
+		prodRPCURLWSPrefix,
+		prodRPCURLHTTPPrefix,
+		"BB_RPC_BIND_HOST_",
+		"BB_RPC_ALLOW_IP_",
+	}
 }
 
 func collectUnknownRPCEnvVars(validAliases map[string]struct{}, prefixes []string) []string {
@@ -217,6 +238,63 @@ func collectUnknownRPCEnvVars(validAliases map[string]struct{}, prefixes []strin
 		}
 	}
 	return unknown
+}
+
+func resolveBuildEnv() (string, error) {
+	buildEnv := strings.ToLower(strings.TrimSpace(os.Getenv(buildEnvVar)))
+	if buildEnv == "" {
+		return buildEnvDev, nil
+	}
+	switch buildEnv {
+	case buildEnvDev, buildEnvProd:
+		return buildEnv, nil
+	default:
+		return "", fmt.Errorf("invalid %s value %q, expected %q or %q", buildEnvVar, buildEnv, buildEnvDev, buildEnvProd)
+	}
+}
+
+func rpcURLPrefixesForBuildEnv(buildEnv string) (string, string) {
+	switch buildEnv {
+	case buildEnvProd:
+		return prodRPCURLHTTPPrefix, prodRPCURLWSPrefix
+	default:
+		return devRPCURLHTTPPrefix, devRPCURLWSPrefix
+	}
+}
+
+func renderConfigTemplate(config *Config, name string) (string, error) {
+	templ := config.ParseTemplate()
+	var out bytes.Buffer
+	if err := templ.ExecuteTemplate(&out, name, config); err != nil {
+		return "", err
+	}
+	return out.String(), nil
+}
+
+func rpcURLUsesLoopback(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func wantsBackendService(config *Config) (bool, error) {
+	if isEmpty(config, "backend") {
+		return false, nil
+	}
+
+	renderedRPCURL, err := renderConfigTemplate(config, "IPC.RPCURLTemplate")
+	if err != nil {
+		return false, err
+	}
+
+	return rpcURLUsesLoopback(renderedRPCURL), nil
 }
 
 // ParseTemplate parses the template
@@ -261,8 +339,12 @@ func copyNonZeroBackendFields(toValue *Backend, fromValue *Backend) {
 func LoadConfig(configsDir, coin string) (*Config, error) {
 	config := new(Config)
 
-	// Fail fast if BB_RPC_* variables reference coins that do not exist in configs/coins.
+	// Fail fast if RPC override variables reference coins that do not exist in configs/coins.
 	if err := validateRPCEnvVars(configsDir); err != nil {
+		return nil, err
+	}
+	buildEnv, err := resolveBuildEnv()
+	if err != nil {
 		return nil, err
 	}
 
@@ -300,12 +382,14 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 		config.Env.RPCAllowIP = allowIP
 	}
 
+	rpcURLHTTPPrefix, rpcURLWSPrefix := rpcURLPrefixesForBuildEnv(buildEnv)
+
 	// Resolve RPC env by exact alias first and fall back to *_archive for shared test/deploy wiring.
-	if rpcURL, ok := lookupEnvWithArchiveFallback("BB_RPC_URL_HTTP_", config.Coin.Alias); ok {
+	if rpcURL, ok := lookupEnvWithArchiveFallback(rpcURLHTTPPrefix, config.Coin.Alias); ok {
 		// Prefer explicit env override so package generation/tests can target hosted RPC endpoints without editing JSON.
 		config.IPC.RPCURLTemplate = rpcURL
 	}
-	if rpcURLWS, ok := lookupEnvWithArchiveFallback("BB_RPC_URL_WS_", config.Coin.Alias); ok {
+	if rpcURLWS, ok := lookupEnvWithArchiveFallback(rpcURLWSPrefix, config.Coin.Alias); ok {
 		config.IPC.RPCURLWSTemplate = rpcURLWS
 	}
 
@@ -332,6 +416,11 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 		default:
 			return nil, fmt.Errorf("Invalid verification type: %s", config.Backend.VerificationType)
 		}
+	}
+
+	config.Env.WantsBackendService, err = wantsBackendService(config)
+	if err != nil {
+		return nil, err
 	}
 
 	return config, nil
@@ -365,9 +454,19 @@ func lookupEnvWithArchiveFallback(prefix, alias string) (string, bool) {
 
 func aliasCandidates(alias string) []string {
 	candidates := []string{alias}
-	if !strings.HasSuffix(alias, archiveSuffix) {
-		candidates = append(candidates, alias+archiveSuffix)
+	if strings.Contains(alias, archiveSuffix) {
+		return candidates
 	}
+
+	candidates = append(candidates, alias+archiveSuffix)
+
+	if idx := strings.Index(alias, "_"); idx != -1 {
+		infix := alias[:idx] + archiveSuffix + alias[idx:]
+		if infix != alias && infix != alias+archiveSuffix {
+			candidates = append(candidates, infix)
+		}
+	}
+
 	return candidates
 }
 
