@@ -123,6 +123,18 @@ func testGetAddressTokenBalances(t *testing.T, h *TestHandler) {
 	assertEVMTokenBalancesHaveHoldingsFields(t, &resp, address, "GetAddressTokenBalances")
 }
 
+func testGetAddressIncludeErc4626EVM(t *testing.T, h *TestHandler) {
+	assertErc4626FixturesInAccountInfo(t, h, "GetAddressIncludeErc4626EVM", func(t *testing.T, fixture erc4626Fixture) evmAddressTokenBalanceResponse {
+		path := buildAddressDetailsPath(fixture.Holder, "tokenBalances", addressPage, addressPageSize) +
+			"&contract=" + url.QueryEscape(fixture.Contract) +
+			"&includeErc4626=true"
+
+		var resp evmAddressTokenBalanceResponse
+		h.mustGetJSON(t, path, &resp)
+		return resp
+	})
+}
+
 func testGetAddressContractFilterEVM(t *testing.T, h *TestHandler) {
 	address := h.sampleEVMAddressOrSkip(t)
 	contract := h.sampleEVMContractOrSkip(t)
@@ -294,6 +306,25 @@ func testWsGetAccountInfoContractFilterEVM(t *testing.T, h *TestHandler) {
 }
 
 func testWsGetAccountInfoIncludeErc4626EVM(t *testing.T, h *TestHandler) {
+	assertErc4626FixturesInAccountInfo(t, h, "WsGetAccountInfoIncludeErc4626EVM", func(t *testing.T, fixture erc4626Fixture) evmAddressTokenBalanceResponse {
+		resp := h.wsCall(t, "getAccountInfo", map[string]interface{}{
+			"descriptor":     fixture.Holder,
+			"details":        "tokenBalances",
+			"contractFilter": fixture.Contract,
+			"includeErc4626": true,
+			"page":           addressPage,
+			"pageSize":       addressPageSize,
+		})
+
+		var info evmAddressTokenBalanceResponse
+		if err := json.Unmarshal(resp.Data, &info); err != nil {
+			t.Fatalf("decode websocket getAccountInfo includeErc4626 response: %v", err)
+		}
+		return info
+	})
+}
+
+func assertErc4626FixturesInAccountInfo(t *testing.T, h *TestHandler, testName string, fetch func(t *testing.T, fixture erc4626Fixture) evmAddressTokenBalanceResponse) {
 	testData, err := loadAPITestData(h.Coin)
 	if err != nil {
 		t.Fatalf("load api test data for %s: %v", h.Coin, err)
@@ -306,28 +337,16 @@ func testWsGetAccountInfoIncludeErc4626EVM(t *testing.T, h *TestHandler) {
 
 	for _, fixture := range testData.ERC4626Fixtures {
 		t.Run(fixture.Name, func(t *testing.T) {
-			resp := h.wsCall(t, "getAccountInfo", map[string]interface{}{
-				"descriptor":     fixture.Holder,
-				"details":        "tokenBalances",
-				"contractFilter": fixture.Contract,
-				"includeErc4626": true,
-				"page":           addressPage,
-				"pageSize":       addressPageSize,
-			})
+			info := fetch(t, fixture)
 
-			var info evmAddressTokenBalanceResponse
-			if err := json.Unmarshal(resp.Data, &info); err != nil {
-				t.Fatalf("decode websocket getAccountInfo includeErc4626 response: %v", err)
-			}
-
-			assertAddressMatches(t, info.Address, fixture.Holder, "WsGetAccountInfoIncludeErc4626EVM.address")
+			assertAddressMatches(t, info.Address, fixture.Holder, testName+".address")
 			if len(info.Tokens) == 0 {
 				t.Skipf("fixture %s returned no tokens for contract %s", fixture.Name, fixture.Contract)
 			}
 
 			for i := range info.Tokens {
 				token := info.Tokens[i]
-				context := fmt.Sprintf("WsGetAccountInfoIncludeErc4626EVM.tokens[%d]", i)
+				context := fmt.Sprintf("%s.tokens[%d]", testName, i)
 				if !strings.EqualFold(token.Contract, fixture.Contract) {
 					t.Fatalf("%s contract mismatch: got %s want %s", context, token.Contract, fixture.Contract)
 				}
@@ -342,7 +361,7 @@ func testWsGetAccountInfoIncludeErc4626EVM(t *testing.T, h *TestHandler) {
 	}
 
 	if validatedFixtures == 0 {
-		t.Fatalf("WsGetAccountInfoIncludeErc4626EVM did not validate any ERC4626 fixture")
+		t.Fatalf("%s did not validate any ERC4626 fixture", testName)
 	}
 }
 
