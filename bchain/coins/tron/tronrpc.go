@@ -783,32 +783,13 @@ func (b *TronRPC) getTransactionInfoByIDWithFallback(txid string) (*tronGetTrans
 }
 
 func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	if b.Mempool != nil && b.Mempool.GetTransactionTime(strip0xPrefix(txid)) != 0 {
-		txInfo, err := b.getTransactionInfoByID(txid, false)
-		if err != nil {
-			return nil, err
-		}
-		txByID, err := b.getTransactionByID(txid, false)
-		if err != nil {
-			return nil, err
-		}
-
-		blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
-		confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
-		return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, false)
-	}
-
-	txInfo, infoSolidified, err := b.getTransactionInfoByIDWithFallback(txid)
+	txInfo, isSolidified, err := b.getTransactionInfoByIDWithFallback(txid)
 	if err != nil {
 		return nil, err
 	}
-	txByID, txSolidified, err := b.getTransactionByIDWithFallback(txid)
+	txByID, err := b.getTransactionByID(txid, isSolidified)
 	if err != nil {
 		return nil, err
-	}
-	isSolidified := infoSolidified
-	if infoSolidified != txSolidified {
-		glog.V(1).Infof("Tron GetTransaction tx %s endpoint mismatch: infoSolidified=%v txSolidified=%v", txid, infoSolidified, txSolidified)
 	}
 
 	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)

@@ -154,7 +154,7 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 				{
 					ID: "deadbeef",
 					InternalTransactions: []tronInternalTransaction{
-						{Note: "73756963696465"}, // suicide
+						{Note: "73756963696465", CallerAddress: "4139dd12a54e2bab7c82aa14a1e158b34263d2d510"}, // suicide
 					},
 				},
 			},
