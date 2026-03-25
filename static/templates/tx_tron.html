@@ -30,9 +30,9 @@
             <td><span class="badge bg-success">Success</span></td>
             {{else}}
             {{if eq $eth.Status -1}}
-            <td>Pending</td>
+            <td><span class="badge bg-warning">Pending</span></td>
             {{else}}
-            <td>Unknown</td>
+            <td><span class="badge bg-secondary">Unknown</span></td>
             {{end}}
             {{end}}
             {{else}}
@@ -79,19 +79,34 @@
             </td>
         </tr>
         {{end}}
-        {{if $chainExtra.StakeAmount}}
+        {{if $chainExtra.StakeAmountValue}}
+        <tr>
+            <td>Stake Amount</td>
+            <td>{{formattedAmountSpan $chainExtra.StakeAmountValue 6 "TRX" $data "copyable"}}</td>
+        </tr>
+        {{else if $chainExtra.StakeAmount}}
         <tr>
             <td>Stake Amount</td>
             <td><span class="copyable">{{$chainExtra.StakeAmount}}</span> sun</td>
         </tr>
         {{end}}
-        {{if $chainExtra.UnstakeAmount}}
+        {{if $chainExtra.UnstakeAmountValue}}
+        <tr>
+            <td>Unstake Amount</td>
+            <td>{{formattedAmountSpan $chainExtra.UnstakeAmountValue 6 "TRX" $data "copyable"}}</td>
+        </tr>
+        {{else if $chainExtra.UnstakeAmount}}
         <tr>
             <td>Unstake Amount</td>
             <td><span class="copyable">{{$chainExtra.UnstakeAmount}}</span> sun</td>
         </tr>
         {{end}}
-        {{if $chainExtra.DelegateAmount}}
+        {{if $chainExtra.DelegateAmountValue}}
+        <tr>
+            <td>Delegate Amount</td>
+            <td>{{formattedAmountSpan $chainExtra.DelegateAmountValue 6 "TRX" $data "copyable"}}</td>
+        </tr>
+        {{else if $chainExtra.DelegateAmount}}
         <tr>
             <td>Delegate Amount</td>
             <td><span class="copyable">{{$chainExtra.DelegateAmount}}</span> sun</td>
@@ -139,7 +154,7 @@
         {{end}}
         {{if $chainExtra.TotalFeeAmount}}
         <tr>
-            <td>Total Fee</td>
+            <td>Burned Fee</td>
             <td>{{formattedAmountSpan $chainExtra.TotalFeeAmount 6 "TRX" $data "copyable"}}</td>
         </tr>
         {{end}}

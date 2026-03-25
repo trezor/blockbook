@@ -233,6 +233,18 @@ func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
 	require.Equal(t, "SUCCESS", extra.Result)
 }
 
+func TestTronBuildExtraData_BandwidthUsageDefaultsToZero(t *testing.T) {
+	txByID := &tronGetTransactionByIDResponse{}
+	txInfo := &tronGetTransactionInfoByIDResponse{}
+
+	extra := tronBuildExtraData(txByID, txInfo)
+	require.Equal(t, "0", extra.BandwidthUsage)
+
+	txInfo.Receipt.NetUsage = int64Ptr(42)
+	extra = tronBuildExtraData(txByID, txInfo)
+	require.Equal(t, "42", extra.BandwidthUsage)
+}
+
 func TestTronTxMeta_GetCorrectTxMeta(t *testing.T) {
 	txInfo := &tronGetTransactionInfoByIDResponse{
 		BlockNumber:    int64Ptr(12345),
