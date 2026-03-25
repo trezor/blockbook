@@ -97,6 +97,7 @@ Good examples of coin configuration are
         * `mempool_sub_workers` – Number of subworkers for BitcoinType mempool.
         * `block_addresses_to_keep` – Number of blocks that are to be kept in blockaddresses column.
         * `additional_params` – Object of coin-specific params.
+          * Tron-specific endpoint configuration is documented in [Tron Config](/docs/tron-config.md).
           * Hot-address configuration (Blockbook, Ethereum-type indexing):
             * `hot_address_min_contracts` – Minimum number of contracts before hotness tracking applies (default **192**).
             * `hot_address_min_hits` – Lookups within the current block required to mark an address hot (default **3**, clamped to **10**).
