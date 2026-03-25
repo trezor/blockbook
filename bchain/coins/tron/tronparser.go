@@ -106,8 +106,16 @@ func ToTronAddressFromDesc(addrDesc bchain.AddressDescriptor) string {
 }
 
 func ToTronAddressFromAddress(address string) string {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return ""
+	}
 	if has0xPrefix(address) {
 		address = address[2:]
+		address = strings.TrimSpace(address)
+		if address == "" {
+			return ""
+		}
 	}
 	b, err := hex.DecodeString(address)
 	if err != nil {

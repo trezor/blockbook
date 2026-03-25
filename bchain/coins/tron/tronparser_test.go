@@ -171,6 +171,47 @@ func TestFromTronAddressToHex(t *testing.T) {
 	}
 }
 
+func TestToTronAddressFromAddress(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "hex without 0x prefix",
+			input:    "08e3448764a3b3014727070b32795dafbfcdd436",
+			expected: "TAnCfRsZkYJ3AZ1DRuMTAV6u7Mi7sNUMf9",
+		},
+		{
+			name:     "hex with 0x prefix",
+			input:    "0x08e3448764a3b3014727070b32795dafbfcdd436",
+			expected: "TAnCfRsZkYJ3AZ1DRuMTAV6u7Mi7sNUMf9",
+		},
+		{
+			name:     "hex with tron 0x41 prefix",
+			input:    "4160bb513e91aa723a10a4020ae6fcce39bce7e240",
+			expected: "TJngGWiRMLgNFScEybQxLEKQMNdB4nR6Vx",
+		},
+		{
+			name:     "invalid input is returned unchanged",
+			input:    "not-a-hex-address",
+			expected: "not-a-hex-address",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ToTronAddressFromAddress(tt.input)
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 func TestTronParser_PackUnpackRoundtrip(t *testing.T) {
 	original := &bchain.Tx{
 		Txid: "a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
