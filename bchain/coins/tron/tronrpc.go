@@ -679,6 +679,17 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		}
 
 		txInfo := txInfosByID[strip0xPrefix(tx.Hash)]
+		if txInfo == nil {
+			b.ObserveChainDataFallback("tron_getblock", "missing_tx_info_by_block")
+			glog.V(1).Infof("Tron GetBlock fallback to gettransactioninfobyid for tx %s in block %d", tx.Hash, bbh.Height)
+			txInfo, err = b.getTransactionInfoByID(tx.Hash, isSolidified)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if txInfo == nil {
+			return nil, errors.Errorf("missing txInfo for tx %s in block %d", tx.Hash, bbh.Height)
+		}
 
 		var txInternalData *bchain.EthereumInternalData
 		if i < len(internalData) {
