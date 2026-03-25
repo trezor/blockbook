@@ -142,7 +142,7 @@ func testGetTransactionEVMShape(t *testing.T, h *TestHandler) {
 	h.mustGetJSON(t, path, &tx)
 
 	assertEqualString(t, tx.Txid, txid, "GetTransactionEVMShape.txid")
-	if !isEVMTxID(tx.Txid) {
+	if !h.isEVMTxID(tx.Txid) {
 		t.Fatalf("GetTransactionEVMShape txid is not EVM-like: %s", tx.Txid)
 	}
 	if len(tx.Vin) != 1 {
