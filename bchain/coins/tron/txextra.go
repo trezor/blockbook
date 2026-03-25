@@ -103,6 +103,9 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 	extra.EnergyFee = tronInt64PtrToString(txInfo.Receipt.EnergyFee)
 	extra.BandwidthUsage = tronInt64PtrToString(txInfo.Receipt.NetUsage)
 	extra.BandwidthFee = tronInt64PtrToString(txInfo.Receipt.NetFee)
+	if extra.BandwidthUsage == "" {
+		extra.BandwidthUsage = "0"
+	}
 	extra.Result = strings.TrimSpace(txInfo.Receipt.Result)
 	if extra.Result == "" {
 		extra.Result = strings.TrimSpace(txInfo.Result)

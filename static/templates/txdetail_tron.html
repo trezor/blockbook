@@ -3,9 +3,8 @@
     <div class="row head">
         <div class="col-xs-7 col-md-8{{if eq $tx.EthereumSpecific.Status 0}} txerror{{end}}">
             <a href="/tx/{{$tx.Txid}}" class="ellipsis copyable txid">{{$tx.Txid}}</a>
-            {{if $tx.Rbf}}<span class="ps-1" tt="Replace-by-Fee (RBF) transaction, could be overridden"> RBF</span>{{end}}
         </div>
-        {{if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} <span class="txvalue ms-1">{{unixTimeSpan $tx.Blocktime}}</span></div>{{end}}
+        {{if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}included{{else}}first seen{{end}} <span class="txvalue ms-1">{{unixTimeSpan $tx.Blocktime}}</span></div>{{end}}
         {{if eq $tx.EthereumSpecific.Status 0}}<div class="col-12 txerror pb-1"><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="small ms-1">{{$tx.EthereumSpecific.Error}}</span>{{end}}</div>{{end}}
         {{if $tx.EthereumSpecific.ParsedData}}
             {{if $tx.EthereumSpecific.ParsedData.Name}}<div class="col-12 small"><span class="txvalue">{{$tx.EthereumSpecific.ParsedData.Name}}</span>{{if $tx.EthereumSpecific.ParsedData.MethodId}}<span class="ms-1" tt="4-byte signature"> ({{$tx.EthereumSpecific.ParsedData.MethodId}})</span>{{end}}</div>{{else}}
@@ -16,9 +15,9 @@
         <div class="col-12 small txvalue">
             {{if $chainExtra.Operation}}<span class="badge bg-secondary">{{$chainExtra.Operation}}</span>{{end}}
             {{if $chainExtra.Resource}}<span class="ms-2">resource {{$chainExtra.Resource}}</span>{{end}}
-            {{if $chainExtra.DelegateAmount}}<span class="ms-2">delegate {{$chainExtra.DelegateAmount}} sun</span>{{end}}
-            {{if $chainExtra.StakeAmount}}<span class="ms-2">stake {{$chainExtra.StakeAmount}} sun</span>{{end}}
-            {{if $chainExtra.UnstakeAmount}}<span class="ms-2">unstake {{$chainExtra.UnstakeAmount}} sun</span>{{end}}
+            {{if $chainExtra.DelegateAmountValue}}<span class="ms-2">delegate {{formattedAmountSpan $chainExtra.DelegateAmountValue 6 "TRX" $data ""}}</span>{{else if $chainExtra.DelegateAmount}}<span class="ms-2">delegate {{$chainExtra.DelegateAmount}} sun</span>{{end}}
+            {{if $chainExtra.StakeAmountValue}}<span class="ms-2">stake {{formattedAmountSpan $chainExtra.StakeAmountValue 6 "TRX" $data ""}}</span>{{else if $chainExtra.StakeAmount}}<span class="ms-2">stake {{$chainExtra.StakeAmount}} sun</span>{{end}}
+            {{if $chainExtra.UnstakeAmountValue}}<span class="ms-2">unstake {{formattedAmountSpan $chainExtra.UnstakeAmountValue 6 "TRX" $data ""}}</span>{{else if $chainExtra.UnstakeAmount}}<span class="ms-2">unstake {{$chainExtra.UnstakeAmount}} sun</span>{{end}}
         </div>
         {{end}}
     </div>
@@ -195,12 +194,12 @@
     <div class="row footer">
         <div class="col-sm-12 col-md-6">
             {{if $chainExtra.TotalFeeAmount}}
-            Fee {{formattedAmountSpan $chainExtra.TotalFeeAmount 6 "TRX" $data "txvalue copyable ms-3"}}
+            Burned Fee {{formattedAmountSpan $chainExtra.TotalFeeAmount 6 "TRX" $data "txvalue copyable ms-3"}}
+            {{end}}
             <span class="fw-normal small">(
                 {{if $chainExtra.EnergyUsageTotal}}Energy {{$chainExtra.EnergyUsageTotal}}, {{end}}
                 Bandwidth {{$chainExtra.BandwidthUsage}}
             )</span>
-            {{end}}
         </div>
         <div class="col-sm-12 col-md-6 text-end">
             <span class="me-4">
