@@ -31,5 +31,12 @@
         "symbol": "FLUID",
         "decimals": 18,
         "createdInBlock": 12183236
+    },
+    {
+        "standard": "ERC20",
+        "contract": "0x7cf9a80db3b29ee8efe3710aadb7b95270572d47",
+        "name": "Nillion",
+        "symbol": "NIL",
+        "decimals": 6
     }
 ]
