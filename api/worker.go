@@ -64,7 +64,47 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
 	}
+
+	// Seed ERC-20 contract fixes into DB once at startup so API reads remain fast.
+	// We intentionally scope this to the Ethereum (ETH) instances to avoid cross-chain
+	// address collisions.
+	if !w.chain.IsTestnet() && (w.chain.GetCoinName() == "Ethereum" || w.chain.GetCoinName() == "Ethereum Archive") {
+		w.seedERC20ContractFixesToDB()
+	}
 	return w, nil
+}
+
+func (w *Worker) seedERC20ContractFixesToDB() {
+	contractFixes := eth.ContractFixes()
+	for i := range contractFixes {
+		fix := contractFixes[i]
+		addrDesc, err := w.chainParser.GetAddrDescFromAddress(fix.Contract)
+		if err != nil {
+			glog.Warningf("seedERC20ContractFixesToDB: invalid contract address %q: %v", fix.Contract, err)
+			continue
+		}
+
+		ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
+		if err != nil {
+			glog.Warningf("seedERC20ContractFixesToDB: GetContractInfo error for %q: %v", fix.Contract, err)
+			continue
+		}
+		if ci == nil {
+			// Contract not present yet in DB (common for tokens the instance hasn't indexed).
+			// Future lookups will use the fetch fast-path.
+			continue
+		}
+
+		if eth.ApplyContractFixToContractInfo(ci, fix.Contract) {
+			// Ensure StoreContractInfo can persist it.
+			if ci.Contract == "" {
+				ci.Contract = fix.Contract
+			}
+			if err := w.db.StoreContractInfo(ci); err != nil {
+				glog.Errorf("seedERC20ContractFixesToDB: StoreContractInfo error for %q: %v", fix.Contract, err)
+			}
+		}
+	}
 }
 
 func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescriptor, []string, bool, error) {

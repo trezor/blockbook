@@ -316,6 +316,23 @@ func erc20BalanceOfCallData(addrDesc bchain.AddressDescriptor) string {
 
 func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, error) {
 	var contract bchain.ContractInfo
+
+	// Fast path for known ERC-20 contracts with fixed metadata.
+	// This avoids relying on on-chain `decimals()` in cases where it may fail or be non-standard.
+	// Scope overrides to the Ethereum instance (`ETH`) to avoid cross-chain
+	// address collisions (same contract address on different EVM chains).
+	if !b.Testnet && b.ChainConfig != nil && b.ChainConfig.CoinShortcut == "ETH" {
+		if fix := getContractFix(address); fix != nil {
+			contract = bchain.ContractInfo{
+				Contract: address,
+				Name:     fix.Name,
+				Symbol:   fix.Symbol,
+				Decimals: fix.Decimals,
+			}
+			return &contract, nil
+		}
+	}
+
 	b.observeEthCallContractInfo("name")
 	data, err := b.EthereumTypeRpcCall(contractNameSignature, address, "")
 	if err != nil {
