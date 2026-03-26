@@ -461,7 +461,7 @@ Example response:
 Returns balances and transactions of an address. The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&secondary=usd]
+GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&tokens=<nonzero|used|derived>&contract=<contract address>&secondary=usd]
 ```
 
 The optional query parameters:
@@ -476,8 +476,14 @@ The optional query parameters:
     -   _txids_: _tokenBalances_ + list of txids, subject to _from_, _to_ filter and paging
     -   _txslight_: _tokenBalances_ + list of transaction with limited details (only data from index), subject to _from_, _to_ filter and paging
     -   _txs_: _tokenBalances_ + list of transaction with details, subject to _from_, _to_ filter and paging
+-   _tokens_: specifies which tokens are returned (default _nonzero_)
+    -   _nonzero_: return only tokens with nonzero current holdings when holdings data is available
+    -   _used_: return historically used tokens; on EVM single-address requests, fungible zero balances remain visible while empty ERC721/ERC1155 contracts stay omitted when holdings data is available
+    -   _derived_: same as _used_ for a single-address request
 -   _contract_: return only transactions which affect specified contract (applicable only to coins which support contracts)
 -   _secondary_: specifies secondary (fiat) currency in which the token and total balances are returned in addition to crypto values
+
+For _details=tokens_, current holdings are not fetched, so _tokens=nonzero_ behaves the same as _used_.
 
 Example response for bitcoin type coin, _details_ set to _txids_ (`Address` type):
 

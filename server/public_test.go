@@ -23,6 +23,7 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
+	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
@@ -212,6 +213,95 @@ func newPostRequestWithContentLength(u string, contentLength int64) *http.Reques
 	r.Header.Add("Content-Type", "application/octet-stream")
 	r.ContentLength = contentLength
 	return r
+}
+
+func TestGetAddressQueryParamsParsesDocumentedAddressOptions(t *testing.T) {
+	s := &PublicServer{}
+	tests := []struct {
+		name               string
+		url                string
+		defaultDetails     api.AccountDetails
+		wantPage           int
+		wantPageSize       int
+		wantDetails        api.AccountDetails
+		wantTokensToReturn api.TokensToReturn
+		wantContract       string
+		wantFromHeight     uint32
+		wantToHeight       uint32
+		wantGap            int
+	}{
+		{
+			name:               "defaults use nonzero tokens",
+			url:                "http://example.test/api/v2/address/0xabc",
+			defaultDetails:     api.AccountDetailsTxidHistory,
+			wantPage:           0,
+			wantPageSize:       1000,
+			wantDetails:        api.AccountDetailsTxidHistory,
+			wantTokensToReturn: api.TokensToReturnNonzeroBalance,
+		},
+		{
+			name:               "details tokens with used filter",
+			url:                "http://example.test/api/v2/address/0xabc?details=tokens&tokens=used",
+			defaultDetails:     api.AccountDetailsBasic,
+			wantPage:           0,
+			wantPageSize:       1000,
+			wantDetails:        api.AccountDetailsTokens,
+			wantTokensToReturn: api.TokensToReturnUsed,
+		},
+		{
+			name:               "token balances with derived filter",
+			url:                "http://example.test/api/v2/address/0xabc?details=tokenBalances&tokens=derived",
+			defaultDetails:     api.AccountDetailsBasic,
+			wantPage:           0,
+			wantPageSize:       1000,
+			wantDetails:        api.AccountDetailsTokenBalances,
+			wantTokensToReturn: api.TokensToReturnDerived,
+		},
+		{
+			name:               "nonzero contract filter paging and heights",
+			url:                "http://example.test/api/v2/address/0xabc?details=txs&tokens=nonzero&contract=0xdef&page=2&pageSize=50&from=11&to=22&gap=7",
+			defaultDetails:     api.AccountDetailsBasic,
+			wantPage:           2,
+			wantPageSize:       50,
+			wantDetails:        api.AccountDetailsTxHistory,
+			wantTokensToReturn: api.TokensToReturnNonzeroBalance,
+			wantContract:       "0xdef",
+			wantFromHeight:     11,
+			wantToHeight:       22,
+			wantGap:            7,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newGetRequest(tt.url)
+			page, pageSize, details, filter, _, gap := s.getAddressQueryParams(r, tt.defaultDetails, 1000)
+			if page != tt.wantPage {
+				t.Fatalf("page = %d, want %d", page, tt.wantPage)
+			}
+			if pageSize != tt.wantPageSize {
+				t.Fatalf("pageSize = %d, want %d", pageSize, tt.wantPageSize)
+			}
+			if details != tt.wantDetails {
+				t.Fatalf("details = %v, want %v", details, tt.wantDetails)
+			}
+			if filter.TokensToReturn != tt.wantTokensToReturn {
+				t.Fatalf("tokensToReturn = %v, want %v", filter.TokensToReturn, tt.wantTokensToReturn)
+			}
+			if filter.Contract != tt.wantContract {
+				t.Fatalf("contract = %q, want %q", filter.Contract, tt.wantContract)
+			}
+			if filter.FromHeight != tt.wantFromHeight {
+				t.Fatalf("fromHeight = %d, want %d", filter.FromHeight, tt.wantFromHeight)
+			}
+			if filter.ToHeight != tt.wantToHeight {
+				t.Fatalf("toHeight = %d, want %d", filter.ToHeight, tt.wantToHeight)
+			}
+			if gap != tt.wantGap {
+				t.Fatalf("gap = %d, want %d", gap, tt.wantGap)
+			}
+		})
+	}
 }
 
 func insertFiatRate(date string, rates map[string]float32, tokenRates map[string]float32, d *db.RocksDB) error {
