@@ -679,11 +679,12 @@ func (h *TestHandler) isEVMTxID(txid string) bool {
 }
 
 func (h *TestHandler) isEVMAddress(address string) bool {
+	return isEVMAddress(address) || h.Coin == "tron" && isTronAddress(address)
+}
+
+func isEVMAddress(address string) bool {
 	address = strings.TrimSpace(address)
-	if strings.HasPrefix(strings.ToLower(address), "0x") {
-		return true
-	}
-	return h.Coin == "tron" && isTronAddress(address)
+	return strings.HasPrefix(strings.ToLower(address), "0x")
 }
 
 func isFixedHex(s string, length int) bool {
