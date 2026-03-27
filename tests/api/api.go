@@ -64,6 +64,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"GetAddressBasicEVM":                  testGetAddressBasicEVM,
 	"GetAddressTokensEVM":                 testGetAddressTokensEVM,
 	"GetAddressTokenBalances":             testGetAddressTokenBalances,
+	"GetAddressIncludeErc4626EVM":         testGetAddressIncludeErc4626EVM,
 	"GetAddressTxidsPaginationEVM":        testGetAddressTxidsPaginationEVM,
 	"GetAddressTxsPaginationEVM":          testGetAddressTxsPaginationEVM,
 	"GetAddressContractFilterEVM":         testGetAddressContractFilterEVM,
@@ -73,6 +74,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"WsGetAccountInfoTxidsConsistencyEVM": testWsGetAccountInfoTxidsConsistencyEVM,
 	"WsGetAccountInfoTxsConsistencyEVM":   testWsGetAccountInfoTxsConsistencyEVM,
 	"WsGetAccountInfoContractFilterEVM":   testWsGetAccountInfoContractFilterEVM,
+	"WsGetAccountInfoIncludeErc4626EVM":   testWsGetAccountInfoIncludeErc4626EVM,
 }
 
 var wsOnlyTests = map[string]func(t *testing.T, th *TestHandler){
@@ -242,11 +244,30 @@ type evmTokenResponse struct {
 	Balance          string               `json:"balance"`
 	IDs              []string             `json:"ids"`
 	MultiTokenValues []evmMultiTokenValue `json:"multiTokenValues"`
+	Erc4626          *evmErc4626Response  `json:"erc4626,omitempty"`
 }
 
 type evmMultiTokenValue struct {
 	ID    string `json:"id"`
 	Value string `json:"value"`
+}
+
+type evmErc4626Response struct {
+	Asset                 *evmErc4626MetadataResponse `json:"asset,omitempty"`
+	Share                 *evmErc4626MetadataResponse `json:"share,omitempty"`
+	TotalAssets           string                      `json:"totalAssets,omitempty"`
+	ConvertToAssets1Share string                      `json:"convertToAssets1Share,omitempty"`
+	ConvertToShares1Asset string                      `json:"convertToShares1Asset,omitempty"`
+	PreviewDeposit1Asset  string                      `json:"previewDeposit1Asset,omitempty"`
+	PreviewRedeem1Share   string                      `json:"previewRedeem1Share,omitempty"`
+	Error                 string                      `json:"error,omitempty"`
+}
+
+type evmErc4626MetadataResponse struct {
+	Contract string `json:"contract"`
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Decimals int    `json:"decimals"`
 }
 
 type evmTxShapeResponse struct {

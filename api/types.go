@@ -172,6 +172,26 @@ type MultiTokenValue struct {
 	Value *Amount `json:"value,omitempty" ts_doc:"Amount of that specific token ID."`
 }
 
+// Erc4626TokenMetadata contains token metadata used in ERC4626 payloads.
+type Erc4626TokenMetadata struct {
+	Contract string `json:"contract" ts_doc:"Token contract address."`
+	Name     string `json:"name,omitempty" ts_doc:"Human-readable token name."`
+	Symbol   string `json:"symbol,omitempty" ts_doc:"Token symbol."`
+	Decimals int    `json:"decimals" ts_doc:"Token decimals."`
+}
+
+// Erc4626Token contains ERC4626 vault details for a fungible token.
+type Erc4626Token struct {
+	Asset                    *Erc4626TokenMetadata `json:"asset,omitempty" ts_doc:"Metadata of the underlying asset token."`
+	Share                    *Erc4626TokenMetadata `json:"share,omitempty" ts_doc:"Metadata of the vault share token."`
+	TotalAssetsSat           *Amount               `json:"totalAssets,omitempty" ts_doc:"Total underlying assets managed by the vault."`
+	ConvertToAssets1ShareSat *Amount               `json:"convertToAssets1Share,omitempty" ts_doc:"Underlying assets for one whole share unit."`
+	ConvertToShares1AssetSat *Amount               `json:"convertToShares1Asset,omitempty" ts_doc:"Shares for one whole underlying asset unit."`
+	PreviewDeposit1AssetSat  *Amount               `json:"previewDeposit1Asset,omitempty" ts_doc:"Previewed shares minted for one whole underlying asset unit."`
+	PreviewRedeem1ShareSat   *Amount               `json:"previewRedeem1Share,omitempty" ts_doc:"Previewed assets redeemed for one whole share unit."`
+	Error                    string                `json:"error,omitempty" ts_doc:"Error message for partial failures while fetching ERC4626 fields."`
+}
+
 // Token contains info about tokens held by an address
 type Token struct {
 	// Deprecated: Use Standard instead.
@@ -190,6 +210,7 @@ type Token struct {
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"Multiple ERC1155 token balances (id + value)."`
 	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty" ts_doc:"Total amount of tokens received."`
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
+	Erc4626          *Erc4626Token            `json:"erc4626,omitempty" ts_doc:"ERC4626 vault details when requested and detected."`
 	ContractIndex    string                   `json:"-"`
 }
 
@@ -344,6 +365,7 @@ type AddressFilter struct {
 	FromHeight     uint32         `ts_doc:"Starting block height for filtering transactions."`
 	ToHeight       uint32         `ts_doc:"Ending block height for filtering transactions."`
 	TokensToReturn TokensToReturn `ts_doc:"Which tokens to include in the result set."`
+	IncludeErc4626 bool           `ts_doc:"If true, enriches fungible EVM tokens with ERC4626 vault data when available."`
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool `ts_doc:"If true, ignores mempool (unconfirmed) transactions."`
 }

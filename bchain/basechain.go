@@ -103,6 +103,11 @@ func (b *BaseChain) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return "", errors.New("not supported")
 }
 
+// EthereumTypeRpcCallBatch performs batch eth_call requests.
+func (b *BaseChain) EthereumTypeRpcCallBatch(calls []EthereumTypeRPCCall) ([]EthereumTypeRPCCallResult, error) {
+	return nil, errors.New("not supported")
+}
+
 func (b *BaseChain) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	return "", errors.New("not supported")
 }

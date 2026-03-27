@@ -305,6 +305,66 @@ func (b *EthereumRPC) EthereumTypeRpcCallAtBlock(data, to, from string, blockNum
 	return r, nil
 }
 
+// EthereumTypeRpcCallBatch executes multiple eth_call requests in one JSON-RPC batch.
+func (b *EthereumRPC) EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error) {
+	if len(calls) == 0 {
+		return nil, nil
+	}
+	batcher, ok := b.RPC.(batchCaller)
+	if !ok {
+		return nil, errors.New("BatchCallContext not supported")
+	}
+
+	results := make([]string, len(calls))
+	batch := make([]rpc.BatchElem, len(calls))
+	blockArg := bchain.ToBlockNumArg(nil)
+	for i := range calls {
+		args := map[string]interface{}{
+			"data": calls[i].Data,
+			"to":   calls[i].To,
+		}
+		if calls[i].From != "" {
+			args["from"] = calls[i].From
+		}
+		batch[i] = rpc.BatchElem{
+			Method: "eth_call",
+			Args:   []interface{}{args, blockArg},
+			Result: &results[i],
+		}
+	}
+
+	b.observeEthCall("batch", len(calls))
+	b.observeEthCallBatch(len(calls))
+
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	if err := batcher.BatchCallContext(ctx, batch); err != nil {
+		b.observeEthCallError("batch", "rpc")
+		return nil, err
+	}
+
+	out := make([]bchain.EthereumTypeRPCCallResult, len(calls))
+	for i := range calls {
+		out[i].Data = results[i]
+		if batch[i].Error == nil {
+			continue
+		}
+		b.observeEthCallError("batch", "elem")
+		if isNonRetriableEthCallError(batch[i].Error) {
+			out[i].Error = batch[i].Error
+			continue
+		}
+		// Retry failed elements using single eth_call to avoid losing data on partial batch failures.
+		data, err := b.EthereumTypeRpcCall(calls[i].Data, calls[i].To, calls[i].From)
+		if err != nil {
+			out[i].Error = err
+			continue
+		}
+		out[i].Data = data
+	}
+	return out, nil
+}
+
 func erc20BalanceOfCallData(addrDesc bchain.AddressDescriptor) string {
 	addr := hexutil.Encode(addrDesc)
 	if len(addr) > 1 {

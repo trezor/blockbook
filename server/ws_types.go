@@ -24,6 +24,7 @@ type WsAccountInfoReq struct {
 	Descriptor        string `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
 	Details           string `json:"details,omitempty" ts_type:"'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs'" ts_doc:"Level of detail to retrieve about the account."`
 	Tokens            string `json:"tokens,omitempty" ts_type:"'derived' | 'used' | 'nonzero'" ts_doc:"Which tokens to include in the account info."`
+	IncludeErc4626    bool   `json:"includeErc4626,omitempty" ts_doc:"If true, includes ERC4626 data for detected vault tokens."`
 	PageSize          int    `json:"pageSize,omitempty" ts_doc:"Number of items per page, if paging is used."`
 	Page              int    `json:"page,omitempty" ts_doc:"Requested page index, if paging is used."`
 	FromHeight        int    `json:"from,omitempty" ts_doc:"Starting block height for transaction filtering."`
