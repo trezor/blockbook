@@ -83,14 +83,14 @@ func TestAccountChainExtra(t *testing.T) {
 		addr := &api.Address{
 			ChainExtraData: &api.AccountChainExtraData{
 				PayloadType: "tron",
-				Payload:     json.RawMessage(`{"availableBandwidth":600,"totalBandwidth":1000,"availableEnergy":1234,"totalEnergy":9000}`),
+				Payload:     json.RawMessage(`{"availableStakedBandwidth":400,"totalStakedBandwidth":700,"availableFreeBandwidth":200,"totalFreeBandwidth":300,"availableEnergy":1234,"totalEnergy":9000}`),
 			},
 		}
 		got := accountChainExtra(addr)
 		if got == nil {
 			t.Fatal("expected extra data")
 		}
-		if got.AvailableBandwidth != 600 || got.TotalBandwidth != 1000 {
+		if got.AvailableStakedBandwidth != 400 || got.TotalStakedBandwidth != 700 || got.AvailableFreeBandwidth != 200 || got.TotalFreeBandwidth != 300 {
 			t.Fatalf("unexpected bandwidth values %+v", got)
 		}
 		if got.AvailableEnergy != 1234 || got.TotalEnergy != 9000 {
