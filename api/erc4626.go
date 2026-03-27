@@ -45,6 +45,10 @@ type erc4626BatchCaller interface {
 	EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error)
 }
 
+type erc4626ContractInfoFetcher func(contract string, standard bchain.TokenStandardName) (*bchain.ContractInfo, bool, error)
+type erc4626DecimalsFetcher func(contract string) (int, error)
+type erc4626UintArgCaller func(contract string, selector [4]byte, arg *big.Int) (*big.Int, error)
+
 type erc4626Candidate struct {
 	token *Token
 	key   string
@@ -178,6 +182,10 @@ func (w *Worker) detectErc4626Vault(contract string) (erc4626VaultProbe, bool) {
 }
 
 func (w *Worker) fetchErc4626TokenData(token *Token, probe erc4626VaultProbe) *Erc4626Token {
+	return erc4626FetchTokenDataWithDeps(token, probe, w.GetContractInfo, w.erc4626CallDecimals, w.erc4626CallUintWithArg)
+}
+
+func erc4626FetchTokenDataWithDeps(token *Token, probe erc4626VaultProbe, getContractInfo erc4626ContractInfoFetcher, getDecimals erc4626DecimalsFetcher, callUint erc4626UintArgCaller) *Erc4626Token {
 	result := &Erc4626Token{
 		Asset: &Erc4626TokenMetadata{
 			Contract: probe.assetContract,
@@ -193,7 +201,7 @@ func (w *Worker) fetchErc4626TokenData(token *Token, probe erc4626VaultProbe) *E
 
 	var errs []string
 
-	assetInfo, validAssetContract, err := w.GetContractInfo(probe.assetContract, bchain.UnknownTokenStandard)
+	assetInfo, validAssetContract, err := getContractInfo(probe.assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
 		errs = append(errs, "asset metadata: "+err.Error())
 	} else if assetInfo != nil {
@@ -206,60 +214,27 @@ func (w *Worker) fetchErc4626TokenData(token *Token, probe erc4626VaultProbe) *E
 		}
 	}
 
-	shareDecimals, err := w.erc4626CallDecimals(token.Contract)
-	if err != nil {
-		if token.Decimals >= 0 {
-			shareDecimals = token.Decimals
-		} else {
+	shareDecimals, shareDecimalsResolved := erc4626ResolveDecimals(token.Contract, getContractInfo, getDecimals, nil, false, "share decimals", &errs)
+	if shareDecimalsResolved {
+		result.Share.Decimals = shareDecimals
+		shareUnit, err := erc4626UnitAmount(shareDecimals)
+		if err != nil {
 			errs = append(errs, "share decimals: "+err.Error())
-		}
-	}
-	result.Share.Decimals = shareDecimals
-	shareUnit, err := erc4626UnitAmount(shareDecimals)
-	if err != nil {
-		errs = append(errs, "share decimals: "+err.Error())
-	} else {
-		convertToAssets, err := w.erc4626CallUintWithArg(token.Contract, erc4626MethodConvertToAssets, shareUnit)
-		if err != nil {
-			errs = append(errs, "convertToAssets: "+err.Error())
 		} else {
-			result.ConvertToAssets1ShareSat = (*Amount)(convertToAssets)
-		}
-
-		previewRedeem, err := w.erc4626CallUintWithArg(token.Contract, erc4626MethodPreviewRedeem, shareUnit)
-		if err != nil {
-			errs = append(errs, "previewRedeem: "+err.Error())
-		} else {
-			result.PreviewRedeem1ShareSat = (*Amount)(previewRedeem)
+			result.ConvertToAssets1ShareSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodConvertToAssets, shareUnit, "convertToAssets", callUint, &errs)
+			result.PreviewRedeem1ShareSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodPreviewRedeem, shareUnit, "previewRedeem", callUint, &errs)
 		}
 	}
 
-	assetDecimals, err := w.erc4626CallDecimals(probe.assetContract)
-	if err != nil {
-		if validAssetContract {
-			assetDecimals = result.Asset.Decimals
-		} else {
-			errs = append(errs, "asset decimals: "+err.Error())
-		}
-	}
-	assetUnit, err := erc4626UnitAmount(assetDecimals)
-	if err != nil {
-		errs = append(errs, "asset decimals: "+err.Error())
-	} else {
+	assetDecimals, assetDecimalsResolved := erc4626ResolveDecimals(probe.assetContract, getContractInfo, getDecimals, assetInfo, validAssetContract, "asset decimals", &errs)
+	if assetDecimalsResolved {
 		result.Asset.Decimals = assetDecimals
-
-		convertToShares, err := w.erc4626CallUintWithArg(token.Contract, erc4626MethodConvertToShares, assetUnit)
+		assetUnit, err := erc4626UnitAmount(assetDecimals)
 		if err != nil {
-			errs = append(errs, "convertToShares: "+err.Error())
+			errs = append(errs, "asset decimals: "+err.Error())
 		} else {
-			result.ConvertToShares1AssetSat = (*Amount)(convertToShares)
-		}
-
-		previewDeposit, err := w.erc4626CallUintWithArg(token.Contract, erc4626MethodPreviewDeposit, assetUnit)
-		if err != nil {
-			errs = append(errs, "previewDeposit: "+err.Error())
-		} else {
-			result.PreviewDeposit1AssetSat = (*Amount)(previewDeposit)
+			result.ConvertToShares1AssetSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodConvertToShares, assetUnit, "convertToShares", callUint, &errs)
+			result.PreviewDeposit1AssetSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodPreviewDeposit, assetUnit, "previewDeposit", callUint, &errs)
 		}
 	}
 
@@ -268,6 +243,35 @@ func (w *Worker) fetchErc4626TokenData(token *Token, probe erc4626VaultProbe) *E
 	}
 
 	return result
+}
+
+func erc4626ResolveDecimals(contract string, getContractInfo erc4626ContractInfoFetcher, getDecimals erc4626DecimalsFetcher, fallbackInfo *bchain.ContractInfo, fallbackValid bool, errorLabel string, errs *[]string) (int, bool) {
+	decimals, decimalsErr := getDecimals(contract)
+	if decimalsErr != nil {
+		if !fallbackValid || fallbackInfo == nil {
+			var err error
+			fallbackInfo, fallbackValid, err = getContractInfo(contract, bchain.UnknownTokenStandard)
+			if err != nil {
+				*errs = append(*errs, errorLabel+": "+err.Error())
+				return 0, false
+			}
+		}
+		if !fallbackValid || fallbackInfo == nil {
+			*errs = append(*errs, errorLabel+": "+decimalsErr.Error())
+			return 0, false
+		}
+		return fallbackInfo.Decimals, true
+	}
+	return decimals, true
+}
+
+func erc4626FetchDerivedAmount(contract string, selector [4]byte, arg *big.Int, label string, callUint erc4626UintArgCaller, errs *[]string) *Amount {
+	value, err := callUint(contract, selector, arg)
+	if err != nil {
+		*errs = append(*errs, label+": "+err.Error())
+		return nil
+	}
+	return (*Amount)(value)
 }
 
 func (w *Worker) erc4626CallNoArg(contract string, selector [4]byte) (string, error) {

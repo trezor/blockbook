@@ -181,6 +181,128 @@ func TestErc4626DetectVaultsBatchedErrors(t *testing.T) {
 	})
 }
 
+func TestErc4626FetchTokenDataOmitsDerivedFieldsOnUnresolvedDecimals(t *testing.T) {
+	token := &Token{
+		Contract: "0x00000000000000000000000000000000000000a1",
+		Name:     "Vault Share",
+		Symbol:   "vSHARE",
+		Decimals: 0,
+	}
+	probe := erc4626VaultProbe{
+		assetContract: "0x00000000000000000000000000000000000000b2",
+		totalAssets:   big.NewInt(999),
+	}
+
+	uintCalls := 0
+	result := erc4626FetchTokenDataWithDeps(
+		token,
+		probe,
+		func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+			return nil, false, nil
+		},
+		func(contract string) (int, error) {
+			if strings.EqualFold(contract, token.Contract) {
+				return 0, errors.New("share decimals unavailable")
+			}
+			if strings.EqualFold(contract, probe.assetContract) {
+				return 0, errors.New("asset decimals unavailable")
+			}
+			return 0, fmt.Errorf("unexpected decimals contract %s", contract)
+		},
+		func(_ string, _ [4]byte, _ *big.Int) (*big.Int, error) {
+			uintCalls++
+			return nil, errors.New("unexpected call")
+		},
+	)
+
+	if uintCalls != 0 {
+		t.Fatalf("expected no derived uint calls, got %d", uintCalls)
+	}
+	if result.ConvertToAssets1ShareSat != nil || result.PreviewRedeem1ShareSat != nil || result.ConvertToShares1AssetSat != nil || result.PreviewDeposit1AssetSat != nil {
+		t.Fatalf("expected derived fields to be omitted on unresolved decimals, got %+v", result)
+	}
+	if result.TotalAssetsSat == nil || (*big.Int)(result.TotalAssetsSat).Cmp(probe.totalAssets) != 0 {
+		t.Fatalf("unexpected total assets: got %v want %v", result.TotalAssetsSat, probe.totalAssets)
+	}
+	if !strings.Contains(result.Error, "share decimals: share decimals unavailable") {
+		t.Fatalf("missing share decimals error: %q", result.Error)
+	}
+	if !strings.Contains(result.Error, "asset decimals: asset decimals unavailable") {
+		t.Fatalf("missing asset decimals error: %q", result.Error)
+	}
+}
+
+func TestErc4626FetchTokenDataUsesTrustedMetadataFallbackForDecimals(t *testing.T) {
+	token := &Token{
+		Contract: "0x00000000000000000000000000000000000000a1",
+		Name:     "Vault Share",
+		Symbol:   "vSHARE",
+		Decimals: 0,
+	}
+	probe := erc4626VaultProbe{
+		assetContract: "0x00000000000000000000000000000000000000b2",
+		totalAssets:   big.NewInt(1234),
+	}
+
+	type uintCall struct {
+		selector [4]byte
+		arg      *big.Int
+	}
+	var calls []uintCall
+
+	result := erc4626FetchTokenDataWithDeps(
+		token,
+		probe,
+		func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+			switch {
+			case strings.EqualFold(contract, token.Contract):
+				return &bchain.ContractInfo{Contract: token.Contract, Name: token.Name, Symbol: token.Symbol, Decimals: 18}, true, nil
+			case strings.EqualFold(contract, probe.assetContract):
+				return &bchain.ContractInfo{Contract: probe.assetContract, Name: "USD Coin", Symbol: "USDC", Decimals: 6}, true, nil
+			default:
+				return nil, false, fmt.Errorf("unexpected metadata contract %s", contract)
+			}
+		},
+		func(_ string) (int, error) {
+			return 0, errors.New("decimals unavailable")
+		},
+		func(_ string, selector [4]byte, arg *big.Int) (*big.Int, error) {
+			calls = append(calls, uintCall{selector: selector, arg: new(big.Int).Set(arg)})
+			return big.NewInt(int64(len(calls))), nil
+		},
+	)
+
+	if result.Error != "" {
+		t.Fatalf("expected trusted fallback to avoid error, got %q", result.Error)
+	}
+	if result.Share == nil || result.Share.Decimals != 18 {
+		t.Fatalf("unexpected share metadata: %+v", result.Share)
+	}
+	if result.Asset == nil || result.Asset.Decimals != 6 || result.Asset.Symbol != "USDC" {
+		t.Fatalf("unexpected asset metadata: %+v", result.Asset)
+	}
+	if len(calls) != 4 {
+		t.Fatalf("expected 4 derived uint calls, got %d", len(calls))
+	}
+	shareUnit := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+	assetUnit := new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil)
+	if calls[0].selector != erc4626MethodConvertToAssets || calls[0].arg.Cmp(shareUnit) != 0 {
+		t.Fatalf("unexpected first call: %+v", calls[0])
+	}
+	if calls[1].selector != erc4626MethodPreviewRedeem || calls[1].arg.Cmp(shareUnit) != 0 {
+		t.Fatalf("unexpected second call: %+v", calls[1])
+	}
+	if calls[2].selector != erc4626MethodConvertToShares || calls[2].arg.Cmp(assetUnit) != 0 {
+		t.Fatalf("unexpected third call: %+v", calls[2])
+	}
+	if calls[3].selector != erc4626MethodPreviewDeposit || calls[3].arg.Cmp(assetUnit) != 0 {
+		t.Fatalf("unexpected fourth call: %+v", calls[3])
+	}
+	if result.ConvertToAssets1ShareSat == nil || result.PreviewRedeem1ShareSat == nil || result.ConvertToShares1AssetSat == nil || result.PreviewDeposit1AssetSat == nil {
+		t.Fatalf("expected all derived fields to be populated, got %+v", result)
+	}
+}
+
 func TestErc4626MathAndEncodingBoundaries(t *testing.T) {
 	if _, err := erc4626EncodeUintArg(erc4626MethodConvertToShares, nil); err == nil {
 		t.Fatal("expected nil arg error")
