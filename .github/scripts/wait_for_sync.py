@@ -89,6 +89,14 @@ def fetch_status(base_url: str, request_timeout: int) -> tuple[int, bytes]:
         return resp.getcode(), resp.read()
 
 
+def parse_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
 def parse_sync_state(body: bytes) -> tuple[bool, str]:
     try:
         payload = json.loads(body)
@@ -99,10 +107,28 @@ def parse_sync_state(body: bytes) -> tuple[bool, str]:
     if not isinstance(blockbook, dict):
         return False, "response missing blockbook object"
 
+    backend = payload.get("backend")
+    if backend is not None and not isinstance(backend, dict):
+        return False, "response missing backend object"
+
     in_sync = blockbook.get("inSync")
-    best_height = blockbook.get("bestHeight")
-    summary = f"inSync={in_sync!r}, bestHeight={best_height!r}"
-    return in_sync is True, summary
+    initial_sync = blockbook.get("initialSync")
+    best_height = parse_int(blockbook.get("bestHeight"))
+    backend_blocks = parse_int(backend.get("blocks")) if isinstance(backend, dict) else None
+
+    ready = in_sync is True and initial_sync is not True
+    summary = (
+        f"inSync={in_sync!r}, initialSync={initial_sync!r}, "
+        f"bestHeight={best_height!r}, backendBlocks={backend_blocks!r}"
+    )
+
+    if best_height is not None and backend_blocks is not None:
+        height_lag = backend_blocks - best_height
+        summary += f", heightLag={height_lag!r}"
+        if height_lag > 1:
+            ready = False
+
+    return ready, summary
 
 
 def main() -> None:
