@@ -18,7 +18,7 @@
 - **Base newHeads burst handling fix** ([#1407](https://github.com/trezor/blockbook/pull/1407)): coalesces head notifications as hints and enforces strictly increasing block-number processing with a catch-up loop.
 - **Reliable SIGTERM shutdown + clean RocksDB close** ([#1408](https://github.com/trezor/blockbook/pull/1408)): reworks signal fan-out so main shutdown always runs, unblocks workers, and stops periodic state writes during shutdown.
 - **Resync recovery on errors** ([#1409](https://github.com/trezor/blockbook/pull/1409)): detects errors in parallel/bulk sync and triggers controlled resync restarts on rollback/reorg to avoid infinite retry stalls.
-- **Fixed scientific notation parsing error** ([#1429](https://github.com/trezor/blockbook/pull/1429)): `AmountToBigInt` now safely handles scientific notation (`e`/`E`).
+- **Fixed scientific notation parsing error** ([#1429](https://github.com/trezor/blockbook/pull/1429)): `AmountToBigInt` now safely handles scientific notation (`e`/`E`), keeps a fast path for plain decimals, and rejects pathological exponent expansion.
 
 ### Configuration and Deployment
 
@@ -35,17 +35,21 @@
 
 ### Testing
 
-- **New API-level E2E integration suite** ([#1426](https://github.com/trezor/blockbook/pull/1426)): adds E2E tests against live Blockbook endpoints (including deploy) and validates core `/api/*` and websocket behavior.
+- **API-level E2E suite + deploy workflow** ([#1426](https://github.com/trezor/blockbook/pull/1426)): adds E2E tests against live Blockbook endpoints plus GitHub Actions build/deploy stages that wait for sync and run filtered E2E validation after deploy.
 
 ### Security
 
+- **Potential DoS fix for oversized pagination inputs** ([#1363](https://github.com/trezor/blockbook/pull/1363)): validates extreme `page` and `pageSize` values to prevent resource-exhaustion requests.
 - **Security hardening: CSP + XSS fixes in templates** ([#1397](https://github.com/trezor/blockbook/pull/1397)): adds CSP headers and fixes XSS vulnerabilities in templates.
+- **WebSocket origin allowlist** ([#1421](https://github.com/trezor/blockbook/pull/1421)): adds optional origin checks with explicit logging to reduce cross-origin websocket exposure when not protected by a proxy.
+- **Request-size and template hardening** ([#1434](https://github.com/trezor/blockbook/pull/1434)): limits `/api/sendtx` body size, rejects oversized websocket messages, and avoids `template.JSStr`.
 
 ### New Features and Chain Support
 
 - **ENS resolver support** ([#1289](https://github.com/trezor/blockbook/pull/1289)).
 - **Zcash upgrade** ([#1402](https://github.com/trezor/blockbook/pull/1402)).
 - **Tron network support** ([#1273](https://github.com/trezor/blockbook/pull/1273)): adds Tron support to Blockbook.
+- **Opt-in ERC-4626 vault enrichment for EVM tokens** ([#1431](https://github.com/trezor/blockbook/pull/1431)): adds REST/WS `includeErc4626`enabled batched vault detection and response enrichment with erc4626 data.
 
 ### Backend Compatibility
 
