@@ -156,10 +156,12 @@ func (c *fakeBlockChainTronType) GetAddressChainExtraData(addrDesc bchain.Addres
 	}
 
 	payload, err := json.Marshal(&bchain.TronAccountExtraData{
-		AvailableBandwidth: seed,
-		TotalBandwidth:     seed + 1000,
-		AvailableEnergy:    seed * 100,
-		TotalEnergy:        seed*100 + 10000,
+		AvailableStakedBandwidth: seed,
+		TotalStakedBandwidth:     seed + 1000,
+		AvailableFreeBandwidth:   seed + 500,
+		TotalFreeBandwidth:       seed + 1500,
+		AvailableEnergy:          seed * 100,
+		TotalEnergy:              seed*100 + 10000,
 	})
 	if err != nil {
 		return nil, err

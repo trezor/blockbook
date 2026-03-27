@@ -85,10 +85,12 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 	}
 
 	payload, err := json.Marshal(bchain.TronAccountExtraData{
-		AvailableBandwidth: tronAvailableResource(resp.FreeNetLimit, resp.FreeNetUsed) + tronAvailableResource(resp.NetLimit, resp.NetUsed),
-		TotalBandwidth:     resp.FreeNetLimit + resp.NetLimit,
-		AvailableEnergy:    tronAvailableResource(resp.EnergyLimit, resp.EnergyUsed),
-		TotalEnergy:        resp.EnergyLimit,
+		AvailableStakedBandwidth: tronAvailableResource(resp.NetLimit, resp.NetUsed),
+		TotalStakedBandwidth:     resp.NetLimit,
+		AvailableFreeBandwidth:   tronAvailableResource(resp.FreeNetLimit, resp.FreeNetUsed),
+		TotalFreeBandwidth:       resp.FreeNetLimit,
+		AvailableEnergy:          tronAvailableResource(resp.EnergyLimit, resp.EnergyUsed),
+		TotalEnergy:              resp.EnergyLimit,
 	})
 	if err != nil {
 		return nil, err

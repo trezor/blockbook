@@ -461,8 +461,10 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
-		"availableBandwidth":650,
-		"totalBandwidth":1000,
+		"availableStakedBandwidth":150,
+		"totalStakedBandwidth":400,
+		"availableFreeBandwidth":500,
+		"totalFreeBandwidth":600,
 		"availableEnergy":7766,
 		"totalEnergy":9000
 	}`, string(payload))
@@ -501,10 +503,12 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 	var extra bchain.TronAccountExtraData
 	require.NoError(t, json.Unmarshal(payload, &extra))
 	require.Equal(t, bchain.TronAccountExtraData{
-		AvailableBandwidth: 40,
-		TotalBandwidth:     150,
-		AvailableEnergy:    0,
-		TotalEnergy:        0,
+		AvailableStakedBandwidth: 40,
+		TotalStakedBandwidth:     50,
+		AvailableFreeBandwidth:   0,
+		TotalFreeBandwidth:       100,
+		AvailableEnergy:          0,
+		TotalEnergy:              0,
 	}, extra)
 }
 

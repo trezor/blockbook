@@ -84,7 +84,7 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableBandwidth":255,"totalBandwidth":1255,"availableEnergy":25500,"totalEnergy":35500}}}`,
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500}}}`,
 			},
 		},
 		{
@@ -161,7 +161,7 @@ var websocketTestsTron = []websocketTest{
 				"details":    "txids",
 			},
 		},
-		want: `{"id":"2","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableBandwidth":255,"totalBandwidth":1255,"availableEnergy":25500,"totalEnergy":35500}}}}`,
+		want: `{"id":"2","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500}}}}`,
 	},
 }
 
