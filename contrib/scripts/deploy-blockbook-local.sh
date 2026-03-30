@@ -13,11 +13,34 @@ die() {
   exit 1
 }
 
-if [[ $# -ne 1 ]]; then
-  die "usage: $(basename "$0") <coin-alias>"
+if [[ $# -lt 1 ]]; then
+  die "usage: $(basename "$0") <coin-alias> [--force-confnew]"
 fi
 
-coin="$1"
+coin=""
+force_confnew=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --force-confnew)
+      force_confnew=1
+      ;;
+    -*)
+      die "unknown option: $arg"
+      ;;
+    *)
+      if [[ -n "$coin" ]]; then
+        die "usage: $(basename "$0") <coin-alias> [--force-confnew]"
+      fi
+      coin="$arg"
+      ;;
+  esac
+done
+
+if [[ -z "$coin" ]]; then
+  die "usage: $(basename "$0") <coin-alias> [--force-confnew]"
+fi
+
 config="configs/coins/${coin}.json"
 
 if [[ ! -f "$config" ]]; then
@@ -49,7 +72,16 @@ show_service_diagnostics() {
 }
 
 log "installing ${package_path}"
-sudo DEBIAN_FRONTEND=noninteractive apt install -y --reinstall "$package_path"
+dpkg_install_cmd=(
+  sudo DEBIAN_FRONTEND=noninteractive dpkg -i
+)
+
+if [[ "$force_confnew" -eq 1 ]]; then
+  dpkg_install_cmd=(sudo DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -i)
+fi
+
+dpkg_install_cmd+=("$package_path")
+"${dpkg_install_cmd[@]}"
 
 log "restarting ${service_name}"
 if ! sudo systemctl restart "$service_name"; then
