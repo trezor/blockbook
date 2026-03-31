@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
+import pwd
+import grp
 
 
 LOG_PREFIX = "CI/CD Pipeline:"
@@ -135,6 +137,27 @@ def latest_package(pattern: str) -> Path:
     return matches[0]
 
 
+def ensure_writable_dir(path: Path) -> None:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return
+    except PermissionError:
+        pass
+
+    user = pwd.getpwuid(os.getuid()).pw_name
+    group = grp.getgrgid(os.getgid()).gr_name
+    try:
+        subprocess.run(["sudo", "mkdir", "-p", str(path)], check=True)
+        subprocess.run(["sudo", "chown", "-R", f"{user}:{group}", str(path)], check=True)
+    except subprocess.CalledProcessError as exc:
+        fail(f"cannot create writable directory {path}: {exc}")
+
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except PermissionError as exc:
+        fail(f"cannot write to {path}: {exc}")
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--always-build-backend", action="store_true")
@@ -157,6 +180,7 @@ def main(argv: list[str] | None = None) -> None:
         fail(f"BB_PACKAGE_ROOT must be an absolute path (got '{package_root}')")
     branch_or_tag = resolve_branch_or_tag()
     branch_or_tag_path = branch_or_tag.replace("/", "-")
+    branch_root = Path(package_root) / branch_or_tag_path
 
     log("requested coins: " + " ".join(args))
     log(f"always_build_backend={int(always_build_backend)}")
@@ -164,6 +188,8 @@ def main(argv: list[str] | None = None) -> None:
     log("backend build rule: build unless the selected BB_{DEV|PROD}_RPC_URL_HTTP is non-empty and non-local")
     log(f"branch_or_tag={branch_or_tag} -> path={branch_or_tag_path}")
     log(f"package_root={package_root}")
+
+    ensure_writable_dir(branch_root)
 
     coins: list[str] = []
     blockbook_package_names: list[str] = []
@@ -211,7 +237,7 @@ def main(argv: list[str] | None = None) -> None:
             log(f"removing previous packages matching build/{backend_package_name}_*.deb")
             for path in Path("build").glob(f"{backend_package_name}_*.deb"):
                 path.unlink()
-        shutil.rmtree(Path(package_root) / branch_or_tag_path / coin, ignore_errors=True)
+        shutil.rmtree(branch_root / coin, ignore_errors=True)
 
     log("starting build: make " + " ".join(make_targets))
     try:
@@ -228,7 +254,7 @@ def main(argv: list[str] | None = None) -> None:
         if build_backend:
             backend_package_file = latest_package(f"{backend_package_name}_*.deb")
 
-        target_dir = Path(package_root) / branch_or_tag_path / coin
+        target_dir = branch_root / coin
         target_dir.mkdir(parents=True, exist_ok=True)
 
         staged_blockbook = target_dir / blockbook_package_file.name
