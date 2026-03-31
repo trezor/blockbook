@@ -20,7 +20,7 @@
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
-    "package_name": "backend-pivx",
+    "package_name": "backend-pivx-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "pivx",
     "version": "5.6.1",
