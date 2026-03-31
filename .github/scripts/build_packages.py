@@ -41,10 +41,12 @@ def load_config(path: Path) -> dict:
     return payload
 
 
-def get_package_name(config: dict, section: str, coin: str) -> str:
+def get_optional_package_name(config: dict, section: str, coin: str) -> str | None:
     value = config.get(section, {}).get("package_name", "")
+    if value in (None, ""):
+        return None
     if not isinstance(value, str) or not value.strip():
-        fail(f"coin '{coin}' does not define {section}.package_name")
+        fail(f"coin '{coin}' does not define a valid {section}.package_name")
     return value.strip()
 
 
@@ -192,8 +194,8 @@ def main(argv: list[str] | None = None) -> None:
     ensure_writable_dir(branch_root)
 
     coins: list[str] = []
-    blockbook_package_names: list[str] = []
-    backend_package_names: list[str] = []
+    blockbook_package_names: list[str | None] = []
+    backend_package_names: list[str | None] = []
     build_backend_flags: list[bool] = []
     make_targets: list[str] = []
 
@@ -203,8 +205,10 @@ def main(argv: list[str] | None = None) -> None:
             fail(f"missing coin config {config_path}")
 
         config = load_config(config_path)
-        blockbook_package_name = get_package_name(config, "blockbook", coin)
-        backend_package_name = get_package_name(config, "backend", coin)
+        blockbook_package_name = get_optional_package_name(config, "blockbook", coin)
+        backend_package_name = get_optional_package_name(config, "backend", coin)
+        if blockbook_package_name is None and backend_package_name is None:
+            fail(f"coin '{coin}' does not define blockbook.package_name or backend.package_name")
         coin_alias = get_coin_alias(config, coin)
         rpc_env = rpc_url_env_name(coin_alias, build_env)
         rpc_url = os.environ.get(rpc_env, "").strip()
@@ -212,6 +216,12 @@ def main(argv: list[str] | None = None) -> None:
             always_build_backend=always_build_backend,
             rpc_url=rpc_url,
         )
+        if backend_package_name is None:
+            build_backend = False
+            reason = "backend-missing"
+        elif blockbook_package_name is None:
+            build_backend = True
+            reason = "blockbook-missing"
         host = rpc_hostname(rpc_url)
 
         coins.append(coin)
@@ -219,21 +229,24 @@ def main(argv: list[str] | None = None) -> None:
         backend_package_names.append(backend_package_name)
         build_backend_flags.append(build_backend)
 
-        if build_backend:
-            target = f"deb-{coin}"
+        if blockbook_package_name is not None and backend_package_name is not None:
+            target = f"deb-{coin}" if build_backend else f"deb-blockbook-{coin}"
+        elif backend_package_name is not None:
+            target = f"deb-backend-{coin}"
         else:
             target = f"deb-blockbook-{coin}"
         log(
-            f"validated {coin}: alias={coin_alias}, blockbook={blockbook_package_name}, "
-            f"backend={backend_package_name}, target={target}, build_backend={str(build_backend).lower()}, "
+            f"validated {coin}: alias={coin_alias}, blockbook={blockbook_package_name or '<none>'}, "
+            f"backend={backend_package_name or '<none>'}, target={target}, build_backend={str(build_backend).lower()}, "
             f"reason={reason}, rpc_env={rpc_env}, rpc_host={host or '<unset>'}"
         )
         make_targets.append(target)
 
-        log(f"removing previous packages matching build/{blockbook_package_name}_*.deb")
-        for path in Path("build").glob(f"{blockbook_package_name}_*.deb"):
-            path.unlink()
-        if build_backend:
+        if blockbook_package_name is not None:
+            log(f"removing previous packages matching build/{blockbook_package_name}_*.deb")
+            for path in Path("build").glob(f"{blockbook_package_name}_*.deb"):
+                path.unlink()
+        if build_backend and backend_package_name is not None:
             log(f"removing previous packages matching build/{backend_package_name}_*.deb")
             for path in Path("build").glob(f"{backend_package_name}_*.deb"):
                 path.unlink()
@@ -249,27 +262,34 @@ def main(argv: list[str] | None = None) -> None:
     for coin, blockbook_package_name, backend_package_name, build_backend in zip(
         coins, blockbook_package_names, backend_package_names, build_backend_flags
     ):
-        blockbook_package_file = latest_package(f"{blockbook_package_name}_*.deb")
+        blockbook_package_file: Path | None = None
         backend_package_file: Path | None = None
-        if build_backend:
+        if blockbook_package_name is not None:
+            blockbook_package_file = latest_package(f"{blockbook_package_name}_*.deb")
+        if build_backend and backend_package_name is not None:
             backend_package_file = latest_package(f"{backend_package_name}_*.deb")
 
         target_dir = branch_root / coin
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        staged_blockbook = target_dir / blockbook_package_file.name
-        shutil.copy2(blockbook_package_file, staged_blockbook)
-        log(f"staged {coin} blockbook to {staged_blockbook}")
+        if blockbook_package_file is not None:
+            staged_blockbook = target_dir / blockbook_package_file.name
+            shutil.copy2(blockbook_package_file, staged_blockbook)
+            log(f"staged {coin} blockbook to {staged_blockbook}")
 
         if build_backend and backend_package_file is not None:
             staged_backend = target_dir / backend_package_file.name
             shutil.copy2(backend_package_file, staged_backend)
             log(f"staged {coin} backend to {staged_backend}")
 
-        log(f"built {coin} blockbook via {blockbook_package_file}")
+        if blockbook_package_file is not None:
+            log(f"built {coin} blockbook via {blockbook_package_file}")
         if backend_package_file is not None:
             log(f"built {coin} backend via {backend_package_file}")
-        print(blockbook_package_file)
+        if blockbook_package_file is not None:
+            print(blockbook_package_file)
+        elif backend_package_file is not None:
+            print(backend_package_file)
 
 
 if __name__ == "__main__":
