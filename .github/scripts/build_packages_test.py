@@ -39,6 +39,13 @@ class BuildPackagesTest(unittest.TestCase):
                 "backend": {"package_name": "backend-polygon"},
             },
         )
+        write_json(
+            self.workspace / "configs" / "coins" / "ethereum_testnet_sepolia_consensus.json",
+            {
+                "coin": {"alias": "ethereum_testnet_sepolia_consensus"},
+                "backend": {"package_name": "backend-eth-sepolia-consensus"},
+            },
+        )
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
@@ -61,6 +68,10 @@ class BuildPackagesTest(unittest.TestCase):
                 "backend-polygon_1.0_amd64.deb",
             ),
             "deb-blockbook-polygon_archive": ("blockbook-polygon_1.0_amd64.deb", None),
+            "deb-backend-ethereum_testnet_sepolia_consensus": (
+                None,
+                "backend-eth-sepolia-consensus_1.0_amd64.deb",
+            ),
         }
 
         def fake_run(cmd, check, **kwargs):
@@ -68,7 +79,8 @@ class BuildPackagesTest(unittest.TestCase):
             if cmd[:1] == ["make"]:
                 target = cmd[1]
                 blockbook_name, backend_name = outputs[target]
-                (self.build_dir / blockbook_name).write_text("blockbook", encoding="utf-8")
+                if blockbook_name:
+                    (self.build_dir / blockbook_name).write_text("blockbook", encoding="utf-8")
                 if backend_name:
                     (self.build_dir / backend_name).write_text("backend", encoding="utf-8")
                 return None
@@ -251,6 +263,17 @@ class BuildPackagesTest(unittest.TestCase):
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
         self.assertTrue((staged_dir / "backend-base_1.0_amd64.deb").is_file())
+
+    def test_backend_only_coin_builds_backend_target(self) -> None:
+        make_cmd, output = self.run_build(
+            coin="ethereum_testnet_sepolia_consensus",
+            always_build_backend=False,
+        )
+
+        self.assertEqual(make_cmd, ["make", "deb-backend-ethereum_testnet_sepolia_consensus"])
+        self.assertEqual(output, "build/backend-eth-sepolia-consensus_1.0_amd64.deb")
+        staged_dir = self.package_root / "feature-test-branch" / "ethereum_testnet_sepolia_consensus"
+        self.assertTrue((staged_dir / "backend-eth-sepolia-consensus_1.0_amd64.deb").is_file())
 
     def test_fails_on_invalid_build_env(self) -> None:
         env = {
