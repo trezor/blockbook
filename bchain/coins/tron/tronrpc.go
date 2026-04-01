@@ -569,6 +569,23 @@ func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, tx
 	return tx, nil
 }
 
+func synthesizeGenesisTxInfo(txHash string, blockHeight uint32, blockTime int64) *tronGetTransactionInfoByIDResponse {
+	if blockHeight != 0 {
+		return nil
+	}
+
+	blockNumber := int64(0)
+	txInfo := &tronGetTransactionInfoByIDResponse{
+		ID:          strip0xPrefix(txHash),
+		BlockNumber: &blockNumber,
+	}
+	if blockTime >= 0 {
+		blockTimestamp := blockTime * 1000
+		txInfo.BlockTimeStamp = &blockTimestamp
+	}
+	return txInfo
+}
+
 func (b *TronRPC) getTransactionByIDMapForBlockWithContext(ctx context.Context, hash string, blockHeight uint32, isSolidified bool) (map[string]*tronGetTransactionByIDResponse, error) {
 	var (
 		blockResp *tronGetBlockResponse
@@ -712,6 +729,9 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		}
 
 		txInfo := txInfosByID[strip0xPrefix(tx.Hash)]
+		if txInfo == nil {
+			txInfo = synthesizeGenesisTxInfo(tx.Hash, bbh.Height, bbh.Time)
+		}
 		if txInfo == nil {
 			b.ObserveChainDataFallback("tron_getblock", "missing_tx_info_by_block")
 			glog.V(1).Infof("Tron GetBlock fallback to gettransactioninfobyid for tx %s in block %d", tx.Hash, bbh.Height)
