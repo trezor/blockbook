@@ -255,3 +255,45 @@ func TestTronTxMeta_GetCorrectTxMeta(t *testing.T) {
 	require.Equal(t, uint64(12345), blockNumber)
 	require.Equal(t, int64(1700000000), blockTime)
 }
+
+func TestSynthesizeGenesisTxInfo(t *testing.T) {
+	txInfo := synthesizeGenesisTxInfo("0x1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e", 0, 1234)
+	require.NotNil(t, txInfo)
+	require.Equal(t, "1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e", txInfo.ID)
+	require.NotNil(t, txInfo.BlockNumber)
+	require.Equal(t, int64(0), *txInfo.BlockNumber)
+	require.NotNil(t, txInfo.BlockTimeStamp)
+	require.Equal(t, int64(1234000), *txInfo.BlockTimeStamp)
+
+	txInfo = synthesizeGenesisTxInfo("0xabc", 1, 1234)
+	require.Nil(t, txInfo)
+}
+
+func TestTronBuildRpcTransaction_WithSyntheticGenesisTxInfo(t *testing.T) {
+	txByID := &tronGetTransactionByIDResponse{
+		TxID: "1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e",
+	}
+	txByID.RawData.Contract = []tronTxContract{
+		{
+			Type: "TransferContract",
+			Parameter: struct {
+				Value tronTxContractValue `json:"value"`
+			}{
+				Value: tronTxContractValue{
+					OwnerAddress: "3078303030303030303030303030303030303030303030",
+					ToAddress:    "417e95e45f5a60cc45f2d0afe37ee9f77fb8ce9fff",
+					Amount:       int64Ptr(99000000000000000),
+				},
+			},
+		},
+	}
+
+	txInfo := synthesizeGenesisTxInfo(txByID.TxID, 0, 0)
+	tx := tronBuildRpcTransaction(txByID, txInfo)
+	require.NotNil(t, tx)
+	require.Equal(t, "0x0", tx.BlockNumber)
+
+	receipt := tronBuildRpcReceipt(txInfo)
+	require.NotNil(t, receipt)
+	require.Equal(t, "0x1", receipt.Status)
+}
