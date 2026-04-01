@@ -3,10 +3,12 @@ package tron
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/trezor/blockbook/bchain"
 )
 
@@ -106,6 +108,18 @@ func tronInt64PtrToHexQuantity(v *int64) string {
 		return ""
 	}
 	return "0x" + n.Text(16)
+}
+
+func tronHexQuantityToInt64Ptr(v string) *int64 {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	n, err := hexutil.DecodeUint64(v)
+	if err != nil || n > math.MaxInt64 {
+		return nil
+	}
+	value := int64(n)
+	return &value
 }
 
 func tronUint64(v interface{}) (uint64, bool) {

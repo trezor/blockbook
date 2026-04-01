@@ -569,6 +569,33 @@ func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, tx
 	return tx, nil
 }
 
+func synthesizeGenesisTxByID(tx *bchain.RpcTransaction, blockHeight uint32) *tronGetTransactionByIDResponse {
+	if blockHeight != 0 || tx == nil {
+		return nil
+	}
+
+	contract := tronTxContract{}
+	contract.Parameter.Value.OwnerAddress = strip0xPrefix(tx.From)
+
+	if strings.TrimSpace(tx.Payload) != "" && tx.Payload != "0x" {
+		contract.Type = "TriggerSmartContract"
+		contract.Parameter.Value.ContractAddress = strip0xPrefix(tx.To)
+		contract.Parameter.Value.CallValue = tronHexQuantityToInt64Ptr(tx.Value)
+		contract.Parameter.Value.Data = strip0xPrefix(tx.Payload)
+	} else {
+		contract.Type = "TransferContract"
+		contract.Parameter.Value.ToAddress = strip0xPrefix(tx.To)
+		contract.Parameter.Value.Amount = tronHexQuantityToInt64Ptr(tx.Value)
+	}
+
+	txByID := &tronGetTransactionByIDResponse{
+		TxID: strip0xPrefix(tx.Hash),
+	}
+	txByID.RawData.FeeLimit = tronHexQuantityToInt64Ptr(tx.GasLimit)
+	txByID.RawData.Contract = []tronTxContract{contract}
+	return txByID
+}
+
 func synthesizeGenesisTxInfo(txHash string, blockHeight uint32, blockTime int64) *tronGetTransactionInfoByIDResponse {
 	if blockHeight != 0 {
 		return nil
@@ -718,6 +745,9 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	for i := range block.Transactions {
 		tx := &block.Transactions[i]
 		txByID := txByIDByID[strip0xPrefix(tx.Hash)]
+		if txByID == nil {
+			txByID = synthesizeGenesisTxByID(tx, bbh.Height)
+		}
 
 		if txByID == nil { // todo possibly can be deleted
 			b.ObserveChainDataFallback("tron_getblock", "missing_tx_by_id_map")
