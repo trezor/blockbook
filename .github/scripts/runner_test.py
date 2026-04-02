@@ -33,14 +33,19 @@ class RunnerSelectionTest(unittest.TestCase):
             '{"coin":{"test_name":"polygon"}}',
         )
         write_text(
+            self.workspace / "configs" / "coins" / "ethereum-classic.json",
+            '{"coin":{"test_name":"ethereum_classic"}}',
+        )
+        write_text(
             self.workspace / "tests" / "tests.json",
-            '{"dogecoin":{"connectivity":{}},"base":{"connectivity":{}},"polygon":{"connectivity":{}}}',
+            '{"dogecoin":{"connectivity":{}},"base":{"connectivity":{}},"polygon":{"connectivity":{}},"ethereum_classic":{"connectivity":{}}}',
         )
 
         self.valid_vars_map = {
             "BB_RUNNER_DOGECOIN": "blockbook-dev",
             "BB_RUNNER_BASE_ARCHIVE": "blockbook-dev3",
             "BB_RUNNER_POLYGON_ARCHIVE": "production_builder",
+            "BB_RUNNER_ETHEREUM_CLASSIC": "blockbook-dev2",
         }
         self.stale_vars_map = {
             **self.valid_vars_map,
@@ -64,7 +69,7 @@ class RunnerSelectionTest(unittest.TestCase):
 
         self.assertEqual(
             selection.coins,
-            ["base_archive", "dogecoin", "polygon_archive"],
+            ["base_archive", "dogecoin", "ethereum-classic", "polygon_archive"],
         )
 
     def test_build_dev_rejects_explicit_prod_only_coin(self) -> None:
@@ -76,12 +81,19 @@ class RunnerSelectionTest(unittest.TestCase):
         ):
             resolve_build_selection(context, "polygon_archive", "dev")
 
+    def test_build_accepts_underscore_for_hyphenated_coin(self) -> None:
+        context = load_coin_context(self.workspace, self.valid_vars_map)
+
+        selection = resolve_build_selection(context, "ethereum_classic", "dev")
+
+        self.assertEqual(selection.coins, ["ethereum-classic"])
+
     def test_build_dev_all_skips_prod_only_coins(self) -> None:
         context = load_coin_context(self.workspace, self.valid_vars_map)
 
         selection = resolve_build_selection(context, "ALL", "dev")
 
-        self.assertEqual(selection.coins, ["base_archive", "dogecoin"])
+        self.assertEqual(selection.coins, ["base_archive", "dogecoin", "ethereum-classic"])
         self.assertEqual(selection.skipped_prod_only, ["polygon_archive"])
 
     def test_deploy_all_lists_deployable_coins(self) -> None:

@@ -81,6 +81,19 @@ func TestLookupEnvWithArchiveFallback_UsesArchiveInfixFallback(t *testing.T) {
 	}
 }
 
+func TestLookupEnvWithArchiveFallback_UsesUnderscoreVariantForHyphenAlias(t *testing.T) {
+	const prefix = "TEST_LOOKUP_PREFIX_"
+	t.Setenv(prefix+"ethereum_classic", "https://classic")
+
+	got, ok := lookupEnvWithArchiveFallback(prefix, "ethereum-classic")
+	if !ok {
+		t.Fatal("expected underscore variant lookup to succeed")
+	}
+	if got != "https://classic" {
+		t.Fatalf("unexpected underscore variant value %q", got)
+	}
+}
+
 func TestLookupEnvWithArchiveFallback_DoesNotDoubleArchive(t *testing.T) {
 	const prefix = "TEST_LOOKUP_PREFIX_"
 	t.Setenv(prefix+"polygon_archive_archive_bor", "https://invalid")

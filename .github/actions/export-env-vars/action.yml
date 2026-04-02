@@ -44,7 +44,7 @@ runs:
                     if key.startswith(prefix):
                         alias = key[len(prefix):]
                         # Blockbook env lookups use lowercase coin aliases from configs/coins.
-                        normalized = prefix + alias.lower()
+                        normalized = prefix + alias.lower().replace("-", "_")
                         break
                 write_env_var(env_file, normalized, text)
         PY

@@ -69,7 +69,7 @@ def resolve_build_env() -> str:
 
 def rpc_url_env_name(alias: str, build_env: str) -> str:
     prefix = "BB_DEV_RPC_URL_HTTP_" if build_env == BUILD_ENV_DEV else "BB_PROD_RPC_URL_HTTP_"
-    return f"{prefix}{alias}"
+    return f"{prefix}{alias.replace('-', '_')}"
 
 
 def rpc_hostname(url: str) -> str:

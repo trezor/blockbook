@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
+	"github.com/trezor/blockbook/bchain"
 )
 
 func int64Ptr(v int64) *int64 {
@@ -254,4 +255,80 @@ func TestTronTxMeta_GetCorrectTxMeta(t *testing.T) {
 	require.True(t, hasBlockNumber)
 	require.Equal(t, uint64(12345), blockNumber)
 	require.Equal(t, int64(1700000000), blockTime)
+}
+
+func TestSynthesizeGenesisTxInfo(t *testing.T) {
+	txInfo := synthesizeGenesisTxInfo("0x1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e", 0, 1234)
+	require.NotNil(t, txInfo)
+	require.Equal(t, "1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e", txInfo.ID)
+	require.NotNil(t, txInfo.BlockNumber)
+	require.Equal(t, int64(0), *txInfo.BlockNumber)
+	require.NotNil(t, txInfo.BlockTimeStamp)
+	require.Equal(t, int64(1234000), *txInfo.BlockTimeStamp)
+
+	txInfo = synthesizeGenesisTxInfo("0xabc", 1, 1234)
+	require.Nil(t, txInfo)
+}
+
+func TestSynthesizeGenesisTxByID(t *testing.T) {
+	rpcTx := &bchain.RpcTransaction{
+		Hash:      "0x1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e",
+		From:      "0x0000000000000000000000000000000000000000",
+		To:        "0x7e95e45f5a60cc45f2d0afe37ee9f77fb8ce9fff",
+		Value:     "0x15fb7f9b8c38000",
+		Payload:   "0x",
+		GasLimit:  "0x0",
+		BlockHash: "0x0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc",
+	}
+
+	txByID := synthesizeGenesisTxByID(rpcTx, 0)
+	require.NotNil(t, txByID)
+	require.Equal(t, "1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e", txByID.TxID)
+	require.NotNil(t, txByID.RawData.FeeLimit)
+	require.Equal(t, int64(0), *txByID.RawData.FeeLimit)
+	require.Len(t, txByID.RawData.Contract, 1)
+	require.Equal(t, "TransferContract", txByID.RawData.Contract[0].Type)
+	require.Equal(t, "0000000000000000000000000000000000000000", txByID.RawData.Contract[0].Parameter.Value.OwnerAddress)
+	require.Equal(t, "7e95e45f5a60cc45f2d0afe37ee9f77fb8ce9fff", txByID.RawData.Contract[0].Parameter.Value.ToAddress)
+	require.NotNil(t, txByID.RawData.Contract[0].Parameter.Value.Amount)
+	require.Equal(t, int64(99000000000000000), *txByID.RawData.Contract[0].Parameter.Value.Amount)
+
+	txByID = synthesizeGenesisTxByID(rpcTx, 1)
+	require.Nil(t, txByID)
+}
+
+func TestTronHexQuantityToInt64Ptr(t *testing.T) {
+	value := tronHexQuantityToInt64Ptr("0x15fb7f9b8c38000")
+	require.NotNil(t, value)
+	require.Equal(t, int64(99000000000000000), *value)
+
+	require.Nil(t, tronHexQuantityToInt64Ptr(""))
+	require.Nil(t, tronHexQuantityToInt64Ptr("not-a-quantity"))
+	require.Nil(t, tronHexQuantityToInt64Ptr("0x8000000000000000"))
+}
+
+func TestTronBuildTxFromHTTPData_WithSynthesizedGenesisData(t *testing.T) {
+	rpcTx := &bchain.RpcTransaction{
+		Hash:     "0x1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e",
+		From:     "0x0000000000000000000000000000000000000000",
+		To:       "0x7e95e45f5a60cc45f2d0afe37ee9f77fb8ce9fff",
+		Value:    "0x15fb7f9b8c38000",
+		Payload:  "0x",
+		GasLimit: "0x0",
+	}
+	txByID := synthesizeGenesisTxByID(rpcTx, 0)
+	txInfo := synthesizeGenesisTxInfo(txByID.TxID, 0, 0)
+	tronRPC := &TronRPC{
+		Parser: NewTronParser(1, false),
+	}
+	tx, err := tronRPC.buildTxFromHTTPData(txByID, txInfo, 0, 1, nil, true)
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+	require.Equal(t, "1fdaa5bb76e3c1a5430f7d8920fe2cebc8120a14c87b3a9cba36e0a11b68b57e", tx.Txid)
+	require.Len(t, tx.Vout, 1)
+	require.Equal(t, ToTronAddressFromAddress("7e95e45f5a60cc45f2d0afe37ee9f77fb8ce9fff"), tx.Vout[0].ScriptPubKey.Addresses[0])
+
+	receipt := tronBuildRpcReceipt(txInfo)
+	require.NotNil(t, receipt)
+	require.Equal(t, "0x1", receipt.Status)
 }
