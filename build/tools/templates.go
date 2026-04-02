@@ -187,6 +187,9 @@ func loadCoinAliases(configsDir string) (map[string]struct{}, error) {
 		}
 		if alias != "" {
 			validAliases[alias] = struct{}{}
+			if strings.Contains(alias, "-") {
+				validAliases[strings.ReplaceAll(alias, "-", "_")] = struct{}{}
+			}
 		}
 	}
 
@@ -455,7 +458,7 @@ func lookupEnvWithArchiveFallback(prefix, alias string) (string, bool) {
 func aliasCandidates(alias string) []string {
 	candidates := []string{alias}
 	if strings.Contains(alias, archiveSuffix) {
-		return candidates
+		return withEnvAliasVariants(candidates)
 	}
 
 	candidates = append(candidates, alias+archiveSuffix)
@@ -467,7 +470,26 @@ func aliasCandidates(alias string) []string {
 		}
 	}
 
-	return candidates
+	return withEnvAliasVariants(candidates)
+}
+
+func withEnvAliasVariants(candidates []string) []string {
+	seen := make(map[string]struct{}, len(candidates)*2)
+	var out []string
+	for _, candidate := range candidates {
+		if _, ok := seen[candidate]; !ok {
+			seen[candidate] = struct{}{}
+			out = append(out, candidate)
+		}
+		if strings.Contains(candidate, "-") {
+			normalized := strings.ReplaceAll(candidate, "-", "_")
+			if _, ok := seen[normalized]; !ok {
+				seen[normalized] = struct{}{}
+				out = append(out, normalized)
+			}
+		}
+	}
+	return out
 }
 
 // GeneratePackageDefinitions generate the package definitions from the config
