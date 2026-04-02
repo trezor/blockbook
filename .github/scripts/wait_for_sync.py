@@ -69,10 +69,19 @@ def upgrade_http_base_to_https(raw: str) -> str:
 
 
 def resolve_http_base(coin: str) -> str:
-    value = os.environ.get("BB_DEV_API_URL_HTTP_" + coin, "").strip()
-    if not value:
-        fail(f"missing BB_DEV_API_URL_HTTP_{coin} for selected test coin {coin!r}")
-    return normalize_http_base(value)
+    candidates = [coin]
+    if "-" in coin:
+        candidates.append(coin.replace("-", "_"))
+
+    for candidate in candidates:
+        value = os.environ.get("BB_DEV_API_URL_HTTP_" + candidate, "").strip()
+        if value:
+            return normalize_http_base(value)
+
+    expected = ", ".join(f"BB_DEV_API_URL_HTTP_{c}" for c in candidates)
+    fail(
+        f"missing {expected} for selected test coin {coin!r}"
+    )
 
 
 def preview_body(body: bytes, limit: int = 200) -> str:
