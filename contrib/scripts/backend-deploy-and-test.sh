@@ -18,16 +18,30 @@ then
     die "usage: $(basename $(readlink -f "$0")) coin service_name coin_test backend_log_file OR $(basename $(readlink -f "$0")) coin"
 fi
 
+command -v jq >/dev/null 2>&1 || die "jq is required"
+
 COIN=$1
 SERVICE=${2:-}
 COIN_TEST=${3:-}
 LOGFILE=${4:-}
+CONFIG="configs/coins/${COIN}.json"
 
 BACKEND_TIMEOUT="${BACKEND_TIMEOUT:-}"
 [ -z "${BACKEND_TIMEOUT}" ] && BACKEND_TIMEOUT=15s
 [ -z "${SERVICE}" ] && SERVICE="${COIN}"
 [ -z "${COIN_TEST}" ] && COIN_TEST="${COIN}=main"
-[ -z "${LOGFILE}" ] && LOGFILE=debug.log
+if [[ -z "${LOGFILE}" ]]; then
+  if [[ -f "${CONFIG}" ]]; then
+    alias="$(jq -r '.coin.alias // empty' "${CONFIG}")"
+    if [[ -n "${alias}" ]]; then
+      LOGFILE="${alias}.log"
+    else
+      LOGFILE=debug.log
+    fi
+  else
+    LOGFILE=debug.log
+  fi
+fi
 
 log "running: $(basename $(readlink -f "$0")) ${COIN} ${SERVICE} ${COIN_TEST} ${LOGFILE}"
 
@@ -54,7 +68,11 @@ sudo -u bitcoin /usr/bin/timeout "${BACKEND_TIMEOUT}" /usr/bin/tail -f "/opt/coi
 status=$?
 set -e
 if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
-  die "backend startup log wait failed with exit code ${status}"
+  if [[ "$status" -eq 1 ]]; then
+    log "backend log ${LOGFILE} is not available yet, continuing to integration tests"
+  else
+    die "backend startup log wait failed with exit code ${status}"
+  fi
 fi
 
 log "running integration tests: TestIntegration/${COIN_TEST}"
