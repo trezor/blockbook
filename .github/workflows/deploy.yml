@@ -150,7 +150,7 @@ jobs:
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_BUILD_ENV: dev
-        run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}" --force-confnew
+        run: ./contrib/scripts/deploy-bb-and-backend.sh "${{ matrix.coin }}" --force-confnew
 
   wait-for-sync:
     name: Wait For Sync
