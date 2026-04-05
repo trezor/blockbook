@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -192,6 +193,61 @@ func TestBlockbookServiceTemplateGatesWantsLine(t *testing.T) {
 	}
 	if rendered := renderService(t, false); strings.Contains(rendered, "Wants=backend-bitcoin.service") {
 		t.Fatalf("did not expect Wants line in rendered service:\n%s", rendered)
+	}
+}
+
+func TestEthereumClassicRPCAndBackendHTTPPortStayAligned(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devRPCURLHTTPPrefix+"ethereum_classic",
+		devRPCURLWSPrefix+"ethereum_classic",
+		prodRPCURLHTTPPrefix+"ethereum_classic",
+		prodRPCURLWSPrefix+"ethereum_classic",
+	)
+
+	config, err := LoadConfig(configsDir, "ethereum-classic")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	templ := config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "blockchaincfg.json")))
+
+	var blockchainCfg bytes.Buffer
+	if err := templ.ExecuteTemplate(&blockchainCfg, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(blockchaincfg) error = %v", err)
+	}
+
+	var renderedCfg struct {
+		RPCURL   string `json:"rpc_url"`
+		RPCURLWS string `json:"rpc_url_ws"`
+	}
+	if err := json.Unmarshal(blockchainCfg.Bytes(), &renderedCfg); err != nil {
+		t.Fatalf("json.Unmarshal(blockchaincfg) error = %v", err)
+	}
+
+	if renderedCfg.RPCURL != "http://127.0.0.1:8037" {
+		t.Fatalf("rpc_url = %q, want %q", renderedCfg.RPCURL, "http://127.0.0.1:8037")
+	}
+	if renderedCfg.RPCURLWS != "ws://127.0.0.1:8037" {
+		t.Fatalf("rpc_url_ws = %q, want %q", renderedCfg.RPCURLWS, "ws://127.0.0.1:8037")
+	}
+
+	templ = config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "backend", "debian", "service")))
+
+	var backendService bytes.Buffer
+	if err := templ.ExecuteTemplate(&backendService, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(backend service) error = %v", err)
+	}
+
+	if !strings.Contains(backendService.String(), "--http.port 8037") {
+		t.Fatalf("expected ETC backend service to render --http.port 8037:\n%s", backendService.String())
+	}
+	if !strings.Contains(backendService.String(), "--ws.port 8037") {
+		t.Fatalf("expected ETC backend service to render --ws.port 8037:\n%s", backendService.String())
 	}
 }
 
