@@ -8,8 +8,6 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-import pwd
-import grp
 
 import backend_policy
 from coin_rpc import (
@@ -93,24 +91,22 @@ def latest_package(pattern: str) -> Path:
 
 
 def ensure_writable_dir(path: Path) -> None:
+    root_dir = path.parent
+    if not root_dir.exists():
+        fail(f"writable root directory {root_dir} does not exist; pre-create it for the runner user")
+    if not root_dir.is_dir():
+        fail(f"writable root path {root_dir} is not a directory")
+    if root_dir.stat().st_uid != os.getuid():
+        fail(
+            f"writable root directory {root_dir} must be owned by the runner user "
+            f"(uid {os.getuid()})"
+        )
+
     try:
         path.mkdir(parents=True, exist_ok=True)
         return
     except PermissionError:
-        pass
-
-    user = pwd.getpwuid(os.getuid()).pw_name
-    group = grp.getgrgid(os.getgid()).gr_name
-    try:
-        subprocess.run(["sudo", "mkdir", "-p", str(path)], check=True)
-        subprocess.run(["sudo", "chown", "-R", f"{user}:{group}", str(path)], check=True)
-    except subprocess.CalledProcessError as exc:
-        fail(f"cannot create writable directory {path}: {exc}")
-
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError as exc:
-        fail(f"cannot write to {path}: {exc}")
+        fail(f"cannot write to {path}; ensure {root_dir} is writable by the runner user")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
