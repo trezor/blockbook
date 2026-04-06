@@ -21,6 +21,7 @@ class BuildPackagesTest(unittest.TestCase):
         self.workspace = Path(self.tempdir.name)
         self.package_root = self.workspace / "packages"
         self.build_dir = self.workspace / "build"
+        self.package_root.mkdir(parents=True, exist_ok=True)
         self.build_dir.mkdir(parents=True, exist_ok=True)
 
         write_json(
@@ -289,6 +290,47 @@ class BuildPackagesTest(unittest.TestCase):
                     build_packages.main(["base_archive"])
         finally:
             os.chdir(old_cwd)
+
+    def test_fails_when_package_root_is_missing(self) -> None:
+        env = {
+            "BRANCH_OR_TAG": "feature/test-branch",
+            "BB_PACKAGE_ROOT": str(self.workspace / "missing-packages"),
+        }
+        old_cwd = Path.cwd()
+        try:
+            os.chdir(self.workspace)
+            with patch.dict(os.environ, env, clear=True), patch("build_packages.subprocess.run"):
+                with self.assertRaises(SystemExit):
+                    build_packages.main(["base_archive"])
+        finally:
+            os.chdir(old_cwd)
+
+    def test_fails_when_package_root_is_not_runner_owned(self) -> None:
+        branch_root = self.package_root / "feature-test-branch"
+        original_stat = build_packages.Path.stat
+
+        def fake_stat(path_obj: Path, *args, **kwargs):
+            result = original_stat(path_obj, *args, **kwargs)
+            if path_obj == self.package_root:
+                return os.stat_result(
+                    (
+                        result.st_mode,
+                        result.st_ino,
+                        result.st_dev,
+                        result.st_nlink,
+                        result.st_uid + 1,
+                        result.st_gid,
+                        result.st_size,
+                        result.st_atime,
+                        result.st_mtime,
+                        result.st_ctime,
+                    )
+                )
+            return result
+
+        with patch("build_packages.Path.stat", autospec=True, side_effect=fake_stat):
+            with self.assertRaises(SystemExit):
+                build_packages.ensure_writable_dir(branch_root)
 
 
 if __name__ == "__main__":
