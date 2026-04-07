@@ -43,8 +43,8 @@ for coin in "${coins[@]}"; do
   rm -f "build/${package_name}"_*.deb
 done
 
-log "starting build: make ${make_targets[*]}"
-make "${make_targets[@]}" 1>&2
+log "starting build: make PORTABLE=1 ${make_targets[*]}"
+make PORTABLE=1 "${make_targets[@]}" 1>&2
 log "build finished"
 
 for i in "${!coins[@]}"; do

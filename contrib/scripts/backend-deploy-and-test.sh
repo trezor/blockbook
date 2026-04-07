@@ -47,7 +47,7 @@ log "running: $(basename $(readlink -f "$0")) ${COIN} ${SERVICE} ${COIN_TEST} ${
 
 rm -f build/*.deb
 log "building backend package for ${COIN}"
-make "deb-backend-${COIN}"
+make PORTABLE=1 "deb-backend-${COIN}"
 
 shopt -s nullglob
 packages=(./build/backend-"${SERVICE}"*.deb)
@@ -76,4 +76,4 @@ if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
 fi
 
 log "running integration tests: TestIntegration/${COIN_TEST}"
-make test-integration ARGS="-v -run=TestIntegration/${COIN_TEST}"
+make PORTABLE=1 test-integration ARGS="-v -run=TestIntegration/${COIN_TEST}"

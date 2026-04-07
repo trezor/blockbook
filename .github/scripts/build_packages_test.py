@@ -78,7 +78,7 @@ class BuildPackagesTest(unittest.TestCase):
         def fake_run(cmd, check, **kwargs):
             commands.append(list(cmd))
             if cmd[:1] == ["make"]:
-                target = cmd[1]
+                target = next(part for part in cmd[1:] if not part.startswith("PORTABLE="))
                 blockbook_name, backend_name = outputs[target]
                 if blockbook_name:
                     (self.build_dir / blockbook_name).write_text("blockbook", encoding="utf-8")
@@ -118,7 +118,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -132,7 +132,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -146,7 +146,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-blockbook-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-blockbook-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -160,7 +160,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-blockbook-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-blockbook-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -172,7 +172,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -186,7 +186,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -200,7 +200,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-blockbook-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-blockbook-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -214,7 +214,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=True,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "backend-base_1.0_amd64.deb").is_file())
@@ -227,7 +227,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-polygon_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-polygon_archive"])
         self.assertEqual(output, "build/blockbook-polygon_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "polygon_archive"
         alias_dir = self.package_root / "feature-test-branch" / "polygon_archive_bor"
@@ -244,7 +244,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-blockbook-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-blockbook-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -259,7 +259,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-base_archive"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-base_archive"])
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
@@ -271,7 +271,7 @@ class BuildPackagesTest(unittest.TestCase):
             always_build_backend=False,
         )
 
-        self.assertEqual(make_cmd, ["make", "deb-backend-ethereum_testnet_sepolia_consensus"])
+        self.assertEqual(make_cmd, ["make", "PORTABLE=1", "deb-backend-ethereum_testnet_sepolia_consensus"])
         self.assertEqual(output, "build/backend-eth-sepolia-consensus_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "ethereum_testnet_sepolia_consensus"
         self.assertTrue((staged_dir / "backend-eth-sepolia-consensus_1.0_amd64.deb").is_file())
