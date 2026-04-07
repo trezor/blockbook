@@ -204,9 +204,9 @@ def main(argv: list[str] | None = None) -> None:
                 path.unlink()
         shutil.rmtree(branch_root / coin, ignore_errors=True)
 
-    log("starting build: make " + " ".join(make_targets))
+    log("starting build: make PORTABLE=1 " + " ".join(make_targets))
     try:
-        subprocess.run(["make", *make_targets], check=True)
+        subprocess.run(["make", "PORTABLE=1", *make_targets], check=True)
     except subprocess.CalledProcessError as exc:
         raise SystemExit(exc.returncode) from exc
     log("build finished")
