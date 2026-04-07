@@ -34,11 +34,12 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 	if testIdentity == "" {
 		testIdentity = coin
 	}
+	testIdentityEnv := strings.ReplaceAll(testIdentity, "-", "_")
 
-	httpURL := ""
-	if v, ok := os.LookupEnv("BB_DEV_API_URL_HTTP_" + testIdentity); ok {
-		httpURL = strings.TrimSpace(v)
-	}
+	httpURL := firstNonEmptyEnv(
+		"BB_DEV_API_URL_HTTP_"+testIdentity,
+		"BB_DEV_API_URL_HTTP_"+testIdentityEnv,
+	)
 	if httpURL == "" {
 		if cfg.Ports.BlockbookPublic == 0 {
 			return nil, fmt.Errorf("missing ports.blockbook_public for %s", coin)
@@ -50,10 +51,10 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 		return nil, err
 	}
 
-	wsURL := ""
-	if v, ok := os.LookupEnv("BB_DEV_API_URL_WS_" + testIdentity); ok {
-		wsURL = strings.TrimSpace(v)
-	}
+	wsURL := firstNonEmptyEnv(
+		"BB_DEV_API_URL_WS_"+testIdentity,
+		"BB_DEV_API_URL_WS_"+testIdentityEnv,
+	)
 	if wsURL == "" {
 		wsURL, err = deriveWSFromHTTP(httpURL)
 	} else {
@@ -64,6 +65,18 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 	}
 
 	return &apiEndpoints{HTTP: httpURL, WS: wsURL}, nil
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, key := range keys {
+		if v, ok := os.LookupEnv(key); ok {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				return v
+			}
+		}
+	}
+	return ""
 }
 
 func loadCoinConfig(coin string) (*coinConfig, error) {

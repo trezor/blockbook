@@ -225,9 +225,9 @@ func (h *TestHandler) getSampleIndexedBlock(t *testing.T) (height int, hash stri
 			continue
 		}
 		// Some backends can briefly expose block-index without serving the block body yet.
-		path := fmt.Sprintf("/api/v2/block/%d?page=1&pageSize=%d", height, blockPageSize)
-		statusCode, _ := h.getHTTP(t, path)
-		if statusCode != http.StatusOK {
+		// Also prefer a block response that includes the txs field, since block API tests assert it.
+		blk, ok := h.getBlockByHashForSampling(t, hash, false)
+		if !ok || !blk.HasTxField {
 			continue
 		}
 		h.sampleBlockHeight = height
