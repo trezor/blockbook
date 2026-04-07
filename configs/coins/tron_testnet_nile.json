@@ -1,7 +1,8 @@
 {
     "coin": {
         "name": "Tron Testnet Nile",
-        "shortcut": "TRX",
+        "network": "TRXTN",
+        "shortcut": "TRXTN",
         "label": "Tron Nile",
         "alias": "tron_testnet_nile"
     },
