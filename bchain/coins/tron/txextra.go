@@ -163,9 +163,11 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		switch c.Type {
 		case "AccountCreateContract":
 			tx.To = strings.TrimSpace(v.AccountAddress)
-		case "TransferContract", "TransferAssetContract":
+		case "TransferContract": // TRX transfer
 			tx.To = strings.TrimSpace(v.ToAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.Amount)
+		case "TransferAssetContract": // TRC-10 transfer
+			tx.To = strings.TrimSpace(v.ToAddress)
 		case "TriggerSmartContract":
 			tx.To = strings.TrimSpace(v.ContractAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.CallValue)
@@ -182,7 +184,6 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 			tx.Value = tronInt64PtrToHexQuantity(v.UnfreezeBalance)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.ContractAddress, v.ToAddress)
-			tx.Value = tronInt64PtrToHexQuantity(v.Balance)
 		default:
 			tx.To = tronFirstAddress(v.ToAddress, v.ContractAddress, v.ReceiverAddress)
 			if tx.Payload == "0x" {
