@@ -154,9 +154,19 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 			want:     0,
 		},
 		{
-			name:     "delegate balance integer",
+			name:     "trc10 transfer has no trx tx value",
+			contract: tronTxContract{Type: "TransferAssetContract"},
+			want:     0,
+		},
+		{
+			name:     "delegate resource has no trx tx value",
 			contract: tronTxContract{Type: "DelegateResourceContract"},
-			want:     88000000,
+			want:     0,
+		},
+		{
+			name:     "undelegate resource has no trx tx value",
+			contract: tronTxContract{Type: "UnDelegateResourceContract"},
+			want:     0,
 		},
 	}
 
@@ -165,6 +175,7 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 	tests[2].contract.Parameter.Value.FrozenBalance = int64Ptr(42000000)
 	tests[3].contract.Parameter.Value.UnfreezeBalance = int64Ptr(77000000)
 	tests[5].contract.Parameter.Value.Balance = int64Ptr(88000000)
+	tests[6].contract.Parameter.Value.Balance = int64Ptr(99000000)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
