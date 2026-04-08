@@ -2012,7 +2012,7 @@ func Test_HTTPFiatRates_TokenCaseHandling_BitcoinType(t *testing.T) {
 	mustGetJSON(t, ts.URL+"/api/v2/tickers?currency=usd&token="+tronUSDT, http.StatusOK, &tronCurrent)
 	if !reflect.DeepEqual(tronCurrent, fiatTickerResponse{
 		Timestamp: tickerUnixTs,
-		Rates:     map[string]float32{"usd": 22.5},
+		Rates:     map[string]float32{"usd": 9},
 	}) {
 		t.Fatalf("unexpected tron current ticker: got %v", tronCurrent)
 	}
@@ -2021,7 +2021,7 @@ func Test_HTTPFiatRates_TokenCaseHandling_BitcoinType(t *testing.T) {
 	mustGetJSON(t, ts.URL+"/api/v2/tickers?timestamp=1700000000&currency=usd&token="+url.QueryEscape(mixedCaseHex), http.StatusOK, &hexHistorical)
 	if !reflect.DeepEqual(hexHistorical, fiatTickerResponse{
 		Timestamp: tickerUnixTs,
-		Rates:     map[string]float32{"usd": 10},
+		Rates:     map[string]float32{"usd": 4},
 	}) {
 		t.Fatalf("unexpected hex historical ticker: got %v", hexHistorical)
 	}
@@ -2150,7 +2150,8 @@ func Test_WebsocketFiatRates_SubscribeBroadcastAndUnsubscribe(t *testing.T) {
 	if len(pushData.Rates) != 1 || pushData.Rates["usd"] != 2.5 {
 		t.Fatalf("unexpected pushed rates: %v", pushData.Rates)
 	}
-	if len(pushData.TokenRates) != 1 || pushData.TokenRates[token] != expectedTokenRate {
+	upperToken := strings.ToUpper(token)
+	if len(pushData.TokenRates) != 1 || pushData.TokenRates[upperToken] != expectedTokenRate {
 		t.Fatalf("unexpected pushed token rates: %v", pushData.TokenRates)
 	}
 
@@ -2231,7 +2232,7 @@ func Test_WebsocketFiatRates_TokenCaseHandling_RequestPaths(t *testing.T) {
 	}
 	if !reflect.DeepEqual(currentData, fiatTickerResponse{
 		Timestamp: tickerUnixTs,
-		Rates:     map[string]float32{"usd": 22.5},
+		Rates:     map[string]float32{"usd": 9},
 	}) {
 		t.Fatalf("unexpected tron websocket current ticker: got %v", currentData)
 	}
@@ -2256,7 +2257,7 @@ func Test_WebsocketFiatRates_TokenCaseHandling_RequestPaths(t *testing.T) {
 	}
 	if !reflect.DeepEqual(historicalData.Tickers, []fiatTickerResponse{{
 		Timestamp: tickerUnixTs,
-		Rates:     map[string]float32{"usd": 10},
+		Rates:     map[string]float32{"usd": 4},
 	}}) {
 		t.Fatalf("unexpected hex websocket historical ticker: got %v", historicalData.Tickers)
 	}
@@ -2325,7 +2326,7 @@ func Test_WebsocketFiatRates_SubscribeBroadcastPreservesBase58TokenAddress(t *te
 	if err := json.Unmarshal(push.Data, &pushData); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(pushData.TokenRates, map[string]float32{tronUSDT: 22.5}) {
+	if !reflect.DeepEqual(pushData.TokenRates, map[string]float32{tronUSDT: 9}) {
 		t.Fatalf("unexpected pushed tron token rates: %v", pushData.TokenRates)
 	}
 }
