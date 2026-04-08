@@ -1116,19 +1116,6 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 	return &t, nil
 }
 
-func hasEthereumTokenHoldingsField(t *Token) bool {
-	if t == nil {
-		return false
-	}
-	if t.BalanceSat != nil {
-		return true
-	}
-	if len(t.Ids) > 0 {
-		return true
-	}
-	return len(t.MultiTokenValues) > 0
-}
-
 // a fallback method in case internal transactions are not processed and there is no indexed info about contract balance for an address
 func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bchain.AddressDescriptor, details AccountDetails) (*Token, error) {
 	var b *big.Int
@@ -1185,6 +1172,59 @@ func (w *Worker) GetContractBaseRate(ticker *common.CurrencyRatesTicker, token s
 	return float64(rate), found
 }
 
+func hasEthereumTokenNonzeroHoldings(t *Token) bool {
+	if t == nil {
+		return false
+	}
+	// EVM token families expose current holdings in different fields:
+	// ERC20 uses BalanceSat, ERC721 uses Ids, ERC1155 uses MultiTokenValues.
+	if t.BalanceSat != nil && !IsZeroBigInt((*big.Int)(t.BalanceSat)) {
+		return true
+	}
+	if len(t.Ids) > 0 {
+		return true
+	}
+	for i := range t.MultiTokenValues {
+		if t.MultiTokenValues[i].Value == nil || !IsZeroBigInt((*big.Int)(t.MultiTokenValues[i].Value)) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEthereumTokenHoldingsField(t *Token) bool {
+	if t == nil {
+		return false
+	}
+	return t.BalanceSat != nil || len(t.Ids) > 0 || len(t.MultiTokenValues) > 0
+}
+
+func shouldIncludeEthereumAddressToken(t *Token, details AccountDetails, mode TokensToReturn) bool {
+	if t == nil {
+		return false
+	}
+	switch mode {
+	case TokensToReturnUsed, TokensToReturnDerived:
+		if details >= AccountDetailsTokenBalances &&
+			(t.Standard == bchain.ERC771TokenStandard || t.Standard == bchain.ERC1155TokenStandard) {
+			// Keep the legacy address behavior for NFT-like contracts so websocket
+			// callers that rely on the default derived mode do not suddenly see
+			// metadata-only ERC721/ERC1155 entries with no current holdings field.
+			return hasEthereumTokenHoldingsField(t)
+		}
+		return true
+	case TokensToReturnNonzeroBalance:
+		// The "tokens" detail level returns contract metadata only; do not turn
+		// it into a balance-fetching path just to enforce nonzero filtering.
+		if details < AccountDetailsTokenBalances {
+			return true
+		}
+		return hasEthereumTokenNonzeroHoldings(t)
+	default:
+		return true
+	}
+}
+
 type ethereumTypeAddressData struct {
 	tokens               Tokens
 	contractInfo         *bchain.ContractInfo
@@ -1229,6 +1269,9 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
 		}
 	}
+	// Track indexed contract matches separately so token filtering does not
+	// accidentally hide contract-specific transaction history.
+	indexedContractMatched := false
 	if ca != nil {
 		// Address has indexed contract/tx data; include totals and nonce.
 		ba = &db.AddrBalance{
@@ -1281,6 +1324,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					if !bytes.Equal(filterDesc, c.Contract) {
 						continue
 					}
+					indexedContractMatched = true
 					// filter only transactions of this contract
 					filter.Vout = i + db.ContractIndexOffset
 				}
@@ -1293,9 +1337,9 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				if err != nil {
 					return nil, nil, err
 				}
-				// tokenBalances responses should not contain metadata-only tokens
-				// without any holdings field.
-				if details >= AccountDetailsTokenBalances && !hasEthereumTokenHoldingsField(t) {
+				// Apply tokens=nonzero|used|derived at response assembly time so the
+				// same indexed contract data can back different API views.
+				if !shouldIncludeEthereumAddressToken(t, details, filter.TokensToReturn) {
 					continue
 				}
 				d.tokens[j] = *t
@@ -1346,13 +1390,17 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	// returns 0 for unknown address
 	d.nonce = strconv.Itoa(int(n))
 	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
-	if len(d.tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
+	if !indexedContractMatched && len(filterDesc) > 0 && details >= AccountDetailsTokens {
 		// Query the backend directly to return contract metadata/balance for filtered views.
 		t, err := w.getEthereumContractBalanceFromBlockchain(addrDesc, filterDesc, details)
 		if err != nil {
 			return nil, nil, err
 		}
-		d.tokens = []Token{*t}
+		// Keep the fallback token list consistent with the indexed path while
+		// leaving contract-specific tx history controlled by indexedContractMatched.
+		if shouldIncludeEthereumAddressToken(t, details, filter.TokensToReturn) {
+			d.tokens = []Token{*t}
+		}
 		// switch off query for transactions, there are no transactions
 		filter.Vout = AddressFilterVoutQueryNotNecessary
 		d.totalResults = -1
