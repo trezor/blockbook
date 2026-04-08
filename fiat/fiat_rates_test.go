@@ -296,6 +296,77 @@ func TestFiatRates(t *testing.T) {
 	}
 }
 
+func TestFiatRatesTronCurrentTickers_PreserveBase58TokenAddress(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		var mockData string
+
+		switch r.URL.Path {
+		case "/coins/list":
+			mockData, err = getFiatRatesMockData("coinlist_tron")
+		case "/simple/supported_vs_currencies":
+			mockData, err = getFiatRatesMockData("vs_currencies_tron")
+		case "/simple/price":
+			if r.URL.Query().Get("ids") == "tron" {
+				mockData, err = getFiatRatesMockData("simpleprice_base_tron")
+			} else {
+				mockData, err = getFiatRatesMockData("simpleprice_tokens_tron")
+			}
+		default:
+			t.Fatalf("Unknown URL path: %v", r.URL.Path)
+		}
+
+		if err != nil {
+			t.Fatalf("Error loading stub data: %v", err)
+		}
+		fmt.Fprintln(w, mockData)
+	}))
+	defer mockServer.Close()
+
+	config := common.Config{
+		CoinName:        "fakecoin",
+		CoinShortcut:    "TRX",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"url": "` + mockServer.URL + `", "coin": "tron","platformIdentifier": "tron","platformVsCurrency": "trx","periodSeconds": 60}`,
+	}
+
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	fiatRates, err := NewFiatRates(d, &config, nil, nil)
+	if err != nil {
+		t.Fatalf("FiatRates init error: %v", err)
+	}
+	coingeckoDownloader, ok := fiatRates.downloader.(*Coingecko)
+	if !ok {
+		t.Fatalf("unexpected downloader type: %T", fiatRates.downloader)
+	}
+	coingeckoDownloader.tipURL = mockServer.URL
+
+	currentTickers, err := fiatRates.downloader.CurrentTickers()
+	if err != nil {
+		t.Fatalf("Error in CurrentTickers: %v", err)
+	}
+	if currentTickers == nil {
+		t.Fatal("CurrentTickers returned nil value")
+	}
+
+	const tronUSDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+	if got := currentTickers.TokenRates[tronUSDT]; got != 9 {
+		t.Fatalf("unexpected canonical tron token rate: got %v, want %v", got, float32(9))
+	}
+
+	rate, found := currentTickers.GetTokenRate(tronUSDT)
+	if !found {
+		t.Fatalf("expected tron token rate for canonical Base58 address %q", tronUSDT)
+	}
+	if rate != 9 {
+		t.Fatalf("unexpected tron token base rate: got %v, want %v", rate, float32(9))
+	}
+}
+
 func TestGetTickersForTimestamps_UsesGranularityAndFallback(t *testing.T) {
 	fr := &FiatRates{
 		Enabled: true,

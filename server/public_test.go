@@ -147,6 +147,54 @@ func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockCha
 	return s, path
 }
 
+func setupPublicHTTPServerWithCurrentTicker(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, ticker *common.CurrencyRatesTicker) (*PublicServer, string) {
+	config := common.Config{
+		CoinName:        "Fakecoin",
+		CoinLabel:       "Fake Coin",
+		CoinShortcut:    "FAKE",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"url": "none", "coin": "ethereum","platformIdentifier": "ethereum","platformVsCurrency": "usd","periodSeconds": 60}`,
+	}
+
+	d, is, path := setupRocksDB(parser, chain, t, false, &config)
+
+	if ticker != nil {
+		if err := insertFiatRate(ticker.Timestamp.UTC().Format(db.FiatRatesTimeFormat), ticker.Rates, ticker.TokenRates, d); err != nil {
+			t.Fatal(err)
+		}
+		currentTickers := []common.CurrencyRatesTicker{*ticker}
+		if err := d.FiatRatesStoreSpecialTickers("CurrentTickers", &currentTickers); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var err error
+	if metrics == nil {
+		metrics, err = common.GetMetrics("FakecoinCustomTicker")
+		if err != nil {
+			glog.Fatal("metrics: ", err)
+		}
+	}
+
+	mempool, err := chain.CreateMempool(chain)
+	if err != nil {
+		glog.Fatal("mempool: ", err)
+	}
+	txCache, err := db.NewTxCache(d, chain, metrics, is, false)
+	if err != nil {
+		glog.Fatal("txCache: ", err)
+	}
+	fiatRates, err := fiat.NewFiatRates(d, &config, nil, nil)
+	if err != nil {
+		glog.Fatal("fiatRates ", err)
+	}
+	s, err := NewPublicServer("localhost:12345", "", d, chain, mempool, txCache, "", metrics, is, fiatRates, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, path
+}
+
 func closeAndDestroyPublicServer(t *testing.T, s *PublicServer, dbpath string) {
 	// destroy db
 	if err := s.db.Close(); err != nil {
@@ -1933,6 +1981,61 @@ func Test_HTTPFiatRates_CrossEndpointConsistency_BitcoinType(t *testing.T) {
 	}
 }
 
+func Test_HTTPFiatRates_TokenCaseHandling_BitcoinType(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	const (
+		tronUSDT     = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+		mixedCaseHex = "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3"
+		canonicalHex = "0xa4dd6bc15be95af55f0447555c8b6aa3088562f3"
+		tickerUnixTs = int64(1700000000)
+	)
+
+	ticker := &common.CurrencyRatesTicker{
+		Timestamp: time.Unix(tickerUnixTs, 0).UTC(),
+		Rates: map[string]float32{
+			"usd": 2.5,
+		},
+		TokenRates: map[string]float32{
+			canonicalHex: 4,
+			tronUSDT:     9,
+		},
+	}
+
+	s, dbpath := setupPublicHTTPServerWithCurrentTicker(parser, chain, t, ticker)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	var tronCurrent fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?currency=usd&token="+tronUSDT, http.StatusOK, &tronCurrent)
+	if !reflect.DeepEqual(tronCurrent, fiatTickerResponse{
+		Timestamp: tickerUnixTs,
+		Rates:     map[string]float32{"usd": 22.5},
+	}) {
+		t.Fatalf("unexpected tron current ticker: got %v", tronCurrent)
+	}
+
+	var hexHistorical fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?timestamp=1700000000&currency=usd&token="+url.QueryEscape(mixedCaseHex), http.StatusOK, &hexHistorical)
+	if !reflect.DeepEqual(hexHistorical, fiatTickerResponse{
+		Timestamp: tickerUnixTs,
+		Rates:     map[string]float32{"usd": 10},
+	}) {
+		t.Fatalf("unexpected hex historical ticker: got %v", hexHistorical)
+	}
+
+	var tronTickerList fiatTickersListResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers-list?timestamp=1700000000&token="+tronUSDT, http.StatusOK, &tronTickerList)
+	if !reflect.DeepEqual(tronTickerList, fiatTickersListResponse{
+		Timestamp: tickerUnixTs,
+		Tickers:   []string{"usd"},
+	}) {
+		t.Fatalf("unexpected tron ticker list: got %v", tronTickerList)
+	}
+}
+
 func Test_HTTPBalanceHistory_GroupByAndInvalidCurrency_BitcoinType(t *testing.T) {
 	parser, chain := setupChain(t)
 
@@ -2082,6 +2185,149 @@ func Test_WebsocketFiatRates_SubscribeBroadcastAndUnsubscribe(t *testing.T) {
 		},
 	})
 	assertNoWebsocketMessage(t, ws, 300*time.Millisecond)
+}
+
+func Test_WebsocketFiatRates_TokenCaseHandling_RequestPaths(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	const (
+		tronUSDT     = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+		mixedCaseHex = "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3"
+		canonicalHex = "0xa4dd6bc15be95af55f0447555c8b6aa3088562f3"
+		tickerUnixTs = int64(1700000000)
+	)
+
+	ticker := &common.CurrencyRatesTicker{
+		Timestamp: time.Unix(tickerUnixTs, 0).UTC(),
+		Rates: map[string]float32{
+			"usd": 2.5,
+		},
+		TokenRates: map[string]float32{
+			canonicalHex: 4,
+			tronUSDT:     9,
+		},
+	}
+
+	s, dbpath := setupPublicHTTPServerWithCurrentTicker(parser, chain, t, ticker)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	if err := ws.WriteJSON(websocketReq{
+		ID:     "tron-current",
+		Method: "getCurrentFiatRates",
+		Params: map[string]interface{}{"currencies": []string{"usd"}, "token": tronUSDT},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	currentResp := readWebsocketResponse(t, ws, time.Second)
+	var currentData fiatTickerResponse
+	if err := json.Unmarshal(currentResp.Data, &currentData); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(currentData, fiatTickerResponse{
+		Timestamp: tickerUnixTs,
+		Rates:     map[string]float32{"usd": 22.5},
+	}) {
+		t.Fatalf("unexpected tron websocket current ticker: got %v", currentData)
+	}
+
+	if err := ws.WriteJSON(websocketReq{
+		ID:     "hex-historical",
+		Method: "getFiatRatesForTimestamps",
+		Params: map[string]interface{}{
+			"timestamps": []int64{tickerUnixTs},
+			"currencies": []string{"usd"},
+			"token":      mixedCaseHex,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	historicalResp := readWebsocketResponse(t, ws, time.Second)
+	var historicalData struct {
+		Tickers []fiatTickerResponse `json:"tickers"`
+	}
+	if err := json.Unmarshal(historicalResp.Data, &historicalData); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(historicalData.Tickers, []fiatTickerResponse{{
+		Timestamp: tickerUnixTs,
+		Rates:     map[string]float32{"usd": 10},
+	}}) {
+		t.Fatalf("unexpected hex websocket historical ticker: got %v", historicalData.Tickers)
+	}
+
+	if err := ws.WriteJSON(websocketReq{
+		ID:     "tron-list",
+		Method: "getFiatRatesTickersList",
+		Params: map[string]interface{}{"timestamp": tickerUnixTs, "token": tronUSDT},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	listResp := readWebsocketResponse(t, ws, time.Second)
+	var listData fiatTickersListResponse
+	if err := json.Unmarshal(listResp.Data, &listData); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(listData, fiatTickersListResponse{
+		Timestamp: tickerUnixTs,
+		Tickers:   []string{"usd"},
+	}) {
+		t.Fatalf("unexpected tron websocket ticker list: got %v", listData)
+	}
+}
+
+func Test_WebsocketFiatRates_SubscribeBroadcastPreservesBase58TokenAddress(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	const tronUSDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+	subscribe := websocketReq{
+		ID:     "sub-tron-fiat",
+		Method: "subscribeFiatRates",
+		Params: map[string]interface{}{
+			"currency": "USD",
+			"tokens":   []string{tronUSDT},
+		},
+	}
+	if err := ws.WriteJSON(subscribe); err != nil {
+		t.Fatal(err)
+	}
+	_ = readWebsocketResponse(t, ws, time.Second)
+
+	ticker := &common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000000, 0),
+		Rates: map[string]float32{
+			"usd": 2.5,
+		},
+		TokenRates: map[string]float32{
+			tronUSDT: 9,
+		},
+	}
+	s.OnNewFiatRatesTicker(ticker)
+
+	push := readWebsocketResponse(t, ws, time.Second)
+	var pushData struct {
+		TokenRates map[string]float32 `json:"tokenRates,omitempty"`
+	}
+	if err := json.Unmarshal(push.Data, &pushData); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(pushData.TokenRates, map[string]float32{tronUSDT: 22.5}) {
+		t.Fatalf("unexpected pushed tron token rates: %v", pushData.TokenRates)
+	}
 }
 
 func Test_WebsocketFiatRates_ResubscribeReplacesPreviousCurrency(t *testing.T) {
