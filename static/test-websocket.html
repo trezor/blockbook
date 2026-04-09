@@ -649,7 +649,6 @@
                         class="form-control"
                         placeholder="height"
                         id="getBlockHashHeight"
-                        value="0"
                     />
                 </div>
                 <div class="col"></div>
@@ -716,7 +715,6 @@
                             style="width: 79%"
                             class="form-control"
                             id="getAccountInfoDescriptor"
-                            value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd"
                         />
                         <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px">
                             <option value="basic">Basic</option>
@@ -810,7 +808,6 @@
                             placeholder="descriptor"
                             class="form-control"
                             id="getBalanceHistoryDescriptor"
-                            value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd"
                         />
                     </div>
                     <div class="row" style="margin: 0; margin-top: 5px">
@@ -865,7 +862,6 @@
                             placeholder="txid"
                             class="form-control"
                             id="getTransactionTxid"
-                            value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574"
                         />
                     </div>
                 </div>
@@ -890,7 +886,6 @@
                             placeholder="txid"
                             class="form-control"
                             id="getTransactionSpecificTxid"
-                            value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574"
                         />
                     </div>
                 </div>
@@ -1062,7 +1057,6 @@
                         type="text"
                         class="form-control"
                         id="getFiatRatesTickersListDate"
-                        value="1576591569"
                         placeholder="Unix timestamp"
                     />
                 </div>
@@ -1203,7 +1197,6 @@
                             class="form-control"
                             id="rpcCallTo"
                             style="width: 60%; margin-right: 5px"
-                            value="0x624087dd1904ab122a32878ce9e933c7071f53b9"
                             placeholder="to"
                         />
                         <input
@@ -1212,7 +1205,6 @@
                             placeholder="data"
                             style="width: 100%"
                             id="rpcCallData"
-                            value="0x2fec7966000000000000000000000000ce66a9577f4e2589c1d1547b75b7a2b0807ce0ed"
                         />
                     </div>
                 </div>
@@ -1286,7 +1278,6 @@
                         type="text"
                         class="form-control"
                         id="subscribeAddressesName"
-                        value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd,0x73d0385f4d8e00c5e6504c6030f47bf6212736a8"
                     />
                     <div class="form-check">
                         <input
@@ -1330,7 +1321,6 @@
                         type="text"
                         class="form-control"
                         id="subscribeFiatRatesCurrency"
-                        value="usd"
                     />
                 </div>
                 <div class="col-8">
@@ -1365,7 +1355,7 @@
     <script>
         const tronTxid = '0124a39312169cd5adbd3268f7d20fe23132bf66eb8e2fbb4be4af1f040cf211';
         const ethereumTxid =
-            '0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574';
+            '0x2fd49105eec5b19e1453ac2a05472fea44ee21fba8871cd41d151ec2bc3f6487';
         const presetValues = {
             ethereum: {
                 getBlockHashHeight: '0',
@@ -1457,7 +1447,7 @@
                 applyPreset(preset);
                 return;
             }
-            setPresetButtons('ethereum');
+            applyPreset('ethereum');
         }
 
         document.getElementById('serverAddress').value =
