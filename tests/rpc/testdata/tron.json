@@ -95,7 +95,7 @@
       ],
       "vout": [
         {
-          "value": 6943,
+          "value": null,
           "scriptPubKey": {
             "addresses": [
               "TYNwyyP1j6ZQrWQ44Aw2pbq88jtM5UaFPn"
@@ -265,7 +265,7 @@
       ],
       "vout": [
         {
-          "value": 0.000176,
+          "value": null,
           "scriptPubKey": {
             "addresses": [
               "TXXSQxG1rz7T3c7ZyfiyKi6tqf5Fr6UQuE"
