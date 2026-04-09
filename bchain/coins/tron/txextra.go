@@ -44,6 +44,8 @@ func tronOperationFromContractType(contractType string) string {
 		return "unfreeze"
 	case "WithdrawExpireUnfreezeContract":
 		return "withdraw"
+	case "WithdrawBalanceContract":
+		return "VoteRewardAmount"
 	case "DelegateResourceContract":
 		return "delegate"
 	case "UnDelegateResourceContract":
@@ -92,6 +94,8 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			extra.StakeAmount = tronInt64PtrToString(v.FrozenBalance)
 		case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
 			extra.UnstakeAmount = tronInt64PtrToString(v.UnfreezeBalance)
+		case "WithdrawBalanceContract":
+			extra.ClaimedVoteReward = tronInt64PtrToString(txInfo.WithdrawAmount)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
 			extra.DelegateAmount = tronInt64PtrToString(v.Balance)
 			extra.DelegateTo = ToTronAddressFromAddress(v.ReceiverAddress)

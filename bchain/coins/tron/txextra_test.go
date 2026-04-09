@@ -105,6 +105,19 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 		require.Equal(t, "votePower", extra.Resource)
 	})
 
+	t.Run("withdraw balance contract uses vote reward amount", func(t *testing.T) {
+		contract := tronTxContract{Type: "WithdrawBalanceContract"}
+		txByID := &tronGetTransactionByIDResponse{}
+		txByID.RawData.Contract = []tronTxContract{contract}
+		txInfo := &tronGetTransactionInfoByIDResponse{
+			WithdrawAmount: int64Ptr(6500000),
+		}
+
+		extra := tronBuildExtraData(txByID, txInfo)
+		require.Equal(t, "VoteRewardAmount", extra.Operation)
+		require.Equal(t, "6500000", extra.ClaimedVoteReward)
+	})
+
 }
 
 func TestTronBuildExtraData_AssetIssueID(t *testing.T) {
