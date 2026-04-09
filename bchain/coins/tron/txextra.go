@@ -42,8 +42,10 @@ func tronOperationFromContractType(contractType string) string {
 		return "vote"
 	case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 		return "freeze"
-	case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
+	case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract":
 		return "unfreeze"
+	case "WithdrawExpireUnfreezeContract":
+		return "withdraw"
 	case "DelegateResourceContract":
 		return "delegate"
 	case "UnDelegateResourceContract":
@@ -177,8 +179,10 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.FrozenBalance)
-		case "UnfreezeBalanceContract", "WithdrawExpireUnfreezeContract":
+		case "UnfreezeBalanceContract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
+		case "WithdrawExpireUnfreezeContract":
+			tx.Value = tronInt64PtrToHexQuantity(txInfo.WithdrawExpireAmount)
 		case "UnfreezeBalanceV2Contract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.UnfreezeBalance)

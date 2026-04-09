@@ -32,24 +32,36 @@ func parseBase10BigInt(value string) (*big.Int, bool) {
 }
 
 func tronBalanceHistoryOverrideFromExtraData(payload json.RawMessage, fallbackValue *big.Int) (tronBalanceHistoryOverride, bool) {
-	override := tronBalanceHistoryOverride{}
 	if len(payload) == 0 {
-		return override, false
+		return tronBalanceHistoryOverride{}, false
 	}
-
 	var extra bchain.TronChainExtraData
 	if err := json.Unmarshal(payload, &extra); err != nil {
+		return tronBalanceHistoryOverride{}, false
+	}
+	return tronBalanceHistoryOverrideFromExtraDataParsed(&extra, fallbackValue)
+}
+
+func tronBalanceHistoryOverrideFromExtraDataParsed(extra *bchain.TronChainExtraData, fallbackValue *big.Int) (tronBalanceHistoryOverride, bool) {
+	override := tronBalanceHistoryOverride{}
+	if extra == nil {
 		return override, false
 	}
 
 	var amountText string
-	switch strings.ToLower(strings.TrimSpace(extra.Operation)) {
+	switch extra.Operation {
 	case "freeze":
 		override.direction = tronBalanceHistoryDirectionOutgoing
 		amountText = extra.StakeAmount
-	case "unfreeze":
+	case "withdraw":
 		override.direction = tronBalanceHistoryDirectionIncoming
 		amountText = extra.UnstakeAmount
+	case "unfreeze":
+		// Unfreeze starts unlock period but funds are not yet spendable.
+		// Do not account principal movement in balance history at this stage.
+		override.direction = tronBalanceHistoryDirectionNone
+		override.amount.SetInt64(0)
+		return override, true
 	default:
 		return override, false
 	}
@@ -65,6 +77,17 @@ func tronBalanceHistoryOverrideFromExtraData(payload json.RawMessage, fallbackVa
 	return override, true
 }
 
+func tronBalanceHistoryFeeFromExtraDataParsed(extra *bchain.TronChainExtraData) big.Int {
+	var fee big.Int
+	if extra == nil {
+		return fee
+	}
+	if a, ok := parseBase10BigInt(extra.TotalFee); ok {
+		fee.Set(a)
+	}
+	return fee
+}
+
 func (w *Worker) processTronBalanceHistory(
 	addrDesc bchain.AddressDescriptor,
 	txid string,
@@ -73,24 +96,39 @@ func (w *Worker) processTronBalanceHistory(
 	ethTxData *bchain.EthereumTxData,
 	bh *BalanceHistory,
 ) error {
+	// Value is kept as fallback amount source when chainExtra amount is absent.
 	var value big.Int
 	if len(bchainTx.Vout) > 0 {
 		value = bchainTx.Vout[0].ValueSat
 	}
 
+	// Tron balance history is operation-driven (freeze/unfreeze/withdraw),
+	// not purely based on Ethereum-like Vout semantics
+	var extra *bchain.TronChainExtraData
 	payload, err := w.chainParser.GetChainExtraData(bchainTx)
-	if err != nil {
-		// If extra data is unavailable, fall back to generic Ethereum-like accounting.
-		return w.processEthereumLikeBalanceHistory(addrDesc, txid, bchainTx, selfAddrDesc, ethTxData, bh)
+	if err == nil {
+		var parsed bchain.TronChainExtraData
+		if unmarshalErr := json.Unmarshal(payload, &parsed); unmarshalErr == nil {
+			extra = &parsed
+		}
 	}
+	feeSat := tronBalanceHistoryFeeFromExtraDataParsed(extra)
 
-	override, hasOverride := tronBalanceHistoryOverrideFromExtraData(payload, &value)
-	if !hasOverride {
-		return w.processEthereumLikeBalanceHistory(addrDesc, txid, bchainTx, selfAddrDesc, ethTxData, bh)
-	}
+	override, hasOverride := tronBalanceHistoryOverrideFromExtraDataParsed(extra, &value)
 
 	includeTransferAmount := ethTxData.Status == bchain.TxStatusOK || ethTxData.Status == bchain.TxStatusUnknown
+	countSentToSelf := false
 	if includeTransferAmount {
+		// For non-overridden Tron operations, keep generic Ethereum-like
+		// principal movement semantics.
+		if !hasOverride {
+			countSentToSelf, err = w.processPrimaryVoutForBalanceHistory(addrDesc, bchainTx, selfAddrDesc, bh)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Internal transfers remain shared accounting for call-style transactions.
 		if err := w.processInternalTransactionsForBalanceHistory(addrDesc, txid, bh); err != nil {
 			return err
 		}
@@ -111,16 +149,26 @@ func (w *Worker) processTronBalanceHistory(
 		}
 
 		if includeTransferAmount {
-			switch override.direction {
-			case tronBalanceHistoryDirectionOutgoing:
-				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &override.amount)
-			case tronBalanceHistoryDirectionIncoming:
-				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &override.amount)
-			default:
+			if hasOverride {
+				switch override.direction {
+				case tronBalanceHistoryDirectionOutgoing:
+					(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &override.amount)
+				case tronBalanceHistoryDirectionIncoming:
+					(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &override.amount)
+				case tronBalanceHistoryDirectionNone:
+					// Explicitly no principal movement for this operation.
+				}
+			} else {
 				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
+				if countSentToSelf {
+					if _, found := selfAddrDesc[string(txAddrDesc)]; found {
+						(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &value)
+					}
+				}
 			}
 		}
-		addEthereumFeesToBalanceHistory(ethTxData, bh)
+		// Fees always reduce spendable balance for sender-side matches.
+		(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feeSat)
 	}
 
 	return nil

@@ -115,6 +115,7 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 		extra := tronBuildExtraData(txByID, txInfo)
 		require.Equal(t, "votePower", extra.Resource)
 	})
+
 }
 
 func TestTronBuildExtraData_AssetIssueID(t *testing.T) {

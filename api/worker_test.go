@@ -80,8 +80,8 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 			wantAmount:        "42000000",
 		},
 		{
-			name:              "unfreeze uses unstake amount",
-			payload:           `{"operation":"unfreeze","unstakeAmount":"77000000"}`,
+			name:              "withdraw uses unstake amount",
+			payload:           `{"operation":"withdraw","unstakeAmount":"77000000"}`,
 			fallbackAmount:    "1",
 			hasFallbackAmount: true,
 			wantOverride:      true,
@@ -89,8 +89,8 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 			wantAmount:        "77000000",
 		},
 		{
-			name:              "unfreeze falls back to tx value",
-			payload:           `{"operation":"unfreeze"}`,
+			name:              "withdraw falls back to tx value",
+			payload:           `{"operation":"withdraw"}`,
 			fallbackAmount:    "123",
 			hasFallbackAmount: true,
 			wantOverride:      true,
@@ -105,6 +105,13 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 			wantOverride:      true,
 			wantDirection:     tronBalanceHistoryDirectionOutgoing,
 			wantAmount:        "999",
+		},
+		{
+			name:          "unfreeze has explicit no-move override",
+			payload:       `{"operation":"unfreeze","unstakeAmount":"77000000"}`,
+			wantOverride:  true,
+			wantDirection: tronBalanceHistoryDirectionNone,
+			wantAmount:    "0",
 		},
 		{
 			name:         "non-freeze operation has no override",
