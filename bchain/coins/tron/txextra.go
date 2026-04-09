@@ -17,10 +17,10 @@ type tronGetTransactionInfoByIDResponse struct {
 	Result               string                    `json:"result,omitempty"` // omitted on success, FAILED on error
 	ResMessage           string                    `json:"resMessage,omitempty"`
 	AssetIssueID         string                    `json:"assetIssueID,omitempty"`
-	WithdrawAmount       *int64                    `json:"withdraw_amount,omitempty"`
+	WithdrawAmount       *int64                    `json:"withdraw_amount,omitempty"` // rewards from voting, super representatives rewards
 	UnfreezeAmount       *int64                    `json:"unfreeze_amount,omitempty"`
 	InternalTransactions []tronInternalTransaction `json:"internal_transactions,omitempty"`
-	WithdrawExpireAmount *int64                    `json:"withdraw_expire_amount,omitempty"`
+	WithdrawExpireAmount *int64                    `json:"withdraw_expire_amount,omitempty"` // stake 2.0 withdraw of TRX after unfreeze
 	Receipt              struct {
 		Result             string `json:"result"`
 		EnergyUsage        *int64 `json:"energy_usage,omitempty"`
@@ -94,8 +94,10 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			}
 		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 			extra.StakeAmount = tronInt64PtrToString(v.FrozenBalance)
-		case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
-			extra.UnstakeAmount = tronInt64PtrToString(v.UnfreezeBalance)
+		case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract":
+			extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
+		case "WithdrawExpireUnfreezeContract":
+			extra.UnstakeAmount = tronInt64PtrToString(txInfo.WithdrawExpireAmount)
 		case "WithdrawBalanceContract":
 			extra.ClaimedVoteReward = tronInt64PtrToString(txInfo.WithdrawAmount)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
@@ -117,9 +119,6 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 	extra.Result = strings.TrimSpace(txInfo.Receipt.Result)
 	if extra.Result == "" {
 		extra.Result = strings.TrimSpace(txInfo.Result)
-	}
-	if extra.UnstakeAmount == "" {
-		extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
 	}
 
 	return extra
@@ -186,6 +185,7 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		case "UnfreezeBalanceContract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 		case "WithdrawExpireUnfreezeContract":
+			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 			tx.Value = tronInt64PtrToHexQuantity(txInfo.WithdrawExpireAmount)
 		case "UnfreezeBalanceV2Contract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
