@@ -62,9 +62,22 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 		require.Equal(t, "energy", extra.Resource)
 	})
 
-	t.Run("unstake amount uses txInfo unfreeze amount for stake 2.0", func(t *testing.T) {
+	t.Run("unstake amount uses contract unfreeze balance for stake 2.0", func(t *testing.T) {
 		contract := tronTxContract{Type: "UnfreezeBalanceV2Contract"}
 		contract.Parameter.Value.UnfreezeBalance = int64Ptr(99000000)
+		txByID := &tronGetTransactionByIDResponse{}
+		txByID.RawData.Contract = []tronTxContract{contract}
+
+		txInfo := &tronGetTransactionInfoByIDResponse{}
+
+		extra := tronBuildExtraData(txByID, txInfo)
+		require.Equal(t, "unfreeze", extra.Operation)
+		require.Equal(t, "99000000", extra.UnstakeAmount)
+	})
+
+	t.Run("unstake amount uses txInfo unfreeze amount for stake 1.0", func(t *testing.T) {
+		contract := tronTxContract{Type: "UnfreezeBalanceContract"}
+		contract.Parameter.Value.UnfreezeBalance = int64Ptr(11111111)
 		txByID := &tronGetTransactionByIDResponse{}
 		txByID.RawData.Contract = []tronTxContract{contract}
 
