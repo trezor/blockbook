@@ -115,7 +115,7 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 		}
 
 		extra := tronBuildExtraData(txByID, txInfo)
-		require.Equal(t, "VoteRewardAmount", extra.Operation)
+		require.Equal(t, "voteRewardAmount", extra.Operation)
 		require.Equal(t, "6500000", extra.ClaimedVoteReward)
 	})
 

@@ -56,7 +56,7 @@ func tronBalanceHistoryOverrideFromExtraDataParsed(extra *bchain.TronChainExtraD
 	case "withdraw":
 		override.direction = tronBalanceHistoryDirectionIncoming
 		amountText = extra.UnstakeAmount
-	case "VoteRewardAmount":
+	case "voteRewardAmount":
 		override.direction = tronBalanceHistoryDirectionIncoming
 		amountText = extra.ClaimedVoteReward
 	case "unfreeze":

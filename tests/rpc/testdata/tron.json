@@ -280,6 +280,123 @@
           "bandwidthUsage": "273"
         }
       }
+    },
+    "edf9e0f36efbc7562a97cd686c5642b8391bba0c3681eab3a91a93feda7e9f71": {
+      "txid": "edf9e0f36efbc7562a97cd686c5642b8391bba0c3681eab3a91a93feda7e9f71",
+      "blockTime": 1766414709,
+      "time": 1766414709,
+      "vin": [
+        {
+          "addresses": [
+            "TBMNN8WUbRczM89NNvsYhvuZPwc9vwNkYH"
+          ]
+        }
+      ],
+      "vout": [
+        {
+          "value": null,
+          "scriptPubKey": {
+          }
+        }
+      ],
+      "coinSpecificData": {
+        "chainExtraData": {
+          "contractType": "WithdrawBalanceContract",
+          "operation": "voteRewardAmount",
+          "claimedVoteReward": "2598485108",
+          "bandwidthUsage": "246"
+        }
+      }
+    },
+    "8db7c8de3a82584c420d46ec6c1cf300acb06c182807b4a0d444ccb1b1354eb2": {
+      "txid": "8db7c8de3a82584c420d46ec6c1cf300acb06c182807b4a0d444ccb1b1354eb2",
+      "blockTime": 1732308888,
+      "time": 1732308888,
+      "vin": [
+        {
+          "addresses": [
+            "TB4pdxkEGndTwyRi62Kpk9WVUecwU7czFo"
+          ]
+        }
+      ],
+      "vout": [
+        {
+          "value": 100000.0,
+          "scriptPubKey": {
+            "addresses": [
+              "TB4pdxkEGndTwyRi62Kpk9WVUecwU7czFo"
+            ]
+          }
+        }
+      ],
+      "coinSpecificData": {
+        "chainExtraData": {
+          "contractType": "WithdrawExpireUnfreezeContract",
+          "operation": "withdraw",
+          "unstakeAmount": "100000000000",
+          "bandwidthUsage": "253"
+        }
+      }
+    },
+    "6eb8207437337630ef532d91fb857352970917c11ddeab0d51ea413d25943e9a": {
+      "txid": "6eb8207437337630ef532d91fb857352970917c11ddeab0d51ea413d25943e9a",
+      "blockTime": 1766808993,
+      "time": 1766808993,
+      "vin": [
+        {
+          "addresses": [
+            "TBBNyK23Mtcus51nJUCU3G8H79Ask8xn9A"
+          ]
+        }
+      ],
+      "vout": [
+        {
+          "value": 1000000.0,
+          "scriptPubKey": {
+            "addresses": [
+              "TBBNyK23Mtcus51nJUCU3G8H79Ask8xn9A"
+            ]
+          }
+        }
+      ],
+      "coinSpecificData": {
+        "chainExtraData": {
+          "contractType": "UnfreezeBalanceV2Contract",
+          "operation": "unfreeze",
+          "totalFee": "1000000",
+          "bandwidthUsage": "322"
+        }
+      }
+    },
+    "4ddfff11020fdd81e664c60d403eea7f9668407efdc87c33e790856e14bc7e7e": {
+      "txid": "4ddfff11020fdd81e664c60d403eea7f9668407efdc87c33e790856e14bc7e7e",
+      "blockTime": 1775495685,
+      "time": 1775495685,
+      "vin": [
+        {
+          "addresses": [
+            "TNkeWLH8cPvuu6wQZyRqHnSxHXCieoYXvn"
+          ]
+        }
+      ],
+      "vout": [
+        {
+          "value": 4500.0,
+          "scriptPubKey": {
+            "addresses": [
+              "TNkeWLH8cPvuu6wQZyRqHnSxHXCieoYXvn"
+            ]
+          }
+        }
+      ],
+      "coinSpecificData": {
+        "chainExtraData": {
+          "contractType": "FreezeBalanceV2Contract",
+          "operation": "freeze",
+          "stakeAmount": "4500000000",
+          "bandwidthUsage": "254"
+        }
+      }
     }
   }
 }

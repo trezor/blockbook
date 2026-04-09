@@ -99,7 +99,7 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 		},
 		{
 			name:              "vote reward amount uses claimed vote reward",
-			payload:           `{"operation":"VoteRewardAmount","claimedVoteReward":"6500000"}`,
+			payload:           `{"operation":"voteRewardAmount","claimedVoteReward":"6500000"}`,
 			fallbackAmount:    "1",
 			hasFallbackAmount: true,
 			wantOverride:      true,
@@ -108,7 +108,7 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 		},
 		{
 			name:              "vote reward amount falls back to tx value",
-			payload:           `{"operation":"VoteRewardAmount"}`,
+			payload:           `{"operation":"voteRewardAmount"}`,
 			fallbackAmount:    "321",
 			hasFallbackAmount: true,
 			wantOverride:      true,
