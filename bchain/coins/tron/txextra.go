@@ -94,8 +94,10 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			}
 		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 			extra.StakeAmount = tronInt64PtrToString(v.FrozenBalance)
-		case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract":
+		case "UnfreezeBalanceContract":
 			extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
+		case "UnfreezeBalanceV2Contract":
+			extra.UnstakeAmount = tronInt64PtrToString(v.UnfreezeBalance)
 		case "WithdrawExpireUnfreezeContract":
 			extra.UnstakeAmount = tronInt64PtrToString(txInfo.WithdrawExpireAmount)
 		case "WithdrawBalanceContract":

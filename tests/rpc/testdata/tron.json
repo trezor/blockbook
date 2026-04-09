@@ -363,6 +363,7 @@
         "chainExtraData": {
           "contractType": "UnfreezeBalanceV2Contract",
           "operation": "unfreeze",
+          "unstakeAmount": "1000000000000",
           "totalFee": "1000000",
           "bandwidthUsage": "322"
         }
