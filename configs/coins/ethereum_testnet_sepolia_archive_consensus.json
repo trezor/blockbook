@@ -24,10 +24,10 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive-consensus",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "7.1.0",
-        "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v7.1.0/beacon-chain-v7.1.0-linux-amd64",
+        "version": "7.1.3",
+        "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v7.1.3/beacon-chain-v7.1.3-linux-amd64",
         "verification_type": "sha256",
-        "verification_source": "a5402ea516d055f8ce150fff2ab4b73adbd8213789789e74c0e0a33eed3397ce",
+        "verification_source": "6efcd238124e000783f55a4430f0962b324a32599cf33219415f7f6dece8363f",
         "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --sepolia --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=17586 --rpc-port=17587 --monitoring-port=17548 --p2p-tcp-port=13676 --p2p-udp-port=12676 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_sepolia_archive/backend/erigon/jwt.hex --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -41,8 +41,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v7.1.0/beacon-chain-v7.1.0-linux-arm64",
-                "verification_source": "afc18b5d0810ec6ba716bfc41b7bd574962214688be4ab71afac91d03d46826c"
+                "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v7.1.3/beacon-chain-v7.1.3-linux-arm64",
+                "verification_source": "23ec40327ac81925dace24cdcb820632dd1c38031208ca8d1c30ebc884612a0c"
             }
         }
     },
