@@ -1769,6 +1769,34 @@ func addEthereumFeesToBalanceHistory(ethTxData *bchain.EthereumTxData, bh *Balan
 	(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
 }
 
+func (w *Worker) processPrimaryVoutForBalanceHistory(
+	addrDesc bchain.AddressDescriptor,
+	bchainTx *bchain.Tx,
+	selfAddrDesc map[string]struct{},
+	bh *BalanceHistory,
+) (bool, error) {
+	countSentToSelf := false
+	if len(bchainTx.Vout) == 0 {
+		return countSentToSelf, nil
+	}
+	bchainVout := &bchainTx.Vout[0]
+	if len(bchainVout.ScriptPubKey.Addresses) == 0 {
+		return countSentToSelf, nil
+	}
+
+	txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVout.ScriptPubKey.Addresses[0])
+	if err != nil {
+		return false, err
+	}
+	if bytes.Equal(addrDesc, txAddrDesc) {
+		(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &bchainVout.ValueSat)
+	}
+	if _, found := selfAddrDesc[string(txAddrDesc)]; found {
+		countSentToSelf = true
+	}
+	return countSentToSelf, nil
+}
+
 func (w *Worker) processEthereumLikeBalanceHistory(
 	addrDesc bchain.AddressDescriptor,
 	txid string,
@@ -1777,6 +1805,8 @@ func (w *Worker) processEthereumLikeBalanceHistory(
 	ethTxData *bchain.EthereumTxData,
 	bh *BalanceHistory,
 ) error {
+	// Ethereum-like transactions carry one primary transfer in Vout[0].
+	// Principal movement is accounted only for successful/unknown-status txs.
 	var value big.Int
 	if len(bchainTx.Vout) > 0 {
 		value = bchainTx.Vout[0].ValueSat
@@ -1785,22 +1815,13 @@ func (w *Worker) processEthereumLikeBalanceHistory(
 	countSentToSelf := false
 	includeTransferAmount := ethTxData.Status == bchain.TxStatusOK || ethTxData.Status == bchain.TxStatusUnknown
 	if includeTransferAmount {
-		if len(bchainTx.Vout) > 0 {
-			bchainVout := &bchainTx.Vout[0]
-			if len(bchainVout.ScriptPubKey.Addresses) > 0 {
-				txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVout.ScriptPubKey.Addresses[0])
-				if err != nil {
-					return err
-				}
-				if bytes.Equal(addrDesc, txAddrDesc) {
-					(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &value)
-				}
-				if _, found := selfAddrDesc[string(txAddrDesc)]; found {
-					countSentToSelf = true
-				}
-			}
+		var err error
+		countSentToSelf, err = w.processPrimaryVoutForBalanceHistory(addrDesc, bchainTx, selfAddrDesc, bh)
+		if err != nil {
+			return err
 		}
 
+		// Internal transfers are shared accounting for Ethereum-like families.
 		if err := w.processInternalTransactionsForBalanceHistory(addrDesc, txid, bh); err != nil {
 			return err
 		}
@@ -1828,13 +1849,14 @@ func (w *Worker) processEthereumLikeBalanceHistory(
 				}
 			}
 		}
+		// Fees always reduce spendable balance for sender-side matches.
 		addEthereumFeesToBalanceHistory(ethTxData, bh)
 	}
 
 	return nil
 }
 
-func (w *Worker) processEthereumFamilyBalanceHistory(
+func (w *Worker) processEthereumTypeBalanceHistory(
 	addrDesc bchain.AddressDescriptor,
 	txid string,
 	bchainTx *bchain.Tx,
@@ -1848,6 +1870,43 @@ func (w *Worker) processEthereumFamilyBalanceHistory(
 		return w.processTronBalanceHistory(addrDesc, txid, bchainTx, selfAddrDesc, ethTxData, bh)
 	default:
 		return w.processEthereumLikeBalanceHistory(addrDesc, txid, bchainTx, selfAddrDesc, ethTxData, bh)
+	}
+}
+
+func (w *Worker) processBitcoinTypeBalanceHistory(
+	addrDesc bchain.AddressDescriptor,
+	ta *db.TxAddresses,
+	selfAddrDesc map[string]struct{},
+	bh *BalanceHistory,
+) {
+	countSentToSelf := false
+	// detect if this input is the first of selfAddrDesc
+	// to not to count sentToSelf multiple times if counting multiple xpub addresses
+	ownInputIndex := -1
+	for i := range ta.Inputs {
+		tai := &ta.Inputs[i]
+		if _, found := selfAddrDesc[string(tai.AddrDesc)]; found {
+			if ownInputIndex < 0 {
+				ownInputIndex = i
+			}
+		}
+		if bytes.Equal(addrDesc, tai.AddrDesc) {
+			(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
+			if ownInputIndex == i {
+				countSentToSelf = true
+			}
+		}
+	}
+	for i := range ta.Outputs {
+		tao := &ta.Outputs[i]
+		if bytes.Equal(addrDesc, tao.AddrDesc) {
+			(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
+		}
+		if countSentToSelf {
+			if _, found := selfAddrDesc[string(tao.AddrDesc)]; found {
+				(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &tao.ValueSat)
+			}
+		}
 	}
 }
 
@@ -1891,38 +1950,10 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 		SentToSelfSat: &Amount{},
 		Txid:          txid,
 	}
-	countSentToSelf := false
 	if w.chainType == bchain.ChainBitcoinType {
-		// detect if this input is the first of selfAddrDesc
-		// to not to count sentToSelf multiple times if counting multiple xpub addresses
-		ownInputIndex := -1
-		for i := range ta.Inputs {
-			tai := &ta.Inputs[i]
-			if _, found := selfAddrDesc[string(tai.AddrDesc)]; found {
-				if ownInputIndex < 0 {
-					ownInputIndex = i
-				}
-			}
-			if bytes.Equal(addrDesc, tai.AddrDesc) {
-				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
-				if ownInputIndex == i {
-					countSentToSelf = true
-				}
-			}
-		}
-		for i := range ta.Outputs {
-			tao := &ta.Outputs[i]
-			if bytes.Equal(addrDesc, tao.AddrDesc) {
-				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
-			}
-			if countSentToSelf {
-				if _, found := selfAddrDesc[string(tao.AddrDesc)]; found {
-					(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &tao.ValueSat)
-				}
-			}
-		}
+		w.processBitcoinTypeBalanceHistory(addrDesc, ta, selfAddrDesc, &bh)
 	} else if w.chainType == bchain.ChainEthereumType {
-		if err := w.processEthereumFamilyBalanceHistory(addrDesc, txid, bchainTx, selfAddrDesc, &bh); err != nil {
+		if err := w.processEthereumTypeBalanceHistory(addrDesc, txid, bchainTx, selfAddrDesc, &bh); err != nil {
 			return nil, err
 		}
 	}
