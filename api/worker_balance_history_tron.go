@@ -56,6 +56,9 @@ func tronBalanceHistoryOverrideFromExtraDataParsed(extra *bchain.TronChainExtraD
 	case "withdraw":
 		override.direction = tronBalanceHistoryDirectionIncoming
 		amountText = extra.UnstakeAmount
+	case "VoteRewardAmount":
+		override.direction = tronBalanceHistoryDirectionIncoming
+		amountText = extra.ClaimedVoteReward
 	case "unfreeze":
 		// Unfreeze starts unlock period but funds are not yet spendable.
 		// Do not account principal movement in balance history at this stage.

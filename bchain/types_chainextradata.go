@@ -16,23 +16,24 @@ type TronVoteExtra struct {
 
 // TronChainExtraData contains normalized Tron-specific transaction metadata.
 type TronChainExtraData struct {
-	ContractType     string          `json:"contractType,omitempty"`
-	Operation        string          `json:"operation,omitempty"`
-	Resource         string          `json:"resource,omitempty"`
-	StakeAmount      string          `json:"stakeAmount,omitempty"`
-	UnstakeAmount    string          `json:"unstakeAmount,omitempty"`
-	DelegateAmount   string          `json:"delegateAmount,omitempty"`
-	DelegateTo       string          `json:"delegateTo,omitempty"`
-	AssetIssueID     string          `json:"assetIssueID,omitempty"`
-	TotalFee         string          `json:"totalFee,omitempty"`
-	FeeLimit         string          `json:"feeLimit,omitempty"`
-	EnergyUsage      string          `json:"energyUsage,omitempty"`
-	EnergyUsageTotal string          `json:"energyUsageTotal,omitempty"`
-	EnergyFee        string          `json:"energyFee,omitempty"`
-	BandwidthUsage   string          `json:"bandwidthUsage,omitempty"`
-	BandwidthFee     string          `json:"bandwidthFee,omitempty"`
-	Result           string          `json:"result,omitempty"`
-	Votes            []TronVoteExtra `json:"votes,omitempty"`
+	ContractType      string          `json:"contractType,omitempty"`
+	Operation         string          `json:"operation,omitempty"`
+	Resource          string          `json:"resource,omitempty"`
+	StakeAmount       string          `json:"stakeAmount,omitempty"`
+	UnstakeAmount     string          `json:"unstakeAmount,omitempty"`
+	ClaimedVoteReward string          `json:"claimedVoteReward,omitempty"`
+	DelegateAmount    string          `json:"delegateAmount,omitempty"`
+	DelegateTo        string          `json:"delegateTo,omitempty"`
+	AssetIssueID      string          `json:"assetIssueID,omitempty"`
+	TotalFee          string          `json:"totalFee,omitempty"`
+	FeeLimit          string          `json:"feeLimit,omitempty"`
+	EnergyUsage       string          `json:"energyUsage,omitempty"`
+	EnergyUsageTotal  string          `json:"energyUsageTotal,omitempty"`
+	EnergyFee         string          `json:"energyFee,omitempty"`
+	BandwidthUsage    string          `json:"bandwidthUsage,omitempty"`
+	BandwidthFee      string          `json:"bandwidthFee,omitempty"`
+	Result            string          `json:"result,omitempty"`
+	Votes             []TronVoteExtra `json:"votes,omitempty"`
 }
 
 // TronAccountExtraData contains normalized Tron-specific account resource metadata.

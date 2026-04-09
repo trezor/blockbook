@@ -14,7 +14,7 @@ func TestChainExtra(t *testing.T) {
 		tx := &api.Tx{
 			ChainExtraData: &api.TxChainExtraData{
 				PayloadType: "tron",
-				Payload:     json.RawMessage(`{"operation":"vote","totalFee":"3076500","energyUsageTotal":"100","energyFee":"250000","bandwidthUsage":"50","bandwidthFee":"345000","stakeAmount":"125000000","unstakeAmount":"88000000","votes":[{"address":"TA","count":"2"}]}`),
+				Payload:     json.RawMessage(`{"operation":"vote","totalFee":"3076500","energyUsageTotal":"100","energyFee":"250000","bandwidthUsage":"50","bandwidthFee":"345000","stakeAmount":"125000000","unstakeAmount":"88000000","claimedVoteReward":"6500000","votes":[{"address":"TA","count":"2"}]}`),
 			},
 		}
 		got := chainExtra(tx)
@@ -41,6 +41,9 @@ func TestChainExtra(t *testing.T) {
 		}
 		if got.UnstakeAmountValue == nil || got.UnstakeAmountValue.DecimalString(6) != "88" {
 			t.Fatalf("unexpected unstakeAmount %+v", got.UnstakeAmountValue)
+		}
+		if got.ClaimedVoteRewardValue == nil || got.ClaimedVoteRewardValue.DecimalString(6) != "6.5" {
+			t.Fatalf("unexpected claimedVoteReward %+v", got.ClaimedVoteRewardValue)
 		}
 		if len(got.Votes) != 1 || got.Votes[0].Address != "TA" || got.Votes[0].Count != "2" {
 			t.Fatalf("unexpected votes %+v", got.Votes)

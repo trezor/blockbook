@@ -16,12 +16,13 @@ func init() {
 
 type tronTxExtraTemplateData struct {
 	bchain.TronChainExtraData
-	TotalFeeAmount      *api.Amount `json:"-"`
-	EnergyFeeAmount     *api.Amount `json:"-"`
-	BandwidthFeeAmount  *api.Amount `json:"-"`
-	DelegateAmountValue *api.Amount `json:"-"`
-	StakeAmountValue    *api.Amount `json:"-"`
-	UnstakeAmountValue  *api.Amount `json:"-"`
+	TotalFeeAmount         *api.Amount `json:"-"`
+	EnergyFeeAmount        *api.Amount `json:"-"`
+	BandwidthFeeAmount     *api.Amount `json:"-"`
+	DelegateAmountValue    *api.Amount `json:"-"`
+	StakeAmountValue       *api.Amount `json:"-"`
+	UnstakeAmountValue     *api.Amount `json:"-"`
+	ClaimedVoteRewardValue *api.Amount `json:"-"`
 }
 
 type tronAccountExtraTemplateData struct {
@@ -38,13 +39,14 @@ func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
 	}
 
 	rv := &tronTxExtraTemplateData{
-		TronChainExtraData:  extra,
-		TotalFeeAmount:      parseTronSunAmount(extra.TotalFee),
-		EnergyFeeAmount:     parseTronSunAmount(extra.EnergyFee),
-		BandwidthFeeAmount:  parseTronSunAmount(extra.BandwidthFee),
-		DelegateAmountValue: parseTronSunAmount(extra.DelegateAmount),
-		StakeAmountValue:    parseTronSunAmount(extra.StakeAmount),
-		UnstakeAmountValue:  parseTronSunAmount(extra.UnstakeAmount),
+		TronChainExtraData:     extra,
+		TotalFeeAmount:         parseTronSunAmount(extra.TotalFee),
+		EnergyFeeAmount:        parseTronSunAmount(extra.EnergyFee),
+		BandwidthFeeAmount:     parseTronSunAmount(extra.BandwidthFee),
+		DelegateAmountValue:    parseTronSunAmount(extra.DelegateAmount),
+		StakeAmountValue:       parseTronSunAmount(extra.StakeAmount),
+		UnstakeAmountValue:     parseTronSunAmount(extra.UnstakeAmount),
+		ClaimedVoteRewardValue: parseTronSunAmount(extra.ClaimedVoteReward),
 	}
 	return rv
 }
