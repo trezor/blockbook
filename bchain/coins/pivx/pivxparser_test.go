@@ -422,6 +422,15 @@ var testParseBlockTxs = map[int]testBlock{
 			"0c5b5b1b9c491a5a7ec9caab204e14f72383460b887c5342d296ae0a7451c09e",
 		},
 	},
+	5057529: {
+		size: 3294,
+		time: 1756978980,
+		txs: []string{
+			"616d1d89e82dbd2b34e003a8821686b361691f6a61fe860cf2c1e856d063840c",
+			"25c73d08e2cd7ca57305652363ba8031e5e63ad92bfcfefdc465c34d0aa44b68",
+			"36151d608497fc12b7f3b1dc57e1ed927326bdc380dc808a75786abf7f0efdb1",
+		},
+	},
 }
 
 func helperLoadBlock(t *testing.T, height int) []byte {
