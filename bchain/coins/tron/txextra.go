@@ -47,7 +47,7 @@ func tronOperationFromContractType(contractType string) string {
 	case "WithdrawExpireUnfreezeContract":
 		return "withdraw"
 	case "WithdrawBalanceContract":
-		return "VoteRewardAmount"
+		return "voteRewardAmount"
 	case "DelegateResourceContract":
 		return "delegate"
 	case "UnDelegateResourceContract":
