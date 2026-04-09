@@ -48,6 +48,7 @@ type tronResourceCode int64
 type tronTxContractValue struct {
 	OwnerAddress    string            `json:"owner_address,omitempty"`
 	ToAddress       string            `json:"to_address,omitempty"`
+	AccountAddress  string            `json:"account_address,omitempty"`
 	ContractAddress string            `json:"contract_address,omitempty"`
 	ReceiverAddress string            `json:"receiver_address,omitempty"`
 	Resource        *tronResourceCode `json:"resource,omitempty"`
