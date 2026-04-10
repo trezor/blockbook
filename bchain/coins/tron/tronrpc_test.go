@@ -437,13 +437,40 @@ func TestTronRPC_GetMempoolTransactions_Error(t *testing.T) {
 
 func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
-		Resp: tronGetAccountResourceResponse{
-			FreeNetLimit: 600,
-			FreeNetUsed:  100,
-			NetLimit:     400,
-			NetUsed:      250,
-			EnergyLimit:  9000,
-			EnergyUsed:   1234,
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				FreeNetLimit:   600,
+				FreeNetUsed:    100,
+				NetLimit:       400,
+				NetUsed:        250,
+				EnergyLimit:    9000,
+				EnergyUsed:     1234,
+				TronPowerLimit: 10,
+			},
+			"/wallet/getaccount": map[string]any{
+				"frozenV2": []map[string]any{
+					{"amount": int64(2000000)},
+					{"type": "ENERGY", "amount": int64(5000000)},
+					{"type": "TRON_POWER"},
+				},
+				"unfrozenV2": []map[string]any{
+					{
+						"unfreeze_amount":      int64(1112757),
+						"unfreeze_expire_time": int64(1777018452000),
+					},
+				},
+				"votes": []map[string]any{
+					{
+						"vote_address": "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+						"vote_count":   int64(20),
+					},
+				},
+				"delegated_frozenV2_balance_for_energy":    int64(3210000),
+				"delegated_frozenV2_balance_for_bandwidth": int64(654000),
+			},
+			"/wallet/getReward": map[string]any{
+				"reward": int64(42767),
+			},
 		},
 	}
 	parser := NewTronParser(1, false)
@@ -466,23 +493,67 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 		"availableFreeBandwidth":500,
 		"totalFreeBandwidth":600,
 		"availableEnergy":7766,
-		"totalEnergy":9000
+		"totalEnergy":9000,
+		"stakingInfo":{
+			"stakedBalance":"7000000",
+			"stakedBalanceEnergy":"5000000",
+			"stakedBalanceBandwidth":"2000000",
+			"unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],
+			"totalVotingPower":"7",
+			"availableVotingPower":"10",
+			"votes":[{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","voteCount":"20"}],
+			"unclaimedReward":"42767",
+			"delegatedBalanceEnergy":"3210000",
+			"delegatedBalanceBandwidth":"654000"
+		}
 	}`, string(payload))
-	require.Equal(t, "/wallet/getaccountresource", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{
-		"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
-		"visible": true,
-	}, mockHTTP.LastBody)
+	require.Equal(t, []string{
+		"/wallet/getaccount",
+		"/wallet/getaccountresource",
+		"/wallet/getReward",
+	}, mockHTTP.Paths)
+	for _, reqBody := range mockHTTP.Bodies {
+		require.Equal(t, map[string]any{
+			"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+			"visible": true,
+		}, reqBody)
+	}
 }
 
 func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
-		Resp: map[string]any{
-			"freeNetLimit": int64(100),
-			"freeNetUsed":  int64(150),
-			"NetLimit":     int64(50),
-			"NetUsed":      int64(10),
-			"EnergyUsed":   int64(20),
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": map[string]any{
+				"freeNetLimit": int64(100),
+				"freeNetUsed":  int64(150),
+				"NetLimit":     int64(50),
+				"NetUsed":      int64(10),
+				"EnergyUsed":   int64(20),
+			},
+			"/wallet/getaccount": map[string]any{
+				"frozenV2": []map[string]any{
+					{"amount": int64(-10)},
+					{"type": "ENERGY", "amount": int64(2000000)},
+				},
+				"unfrozenV2": []map[string]any{
+					{
+						"unfreeze_amount":      int64(1000000),
+						"unfreeze_expire_time": int64(1700000001000),
+					},
+					{},
+				},
+				"votes": []map[string]any{
+					{
+						"vote_address": "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+						"vote_count":   int64(15),
+					},
+					{
+						"vote_count": int64(7),
+					},
+				},
+				"delegated_frozenV2_balance_for_energy": int64(-1),
+			},
+			"/wallet/getReward": map[string]any{},
 		},
 	}
 
@@ -509,6 +580,28 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 		TotalFreeBandwidth:       100,
 		AvailableEnergy:          0,
 		TotalEnergy:              0,
+		StakingInfo: &bchain.TronStakingInfo{
+			StakedBalance:          "2000000",
+			StakedBalanceEnergy:    "2000000",
+			StakedBalanceBandwidth: "0",
+			UnstakingBatches: []bchain.TronUnstakingBatch{
+				{
+					Amount:     "1000000",
+					ExpireTime: 1700000001,
+				},
+			},
+			TotalVotingPower:     "2",
+			AvailableVotingPower: "0",
+			Votes: []bchain.TronVote{
+				{
+					Address:   "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+					VoteCount: "15",
+				},
+			},
+			UnclaimedReward:           "0",
+			DelegatedBalanceEnergy:    "0",
+			DelegatedBalanceBandwidth: "0",
+		},
 	}, extra)
 }
 

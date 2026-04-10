@@ -13,21 +13,32 @@ import (
 )
 
 type MockTronHTTPClient struct {
-	Resp interface{}
-	Err  error
+	Resp       interface{}
+	RespByPath map[string]interface{}
+	Err        error
 
 	LastPath string
 	LastBody interface{}
+	Paths    []string
+	Bodies   []interface{}
 }
 
 func (m *MockTronHTTPClient) Request(ctx context.Context, path string, reqBody interface{}, respBody interface{}) error {
 	m.LastPath = path
 	m.LastBody = reqBody
+	m.Paths = append(m.Paths, path)
+	m.Bodies = append(m.Bodies, reqBody)
 
 	if m.Err != nil {
 		return m.Err
 	}
-	b, _ := json.Marshal(m.Resp)
+	resp := m.Resp
+	if m.RespByPath != nil {
+		if v, ok := m.RespByPath[path]; ok {
+			resp = v
+		}
+	}
+	b, _ := json.Marshal(resp)
 	return json.Unmarshal(b, respBody)
 }
 

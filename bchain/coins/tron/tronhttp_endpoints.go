@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math/big"
+	"strconv"
 
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
@@ -21,12 +23,36 @@ type tronGetTransactionListFromPendingResponse struct {
 }
 
 type tronGetAccountResourceResponse struct {
-	FreeNetLimit int64 `json:"freeNetLimit"`
-	FreeNetUsed  int64 `json:"freeNetUsed"`
-	NetLimit     int64 `json:"NetLimit"`
-	NetUsed      int64 `json:"NetUsed"`
-	EnergyLimit  int64 `json:"EnergyLimit"`
-	EnergyUsed   int64 `json:"EnergyUsed"`
+	FreeNetLimit   int64 `json:"freeNetLimit"`
+	FreeNetUsed    int64 `json:"freeNetUsed"`
+	NetLimit       int64 `json:"NetLimit"`
+	NetUsed        int64 `json:"NetUsed"`
+	EnergyLimit    int64 `json:"EnergyLimit"`
+	EnergyUsed     int64 `json:"EnergyUsed"`
+	TronPowerUsed  int64 `json:"tronPowerUsed"`
+	TronPowerLimit int64 `json:"tronPowerLimit"`
+}
+
+type tronFrozenV2Entry struct {
+	Type   *tronResourceCode `json:"type,omitempty"`
+	Amount *int64            `json:"amount,omitempty"`
+}
+
+type tronUnfrozenV2Entry struct {
+	UnfreezeAmount     *int64 `json:"unfreeze_amount,omitempty"`
+	UnfreezeExpireTime *int64 `json:"unfreeze_expire_time,omitempty"`
+}
+
+type tronGetAccountResponse struct {
+	FrozenV2                             []tronFrozenV2Entry   `json:"frozenV2,omitempty"`
+	UnfrozenV2                           []tronUnfrozenV2Entry `json:"unfrozenV2,omitempty"`
+	Votes                                []tronTxVote          `json:"votes,omitempty"`
+	DelegatedFrozenV2BalanceForEnergy    int64                 `json:"delegated_frozenV2_balance_for_energy"`
+	DelegatedFrozenV2BalanceForBandwidth int64                 `json:"delegated_frozenV2_balance_for_bandwidth"`
+}
+
+type tronGetRewardResponse struct {
+	Reward int64 `json:"reward"`
 }
 
 type tronGetBlockResponse struct {
@@ -79,23 +105,126 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	resp, err := b.requestAccountResource(ctx, ToTronAddressFromDesc(addrDesc))
+	address := ToTronAddressFromDesc(addrDesc)
+	accountResp, err := b.requestAccount(ctx, address)
 	if err != nil {
 		return nil, err
 	}
+	resourceResp, err := b.requestAccountResource(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	rewardResp, err := b.requestReward(ctx, address)
+	if err != nil {
+		rewardResp = &tronGetRewardResponse{}
+	}
 
 	payload, err := json.Marshal(bchain.TronAccountExtraData{
-		AvailableStakedBandwidth: tronAvailableResource(resp.NetLimit, resp.NetUsed),
-		TotalStakedBandwidth:     resp.NetLimit,
-		AvailableFreeBandwidth:   tronAvailableResource(resp.FreeNetLimit, resp.FreeNetUsed),
-		TotalFreeBandwidth:       resp.FreeNetLimit,
-		AvailableEnergy:          tronAvailableResource(resp.EnergyLimit, resp.EnergyUsed),
-		TotalEnergy:              resp.EnergyLimit,
+		AvailableStakedBandwidth: tronAvailableResource(resourceResp.NetLimit, resourceResp.NetUsed),
+		TotalStakedBandwidth:     resourceResp.NetLimit,
+		AvailableFreeBandwidth:   tronAvailableResource(resourceResp.FreeNetLimit, resourceResp.FreeNetUsed),
+		TotalFreeBandwidth:       resourceResp.FreeNetLimit,
+		AvailableEnergy:          tronAvailableResource(resourceResp.EnergyLimit, resourceResp.EnergyUsed),
+		TotalEnergy:              resourceResp.EnergyLimit,
+		StakingInfo:              tronBuildStakingInfo(accountResp, resourceResp, rewardResp),
 	})
 	if err != nil {
 		return nil, err
 	}
 	return payload, nil
+}
+
+func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tronGetAccountResourceResponse, rewardResp *tronGetRewardResponse) *bchain.TronStakingInfo {
+	if accountResp == nil {
+		accountResp = &tronGetAccountResponse{}
+	}
+	if resourceResp == nil {
+		resourceResp = &tronGetAccountResourceResponse{}
+	}
+	if rewardResp == nil {
+		rewardResp = &tronGetRewardResponse{}
+	}
+
+	stakedEnergy := new(big.Int)
+	stakedBandwidth := new(big.Int)
+	for i := range accountResp.FrozenV2 {
+		frozen := &accountResp.FrozenV2[i]
+		if frozen.Amount == nil || *frozen.Amount <= 0 {
+			continue
+		}
+		amount := big.NewInt(*frozen.Amount)
+		if frozen.Type == nil || *frozen.Type == tronResourceBandwidth {
+			stakedBandwidth.Add(stakedBandwidth, amount)
+		} else if *frozen.Type == tronResourceEnergy {
+			stakedEnergy.Add(stakedEnergy, amount)
+		}
+	}
+
+	stakedBalance := new(big.Int).Add(new(big.Int).Set(stakedBandwidth), stakedEnergy)
+	totalVotingPower := new(big.Int).Div(new(big.Int).Set(stakedBalance), big.NewInt(1_000_000))
+
+	unstakingBatches := make([]bchain.TronUnstakingBatch, 0, len(accountResp.UnfrozenV2))
+	for i := range accountResp.UnfrozenV2 {
+		unfreeze := &accountResp.UnfrozenV2[i]
+		if unfreeze.UnfreezeAmount == nil || *unfreeze.UnfreezeAmount <= 0 {
+			continue
+		}
+		expireTime := int64(0)
+		if unfreeze.UnfreezeExpireTime != nil && *unfreeze.UnfreezeExpireTime > 0 {
+			expireTime = *unfreeze.UnfreezeExpireTime / 1000
+		}
+		unstakingBatches = append(unstakingBatches, bchain.TronUnstakingBatch{
+			Amount:     strconv.FormatInt(*unfreeze.UnfreezeAmount, 10),
+			ExpireTime: expireTime,
+		})
+	}
+
+	votes := make([]bchain.TronVote, 0, len(accountResp.Votes))
+	for i := range accountResp.Votes {
+		vote := &accountResp.Votes[i]
+		address := ToTronAddressFromAddress(vote.VoteAddress)
+		if address == "" {
+			continue
+		}
+		voteCount := int64(0)
+		if vote.VoteCount != nil && *vote.VoteCount > 0 {
+			voteCount = *vote.VoteCount
+		}
+		votes = append(votes, bchain.TronVote{
+			Address:   address,
+			VoteCount: strconv.FormatInt(voteCount, 10),
+		})
+	}
+
+	availableVotingPower := resourceResp.TronPowerLimit
+	if availableVotingPower < 0 {
+		availableVotingPower = 0
+	}
+	unclaimedReward := rewardResp.Reward
+	if unclaimedReward < 0 {
+		unclaimedReward = 0
+	}
+	delegatedEnergy := accountResp.DelegatedFrozenV2BalanceForEnergy
+	if delegatedEnergy < 0 {
+		delegatedEnergy = 0
+	}
+	delegatedBandwidth := accountResp.DelegatedFrozenV2BalanceForBandwidth
+	if delegatedBandwidth < 0 {
+		delegatedBandwidth = 0
+	}
+
+	return &bchain.TronStakingInfo{
+		StakedBalance:             stakedBalance.String(),
+		StakedBalanceEnergy:       stakedEnergy.String(),
+		StakedBalanceBandwidth:    stakedBandwidth.String(),
+		UnstakingBatches:          unstakingBatches,
+		TotalVotingPower:          totalVotingPower.String(),
+		AvailableVotingPower:      strconv.FormatInt(availableVotingPower, 10),
+		Votes:                     votes,
+		UnclaimedReward:           strconv.FormatInt(unclaimedReward, 10),
+		DelegatedBalanceEnergy:    strconv.FormatInt(delegatedEnergy, 10),
+		DelegatedBalanceBandwidth: strconv.FormatInt(delegatedBandwidth, 10),
+	}
 }
 
 func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error) {
@@ -183,6 +312,30 @@ func (b *TronRPC) requestAccountResource(ctx context.Context, address string) (*
 	}
 	var resp tronGetAccountResourceResponse
 	if err := b.fullNodeHTTP.Request(ctx, "/wallet/getaccountresource", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (b *TronRPC) requestAccount(ctx context.Context, address string) (*tronGetAccountResponse, error) {
+	req := map[string]any{
+		"address": address,
+		"visible": true,
+	}
+	var resp tronGetAccountResponse
+	if err := b.fullNodeHTTP.Request(ctx, "/wallet/getaccount", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (b *TronRPC) requestReward(ctx context.Context, address string) (*tronGetRewardResponse, error) {
+	req := map[string]any{
+		"address": address,
+		"visible": true,
+	}
+	var resp tronGetRewardResponse
+	if err := b.fullNodeHTTP.Request(ctx, "/wallet/getReward", req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
