@@ -17,10 +17,10 @@ type tronGetTransactionInfoByIDResponse struct {
 	Result               string                    `json:"result,omitempty"` // omitted on success, FAILED on error
 	ResMessage           string                    `json:"resMessage,omitempty"`
 	AssetIssueID         string                    `json:"assetIssueID,omitempty"`
-	WithdrawAmount       *int64                    `json:"withdraw_amount,omitempty"`
+	WithdrawAmount       *int64                    `json:"withdraw_amount,omitempty"` // rewards from voting, super representatives rewards
 	UnfreezeAmount       *int64                    `json:"unfreeze_amount,omitempty"`
 	InternalTransactions []tronInternalTransaction `json:"internal_transactions,omitempty"`
-	WithdrawExpireAmount *int64                    `json:"withdraw_expire_amount,omitempty"`
+	WithdrawExpireAmount *int64                    `json:"withdraw_expire_amount,omitempty"` // stake 2.0 withdraw of TRX after unfreeze
 	Receipt              struct {
 		Result             string `json:"result"`
 		EnergyUsage        *int64 `json:"energy_usage,omitempty"`
@@ -40,8 +40,12 @@ func tronOperationFromContractType(contractType string) string {
 		return "vote"
 	case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 		return "freeze"
-	case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
+	case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract":
 		return "unfreeze"
+	case "WithdrawExpireUnfreezeContract":
+		return "withdraw"
+	case "WithdrawBalanceContract":
+		return "voteRewardAmount"
 	case "DelegateResourceContract":
 		return "delegate"
 	case "UnDelegateResourceContract":
@@ -88,8 +92,14 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			}
 		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 			extra.StakeAmount = tronInt64PtrToString(v.FrozenBalance)
-		case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
+		case "UnfreezeBalanceContract":
+			extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
+		case "UnfreezeBalanceV2Contract":
 			extra.UnstakeAmount = tronInt64PtrToString(v.UnfreezeBalance)
+		case "WithdrawExpireUnfreezeContract":
+			extra.UnstakeAmount = tronInt64PtrToString(txInfo.WithdrawExpireAmount)
+		case "WithdrawBalanceContract":
+			extra.ClaimedVoteReward = tronInt64PtrToString(txInfo.WithdrawAmount)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
 			extra.DelegateAmount = tronInt64PtrToString(v.Balance)
 			extra.DelegateTo = ToTronAddressFromAddress(v.ReceiverAddress)
@@ -109,9 +119,6 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 	extra.Result = strings.TrimSpace(txInfo.Receipt.Result)
 	if extra.Result == "" {
 		extra.Result = strings.TrimSpace(txInfo.Result)
-	}
-	if extra.UnstakeAmount == "" {
-		extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
 	}
 
 	return extra
@@ -159,9 +166,11 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		v := c.Parameter.Value
 		tx.From = ToTronAddressFromAddress(v.OwnerAddress)
 		switch c.Type {
-		case "TransferContract", "TransferAssetContract":
+		case "TransferContract": // TRX transfer
 			tx.To = strings.TrimSpace(v.ToAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.Amount)
+		case "TransferAssetContract": // TRC-10 transfer
+			tx.To = strings.TrimSpace(v.ToAddress)
 		case "TriggerSmartContract":
 			tx.To = strings.TrimSpace(v.ContractAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.CallValue)
@@ -171,14 +180,16 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.FrozenBalance)
-		case "UnfreezeBalanceContract", "WithdrawExpireUnfreezeContract":
+		case "UnfreezeBalanceContract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
+		case "WithdrawExpireUnfreezeContract":
+			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
+			tx.Value = tronInt64PtrToHexQuantity(txInfo.WithdrawExpireAmount)
 		case "UnfreezeBalanceV2Contract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.UnfreezeBalance)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.ContractAddress, v.ToAddress)
-			tx.Value = tronInt64PtrToHexQuantity(v.Balance)
 		default:
 			tx.To = tronFirstAddress(v.ToAddress, v.ContractAddress, v.ReceiverAddress)
 			if tx.Payload == "0x" {
