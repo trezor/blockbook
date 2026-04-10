@@ -605,7 +605,7 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 	}, extra)
 }
 
-func TestTronRPC_GetAddressChainExtraData_GetAccountFailure_OmitsStakingInfo(t *testing.T) {
+func TestTronRPC_GetAddressChainExtraData_EmptyGetAccountPayload_OmitsStakingInfo(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
 		RespByPath: map[string]interface{}{
 			"/wallet/getaccountresource": tronGetAccountResourceResponse{
@@ -616,10 +616,9 @@ func TestTronRPC_GetAddressChainExtraData_GetAccountFailure_OmitsStakingInfo(t *
 				EnergyLimit:  9000,
 				EnergyUsed:   1234,
 			},
-			"/wallet/getReward": map[string]any{},
-		},
-		ErrByPath: map[string]error{
-			"/wallet/getaccount": errors.New("backend /wallet/getaccount temporary failure"),
+			// Empty /wallet/getaccount payload should omit stakingInfo.
+			"/wallet/getaccount": map[string]any{},
+			"/wallet/getReward":  map[string]any{},
 		},
 	}
 	parser := NewTronParser(1, false)
@@ -648,11 +647,6 @@ func TestTronRPC_GetAddressChainExtraData_GetAccountFailure_OmitsStakingInfo(t *
 		TotalEnergy:              9000,
 		StakingInfo:              nil,
 	}, extra)
-	require.ElementsMatch(t, []string{
-		"/wallet/getaccountresource",
-		"/wallet/getaccount",
-		"/wallet/getReward",
-	}, mockHTTP.Paths)
 }
 
 func TestTronRPC_GetAddressChainExtraData_GetRewardFailure_UsesZeroReward(t *testing.T) {

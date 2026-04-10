@@ -142,13 +142,20 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 		return nil, resourceRes.err
 	}
 	accountRes := <-accountCh
-	rewardRes := <-rewardCh
 
 	var stakingInfo *bchain.TronStakingInfo
 	if accountRes.err != nil {
-		// Keep legacy resource fields available even when staking/governance endpoints are temporarily unavailable.
+		// Keep resource fields available even when staking/governance endpoints are temporarily unavailable.
 		glog.Warningf("Tron /wallet/getaccount failed for %s: %v", address, accountRes.err)
+		// No staking data can be built without /wallet/getaccount, do not wait for /wallet/getReward.
+		cancel()
+	} else if tronIsEmptyAccountResponse(accountRes.resp) {
+		// Empty /wallet/getaccount payload means staking/governance data is unavailable.
+		glog.Warningf("Tron /wallet/getaccount returned empty payload for %s", address)
+		// No staking data can be built from empty account payload, do not wait for /wallet/getReward.
+		cancel()
 	} else {
+		rewardRes := <-rewardCh
 		rewardResp := rewardRes.resp
 		if rewardRes.err != nil {
 			glog.Warningf("Tron /wallet/getReward failed for %s: %v", address, rewardRes.err)
@@ -170,6 +177,17 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 		return nil, err
 	}
 	return payload, nil
+}
+
+func tronIsEmptyAccountResponse(resp *tronGetAccountResponse) bool {
+	if resp == nil {
+		return true
+	}
+	return len(resp.FrozenV2) == 0 &&
+		len(resp.UnfrozenV2) == 0 &&
+		len(resp.Votes) == 0 &&
+		resp.DelegatedFrozenV2BalanceForEnergy == 0 &&
+		resp.DelegatedFrozenV2BalanceForBandwidth == 0
 }
 
 func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tronGetAccountResourceResponse, rewardResp *tronGetRewardResponse) *bchain.TronStakingInfo {
