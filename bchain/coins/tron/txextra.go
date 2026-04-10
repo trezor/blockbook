@@ -36,6 +36,8 @@ type tronGetTransactionInfoByIDResponse struct {
 
 func tronOperationFromContractType(contractType string) string {
 	switch contractType {
+	case "AccountCreateContract":
+		return "activateAccount"
 	case "VoteWitnessContract":
 		return "vote"
 	case "FreezeBalanceContract", "FreezeBalanceV2Contract":
@@ -159,6 +161,8 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		v := c.Parameter.Value
 		tx.From = ToTronAddressFromAddress(v.OwnerAddress)
 		switch c.Type {
+		case "AccountCreateContract":
+			tx.To = strings.TrimSpace(v.AccountAddress)
 		case "TransferContract", "TransferAssetContract":
 			tx.To = strings.TrimSpace(v.ToAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.Amount)
