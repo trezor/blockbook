@@ -15,6 +15,7 @@ import (
 type MockTronHTTPClient struct {
 	Resp       interface{}
 	RespByPath map[string]interface{}
+	ErrByPath  map[string]error
 	Err        error
 
 	LastPath string
@@ -29,6 +30,11 @@ func (m *MockTronHTTPClient) Request(ctx context.Context, path string, reqBody i
 	m.Paths = append(m.Paths, path)
 	m.Bodies = append(m.Bodies, reqBody)
 
+	if m.ErrByPath != nil {
+		if err, ok := m.ErrByPath[path]; ok {
+			return err
+		}
+	}
 	if m.Err != nil {
 		return m.Err
 	}
