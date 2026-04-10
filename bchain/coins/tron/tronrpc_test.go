@@ -507,9 +507,9 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 			"delegatedBalanceBandwidth":"654000"
 		}
 	}`, string(payload))
-	require.Equal(t, []string{
-		"/wallet/getaccount",
+	require.ElementsMatch(t, []string{
 		"/wallet/getaccountresource",
+		"/wallet/getaccount",
 		"/wallet/getReward",
 	}, mockHTTP.Paths)
 	for _, reqBody := range mockHTTP.Bodies {
@@ -603,6 +603,100 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 			DelegatedBalanceBandwidth: "0",
 		},
 	}, extra)
+}
+
+func TestTronRPC_GetAddressChainExtraData_GetAccountFailure_OmitsStakingInfo(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				FreeNetLimit: 600,
+				FreeNetUsed:  100,
+				NetLimit:     400,
+				NetUsed:      250,
+				EnergyLimit:  9000,
+				EnergyUsed:   1234,
+			},
+			"/wallet/getReward": map[string]any{},
+		},
+		ErrByPath: map[string]error{
+			"/wallet/getaccount": errors.New("backend /wallet/getaccount temporary failure"),
+		},
+	}
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.Equal(t, bchain.TronAccountExtraData{
+		AvailableStakedBandwidth: 150,
+		TotalStakedBandwidth:     400,
+		AvailableFreeBandwidth:   500,
+		TotalFreeBandwidth:       600,
+		AvailableEnergy:          7766,
+		TotalEnergy:              9000,
+		StakingInfo:              nil,
+	}, extra)
+	require.ElementsMatch(t, []string{
+		"/wallet/getaccountresource",
+		"/wallet/getaccount",
+		"/wallet/getReward",
+	}, mockHTTP.Paths)
+}
+
+func TestTronRPC_GetAddressChainExtraData_GetRewardFailure_UsesZeroReward(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				NetLimit:       100,
+				NetUsed:        10,
+				TronPowerLimit: 3,
+			},
+			"/wallet/getaccount": map[string]any{
+				"frozenV2": []map[string]any{
+					{"amount": int64(3000000)},
+				},
+			},
+		},
+		ErrByPath: map[string]error{
+			"/wallet/getReward": errors.New("backend /wallet/getReward temporary failure"),
+		},
+	}
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.NotNil(t, extra.StakingInfo)
+	require.Equal(t, "0", extra.StakingInfo.UnclaimedReward)
+	require.ElementsMatch(t, []string{
+		"/wallet/getaccountresource",
+		"/wallet/getaccount",
+		"/wallet/getReward",
+	}, mockHTTP.Paths)
 }
 
 func TestTronRPC_RequestLatestSolidifiedBlockHeight(t *testing.T) {

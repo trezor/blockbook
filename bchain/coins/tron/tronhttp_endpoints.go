@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 )
@@ -106,27 +107,64 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 	defer cancel()
 
 	address := ToTronAddressFromDesc(addrDesc)
-	accountResp, err := b.requestAccount(ctx, address)
-	if err != nil {
-		return nil, err
+	type accountResourceResult struct {
+		resp *tronGetAccountResourceResponse
+		err  error
 	}
-	resourceResp, err := b.requestAccountResource(ctx, address)
-	if err != nil {
-		return nil, err
+	type accountResult struct {
+		resp *tronGetAccountResponse
+		err  error
 	}
-	rewardResp, err := b.requestReward(ctx, address)
-	if err != nil {
-		rewardResp = &tronGetRewardResponse{}
+	type rewardResult struct {
+		resp *tronGetRewardResponse
+		err  error
+	}
+	resourceCh := make(chan accountResourceResult, 1)
+	accountCh := make(chan accountResult, 1)
+	rewardCh := make(chan rewardResult, 1)
+
+	go func() {
+		resp, err := b.requestAccountResource(ctx, address)
+		resourceCh <- accountResourceResult{resp: resp, err: err}
+	}()
+	go func() {
+		resp, err := b.requestAccount(ctx, address)
+		accountCh <- accountResult{resp: resp, err: err}
+	}()
+	go func() {
+		resp, err := b.requestReward(ctx, address)
+		rewardCh <- rewardResult{resp: resp, err: err}
+	}()
+
+	resourceRes := <-resourceCh
+	if resourceRes.err != nil {
+		cancel()
+		return nil, resourceRes.err
+	}
+	accountRes := <-accountCh
+	rewardRes := <-rewardCh
+
+	var stakingInfo *bchain.TronStakingInfo
+	if accountRes.err != nil {
+		// Keep legacy resource fields available even when staking/governance endpoints are temporarily unavailable.
+		glog.Warningf("Tron /wallet/getaccount failed for %s: %v", address, accountRes.err)
+	} else {
+		rewardResp := rewardRes.resp
+		if rewardRes.err != nil {
+			glog.Warningf("Tron /wallet/getReward failed for %s: %v", address, rewardRes.err)
+			rewardResp = &tronGetRewardResponse{}
+		}
+		stakingInfo = tronBuildStakingInfo(accountRes.resp, resourceRes.resp, rewardResp)
 	}
 
 	payload, err := json.Marshal(bchain.TronAccountExtraData{
-		AvailableStakedBandwidth: tronAvailableResource(resourceResp.NetLimit, resourceResp.NetUsed),
-		TotalStakedBandwidth:     resourceResp.NetLimit,
-		AvailableFreeBandwidth:   tronAvailableResource(resourceResp.FreeNetLimit, resourceResp.FreeNetUsed),
-		TotalFreeBandwidth:       resourceResp.FreeNetLimit,
-		AvailableEnergy:          tronAvailableResource(resourceResp.EnergyLimit, resourceResp.EnergyUsed),
-		TotalEnergy:              resourceResp.EnergyLimit,
-		StakingInfo:              tronBuildStakingInfo(accountResp, resourceResp, rewardResp),
+		AvailableStakedBandwidth: tronAvailableResource(resourceRes.resp.NetLimit, resourceRes.resp.NetUsed),
+		TotalStakedBandwidth:     resourceRes.resp.NetLimit,
+		AvailableFreeBandwidth:   tronAvailableResource(resourceRes.resp.FreeNetLimit, resourceRes.resp.FreeNetUsed),
+		TotalFreeBandwidth:       resourceRes.resp.FreeNetLimit,
+		AvailableEnergy:          tronAvailableResource(resourceRes.resp.EnergyLimit, resourceRes.resp.EnergyUsed),
+		TotalEnergy:              resourceRes.resp.EnergyLimit,
+		StakingInfo:              stakingInfo,
 	})
 	if err != nil {
 		return nil, err
