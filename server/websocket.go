@@ -527,9 +527,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 			return nil, err
 		}
 		r.Currency = strings.ToLower(r.Currency)
-		for i := range r.Tokens {
-			r.Tokens[i] = strings.ToLower(r.Tokens[i])
-		}
+
 		return s.subscribeFiatRates(c, &r, req)
 	},
 	"unsubscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
@@ -1455,16 +1453,16 @@ func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *common.CurrencyRatesTicke
 }
 
 func (s *WebsocketServer) getCurrentFiatRates(currencies []string, token string) (*api.FiatTicker, error) {
-	ret, err := s.api.GetCurrentFiatRates(currencies, strings.ToLower(token))
+	ret, err := s.api.GetCurrentFiatRates(currencies, token)
 	return ret, err
 }
 
 func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currencies []string, token string) (*api.FiatTickers, error) {
-	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currencies, strings.ToLower(token))
+	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currencies, token)
 	return ret, err
 }
 
 func (s *WebsocketServer) getAvailableVsCurrencies(timestamp int64, token string) (*api.AvailableVsCurrencies, error) {
-	ret, err := s.api.GetAvailableVsCurrencies(timestamp, strings.ToLower(token))
+	ret, err := s.api.GetAvailableVsCurrencies(timestamp, token)
 	return ret, err
 }
