@@ -605,7 +605,7 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 	}, extra)
 }
 
-func TestTronRPC_GetAddressChainExtraData_EmptyGetAccountPayload_OmitsStakingInfo(t *testing.T) {
+func TestTronRPC_GetAddressChainExtraData_NonExistentAccount_OmitsStakingInfo(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
 		RespByPath: map[string]interface{}{
 			"/wallet/getaccountresource": tronGetAccountResourceResponse{
@@ -616,9 +616,54 @@ func TestTronRPC_GetAddressChainExtraData_EmptyGetAccountPayload_OmitsStakingInf
 				EnergyLimit:  9000,
 				EnergyUsed:   1234,
 			},
-			// Empty /wallet/getaccount payload should omit stakingInfo.
+			// Non-existent account: Tron node returns {} (no address field).
 			"/wallet/getaccount": map[string]any{},
 			"/wallet/getReward":  map[string]any{},
+		},
+	}
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.Equal(t, bchain.TronAccountExtraData{
+		AvailableStakedBandwidth: 150,
+		TotalStakedBandwidth:     400,
+		AvailableFreeBandwidth:   500,
+		TotalFreeBandwidth:       600,
+		AvailableEnergy:          7766,
+		TotalEnergy:              9000,
+		StakingInfo:              nil,
+	}, extra)
+}
+
+func TestTronRPC_GetAddressChainExtraData_GetAccountFailure_OmitsStakingInfo(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				FreeNetLimit: 600,
+				FreeNetUsed:  100,
+				NetLimit:     400,
+				NetUsed:      250,
+				EnergyLimit:  9000,
+				EnergyUsed:   1234,
+			},
+			"/wallet/getReward": map[string]any{},
+		},
+		ErrByPath: map[string]error{
+			"/wallet/getaccount": errors.New("backend /wallet/getaccount temporary failure"),
 		},
 	}
 	parser := NewTronParser(1, false)

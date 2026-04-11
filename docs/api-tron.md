@@ -72,7 +72,7 @@ Schema:
 
 ## Tron-specific account data (`Address.chainExtraData.payload`)
 
-On Tron, `Address.chainExtraData.payload` also includes staking/governance metadata in `stakingInfo` when available. If staking/governance endpoints fail, `stakingInfo` may be omitted while base resource fields remain present.
+On Tron, `Address.chainExtraData.payload` also includes staking/governance metadata in `stakingInfo` when available. `stakingInfo` is omitted for non-existent accounts or when the backend is temporarily unavailable.
 
 `stakingInfo` schema:
 
