@@ -155,14 +155,38 @@ func (c *fakeBlockChainTronType) GetAddressChainExtraData(addrDesc bchain.Addres
 		seed = int64(addrDesc[0])
 	}
 
-	payload, err := json.Marshal(&bchain.TronAccountExtraData{
+	extra := &bchain.TronAccountExtraData{
 		AvailableStakedBandwidth: seed,
 		TotalStakedBandwidth:     seed + 1000,
 		AvailableFreeBandwidth:   seed + 500,
 		TotalFreeBandwidth:       seed + 1500,
 		AvailableEnergy:          seed * 100,
 		TotalEnergy:              seed*100 + 10000,
-	})
+	}
+	extra.StakingInfo = &bchain.TronStakingInfo{
+		StakedBalance:          "7000000",
+		StakedBalanceEnergy:    "5000000",
+		StakedBalanceBandwidth: "2000000",
+		UnstakingBatches: []bchain.TronUnstakingBatch{
+			{
+				Amount:     "1112757",
+				ExpireTime: 1777018452,
+			},
+		},
+		TotalVotingPower:     "7",
+		AvailableVotingPower: "10",
+		Votes: []bchain.TronVote{
+			{
+				Address:   TronAddrTD,
+				VoteCount: "20",
+			},
+		},
+		UnclaimedReward:           "42767",
+		DelegatedBalanceEnergy:    "3210000",
+		DelegatedBalanceBandwidth: "654000",
+	}
+
+	payload, err := json.Marshal(extra)
 	if err != nil {
 		return nil, err
 	}

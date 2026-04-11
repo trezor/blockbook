@@ -69,3 +69,24 @@ Schema:
   }
 }
 ```
+
+## Tron-specific account data (`Address.chainExtraData.payload`)
+
+On Tron, `Address.chainExtraData.payload` also includes staking/governance metadata in `stakingInfo` when available. `stakingInfo` is omitted for non-existent accounts or when the backend is temporarily unavailable.
+
+`stakingInfo` schema:
+
+- `stakedBalance` (`string`): total staked TRX in sun (Stake 2.0, bandwidth + energy)
+- `stakedBalanceEnergy` (`string`): staked-for-energy amount in sun
+- `stakedBalanceBandwidth` (`string`): staked-for-bandwidth amount in sun
+- `unstakingBatches` (`array`): pending unstaking batches
+  - `amount` (`string`): unstaked amount in sun
+  - `expireTime` (`number`): Unix timestamp in **seconds** (`unfreeze_expire_time` from node is milliseconds and is converted)
+- `totalVotingPower` (`string`): `stakedBalance / 1_000_000`
+- `availableVotingPower` (`string`): value from `wallet/getaccountresource` field `tronPowerLimit`
+- `votes` (`array`): current vote allocations
+  - `address` (`string`): SR address (base58)
+  - `voteCount` (`string`): vote count
+- `unclaimedReward` (`string`): value from `wallet/getReward.reward` (sun)
+- `delegatedBalanceEnergy` (`string`): delegated staked energy in sun (`delegated_frozenV2_balance_for_energy`)
+- `delegatedBalanceBandwidth` (`string`): delegated staked bandwidth in sun (`delegated_frozenV2_balance_for_bandwidth`)
