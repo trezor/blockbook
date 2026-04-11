@@ -448,6 +448,7 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 				TronPowerLimit: 10,
 			},
 			"/wallet/getaccount": map[string]any{
+				"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
 				"frozenV2": []map[string]any{
 					{"amount": int64(2000000)},
 					{"type": "ENERGY", "amount": int64(5000000)},
@@ -531,6 +532,7 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 				"EnergyUsed":   int64(20),
 			},
 			"/wallet/getaccount": map[string]any{
+				"address": "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
 				"frozenV2": []map[string]any{
 					{"amount": int64(-10)},
 					{"type": "ENERGY", "amount": int64(2000000)},
@@ -703,6 +705,7 @@ func TestTronRPC_GetAddressChainExtraData_GetRewardFailure_UsesZeroReward(t *tes
 				TronPowerLimit: 3,
 			},
 			"/wallet/getaccount": map[string]any{
+				"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
 				"frozenV2": []map[string]any{
 					{"amount": int64(3000000)},
 				},
