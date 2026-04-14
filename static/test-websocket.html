@@ -269,6 +269,7 @@
                     if (specific) {
                         // example for bitcoin type: {"conservative": false,"txsize":1234}
                         // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd","gasPrice":"0x30d40","value":"0x1234"}
+                        // example for tron type (TRC20 USDT transfer): {"from":"TAzsQ9Gx8eqFNFSKbeXrbi45CuVPHzA8wr","to":"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t","value":"0x0","data":"0xa9059cbb000000000000000000000041229f50e96adb494f7aef1868eb38a0da00f769ac0000000000000000000000000000000000000000000000000000000002faf080"}
                         specific = JSON.parse(specific);
                     } else {
                         specific = undefined;
@@ -1400,6 +1401,8 @@
                     'TEJqVieEEDTwZqYh6oTywUUGMgB6b12peo,TJg3b7zguL3SfParGd7rtBxKW75dWYHv95',
                 subscribeFiatRatesCurrency: 'usd',
                 subscribeFiatRatesTokens: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                estimateFeeSpecific:
+                    '{"from":"TAzsQ9Gx8eqFNFSKbeXrbi45CuVPHzA8wr","to":"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t","value":"0x0","data":"0xa9059cbb000000000000000000000041229f50e96adb494f7aef1868eb38a0da00f769ac0000000000000000000000000000000000000000000000000000000002faf080"}',
             },
         };
 
