@@ -8,8 +8,8 @@ TCMALLOC =
 PORTABLE = 0
 ARGS ?=
 GITCOMMIT ?= $(shell git describe --always --dirty 2>/dev/null)
-# Forward BB_BUILD_ENV, BB_*_RPC_URL_*, BB_RPC_*, and BB_DEV_API_* overrides into Docker for build/test tooling.
-BB_RPC_ENV := $(shell env | awk -F= '/^BB_BUILD_ENV$$|^BB_(DEV|PROD)_RPC_URL_(HTTP|WS)_|^BB_RPC_(BIND_HOST|ALLOW_IP)_|^BB_DEV_API_URL_(HTTP|WS)_/ {print "-e " $$1}')
+# Forward BB_BUILD_ENV, BB_*_RPC_URL_*, BB_*_MQ_URL_*, BB_RPC_*, and BB_DEV_API_* overrides into Docker for build/test tooling.
+BB_RPC_ENV := $(shell env | awk -F= '/^BB_BUILD_ENV$$|^BB_(DEV|PROD)_RPC_URL_(HTTP|WS)_|^BB_(DEV|PROD)_MQ_URL_|^BB_RPC_(BIND_HOST|ALLOW_IP)_|^BB_DEV_API_URL_(HTTP|WS)_/ {print "-e " $$1}')
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 
