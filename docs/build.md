@@ -101,6 +101,11 @@ Resolution prefers the exact alias and also accepts archive variants such as `<a
 subscriptions. The selected value should point to the same host as the selected HTTP RPC override and follows the same
 fallback resolution.
 
+`BB_DEV_MQ_URL_<coin alias>` / `BB_PROD_MQ_URL_<coin alias>`: Override `ipc.message_queue_binding_template` during
+package/config generation. The value is used as-is and should be a full MQ endpoint such as
+`tcp://backend_hostname:28332`. The root `Makefile` forwards these variables into the Docker build/test containers and
+the same alias/archive fallback resolution applies.
+
 Example:
 `BB_BUILD_ENV=prod BB_PROD_RPC_URL_HTTP_ethereum=http://backend_hostname:1234 BB_PROD_RPC_URL_WS_ethereum_archive=ws://backend_hostname:1234 make deb-ethereum_archive`.
 

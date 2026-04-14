@@ -24,8 +24,10 @@ runs:
         alias_prefixes = (
             "BB_DEV_RPC_URL_HTTP_",
             "BB_DEV_RPC_URL_WS_",
+            "BB_DEV_MQ_URL_",
             "BB_PROD_RPC_URL_HTTP_",
             "BB_PROD_RPC_URL_WS_",
+            "BB_PROD_MQ_URL_",
             "BB_RPC_BIND_HOST_",
             "BB_RPC_ALLOW_IP_",
             "BB_DEV_API_URL_HTTP_",

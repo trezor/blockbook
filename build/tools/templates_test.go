@@ -162,6 +162,87 @@ func TestLoadConfigSetsWantsBackendServiceFromEffectiveRPCURL(t *testing.T) {
 	})
 }
 
+func TestLoadConfigOverridesMessageQueueBindingFromEnv(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"bitcoin",
+		devMQURLPrefix+"bitcoin_archive",
+		prodMQURLPrefix+"bitcoin",
+		prodMQURLPrefix+"bitcoin_archive",
+	)
+
+	t.Setenv(buildEnvVar, buildEnvDev)
+	t.Setenv(devMQURLPrefix+"bitcoin", "tcp://mq-dev.example:38330")
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	renderedMQ, err := renderConfigTemplate(config, "IPC.MessageQueueBindingTemplate")
+	if err != nil {
+		t.Fatalf("renderConfigTemplate(MessageQueueBindingTemplate) error = %v", err)
+	}
+	if renderedMQ != "tcp://mq-dev.example:38330" {
+		t.Fatalf("message_queue_binding = %q, want %q", renderedMQ, "tcp://mq-dev.example:38330")
+	}
+}
+
+func TestLoadConfigUsesProdMQOverrideWhenBuildEnvIsProd(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"bitcoin",
+		prodMQURLPrefix+"bitcoin",
+	)
+
+	t.Setenv(buildEnvVar, buildEnvProd)
+	t.Setenv(devMQURLPrefix+"bitcoin", "tcp://mq-dev.example:38330")
+	t.Setenv(prodMQURLPrefix+"bitcoin", "tcp://mq-prod.example:48330")
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	renderedMQ, err := renderConfigTemplate(config, "IPC.MessageQueueBindingTemplate")
+	if err != nil {
+		t.Fatalf("renderConfigTemplate(MessageQueueBindingTemplate) error = %v", err)
+	}
+	if renderedMQ != "tcp://mq-prod.example:48330" {
+		t.Fatalf("message_queue_binding = %q, want %q", renderedMQ, "tcp://mq-prod.example:48330")
+	}
+}
+
+func TestLoadConfigUsesUnderscoreMQOverrideForHyphenAlias(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"ethereum_classic",
+		prodMQURLPrefix+"ethereum_classic",
+	)
+
+	t.Setenv(buildEnvVar, buildEnvDev)
+	t.Setenv(devMQURLPrefix+"ethereum_classic", "tcp://mq-classic.example:9037")
+
+	config, err := LoadConfig(configsDir, "ethereum-classic")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	renderedMQ, err := renderConfigTemplate(config, "IPC.MessageQueueBindingTemplate")
+	if err != nil {
+		t.Fatalf("renderConfigTemplate(MessageQueueBindingTemplate) error = %v", err)
+	}
+	if renderedMQ != "tcp://mq-classic.example:9037" {
+		t.Fatalf("message_queue_binding = %q, want %q", renderedMQ, "tcp://mq-classic.example:9037")
+	}
+}
+
 func TestBlockbookServiceTemplateGatesWantsLine(t *testing.T) {
 	config := &Config{}
 	config.Coin.Name = "Bitcoin"

@@ -29,6 +29,10 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 -   `BB_DEV_RPC_URL_WS_<coin alias>` / `BB_PROD_RPC_URL_WS_<coin alias>` - Override `ipc.rpc_url_ws_template` for
     WebSocket subscriptions; should point to the same host as the selected HTTP RPC override and follows the same
     fallback resolution.
+-   `BB_DEV_MQ_URL_<coin alias>` / `BB_PROD_MQ_URL_<coin alias>` - Override `ipc.message_queue_binding_template`
+    during package/config generation. The value is used as-is, so it should include the full MQ transport URL
+    (for example `tcp://backend_hostname:28332`). This follows the same alias/archive fallback resolution as the
+    RPC URL overrides.
 -   `BB_RPC_BIND_HOST_<coin alias>` - Overrides backend RPC bind host during package/config generation; when set to
     `0.0.0.0`, RPC stays restricted unless `BB_RPC_ALLOW_IP_<coin alias>` is set.
 -   `BB_RPC_ALLOW_IP_<coin alias>` - Overrides backend RPC allow list for UTXO configs (e.g. `rpcallowip`), defaulting

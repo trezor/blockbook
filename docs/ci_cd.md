@@ -92,6 +92,7 @@ Special cases:
 | Runner mapping                | BB_RUNNER_<coin>                       | BB_RUNNER_POLYGON_ARCHIVE            |
 | Build env selector            | BB_BUILD_ENV                           | dev                                  |
 | Backend RPC env identity      | coin.alias                             | BB_DEV_RPC_URL_HTTP_polygon_archive_bor |
+| Backend MQ env identity       | coin.alias                             | BB_DEV_MQ_URL_polygon_archive_bor    |
 | Blockbook package name        | blockbook.package_name                 | blockbook-polygon                    |
 | Backend package name          | backend.package_name                   | backend-polygon                      |
 | Build target identity         | workflow/config coin name              | deb-blockbook-polygon_archive        |
