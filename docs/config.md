@@ -47,7 +47,10 @@ Good examples of coin configuration are
     * `rpc_pass` – Password of back-end RPC service, used by both Blockbook and back-end configuration templates.
     * `rpc_timeout` – RPC timeout used by Blockbook.
     * `message_queue_binding_template` – Template that defines URL of back-end's message queue (ZMQ), used by both
-       Blockbook and back-end configuration template. See note on templates below.
+       Blockbook and back-end configuration template. You can override it at build time by setting the selected
+       `BB_DEV_MQ_URL_<coin alias>` or `BB_PROD_MQ_URL_<coin alias>` variable (for example,
+       `BB_BUILD_ENV=dev BB_DEV_MQ_URL_bitcoin=tcp://backend_hostname:28332`), which is used as-is during template
+       generation. See note on templates below.
 
 * `backend` – Definition of back-end package, configuration and service.
     * `package_name` – Name of package. See convention note in [build guide](/docs/build.md#on-naming-conventions-and-versioning).

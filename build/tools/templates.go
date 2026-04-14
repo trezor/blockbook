@@ -119,8 +119,10 @@ const (
 	buildEnvProd         = "prod"
 	devRPCURLHTTPPrefix  = "BB_DEV_RPC_URL_HTTP_"
 	devRPCURLWSPrefix    = "BB_DEV_RPC_URL_WS_"
+	devMQURLPrefix       = "BB_DEV_MQ_URL_"
 	prodRPCURLHTTPPrefix = "BB_PROD_RPC_URL_HTTP_"
 	prodRPCURLWSPrefix   = "BB_PROD_RPC_URL_WS_"
+	prodMQURLPrefix      = "BB_PROD_MQ_URL_"
 )
 
 func jsonToString(msg json.RawMessage) (string, error) {
@@ -214,8 +216,10 @@ func rpcEnvPrefixes() []string {
 	return []string{
 		devRPCURLWSPrefix,
 		devRPCURLHTTPPrefix,
+		devMQURLPrefix,
 		prodRPCURLWSPrefix,
 		prodRPCURLHTTPPrefix,
+		prodMQURLPrefix,
 		"BB_RPC_BIND_HOST_",
 		"BB_RPC_ALLOW_IP_",
 	}
@@ -262,6 +266,15 @@ func rpcURLPrefixesForBuildEnv(buildEnv string) (string, string) {
 		return prodRPCURLHTTPPrefix, prodRPCURLWSPrefix
 	default:
 		return devRPCURLHTTPPrefix, devRPCURLWSPrefix
+	}
+}
+
+func mqURLPrefixForBuildEnv(buildEnv string) string {
+	switch buildEnv {
+	case buildEnvProd:
+		return prodMQURLPrefix
+	default:
+		return devMQURLPrefix
 	}
 }
 
@@ -386,6 +399,7 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	}
 
 	rpcURLHTTPPrefix, rpcURLWSPrefix := rpcURLPrefixesForBuildEnv(buildEnv)
+	mqURLPrefix := mqURLPrefixForBuildEnv(buildEnv)
 
 	// Resolve RPC env by exact alias first and fall back to *_archive for shared test/deploy wiring.
 	if rpcURL, ok := lookupEnvWithArchiveFallback(rpcURLHTTPPrefix, config.Coin.Alias); ok {
@@ -394,6 +408,9 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	}
 	if rpcURLWS, ok := lookupEnvWithArchiveFallback(rpcURLWSPrefix, config.Coin.Alias); ok {
 		config.IPC.RPCURLWSTemplate = rpcURLWS
+	}
+	if mqURL, ok := lookupEnvWithArchiveFallback(mqURLPrefix, config.Coin.Alias); ok {
+		config.IPC.MessageQueueBindingTemplate = mqURL
 	}
 
 	if !isEmpty(config, "backend") {

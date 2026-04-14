@@ -64,6 +64,7 @@ URLs that link to *localhost*. If you need run tests against remote servers, the
 * tests use `BB_BUILD_ENV=dev`
 * set `BB_DEV_RPC_URL_HTTP_<coin alias>` to override `rpc_url_template` during template generation (forwarded into Docker by the root `Makefile`)
 * set `BB_DEV_RPC_URL_WS_<coin alias>` to override `rpc_url_ws_template` for WebSocket subscriptions when needed
+* set `BB_DEV_MQ_URL_<coin alias>` to override `message_queue_binding_template` when tests need a non-local MQ binding
 * temporarily change config
 * SSH tunneling – `ssh -nNT -L 8030:localhost:8030 remote-server`
 * HTTP proxy
