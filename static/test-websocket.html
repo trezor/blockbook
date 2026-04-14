@@ -269,6 +269,7 @@
                     if (specific) {
                         // example for bitcoin type: {"conservative": false,"txsize":1234}
                         // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd","gasPrice":"0x30d40","value":"0x1234"}
+                        // example for tron type (TRC20 USDT transfer): {"from":"TAzsQ9Gx8eqFNFSKbeXrbi45CuVPHzA8wr","to":"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t","value":"0x0","data":"0xa9059cbb000000000000000000000041229f50e96adb494f7aef1868eb38a0da00f769ac0000000000000000000000000000000000000000000000000000000002faf080"}
                         specific = JSON.parse(specific);
                     } else {
                         specific = undefined;
@@ -580,6 +581,28 @@
                 <h1>Blockbook Websocket Test Page</h1>
             </div>
             <div class="row">
+                <div class="col d-flex justify-content-center">
+                    <div class="btn-group" role="group" aria-label="Preset selector">
+                        <button
+                            id="presetEthereumButton"
+                            class="btn btn-secondary"
+                            type="button"
+                            onclick="setPreset('ethereum')"
+                        >
+                            Ethereum
+                        </button>
+                        <button
+                            id="presetTronButton"
+                            class="btn btn-outline-secondary"
+                            type="button"
+                            onclick="setPreset('tron')"
+                        >
+                            Tron
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
                 <div class="col">
                     <input
                         class="btn btn-secondary"
@@ -627,7 +650,6 @@
                         class="form-control"
                         placeholder="height"
                         id="getBlockHashHeight"
-                        value="0"
                     />
                 </div>
                 <div class="col"></div>
@@ -694,7 +716,6 @@
                             style="width: 79%"
                             class="form-control"
                             id="getAccountInfoDescriptor"
-                            value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd"
                         />
                         <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px">
                             <option value="basic">Basic</option>
@@ -788,7 +809,6 @@
                             placeholder="descriptor"
                             class="form-control"
                             id="getBalanceHistoryDescriptor"
-                            value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd"
                         />
                     </div>
                     <div class="row" style="margin: 0; margin-top: 5px">
@@ -843,7 +863,6 @@
                             placeholder="txid"
                             class="form-control"
                             id="getTransactionTxid"
-                            value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574"
                         />
                     </div>
                 </div>
@@ -868,7 +887,6 @@
                             placeholder="txid"
                             class="form-control"
                             id="getTransactionSpecificTxid"
-                            value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574"
                         />
                     </div>
                 </div>
@@ -1040,7 +1058,6 @@
                         type="text"
                         class="form-control"
                         id="getFiatRatesTickersListDate"
-                        value="1576591569"
                         placeholder="Unix timestamp"
                     />
                 </div>
@@ -1181,7 +1198,6 @@
                             class="form-control"
                             id="rpcCallTo"
                             style="width: 60%; margin-right: 5px"
-                            value="0x624087dd1904ab122a32878ce9e933c7071f53b9"
                             placeholder="to"
                         />
                         <input
@@ -1190,7 +1206,6 @@
                             placeholder="data"
                             style="width: 100%"
                             id="rpcCallData"
-                            value="0x2fec7966000000000000000000000000ce66a9577f4e2589c1d1547b75b7a2b0807ce0ed"
                         />
                     </div>
                 </div>
@@ -1264,7 +1279,6 @@
                         type="text"
                         class="form-control"
                         id="subscribeAddressesName"
-                        value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd,0x73d0385f4d8e00c5e6504c6030f47bf6212736a8"
                     />
                     <div class="form-check">
                         <input
@@ -1308,7 +1322,6 @@
                         type="text"
                         class="form-control"
                         id="subscribeFiatRatesCurrency"
-                        value="usd"
                     />
                 </div>
                 <div class="col-8">
@@ -1341,7 +1354,107 @@
         <br /><br />
     </body>
     <script>
+        const tronTxid = '0124a39312169cd5adbd3268f7d20fe23132bf66eb8e2fbb4be4af1f040cf211';
+        const ethereumTxid =
+            '0x2fd49105eec5b19e1453ac2a05472fea44ee21fba8871cd41d151ec2bc3f6487';
+        const presetValues = {
+            ethereum: {
+                getBlockHashHeight: '0',
+                getBlockId: '',
+                getAccountInfoDescriptor: '0xba98d6a5ac827632e3457de7512d211e4ff7e8bd',
+                getAccountInfoContract: '',
+                getBalanceHistoryDescriptor: '0xba98d6a5ac827632e3457de7512d211e4ff7e8bd',
+                getTransactionTxid: ethereumTxid,
+                getTransactionSpecificTxid: ethereumTxid,
+                getFiatRatesForTimestampsCurrency: '',
+                getFiatRatesForTimestampsToken: '',
+                getCurrentFiatRatesCurrency: '',
+                getCurrentFiatRatesToken: '',
+                getFiatRatesTickersListDate: '1576591569',
+                getFiatRatesTickersToken: '',
+                rpcCallTo: '0x624087dd1904ab122a32878ce9e933c7071f53b9',
+                rpcCallData:
+                    '0x2fec7966000000000000000000000000ce66a9577f4e2589c1d1547b75b7a2b0807ce0ed',
+                subscribeAddressesName:
+                    '0xba98d6a5ac827632e3457de7512d211e4ff7e8bd,0x73d0385f4d8e00c5e6504c6030f47bf6212736a8',
+                subscribeFiatRatesCurrency: 'usd',
+                subscribeFiatRatesTokens: '',
+            },
+            tron: {
+                getBlockHashHeight: '81693417',
+                getBlockId:
+                    '0000000004de8ae9f7033152c7eb7c79a62c0f99bbe3816c0bbfc28694c0541a',
+                getAccountInfoDescriptor: 'TEJqVieEEDTwZqYh6oTywUUGMgB6b12peo',
+                getAccountInfoContract: '',
+                getBalanceHistoryDescriptor: 'TEJqVieEEDTwZqYh6oTywUUGMgB6b12peo',
+                getTransactionTxid: tronTxid,
+                getTransactionSpecificTxid: tronTxid,
+                getFiatRatesForTimestampsCurrency: 'usd',
+                getFiatRatesForTimestampsToken: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                getCurrentFiatRatesCurrency: 'usd',
+                getCurrentFiatRatesToken: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                getFiatRatesTickersListDate: '1775740614',
+                getFiatRatesTickersToken: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                rpcCallTo: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                rpcCallData: '0x18160ddd',
+                subscribeAddressesName:
+                    'TEJqVieEEDTwZqYh6oTywUUGMgB6b12peo,TJg3b7zguL3SfParGd7rtBxKW75dWYHv95',
+                subscribeFiatRatesCurrency: 'usd',
+                subscribeFiatRatesTokens: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                estimateFeeSpecific:
+                    '{"from":"TAzsQ9Gx8eqFNFSKbeXrbi45CuVPHzA8wr","to":"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t","value":"0x0","data":"0xa9059cbb000000000000000000000041229f50e96adb494f7aef1868eb38a0da00f769ac0000000000000000000000000000000000000000000000000000000002faf080"}',
+            },
+        };
+
+        function setPresetButtons(preset) {
+            const ethereumButton = document.getElementById('presetEthereumButton');
+            const tronButton = document.getElementById('presetTronButton');
+            if (!ethereumButton || !tronButton) {
+                return;
+            }
+            if (preset === 'tron') {
+                ethereumButton.className = 'btn btn-outline-secondary';
+                tronButton.className = 'btn btn-secondary';
+            } else {
+                ethereumButton.className = 'btn btn-secondary';
+                tronButton.className = 'btn btn-outline-secondary';
+            }
+        }
+
+        function applyPreset(preset) {
+            const values = presetValues[preset] || presetValues.ethereum;
+            Object.keys(values).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.value = values[id];
+                }
+            });
+            const accountInfoDetails = document.getElementById('getAccountInfoDetails');
+            if (accountInfoDetails) {
+                accountInfoDetails.value = 'basic';
+            }
+            setPresetButtons(preset);
+        }
+
+        function setPreset(preset) {
+            const selected = preset === 'tron' ? 'tron' : 'ethereum';
+            const url = new URL(window.location.href);
+            url.searchParams.set('preset', selected);
+            window.history.replaceState(null, '', url.toString());
+            applyPreset(selected);
+        }
+
+        function applyPresetFromQuery() {
+            const preset = new URLSearchParams(window.location.search).get('preset');
+            if (preset === 'tron' || preset === 'ethereum') {
+                applyPreset(preset);
+                return;
+            }
+            applyPreset('ethereum');
+        }
+
         document.getElementById('serverAddress').value =
             window.location.protocol + '//' + window.location.host;
+        applyPresetFromQuery();
     </script>
 </html>
