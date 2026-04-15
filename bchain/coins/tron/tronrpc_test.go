@@ -610,6 +610,63 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 	}, extra)
 }
 
+func TestTronRPC_GetAddressChainExtraData_SkipsVotesWithoutPositiveCount(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				TronPowerLimit: 9,
+				TronPowerUsed:  2,
+			},
+			"/wallet/getaccount": map[string]any{
+				"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+				"votes": []map[string]any{
+					{
+						"vote_address": "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+					},
+					{
+						"vote_address": "TEoMgjvT6Z5MZ7BfY8M8Pt6APxMfkXxM9P",
+						"vote_count":   int64(0),
+					},
+					{
+						"vote_address": "TS7Rr3V7wYj8D45Rta7kcxkW5n4M57cC8S",
+						"vote_count":   int64(-3),
+					},
+					{
+						"vote_address": "TLyqzVGLV1srkB7dToTAEqgDSfPtXRJZYH",
+						"vote_count":   int64(7),
+					},
+				},
+			},
+			"/wallet/getReward": map[string]any{},
+		},
+	}
+
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.NotNil(t, extra.StakingInfo)
+	require.Equal(t, []bchain.TronVote{
+		{
+			Address:   "TLyqzVGLV1srkB7dToTAEqgDSfPtXRJZYH",
+			VoteCount: "7",
+		},
+	}, extra.StakingInfo.Votes)
+}
+
 func TestTronRPC_GetAddressChainExtraData_NonExistentAccount_OmitsStakingInfo(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
 		RespByPath: map[string]interface{}{
