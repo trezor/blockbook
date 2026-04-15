@@ -229,13 +229,12 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 		if address == "" {
 			continue
 		}
-		voteCount := int64(0)
-		if vote.VoteCount != nil && *vote.VoteCount > 0 {
-			voteCount = *vote.VoteCount
+		if vote.VoteCount == nil || *vote.VoteCount <= 0 {
+			continue
 		}
 		votes = append(votes, bchain.TronVote{
 			Address:   address,
-			VoteCount: strconv.FormatInt(voteCount, 10),
+			VoteCount: strconv.FormatInt(*vote.VoteCount, 10),
 		})
 	}
 
