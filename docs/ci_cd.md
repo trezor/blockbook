@@ -56,7 +56,7 @@ Inputs:
   - in `auto`, backend is built when that env var is unset, empty, or resolves to `localhost`, `127.0.0.1`, or `::1`
   - in `auto`, backend is skipped only when the env var is present and points to a non-loopback target
   - `always` forces backend builds for all selected coins
-  - `never` builds only blockbook packages for all selected coins
+  - `never` skips backend builds for coins that also produce a blockbook package; backend-only coins still build their backend package
   - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
 - `branch_or_tag`: optional branch or tag to check out and deploy; leave empty to use the workflow run ref name

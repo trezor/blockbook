@@ -144,7 +144,18 @@ def main(argv: list[str] | None = None) -> None:
     log("requested coins: " + " ".join(args))
     log(f"backend_mode={backend_mode}")
     log(f"{BUILD_ENV_VAR}={build_env}")
-    log("backend build rule: build unless the selected BB_{DEV|PROD}_RPC_URL_HTTP is non-empty and non-local")
+    if backend_mode == backend_policy.BACKEND_MODE_AUTO:
+        log(
+            "backend build rule: auto mode builds backend unless the selected "
+            "BB_{DEV|PROD}_RPC_URL_HTTP is non-empty and non-local"
+        )
+    elif backend_mode == backend_policy.BACKEND_MODE_ALWAYS:
+        log("backend build rule: always mode builds backend for coins that define a backend package")
+    else:
+        log(
+            "backend build rule: never mode skips backend for coins that also build "
+            "blockbook, but still builds backend-only coins"
+        )
     log(f"branch_or_tag={branch_or_tag} -> path={branch_or_tag_path}")
     log(f"package_root={package_root}")
 

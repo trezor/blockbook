@@ -20,7 +20,7 @@ on:
         required: true
         default: dev
       backend_mode:
-        description: "Backend package build mode; used only when mode=build"
+        description: "Backend package build mode; in never mode, backend-only coins still build backend packages"
         type: choice
         options:
           - auto
