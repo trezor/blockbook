@@ -19,11 +19,15 @@ on:
           - prod
         required: true
         default: dev
-      always_build_backend:
-        description: "Build backend packages for all selected coins; used only when mode=build"
-        type: boolean
+      backend_mode:
+        description: "Backend package build mode; in never mode, backend-only coins still build backend packages"
+        type: choice
+        options:
+          - auto
+          - always
+          - never
         required: true
-        default: false
+        default: auto
       coins:
         description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
         required: true
@@ -122,7 +126,7 @@ jobs:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_PACKAGE_ROOT: /opt/blockbook-builds
           BB_BUILD_ENV: ${{ inputs.env }}
-        run: python3 ./.github/scripts/build_packages.py ${{ inputs.always_build_backend && '--always-build-backend' || '' }} ${{ join(matrix.coins, ' ') }}
+        run: python3 ./.github/scripts/build_packages.py --backend-mode ${{ inputs.backend_mode }} ${{ join(matrix.coins, ' ') }}
 
   deploy:
     name: Deploy (${{ matrix.coin }})

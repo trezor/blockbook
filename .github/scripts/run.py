@@ -20,6 +20,7 @@ from runner import (
 
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_NAME = SCRIPT_PATH.name
+CLI_NAME = "bbcli"
 REPO_ROOT = SCRIPT_PATH.parents[2]
 DEFAULT_REPO = "trezor/blockbook"
 
@@ -85,7 +86,7 @@ def build_command(
     branch_or_tag: str,
     build_env: str,
     coins: str,
-    always_build_backend: bool,
+    backend_mode: str,
 ) -> list[str]:
     cmd = [
         "gh",
@@ -103,8 +104,8 @@ def build_command(
         "-f",
         f"coins={coins}",
     ]
-    if always_build_backend:
-        cmd += ["-f", "always_build_backend=true"]
+    if backend_mode != "auto":
+        cmd += ["-f", f"backend_mode={backend_mode}"]
     if branch_or_tag:
         cmd += ["-f", f"branch_or_tag={branch_or_tag}"]
     return cmd
@@ -201,7 +202,7 @@ def handle_build(args: argparse.Namespace) -> None:
             args.branch_or_tag,
             args.env,
             "ALL" if selection.requested_all else ",".join(selection.coins),
-            args.always_build_backend,
+            args.backend_mode,
         ),
         args.run,
     )
@@ -304,7 +305,7 @@ def handle_watch(args: argparse.Namespace) -> None:
 def create_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.ArgumentParser]]:
     workflow_ref = workflow_ref_display()
     parser = argparse.ArgumentParser(
-        prog=SCRIPT_NAME,
+        prog=CLI_NAME,
         formatter_class=Formatter,
         description="Helper for the Build / Deploy GitHub workflow.",
         epilog=(
@@ -379,13 +380,14 @@ def create_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.Argumen
         help="Build environment (default: dev)",
     )
     build_parser.add_argument(
-        "--always-build-backend",
-        action="store_true",
+        "--backend-mode",
+        choices=("auto", "always", "never"),
+        default="auto",
         help=(
-            "Build backend packages for every selected coin. "
-            "If omitted, backend builds are derived from "
-            "BB_BUILD_ENV plus BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>; "
-            "backend is skipped only for present non-local values"
+            "Backend package build mode (default: auto). "
+            "auto derives from BB_BUILD_ENV plus BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>; "
+            "always forces backend builds; never skips backend for coins that also "
+            "build blockbook, but backend-only coins still build backend."
         ),
     )
     build_parser.set_defaults(func=handle_build)

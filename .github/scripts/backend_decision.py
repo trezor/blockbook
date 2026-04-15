@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> None:
         coin=coin,
         config=load_config(config_path),
         build_env=build_env,
-        always_build_backend=False,
+        backend_mode=backend_policy.BACKEND_MODE_AUTO,
     )
     print(format_shell(decision, build_env))
 
