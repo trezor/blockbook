@@ -46,6 +46,17 @@ func TestTronBuildExtraData_VoteWitness(t *testing.T) {
 	require.Equal(t, "3", extra.Votes[1].Count)
 }
 
+func TestTronBuildExtraData_AccountCreateOperation(t *testing.T) {
+	contract := tronTxContract{Type: "AccountCreateContract"}
+	txByID := &tronGetTransactionByIDResponse{}
+	txByID.RawData.Contract = []tronTxContract{contract}
+	txInfo := &tronGetTransactionInfoByIDResponse{}
+
+	extra := tronBuildExtraData(txByID, txInfo)
+	require.Equal(t, "AccountCreateContract", extra.ContractType)
+	require.Equal(t, "activateAccount", extra.Operation)
+}
+
 func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 	t.Run("stake amount", func(t *testing.T) {
 		contract := tronTxContract{Type: "FreezeBalanceV2Contract"}
@@ -182,6 +193,27 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 			require.Equal(t, tt.want, value.Int64())
 		})
 	}
+}
+
+func TestTronBuildRpcTransaction_AccountCreateContractSetsToAddress(t *testing.T) {
+	contract := tronTxContract{Type: "AccountCreateContract"}
+	contract.Parameter.Value.OwnerAddress = "41508b7b8057fc9170398a65bbc89ff3ccfcc0f4a5"
+	contract.Parameter.Value.AccountAddress = "41da79e32a568680fccedadcab18a6e1bc231c0476"
+
+	txByID := &tronGetTransactionByIDResponse{
+		TxID: "e5babca390bfb5ba2e26151f031893f5b01237536fbd700f5f563423a1dc1b7d",
+	}
+	txByID.RawData.Contract = []tronTxContract{contract}
+
+	txInfo := &tronGetTransactionInfoByIDResponse{
+		BlockNumber: int64Ptr(1),
+	}
+
+	tx := tronBuildRpcTransaction(txByID, txInfo)
+
+	require.Equal(t, ToTronAddressFromAddress(contract.Parameter.Value.OwnerAddress), tx.From)
+	require.Equal(t, contract.Parameter.Value.AccountAddress, tx.To)
+	require.Equal(t, "0x0", tx.Value)
 }
 
 func TestTronGetTransactionInfoByIDResponse_IgnoresCancelUnfreezeV2AmountShape(t *testing.T) {
