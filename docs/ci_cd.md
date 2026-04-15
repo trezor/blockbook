@@ -51,11 +51,12 @@ Inputs:
   - default is `dev`
   - selected value is exported downstream as `BB_BUILD_ENV`
   - ignored when `mode=deploy`
-- `always_build_backend`:
-  - `false` derives backend builds per coin from the selected `BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>` value
-  - backend is built when that env var is unset, empty, or resolves to `localhost`, `127.0.0.1`, or `::1`
-  - backend is skipped only when the env var is present and points to a non-loopback target
-  - `true` forces backend builds for all selected coins
+- `backend_mode`:
+  - `auto` derives backend builds per coin from the selected `BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>` value
+  - in `auto`, backend is built when that env var is unset, empty, or resolves to `localhost`, `127.0.0.1`, or `::1`
+  - in `auto`, backend is skipped only when the env var is present and points to a non-loopback target
+  - `always` forces backend builds for all selected coins
+  - `never` builds only blockbook packages for all selected coins
   - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
 - `branch_or_tag`: optional branch or tag to check out and deploy; leave empty to use the workflow run ref name
@@ -179,6 +180,16 @@ Print the prod build command for selected coins:
 
 ```text
 gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=bitcoin,bsc_archive -f branch_or_tag=new-test-name-config
+```
+
+Print a build command that skips backend packages entirely:
+
+```bash
+./.github/bin/bb_deploy build --coins bitcoin,dogecoin --backend-mode never
+```
+
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=bitcoin,dogecoin -f backend_mode=never -f branch_or_tag=new-test-name-config
 ```
 
 Print the dev build command for all selectable coins:

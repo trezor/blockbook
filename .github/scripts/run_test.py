@@ -41,7 +41,7 @@ class RunCliHelpTest(unittest.TestCase):
     def test_build_help_is_subcommand_specific(self) -> None:
         result = run_cli("build", "--help")
         self.assertEqual(result.returncode, 0)
-        self.assertIn("--always-build-backend", result.stdout)
+        self.assertIn("--backend-mode", result.stdout)
         self.assertIn("--coins", result.stdout)
         self.assertNotIn("--format", result.stdout)
 
@@ -49,12 +49,12 @@ class RunCliHelpTest(unittest.TestCase):
         result = run_cli("list", "--help")
         self.assertEqual(result.returncode, 0)
         self.assertIn("--format", result.stdout)
-        self.assertNotIn("--always-build-backend", result.stdout)
+        self.assertNotIn("--backend-mode", result.stdout)
 
     def test_help_subcommand_can_show_build_help(self) -> None:
         result = run_cli("help", "build")
         self.assertEqual(result.returncode, 0)
-        self.assertIn("--always-build-backend", result.stdout)
+        self.assertIn("--backend-mode", result.stdout)
         self.assertIn("Build Debian packages only.", result.stdout)
 
 
