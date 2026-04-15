@@ -74,6 +74,15 @@ Schema:
 
 On Tron, `Address.chainExtraData.payload` also includes staking/governance metadata in `stakingInfo` when available. `stakingInfo` is omitted for non-existent accounts or when the backend is temporarily unavailable.
 
+Resource fields:
+
+- `availableStakedBandwidth` (`number`): remaining bandwidth obtained by staking, computed as `max(NetLimit - NetUsed, 0)` from `wallet/getaccountresource`
+- `totalStakedBandwidth` (`number`): total bandwidth obtained by staking, from `wallet/getaccountresource.NetLimit`
+- `availableFreeBandwidth` (`number`): remaining free bandwidth, computed as `max(freeNetLimit - freeNetUsed, 0)` from `wallet/getaccountresource`
+- `totalFreeBandwidth` (`number`): total daily free bandwidth, from `wallet/getaccountresource.freeNetLimit`
+- `availableEnergy` (`number`): remaining energy, computed as `max(EnergyLimit - EnergyUsed, 0)` from `wallet/getaccountresource`
+- `totalEnergy` (`number`): total energy obtained by staking, from `wallet/getaccountresource.EnergyLimit`
+
 `stakingInfo` schema:
 
 - `stakedBalance` (`string`): total staked TRX in sun (Stake 2.0, bandwidth + energy)
