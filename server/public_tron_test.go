@@ -26,6 +26,10 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 				`<h5>Resources</h5>`,
 				`Bandwidth</td><td>255 / 1`,
 				`Energy</td><td>25`,
+				`<h5>Staking</h5>`,
+				`Voting Power</td><td><span class="copyable">10</span> / <span class="copyable">7</span></td>`,
+				`href="/address/TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD"`,
+				`Unclaimed Reward</td>`,
 			},
 		},
 		{
