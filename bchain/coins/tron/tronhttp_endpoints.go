@@ -205,7 +205,6 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 	}
 
 	stakedBalance := new(big.Int).Add(new(big.Int).Set(stakedBandwidth), stakedEnergy)
-	totalVotingPower := new(big.Int).Div(new(big.Int).Set(stakedBalance), big.NewInt(1_000_000))
 
 	unstakingBatches := make([]bchain.TronUnstakingBatch, 0, len(accountResp.UnfrozenV2))
 	for i := range accountResp.UnfrozenV2 {
@@ -240,7 +239,11 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 		})
 	}
 
-	availableVotingPower := resourceResp.TronPowerLimit
+	totalVotingPower := resourceResp.TronPowerLimit
+	if totalVotingPower < 0 {
+		totalVotingPower = 0
+	}
+	availableVotingPower := totalVotingPower - resourceResp.TronPowerUsed
 	if availableVotingPower < 0 {
 		availableVotingPower = 0
 	}
@@ -262,7 +265,7 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 		StakedBalanceEnergy:       stakedEnergy.String(),
 		StakedBalanceBandwidth:    stakedBandwidth.String(),
 		UnstakingBatches:          unstakingBatches,
-		TotalVotingPower:          totalVotingPower.String(),
+		TotalVotingPower:          strconv.FormatInt(totalVotingPower, 10),
 		AvailableVotingPower:      strconv.FormatInt(availableVotingPower, 10),
 		Votes:                     votes,
 		UnclaimedReward:           strconv.FormatInt(unclaimedReward, 10),

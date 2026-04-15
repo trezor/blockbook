@@ -82,8 +82,8 @@ On Tron, `Address.chainExtraData.payload` also includes staking/governance metad
 - `unstakingBatches` (`array`): pending unstaking batches
   - `amount` (`string`): unstaked amount in sun
   - `expireTime` (`number`): Unix timestamp in **seconds** (`unfreeze_expire_time` from node is milliseconds and is converted)
-- `totalVotingPower` (`string`): `stakedBalance / 1_000_000`
-- `availableVotingPower` (`string`): value from `wallet/getaccountresource` field `tronPowerLimit`
+- `totalVotingPower` (`string`): total TRON Power owned by the account, from `wallet/getaccountresource.tronPowerLimit`
+- `availableVotingPower` (`string`): remaining TRON Power available for voting, computed as `max(tronPowerLimit - tronPowerUsed, 0)` from `wallet/getaccountresource`
 - `votes` (`array`): current vote allocations
   - `address` (`string`): SR address (base58)
   - `voteCount` (`string`): vote count

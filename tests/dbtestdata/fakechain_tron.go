@@ -173,8 +173,8 @@ func (c *fakeBlockChainTronType) GetAddressChainExtraData(addrDesc bchain.Addres
 				ExpireTime: 1777018452,
 			},
 		},
-		TotalVotingPower:     "7",
-		AvailableVotingPower: "10",
+		TotalVotingPower:     "10",
+		AvailableVotingPower: "7",
 		Votes: []bchain.TronVote{
 			{
 				Address:   TronAddrTD,
