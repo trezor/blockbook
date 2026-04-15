@@ -39,6 +39,19 @@ type tronTestMempool struct {
 	txTimes map[string]uint32
 }
 
+func requireMockLastPath(t *testing.T, mock *MockTronHTTPClient, wantPath string) {
+	t.Helper()
+	gotPath, _ := mock.SnapshotLastRequest()
+	require.Equal(t, wantPath, gotPath)
+}
+
+func requireMockLastRequest(t *testing.T, mock *MockTronHTTPClient, wantPath string, wantBody interface{}) {
+	t.Helper()
+	gotPath, gotBody := mock.SnapshotLastRequest()
+	require.Equal(t, wantPath, gotPath)
+	require.Equal(t, wantBody, gotBody)
+}
+
 func (m *tronTestMempool) Resync() (int, error) {
 	return 0, nil
 }
@@ -108,10 +121,8 @@ func TestTronRPC_EthereumTypeGetRawTransaction_FallbackToFullNode(t *testing.T) 
 	rawHex, err := tronRPC.EthereumTypeGetRawTransaction("0xabc")
 	require.NoError(t, err)
 	require.Equal(t, "0xdeadbeef", rawHex)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", solidityHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "abc"}, solidityHTTP.LastBody)
-	require.Equal(t, "/wallet/gettransactionbyid", fullNodeHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "abc"}, fullNodeHTTP.LastBody)
+	requireMockLastRequest(t, solidityHTTP, "/walletsolidity/gettransactionbyid", map[string]string{"value": "abc"})
+	requireMockLastRequest(t, fullNodeHTTP, "/wallet/gettransactionbyid", map[string]string{"value": "abc"})
 }
 
 func TestTronRPC_GetTransactionByIDWithFallback_FallbackToFullNode(t *testing.T) {
@@ -137,8 +148,8 @@ func TestTronRPC_GetTransactionByIDWithFallback_FallbackToFullNode(t *testing.T)
 	require.False(t, isSolidified)
 	require.NotNil(t, txByID)
 	require.Equal(t, "tx1", txByID.TxID)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", solidityHTTP.LastPath)
-	require.Equal(t, "/wallet/gettransactionbyid", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactionbyid")
+	requireMockLastPath(t, fullNodeHTTP, "/wallet/gettransactionbyid")
 }
 
 func TestTronRPC_GetTransactionInfoByIDWithFallback_FallbackToFullNode(t *testing.T) {
@@ -164,8 +175,8 @@ func TestTronRPC_GetTransactionInfoByIDWithFallback_FallbackToFullNode(t *testin
 	require.False(t, isSolidified)
 	require.NotNil(t, txInfo)
 	require.Equal(t, "tx1", txInfo.ID)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", solidityHTTP.LastPath)
-	require.Equal(t, "/wallet/gettransactioninfobyid", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactioninfobyid")
+	requireMockLastPath(t, fullNodeHTTP, "/wallet/gettransactioninfobyid")
 }
 
 func TestTronRPC_GetTransaction_NilMempoolDoesNotPanic(t *testing.T) {
@@ -192,8 +203,8 @@ func TestTronRPC_GetTransaction_NilMempoolDoesNotPanic(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tx)
 	require.Equal(t, "abc", tx.Txid)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", solidityHTTP.LastPath)
-	require.Equal(t, "", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactionbyid")
+	requireMockLastPath(t, fullNodeHTTP, "")
 
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	require.True(t, ok)
@@ -226,8 +237,8 @@ func TestTronRPC_GetTransaction_FallbackToFullNodeKeepsPendingEvenWithBlockNumbe
 	require.NoError(t, err)
 	require.NotNil(t, tx)
 	require.Equal(t, "abc", tx.Txid)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", solidityHTTP.LastPath)
-	require.Equal(t, "/wallet/gettransactionbyid", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactioninfobyid")
+	requireMockLastPath(t, fullNodeHTTP, "/wallet/gettransactionbyid")
 
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	require.True(t, ok)
@@ -274,8 +285,7 @@ func TestTronRPC_GetTransactionByID_EmptyObjectMeansNotFound(t *testing.T) {
 	tx, err := tronRPC.getTransactionByID("0x788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803", true)
 	require.Error(t, err)
 	require.Nil(t, tx)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", mockHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/walletsolidity/gettransactionbyid", map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"})
 }
 
 func TestTronRPC_GetTransactionInfoByID_EmptyObjectMeansNoData(t *testing.T) {
@@ -294,8 +304,7 @@ func TestTronRPC_GetTransactionInfoByID_EmptyObjectMeansNoData(t *testing.T) {
 	txInfo, err := tronRPC.getTransactionInfoByID("0x788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803", true)
 	require.Error(t, err)
 	require.Nil(t, txInfo)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", mockHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/walletsolidity/gettransactioninfobyid", map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"})
 }
 
 func TestTronRPC_GetTransactionInfoByID_NonEmptyObjectReturned(t *testing.T) {
@@ -317,7 +326,7 @@ func TestTronRPC_GetTransactionInfoByID_NonEmptyObjectReturned(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, txInfo)
 	require.Equal(t, "tx1", txInfo.ID)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", mockHTTP.LastPath)
+	requireMockLastPath(t, mockHTTP, "/walletsolidity/gettransactioninfobyid")
 }
 
 func TestTronRPC_SendRawTransaction(t *testing.T) {
@@ -342,8 +351,7 @@ func TestTronRPC_SendRawTransaction(t *testing.T) {
 	gotTxID, err := tronRPC.SendRawTransaction(txHex, false)
 	require.NoError(t, err)
 	require.Equal(t, txID, gotTxID)
-	require.Equal(t, "/wallet/broadcasthex", mockHTTP.LastPath)
-	require.Equal(t, map[string]string{"transaction": "deadbeef"}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/wallet/broadcasthex", map[string]string{"transaction": "deadbeef"})
 }
 
 func TestTronRPC_SendRawTransaction_StripsPrefixFromResponse(t *testing.T) {
@@ -414,8 +422,7 @@ func TestTronRPC_GetMempoolTransactions(t *testing.T) {
 		"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
 		"b431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b303",
 	}, txs)
-	require.Equal(t, "/wallet/gettransactionlistfrompending", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/wallet/gettransactionlistfrompending", map[string]any{})
 }
 
 func TestTronRPC_GetMempoolTransactions_Error(t *testing.T) {
@@ -509,12 +516,13 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 			"delegatedBalanceBandwidth":"654000"
 		}
 	}`, string(payload))
+	paths, bodies := mockHTTP.SnapshotRequests()
 	require.ElementsMatch(t, []string{
 		"/wallet/getaccountresource",
 		"/wallet/getaccount",
 		"/wallet/getReward",
-	}, mockHTTP.Paths)
-	for _, reqBody := range mockHTTP.Bodies {
+	}, paths)
+	for _, reqBody := range bodies {
 		require.Equal(t, map[string]any{
 			"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
 			"visible": true,
@@ -794,11 +802,12 @@ func TestTronRPC_GetAddressChainExtraData_GetRewardFailure_UsesZeroReward(t *tes
 	require.NoError(t, json.Unmarshal(payload, &extra))
 	require.NotNil(t, extra.StakingInfo)
 	require.Equal(t, "0", extra.StakingInfo.UnclaimedReward)
+	paths, _ := mockHTTP.SnapshotRequests()
 	require.ElementsMatch(t, []string{
 		"/wallet/getaccountresource",
 		"/wallet/getaccount",
 		"/wallet/getReward",
-	}, mockHTTP.Paths)
+	}, paths)
 }
 
 func TestTronRPC_RequestLatestSolidifiedBlockHeight(t *testing.T) {
@@ -823,8 +832,7 @@ func TestTronRPC_RequestLatestSolidifiedBlockHeight(t *testing.T) {
 	height, err := tronRPC.requestLatestSolidifiedBlockHeight(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, uint64(123456), height)
-	require.Equal(t, "/walletsolidity/getblock", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{"detail": false}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/walletsolidity/getblock", map[string]any{"detail": false})
 }
 
 func TestTronRPC_RequestLatestSolidifiedBlockHeight_MissingNumber(t *testing.T) {
