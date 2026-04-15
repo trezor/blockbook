@@ -86,7 +86,7 @@ func TestAccountChainExtra(t *testing.T) {
 		addr := &api.Address{
 			ChainExtraData: &api.AccountChainExtraData{
 				PayloadType: "tron",
-				Payload:     json.RawMessage(`{"availableStakedBandwidth":400,"totalStakedBandwidth":700,"availableFreeBandwidth":200,"totalFreeBandwidth":300,"availableEnergy":1234,"totalEnergy":9000,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"7","availableVotingPower":"10","votes":[{"address":"TA","voteCount":"2"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000"}}`),
+				Payload:     json.RawMessage(`{"availableStakedBandwidth":400,"totalStakedBandwidth":700,"availableFreeBandwidth":200,"totalFreeBandwidth":300,"availableEnergy":1234,"totalEnergy":9000,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TA","voteCount":"2"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000"}}`),
 			},
 		}
 		got := accountChainExtra(addr)

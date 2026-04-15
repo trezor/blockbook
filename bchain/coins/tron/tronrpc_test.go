@@ -445,6 +445,7 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 				NetUsed:        250,
 				EnergyLimit:    9000,
 				EnergyUsed:     1234,
+				TronPowerUsed:  3,
 				TronPowerLimit: 10,
 			},
 			"/wallet/getaccount": map[string]any{
@@ -500,8 +501,8 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 			"stakedBalanceEnergy":"5000000",
 			"stakedBalanceBandwidth":"2000000",
 			"unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],
-			"totalVotingPower":"7",
-			"availableVotingPower":"10",
+			"totalVotingPower":"10",
+			"availableVotingPower":"7",
 			"votes":[{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","voteCount":"20"}],
 			"unclaimedReward":"42767",
 			"delegatedBalanceEnergy":"3210000",
@@ -525,11 +526,13 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 	mockHTTP := &MockTronHTTPClient{
 		RespByPath: map[string]interface{}{
 			"/wallet/getaccountresource": map[string]any{
-				"freeNetLimit": int64(100),
-				"freeNetUsed":  int64(150),
-				"NetLimit":     int64(50),
-				"NetUsed":      int64(10),
-				"EnergyUsed":   int64(20),
+				"freeNetLimit":   int64(100),
+				"freeNetUsed":    int64(150),
+				"NetLimit":       int64(50),
+				"NetUsed":        int64(10),
+				"EnergyUsed":     int64(20),
+				"tronPowerUsed":  int64(7),
+				"tronPowerLimit": int64(5),
 			},
 			"/wallet/getaccount": map[string]any{
 				"address": "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
@@ -592,7 +595,7 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 					ExpireTime: 1700000001,
 				},
 			},
-			TotalVotingPower:     "2",
+			TotalVotingPower:     "5",
 			AvailableVotingPower: "0",
 			Votes: []bchain.TronVote{
 				{
