@@ -118,7 +118,7 @@ For `polygon_archive` specifically:
 Wrapper entrypoint:
 
 ```bash
-./.github/bin/bb_deploy
+./.github/bin/bbcli
 ```
 
 Without `--run`, `build` and `deploy` print the underlying `gh workflow run ...`
@@ -131,7 +131,7 @@ The output below assumes `BB_RUNNER_*` repository variables are valid for the cu
 List coins buildable on dev runners:
 
 ```bash
-./.github/bin/bb_deploy list --env dev
+./.github/bin/bbcli list --env dev
 ```
 
 ```text
@@ -155,7 +155,7 @@ zcash
 List all configured runner-mapped coins in CSV form:
 
 ```bash
-./.github/bin/bb_deploy list --env prod --format csv
+./.github/bin/bbcli list --env prod --format csv
 ```
 
 ```text
@@ -165,7 +165,7 @@ arbitrum_archive,avalanche_archive,base_archive,bcash,bitcoin,bitcoin_regtest,bi
 Print the default dev build command for selected coins:
 
 ```bash
-./.github/bin/bb_deploy build --coins bitcoin,dogecoin
+./.github/bin/bbcli build --coins bitcoin,dogecoin
 ```
 
 ```text
@@ -175,7 +175,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the prod build command for selected coins:
 
 ```bash
-./.github/bin/bb_deploy build --env prod --coins bitcoin,bsc_archive
+./.github/bin/bbcli build --env prod --coins bitcoin,bsc_archive
 ```
 
 ```text
@@ -185,7 +185,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print a build command that skips backend packages entirely:
 
 ```bash
-./.github/bin/bb_deploy build --coins bitcoin,dogecoin --backend-mode never
+./.github/bin/bbcli build --coins bitcoin,dogecoin --backend-mode never
 ```
 
 ```text
@@ -195,7 +195,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the dev build command for all selectable coins:
 
 ```bash
-./.github/bin/bb_deploy build --coins ALL
+./.github/bin/bbcli build --coins ALL
 ```
 
 ```text
@@ -205,7 +205,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the prod build command for all selectable coins:
 
 ```bash
-./.github/bin/bb_deploy build --env prod --coins ALL
+./.github/bin/bbcli build --env prod --coins ALL
 ```
 
 ```text
@@ -215,7 +215,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the deploy command for selected coins:
 
 ```bash
-./.github/bin/bb_deploy deploy --coins bitcoin,dogecoin
+./.github/bin/bbcli deploy --coins bitcoin,dogecoin
 ```
 
 ```text
@@ -225,7 +225,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the deploy command with an explicit branch or tag:
 
 ```bash
-./.github/bin/bb_deploy deploy --coins bitcoin --branch-or-tag master
+./.github/bin/bbcli deploy --coins bitcoin --branch-or-tag master
 ```
 
 ```text
