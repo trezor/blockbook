@@ -111,7 +111,15 @@ def ensure_writable_dir(path: Path) -> None:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--always-build-backend", action="store_true")
+    parser.add_argument(
+        "--backend-mode",
+        choices=(
+            backend_policy.BACKEND_MODE_AUTO,
+            backend_policy.BACKEND_MODE_ALWAYS,
+            backend_policy.BACKEND_MODE_NEVER,
+        ),
+        default=backend_policy.BACKEND_MODE_AUTO,
+    )
     parser.add_argument("coins", nargs="+")
     return parser.parse_args(argv)
 
@@ -123,7 +131,7 @@ def main(argv: list[str] | None = None) -> None:
     parsed = parse_args(raw_args)
     args = parsed.coins
 
-    always_build_backend = parsed.always_build_backend
+    backend_mode = parsed.backend_mode
     build_env = resolve_build_env()
 
     package_root = os.environ.get("BB_PACKAGE_ROOT", "").strip() or DEFAULT_PACKAGE_ROOT
@@ -134,7 +142,7 @@ def main(argv: list[str] | None = None) -> None:
     branch_root = Path(package_root) / branch_or_tag_path
 
     log("requested coins: " + " ".join(args))
-    log(f"always_build_backend={int(always_build_backend)}")
+    log(f"backend_mode={backend_mode}")
     log(f"{BUILD_ENV_VAR}={build_env}")
     log("backend build rule: build unless the selected BB_{DEV|PROD}_RPC_URL_HTTP is non-empty and non-local")
     log(f"branch_or_tag={branch_or_tag} -> path={branch_or_tag_path}")
@@ -163,7 +171,7 @@ def main(argv: list[str] | None = None) -> None:
                 coin=coin,
                 config=config,
                 build_env=build_env,
-                always_build_backend=always_build_backend,
+                backend_mode=backend_mode,
             )
         except CoinRPCError as exc:
             fail(str(exc))
