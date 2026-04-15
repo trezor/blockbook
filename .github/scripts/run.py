@@ -386,7 +386,8 @@ def create_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.Argumen
         help=(
             "Backend package build mode (default: auto). "
             "auto derives from BB_BUILD_ENV plus BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>; "
-            "always forces backend builds; never builds blockbook only."
+            "always forces backend builds; never skips backend for coins that also "
+            "build blockbook, but backend-only coins still build backend."
         ),
     )
     build_parser.set_defaults(func=handle_build)
