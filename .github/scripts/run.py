@@ -20,6 +20,7 @@ from runner import (
 
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_NAME = SCRIPT_PATH.name
+CLI_NAME = "bbcli"
 REPO_ROOT = SCRIPT_PATH.parents[2]
 DEFAULT_REPO = "trezor/blockbook"
 
@@ -304,7 +305,7 @@ def handle_watch(args: argparse.Namespace) -> None:
 def create_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.ArgumentParser]]:
     workflow_ref = workflow_ref_display()
     parser = argparse.ArgumentParser(
-        prog=SCRIPT_NAME,
+        prog=CLI_NAME,
         formatter_class=Formatter,
         description="Helper for the Build / Deploy GitHub workflow.",
         epilog=(

@@ -36,6 +36,7 @@ class RunCliHelpTest(unittest.TestCase):
     def test_top_level_help_mentions_subcommand_help(self) -> None:
         result = run_cli("--help")
         self.assertEqual(result.returncode, 0)
+        self.assertIn("usage: bbcli", result.stdout)
         self.assertIn("Use '<command> --help' for command-specific options.", result.stdout)
 
     def test_build_help_is_subcommand_specific(self) -> None:
