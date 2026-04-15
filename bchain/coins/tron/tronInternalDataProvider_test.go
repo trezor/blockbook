@@ -5,6 +5,7 @@ package tron
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,8 @@ type MockTronHTTPClient struct {
 	ErrByPath  map[string]error
 	Err        error
 
+	mu sync.RWMutex
+
 	LastPath string
 	LastBody interface{}
 	Paths    []string
@@ -25,10 +28,12 @@ type MockTronHTTPClient struct {
 }
 
 func (m *MockTronHTTPClient) Request(ctx context.Context, path string, reqBody interface{}, respBody interface{}) error {
+	m.mu.Lock()
 	m.LastPath = path
 	m.LastBody = reqBody
 	m.Paths = append(m.Paths, path)
 	m.Bodies = append(m.Bodies, reqBody)
+	m.mu.Unlock()
 
 	if m.ErrByPath != nil {
 		if err, ok := m.ErrByPath[path]; ok {
@@ -46,6 +51,21 @@ func (m *MockTronHTTPClient) Request(ctx context.Context, path string, reqBody i
 	}
 	b, _ := json.Marshal(resp)
 	return json.Unmarshal(b, respBody)
+}
+
+func (m *MockTronHTTPClient) SnapshotLastRequest() (string, interface{}) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.LastPath, m.LastBody
+}
+
+func (m *MockTronHTTPClient) SnapshotRequests() ([]string, []interface{}) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	paths := append([]string(nil), m.Paths...)
+	bodies := append([]interface{}(nil), m.Bodies...)
+	return paths, bodies
 }
 
 func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
@@ -84,8 +104,9 @@ func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify HTTP call
-	require.Equal(t, "/walletsolidity/gettransactioninfobyblocknum", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{"num": uint32(99)}, mockHTTP.LastBody)
+	lastPath, lastBody := mockHTTP.SnapshotLastRequest()
+	require.Equal(t, "/walletsolidity/gettransactioninfobyblocknum", lastPath)
+	require.Equal(t, map[string]any{"num": uint32(99)}, lastBody)
 
 	// verify parsed internal data
 	require.Len(t, data, 1)
