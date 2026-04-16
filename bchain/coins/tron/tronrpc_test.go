@@ -39,6 +39,19 @@ type tronTestMempool struct {
 	txTimes map[string]uint32
 }
 
+func requireMockLastPath(t *testing.T, mock *MockTronHTTPClient, wantPath string) {
+	t.Helper()
+	gotPath, _ := mock.SnapshotLastRequest()
+	require.Equal(t, wantPath, gotPath)
+}
+
+func requireMockLastRequest(t *testing.T, mock *MockTronHTTPClient, wantPath string, wantBody interface{}) {
+	t.Helper()
+	gotPath, gotBody := mock.SnapshotLastRequest()
+	require.Equal(t, wantPath, gotPath)
+	require.Equal(t, wantBody, gotBody)
+}
+
 func (m *tronTestMempool) Resync() (int, error) {
 	return 0, nil
 }
@@ -108,10 +121,8 @@ func TestTronRPC_EthereumTypeGetRawTransaction_FallbackToFullNode(t *testing.T) 
 	rawHex, err := tronRPC.EthereumTypeGetRawTransaction("0xabc")
 	require.NoError(t, err)
 	require.Equal(t, "0xdeadbeef", rawHex)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", solidityHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "abc"}, solidityHTTP.LastBody)
-	require.Equal(t, "/wallet/gettransactionbyid", fullNodeHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "abc"}, fullNodeHTTP.LastBody)
+	requireMockLastRequest(t, solidityHTTP, "/walletsolidity/gettransactionbyid", map[string]string{"value": "abc"})
+	requireMockLastRequest(t, fullNodeHTTP, "/wallet/gettransactionbyid", map[string]string{"value": "abc"})
 }
 
 func TestTronRPC_GetTransactionByIDWithFallback_FallbackToFullNode(t *testing.T) {
@@ -137,8 +148,8 @@ func TestTronRPC_GetTransactionByIDWithFallback_FallbackToFullNode(t *testing.T)
 	require.False(t, isSolidified)
 	require.NotNil(t, txByID)
 	require.Equal(t, "tx1", txByID.TxID)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", solidityHTTP.LastPath)
-	require.Equal(t, "/wallet/gettransactionbyid", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactionbyid")
+	requireMockLastPath(t, fullNodeHTTP, "/wallet/gettransactionbyid")
 }
 
 func TestTronRPC_GetTransactionInfoByIDWithFallback_FallbackToFullNode(t *testing.T) {
@@ -164,8 +175,8 @@ func TestTronRPC_GetTransactionInfoByIDWithFallback_FallbackToFullNode(t *testin
 	require.False(t, isSolidified)
 	require.NotNil(t, txInfo)
 	require.Equal(t, "tx1", txInfo.ID)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", solidityHTTP.LastPath)
-	require.Equal(t, "/wallet/gettransactioninfobyid", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactioninfobyid")
+	requireMockLastPath(t, fullNodeHTTP, "/wallet/gettransactioninfobyid")
 }
 
 func TestTronRPC_GetTransaction_NilMempoolDoesNotPanic(t *testing.T) {
@@ -192,8 +203,8 @@ func TestTronRPC_GetTransaction_NilMempoolDoesNotPanic(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tx)
 	require.Equal(t, "abc", tx.Txid)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", solidityHTTP.LastPath)
-	require.Equal(t, "", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactionbyid")
+	requireMockLastPath(t, fullNodeHTTP, "")
 
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	require.True(t, ok)
@@ -226,8 +237,8 @@ func TestTronRPC_GetTransaction_FallbackToFullNodeKeepsPendingEvenWithBlockNumbe
 	require.NoError(t, err)
 	require.NotNil(t, tx)
 	require.Equal(t, "abc", tx.Txid)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", solidityHTTP.LastPath)
-	require.Equal(t, "/wallet/gettransactionbyid", fullNodeHTTP.LastPath)
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactioninfobyid")
+	requireMockLastPath(t, fullNodeHTTP, "/wallet/gettransactionbyid")
 
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	require.True(t, ok)
@@ -274,8 +285,7 @@ func TestTronRPC_GetTransactionByID_EmptyObjectMeansNotFound(t *testing.T) {
 	tx, err := tronRPC.getTransactionByID("0x788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803", true)
 	require.Error(t, err)
 	require.Nil(t, tx)
-	require.Equal(t, "/walletsolidity/gettransactionbyid", mockHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/walletsolidity/gettransactionbyid", map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"})
 }
 
 func TestTronRPC_GetTransactionInfoByID_EmptyObjectMeansNoData(t *testing.T) {
@@ -294,8 +304,7 @@ func TestTronRPC_GetTransactionInfoByID_EmptyObjectMeansNoData(t *testing.T) {
 	txInfo, err := tronRPC.getTransactionInfoByID("0x788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803", true)
 	require.Error(t, err)
 	require.Nil(t, txInfo)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", mockHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/walletsolidity/gettransactioninfobyid", map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"})
 }
 
 func TestTronRPC_GetTransactionInfoByID_NonEmptyObjectReturned(t *testing.T) {
@@ -317,7 +326,7 @@ func TestTronRPC_GetTransactionInfoByID_NonEmptyObjectReturned(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, txInfo)
 	require.Equal(t, "tx1", txInfo.ID)
-	require.Equal(t, "/walletsolidity/gettransactioninfobyid", mockHTTP.LastPath)
+	requireMockLastPath(t, mockHTTP, "/walletsolidity/gettransactioninfobyid")
 }
 
 func TestTronRPC_SendRawTransaction(t *testing.T) {
@@ -342,8 +351,7 @@ func TestTronRPC_SendRawTransaction(t *testing.T) {
 	gotTxID, err := tronRPC.SendRawTransaction(txHex, false)
 	require.NoError(t, err)
 	require.Equal(t, txID, gotTxID)
-	require.Equal(t, "/wallet/broadcasthex", mockHTTP.LastPath)
-	require.Equal(t, map[string]string{"transaction": "deadbeef"}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/wallet/broadcasthex", map[string]string{"transaction": "deadbeef"})
 }
 
 func TestTronRPC_SendRawTransaction_StripsPrefixFromResponse(t *testing.T) {
@@ -414,8 +422,7 @@ func TestTronRPC_GetMempoolTransactions(t *testing.T) {
 		"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
 		"b431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b303",
 	}, txs)
-	require.Equal(t, "/wallet/gettransactionlistfrompending", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/wallet/gettransactionlistfrompending", map[string]any{})
 }
 
 func TestTronRPC_GetMempoolTransactions_Error(t *testing.T) {
@@ -437,13 +444,44 @@ func TestTronRPC_GetMempoolTransactions_Error(t *testing.T) {
 
 func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
-		Resp: tronGetAccountResourceResponse{
-			FreeNetLimit: 600,
-			FreeNetUsed:  100,
-			NetLimit:     400,
-			NetUsed:      250,
-			EnergyLimit:  9000,
-			EnergyUsed:   1234,
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				FreeNetLimit:   600,
+				FreeNetUsed:    100,
+				NetLimit:       400,
+				NetUsed:        250,
+				EnergyLimit:    9000,
+				EnergyUsed:     1234,
+				TronPowerUsed:  3,
+				TronPowerLimit: 10,
+			},
+			"/wallet/getaccount": map[string]any{
+				"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+				"frozenV2": []map[string]any{
+					{"amount": int64(2000000)},
+					{"type": "ENERGY", "amount": int64(5000000)},
+					{"type": "TRON_POWER"},
+				},
+				"unfrozenV2": []map[string]any{
+					{
+						"unfreeze_amount":      int64(1112757),
+						"unfreeze_expire_time": int64(1777018452000),
+					},
+				},
+				"votes": []map[string]any{
+					{
+						"vote_address": "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+						"vote_count":   int64(20),
+					},
+				},
+				"account_resource": map[string]any{
+					"delegated_frozenV2_balance_for_energy": int64(3210000),
+				},
+				"delegated_frozenV2_balance_for_bandwidth": int64(654000),
+			},
+			"/wallet/getReward": map[string]any{
+				"reward": int64(42767),
+			},
 		},
 	}
 	parser := NewTronParser(1, false)
@@ -466,23 +504,73 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 		"availableFreeBandwidth":500,
 		"totalFreeBandwidth":600,
 		"availableEnergy":7766,
-		"totalEnergy":9000
+		"totalEnergy":9000,
+		"stakingInfo":{
+			"stakedBalance":"7000000",
+			"stakedBalanceEnergy":"5000000",
+			"stakedBalanceBandwidth":"2000000",
+			"unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],
+			"totalVotingPower":"10",
+			"availableVotingPower":"7",
+			"votes":[{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","voteCount":"20"}],
+			"unclaimedReward":"42767",
+			"delegatedBalanceEnergy":"3210000",
+			"delegatedBalanceBandwidth":"654000"
+		}
 	}`, string(payload))
-	require.Equal(t, "/wallet/getaccountresource", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{
-		"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
-		"visible": true,
-	}, mockHTTP.LastBody)
+	paths, bodies := mockHTTP.SnapshotRequests()
+	require.ElementsMatch(t, []string{
+		"/wallet/getaccountresource",
+		"/wallet/getaccount",
+		"/wallet/getReward",
+	}, paths)
+	for _, reqBody := range bodies {
+		require.Equal(t, map[string]any{
+			"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+			"visible": true,
+		}, reqBody)
+	}
 }
 
 func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
-		Resp: map[string]any{
-			"freeNetLimit": int64(100),
-			"freeNetUsed":  int64(150),
-			"NetLimit":     int64(50),
-			"NetUsed":      int64(10),
-			"EnergyUsed":   int64(20),
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": map[string]any{
+				"freeNetLimit":   int64(100),
+				"freeNetUsed":    int64(150),
+				"NetLimit":       int64(50),
+				"NetUsed":        int64(10),
+				"EnergyUsed":     int64(20),
+				"tronPowerUsed":  int64(7),
+				"tronPowerLimit": int64(5),
+			},
+			"/wallet/getaccount": map[string]any{
+				"address": "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+				"frozenV2": []map[string]any{
+					{"amount": int64(-10)},
+					{"type": "ENERGY", "amount": int64(2000000)},
+				},
+				"unfrozenV2": []map[string]any{
+					{
+						"unfreeze_amount":      int64(1000000),
+						"unfreeze_expire_time": int64(1700000001000),
+					},
+					{},
+				},
+				"votes": []map[string]any{
+					{
+						"vote_address": "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+						"vote_count":   int64(15),
+					},
+					{
+						"vote_count": int64(7),
+					},
+				},
+				"account_resource": map[string]any{
+					"delegated_frozenV2_balance_for_energy": int64(-1),
+				},
+			},
+			"/wallet/getReward": map[string]any{},
 		},
 	}
 
@@ -509,7 +597,221 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 		TotalFreeBandwidth:       100,
 		AvailableEnergy:          0,
 		TotalEnergy:              0,
+		StakingInfo: &bchain.TronStakingInfo{
+			StakedBalance:          "2000000",
+			StakedBalanceEnergy:    "2000000",
+			StakedBalanceBandwidth: "0",
+			UnstakingBatches: []bchain.TronUnstakingBatch{
+				{
+					Amount:     "1000000",
+					ExpireTime: 1700000001,
+				},
+			},
+			TotalVotingPower:     "5",
+			AvailableVotingPower: "0",
+			Votes: []bchain.TronVote{
+				{
+					Address:   "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+					VoteCount: "15",
+				},
+			},
+			UnclaimedReward:           "0",
+			DelegatedBalanceEnergy:    "0",
+			DelegatedBalanceBandwidth: "0",
+		},
 	}, extra)
+}
+
+func TestTronRPC_GetAddressChainExtraData_SkipsVotesWithoutPositiveCount(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				TronPowerLimit: 9,
+				TronPowerUsed:  2,
+			},
+			"/wallet/getaccount": map[string]any{
+				"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+				"votes": []map[string]any{
+					{
+						"vote_address": "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
+					},
+					{
+						"vote_address": "TEoMgjvT6Z5MZ7BfY8M8Pt6APxMfkXxM9P",
+						"vote_count":   int64(0),
+					},
+					{
+						"vote_address": "TS7Rr3V7wYj8D45Rta7kcxkW5n4M57cC8S",
+						"vote_count":   int64(-3),
+					},
+					{
+						"vote_address": "TLyqzVGLV1srkB7dToTAEqgDSfPtXRJZYH",
+						"vote_count":   int64(7),
+					},
+				},
+			},
+			"/wallet/getReward": map[string]any{},
+		},
+	}
+
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.NotNil(t, extra.StakingInfo)
+	require.Equal(t, []bchain.TronVote{
+		{
+			Address:   "TLyqzVGLV1srkB7dToTAEqgDSfPtXRJZYH",
+			VoteCount: "7",
+		},
+	}, extra.StakingInfo.Votes)
+}
+
+func TestTronRPC_GetAddressChainExtraData_NonExistentAccount_OmitsStakingInfo(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				FreeNetLimit: 600,
+				FreeNetUsed:  100,
+				NetLimit:     400,
+				NetUsed:      250,
+				EnergyLimit:  9000,
+				EnergyUsed:   1234,
+			},
+			// Non-existent account: Tron node returns {} (no address field).
+			"/wallet/getaccount": map[string]any{},
+			"/wallet/getReward":  map[string]any{},
+		},
+	}
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.Equal(t, bchain.TronAccountExtraData{
+		AvailableStakedBandwidth: 150,
+		TotalStakedBandwidth:     400,
+		AvailableFreeBandwidth:   500,
+		TotalFreeBandwidth:       600,
+		AvailableEnergy:          7766,
+		TotalEnergy:              9000,
+		StakingInfo:              nil,
+	}, extra)
+}
+
+func TestTronRPC_GetAddressChainExtraData_GetAccountFailure_OmitsStakingInfo(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				FreeNetLimit: 600,
+				FreeNetUsed:  100,
+				NetLimit:     400,
+				NetUsed:      250,
+				EnergyLimit:  9000,
+				EnergyUsed:   1234,
+			},
+			"/wallet/getReward": map[string]any{},
+		},
+		ErrByPath: map[string]error{
+			"/wallet/getaccount": errors.New("backend /wallet/getaccount temporary failure"),
+		},
+	}
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.Equal(t, bchain.TronAccountExtraData{
+		AvailableStakedBandwidth: 150,
+		TotalStakedBandwidth:     400,
+		AvailableFreeBandwidth:   500,
+		TotalFreeBandwidth:       600,
+		AvailableEnergy:          7766,
+		TotalEnergy:              9000,
+		StakingInfo:              nil,
+	}, extra)
+}
+
+func TestTronRPC_GetAddressChainExtraData_GetRewardFailure_UsesZeroReward(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/getaccountresource": tronGetAccountResourceResponse{
+				NetLimit:       100,
+				NetUsed:        10,
+				TronPowerLimit: 3,
+			},
+			"/wallet/getaccount": map[string]any{
+				"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+				"frozenV2": []map[string]any{
+					{"amount": int64(3000000)},
+				},
+			},
+		},
+		ErrByPath: map[string]error{
+			"/wallet/getReward": errors.New("backend /wallet/getReward temporary failure"),
+		},
+	}
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.NotNil(t, extra.StakingInfo)
+	require.Equal(t, "0", extra.StakingInfo.UnclaimedReward)
+	paths, _ := mockHTTP.SnapshotRequests()
+	require.ElementsMatch(t, []string{
+		"/wallet/getaccountresource",
+		"/wallet/getaccount",
+		"/wallet/getReward",
+	}, paths)
 }
 
 func TestTronRPC_RequestLatestSolidifiedBlockHeight(t *testing.T) {
@@ -534,8 +836,7 @@ func TestTronRPC_RequestLatestSolidifiedBlockHeight(t *testing.T) {
 	height, err := tronRPC.requestLatestSolidifiedBlockHeight(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, uint64(123456), height)
-	require.Equal(t, "/walletsolidity/getblock", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{"detail": false}, mockHTTP.LastBody)
+	requireMockLastRequest(t, mockHTTP, "/walletsolidity/getblock", map[string]any{"detail": false})
 }
 
 func TestTronRPC_RequestLatestSolidifiedBlockHeight_MissingNumber(t *testing.T) {

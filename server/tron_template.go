@@ -27,6 +27,23 @@ type tronTxExtraTemplateData struct {
 
 type tronAccountExtraTemplateData struct {
 	bchain.TronAccountExtraData
+	StakingInfoData *tronStakingInfoTemplateData `json:"-"`
+}
+
+type tronStakingInfoTemplateData struct {
+	bchain.TronStakingInfo
+	StakedBalanceValue             *api.Amount                      `json:"-"`
+	StakedBalanceEnergyValue       *api.Amount                      `json:"-"`
+	StakedBalanceBandwidthValue    *api.Amount                      `json:"-"`
+	UnclaimedRewardValue           *api.Amount                      `json:"-"`
+	DelegatedBalanceEnergyValue    *api.Amount                      `json:"-"`
+	DelegatedBalanceBandwidthValue *api.Amount                      `json:"-"`
+	UnstakingBatchesData           []tronUnstakingBatchTemplateData `json:"-"`
+}
+
+type tronUnstakingBatchTemplateData struct {
+	bchain.TronUnstakingBatch
+	AmountValue *api.Amount `json:"-"`
 }
 
 func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
@@ -61,6 +78,26 @@ func accountChainExtra(addr *api.Address) *tronAccountExtraTemplateData {
 	}
 	rv := &tronAccountExtraTemplateData{
 		TronAccountExtraData: extra,
+	}
+	if extra.StakingInfo != nil {
+		unstakingBatches := make([]tronUnstakingBatchTemplateData, len(extra.StakingInfo.UnstakingBatches))
+		for i := range extra.StakingInfo.UnstakingBatches {
+			batch := extra.StakingInfo.UnstakingBatches[i]
+			unstakingBatches[i] = tronUnstakingBatchTemplateData{
+				TronUnstakingBatch: batch,
+				AmountValue:        parseTronSunAmount(batch.Amount),
+			}
+		}
+		rv.StakingInfoData = &tronStakingInfoTemplateData{
+			TronStakingInfo:                *extra.StakingInfo,
+			StakedBalanceValue:             parseTronSunAmount(extra.StakingInfo.StakedBalance),
+			StakedBalanceEnergyValue:       parseTronSunAmount(extra.StakingInfo.StakedBalanceEnergy),
+			StakedBalanceBandwidthValue:    parseTronSunAmount(extra.StakingInfo.StakedBalanceBandwidth),
+			UnclaimedRewardValue:           parseTronSunAmount(extra.StakingInfo.UnclaimedReward),
+			DelegatedBalanceEnergyValue:    parseTronSunAmount(extra.StakingInfo.DelegatedBalanceEnergy),
+			DelegatedBalanceBandwidthValue: parseTronSunAmount(extra.StakingInfo.DelegatedBalanceBandwidth),
+			UnstakingBatchesData:           unstakingBatches,
+		}
 	}
 	return rv
 }

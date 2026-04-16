@@ -26,6 +26,10 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 				`<h5>Resources</h5>`,
 				`Bandwidth</td><td>255 / 1`,
 				`Energy</td><td>25`,
+				`<h5>Staking</h5>`,
+				`Voting Power</td><td><span class="copyable">7</span> / <span class="copyable">10</span></td>`,
+				`href="/address/TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD"`,
+				`Unclaimed Reward</td>`,
 			},
 		},
 		{
@@ -84,7 +88,7 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500}}}`,
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD","voteCount":"20"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000"}}}}`,
 			},
 		},
 		{
@@ -94,6 +98,7 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`"address":"TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD"`,
+				`"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":36,"totalStakedBandwidth":1036,"availableFreeBandwidth":536,"totalFreeBandwidth":1536,"availableEnergy":3600,"totalEnergy":13600,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD","voteCount":"20"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000"}}`,
 				`"transactions":[{"txid":"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"`,
 				`"chainExtraData":{"contractType":"TriggerSmartContract","operation":"contractCall","assetIssueID":"1002001","totalFee":"3076500","energyUsage":"14650","energyUsageTotal":"14650","bandwidthUsage":"345","bandwidthFee":"0","result":"SUCCESS"}`,
 				`"nonce":"36"`,
@@ -161,7 +166,7 @@ var websocketTestsTron = []websocketTest{
 				"details":    "txids",
 			},
 		},
-		want: `{"id":"2","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500}}}}`,
+		want: `{"id":"2","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD","voteCount":"20"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000"}}}}}`,
 	},
 }
 

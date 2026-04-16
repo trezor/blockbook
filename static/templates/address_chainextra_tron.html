@@ -16,5 +16,107 @@
     <td>Energy</td>
     <td>{{formatInt64 $chainExtra.AvailableEnergy}} / {{formatInt64 $chainExtra.TotalEnergy}}</td>
 </tr>
+{{with $staking := $chainExtra.StakingInfoData}}
+<tr>
+    <td style="white-space: nowrap;"><h5>Staking</h5></td>
+    <td></td>
+</tr>
+{{if $staking.StakedBalanceValue}}
+<tr>
+    <td>Staked Balance</td>
+    <td>{{formattedAmountSpan $staking.StakedBalanceValue 6 "TRX" $data "copyable"}}</td>
+</tr>
+{{else if $staking.StakedBalance}}
+<tr>
+    <td>Staked Balance</td>
+    <td><span class="copyable">{{$staking.StakedBalance}}</span> sun</td>
+</tr>
+{{end}}
+{{if $staking.StakedBalanceEnergyValue}}
+<tr>
+    <td>Staked for Energy</td>
+    <td>{{formattedAmountSpan $staking.StakedBalanceEnergyValue 6 "TRX" $data "copyable"}}</td>
+</tr>
+{{else if $staking.StakedBalanceEnergy}}
+<tr>
+    <td>Staked for Energy</td>
+    <td><span class="copyable">{{$staking.StakedBalanceEnergy}}</span> sun</td>
+</tr>
+{{end}}
+{{if $staking.StakedBalanceBandwidthValue}}
+<tr>
+    <td>Staked for Bandwidth</td>
+    <td>{{formattedAmountSpan $staking.StakedBalanceBandwidthValue 6 "TRX" $data "copyable"}}</td>
+</tr>
+{{else if $staking.StakedBalanceBandwidth}}
+<tr>
+    <td>Staked for Bandwidth</td>
+    <td><span class="copyable">{{$staking.StakedBalanceBandwidth}}</span> sun</td>
+</tr>
+{{end}}
+{{if $staking.UnstakingBatchesData}}
+<tr>
+    <td>Unstaking</td>
+    <td>
+        {{range $i, $batch := $staking.UnstakingBatchesData}}
+        {{if $i}}<br>{{end}}
+        {{if $batch.AmountValue}}{{formattedAmountSpan $batch.AmountValue 6 "TRX" $data "copyable"}}{{else if $batch.Amount}}<span class="copyable">{{$batch.Amount}}</span> sun{{end}}
+        {{if $batch.ExpireTime}} available {{unixTimeSpan $batch.ExpireTime}}{{end}}
+        {{end}}
+    </td>
+</tr>
+{{end}}
+{{if or $staking.AvailableVotingPower $staking.TotalVotingPower}}
+<tr>
+    <td>Voting Power</td>
+    <td><span class="copyable">{{$staking.AvailableVotingPower}}</span> / <span class="copyable">{{$staking.TotalVotingPower}}</span></td>
+</tr>
+{{end}}
+{{if $staking.Votes}}
+<tr>
+    <td>Votes</td>
+    <td>
+        {{range $i, $vote := $staking.Votes}}
+        {{if $i}}<br>{{end}}
+        {{if $vote.VoteCount}}<span class="copyable">{{$vote.VoteCount}}</span>{{end}}
+        {{if $vote.Address}}{{if $vote.VoteCount}} for {{end}}<a href="/address/{{$vote.Address}}">{{addressAliasSpan $vote.Address $data}}</a>{{end}}
+        {{end}}
+    </td>
+</tr>
+{{end}}
+{{if $staking.UnclaimedRewardValue}}
+<tr>
+    <td>Unclaimed Reward</td>
+    <td>{{formattedAmountSpan $staking.UnclaimedRewardValue 6 "TRX" $data "copyable"}}</td>
+</tr>
+{{else if $staking.UnclaimedReward}}
+<tr>
+    <td>Unclaimed Reward</td>
+    <td><span class="copyable">{{$staking.UnclaimedReward}}</span> sun</td>
+</tr>
+{{end}}
+{{if $staking.DelegatedBalanceEnergyValue}}
+<tr>
+    <td>Delegated for Energy</td>
+    <td>{{formattedAmountSpan $staking.DelegatedBalanceEnergyValue 6 "TRX" $data "copyable"}}</td>
+</tr>
+{{else if $staking.DelegatedBalanceEnergy}}
+<tr>
+    <td>Delegated for Energy</td>
+    <td><span class="copyable">{{$staking.DelegatedBalanceEnergy}}</span> sun</td>
+</tr>
+{{end}}
+{{if $staking.DelegatedBalanceBandwidthValue}}
+<tr>
+    <td>Delegated for Bandwidth</td>
+    <td>{{formattedAmountSpan $staking.DelegatedBalanceBandwidthValue 6 "TRX" $data "copyable"}}</td>
+</tr>
+{{else if $staking.DelegatedBalanceBandwidth}}
+<tr>
+    <td>Delegated for Bandwidth</td>
+    <td><span class="copyable">{{$staking.DelegatedBalanceBandwidth}}</span> sun</td>
+</tr>
+{{end}}
+{{end}}
 {{end}}
 {{end}}
