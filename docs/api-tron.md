@@ -76,12 +76,12 @@ On Tron, `Address.chainExtraData.payload` also includes staking/governance metad
 
 Resource fields:
 
-- `availableStakedBandwidth` (`number`): remaining bandwidth obtained by staking, computed as `max(NetLimit - NetUsed, 0)` from `wallet/getaccountresource`
-- `totalStakedBandwidth` (`number`): total bandwidth obtained by staking, from `wallet/getaccountresource.NetLimit`
-- `availableFreeBandwidth` (`number`): remaining free bandwidth, computed as `max(freeNetLimit - freeNetUsed, 0)` from `wallet/getaccountresource`
-- `totalFreeBandwidth` (`number`): total daily free bandwidth, from `wallet/getaccountresource.freeNetLimit`
-- `availableEnergy` (`number`): remaining energy, computed as `max(EnergyLimit - EnergyUsed, 0)` from `wallet/getaccountresource`
-- `totalEnergy` (`number`): total energy obtained by staking, from `wallet/getaccountresource.EnergyLimit`
+- `availableStakedBandwidth` (`number`): remaining bandwidth obtained by staking, computed as `max(NetLimit - NetUsed, 0)`
+- `totalStakedBandwidth` (`number`): total bandwidth obtained by staking
+- `availableFreeBandwidth` (`number`): remaining free bandwidth, computed as `max(freeNetLimit - freeNetUsed, 0)`
+- `totalFreeBandwidth` (`number`): total daily free bandwidth
+- `availableEnergy` (`number`): remaining energy, computed as `max(EnergyLimit - EnergyUsed, 0)` 
+- `totalEnergy` (`number`): total energy obtained by staking
 
 `stakingInfo` schema:
 
@@ -90,12 +90,12 @@ Resource fields:
 - `stakedBalanceBandwidth` (`string`): staked-for-bandwidth amount in sun
 - `unstakingBatches` (`array`): pending unstaking batches
   - `amount` (`string`): unstaked amount in sun
-  - `expireTime` (`number`): Unix timestamp in **seconds** (`unfreeze_expire_time` from node is milliseconds and is converted)
-- `totalVotingPower` (`string`): total TRON Power owned by the account, from `wallet/getaccountresource.tronPowerLimit`
-- `availableVotingPower` (`string`): remaining TRON Power available for voting, computed as `max(tronPowerLimit - tronPowerUsed, 0)` from `wallet/getaccountresource`
+  - `expireTime` (`number`): Unix timestamp in **seconds**
+- `totalVotingPower` (`string`): total TRON Power owned by the account
+- `availableVotingPower` (`string`): remaining TRON Power available for voting, computed as `max(tronPowerLimit - tronPowerUsed, 0)` 
 - `votes` (`array`): current vote allocations
   - `address` (`string`): SR address (base58)
   - `voteCount` (`string`): vote count
-- `unclaimedReward` (`string`): value from `wallet/getReward.reward` (sun)
-- `delegatedBalanceEnergy` (`string`): delegated staked energy in sun (`delegated_frozenV2_balance_for_energy`)
-- `delegatedBalanceBandwidth` (`string`): delegated staked bandwidth in sun (`delegated_frozenV2_balance_for_bandwidth`)
+- `unclaimedReward` (`string`): unclaimed voting reward (sun)
+- `delegatedBalanceEnergy` (`string`): delegated staked energy in sun
+- `delegatedBalanceBandwidth` (`string`): delegated staked bandwidth in sun
