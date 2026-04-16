@@ -474,7 +474,9 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 						"vote_count":   int64(20),
 					},
 				},
-				"delegated_frozenV2_balance_for_energy":    int64(3210000),
+				"account_resource": map[string]any{
+					"delegated_frozenV2_balance_for_energy": int64(3210000),
+				},
 				"delegated_frozenV2_balance_for_bandwidth": int64(654000),
 			},
 			"/wallet/getReward": map[string]any{
@@ -564,7 +566,9 @@ func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T)
 						"vote_count": int64(7),
 					},
 				},
-				"delegated_frozenV2_balance_for_energy": int64(-1),
+				"account_resource": map[string]any{
+					"delegated_frozenV2_balance_for_energy": int64(-1),
+				},
 			},
 			"/wallet/getReward": map[string]any{},
 		},
