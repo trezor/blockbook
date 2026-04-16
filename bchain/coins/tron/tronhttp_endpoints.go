@@ -45,12 +45,14 @@ type tronUnfrozenV2Entry struct {
 }
 
 type tronGetAccountResponse struct {
-	Address                              string                `json:"address,omitempty"`
-	FrozenV2                             []tronFrozenV2Entry   `json:"frozenV2,omitempty"`
-	UnfrozenV2                           []tronUnfrozenV2Entry `json:"unfrozenV2,omitempty"`
-	Votes                                []tronTxVote          `json:"votes,omitempty"`
-	DelegatedFrozenV2BalanceForEnergy    int64                 `json:"delegated_frozenV2_balance_for_energy"`
-	DelegatedFrozenV2BalanceForBandwidth int64                 `json:"delegated_frozenV2_balance_for_bandwidth"`
+	Address         string                `json:"address,omitempty"`
+	FrozenV2        []tronFrozenV2Entry   `json:"frozenV2,omitempty"`
+	UnfrozenV2      []tronUnfrozenV2Entry `json:"unfrozenV2,omitempty"`
+	Votes           []tronTxVote          `json:"votes,omitempty"`
+	AccountResource struct {
+		DelegatedFrozenV2BalanceForEnergy int64 `json:"delegated_frozenV2_balance_for_energy"`
+	} `json:"account_resource,omitempty"`
+	DelegatedFrozenV2BalanceForBandwidth int64 `json:"delegated_frozenV2_balance_for_bandwidth"`
 }
 
 type tronGetRewardResponse struct {
@@ -250,7 +252,7 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 	if unclaimedReward < 0 {
 		unclaimedReward = 0
 	}
-	delegatedEnergy := accountResp.DelegatedFrozenV2BalanceForEnergy
+	delegatedEnergy := accountResp.AccountResource.DelegatedFrozenV2BalanceForEnergy
 	if delegatedEnergy < 0 {
 		delegatedEnergy = 0
 	}
