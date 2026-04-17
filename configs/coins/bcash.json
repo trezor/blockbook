@@ -1,69 +1,71 @@
 {
-    "coin": {
-        "name": "Bcash",
-        "shortcut": "BCH",
-        "label": "Bitcoin Cash",
-        "alias": "bcash"
-    },
-    "ports": {
-        "backend_rpc": 8031,
-        "backend_message_queue": 38331,
-        "blockbook_internal": 9031,
-        "blockbook_public": 9131
-    },
-    "ipc": {
-        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
-        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
-        "rpc_user": "rpc",
-        "rpc_pass": "rpc",
-        "rpc_timeout": 25,
-        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
-    },
-    "backend": {
-        "package_name": "backend-bcash",
-        "package_revision": "satoshilabs-1",
-        "system_user": "bcash",
-        "version": "28.0.1",
-        "binary_url": "https://github.com/bitcoin-cash-node/bitcoin-cash-node/releases/download/v28.0.1/bitcoin-cash-node-28.0.1-x86_64-linux-gnu.tar.gz",
-        "verification_type": "sha256",
-        "verification_source": "d69ee632147f886ca540cecdff5b1b85512612b4c005e86b09083a63c35b64fa",
-        "extract_command": "tar -C backend --strip 1 -xf",
-        "exclude_files": ["bin/bitcoin-qt"],
-        "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
-        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
-        "postinst_script_template": "",
-        "service_type": "forking",
-        "service_additional_params_template": "",
-        "protect_memory": true,
-        "mainnet": true,
-        "server_config_file": "bcash.conf",
-        "client_config_file": "bitcoin_like_client.conf"
-    },
-    "blockbook": {
-        "package_name": "blockbook-bcash",
-        "system_user": "blockbook-bcash",
-        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
-        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-        "explorer_url": "",
-        "additional_params": "",
-        "block_chain": {
-            "parse": true,
-            "subversion": "/Bitcoin ABC Cash Node:22.1.0/",
-            "address_format": "cashaddr",
-            "mempool_workers": 8,
-            "mempool_sub_workers": 2,
-            "block_addresses_to_keep": 300,
-            "xpub_magic": 76067358,
-            "slip44": 145,
-            "additional_params": {
-                "fiat_rates": "coingecko",
-                "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
-                "fiat_rates_params": "{\"coin\": \"bitcoin-cash\", \"periodSeconds\": 900}"
-            }
-        }
-    },
-    "meta": {
-        "package_maintainer": "IT",
-        "package_maintainer_email": "it@satoshilabs.com"
+  "coin": {
+    "name": "Bcash",
+    "shortcut": "BCH",
+    "label": "Bitcoin Cash",
+    "alias": "bcash"
+  },
+  "ports": {
+    "backend_rpc": 8031,
+    "backend_message_queue": 38331,
+    "blockbook_internal": 9031,
+    "blockbook_public": 9131
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-bcash",
+    "package_revision": "satoshilabs-1",
+    "system_user": "bcash",
+    "version": "29.0.0",
+    "binary_url": "https://github.com/bitcoin-cash-node/bitcoin-cash-node/releases/download/v29.0.0/bitcoin-cash-node-29.0.0-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "6125d1cbecc1db476f2b6b7b91da5acde92d2311b8e738124e3db64ca84b33e1",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/bitcoin-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "bcash.conf",
+    "client_config_file": "bitcoin_like_client.conf"
+  },
+  "blockbook": {
+    "package_name": "blockbook-bcash",
+    "system_user": "blockbook-bcash",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "subversion": "/Bitcoin ABC Cash Node:22.1.0/",
+      "address_format": "cashaddr",
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
+      "slip44": 145,
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+        "fiat_rates_params": "{\"coin\": \"bitcoin-cash\", \"periodSeconds\": 900}"
+      }
     }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
 }
