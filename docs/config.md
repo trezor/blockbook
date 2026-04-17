@@ -127,10 +127,8 @@ Backend templates may also reference `.Env.RPCBindHost` and `.Env.RPCAllowIP`, w
 ## Built-in text
 
 Since Blockbook is an open-source project and we don't prevent anybody from running independent instances, it is possible
-to alter built-in text that is specific for Trezor. Text fields that could be updated are:
-
- * [about](/build/text/about) – A note about instance shown on the Application status page and returned by an API.
- * [tos_link](/build/text/tos_link) – A link to Terms of service shown as the footer on the Explorer pages.
-
-Text data are stored as plain text files in *build/text* directory and are embedded to binary during build. A change of
-these files is meant for a private purpose and PRs that would update them won't be accepted.
+to alter branding and static copy (including Trezor-specific defaults). The `about` string and `tos_link` URL are part of
+the `branding` object in *configs/environ.json*, with optional overrides in *configs/environ.overrides.json* (see
+*docs/build.md*, section *explorer branding*). `about` is shown on the Application status page and returned by the API;
+`tos_link` is the Terms-of-Use URL; `branding.footer` supplies the rest of the explorer footer labels and hrefs (layout
+is fixed in templates).

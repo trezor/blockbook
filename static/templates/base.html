@@ -5,13 +5,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0,shrink-to-fit=no">
     <link rel="stylesheet" href="/static/css/bootstrap.5.2.2.min.css">
+    <link rel="icon" href="{{.Branding.FaviconURL}}">
     <link rel="stylesheet" href="/static/css/main{{.Minified}}.css">
     <script>var hasSecondary={{if .SecondaryCoin}}true{{else}}false{{end}};</script>
     <script src="/static/js/bootstrap.bundle.5.2.2.min.js"></script>
     <script src="/static/js/main{{.Minified}}.js"></script>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="description" content="Trezor {{.CoinLabel}} Explorer">
-    <title>Trezor {{.CoinLabel}} Explorer</title>
+    <meta name="description" content="{{.Branding.BrandName}} {{.CoinLabel}} Explorer">
+    <title>{{.Branding.BrandName}} {{.CoinLabel}} Explorer</title>
 </head>
 
 <body>
@@ -19,8 +20,8 @@
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <a class="navbar-brand" href="/" title="Home">
-                    <span class="trezor-logo"></span>
-                    <span style="padding-left: 140px;">{{.CoinLabel}} Explorer</span>
+                    <span class="trezor-logo" style="width: {{.Branding.LogoWidthPx}}px; background-image: url({{.Branding.LogoURL}});"></span>
+                    <span style="padding-left: {{.Branding.LogoRightPaddingPx}}px;">{{.CoinLabel}} Explorer</span>
                 </a>
                 {{if .InternalExplorer}}
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,27 +71,41 @@
     <footer id="footer">
         <div class="container">
             <nav class="navbar navbar-dark">
-                <span class="navbar-nav">
-                    <a class="nav-link" href="https://satoshilabs.com/" target="_blank" rel="noopener noreferrer">Created by SatoshiLabs</a>
+                {{- if and .Branding.Footer.CreatedByLabel .Branding.Footer.CreatedByHref}}
+                <span class="navbar-nav ">
+                    <a class="nav-link" href="{{.Branding.Footer.CreatedByHref}}" target="_blank" rel="noopener noreferrer">{{.Branding.Footer.CreatedByLabel}}</a>
                 </span>
+                {{- end}}
+                {{- if .Branding.Footer.TermsLabel}}
                 <span class="navbar-nav ml-md-auto">
-                    <a class="nav-link" href="{{- .TOSLink -}}" target="_blank" rel="noopener noreferrer">Terms of Use</a>
+                    <a class="nav-link" href="{{.Branding.TOSLink}}" target="_blank" rel="noopener noreferrer">{{.Branding.Footer.TermsLabel}}</a>
                 </span>
+                {{- end}}
+                {{- if and .Branding.Footer.BrandLabel .Branding.Footer.BrandHref}}
                 <span class="navbar-nav ml-md-auto d-md-flex d-none">
-                    <a class="nav-link" href="https://trezor.io/" target="_blank" rel="noopener noreferrer">Trezor</a>
+                    <a class="nav-link" href="{{.Branding.Footer.BrandHref}}" target="_blank" rel="noopener noreferrer">{{.Branding.Footer.BrandLabel}}</a>
                 </span>
+                {{- end}}
+                {{- if and .Branding.Footer.SuiteLabel .Branding.Footer.SuiteHref}}
                 <span class="navbar-nav ml-md-auto d-md-flex d-none">
-                    <a class="nav-link" href="https://trezor.io/trezor-suite" target="_blank" rel="noopener noreferrer">Suite</a>
+                    <a class="nav-link" href="{{.Branding.Footer.SuiteHref}}" target="_blank" rel="noopener noreferrer">{{.Branding.Footer.SuiteLabel}}</a>
                 </span>
+                {{- end}}
+                {{- if and .Branding.Footer.SupportLabel .Branding.Footer.SupportHref}}
                 <span class="navbar-nav ml-md-auto d-md-flex d-none">
-                    <a class="nav-link" href="https://trezor.io/support" target="_blank" rel="noopener noreferrer">Support</a>
+                    <a class="nav-link" href="{{.Branding.Footer.SupportHref}}" target="_blank" rel="noopener noreferrer">{{.Branding.Footer.SupportLabel}}</a>
                 </span>
+                {{- end}}
+                {{- if and .Branding.Footer.SendTxLabel .Branding.Footer.SendTxHref}}
                 <span class="navbar-nav ml-md-auto">
-                    <a class="nav-link" href="/sendtx">Send Transaction</a>
+                    <a class="nav-link" href="{{.Branding.Footer.SendTxHref}}"{{if not (hasPrefix .Branding.Footer.SendTxHref "/")}} target="_blank" rel="noopener noreferrer"{{end}}>{{.Branding.Footer.SendTxLabel}}</a>
                 </span>
+                {{- end}}
+                {{- if and .Branding.Footer.PromoLabel .Branding.Footer.PromoHref}}
                 <span class="navbar-nav ml-md-auto d-lg-flex d-none">
-                    <a class="nav-link" href="https://trezor.io/compare" target="_blank" rel="noopener noreferrer">Don't have a Trezor? Get one!</a>
+                    <a class="nav-link" href="{{.Branding.Footer.PromoHref}}" target="_blank" rel="noopener noreferrer">{{.Branding.Footer.PromoLabel}}</a>
                 </span>
+                {{- end}}
             </nav>
         </div>
     </footer>

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"os/signal"
 	"runtime/debug"
 	"strconv"
@@ -108,6 +109,7 @@ var (
 	callbacksOnNewTx              []bchain.OnNewTxFunc
 	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
 	chanOsSignal                  chan os.Signal
+	appBranding                   *common.Branding
 )
 
 func init() {
@@ -175,6 +177,14 @@ func mainWithExitCode() int {
 		glog.Error("config: ", err)
 		return exitCodeFatal
 	}
+
+	configsDir := filepath.Clean(filepath.Join(filepath.Dir(*configFile), ".."))
+	appBranding, err = common.LoadBranding(configsDir)
+	if err != nil {
+		glog.Error("branding: ", err)
+		return exitCodeFatal
+	}
+	api.SetBranding(appBranding.About, appBranding.TOSLink)
 
 	metrics, err = common.GetMetrics(config.CoinName)
 	if err != nil {
@@ -442,7 +452,7 @@ func startInternalServer() (*server.InternalServer, error) {
 
 func startPublicServer() (*server.PublicServer, error) {
 	// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, fiatRates, *debugMode)
+	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, fiatRates, *debugMode, appBranding)
 	if err != nil {
 		return nil, err
 	}
