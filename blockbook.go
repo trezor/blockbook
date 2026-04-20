@@ -28,8 +28,8 @@ import (
 	"github.com/trezor/blockbook/server"
 )
 
-// debounce too close requests for resync
-const debounceResyncIndexMs = 1009
+// default debounce for too-close requests for resync
+const defaultResyncIndexDebounceMs = 1009
 
 // debounce too close requests for resync mempool (ZeroMQ sends message for each tx, when new block there are many transactions)
 const debounceResyncMempoolMs = 1009
@@ -81,6 +81,9 @@ var (
 
 	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncIndexPeriodMs = flag.Int("resyncindexperiod", 935093, "resync index period in milliseconds")
+
+	// debounce for push-triggered index resync requests
+	resyncIndexDebounceMs = flag.Int("resyncindexdebounce", defaultResyncIndexDebounceMs, "debounce for push-triggered index resync requests in milliseconds")
 
 	// resync mempool at least each resyncMempoolPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncMempoolPeriodMs = flag.Int("resyncmempoolperiod", 60017, "resync mempool period in milliseconds")
@@ -544,7 +547,7 @@ func syncIndexLoop() {
 	defer close(chanSyncIndexDone)
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
-	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
+	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, time.Duration(*resyncIndexDebounceMs)*time.Millisecond, chanSyncIndex, func() {
 		if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
 			if err == db.ErrOperationInterrupted || common.IsInShutdown() {
 				return
