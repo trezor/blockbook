@@ -69,8 +69,8 @@ type WsBlockHashRes struct {
 // WsBlockReq is used to request details of a block (by ID) with paging options.
 type WsBlockReq struct {
 	Id       string `json:"id" ts_doc:"Block identifier (hash)."`
-	PageSize int    `json:"pageSize,omitempty" ts_doc:"Number of transactions per page in the block."`
-	Page     int    `json:"page,omitempty" ts_doc:"Page index to retrieve if multiple pages of transactions are available."`
+	PageSize int    `json:"pageSize,omitempty" ts_doc:"Number of transactions per page in the block. Defaults to 1000 and is capped at 10000."`
+	Page     int    `json:"page,omitempty" ts_doc:"1-based page index to retrieve if multiple pages of transactions are available. Values above the safe internal limit are clamped."`
 }
 
 // WsAccountUtxoReq is used to request unspent transaction outputs (UTXOs) for a given xpub/address.
