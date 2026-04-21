@@ -32,8 +32,10 @@ const txsOnPage = 25
 const blocksOnPage = 50
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
+const maxWebsocketBlockPageSize = 10000
 const maxPageNumber = 1000000
 const maxGapValue = 10000
+const maxSafePagingOffset = 1000000000
 const maxSendTxBodyBytes int64 = 8 * 1024 * 1024
 
 const secondaryCoinCookieName = "secondary_coin"
@@ -865,15 +867,7 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 	return errorTpl, nil, err
 }
 
-// validateIntParam validates and sanitizes integer parameters from query strings
-func validateIntParam(value string, defaultValue int, min int, max int) int {
-	if value == "" {
-		return defaultValue
-	}
-	val, err := strconv.Atoi(value)
-	if err != nil {
-		return defaultValue
-	}
+func validateIntValue(val, defaultValue int, min int, max int) int {
 	if val < min {
 		return defaultValue
 	}
@@ -883,23 +877,37 @@ func validateIntParam(value string, defaultValue int, min int, max int) int {
 	return val
 }
 
+// validateIntParam validates and sanitizes integer parameters from query strings
+func validateIntParam(value string, defaultValue int, min int, max int) int {
+	if value == "" {
+		return defaultValue
+	}
+	val, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return validateIntValue(val, defaultValue, min, max)
+}
+
+func sanitizePagingParams(page, pageSize, defaultPageSize, maxPageSize int) (int, int) {
+	page = validateIntValue(page, 0, 0, maxPageNumber)
+	pageSize = validateIntValue(pageSize, defaultPageSize, 0, maxPageSize)
+	if pageSize == 0 {
+		pageSize = defaultPageSize
+	}
+	if page > 0 && pageSize > 0 && page > maxSafePagingOffset/pageSize {
+		page = maxSafePagingOffset / pageSize
+	}
+	return page, pageSize
+}
+
 func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int) {
 	var voutFilter = api.AddressFilterVoutOff
 	page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
 	pageSize := validateIntParam(r.URL.Query().Get("pageSize"), maxPageSize, 0, maxPageSize)
-	if pageSize == 0 {
-		pageSize = maxPageSize
-	}
+	page, pageSize = sanitizePagingParams(page, pageSize, maxPageSize, maxPageSize)
 	from := validateIntParam(r.URL.Query().Get("from"), 0, 0, 10000000000)
 	to := validateIntParam(r.URL.Query().Get("to"), 0, 0, 10000000000)
-
-	// Check for overflow in page * pageSize calculation
-	const maxSafeOffset = 1000000000
-	if page > 0 && pageSize > 0 {
-		if page > maxSafeOffset/pageSize {
-			page = maxSafeOffset / pageSize
-		}
-	}
 
 	filterParam := r.URL.Query().Get("filter")
 	if len(filterParam) > 0 {

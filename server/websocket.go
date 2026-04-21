@@ -399,10 +399,8 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		}
 		r := WsBlockReq{}
 		err = json.Unmarshal(req.Params, &r)
-		if r.PageSize == 0 {
-			r.PageSize = 1000000
-		}
 		if err == nil {
+			r.Page, r.PageSize = sanitizePagingParams(r.Page, r.PageSize, txsInAPI, maxWebsocketBlockPageSize)
 			rv, err = s.getBlock(r.Id, r.Page, r.PageSize)
 		}
 		return
