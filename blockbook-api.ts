@@ -112,6 +112,34 @@ export interface MultiTokenValue {
     /** Amount of that specific token ID. */
     value?: string;
 }
+export interface Erc4626TokenMetadata {
+    /** Token contract address. */
+    contract: string;
+    /** Human-readable token name. */
+    name?: string;
+    /** Token symbol. */
+    symbol?: string;
+    /** Token decimals. */
+    decimals: number;
+}
+export interface Erc4626Token {
+    /** Metadata of the underlying asset token. */
+    asset?: Erc4626TokenMetadata;
+    /** Metadata of the vault share token. */
+    share?: Erc4626TokenMetadata;
+    /** Total underlying assets managed by the vault. */
+    totalAssets?: string;
+    /** Underlying assets for one whole share unit. */
+    convertToAssets1Share?: string;
+    /** Shares for one whole underlying asset unit. */
+    convertToShares1Asset?: string;
+    /** Previewed shares minted for one whole underlying asset unit. */
+    previewDeposit1Asset?: string;
+    /** Previewed assets redeemed for one whole share unit. */
+    previewRedeem1Share?: string;
+    /** Error message for partial failures while fetching ERC4626 fields. */
+    error?: string;
+}
 export interface TokenTransfer {
     /** @deprecated: Use standard instead. */
     type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
@@ -308,6 +336,8 @@ export interface Token {
     totalReceived?: string;
     /** Total amount of tokens sent. */
     totalSent?: string;
+    /** ERC4626 vault details when requested and detected. */
+    erc4626?: Erc4626Token;
 }
 export interface Address {
     /** Current page index. */
@@ -611,6 +641,8 @@ export interface WsAccountInfoReq {
     details?: 'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs';
     /** Which tokens to include in the account info. */
     tokens?: 'derived' | 'used' | 'nonzero';
+    /** If true, includes ERC4626 data for detected vault tokens. */
+    includeErc4626?: boolean;
     /** Number of items per page, if paging is used. */
     pageSize?: number;
     /** Requested page index, if paging is used. */
@@ -669,9 +701,9 @@ export interface WsBlockHashRes {
 export interface WsBlockReq {
     /** Block identifier (hash). */
     id: string;
-    /** Number of transactions per page in the block. */
+    /** Number of transactions per page in the block. Defaults to 1000 and is capped at 10000. */
     pageSize?: number;
-    /** Page index to retrieve if multiple pages of transactions are available. */
+    /** 1-based page index to retrieve if multiple pages of transactions are available. Values above the safe internal limit are clamped. */
     page?: number;
 }
 export interface WsBlockFilterReq {
