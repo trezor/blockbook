@@ -105,6 +105,8 @@ Good examples of coin configuration are
             * `hot_address_min_contracts` – Minimum number of contracts before hotness tracking applies (default **192**).
             * `hot_address_min_hits` – Lookups within the current block required to mark an address hot (default **3**, clamped to **10**).
             * `hot_address_lru_cache_size` – Max hot addresses kept in the LRU (default **20000**, clamped to **100,000**).
+          * Ethereum trace configuration (Blockbook, Ethereum-type indexing):
+            * `trace_timeout` – Optional per-request timeout passed to `debug_traceBlockByHash` as tracer config, formatted as a Go duration string such as `"20s"`.
           * Address-contracts cache configuration (Blockbook, Ethereum-type indexing):
             * `address_contracts_cache_min_size` – Minimum packed size (bytes) before an addressContracts entry is cached (default **300000**).
             * `address_contracts_cache_max_bytes` – Cache size cap in bytes; when exceeded, cached entries are flushed early (default **4000000000**).

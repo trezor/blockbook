@@ -47,3 +47,28 @@ func TestLoadBlockchainCfgEnvOverride(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadBlockchainCfgTraceTimeout(t *testing.T) {
+	tests := []struct {
+		coinAlias string
+		want      string
+	}{
+		{
+			coinAlias: "polygon_archive",
+			want:      "20s",
+		},
+		{
+			coinAlias: "arbitrum_archive",
+			want:      "20s",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.coinAlias, func(t *testing.T) {
+			cfg := bchain.LoadBlockchainCfg(t, tt.coinAlias)
+			if cfg.TraceTimeout != tt.want {
+				t.Fatalf("expected trace_timeout %q, got %q", tt.want, cfg.TraceTimeout)
+			}
+		})
+	}
+}

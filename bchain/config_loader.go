@@ -25,12 +25,13 @@ var testEnvMu sync.Mutex
 // BlockchainCfg contains fields read from blockbook's blockchaincfg.json after being rendered from templates.
 type BlockchainCfg struct {
 	// more fields can be added later as needed
-	RpcUrl     string `json:"rpc_url"`
-	RpcUrlWs   string `json:"rpc_url_ws"`
-	RpcUser    string `json:"rpc_user"`
-	RpcPass    string `json:"rpc_pass"`
-	RpcTimeout int    `json:"rpc_timeout"`
-	Parse      bool   `json:"parse"`
+	RpcUrl       string `json:"rpc_url"`
+	RpcUrlWs     string `json:"rpc_url_ws"`
+	RpcUser      string `json:"rpc_user"`
+	RpcPass      string `json:"rpc_pass"`
+	RpcTimeout   int    `json:"rpc_timeout"`
+	TraceTimeout string `json:"trace_timeout"`
+	Parse        bool   `json:"parse"`
 }
 
 // LoadBlockchainCfg returns the resolved blockchaincfg.json (env overrides are honored in tests)

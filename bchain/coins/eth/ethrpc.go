@@ -67,6 +67,7 @@ type Configuration struct {
 	RPCURL                          string `json:"rpc_url"`
 	RPCURLWS                        string `json:"rpc_url_ws"`
 	RPCTimeout                      int    `json:"rpc_timeout"`
+	TraceTimeout                    string `json:"trace_timeout,omitempty"`
 	Erc20BatchSize                  int    `json:"erc20_batch_size,omitempty"`
 	BlockAddressesToKeep            int    `json:"block_addresses_to_keep"`
 	HotAddressMinContracts          int    `json:"hot_address_min_contracts,omitempty"`
@@ -154,6 +155,11 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	}
 	if c.AddressContractsCacheMaxBytes <= 0 {
 		c.AddressContractsCacheMaxBytes = defaultAddressContractsCacheMaxBytes
+	}
+	if c.TraceTimeout != "" {
+		if _, err := time.ParseDuration(c.TraceTimeout); err != nil {
+			return nil, errors.Annotatef(err, "invalid trace_timeout")
+		}
 	}
 
 	s := &EthereumRPC{
@@ -998,7 +1004,11 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 	contracts := make([]bchain.ContractInfo, 0)
 	if bchain.ProcessInternalTransactions {
 		var trace []rpcTraceResult
-		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"}) // Use caller-provided ctx for timeout/cancel.
+		traceConfig := map[string]interface{}{"tracer": "callTracer"}
+		if b.ChainConfig.TraceTimeout != "" {
+			traceConfig["timeout"] = b.ChainConfig.TraceTimeout
+		}
+		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, traceConfig) // Use caller-provided ctx for timeout/cancel.
 		if err != nil {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
 			return data, contracts, err
