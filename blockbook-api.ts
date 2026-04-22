@@ -278,6 +278,34 @@ export interface ContractInfo {
     /** Block height where contract was destroyed (if any). */
     destructedInBlock?: number;
 }
+export interface Erc4626TokenMetadata {
+    /** Token contract address. */
+    contract: string;
+    /** Human-readable token name. */
+    name?: string;
+    /** Token symbol. */
+    symbol?: string;
+    /** Token decimals. */
+    decimals: number;
+}
+export interface Erc4626Token {
+    /** Metadata of the underlying asset token. */
+    asset?: Erc4626TokenMetadata;
+    /** Metadata of the vault share token. */
+    share?: Erc4626TokenMetadata;
+    /** Total underlying assets managed by the vault. */
+    totalAssets?: string;
+    /** Underlying assets for one whole share unit. */
+    convertToAssets1Share?: string;
+    /** Shares for one whole underlying asset unit. */
+    convertToShares1Asset?: string;
+    /** Previewed shares minted for one whole underlying asset unit. */
+    previewDeposit1Asset?: string;
+    /** Previewed assets redeemed for one whole share unit. */
+    previewRedeem1Share?: string;
+    /** Error message for partial failures while fetching ERC4626 fields. */
+    error?: string;
+}
 export interface Token {
     /** @deprecated: Use standard instead. */
     type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
@@ -308,6 +336,8 @@ export interface Token {
     totalReceived?: string;
     /** Total amount of tokens sent. */
     totalSent?: string;
+    /** ERC4626 vault details when requested and detected. */
+    erc4626?: Erc4626Token;
 }
 export interface Address {
     /** Current page index. */
@@ -370,6 +400,14 @@ export interface Address {
     stakingPools?: StakingPool[];
     /** Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload. */
     chainExtraData?: AccountChainExtraData;
+}
+export interface Erc4626Info {
+    /** Vault share token contract address that was requested. */
+    contract: string;
+    /** Latest ERC4626 vault details for the contract, matching the payload shape used in accountInfo token responses. */
+    erc4626?: Erc4626Token;
+    /** Backend best block height observed for this response. This endpoint exists because accountInfo returns only a session-time snapshot of ERC4626 data. */
+    blockHeight: number;
 }
 export interface Utxo {
     /** Transaction ID in which this UTXO was created. */
@@ -594,7 +632,7 @@ export interface WsReq {
     /** Unique request identifier. */
     id: string;
     /** Requested method name. */
-    method: 'getAccountInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
+    method: 'getAccountInfo' | 'getErc4626' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
     /** Parameters for the requested method in raw JSON format. */
     params: any;
 }
@@ -611,6 +649,8 @@ export interface WsAccountInfoReq {
     details?: 'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs';
     /** Which tokens to include in the account info. */
     tokens?: 'derived' | 'used' | 'nonzero';
+    /** If true, includes ERC4626 data for detected vault tokens. */
+    includeErc4626?: boolean;
     /** Number of items per page, if paging is used. */
     pageSize?: number;
     /** Requested page index, if paging is used. */
@@ -625,6 +665,10 @@ export interface WsAccountInfoReq {
     secondaryCurrency?: string;
     /** Gap limit for XPUB scanning, if relevant. */
     gap?: number;
+}
+export interface WsErc4626Req {
+    /** Vault share token contract address to query. This exists because ERC4626 data returned from accountInfo is only a snapshot and can become stale during a client session. */
+    contract: string;
 }
 export interface WsBackendInfo {
     /** Backend version string. */

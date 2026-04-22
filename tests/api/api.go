@@ -65,6 +65,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"GetAddressTokensEVM":                 testGetAddressTokensEVM,
 	"GetAddressTokenBalances":             testGetAddressTokenBalances,
 	"GetAddressIncludeErc4626EVM":         testGetAddressIncludeErc4626EVM,
+	"GetErc4626EVM":                       testGetErc4626EVM,
 	"GetAddressTxidsPaginationEVM":        testGetAddressTxidsPaginationEVM,
 	"GetAddressTxsPaginationEVM":          testGetAddressTxsPaginationEVM,
 	"GetAddressContractFilterEVM":         testGetAddressContractFilterEVM,
@@ -75,6 +76,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"WsGetAccountInfoTxsConsistencyEVM":   testWsGetAccountInfoTxsConsistencyEVM,
 	"WsGetAccountInfoContractFilterEVM":   testWsGetAccountInfoContractFilterEVM,
 	"WsGetAccountInfoIncludeErc4626EVM":   testWsGetAccountInfoIncludeErc4626EVM,
+	"WsGetErc4626EVM":                     testWsGetErc4626EVM,
 }
 
 var wsOnlyTests = map[string]func(t *testing.T, th *TestHandler){
@@ -268,6 +270,12 @@ type evmErc4626MetadataResponse struct {
 	Name     string `json:"name"`
 	Symbol   string `json:"symbol"`
 	Decimals int    `json:"decimals"`
+}
+
+type evmErc4626InfoResponse struct {
+	Contract    string              `json:"contract"`
+	Erc4626     *evmErc4626Response `json:"erc4626,omitempty"`
+	BlockHeight uint32              `json:"blockHeight"`
 }
 
 type evmTxShapeResponse struct {

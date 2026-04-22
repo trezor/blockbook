@@ -9,7 +9,7 @@ import (
 // WsReq represents a generic WebSocket request with an ID, method, and raw parameters.
 type WsReq struct {
 	ID     string          `json:"id" ts_doc:"Unique request identifier."`
-	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
+	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getErc4626' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
 	Params json.RawMessage `json:"params" ts_type:"any" ts_doc:"Parameters for the requested method in raw JSON format."`
 }
 
@@ -32,6 +32,11 @@ type WsAccountInfoReq struct {
 	ContractFilter    string `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
 	SecondaryCurrency string `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
 	Gap               int    `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+}
+
+// WsErc4626Req carries parameters for the 'getErc4626' method.
+type WsErc4626Req struct {
+	Contract string `json:"contract" ts_doc:"Vault share token contract address to query."`
 }
 
 // WsBackendInfo holds extended info about the connected backend node.

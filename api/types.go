@@ -192,6 +192,13 @@ type Erc4626Token struct {
 	Error                    string                `json:"error,omitempty" ts_doc:"Error message for partial failures while fetching ERC4626 fields."`
 }
 
+// Erc4626Info contains latest-block ERC4626 data for a single vault token.
+type Erc4626Info struct {
+	Contract    string        `json:"contract" ts_doc:"Vault share token contract address that was requested."`
+	Erc4626     *Erc4626Token `json:"erc4626,omitempty" ts_doc:"Latest ERC4626 vault details for the contract, matching the payload shape used in accountInfo token responses."`
+	BlockHeight uint32        `json:"blockHeight" ts_doc:"Backend best block height observed for this response. This endpoint exists because accountInfo returns only a session-time snapshot of ERC4626 data."`
+}
+
 // Token contains info about tokens held by an address
 type Token struct {
 	// Deprecated: Use Standard instead.

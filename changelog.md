@@ -50,6 +50,7 @@
 - **Zcash upgrade** ([#1402](https://github.com/trezor/blockbook/pull/1402)).
 - **Tron network support** ([#1273](https://github.com/trezor/blockbook/pull/1273)): adds Tron support to Blockbook.
 - **Opt-in ERC-4626 vault enrichment for EVM tokens** ([#1431](https://github.com/trezor/blockbook/pull/1431)): adds REST/WS `includeErc4626`enabled batched vault detection and response enrichment with erc4626 data.
+- **Targeted ERC-4626 API**: adds REST/WS single-contract ERC4626 lookup so clients can fetch current vault metadata without reloading full accountInfo payloads.
 
 ### Backend Compatibility
 

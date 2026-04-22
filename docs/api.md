@@ -468,7 +468,7 @@ Example response:
 Returns balances and transactions of an address. The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&secondary=usd]
+GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&includeErc4626=<true|false>&secondary=usd]
 ```
 
 The optional query parameters:
@@ -484,6 +484,7 @@ The optional query parameters:
     -   _txslight_: _tokenBalances_ + list of transaction with limited details (only data from index), subject to _from_, _to_ filter and paging
     -   _txs_: _tokenBalances_ + list of transaction with details, subject to _from_, _to_ filter and paging
 -   _contract_: return only transactions which affect specified contract (applicable only to coins which support contracts)
+-   _includeErc4626_: for EVM fungible tokens, enrich detected ERC4626 vault tokens with `erc4626` data. This is a snapshot captured when the address response is produced.
 -   _secondary_: specifies secondary (fiat) currency in which the token and total balances are returned in addition to crypto values
 
 Example response for bitcoin type coin, _details_ set to _txids_ (`Address` type):
@@ -542,6 +543,44 @@ Example response for ethereum type coin, _details_ set to _tokenBalances_ and _s
   "totalSecondaryValue": 4947.462160741995
 }
 
+```
+
+#### Get ERC4626
+
+Returns the latest ERC4626 payload for a single vault share token contract on EVM chains.
+
+This endpoint exists because `erc4626` data returned from `getAccountInfo` or `/api/v2/address` is only a snapshot taken when that broader account response was fetched. Suite can fetch current vault metadata for the token the user is actively interacting with without reloading full account data.
+
+```
+GET /api/v2/erc4626/<contract>
+```
+
+Response (`Erc4626Info` type):
+
+```javascript
+{
+  "contract": "0x...",
+  "erc4626": {
+    "asset": {
+      "contract": "0x...",
+      "name": "Wrapped Ether",
+      "symbol": "WETH",
+      "decimals": 18
+    },
+    "share": {
+      "contract": "0x...",
+      "name": "Vault Share",
+      "symbol": "vETH",
+      "decimals": 18
+    },
+    "totalAssets": "123456789",
+    "convertToAssets1Share": "1000000000000000000",
+    "convertToShares1Asset": "1000000000000000000",
+    "previewDeposit1Asset": "999999999999999999",
+    "previewRedeem1Share": "1000000000000000000"
+  },
+  "blockHeight": 12345678
+}
 ```
 
 #### Get xpub
@@ -996,6 +1035,7 @@ The websocket interface provides the following requests:
 -   getInfo
 -   getBlockHash
 -   getAccountInfo
+-   getErc4626
 -   getAccountUtxo
 -   getTransaction
 -   getTransactionSpecific
@@ -1053,6 +1093,18 @@ Example for subscribing to an address (or multiple addresses) including new bloc
   "params":{
     "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"],
     "newBlockTxs": true,
+   }
+}
+```
+
+Example for getting ERC4626 data for a single vault token
+
+```javascript
+{
+  "id":"1",
+  "method":"getErc4626",
+  "params":{
+    "contract":"0x..."
    }
 }
 ```
