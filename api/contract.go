@@ -45,6 +45,18 @@ func ValidateContractProtocols(protocols []string) error {
 	return nil
 }
 
+// ValidateProtocolsForChain rejects a non-empty protocols list on coins that
+// don't support any protocol enrichments, and otherwise validates the values.
+func (w *Worker) ValidateProtocolsForChain(protocols []string) error {
+	if len(protocols) == 0 {
+		return nil
+	}
+	if w.chainType != bchain.ChainEthereumType {
+		return NewAPIError("protocols parameter is not supported on this coin", true)
+	}
+	return ValidateContractProtocols(protocols)
+}
+
 func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string) {
 	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) {
 		return

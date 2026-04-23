@@ -1436,7 +1436,7 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
 	page, pageSize, details, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
-	if err := api.ValidateContractProtocols(filter.Protocols); err != nil {
+	if err := s.api.ValidateProtocolsForChain(filter.Protocols); err != nil {
 		return nil, err
 	}
 	secondaryCoin := strings.ToLower(r.URL.Query().Get("secondary"))
