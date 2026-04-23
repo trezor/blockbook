@@ -632,6 +632,9 @@ func unmarshalGetAccountInfoRequest(params []byte) (*WsAccountInfoReq, error) {
 }
 
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
+	if err := api.ValidateContractProtocols(req.Protocols); err != nil {
+		return nil, err
+	}
 	var opt api.AccountDetails
 	switch req.Details {
 	case "tokens":

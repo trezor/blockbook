@@ -484,7 +484,7 @@ The optional query parameters:
     -   _txslight_: _tokenBalances_ + list of transaction with limited details (only data from index), subject to _from_, _to_ filter and paging
     -   _txs_: _tokenBalances_ + list of transaction with details, subject to _from_, _to_ filter and paging
 -   _contract_: return only transactions which affect specified contract (applicable only to coins which support contracts)
--   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`. In account responses, protocol payloads are returned under `tokens[].protocols`.
+-   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`. Unknown values are rejected with an error. In account responses, protocol payloads are returned under `tokens[].protocols`.
 -   _secondary_: specifies secondary (fiat) currency in which the token and total balances are returned in addition to crypto values
 
 Example response for bitcoin type coin, _details_ set to _txids_ (`Address` type):
@@ -558,7 +558,9 @@ GET /api/v2/contract/<contract>[?currency=<currency>&protocols=<protocol1,protoc
 Parameters:
 
 -   _currency_: optional secondary currency code (for example `usd`). When present, the response may include `rates.secondaryRate` in that currency.
--   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`.
+-   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`. Unknown values are rejected with an error.
+
+`blockHeight` reflects the indexer's best block at request time. ERC-4626 fields inside `protocols.erc4626` are fetched via live JSON-RPC `eth_call` against the backend node, which may already be one or more blocks ahead of the indexer. Treat `blockHeight` as a floor, not an exact pin.
 
 Response (`ContractInfoResult` type):
 
