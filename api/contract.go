@@ -80,6 +80,9 @@ func (w *Worker) buildContractInfoRates(contract string, standard bchain.TokenSt
 }
 
 func (w *Worker) GetContractInfoData(contract string, currency string, protocols []string) (*ContractInfoResult, error) {
+	if w.chainType != bchain.ChainEthereumType {
+		return nil, NewAPIError("getContractInfo is not supported on this coin", true)
+	}
 	if strings.TrimSpace(contract) == "" {
 		return nil, NewAPIError("Missing contract", true)
 	}
