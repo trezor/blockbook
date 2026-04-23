@@ -238,7 +238,7 @@ type Token struct {
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"Multiple ERC1155 token balances (id + value)."`
 	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty" ts_doc:"Total amount of tokens received."`
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
-	Erc4626          *Erc4626Token            `json:"erc4626,omitempty" ts_doc:"ERC4626 vault details when requested and detected."`
+	Protocols        *ContractInfoProtocols   `json:"protocols,omitempty" ts_doc:"Optional protocol-specific enrichments requested by the caller."`
 	ContractIndex    string                   `json:"-"`
 }
 
@@ -393,7 +393,7 @@ type AddressFilter struct {
 	FromHeight     uint32         `ts_doc:"Starting block height for filtering transactions."`
 	ToHeight       uint32         `ts_doc:"Ending block height for filtering transactions."`
 	TokensToReturn TokensToReturn `ts_doc:"Which tokens to include in the result set."`
-	IncludeErc4626 bool           `ts_doc:"If true, enriches fungible EVM tokens with ERC4626 vault data when available."`
+	Protocols      []string       `ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool `ts_doc:"If true, ignores mempool (unconfirmed) transactions."`
 }

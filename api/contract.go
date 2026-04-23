@@ -21,6 +21,13 @@ func contractInfoIncludesProtocol(protocols []string, protocol string) bool {
 	return false
 }
 
+func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string) {
+	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) {
+		return
+	}
+	w.enrichErc4626Tokens(tokens)
+}
+
 func (w *Worker) buildContractInfoRates(contract string, standard bchain.TokenStandardName, currency string) *ContractInfoRates {
 	if !contractInfoSupportsRates(standard) || w.fiatRates == nil {
 		return nil

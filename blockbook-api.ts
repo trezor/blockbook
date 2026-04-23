@@ -336,8 +336,8 @@ export interface Token {
     totalReceived?: string;
     /** Total amount of tokens sent. */
     totalSent?: string;
-    /** ERC4626 vault details when requested and detected. */
-    erc4626?: Erc4626Token;
+    /** Optional protocol-specific enrichments requested by the caller. */
+    protocols?: ContractInfoProtocols;
 }
 export interface Address {
     /** Current page index. */
@@ -676,8 +676,8 @@ export interface WsAccountInfoReq {
     details?: 'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs';
     /** Which tokens to include in the account info. */
     tokens?: 'derived' | 'used' | 'nonzero';
-    /** If true, includes ERC4626 data for detected vault tokens. */
-    includeErc4626?: boolean;
+    /** Optional protocol enrichments to include. Supported values currently include 'erc4626'. */
+    protocols?: string[];
     /** Number of items per page, if paging is used. */
     pageSize?: number;
     /** Requested page index, if paging is used. */

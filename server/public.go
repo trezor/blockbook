@@ -885,6 +885,22 @@ func validateIntParam(value string, defaultValue int, min int, max int) int {
 	return val
 }
 
+func parseProtocolsQuery(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	protocols := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, protocol := range strings.Split(value, ",") {
+			protocol = strings.TrimSpace(protocol)
+			if protocol != "" {
+				protocols = append(protocols, protocol)
+			}
+		}
+	}
+	return protocols
+}
+
 func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int) {
 	var voutFilter = api.AddressFilterVoutOff
 	page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
@@ -942,14 +958,13 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	// Validate gap: non-negative, reasonable max (gap limit typically small, maxGapValue)
 	gap := validateIntParam(r.URL.Query().Get("gap"), 0, 0, maxGapValue)
 	contract := r.URL.Query().Get("contract")
-	includeErc4626, _ := strconv.ParseBool(r.URL.Query().Get("includeErc4626"))
 	return page, pageSize, accountDetails, &api.AddressFilter{
 		Vout:           voutFilter,
 		TokensToReturn: tokensToReturn,
 		FromHeight:     uint32(from),
 		ToHeight:       uint32(to),
 		Contract:       contract,
-		IncludeErc4626: includeErc4626,
+		Protocols:      parseProtocolsQuery(r.URL.Query()["protocols"]),
 	}, filterParam, gap
 }
 
@@ -1429,23 +1444,6 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 	return address, err
 }
 
-func parseContractProtocolsQuery(r *http.Request) []string {
-	values := r.URL.Query()["protocols"]
-	if len(values) == 0 {
-		return nil
-	}
-	protocols := make([]string, 0, len(values))
-	for _, value := range values {
-		for _, protocol := range strings.Split(value, ",") {
-			protocol = strings.TrimSpace(protocol)
-			if protocol != "" {
-				protocols = append(protocols, protocol)
-			}
-		}
-	}
-	return protocols
-}
-
 func (s *PublicServer) apiContract(r *http.Request, apiVersion int) (interface{}, error) {
 	var contract string
 	i := strings.LastIndex(r.URL.Path, "contract/")
@@ -1456,7 +1454,7 @@ func (s *PublicServer) apiContract(r *http.Request, apiVersion int) (interface{}
 		return nil, api.NewAPIError("Missing contract", true)
 	}
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-contract"}).Inc()
-	return s.api.GetContractInfoData(contract, strings.ToLower(r.URL.Query().Get("currency")), parseContractProtocolsQuery(r))
+	return s.api.GetContractInfoData(contract, strings.ToLower(r.URL.Query().Get("currency")), parseProtocolsQuery(r.URL.Query()["protocols"]))
 }
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {

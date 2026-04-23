@@ -64,7 +64,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"GetAddressBasicEVM":                  testGetAddressBasicEVM,
 	"GetAddressTokensEVM":                 testGetAddressTokensEVM,
 	"GetAddressTokenBalances":             testGetAddressTokenBalances,
-	"GetAddressIncludeErc4626EVM":         testGetAddressIncludeErc4626EVM,
+	"GetAddressProtocolsEVM":              testGetAddressProtocolsEVM,
 	"GetContractInfoEVM":                  testGetContractInfoEVM,
 	"GetAddressTxidsPaginationEVM":        testGetAddressTxidsPaginationEVM,
 	"GetAddressTxsPaginationEVM":          testGetAddressTxsPaginationEVM,
@@ -75,7 +75,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"WsGetAccountInfoTxidsConsistencyEVM": testWsGetAccountInfoTxidsConsistencyEVM,
 	"WsGetAccountInfoTxsConsistencyEVM":   testWsGetAccountInfoTxsConsistencyEVM,
 	"WsGetAccountInfoContractFilterEVM":   testWsGetAccountInfoContractFilterEVM,
-	"WsGetAccountInfoIncludeErc4626EVM":   testWsGetAccountInfoIncludeErc4626EVM,
+	"WsGetAccountInfoProtocolsEVM":        testWsGetAccountInfoProtocolsEVM,
 	"WsGetContractInfoEVM":                testWsGetContractInfoEVM,
 }
 
@@ -240,13 +240,13 @@ type evmAddressTokenBalanceResponse struct {
 }
 
 type evmTokenResponse struct {
-	Type             string               `json:"type"`
-	Standard         string               `json:"standard"`
-	Contract         string               `json:"contract"`
-	Balance          string               `json:"balance"`
-	IDs              []string             `json:"ids"`
-	MultiTokenValues []evmMultiTokenValue `json:"multiTokenValues"`
-	Erc4626          *evmErc4626Response  `json:"erc4626,omitempty"`
+	Type             string                        `json:"type"`
+	Standard         string                        `json:"standard"`
+	Contract         string                        `json:"contract"`
+	Balance          string                        `json:"balance"`
+	IDs              []string                      `json:"ids"`
+	MultiTokenValues []evmMultiTokenValue          `json:"multiTokenValues"`
+	Protocols        *evmContractProtocolsResponse `json:"protocols,omitempty"`
 }
 
 type evmMultiTokenValue struct {

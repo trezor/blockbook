@@ -468,7 +468,7 @@ Example response:
 Returns balances and transactions of an address. The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&includeErc4626=<true|false>&secondary=usd]
+GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&protocols=<protocol1,protocol2,...>&secondary=usd]
 ```
 
 The optional query parameters:
@@ -484,7 +484,7 @@ The optional query parameters:
     -   _txslight_: _tokenBalances_ + list of transaction with limited details (only data from index), subject to _from_, _to_ filter and paging
     -   _txs_: _tokenBalances_ + list of transaction with details, subject to _from_, _to_ filter and paging
 -   _contract_: return only transactions which affect specified contract (applicable only to coins which support contracts)
--   _includeErc4626_: for EVM fungible tokens, enrich detected ERC4626 vault tokens with `erc4626` data. This is a snapshot captured when the address response is produced.
+-   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`. In account responses, protocol payloads are returned under `tokens[].protocols`.
 -   _secondary_: specifies secondary (fiat) currency in which the token and total balances are returned in addition to crypto values
 
 Example response for bitcoin type coin, _details_ set to _txids_ (`Address` type):

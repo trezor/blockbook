@@ -1305,9 +1305,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 			d.tokens = d.tokens[:j]
 			sort.Sort(d.tokens)
-			if filter.IncludeErc4626 {
-				w.enrichErc4626Tokens(d.tokens)
-			}
+			w.enrichTokenProtocols(d.tokens, filter.Protocols)
 		}
 		d.contractInfo, err = w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
 		if err != nil {

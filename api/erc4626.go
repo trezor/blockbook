@@ -107,7 +107,10 @@ func (w *Worker) enrichErc4626Tokens(tokens Tokens) {
 		if !ok {
 			continue
 		}
-		candidate.token.Erc4626 = w.fetchErc4626TokenData(candidate.token, probe)
+		if candidate.token.Protocols == nil {
+			candidate.token.Protocols = &ContractInfoProtocols{}
+		}
+		candidate.token.Protocols.Erc4626 = w.fetchErc4626TokenData(candidate.token, probe)
 	}
 }
 
