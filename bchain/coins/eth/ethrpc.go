@@ -1383,7 +1383,15 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	}
 	// if there is an alternative provider, use it
 	if b.alternativeFeeProvider != nil {
-		return b.alternativeFeeProvider.GetEip1559Fees()
+		fees, err := b.alternativeFeeProvider.GetEip1559Fees()
+		if err != nil {
+			return nil, err
+		}
+		if fees != nil {
+			return fees, nil
+		}
+		// Fall back to on-chain estimation when the alternative provider is unsupported/stale/unready,
+		// so configured networks still return EIP-1559 fees instead of nil, which resolves to empty fees.
 	}
 
 	// otherwise use algorithm from here https://docs.alchemy.com/docs/how-to-build-a-gas-fee-estimator-using-eip-1559
