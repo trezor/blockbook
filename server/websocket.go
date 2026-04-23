@@ -382,11 +382,11 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		}
 		return
 	},
-	"getErc4626": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
-		r := WsErc4626Req{}
+	"getContractInfo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsContractInfoReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getErc4626(r.Contract)
+			rv, err = s.getContractInfo(r.Contract, strings.ToLower(r.Currency), r.Protocols)
 		}
 		return
 	},
@@ -674,8 +674,8 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 	return a, nil
 }
 
-func (s *WebsocketServer) getErc4626(contract string) (*api.Erc4626Info, error) {
-	return s.api.GetErc4626(contract)
+func (s *WebsocketServer) getContractInfo(contract string, currency string, protocols []string) (*api.ContractInfoResult, error) {
+	return s.api.GetContractInfoData(contract, currency, protocols)
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (api.Utxos, error) {

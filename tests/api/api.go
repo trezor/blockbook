@@ -65,7 +65,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"GetAddressTokensEVM":                 testGetAddressTokensEVM,
 	"GetAddressTokenBalances":             testGetAddressTokenBalances,
 	"GetAddressIncludeErc4626EVM":         testGetAddressIncludeErc4626EVM,
-	"GetErc4626EVM":                       testGetErc4626EVM,
+	"GetContractInfoEVM":                  testGetContractInfoEVM,
 	"GetAddressTxidsPaginationEVM":        testGetAddressTxidsPaginationEVM,
 	"GetAddressTxsPaginationEVM":          testGetAddressTxsPaginationEVM,
 	"GetAddressContractFilterEVM":         testGetAddressContractFilterEVM,
@@ -76,7 +76,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"WsGetAccountInfoTxsConsistencyEVM":   testWsGetAccountInfoTxsConsistencyEVM,
 	"WsGetAccountInfoContractFilterEVM":   testWsGetAccountInfoContractFilterEVM,
 	"WsGetAccountInfoIncludeErc4626EVM":   testWsGetAccountInfoIncludeErc4626EVM,
-	"WsGetErc4626EVM":                     testWsGetErc4626EVM,
+	"WsGetContractInfoEVM":                testWsGetContractInfoEVM,
 }
 
 var wsOnlyTests = map[string]func(t *testing.T, th *TestHandler){
@@ -272,10 +272,28 @@ type evmErc4626MetadataResponse struct {
 	Decimals int    `json:"decimals"`
 }
 
-type evmErc4626InfoResponse struct {
-	Contract    string              `json:"contract"`
-	Erc4626     *evmErc4626Response `json:"erc4626,omitempty"`
-	BlockHeight uint32              `json:"blockHeight"`
+type evmContractRatesResponse struct {
+	BaseRate      float64 `json:"baseRate"`
+	Currency      string  `json:"currency,omitempty"`
+	SecondaryRate float64 `json:"secondaryRate,omitempty"`
+}
+
+type evmContractProtocolsResponse struct {
+	Erc4626 *evmErc4626Response `json:"erc4626,omitempty"`
+}
+
+type evmContractInfoResponse struct {
+	Type              string                        `json:"type"`
+	Standard          string                        `json:"standard"`
+	Contract          string                        `json:"contract"`
+	Name              string                        `json:"name"`
+	Symbol            string                        `json:"symbol"`
+	Decimals          int                           `json:"decimals"`
+	CreatedInBlock    uint32                        `json:"createdInBlock,omitempty"`
+	DestructedInBlock uint32                        `json:"destructedInBlock,omitempty"`
+	Rates             *evmContractRatesResponse     `json:"rates,omitempty"`
+	Protocols         *evmContractProtocolsResponse `json:"protocols,omitempty"`
+	BlockHeight       uint32                        `json:"blockHeight"`
 }
 
 type evmTxShapeResponse struct {

@@ -135,10 +135,10 @@ func testGetAddressIncludeErc4626EVM(t *testing.T, h *TestHandler) {
 	})
 }
 
-func testGetErc4626EVM(t *testing.T, h *TestHandler) {
-	assertErc4626FixturesFetched(t, h, "GetErc4626EVM", func(t *testing.T, fixture erc4626Fixture) evmErc4626InfoResponse {
-		path := "/api/v2/erc4626/" + url.PathEscape(fixture.Contract)
-		var resp evmErc4626InfoResponse
+func testGetContractInfoEVM(t *testing.T, h *TestHandler) {
+	assertContractInfoFixturesFetched(t, h, "GetContractInfoEVM", func(t *testing.T, fixture erc4626Fixture) evmContractInfoResponse {
+		path := "/api/v2/contract/" + url.PathEscape(fixture.Contract) + "?protocols=erc4626"
+		var resp evmContractInfoResponse
 		h.mustGetJSON(t, path, &resp)
 		return resp
 	})
@@ -333,15 +333,18 @@ func testWsGetAccountInfoIncludeErc4626EVM(t *testing.T, h *TestHandler) {
 	})
 }
 
-func testWsGetErc4626EVM(t *testing.T, h *TestHandler) {
-	assertErc4626FixturesFetched(t, h, "WsGetErc4626EVM", func(t *testing.T, fixture erc4626Fixture) evmErc4626InfoResponse {
-		resp := h.wsCall(t, "getErc4626", map[string]interface{}{
+func testWsGetContractInfoEVM(t *testing.T, h *TestHandler) {
+	assertContractInfoFixturesFetched(t, h, "WsGetContractInfoEVM", func(t *testing.T, fixture erc4626Fixture) evmContractInfoResponse {
+		resp := h.wsCall(t, "getContractInfo", map[string]interface{}{
 			"contract": fixture.Contract,
+			"protocols": []string{
+				"erc4626",
+			},
 		})
 
-		var info evmErc4626InfoResponse
+		var info evmContractInfoResponse
 		if err := json.Unmarshal(resp.Data, &info); err != nil {
-			t.Fatalf("decode websocket getErc4626 response: %v", err)
+			t.Fatalf("decode websocket getContractInfo response: %v", err)
 		}
 		return info
 	})
@@ -388,7 +391,7 @@ func assertErc4626FixturesInAccountInfo(t *testing.T, h *TestHandler, testName s
 	}
 }
 
-func assertErc4626FixturesFetched(t *testing.T, h *TestHandler, testName string, fetch func(t *testing.T, fixture erc4626Fixture) evmErc4626InfoResponse) {
+func assertContractInfoFixturesFetched(t *testing.T, h *TestHandler, testName string, fetch func(t *testing.T, fixture erc4626Fixture) evmContractInfoResponse) {
 	testData, err := loadAPITestData(h.Coin)
 	if err != nil {
 		t.Fatalf("load api test data for %s: %v", h.Coin, err)
@@ -405,13 +408,14 @@ func assertErc4626FixturesFetched(t *testing.T, h *TestHandler, testName string,
 			if !strings.EqualFold(info.Contract, fixture.Contract) {
 				t.Fatalf("%s.contract mismatch: got %s want %s", testName, info.Contract, fixture.Contract)
 			}
+			assertNonEmptyString(t, info.Standard, testName+".standard")
 			if info.BlockHeight == 0 {
 				t.Fatalf("%s.blockHeight is zero", testName)
 			}
-			if info.Erc4626 == nil {
+			if info.Protocols == nil || info.Protocols.Erc4626 == nil {
 				t.Fatalf("%s missing erc4626 payload for known ERC4626 contract %s", testName, fixture.Contract)
 			}
-			assertErc4626Payload(t, testName+".erc4626", fixture.Contract, info.Erc4626)
+			assertErc4626Payload(t, testName+".protocols.erc4626", fixture.Contract, info.Protocols.Erc4626)
 			validatedFixtures++
 		})
 	}

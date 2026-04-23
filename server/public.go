@@ -204,7 +204,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
 	serveMux.HandleFunc(path+"api/rawtx/", s.jsonHandler(s.apiRawTx, apiDefault))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
-	serveMux.HandleFunc(path+"api/erc4626/", s.jsonHandler(s.apiErc4626, apiDefault))
+	serveMux.HandleFunc(path+"api/contract/", s.jsonHandler(s.apiContract, apiDefault))
 	serveMux.HandleFunc(path+"api/xpub/", s.jsonHandler(s.apiXpub, apiDefault))
 	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiUtxo, apiDefault))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
@@ -218,7 +218,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
-	serveMux.HandleFunc(path+"api/v2/erc4626/", s.jsonHandler(s.apiErc4626, apiV2))
+	serveMux.HandleFunc(path+"api/v2/contract/", s.jsonHandler(s.apiContract, apiV2))
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
@@ -1429,17 +1429,34 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 	return address, err
 }
 
-func (s *PublicServer) apiErc4626(r *http.Request, apiVersion int) (interface{}, error) {
+func parseContractProtocolsQuery(r *http.Request) []string {
+	values := r.URL.Query()["protocols"]
+	if len(values) == 0 {
+		return nil
+	}
+	protocols := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, protocol := range strings.Split(value, ",") {
+			protocol = strings.TrimSpace(protocol)
+			if protocol != "" {
+				protocols = append(protocols, protocol)
+			}
+		}
+	}
+	return protocols
+}
+
+func (s *PublicServer) apiContract(r *http.Request, apiVersion int) (interface{}, error) {
 	var contract string
-	i := strings.LastIndex(r.URL.Path, "erc4626/")
+	i := strings.LastIndex(r.URL.Path, "contract/")
 	if i > 0 {
-		contract = r.URL.Path[i+8:]
+		contract = r.URL.Path[i+9:]
 	}
 	if len(contract) == 0 {
 		return nil, api.NewAPIError("Missing contract", true)
 	}
-	s.metrics.ExplorerViews.With(common.Labels{"action": "api-erc4626"}).Inc()
-	return s.api.GetErc4626(contract)
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-contract"}).Inc()
+	return s.api.GetContractInfoData(contract, strings.ToLower(r.URL.Query().Get("currency")), parseContractProtocolsQuery(r))
 }
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {

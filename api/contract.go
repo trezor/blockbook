@@ -1,0 +1,102 @@
+package api
+
+import (
+	"strings"
+
+	"github.com/trezor/blockbook/bchain"
+)
+
+const contractInfoProtocolErc4626 = "erc4626"
+
+func contractInfoSupportsRates(standard bchain.TokenStandardName) bool {
+	return standard == erc4626EvmFungibleStandard()
+}
+
+func contractInfoIncludesProtocol(protocols []string, protocol string) bool {
+	for _, value := range protocols {
+		if strings.EqualFold(strings.TrimSpace(value), protocol) {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *Worker) buildContractInfoRates(contract string, standard bchain.TokenStandardName, currency string) *ContractInfoRates {
+	if !contractInfoSupportsRates(standard) || w.fiatRates == nil {
+		return nil
+	}
+
+	currency = strings.ToLower(strings.TrimSpace(currency))
+	ticker := getCurrentTicker(w.fiatRates, currency, contract)
+	baseRate, found := w.GetContractBaseRate(ticker, contract, 0)
+	if !found {
+		return nil
+	}
+
+	rates := &ContractInfoRates{
+		BaseRate: baseRate,
+	}
+	if currency == "" {
+		return rates
+	}
+
+	rates.Currency = currency
+	if ticker != nil {
+		if secondaryRate := ticker.TokenRateInCurrency(contract, currency); secondaryRate > 0 {
+			rates.SecondaryRate = float64(secondaryRate)
+		}
+	}
+	return rates
+}
+
+func (w *Worker) GetContractInfoData(contract string, currency string, protocols []string) (*ContractInfoResult, error) {
+	if strings.TrimSpace(contract) == "" {
+		return nil, NewAPIError("Missing contract", true)
+	}
+
+	contractInfo, _, err := w.GetContractInfo(contract, bchain.UnknownTokenStandard)
+	if err != nil {
+		return nil, NewAPIError("Invalid contract, "+err.Error(), true)
+	}
+	if contractInfo == nil || contractInfo.Contract == "" {
+		return nil, NewAPIError("Contract metadata unavailable", true)
+	}
+
+	bestHeight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ContractInfoResult{
+		Type:              contractInfo.Type,
+		Standard:          contractInfo.Standard,
+		Contract:          contractInfo.Contract,
+		Name:              contractInfo.Name,
+		Symbol:            contractInfo.Symbol,
+		Decimals:          contractInfo.Decimals,
+		CreatedInBlock:    contractInfo.CreatedInBlock,
+		DestructedInBlock: contractInfo.DestructedInBlock,
+		Rates:             w.buildContractInfoRates(contractInfo.Contract, contractInfo.Standard, currency),
+		BlockHeight:       bestHeight,
+	}
+
+	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) || w.chainType != bchain.ChainEthereumType || contractInfo.Standard != erc4626EvmFungibleStandard() {
+		return result, nil
+	}
+
+	probe, isVault := w.detectErc4626Vault(contractInfo.Contract)
+	if !isVault {
+		return result, nil
+	}
+
+	result.Protocols = &ContractInfoProtocols{
+		Erc4626: w.fetchErc4626TokenData(&Token{
+			Contract: contractInfo.Contract,
+			Name:     contractInfo.Name,
+			Symbol:   contractInfo.Symbol,
+			Decimals: contractInfo.Decimals,
+			Standard: contractInfo.Standard,
+		}, probe),
+	}
+	return result, nil
+}

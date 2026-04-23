@@ -401,12 +401,39 @@ export interface Address {
     /** Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload. */
     chainExtraData?: AccountChainExtraData;
 }
-export interface Erc4626Info {
-    /** Vault share token contract address that was requested. */
-    contract: string;
-    /** Latest ERC4626 vault details for the contract, matching the payload shape used in accountInfo token responses. */
+export interface ContractInfoProtocols {
+    /** ERC4626 vault details when explicitly requested and detected. */
     erc4626?: Erc4626Token;
-    /** Backend best block height observed for this response. This endpoint exists because accountInfo returns only a session-time snapshot of ERC4626 data. */
+}
+export interface ContractInfoRates {
+    /** Current price of one whole token in the chain base currency, when available. */
+    baseRate?: number;
+    /** Requested secondary currency code for the secondaryRate field, lower-cased. */
+    currency?: string;
+    /** Current price of one whole token in the requested secondary currency, when available. */
+    secondaryRate?: number;
+}
+export interface ContractInfoResult {
+    /** @deprecated: Use standard instead. */
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    /** Smart contract address. */
+    contract: string;
+    /** Readable name of the contract. */
+    name: string;
+    /** Symbol for tokens under this contract, if applicable. */
+    symbol: string;
+    /** Number of decimal places, if applicable. */
+    decimals: number;
+    /** Block height where contract was first created. */
+    createdInBlock?: number;
+    /** Block height where contract was destroyed (if any). */
+    destructedInBlock?: number;
+    /** Current rate data for the contract when available. */
+    rates?: ContractInfoRates;
+    /** Optional protocol-specific enrichments requested by the caller. */
+    protocols?: ContractInfoProtocols;
+    /** Indexed best block height used as freshness metadata for this response. */
     blockHeight: number;
 }
 export interface Utxo {
@@ -632,7 +659,7 @@ export interface WsReq {
     /** Unique request identifier. */
     id: string;
     /** Requested method name. */
-    method: 'getAccountInfo' | 'getErc4626' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
+    method: 'getAccountInfo' | 'getContractInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
     /** Parameters for the requested method in raw JSON format. */
     params: any;
 }
@@ -666,9 +693,13 @@ export interface WsAccountInfoReq {
     /** Gap limit for XPUB scanning, if relevant. */
     gap?: number;
 }
-export interface WsErc4626Req {
-    /** Vault share token contract address to query. This exists because ERC4626 data returned from accountInfo is only a snapshot and can become stale during a client session. */
+export interface WsContractInfoReq {
+    /** Contract address to query. */
     contract: string;
+    /** Optional secondary currency code used to include fiat pricing information. */
+    currency?: string;
+    /** Optional protocol enrichments to include. Supported values currently include 'erc4626'. */
+    protocols?: string[];
 }
 export interface WsBackendInfo {
     /** Backend version string. */

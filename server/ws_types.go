@@ -9,7 +9,7 @@ import (
 // WsReq represents a generic WebSocket request with an ID, method, and raw parameters.
 type WsReq struct {
 	ID     string          `json:"id" ts_doc:"Unique request identifier."`
-	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getErc4626' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
+	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getContractInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
 	Params json.RawMessage `json:"params" ts_type:"any" ts_doc:"Parameters for the requested method in raw JSON format."`
 }
 
@@ -34,9 +34,11 @@ type WsAccountInfoReq struct {
 	Gap               int    `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
 }
 
-// WsErc4626Req carries parameters for the 'getErc4626' method.
-type WsErc4626Req struct {
-	Contract string `json:"contract" ts_doc:"Vault share token contract address to query."`
+// WsContractInfoReq carries parameters for the 'getContractInfo' method.
+type WsContractInfoReq struct {
+	Contract  string   `json:"contract" ts_doc:"Contract address to query."`
+	Currency  string   `json:"currency,omitempty" ts_doc:"Optional secondary currency code used to include fiat pricing information."`
+	Protocols []string `json:"protocols,omitempty" ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
 }
 
 // WsBackendInfo holds extended info about the connected backend node.

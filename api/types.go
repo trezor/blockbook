@@ -192,11 +192,32 @@ type Erc4626Token struct {
 	Error                    string                `json:"error,omitempty" ts_doc:"Error message for partial failures while fetching ERC4626 fields."`
 }
 
-// Erc4626Info contains latest-block ERC4626 data for a single vault token.
-type Erc4626Info struct {
-	Contract    string        `json:"contract" ts_doc:"Vault share token contract address that was requested."`
-	Erc4626     *Erc4626Token `json:"erc4626,omitempty" ts_doc:"Latest ERC4626 vault details for the contract, matching the payload shape used in accountInfo token responses."`
-	BlockHeight uint32        `json:"blockHeight" ts_doc:"Backend best block height observed for this response. This endpoint exists because accountInfo returns only a session-time snapshot of ERC4626 data."`
+// ContractInfoRates contains current price data for a single contract when available.
+type ContractInfoRates struct {
+	BaseRate      float64 `json:"baseRate,omitempty" ts_doc:"Current price of one whole token in the chain base currency, when available."`
+	Currency      string  `json:"currency,omitempty" ts_doc:"Requested secondary currency code for the secondaryRate field, lower-cased."`
+	SecondaryRate float64 `json:"secondaryRate,omitempty" ts_doc:"Current price of one whole token in the requested secondary currency, when available."`
+}
+
+// ContractInfoProtocols contains optional protocol-specific contract enrichments.
+type ContractInfoProtocols struct {
+	Erc4626 *Erc4626Token `json:"erc4626,omitempty" ts_doc:"ERC4626 vault details when explicitly requested and detected."`
+}
+
+// ContractInfoResult contains contract metadata and optional enrichments for a single contract.
+type ContractInfoResult struct {
+	// Deprecated: Use Standard instead.
+	Type              bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard          bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Contract          string                   `json:"contract" ts_doc:"Smart contract address."`
+	Name              string                   `json:"name" ts_doc:"Readable name of the contract."`
+	Symbol            string                   `json:"symbol" ts_doc:"Symbol for tokens under this contract, if applicable."`
+	Decimals          int                      `json:"decimals" ts_doc:"Number of decimal places, if applicable."`
+	CreatedInBlock    uint32                   `json:"createdInBlock,omitempty" ts_doc:"Block height where contract was first created."`
+	DestructedInBlock uint32                   `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
+	Rates             *ContractInfoRates       `json:"rates,omitempty" ts_doc:"Current rate data for the contract when available."`
+	Protocols         *ContractInfoProtocols   `json:"protocols,omitempty" ts_doc:"Optional protocol-specific enrichments requested by the caller."`
+	BlockHeight       uint32                   `json:"blockHeight" ts_doc:"Indexed best block height used as freshness metadata for this response."`
 }
 
 // Token contains info about tokens held by an address

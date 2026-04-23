@@ -545,39 +545,55 @@ Example response for ethereum type coin, _details_ set to _tokenBalances_ and _s
 
 ```
 
-#### Get ERC4626
+#### Get contract info
 
-Returns the latest ERC4626 payload for a single vault share token contract on EVM chains.
+Returns metadata for a single contract together with optional enrichments requested by the caller.
 
-This endpoint exists because `erc4626` data returned from `getAccountInfo` or `/api/v2/address` is only a snapshot taken when that broader account response was fetched. Suite can fetch current vault metadata for the token the user is actively interacting with without reloading full account data.
+This endpoint exists in part because `erc4626` data returned from `getAccountInfo` or `/api/v2/address` is only a snapshot taken when that broader account response was fetched. Suite can fetch current contract-level metadata for the token the user is actively interacting with without reloading full account data.
 
 ```
-GET /api/v2/erc4626/<contract>
+GET /api/v2/contract/<contract>[?currency=<currency>&protocols=<protocol1,protocol2,...>]
 ```
 
-Response (`Erc4626Info` type):
+Parameters:
+
+-   _currency_: optional secondary currency code (for example `usd`). When present, the response may include `rates.secondaryRate` in that currency.
+-   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`.
+
+Response (`ContractInfoResult` type):
 
 ```javascript
 {
   "contract": "0x...",
-  "erc4626": {
-    "asset": {
-      "contract": "0x...",
-      "name": "Wrapped Ether",
-      "symbol": "WETH",
-      "decimals": 18
-    },
-    "share": {
-      "contract": "0x...",
-      "name": "Vault Share",
-      "symbol": "vETH",
-      "decimals": 18
-    },
-    "totalAssets": "123456789",
-    "convertToAssets1Share": "1000000000000000000",
-    "convertToShares1Asset": "1000000000000000000",
-    "previewDeposit1Asset": "999999999999999999",
-    "previewRedeem1Share": "1000000000000000000"
+  "standard": "ERC20",
+  "name": "Vault Share",
+  "symbol": "vETH",
+  "decimals": 18,
+  "rates": {
+    "baseRate": 0.000523,
+    "currency": "usd",
+    "secondaryRate": 1.24
+  },
+  "protocols": {
+    "erc4626": {
+      "asset": {
+        "contract": "0x...",
+        "name": "Wrapped Ether",
+        "symbol": "WETH",
+        "decimals": 18
+      },
+      "share": {
+        "contract": "0x...",
+        "name": "Vault Share",
+        "symbol": "vETH",
+        "decimals": 18
+      },
+      "totalAssets": "123456789",
+      "convertToAssets1Share": "1000000000000000000",
+      "convertToShares1Asset": "1000000000000000000",
+      "previewDeposit1Asset": "999999999999999999",
+      "previewRedeem1Share": "1000000000000000000"
+    }
   },
   "blockHeight": 12345678
 }
@@ -1035,7 +1051,7 @@ The websocket interface provides the following requests:
 -   getInfo
 -   getBlockHash
 -   getAccountInfo
--   getErc4626
+-   getContractInfo
 -   getAccountUtxo
 -   getTransaction
 -   getTransactionSpecific
@@ -1097,14 +1113,16 @@ Example for subscribing to an address (or multiple addresses) including new bloc
 }
 ```
 
-Example for getting ERC4626 data for a single vault token
+Example for getting current contract info including ERC4626 enrichment
 
 ```javascript
 {
   "id":"1",
-  "method":"getErc4626",
+  "method":"getContractInfo",
   "params":{
-    "contract":"0x..."
+    "contract":"0x...",
+    "currency":"usd",
+    "protocols":["erc4626"]
    }
 }
 ```

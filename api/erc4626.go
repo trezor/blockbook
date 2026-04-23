@@ -185,46 +185,6 @@ func (w *Worker) fetchErc4626TokenData(token *Token, probe erc4626VaultProbe) *E
 	return erc4626FetchTokenDataWithDeps(token, probe, w.GetContractInfo, w.erc4626CallDecimals, w.erc4626CallUintWithArg)
 }
 
-func (w *Worker) GetErc4626(contract string) (*Erc4626Info, error) {
-	if w.chainType != bchain.ChainEthereumType {
-		return nil, NewAPIError("ERC4626 is only supported for EVM chains", true)
-	}
-	if strings.TrimSpace(contract) == "" {
-		return nil, NewAPIError("Missing contract", true)
-	}
-
-	shareInfo, _, err := w.GetContractInfo(contract, erc4626EvmFungibleStandard())
-	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Invalid contract, %v", err), true)
-	}
-	if shareInfo == nil || shareInfo.Contract == "" {
-		return nil, NewAPIError("Contract metadata unavailable", true)
-	}
-
-	probe, isVault := w.detectErc4626Vault(shareInfo.Contract)
-	bestHeight, err := w.chain.GetBestBlockHeight()
-	if err != nil {
-		return nil, err
-	}
-
-	result := &Erc4626Info{
-		Contract:    shareInfo.Contract,
-		BlockHeight: bestHeight,
-	}
-	if !isVault {
-		return result, nil
-	}
-
-	result.Erc4626 = w.fetchErc4626TokenData(&Token{
-		Contract: shareInfo.Contract,
-		Name:     shareInfo.Name,
-		Symbol:   shareInfo.Symbol,
-		Decimals: shareInfo.Decimals,
-		Standard: erc4626EvmFungibleStandard(),
-	}, probe)
-	return result, nil
-}
-
 func erc4626FetchTokenDataWithDeps(token *Token, probe erc4626VaultProbe, getContractInfo erc4626ContractInfoFetcher, getDecimals erc4626DecimalsFetcher, callUint erc4626UintArgCaller) *Erc4626Token {
 	result := &Erc4626Token{
 		Asset: &Erc4626TokenMetadata{
