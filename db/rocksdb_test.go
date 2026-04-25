@@ -66,6 +66,40 @@ func closeAndDestroyRocksDB(t *testing.T, d *RocksDB) {
 	os.RemoveAll(d.path)
 }
 
+func assertBulkConnectReleased(t *testing.T, bc *BulkConnect) {
+	t.Helper()
+	if bc.d != nil {
+		t.Fatal("expected BulkConnect RocksDB handle to be released")
+	}
+	if bc.bulkAddresses != nil {
+		t.Fatal("expected bulkAddresses cache to be released")
+	}
+	if bc.bulkAddressesCount != 0 {
+		t.Fatal("expected bulkAddressesCount to be reset")
+	}
+	if bc.ethBlockTxs != nil {
+		t.Fatal("expected ethBlockTxs cache to be released")
+	}
+	if bc.txAddressesMap != nil {
+		t.Fatal("expected txAddressesMap cache to be released")
+	}
+	if bc.blockFilters != nil {
+		t.Fatal("expected blockFilters cache to be released")
+	}
+	if bc.balances != nil {
+		t.Fatal("expected balances cache to be released")
+	}
+	if bc.addressContracts != nil {
+		t.Fatal("expected addressContracts cache to be released")
+	}
+	if bc.bulkStats != (bulkConnectStats{}) {
+		t.Fatal("expected bulkStats to be reset")
+	}
+	if bc.bulkHotness != (bulkHotnessStats{}) {
+		t.Fatal("expected bulkHotness to be reset")
+	}
+}
+
 func inputAddressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
 	h := dbtestdata.AddressToPubKeyHex(addr, d.chainParser)
 	return hex.EncodeToString([]byte{byte(len(h) / 2)}) + h
@@ -790,6 +824,7 @@ func Test_BulkConnect_BitcoinType(t *testing.T) {
 	if err := bc.Close(); err != nil {
 		t.Fatal(err)
 	}
+	assertBulkConnectReleased(t, bc)
 
 	if d.is.DbState != common.DbStateOpen {
 		t.Fatal("DB not in DbStateOpen")

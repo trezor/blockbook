@@ -64,6 +64,18 @@ type bulkHotnessStats struct {
 	evictions  uint64
 }
 
+func (b *BulkConnect) releaseBulkMemory() {
+	b.bulkAddresses = nil
+	b.bulkAddressesCount = 0
+	b.ethBlockTxs = nil
+	b.txAddressesMap = nil
+	b.blockFilters = nil
+	b.balances = nil
+	b.addressContracts = nil
+	b.bulkStats = bulkConnectStats{}
+	b.bulkHotness = bulkHotnessStats{}
+}
+
 // InitBulkConnect initializes bulk connect and switches DB to inconsistent state
 func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	b := &BulkConnect{
@@ -562,6 +574,7 @@ func (b *BulkConnect) Close() error {
 		}(d)
 	}
 
+	b.releaseBulkMemory()
 	b.d = nil
 	return nil
 }
