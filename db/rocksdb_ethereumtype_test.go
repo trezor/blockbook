@@ -788,6 +788,7 @@ func Test_BulkConnect_EthereumType(t *testing.T) {
 	if err := bc.Close(); err != nil {
 		t.Fatal(err)
 	}
+	assertBulkConnectReleased(t, bc)
 
 	if d.is.DbState != common.DbStateOpen {
 		t.Fatal("DB not in DbStateOpen")
