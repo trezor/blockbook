@@ -128,6 +128,7 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.Parser.HotAddressMinHits = ethChainConfig.HotAddressMinHits
 	tronRpc.Parser.AddrContractsCacheMinSize = ethChainConfig.AddressContractsCacheMinSize
 	tronRpc.Parser.AddrContractsCacheMaxBytes = ethChainConfig.AddressContractsCacheMaxBytes
+	tronRpc.Parser.AddrContractsCacheBulkMaxBytes = ethChainConfig.AddressContractsCacheBulkMaxBytes
 
 	tronRpc.EthereumRPC.Parser = tronRpc.Parser
 	tronRpc.ChainConfig = &cfg

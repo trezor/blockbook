@@ -61,30 +61,31 @@ const (
 
 // Configuration represents json config file
 type Configuration struct {
-	CoinName                        string `json:"coin_name"`
-	CoinShortcut                    string `json:"coin_shortcut"`
-	Network                         string `json:"network"`
-	RPCURL                          string `json:"rpc_url"`
-	RPCURLWS                        string `json:"rpc_url_ws"`
-	RPCTimeout                      int    `json:"rpc_timeout"`
-	TraceTimeout                    string `json:"trace_timeout,omitempty"`
-	Erc20BatchSize                  int    `json:"erc20_batch_size,omitempty"`
-	BlockAddressesToKeep            int    `json:"block_addresses_to_keep"`
-	HotAddressMinContracts          int    `json:"hot_address_min_contracts,omitempty"`
-	HotAddressLRUCacheSize          int    `json:"hot_address_lru_cache_size,omitempty"`
-	HotAddressMinHits               int    `json:"hot_address_min_hits,omitempty"`
-	AddressContractsCacheMinSize    int    `json:"address_contracts_cache_min_size,omitempty"`
-	AddressContractsCacheMaxBytes   int64  `json:"address_contracts_cache_max_bytes,omitempty"`
-	AddressAliases                  bool   `json:"address_aliases,omitempty"`
-	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
-	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
-	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
-	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
-	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
-	DisableMempoolSync              bool   `json:"disableMempoolSync,omitempty"`
-	Eip1559Fees                     bool   `json:"eip1559Fees,omitempty"`
-	AlternativeEstimateFee          string `json:"alternative_estimate_fee,omitempty"`
-	AlternativeEstimateFeeParams    string `json:"alternative_estimate_fee_params,omitempty"`
+	CoinName                          string `json:"coin_name"`
+	CoinShortcut                      string `json:"coin_shortcut"`
+	Network                           string `json:"network"`
+	RPCURL                            string `json:"rpc_url"`
+	RPCURLWS                          string `json:"rpc_url_ws"`
+	RPCTimeout                        int    `json:"rpc_timeout"`
+	TraceTimeout                      string `json:"trace_timeout,omitempty"`
+	Erc20BatchSize                    int    `json:"erc20_batch_size,omitempty"`
+	BlockAddressesToKeep              int    `json:"block_addresses_to_keep"`
+	HotAddressMinContracts            int    `json:"hot_address_min_contracts,omitempty"`
+	HotAddressLRUCacheSize            int    `json:"hot_address_lru_cache_size,omitempty"`
+	HotAddressMinHits                 int    `json:"hot_address_min_hits,omitempty"`
+	AddressContractsCacheMinSize      int    `json:"address_contracts_cache_min_size,omitempty"`
+	AddressContractsCacheMaxBytes     int64  `json:"address_contracts_cache_max_bytes,omitempty"`
+	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
+	AddressAliases                    bool   `json:"address_aliases,omitempty"`
+	MempoolTxTimeoutHours             int    `json:"mempoolTxTimeoutHours"`
+	QueryBackendOnMempoolResync       bool   `json:"queryBackendOnMempoolResync"`
+	ProcessInternalTransactions       bool   `json:"processInternalTransactions"`
+	ProcessZeroInternalTransactions   bool   `json:"processZeroInternalTransactions"`
+	ConsensusNodeVersionURL           string `json:"consensusNodeVersion"`
+	DisableMempoolSync                bool   `json:"disableMempoolSync,omitempty"`
+	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
+	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -156,6 +157,12 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	if c.AddressContractsCacheMaxBytes <= 0 {
 		c.AddressContractsCacheMaxBytes = defaultAddressContractsCacheMaxBytes
 	}
+	if c.AddressContractsCacheBulkMaxBytes <= 0 {
+		c.AddressContractsCacheBulkMaxBytes = defaultAddressContractsCacheBulkMaxBytes
+	}
+	if c.AddressContractsCacheBulkMaxBytes < c.AddressContractsCacheMaxBytes {
+		glog.Warningf("address_contracts_cache_bulk_max_bytes=%d is less than address_contracts_cache_max_bytes=%d", c.AddressContractsCacheBulkMaxBytes, c.AddressContractsCacheMaxBytes)
+	}
 	if c.TraceTimeout != "" {
 		if _, err := time.ParseDuration(c.TraceTimeout); err != nil {
 			return nil, errors.Annotatef(err, "invalid trace_timeout")
@@ -178,6 +185,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	parser.HotAddressMinHits = c.HotAddressMinHits
 	parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
 	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
+	parser.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
 	s.Parser = parser
 	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
 	s.PushHandler = pushHandler

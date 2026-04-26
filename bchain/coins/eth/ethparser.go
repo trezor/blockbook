@@ -28,7 +28,14 @@ const defaultHotAddressMinHits = 3
 const maxHotAddressLRUCacheSize = 100_000
 const maxHotAddressMinHits = 10
 const defaultAddressContractsCacheMinSize = 300_000
-const defaultAddressContractsCacheMaxBytes int64 = 4_000_000_000
+const defaultAddressContractsCacheMaxBytes int64 = 2_000_000_000
+const defaultAddressContractsCacheBulkMaxBytes int64 = 4_000_000_000
+
+type AddressContractsCacheConfig struct {
+	MinSize      int
+	TipMaxBytes  int64
+	BulkMaxBytes int64
+}
 
 type EthereumLikeParser interface {
 	bchain.BlockChainParser
@@ -39,14 +46,15 @@ type EthereumLikeParser interface {
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
-	EnsSuffix                  string
-	HotAddressMinContracts     int
-	HotAddressLRUCacheSize     int
-	HotAddressMinHits          int
-	AddrContractsCacheMinSize  int
-	AddrContractsCacheMaxBytes int64
-	FormatAddressFunc          func(addr string) string
-	FromDescToAddressFunc      func(addrDesc bchain.AddressDescriptor) string
+	EnsSuffix                      string
+	HotAddressMinContracts         int
+	HotAddressLRUCacheSize         int
+	HotAddressMinHits              int
+	AddrContractsCacheMinSize      int
+	AddrContractsCacheMaxBytes     int64
+	AddrContractsCacheBulkMaxBytes int64
+	FormatAddressFunc              func(addr string) string
+	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
 }
 
 // NewEthereumParser returns new EthereumParser instance
@@ -57,14 +65,15 @@ func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 			AmountDecimalPoint:   EtherAmountDecimalPoint,
 			AddressAliases:       addressAliases,
 		},
-		EnsSuffix:                  ".eth",
-		HotAddressMinContracts:     defaultHotAddressMinContracts,
-		HotAddressLRUCacheSize:     defaultHotAddressLRUCacheSize,
-		HotAddressMinHits:          defaultHotAddressMinHits,
-		AddrContractsCacheMinSize:  defaultAddressContractsCacheMinSize,
-		AddrContractsCacheMaxBytes: defaultAddressContractsCacheMaxBytes,
-		FormatAddressFunc:          EIP55AddressFromAddress,
-		FromDescToAddressFunc:      EIP55Address,
+		EnsSuffix:                      ".eth",
+		HotAddressMinContracts:         defaultHotAddressMinContracts,
+		HotAddressLRUCacheSize:         defaultHotAddressLRUCacheSize,
+		HotAddressMinHits:              defaultHotAddressMinHits,
+		AddrContractsCacheMinSize:      defaultAddressContractsCacheMinSize,
+		AddrContractsCacheMaxBytes:     defaultAddressContractsCacheMaxBytes,
+		AddrContractsCacheBulkMaxBytes: defaultAddressContractsCacheBulkMaxBytes,
+		FormatAddressFunc:              EIP55AddressFromAddress,
+		FromDescToAddressFunc:          EIP55Address,
 	}
 }
 
@@ -72,8 +81,12 @@ func (p *EthereumParser) HotAddressConfig() (minContracts, lruSize, minHits int)
 	return p.HotAddressMinContracts, p.HotAddressLRUCacheSize, p.HotAddressMinHits
 }
 
-func (p *EthereumParser) AddressContractsCacheConfig() (minSize int, maxBytes int64) {
-	return p.AddrContractsCacheMinSize, p.AddrContractsCacheMaxBytes
+func (p *EthereumParser) AddressContractsCacheConfig() AddressContractsCacheConfig {
+	return AddressContractsCacheConfig{
+		MinSize:      p.AddrContractsCacheMinSize,
+		TipMaxBytes:  p.AddrContractsCacheMaxBytes,
+		BulkMaxBytes: p.AddrContractsCacheBulkMaxBytes,
+	}
 }
 
 type rpcHeader struct {
