@@ -78,6 +78,10 @@ type RocksDB struct {
 	addrContractsCache    map[string]*unpackedAddrContracts
 	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.
 	addrContractsCacheMinSize int
+	// tipAddrContractsCacheMaxBytes is the configured non-bulk cap.
+	tipAddrContractsCacheMaxBytes int64
+	// bulkAddrContractsCacheMaxBytes is the configured bulk-connect cap.
+	bulkAddrContractsCacheMaxBytes int64
 	// addrContractsCacheMaxBytes is a soft cap; when exceeded we flush and clear the cache.
 	addrContractsCacheMaxBytes int64
 	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
@@ -163,36 +167,48 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
 	r := &RocksDB{
-		path:                       path,
-		db:                         db,
-		wo:                         wo,
-		ro:                         ro,
-		cfh:                        cfh,
-		chainParser:                parser,
-		is:                         nil,
-		metrics:                    metrics,
-		cache:                      c,
-		maxOpenFiles:               maxOpenFiles,
-		cbs:                        connectBlockStats{},
-		extendedIndex:              extendedIndex,
-		connectBlockMux:            sync.Mutex{},
-		addrContractsCacheMux:      sync.Mutex{},
-		addrContractsCache:         make(map[string]*unpackedAddrContracts),
-		addrContractsCacheMinSize:  addrContractsCacheMinSize,
-		addrContractsCacheMaxBytes: 0,
-		addrContractsCacheBytes:    0,
-		hotAddrTracker:             nil,
+		path:                           path,
+		db:                             db,
+		wo:                             wo,
+		ro:                             ro,
+		cfh:                            cfh,
+		chainParser:                    parser,
+		is:                             nil,
+		metrics:                        metrics,
+		cache:                          c,
+		maxOpenFiles:                   maxOpenFiles,
+		cbs:                            connectBlockStats{},
+		extendedIndex:                  extendedIndex,
+		connectBlockMux:                sync.Mutex{},
+		addrContractsCacheMux:          sync.Mutex{},
+		addrContractsCache:             make(map[string]*unpackedAddrContracts),
+		addrContractsCacheMinSize:      addrContractsCacheMinSize,
+		tipAddrContractsCacheMaxBytes:  0,
+		bulkAddrContractsCacheMaxBytes: 0,
+		addrContractsCacheMaxBytes:     0,
+		addrContractsCacheBytes:        0,
+		hotAddrTracker:                 nil,
 	}
 	if chainType == bchain.ChainEthereumType {
 		r.hotAddrTracker = newAddressHotnessFromParser(parser)
 		if cfg, ok := parser.(addressContractsCacheConfigProvider); ok {
-			minSize, maxBytes := cfg.AddressContractsCacheConfig()
-			if minSize > 0 {
-				r.addrContractsCacheMinSize = minSize
+			cacheCfg := cfg.AddressContractsCacheConfig()
+			if cacheCfg.MinSize > 0 {
+				r.addrContractsCacheMinSize = cacheCfg.MinSize
 			}
-			if maxBytes > 0 {
-				r.addrContractsCacheMaxBytes = maxBytes
+			if cacheCfg.TipMaxBytes > 0 {
+				r.tipAddrContractsCacheMaxBytes = cacheCfg.TipMaxBytes
+				r.addrContractsCacheMaxBytes = cacheCfg.TipMaxBytes
 			}
+			if cacheCfg.BulkMaxBytes > 0 {
+				r.bulkAddrContractsCacheMaxBytes = cacheCfg.BulkMaxBytes
+			}
+		}
+		if r.tipAddrContractsCacheMaxBytes == 0 {
+			r.tipAddrContractsCacheMaxBytes = r.addrContractsCacheMaxBytes
+		}
+		if r.bulkAddrContractsCacheMaxBytes == 0 {
+			r.bulkAddrContractsCacheMaxBytes = r.addrContractsCacheMaxBytes
 		}
 		go r.periodicStoreAddrContractsCache()
 	}

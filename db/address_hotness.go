@@ -13,7 +13,7 @@ type hotAddressConfigProvider interface {
 }
 
 type addressContractsCacheConfigProvider interface {
-	AddressContractsCacheConfig() (minSize int, maxBytes int64)
+	AddressContractsCacheConfig() eth.AddressContractsCacheConfig
 }
 
 type addressHotnessKey [eth.EthereumTypeAddressDescriptorLen]byte

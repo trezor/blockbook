@@ -1987,6 +1987,19 @@ func (d *RocksDB) flushAddrContractsCache() {
 	glog.Info("storeAddrContractsCache: store ", count, " entries in ", time.Since(start))
 }
 
+func (d *RocksDB) flushAddrContractsCacheIfOverCap() {
+	maxBytes := d.addrContractsCacheMaxBytes
+	if maxBytes <= 0 {
+		return
+	}
+	d.addrContractsCacheMux.Lock()
+	overCap := d.addrContractsCacheBytes > maxBytes
+	d.addrContractsCacheMux.Unlock()
+	if overCap {
+		d.flushAddrContractsCache()
+	}
+}
+
 func (d *RocksDB) storeAddrContractsCache() {
 	start := time.Now()
 	count := len(d.addrContractsCache)

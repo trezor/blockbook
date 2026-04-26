@@ -109,7 +109,8 @@ Good examples of coin configuration are
             * `trace_timeout` – Optional per-request timeout passed to `debug_traceBlockByHash` as tracer config, formatted as a Go duration string such as `"20s"`.
           * Address-contracts cache configuration (Blockbook, Ethereum-type indexing):
             * `address_contracts_cache_min_size` – Minimum packed size (bytes) before an addressContracts entry is cached (default **300000**).
-            * `address_contracts_cache_max_bytes` – Cache size cap in bytes; when exceeded, cached entries are flushed early (default **4000000000**).
+            * `address_contracts_cache_max_bytes` – Cache size cap in bytes used while syncing near chain tip; when exceeded, cached entries are flushed early (default **2000000000**).
+            * `address_contracts_cache_bulk_max_bytes` – Cache size cap in bytes used during bulk connect; when exceeded, cached entries are flushed early (default **4000000000**).
 
 * `meta` – Common package metadata.
     * `package_maintainer` – Full name of package maintainer.
