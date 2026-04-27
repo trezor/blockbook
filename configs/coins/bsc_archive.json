@@ -52,7 +52,7 @@
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
         "explorer_url": "",
-        "additional_params": "-workers=16",
+        "additional_params": "-workers=16 -resyncindexdebounce=1509",
         "block_chain": {
             "parse": true,
             "mempool_workers": 8,
@@ -65,6 +65,7 @@
                 "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/56/suggestedGasFees\", \"periodSeconds\": 60}",
                 "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
+                "trace_timeout": "20s",
                 "queryBackendOnMempoolResync": false,
                 "disableMempoolSync": true,
                 "fiat_rates": "coingecko",
