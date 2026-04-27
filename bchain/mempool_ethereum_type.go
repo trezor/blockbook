@@ -105,15 +105,20 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 func (m *MempoolEthereumType) Resync() (int, error) {
 	start := time.Now()
 	processedTxs := 0
+	backendRemoved := 0
 	if m.queryBackendOnResync {
+		backendSnapshotTime := uint32(time.Now().Unix())
 		txs, err := m.chain.GetMempoolTransactions()
 		if err != nil {
 			return 0, err
 		}
 		processedTxs = len(txs)
+		backendTxs := make(map[string]struct{}, len(txs))
 		for _, txid := range txs {
+			backendTxs[txid] = struct{}{}
 			m.AddTransactionToMempool(txid)
 		}
+		backendRemoved = m.removeTransactionsMissingFromBackend(backendTxs, backendSnapshotTime)
 	}
 	m.mux.Lock()
 	entries := len(m.txEntries)
@@ -136,16 +141,30 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 	if durationRounded == 0 {
 		durationRounded = duration
 	}
-	if processedTxs > 0 {
+	if m.queryBackendOnResync {
 		throughput := 0.0
 		if seconds := duration.Seconds(); seconds > 0 {
 			throughput = float64(processedTxs) / seconds
 		}
-		glog.Infof("Mempool: resync complete, mempool size %d txs, processed %d txs, duration %s, throughput %.2f tx/s", entries, processedTxs, durationRounded, throughput)
+		glog.Infof("Mempool: resync complete, mempool size %d txs, processed %d txs, removed %d stale txs, duration %s, throughput %.2f tx/s", entries, processedTxs, backendRemoved, durationRounded, throughput)
 	} else {
 		glog.Infof("Mempool: resync complete, mempool size %d txs, duration %s", entries, durationRounded)
 	}
 	return entries, nil
+}
+
+func (m *MempoolEthereumType) removeTransactionsMissingFromBackend(backendTxs map[string]struct{}, backendSnapshotTime uint32) int {
+	removed := 0
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	for txid, entry := range m.txEntries {
+		if _, exists := backendTxs[txid]; exists || entry.time >= backendSnapshotTime {
+			continue
+		}
+		m.removeEntryFromMempool(txid, entry)
+		removed++
+	}
+	return removed
 }
 
 // AddTransactionToMempool adds transactions to mempool, returns true if tx added to mempool, false if not added (for example duplicate call)
