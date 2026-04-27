@@ -52,7 +52,7 @@
             "block_addresses_to_keep": 600,
             "additional_params": {
                 "address_aliases": true,
-                "mempoolTxTimeoutHours": 48,
+                "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
