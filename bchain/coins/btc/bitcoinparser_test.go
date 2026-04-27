@@ -1312,3 +1312,49 @@ func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 		})
 	}
 }
+
+// TestParseTxFromJson_VersionOverflow exercises ParseTxFromJson with
+// non-standard/invalid tx-version values that don't fit in int32.
+// Bitcoin Core serializes the transaction's version field as an unsigned
+// 32-bit integer in JSON, so values above math.MaxInt32 (e.g. the historical
+// mainnet tx 637dd1a3418386a418ceeac7bb58633a904dbf127fa47bbea9cc8f86fef7413f
+// in block 256818, whose version is 2187681472) must be accepted and
+// bit-cast to int32 to match the value produced by the binary block parser.
+func TestParseTxFromJson_VersionOverflow(t *testing.T) {
+	p := NewBitcoinParser(GetChainParams("main"), &Configuration{})
+	tests := []struct {
+		name        string
+		jsonVersion string
+		wantVersion int32
+	}{
+		{
+			name:        "standard version 2",
+			jsonVersion: "2",
+			wantVersion: 2,
+		},
+		{
+			// uint32 0x826C6B40 == 2187681472, bit-cast to int32 == -2107285824
+			name:        "real-world overflow tx 637dd1a3...",
+			jsonVersion: "2187681472",
+			wantVersion: -2107285824,
+		},
+		{
+			// uint32 0xFFFFFFFF, bit-cast to int32 == -1
+			name:        "uint32 max",
+			jsonVersion: "4294967295",
+			wantVersion: -1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := `{"hex":"00","txid":"637dd1a3418386a418ceeac7bb58633a904dbf127fa47bbea9cc8f86fef7413f","version":` + tt.jsonVersion + `,"locktime":0,"vin":[],"vout":[]}`
+			got, err := p.ParseTxFromJson([]byte(msg))
+			if err != nil {
+				t.Fatalf("ParseTxFromJson() unexpected error: %v", err)
+			}
+			if got.Version != tt.wantVersion {
+				t.Errorf("ParseTxFromJson() Version = %d, want %d", got.Version, tt.wantVersion)
+			}
+		})
+	}
+}
