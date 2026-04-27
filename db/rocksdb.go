@@ -975,6 +975,7 @@ func (d *RocksDB) cleanupBlockTxs(wb *grocksdb.WriteBatch, block *bchain.Block) 
 			}
 			// nil data means the key was not found in DB
 			if val.Data() == nil {
+				val.Free()
 				break
 			}
 			val.Free()
@@ -1989,6 +1990,7 @@ func (d *RocksDB) migrateAddrContractsToV7(approxRows int64) error {
 	var seekKey []byte
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	for {
 		var addrDesc bchain.AddressDescriptor
@@ -2212,6 +2214,7 @@ func (d *RocksDB) computeColumnSize(col int, stopCompute chan os.Signal) (int64,
 	var seekKey []byte
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	for {
 		var key []byte
@@ -2393,6 +2396,7 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 	var seekKey []byte
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	for {
 		var addrDesc bchain.AddressDescriptor
