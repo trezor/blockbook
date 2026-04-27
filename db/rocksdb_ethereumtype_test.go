@@ -165,6 +165,40 @@ func Test_unpackedAddrContracts_findContractIndex_HotnessTriggers(t *testing.T) 
 	}
 }
 
+func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t *testing.T) {
+	parser := ethereumTestnetParser()
+	parser.HotAddressMinContracts = 1
+	parser.HotAddressLRUCacheSize = 1
+	parser.HotAddressMinHits = 1
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: parser,
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	addr1 := makeTestAddrDesc(1100)
+	addr2 := makeTestAddrDesc(1101)
+	acs1 := &unpackedAddrContracts{Contracts: []unpackedAddrContract{{Contract: makeTestAddrDesc(1200)}}}
+	acs2 := &unpackedAddrContracts{Contracts: []unpackedAddrContract{{Contract: makeTestAddrDesc(1201)}}}
+	d.addrContractsCache[string(addr1)] = acs1
+	d.addrContractsCache[string(addr2)] = acs2
+
+	if _, found := acs1.findContractIndex(addr1, acs1.Contracts[0].Contract, d.hotAddrTracker); !found {
+		t.Fatal("expected first contract to be found")
+	}
+	if acs1.contractIndex == nil {
+		t.Fatal("expected first contract index to be built")
+	}
+	if _, found := acs2.findContractIndex(addr2, acs2.Contracts[0].Contract, d.hotAddrTracker); !found {
+		t.Fatal("expected second contract to be found")
+	}
+	if acs1.contractIndex != nil {
+		t.Fatal("expected first contract index to be dropped after LRU eviction")
+	}
+	if acs2.contractIndex == nil {
+		t.Fatal("expected second contract index to remain hot")
+	}
+}
+
 func Test_addrContractsCache_FlushOnCap(t *testing.T) {
 	d := setupRocksDB(t, &testEthereumParser{
 		EthereumParser: ethereumTestnetParser(),
