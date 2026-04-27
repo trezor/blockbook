@@ -1521,6 +1521,7 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 	glog.Info("SortAddressContracts: starting")
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	it := d.db.NewIteratorCF(ro, d.cfh[cfAddressContracts])
 	defer it.Close()
