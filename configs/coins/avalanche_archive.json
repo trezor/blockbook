@@ -49,7 +49,7 @@
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
         "explorer_url": "",
-        "additional_params": "-workers=16",
+        "additional_params": "-workers=16 -resyncindexdebounce=1509",
         "block_chain": {
             "parse": true,
             "mempool_workers": 8,
@@ -59,6 +59,7 @@
                 "address_aliases": true,
                 "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
+                "trace_timeout": "20s",
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
