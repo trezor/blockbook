@@ -56,7 +56,7 @@
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "infura",
                 "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/42161/suggestedGasFees\", \"periodSeconds\": 16}",
-                "mempoolTxTimeoutHours": 48,
+                "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
                 "trace_timeout": "20s",
                 "queryBackendOnMempoolResync": false,
