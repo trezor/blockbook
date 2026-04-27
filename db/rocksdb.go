@@ -191,6 +191,9 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	}
 	if chainType == bchain.ChainEthereumType {
 		r.hotAddrTracker = newAddressHotnessFromParser(parser)
+		if r.hotAddrTracker != nil {
+			r.hotAddrTracker.onEvict = r.dropAddrContractsContractIndex
+		}
 		if cfg, ok := parser.(addressContractsCacheConfigProvider); ok {
 			cacheCfg := cfg.AddressContractsCacheConfig()
 			if cacheCfg.MinSize > 0 {

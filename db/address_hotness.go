@@ -31,6 +31,7 @@ type addressHotness struct {
 	minContracts int
 	minHits      int
 	lru          *hotAddressLRU
+	onEvict      func(addressHotnessKey)
 	// hits tracks per-block lookup counts so we can decide when an address is hot.
 	// It is cleared at BeginBlock to avoid unbounded growth.
 	hits map[addressHotnessKey]uint16
@@ -99,8 +100,11 @@ func (h *addressHotness) ShouldUseIndex(addrKey addressHotnessKey, contractCount
 	delete(h.hits, addrKey)
 	if h.lru != nil {
 		// Promotion: once hot, an address stays hot until evicted by LRU capacity.
-		if h.lru.add(addrKey) {
+		if evictedKey, evicted := h.lru.add(addrKey); evicted {
 			h.blockEvictions++
+			if h.onEvict != nil {
+				h.onEvict(evictedKey)
+			}
 		}
 		h.blockPromotions++
 	}
@@ -159,26 +163,28 @@ func (l *hotAddressLRU) touch(key addressHotnessKey) bool {
 	return false
 }
 
-func (l *hotAddressLRU) add(key addressHotnessKey) bool {
+func (l *hotAddressLRU) add(key addressHotnessKey) (addressHotnessKey, bool) {
+	var zero addressHotnessKey
 	if l == nil {
-		return false
+		return zero, false
 	}
 	if el, ok := l.items[key]; ok {
 		// Already hot; refresh recency.
 		l.order.MoveToFront(el)
-		return false
+		return zero, false
 	}
 	el := l.order.PushFront(key)
 	l.items[key] = el
 	if l.order.Len() <= l.capacity {
-		return false
+		return zero, false
 	}
 	// Evict the least-recently used hot address.
 	oldest := l.order.Back()
 	if oldest == nil {
-		return false
+		return zero, false
 	}
+	evictedKey := oldest.Value.(addressHotnessKey)
 	l.order.Remove(oldest)
-	delete(l.items, oldest.Value.(addressHotnessKey))
-	return true
+	delete(l.items, evictedKey)
+	return evictedKey, true
 }

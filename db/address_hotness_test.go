@@ -95,6 +95,32 @@ func Test_addressHotness_LRUEviction(t *testing.T) {
 	}
 }
 
+func Test_addressHotness_LRUEvictionHook(t *testing.T) {
+	hot := newAddressHotness(1, 1, 1)
+	if hot == nil {
+		t.Fatal("expected hotness tracker to be initialized")
+	}
+	a := makeHotKey(13)
+	b := makeHotKey(14)
+	var evicted []addressHotnessKey
+	hot.onEvict = func(key addressHotnessKey) {
+		evicted = append(evicted, key)
+	}
+
+	if !hot.ShouldUseIndex(a, 1) {
+		t.Fatal("expected A to be promoted to hot")
+	}
+	if len(evicted) != 0 {
+		t.Fatal("did not expect eviction before LRU is full")
+	}
+	if !hot.ShouldUseIndex(b, 1) {
+		t.Fatal("expected B to be promoted to hot")
+	}
+	if len(evicted) != 1 || evicted[0] != a {
+		t.Fatalf("expected A to be evicted, got %v", evicted)
+	}
+}
+
 func Test_addressHotness_Specs(t *testing.T) {
 	t.Run("it should reset per-block hits", func(t *testing.T) {
 		hot := newAddressHotness(1, 2, 2)

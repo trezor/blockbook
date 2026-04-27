@@ -1638,6 +1638,19 @@ func (acs *unpackedAddrContracts) rebuildContractIndex() {
 	acs.contractIndexDirty = false
 }
 
+func (acs *unpackedAddrContracts) dropContractIndex() {
+	acs.contractIndex = nil
+	acs.contractIndexDirty = false
+}
+
+func (d *RocksDB) dropAddrContractsContractIndex(addrKey addressHotnessKey) {
+	d.addrContractsCacheMux.Lock()
+	if acs := d.addrContractsCache[string(addrKey[:])]; acs != nil {
+		acs.dropContractIndex()
+	}
+	d.addrContractsCacheMux.Unlock()
+}
+
 func (acs *unpackedAddrContracts) findContractIndex(addrDesc, contract bchain.AddressDescriptor, hot *addressHotness) (int, bool) {
 	useIndex := false
 	if hot != nil && len(acs.Contracts) >= hot.minContracts {
