@@ -1552,32 +1552,25 @@ func (d *RocksDB) writeHeight(wb *grocksdb.WriteBatch, height uint32, bi *BlockI
 }
 
 // address alias support
-var cachedAddressAliasRecords = make(map[string]string)
-var cachedAddressAliasRecordsMux sync.Mutex
-
-// InitAddressAliasRecords loads all records to cache
-func (d *RocksDB) InitAddressAliasRecords() (int, error) {
-	count := 0
-	cachedAddressAliasRecordsMux.Lock()
-	defer cachedAddressAliasRecordsMux.Unlock()
-	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddressAliases])
-	defer it.Close()
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		address := string(it.Key().Data())
-		name := string(it.Value().Data())
-		if address != "" && name != "" {
-			cachedAddressAliasRecords[address] = d.chainParser.FormatAddressAlias(address, name)
-			count++
-		}
-	}
-	return count, nil
-}
+var cachedAddressAliasRecords = newAddressAliasLRU(cachedAddressAliasRecordsLRUMaxSize)
 
 func (d *RocksDB) GetAddressAlias(address string) string {
-	cachedAddressAliasRecordsMux.Lock()
-	name := cachedAddressAliasRecords[address]
-	cachedAddressAliasRecordsMux.Unlock()
-	return name
+	if formatted, ok := cachedAddressAliasRecords.get(address); ok {
+		return formatted
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressAliases], []byte(address))
+	if err != nil {
+		glog.Errorf("GetAddressAlias %v error %v", address, err)
+		return ""
+	}
+	defer val.Free()
+	name := val.Data()
+	if len(name) == 0 {
+		return ""
+	}
+	formatted := d.chainParser.FormatAddressAlias(address, string(name))
+	cachedAddressAliasRecords.add(address, formatted)
+	return formatted
 }
 
 func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
@@ -1586,9 +1579,7 @@ func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bc
 			r := &records[i]
 			if len(r.Name) > 0 {
 				wb.PutCF(d.cfh[cfAddressAliases], []byte(r.Address), []byte(r.Name))
-				cachedAddressAliasRecordsMux.Lock()
-				cachedAddressAliasRecords[r.Address] = d.chainParser.FormatAddressAlias(r.Address, r.Name)
-				cachedAddressAliasRecordsMux.Unlock()
+				cachedAddressAliasRecords.add(r.Address, d.chainParser.FormatAddressAlias(r.Address, r.Name))
 			}
 		}
 	}
@@ -2160,14 +2151,6 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	var t time.Time
 	is.LastMempoolSync = t
 	is.SyncMode = false
-
-	if d.chainParser.UseAddressAliases() {
-		recordsCount, err := d.InitAddressAliasRecords()
-		if err != nil {
-			return nil, err
-		}
-		glog.Infof("loaded %d address alias records", recordsCount)
-	}
 
 	is.CoinShortcut = config.CoinShortcut
 	if config.CoinLabel == "" {
