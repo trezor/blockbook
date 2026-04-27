@@ -80,9 +80,14 @@ type Vout struct {
 // Tx is blockchain transaction
 // unnecessary fields are commented out to avoid overhead
 type Tx struct {
-	Hex         string       `json:"hex"`
-	Txid        string       `json:"txid"`
-	Version     int32        `json:"version"`
+	Hex  string `json:"hex"`
+	Txid string `json:"txid"`
+	// Version is decoded as uint32 to tolerate non-standard/invalid tx
+	// versions present on Bitcoin mainnet (e.g. tx 637dd1a3...fef7413f in
+	// block 256818 has version 2187681472, which overflows int32). It is
+	// bit-cast to int32 in ParseTxFromJson to match the value the binary
+	// block parser produces via wire.MsgTx.Deserialize.
+	Version     uint32       `json:"version"`
 	LockTime    uint32       `json:"locktime"`
 	VSize       int64        `json:"vsize,omitempty"`
 	Vin         []bchain.Vin `json:"vin"`
@@ -108,7 +113,7 @@ func (p *BitcoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error)
 	// it is necessary to copy bitcoinTx to Tx to make it compatible
 	tx.Hex = bitcoinTx.Hex
 	tx.Txid = bitcoinTx.Txid
-	tx.Version = bitcoinTx.Version
+	tx.Version = int32(bitcoinTx.Version)
 	tx.LockTime = bitcoinTx.LockTime
 	tx.VSize = bitcoinTx.VSize
 	tx.Vin = bitcoinTx.Vin
