@@ -207,8 +207,8 @@ type ContractInfoProtocols struct {
 // ContractInfoResult contains contract metadata and optional enrichments for a single contract.
 type ContractInfoResult struct {
 	// Deprecated: Use Standard instead.
-	Type              bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
-	Standard          bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Type              bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard          bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
 	Contract          string                   `json:"contract" ts_doc:"Smart contract address."`
 	Name              string                   `json:"name" ts_doc:"Readable name of the contract."`
 	Symbol            string                   `json:"symbol" ts_doc:"Symbol for tokens under this contract, if applicable."`
@@ -223,8 +223,8 @@ type ContractInfoResult struct {
 // Token contains info about tokens held by an address
 type Token struct {
 	// Deprecated: Use Standard instead.
-	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
-	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
 	Name             string                   `json:"name" ts_doc:"Readable name of the token."`
 	Path             string                   `json:"path,omitempty" ts_doc:"Derivation path if this token is derived from an XPUB-based address."`
 	Contract         string                   `json:"contract,omitempty" ts_doc:"Contract address on-chain."`
@@ -272,8 +272,8 @@ func (a Tokens) Less(i, j int) bool {
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
 	// Deprecated: Use Standard instead.
-	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
-	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
 	From             string                   `json:"from" ts_doc:"Source address of the token transfer."`
 	To               string                   `json:"to" ts_doc:"Destination address of the token transfer."`
 	Contract         string                   `json:"contract" ts_doc:"Contract address of the token."`
