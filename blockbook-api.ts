@@ -744,9 +744,9 @@ export interface WsBlockHashRes {
 export interface WsBlockReq {
     /** Block identifier (hash). */
     id: string;
-    /** Number of transactions per page in the block. */
+    /** Number of transactions per page in the block. Defaults to 1000 and is capped at 10000. */
     pageSize?: number;
-    /** Page index to retrieve if multiple pages of transactions are available. */
+    /** 1-based page index to retrieve if multiple pages of transactions are available. Values above the safe internal limit are clamped. */
     page?: number;
 }
 export interface WsBlockFilterReq {

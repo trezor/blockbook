@@ -1052,6 +1052,7 @@ The websocket interface provides the following requests:
 
 -   getInfo
 -   getBlockHash
+-   getBlock
 -   getAccountInfo
 -   getContractInfo
 -   getAccountUtxo
@@ -1128,6 +1129,27 @@ Example for getting current contract info including ERC4626 enrichment
    }
 }
 ```
+
+Example for getting a block with paged transactions
+
+```javascript
+{
+  "id":"1",
+  "method":"getBlock",
+  "params":{
+    "id":"760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
+    "page":1,
+    "pageSize":1000
+  }
+}
+```
+
+Notes for `getBlock`:
+
+-   available only when Blockbook runs with extended index enabled
+-   response format matches REST `GET /api/v2/block/<block height|block hash>`
+-   _pageSize_ defaults to `1000` and is capped at `10000`
+-   _page_ is sanitized to stay within safe internal limits
 
 ## Legacy API V1
 
