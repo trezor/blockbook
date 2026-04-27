@@ -1353,6 +1353,63 @@ func Test_WebsocketRejectsOversizedMessage(t *testing.T) {
 	t.Fatalf("unexpected websocket error after oversized message: %v", err)
 }
 
+func Test_WebsocketClosesWhenPendingRequestLimitExceeded(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+
+	releaseRequests := make(chan struct{})
+	defer close(releaseRequests)
+	startedRequests := make(chan struct{}, maxWebsocketPendingRequests)
+	originalPingHandler := requestHandlers["ping"]
+	requestHandlers["ping"] = func(s *WebsocketServer, c *websocketChannel, req *WsReq) (interface{}, error) {
+		startedRequests <- struct{}{}
+		<-releaseRequests
+		return struct{}{}, nil
+	}
+	defer func() {
+		requestHandlers["ping"] = originalPingHandler
+	}()
+
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	for i := 0; i < maxWebsocketPendingRequests; i++ {
+		if err := ws.WriteJSON(websocketReq{ID: strconv.Itoa(i), Method: "ping"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < maxWebsocketPendingRequests; i++ {
+		select {
+		case <-startedRequests:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for pending request %d", i)
+		}
+	}
+
+	if err := ws.WriteJSON(websocketReq{ID: "overflow", Method: "ping"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ws.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := ws.ReadMessage()
+	ws.SetReadDeadline(time.Time{})
+	if err == nil {
+		t.Fatal("expected websocket read error after pending request limit was exceeded")
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		t.Fatal("expected connection close after pending request limit was exceeded, got timeout")
+	}
+}
+
 var websocketTestsBitcoinType = []websocketTest{
 	{
 		name: "websocket getInfo",
