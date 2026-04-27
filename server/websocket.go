@@ -28,6 +28,7 @@ const outChannelSize = 500
 const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
+const maxWebsocketPendingRequests = 48
 const websocketLogPreviewBytes = 256
 
 // allRates is a special "currency" parameter that means all available currencies
@@ -44,6 +45,7 @@ type websocketChannel struct {
 	id                           uint64
 	conn                         *websocket.Conn
 	out                          chan *WsRes
+	pendingRequests              chan struct{}
 	ip                           string
 	requestHeader                http.Header
 	alive                        bool
@@ -221,12 +223,13 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(maxWebsocketMessageBytes)
 	c := &websocketChannel{
-		id:            atomic.AddUint64(&connectionCounter, 1),
-		conn:          conn,
-		out:           make(chan *WsRes, outChannelSize),
-		ip:            getIP(r),
-		requestHeader: r.Header,
-		alive:         true,
+		id:              atomic.AddUint64(&connectionCounter, 1),
+		conn:            conn,
+		out:             make(chan *WsRes, outChannelSize),
+		pendingRequests: make(chan struct{}, maxWebsocketPendingRequests),
+		ip:              getIP(r),
+		requestHeader:   r.Header,
+		alive:           true,
 	}
 	if s.is.WsGetAccountInfoLimit > 0 {
 		c.getAddressInfoDescriptors = make(map[string]struct{})
@@ -290,6 +293,19 @@ func (c *websocketChannel) DataOut(data *WsRes) {
 	}
 }
 
+func (c *websocketChannel) acquireRequestSlot() bool {
+	select {
+	case c.pendingRequests <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *websocketChannel) releaseRequestSlot() {
+	<-c.pendingRequests
+}
+
 func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -313,7 +329,15 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 				s.closeChannel(c, "protocol_error")
 				return
 			}
-			go s.onRequest(c, &req)
+			if !c.acquireRequestSlot() {
+				glog.Warning("Client ", c.id, " exceeded pending websocket request limit, ", c.ip)
+				s.closeChannel(c, "pending_requests_limit")
+				return
+			}
+			go func(req WsReq) {
+				defer c.releaseRequestSlot()
+				s.onRequest(c, &req)
+			}(req)
 		case websocket.BinaryMessage:
 			glog.Error("Binary message received from ", c.id, ", ", c.ip)
 			s.closeChannel(c, "protocol_error")
