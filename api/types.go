@@ -414,31 +414,31 @@ type StakingPool struct {
 // Address holds information about an address and its transactions
 type Address struct {
 	Paging
-	AddrStr               string               `json:"address" ts_doc:"The address string in standard format."`
-	BalanceSat            *Amount              `json:"balance" ts_doc:"Current confirmed balance (in satoshi or base units)."`
-	TotalReceivedSat      *Amount              `json:"totalReceived,omitempty" ts_doc:"Total amount ever received by this address."`
-	TotalSentSat          *Amount              `json:"totalSent,omitempty" ts_doc:"Total amount ever sent by this address."`
-	UnconfirmedBalanceSat *Amount              `json:"unconfirmedBalance" ts_doc:"Unconfirmed balance for this address."`
-	UnconfirmedTxs        int                  `json:"unconfirmedTxs" ts_doc:"Number of unconfirmed transactions for this address."`
-	UnconfirmedSending    *Amount              `json:"unconfirmedSending,omitempty" ts_doc:"Unconfirmed outgoing balance for this address."`
-	UnconfirmedReceiving  *Amount              `json:"unconfirmedReceiving,omitempty" ts_doc:"Unconfirmed incoming balance for this address."`
-	Txs                   int                  `json:"txs" ts_doc:"Number of transactions for this address (including confirmed)."`
-	AddrTxCount           int                  `json:"addrTxCount,omitempty" ts_doc:"Historical total count of transactions, if known."`
-	NonTokenTxs           int                  `json:"nonTokenTxs,omitempty" ts_doc:"Number of transactions not involving tokens (pure coin transfers)."`
-	InternalTxs           int                  `json:"internalTxs,omitempty" ts_doc:"Number of internal transactions (e.g., Ethereum calls)."`
-	Transactions          []*Tx                `json:"transactions,omitempty" ts_doc:"List of transaction details (if requested)."`
-	Txids                 []string             `json:"txids,omitempty" ts_doc:"List of transaction IDs (if detailed data is not requested)."`
-	Nonce                 string               `json:"nonce,omitempty" ts_doc:"Current transaction nonce for Ethereum-like addresses."`
-	UsedTokens            int                  `json:"usedTokens,omitempty" ts_doc:"Number of tokens with any historical usage at this address."`
-	Tokens                Tokens               `json:"tokens,omitempty" ts_doc:"List of tokens associated with this address."`
-	SecondaryValue        float64              `json:"secondaryValue,omitempty" ts_doc:"Total value of the address in secondary currency (e.g. fiat)."`
-	TokensBaseValue       float64              `json:"tokensBaseValue,omitempty" ts_doc:"Sum of token values in base currency."`
-	TokensSecondaryValue  float64              `json:"tokensSecondaryValue,omitempty" ts_doc:"Sum of token values in secondary currency (fiat)."`
-	TotalBaseValue        float64              `json:"totalBaseValue,omitempty" ts_doc:"Address's entire value in base currency, including tokens."`
-	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty" ts_doc:"Address's entire value in secondary currency, including tokens."`
-	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty" ts_doc:"Extra info if the address is a contract (ABI, type)."`
+	AddrStr               string              `json:"address" ts_doc:"The address string in standard format."`
+	BalanceSat            *Amount             `json:"balance" ts_doc:"Current confirmed balance (in satoshi or base units)."`
+	TotalReceivedSat      *Amount             `json:"totalReceived,omitempty" ts_doc:"Total amount ever received by this address."`
+	TotalSentSat          *Amount             `json:"totalSent,omitempty" ts_doc:"Total amount ever sent by this address."`
+	UnconfirmedBalanceSat *Amount             `json:"unconfirmedBalance" ts_doc:"Unconfirmed balance for this address."`
+	UnconfirmedTxs        int                 `json:"unconfirmedTxs" ts_doc:"Number of unconfirmed transactions for this address."`
+	UnconfirmedSending    *Amount             `json:"unconfirmedSending,omitempty" ts_doc:"Unconfirmed outgoing balance for this address."`
+	UnconfirmedReceiving  *Amount             `json:"unconfirmedReceiving,omitempty" ts_doc:"Unconfirmed incoming balance for this address."`
+	Txs                   int                 `json:"txs" ts_doc:"Number of transactions for this address (including confirmed)."`
+	AddrTxCount           int                 `json:"addrTxCount,omitempty" ts_doc:"Historical total count of transactions, if known."`
+	NonTokenTxs           int                 `json:"nonTokenTxs,omitempty" ts_doc:"Number of transactions not involving tokens (pure coin transfers)."`
+	InternalTxs           int                 `json:"internalTxs,omitempty" ts_doc:"Number of internal transactions (e.g., Ethereum calls)."`
+	Transactions          []*Tx               `json:"transactions,omitempty" ts_doc:"List of transaction details (if requested)."`
+	Txids                 []string            `json:"txids,omitempty" ts_doc:"List of transaction IDs (if detailed data is not requested)."`
+	Nonce                 string              `json:"nonce,omitempty" ts_doc:"Current transaction nonce for Ethereum-like addresses."`
+	UsedTokens            int                 `json:"usedTokens,omitempty" ts_doc:"Number of tokens with any historical usage at this address."`
+	Tokens                Tokens              `json:"tokens,omitempty" ts_doc:"List of tokens associated with this address."`
+	SecondaryValue        float64             `json:"secondaryValue,omitempty" ts_doc:"Total value of the address in secondary currency (e.g. fiat)."`
+	TokensBaseValue       float64             `json:"tokensBaseValue,omitempty" ts_doc:"Sum of token values in base currency."`
+	TokensSecondaryValue  float64             `json:"tokensSecondaryValue,omitempty" ts_doc:"Sum of token values in secondary currency (fiat)."`
+	TotalBaseValue        float64             `json:"totalBaseValue,omitempty" ts_doc:"Address's entire value in base currency, including tokens."`
+	TotalSecondaryValue   float64             `json:"totalSecondaryValue,omitempty" ts_doc:"Address's entire value in secondary currency, including tokens."`
+	ContractInfo          *ContractInfoResult `json:"contractInfo,omitempty" ts_doc:"Extra info if the address is a contract. Shape matches getContractInfo; rates and protocols are populated only when explicitly requested via getContractInfo."`
 	// Deprecated: replaced by ContractInfo
-	Erc20Contract  *bchain.ContractInfo   `json:"erc20Contract,omitempty" ts_doc:"@deprecated: replaced by contractInfo"`
+	Erc20Contract  *ContractInfoResult    `json:"erc20Contract,omitempty" ts_doc:"@deprecated: replaced by contractInfo"`
 	AddressAliases AddressAliasesMap      `json:"addressAliases,omitempty" ts_doc:"Aliases assigned to this address."`
 	StakingPools   []StakingPool          `json:"stakingPools,omitempty" ts_doc:"List of staking pool data if address interacts with staking."`
 	ChainExtraData *AccountChainExtraData `json:"chainExtraData,omitempty" ts_type:"{ payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any }" ts_doc:"Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload."`

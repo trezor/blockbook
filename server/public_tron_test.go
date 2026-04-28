@@ -111,7 +111,7 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 				`"transactions":[{"txid":"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"`,
 				`"chainExtraData":{"contractType":"TriggerSmartContract","operation":"contractCall","assetIssueID":"1002001","totalFee":"3076500","energyUsage":"14650","energyUsageTotal":"14650","bandwidthUsage":"345","bandwidthFee":"0","result":"SUCCESS"}`,
 				`"nonce":"236"`,
-				`"contractInfo":{"type":"TRC20","standard":"TRC20","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","name":"TronTestContract236","symbol":"TRC236","decimals":6,"createdInBlock":1000}`,
+				`"contractInfo":{"type":"TRC20","standard":"TRC20","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","name":"TronTestContract236","symbol":"TRC236","decimals":6,"createdInBlock":1000,"blockHeight":100000}`,
 				`"addressAliases":{"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf":{"Type":"Contract","Alias":"TronTestContract236"}}`,
 			},
 		},
