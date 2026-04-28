@@ -64,6 +64,26 @@ func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string) {
 	w.enrichErc4626Tokens(tokens)
 }
 
+// contractInfoResultFromBchain wraps bchain.ContractInfo into the API-level
+// ContractInfoResult. Rates and Protocols stay nil; callers that want
+// enrichment use GetContractInfoData directly.
+func contractInfoResultFromBchain(ci *bchain.ContractInfo, bestHeight uint32) *ContractInfoResult {
+	if ci == nil {
+		return nil
+	}
+	return &ContractInfoResult{
+		Type:              ci.Type,
+		Standard:          ci.Standard,
+		Contract:          ci.Contract,
+		Name:              ci.Name,
+		Symbol:            ci.Symbol,
+		Decimals:          ci.Decimals,
+		CreatedInBlock:    ci.CreatedInBlock,
+		DestructedInBlock: ci.DestructedInBlock,
+		BlockHeight:       bestHeight,
+	}
+}
+
 func (w *Worker) buildContractInfoRates(contract string, standard bchain.TokenStandardName, currency string) *ContractInfoRates {
 	if !contractInfoSupportsRates(standard) || w.fiatRates == nil {
 		return nil
