@@ -261,23 +261,6 @@ export interface StakingPool {
     /** Any balance automatically reinvested into the pool. */
     autocompoundBalance?: string;
 }
-export interface ContractInfo {
-    /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
-    /** Smart contract address. */
-    contract: string;
-    /** Readable name of the contract. */
-    name: string;
-    /** Symbol for tokens under this contract, if applicable. */
-    symbol: string;
-    /** Number of decimal places, if applicable. */
-    decimals: number;
-    /** Block height where contract was first created. */
-    createdInBlock?: number;
-    /** Block height where contract was destroyed (if any). */
-    destructedInBlock?: number;
-}
 export interface Erc4626TokenMetadata {
     /** Token contract address. */
     contract: string;
@@ -390,10 +373,10 @@ export interface Address {
     totalBaseValue?: number;
     /** Address's entire value in secondary currency, including tokens. */
     totalSecondaryValue?: number;
-    /** Extra info if the address is a contract (ABI, type). */
-    contractInfo?: ContractInfo;
+    /** Extra info if the address is a contract. Shape matches getContractInfo; rates and protocols are populated only when explicitly requested via getContractInfo. */
+    contractInfo?: ContractInfoResult;
     /** @deprecated: replaced by contractInfo */
-    erc20Contract?: ContractInfo;
+    erc20Contract?: ContractInfoResult;
     /** Aliases assigned to this address. */
     addressAliases?: {[key: string]: AddressAlias};
     /** List of staking pool data if address interacts with staking. */
