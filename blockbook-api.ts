@@ -114,8 +114,8 @@ export interface MultiTokenValue {
 }
 export interface TokenTransfer {
     /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
     /** Source address of the token transfer. */
     from: string;
     /** Destination address of the token transfer. */
@@ -263,8 +263,8 @@ export interface StakingPool {
 }
 export interface ContractInfo {
     /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
     /** Smart contract address. */
     contract: string;
     /** Readable name of the contract. */
@@ -278,10 +278,38 @@ export interface ContractInfo {
     /** Block height where contract was destroyed (if any). */
     destructedInBlock?: number;
 }
+export interface Erc4626TokenMetadata {
+    /** Token contract address. */
+    contract: string;
+    /** Human-readable token name. */
+    name?: string;
+    /** Token symbol. */
+    symbol?: string;
+    /** Token decimals. */
+    decimals: number;
+}
+export interface Erc4626Token {
+    /** Metadata of the underlying asset token. */
+    asset?: Erc4626TokenMetadata;
+    /** Metadata of the vault share token. */
+    share?: Erc4626TokenMetadata;
+    /** Total underlying assets managed by the vault. */
+    totalAssets?: string;
+    /** Underlying assets for one whole share unit. */
+    convertToAssets1Share?: string;
+    /** Shares for one whole underlying asset unit. */
+    convertToShares1Asset?: string;
+    /** Previewed shares minted for one whole underlying asset unit. */
+    previewDeposit1Asset?: string;
+    /** Previewed assets redeemed for one whole share unit. */
+    previewRedeem1Share?: string;
+    /** Error message for partial failures while fetching ERC4626 fields. */
+    error?: string;
+}
 export interface Token {
     /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
     /** Readable name of the token. */
     name: string;
     /** Derivation path if this token is derived from an XPUB-based address. */
@@ -308,6 +336,8 @@ export interface Token {
     totalReceived?: string;
     /** Total amount of tokens sent. */
     totalSent?: string;
+    /** Optional protocol-specific enrichments requested by the caller. */
+    protocols?: ContractInfoProtocols;
 }
 export interface Address {
     /** Current page index. */
@@ -370,6 +400,41 @@ export interface Address {
     stakingPools?: StakingPool[];
     /** Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload. */
     chainExtraData?: AccountChainExtraData;
+}
+export interface ContractInfoProtocols {
+    /** ERC4626 vault details when explicitly requested and detected. */
+    erc4626?: Erc4626Token;
+}
+export interface ContractInfoRates {
+    /** Current price of one whole token in the chain base currency, when available. */
+    baseRate?: number;
+    /** Requested secondary currency code for the secondaryRate field, lower-cased. */
+    currency?: string;
+    /** Current price of one whole token in the requested secondary currency, when available. */
+    secondaryRate?: number;
+}
+export interface ContractInfoResult {
+    /** @deprecated: Use standard instead. */
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    /** Smart contract address. */
+    contract: string;
+    /** Readable name of the contract. */
+    name: string;
+    /** Symbol for tokens under this contract, if applicable. */
+    symbol: string;
+    /** Number of decimal places, if applicable. */
+    decimals: number;
+    /** Block height where contract was first created. */
+    createdInBlock?: number;
+    /** Block height where contract was destroyed (if any). */
+    destructedInBlock?: number;
+    /** Current rate data for the contract when available. */
+    rates?: ContractInfoRates;
+    /** Optional protocol-specific enrichments requested by the caller. */
+    protocols?: ContractInfoProtocols;
+    /** Indexed best block height used as freshness metadata for this response. */
+    blockHeight: number;
 }
 export interface Utxo {
     /** Transaction ID in which this UTXO was created. */
@@ -594,7 +659,7 @@ export interface WsReq {
     /** Unique request identifier. */
     id: string;
     /** Requested method name. */
-    method: 'getAccountInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
+    method: 'getAccountInfo' | 'getContractInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
     /** Parameters for the requested method in raw JSON format. */
     params: any;
 }
@@ -611,6 +676,8 @@ export interface WsAccountInfoReq {
     details?: 'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs';
     /** Which tokens to include in the account info. */
     tokens?: 'derived' | 'used' | 'nonzero';
+    /** Optional protocol enrichments to include. Supported values currently include 'erc4626'. */
+    protocols?: string[];
     /** Number of items per page, if paging is used. */
     pageSize?: number;
     /** Requested page index, if paging is used. */
@@ -625,6 +692,14 @@ export interface WsAccountInfoReq {
     secondaryCurrency?: string;
     /** Gap limit for XPUB scanning, if relevant. */
     gap?: number;
+}
+export interface WsContractInfoReq {
+    /** Contract address to query. */
+    contract: string;
+    /** Optional secondary currency code used to include fiat pricing information. */
+    currency?: string;
+    /** Optional protocol enrichments to include. Supported values currently include 'erc4626'. */
+    protocols?: string[];
 }
 export interface WsBackendInfo {
     /** Backend version string. */

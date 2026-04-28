@@ -49,7 +49,8 @@
 - **ENS resolver support** ([#1289](https://github.com/trezor/blockbook/pull/1289)).
 - **Zcash upgrade** ([#1402](https://github.com/trezor/blockbook/pull/1402)).
 - **Tron network support** ([#1273](https://github.com/trezor/blockbook/pull/1273)): adds Tron support to Blockbook.
-- **Opt-in ERC-4626 vault enrichment for EVM tokens** ([#1431](https://github.com/trezor/blockbook/pull/1431)): adds REST/WS `includeErc4626`enabled batched vault detection and response enrichment with erc4626 data.
+- **Opt-in ERC-4626 vault enrichment for EVM tokens** ([#1431](https://github.com/trezor/blockbook/pull/1431)): adds REST/WS `protocols=erc4626` batched vault detection and response enrichment under `protocols.erc4626`.
+- **Contract metadata API with protocol enrichments**: adds REST/WS single-contract lookup so clients can fetch current contract metadata and optional protocol payloads without reloading full `accountInfo`.
 
 ### Backend Compatibility
 

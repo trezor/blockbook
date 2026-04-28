@@ -123,13 +123,22 @@ func testGetAddressTokenBalances(t *testing.T, h *TestHandler) {
 	assertEVMTokenBalancesHaveHoldingsFields(t, &resp, address, "GetAddressTokenBalances")
 }
 
-func testGetAddressIncludeErc4626EVM(t *testing.T, h *TestHandler) {
-	assertErc4626FixturesInAccountInfo(t, h, "GetAddressIncludeErc4626EVM", func(t *testing.T, fixture erc4626Fixture) evmAddressTokenBalanceResponse {
+func testGetAddressProtocolsEVM(t *testing.T, h *TestHandler) {
+	assertErc4626FixturesInAccountInfo(t, h, "GetAddressProtocolsEVM", func(t *testing.T, fixture erc4626Fixture) evmAddressTokenBalanceResponse {
 		path := buildAddressDetailsPath(fixture.Holder, "tokenBalances", addressPage, addressPageSize) +
 			"&contract=" + url.QueryEscape(fixture.Contract) +
-			"&includeErc4626=true"
+			"&protocols=erc4626"
 
 		var resp evmAddressTokenBalanceResponse
+		h.mustGetJSON(t, path, &resp)
+		return resp
+	})
+}
+
+func testGetContractInfoEVM(t *testing.T, h *TestHandler) {
+	assertContractInfoFixturesFetched(t, h, "GetContractInfoEVM", func(t *testing.T, fixture erc4626Fixture) evmContractInfoResponse {
+		path := "/api/v2/contract/" + url.PathEscape(fixture.Contract) + "?protocols=erc4626"
+		var resp evmContractInfoResponse
 		h.mustGetJSON(t, path, &resp)
 		return resp
 	})
@@ -305,20 +314,37 @@ func testWsGetAccountInfoContractFilterEVM(t *testing.T, h *TestHandler) {
 	assertEVMTokenListContractsMatch(t, info.Tokens, contract, "WsGetAccountInfoContractFilterEVM")
 }
 
-func testWsGetAccountInfoIncludeErc4626EVM(t *testing.T, h *TestHandler) {
-	assertErc4626FixturesInAccountInfo(t, h, "WsGetAccountInfoIncludeErc4626EVM", func(t *testing.T, fixture erc4626Fixture) evmAddressTokenBalanceResponse {
+func testWsGetAccountInfoProtocolsEVM(t *testing.T, h *TestHandler) {
+	assertErc4626FixturesInAccountInfo(t, h, "WsGetAccountInfoProtocolsEVM", func(t *testing.T, fixture erc4626Fixture) evmAddressTokenBalanceResponse {
 		resp := h.wsCall(t, "getAccountInfo", map[string]interface{}{
 			"descriptor":     fixture.Holder,
 			"details":        "tokenBalances",
 			"contractFilter": fixture.Contract,
-			"includeErc4626": true,
+			"protocols":      []string{"erc4626"},
 			"page":           addressPage,
 			"pageSize":       addressPageSize,
 		})
 
 		var info evmAddressTokenBalanceResponse
 		if err := json.Unmarshal(resp.Data, &info); err != nil {
-			t.Fatalf("decode websocket getAccountInfo includeErc4626 response: %v", err)
+			t.Fatalf("decode websocket getAccountInfo protocols response: %v", err)
+		}
+		return info
+	})
+}
+
+func testWsGetContractInfoEVM(t *testing.T, h *TestHandler) {
+	assertContractInfoFixturesFetched(t, h, "WsGetContractInfoEVM", func(t *testing.T, fixture erc4626Fixture) evmContractInfoResponse {
+		resp := h.wsCall(t, "getContractInfo", map[string]interface{}{
+			"contract": fixture.Contract,
+			"protocols": []string{
+				"erc4626",
+			},
+		})
+
+		var info evmContractInfoResponse
+		if err := json.Unmarshal(resp.Data, &info); err != nil {
+			t.Fatalf("decode websocket getContractInfo response: %v", err)
 		}
 		return info
 	})
@@ -350,12 +376,46 @@ func assertErc4626FixturesInAccountInfo(t *testing.T, h *TestHandler, testName s
 				if !strings.EqualFold(token.Contract, fixture.Contract) {
 					t.Fatalf("%s contract mismatch: got %s want %s", context, token.Contract, fixture.Contract)
 				}
-				if token.Erc4626 == nil {
+				if token.Protocols == nil || token.Protocols.Erc4626 == nil {
 					t.Fatalf("%s missing erc4626 payload for known ERC4626 contract %s", context, fixture.Contract)
 				}
-				assertErc4626Payload(t, context+".erc4626", fixture.Contract, token.Erc4626)
+				assertErc4626Payload(t, context+".protocols.erc4626", fixture.Contract, token.Protocols.Erc4626)
 			}
 
+			validatedFixtures++
+		})
+	}
+
+	if validatedFixtures == 0 {
+		t.Fatalf("%s did not validate any ERC4626 fixture", testName)
+	}
+}
+
+func assertContractInfoFixturesFetched(t *testing.T, h *TestHandler, testName string, fetch func(t *testing.T, fixture erc4626Fixture) evmContractInfoResponse) {
+	testData, err := loadAPITestData(h.Coin)
+	if err != nil {
+		t.Fatalf("load api test data for %s: %v", h.Coin, err)
+	}
+	if len(testData.ERC4626Fixtures) == 0 {
+		t.Fatalf("api/testdata/%s.json has no erc4626Fixtures entries", h.Coin)
+	}
+
+	validatedFixtures := 0
+
+	for _, fixture := range testData.ERC4626Fixtures {
+		t.Run(fixture.Name, func(t *testing.T) {
+			info := fetch(t, fixture)
+			if !strings.EqualFold(info.Contract, fixture.Contract) {
+				t.Fatalf("%s.contract mismatch: got %s want %s", testName, info.Contract, fixture.Contract)
+			}
+			assertNonEmptyString(t, info.Standard, testName+".standard")
+			if info.BlockHeight == 0 {
+				t.Fatalf("%s.blockHeight is zero", testName)
+			}
+			if info.Protocols == nil || info.Protocols.Erc4626 == nil {
+				t.Fatalf("%s missing erc4626 payload for known ERC4626 contract %s", testName, fixture.Contract)
+			}
+			assertErc4626Payload(t, testName+".protocols.erc4626", fixture.Contract, info.Protocols.Erc4626)
 			validatedFixtures++
 		})
 	}

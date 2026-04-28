@@ -72,8 +72,8 @@ type EthereumInternalData struct {
 // ContractInfo contains info about a contract
 type ContractInfo struct {
 	// Deprecated: Use Standard instead.
-	Type              TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
-	Standard          TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Type              TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard          TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
 	Contract          string            `json:"contract" ts_doc:"Smart contract address."`
 	Name              string            `json:"name" ts_doc:"Readable name of the contract."`
 	Symbol            string            `json:"symbol" ts_doc:"Symbol for tokens under this contract, if applicable."`

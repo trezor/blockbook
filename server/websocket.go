@@ -382,6 +382,14 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		}
 		return
 	},
+	"getContractInfo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsContractInfoReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getContractInfo(r.Contract, strings.ToLower(r.Currency), r.Protocols)
+		}
+		return
+	},
 	"getInfo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.getInfo()
 	},
@@ -622,6 +630,9 @@ func unmarshalGetAccountInfoRequest(params []byte) (*WsAccountInfoReq, error) {
 }
 
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
+	if err := s.api.ValidateProtocolsForChain(req.Protocols); err != nil {
+		return nil, err
+	}
 	var opt api.AccountDetails
 	switch req.Details {
 	case "tokens":
@@ -652,7 +663,7 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		Contract:       req.ContractFilter,
 		Vout:           api.AddressFilterVoutOff,
 		TokensToReturn: tokensToReturn,
-		IncludeErc4626: req.IncludeErc4626,
+		Protocols:      req.Protocols,
 	}
 	if req.PageSize == 0 {
 		req.PageSize = txsOnPage
@@ -662,6 +673,10 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, strings.ToLower(req.SecondaryCurrency))
 	}
 	return a, nil
+}
+
+func (s *WebsocketServer) getContractInfo(contract string, currency string, protocols []string) (*api.ContractInfoResult, error) {
+	return s.api.GetContractInfoData(contract, currency, protocols)
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (api.Utxos, error) {

@@ -9,7 +9,7 @@ import (
 // WsReq represents a generic WebSocket request with an ID, method, and raw parameters.
 type WsReq struct {
 	ID     string          `json:"id" ts_doc:"Unique request identifier."`
-	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
+	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getContractInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
 	Params json.RawMessage `json:"params" ts_type:"any" ts_doc:"Parameters for the requested method in raw JSON format."`
 }
 
@@ -21,17 +21,24 @@ type WsRes struct {
 
 // WsAccountInfoReq carries parameters for the 'getAccountInfo' method.
 type WsAccountInfoReq struct {
-	Descriptor        string `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
-	Details           string `json:"details,omitempty" ts_type:"'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs'" ts_doc:"Level of detail to retrieve about the account."`
-	Tokens            string `json:"tokens,omitempty" ts_type:"'derived' | 'used' | 'nonzero'" ts_doc:"Which tokens to include in the account info."`
-	IncludeErc4626    bool   `json:"includeErc4626,omitempty" ts_doc:"If true, includes ERC4626 data for detected vault tokens."`
-	PageSize          int    `json:"pageSize,omitempty" ts_doc:"Number of items per page, if paging is used."`
-	Page              int    `json:"page,omitempty" ts_doc:"Requested page index, if paging is used."`
-	FromHeight        int    `json:"from,omitempty" ts_doc:"Starting block height for transaction filtering."`
-	ToHeight          int    `json:"to,omitempty" ts_doc:"Ending block height for transaction filtering."`
-	ContractFilter    string `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
-	SecondaryCurrency string `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
-	Gap               int    `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+	Descriptor        string   `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
+	Details           string   `json:"details,omitempty" ts_type:"'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs'" ts_doc:"Level of detail to retrieve about the account."`
+	Tokens            string   `json:"tokens,omitempty" ts_type:"'derived' | 'used' | 'nonzero'" ts_doc:"Which tokens to include in the account info."`
+	Protocols         []string `json:"protocols,omitempty" ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
+	PageSize          int      `json:"pageSize,omitempty" ts_doc:"Number of items per page, if paging is used."`
+	Page              int      `json:"page,omitempty" ts_doc:"Requested page index, if paging is used."`
+	FromHeight        int      `json:"from,omitempty" ts_doc:"Starting block height for transaction filtering."`
+	ToHeight          int      `json:"to,omitempty" ts_doc:"Ending block height for transaction filtering."`
+	ContractFilter    string   `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
+	SecondaryCurrency string   `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
+	Gap               int      `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+}
+
+// WsContractInfoReq carries parameters for the 'getContractInfo' method.
+type WsContractInfoReq struct {
+	Contract  string   `json:"contract" ts_doc:"Contract address to query."`
+	Currency  string   `json:"currency,omitempty" ts_doc:"Optional secondary currency code used to include fiat pricing information."`
+	Protocols []string `json:"protocols,omitempty" ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
 }
 
 // WsBackendInfo holds extended info about the connected backend node.

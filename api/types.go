@@ -192,11 +192,39 @@ type Erc4626Token struct {
 	Error                    string                `json:"error,omitempty" ts_doc:"Error message for partial failures while fetching ERC4626 fields."`
 }
 
+// ContractInfoRates contains current price data for a single contract when available.
+type ContractInfoRates struct {
+	BaseRate      float64 `json:"baseRate,omitempty" ts_doc:"Current price of one whole token in the chain base currency, when available."`
+	Currency      string  `json:"currency,omitempty" ts_doc:"Requested secondary currency code for the secondaryRate field, lower-cased."`
+	SecondaryRate float64 `json:"secondaryRate,omitempty" ts_doc:"Current price of one whole token in the requested secondary currency, when available."`
+}
+
+// ContractInfoProtocols contains optional protocol-specific contract enrichments.
+type ContractInfoProtocols struct {
+	Erc4626 *Erc4626Token `json:"erc4626,omitempty" ts_doc:"ERC4626 vault details when explicitly requested and detected."`
+}
+
+// ContractInfoResult contains contract metadata and optional enrichments for a single contract.
+type ContractInfoResult struct {
+	// Deprecated: Use Standard instead.
+	Type              bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard          bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
+	Contract          string                   `json:"contract" ts_doc:"Smart contract address."`
+	Name              string                   `json:"name" ts_doc:"Readable name of the contract."`
+	Symbol            string                   `json:"symbol" ts_doc:"Symbol for tokens under this contract, if applicable."`
+	Decimals          int                      `json:"decimals" ts_doc:"Number of decimal places, if applicable."`
+	CreatedInBlock    uint32                   `json:"createdInBlock,omitempty" ts_doc:"Block height where contract was first created."`
+	DestructedInBlock uint32                   `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
+	Rates             *ContractInfoRates       `json:"rates,omitempty" ts_doc:"Current rate data for the contract when available."`
+	Protocols         *ContractInfoProtocols   `json:"protocols,omitempty" ts_doc:"Optional protocol-specific enrichments requested by the caller."`
+	BlockHeight       uint32                   `json:"blockHeight" ts_doc:"Indexed best block height used as freshness metadata for this response."`
+}
+
 // Token contains info about tokens held by an address
 type Token struct {
 	// Deprecated: Use Standard instead.
-	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
-	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
 	Name             string                   `json:"name" ts_doc:"Readable name of the token."`
 	Path             string                   `json:"path,omitempty" ts_doc:"Derivation path if this token is derived from an XPUB-based address."`
 	Contract         string                   `json:"contract,omitempty" ts_doc:"Contract address on-chain."`
@@ -210,7 +238,7 @@ type Token struct {
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"Multiple ERC1155 token balances (id + value)."`
 	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty" ts_doc:"Total amount of tokens received."`
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
-	Erc4626          *Erc4626Token            `json:"erc4626,omitempty" ts_doc:"ERC4626 vault details when requested and detected."`
+	Protocols        *ContractInfoProtocols   `json:"protocols,omitempty" ts_doc:"Optional protocol-specific enrichments requested by the caller."`
 	ContractIndex    string                   `json:"-"`
 }
 
@@ -244,8 +272,8 @@ func (a Tokens) Less(i, j int) bool {
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
 	// Deprecated: Use Standard instead.
-	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
-	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
 	From             string                   `json:"from" ts_doc:"Source address of the token transfer."`
 	To               string                   `json:"to" ts_doc:"Destination address of the token transfer."`
 	Contract         string                   `json:"contract" ts_doc:"Contract address of the token."`
@@ -365,7 +393,7 @@ type AddressFilter struct {
 	FromHeight     uint32         `ts_doc:"Starting block height for filtering transactions."`
 	ToHeight       uint32         `ts_doc:"Ending block height for filtering transactions."`
 	TokensToReturn TokensToReturn `ts_doc:"Which tokens to include in the result set."`
-	IncludeErc4626 bool           `ts_doc:"If true, enriches fungible EVM tokens with ERC4626 vault data when available."`
+	Protocols      []string       `ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool `ts_doc:"If true, ignores mempool (unconfirmed) transactions."`
 }
