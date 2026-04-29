@@ -162,6 +162,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	if s.metrics != nil {
 		s.metrics.WebsocketNewBlockTxsSubscriptions.Set(0)
 	}
+	go s.websocketLimiter.runPeriodicCleanup(websocketConnectionLimiterCleanupInterval)
 	return s, nil
 }
 
@@ -265,12 +266,35 @@ func (l *websocketConnectionLimiter) cleanupLocked(now time.Time) {
 	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < websocketConnectionLimiterCleanupInterval {
 		return
 	}
+	l.sweepLocked(now)
+}
+
+func (l *websocketConnectionLimiter) sweepLocked(now time.Time) {
 	l.lastCleanup = now
 	for ip, client := range l.clients {
 		client.trimAttempts(now)
 		if client.active == 0 && now.Sub(client.lastSeen) > websocketConnectionLimiterTTL {
 			delete(l.clients, ip)
 		}
+	}
+}
+
+// sweep evicts TTL-expired idle entries unconditionally. Used by the
+// background ticker so that idle servers don't retain stale entries.
+func (l *websocketConnectionLimiter) sweep(now time.Time) {
+	l.mux.Lock()
+	defer l.mux.Unlock()
+	l.sweepLocked(now)
+}
+
+// runPeriodicCleanup ticks every interval and sweeps the limiter. It does not
+// terminate; it is started once per WebsocketServer at construction time and
+// runs for the lifetime of the process.
+func (l *websocketConnectionLimiter) runPeriodicCleanup(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		l.sweep(now)
 	}
 }
 

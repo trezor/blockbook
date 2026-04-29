@@ -309,6 +309,36 @@ func TestWebsocketConnectionLimiterActiveConnections(t *testing.T) {
 	}
 }
 
+func TestWebsocketConnectionLimiterSweepEvictsIdleEntries(t *testing.T) {
+	limiter := newWebsocketConnectionLimiter()
+	now := time.Unix(1700000000, 0)
+	idle := "192.0.2.40"
+	active := "192.0.2.41"
+
+	if ok, reason := limiter.accept(idle, now); !ok {
+		t.Fatalf("accept(idle) rejected with %q", reason)
+	}
+	limiter.release(idle, now)
+	if ok, reason := limiter.accept(active, now); !ok {
+		t.Fatalf("accept(active) rejected with %q", reason)
+	}
+
+	// sweep() is what the periodic-cleanup goroutine calls; verify it evicts
+	// TTL-expired idle entries while keeping entries with active connections.
+	limiter.sweep(now.Add(websocketConnectionLimiterTTL + time.Second))
+
+	limiter.mux.Lock()
+	_, idleStillTracked := limiter.clients[idle]
+	_, activeStillTracked := limiter.clients[active]
+	limiter.mux.Unlock()
+	if idleStillTracked {
+		t.Fatal("idle TTL-expired entry was not evicted by sweep")
+	}
+	if !activeStillTracked {
+		t.Fatal("entry with active connection was evicted by sweep")
+	}
+}
+
 func TestWebsocketConnectionLimiterCleanup(t *testing.T) {
 	limiter := newWebsocketConnectionLimiter()
 	now := time.Unix(1700000000, 0)
