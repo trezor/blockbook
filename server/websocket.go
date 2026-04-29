@@ -298,23 +298,46 @@ func getIP(r *http.Request) string {
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		host = h
 	}
-	if ip, ok := parseIP(host); ok {
-		return ip
+	remote, remoteOK := parseAddr(host)
+
+	// Trust X-Real-Ip only when the TCP peer is on a private/loopback network,
+	// i.e. an upstream proxy on the same host or LAN. For direct internet
+	// peers the header is attacker-controlled and would let any client spoof
+	// their IP past the per-IP rate limiter.
+	if remoteOK && isTrustedProxy(remote) {
+		if ip, ok := parseIP(r.Header.Get("X-Real-Ip")); ok {
+			return ip
+		}
 	}
 
+	if remoteOK {
+		return remote.String()
+	}
 	return strings.TrimSpace(r.RemoteAddr)
 }
 
 func parseIP(value string) (string, bool) {
+	addr, ok := parseAddr(value)
+	if !ok {
+		return "", false
+	}
+	return addr.String(), true
+}
+
+func parseAddr(value string) (netip.Addr, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "", false
+		return netip.Addr{}, false
 	}
-	ip, err := netip.ParseAddr(value)
+	addr, err := netip.ParseAddr(value)
 	if err != nil {
-		return "", false
+		return netip.Addr{}, false
 	}
-	return ip.String(), true
+	return addr, true
+}
+
+func isTrustedProxy(addr netip.Addr) bool {
+	return addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast()
 }
 
 func getWebsocketPayloadPreview(d []byte) string {
