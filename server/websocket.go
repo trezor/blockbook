@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -103,6 +104,12 @@ type WebsocketServer struct {
 	allowedRpcCallTo             map[string]struct{}
 	trustedProxyPrefixes         []netip.Prefix
 	websocketLimiter             *websocketConnectionLimiter
+	// Shutdown coordination: protects shuttingDown + activeChannels and gates
+	// trackWork so RocksDB cannot be closed while a WS goroutine is mid-read.
+	shutdownMu     sync.Mutex
+	shuttingDown   bool
+	activeChannels map[*websocketChannel]struct{}
+	requestWg      sync.WaitGroup
 }
 
 type websocketClientLimit struct {
@@ -144,6 +151,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
 		websocketLimiter:            newWebsocketConnectionLimiter(),
+		activeChannels:              make(map[*websocketChannel]struct{}),
 	}
 	s.upgrader = &websocket.Upgrader{
 		ReadBufferSize:    1024 * 32,
@@ -434,6 +442,13 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	s.shutdownMu.Lock()
+	shuttingDown := s.shuttingDown
+	s.shutdownMu.Unlock()
+	if shuttingDown {
+		http.Error(w, "Server shutting down", http.StatusServiceUnavailable)
+		return
+	}
 	ip := getIP(r, s.trustedProxyPrefixes)
 	limited := false
 	if s.websocketLimiter != nil {
@@ -466,6 +481,13 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.is.WsGetAccountInfoLimit > 0 {
 		c.getAddressInfoDescriptors = make(map[string]struct{})
 	}
+	if !s.registerChannel(c) {
+		conn.Close()
+		if limited {
+			s.websocketLimiter.release(ip, time.Now())
+		}
+		return
+	}
 	go s.inputLoop(c)
 	go s.outputLoop(c)
 	s.onConnect(c)
@@ -474,6 +496,79 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // GetHandler returns http handler
 func (s *WebsocketServer) GetHandler() http.Handler {
 	return s
+}
+
+// registerChannel adds channel to activeChannels unless the server is shutting
+// down. Returns false on shutdown so the caller can close the connection.
+func (s *WebsocketServer) registerChannel(c *websocketChannel) bool {
+	s.shutdownMu.Lock()
+	defer s.shutdownMu.Unlock()
+	if s.shuttingDown {
+		return false
+	}
+	s.activeChannels[c] = struct{}{}
+	return true
+}
+
+func (s *WebsocketServer) unregisterChannel(c *websocketChannel) {
+	s.shutdownMu.Lock()
+	defer s.shutdownMu.Unlock()
+	delete(s.activeChannels, c)
+}
+
+// trackWork increments requestWg unless the server is shutting down. Callers
+// that get true must invoke workDone exactly once when the goroutine they
+// spawn returns. Used to gate goroutines that touch the DB/chain/api so that
+// Shutdown can wait for them to drain before RocksDB is closed.
+func (s *WebsocketServer) trackWork() bool {
+	s.shutdownMu.Lock()
+	defer s.shutdownMu.Unlock()
+	if s.shuttingDown {
+		return false
+	}
+	s.requestWg.Add(1)
+	return true
+}
+
+func (s *WebsocketServer) workDone() {
+	s.requestWg.Done()
+}
+
+// Shutdown initiates graceful WebSocket server shutdown: it refuses new
+// connections, closes existing ones, and blocks until in-flight DB-touching
+// goroutines finish or ctx is canceled. This must run before RocksDB is
+// closed; otherwise a long-running getAccountInfo can race rocksdb_close in
+// cgo and SIGSEGV the process.
+func (s *WebsocketServer) Shutdown(ctx context.Context) error {
+	s.shutdownMu.Lock()
+	if s.shuttingDown {
+		s.shutdownMu.Unlock()
+		return nil
+	}
+	s.shuttingDown = true
+	chans := make([]*websocketChannel, 0, len(s.activeChannels))
+	for c := range s.activeChannels {
+		chans = append(chans, c)
+	}
+	s.shutdownMu.Unlock()
+
+	for _, c := range chans {
+		s.closeChannel(c, "server_shutdown")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.requestWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		glog.Info("websocket: shutdown complete, all in-flight requests drained")
+		return nil
+	case <-ctx.Done():
+		glog.Warning("websocket: shutdown timed out waiting for in-flight requests; proceeding anyway")
+		return ctx.Err()
+	}
 }
 
 func (s *WebsocketServer) closeChannel(c *websocketChannel, reason string) bool {
@@ -566,7 +661,13 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 				s.closeChannel(c, "pending_requests_limit")
 				return
 			}
+			if !s.trackWork() {
+				c.releaseRequestSlot()
+				s.closeChannel(c, "server_shutdown")
+				return
+			}
 			go func(req WsReq) {
+				defer s.workDone()
 				defer c.releaseRequestSlot()
 				s.onRequest(c, &req)
 			}(req)
@@ -616,6 +717,7 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	if s.websocketLimiter != nil {
 		s.websocketLimiter.release(c.ip, time.Now())
 	}
+	s.unregisterChannel(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
 	s.metrics.WebsocketClients.Dec()
 }
@@ -1518,9 +1620,13 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 		observeNewBlockTxDuration(s.metrics, "match", matchStart)
 		if len(subscribed) > 0 {
 			incNewBlockTxMetric(s.metrics, "matched", "success", 1)
+			if !s.trackWork() {
+				return
+			}
 			// Convert and publish asynchronously so heavy tx conversion does not
 			// block processing of other transactions in the same block.
 			go func(tx bchain.Tx, subscribed map[string]struct{}) {
+				defer s.workDone()
 				if chainType == bchain.ChainEthereumType {
 					receiptStatus := setEthereumReceiptIfAvailable(&tx, s.chain.EthereumTypeGetTransactionReceipt)
 					if s.metrics != nil {
@@ -1552,7 +1658,12 @@ func (s *WebsocketServer) OnNewBlock(block *bchain.Block) {
 	go s.onNewBlockAsync(block.Hash, block.Height)
 	if s.newBlockTxsSubscriptionCount > 0 {
 		// Skip per-tx address matching when nobody opted into newBlockTxs.
-		go s.publishNewBlockTxsByAddr(block)
+		if s.trackWork() {
+			go func() {
+				defer s.workDone()
+				s.publishNewBlockTxsByAddr(block)
+			}()
+		}
 	}
 }
 
@@ -1677,7 +1788,12 @@ func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[stri
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
 	subscribed := s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers, nil)
 	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
-		go s.onNewTxAsync(tx, subscribed)
+		if s.trackWork() {
+			go func() {
+				defer s.workDone()
+				s.onNewTxAsync(tx, subscribed)
+			}()
+		}
 	}
 }
 
