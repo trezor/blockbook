@@ -206,6 +206,38 @@ func TestGetIP(t *testing.T) {
 			remoteAddr: "198.51.100.2",
 			want:       "198.51.100.2",
 		},
+		{
+			name: "x-real-ip honored when remote is loopback",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.10",
+			},
+			remoteAddr: "127.0.0.1:54321",
+			want:       "203.0.113.10",
+		},
+		{
+			name: "x-real-ip honored when remote is private network",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.11",
+			},
+			remoteAddr: "10.0.0.5:54321",
+			want:       "203.0.113.11",
+		},
+		{
+			name: "x-real-ip ignored when remote is public",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.12",
+			},
+			remoteAddr: "198.51.100.3:54321",
+			want:       "198.51.100.3",
+		},
+		{
+			name: "invalid x-real-ip from trusted proxy falls back to remote",
+			headers: map[string]string{
+				"X-Real-Ip": "not-an-ip",
+			},
+			remoteAddr: "127.0.0.1:54321",
+			want:       "127.0.0.1",
+		},
 	}
 
 	for _, tt := range tests {
