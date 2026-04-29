@@ -24,9 +24,9 @@
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
         "version": "3.3.10",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.3.10/erigon_v3.3.10_linux_amd64.tar.gz",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.4.0/erigon_v3.4.0_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "b717a6fce275d02e517eb473fc5d4385a7b0cd1d9e9ed144e4ef712799a474b7",
+        "verification_source": "48e2622e2252f8babee90e39786f9b97023af455e63d482cfe66ed36db61f2db",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode full --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr {{.Env.RPCBindHost}} --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.3.10/erigon_v3.3.10_linux_arm64.tar.gz",
-                "verification_source": "d85460c6e4c287235939d77051cb3abf3606b21498e71b29b2d8f61f87dddf5b"
+              "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.4.0/erigon_v3.4.0_linux_arm64.tar.gz",
+              "verification_source": "1bed57f1319892578e7d3b0e01f42e797864f6567fca1050378f286d1bd1ad3d"
             }
         }
     },
