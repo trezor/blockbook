@@ -781,11 +781,25 @@ func TestWebsocketShutdownTimesOutOnStuckWork(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	if err := s.Shutdown(ctx); err == nil {
+	start := time.Now()
+	finished := make(chan error)
+	go func() {
+		finished <- s.Shutdown(ctx)
+	}()
+
+	time.Sleep(60 * time.Millisecond)
+	select {
+	case err := <-finished:
+		t.Fatalf("Shutdown returned before tracked work finished: %v", err)
+	default:
+	}
+	s.workDone()
+	if err := <-finished; err == nil {
 		t.Fatal("Shutdown() = nil, want context deadline error")
 	}
-	// Release after the timeout so the test goroutine doesn't leak.
-	s.workDone()
+	if elapsed := time.Since(start); elapsed < 60*time.Millisecond {
+		t.Fatalf("Shutdown returned in %v, expected to wait for tracked work after timeout", elapsed)
+	}
 }
 
 func TestWebsocketShutdownRefusesNewWork(t *testing.T) {
