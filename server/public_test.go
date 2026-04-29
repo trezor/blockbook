@@ -2766,11 +2766,6 @@ func Test_sanitizePagingParams(t *testing.T) {
 		{"oversized page size", 1, maxWebsocketBlockPageSize + 1, txsInAPI, maxWebsocketBlockPageSize, 1, maxWebsocketBlockPageSize},
 		{"negative values", -1, -1, txsInAPI, maxWebsocketBlockPageSize, 0, txsInAPI},
 		{"safe offset clamp", maxPageNumber, maxPageNumber, maxPageNumber, maxPageNumber, maxSafePagingOffset / maxPageNumber, maxPageNumber},
-		// WS getAccountInfo arguments: default 25, cap at txsInAPI.
-		{"ws getAccountInfo default", 0, 0, txsOnPage, txsInAPI, 0, txsOnPage},
-		{"ws getAccountInfo within limit", 1, 100, txsOnPage, txsInAPI, 1, 100},
-		{"ws getAccountInfo caps at txsInAPI", 1, txsInAPI + 1, txsOnPage, txsInAPI, 1, txsInAPI},
-		{"ws getAccountInfo negative defaults", 0, -5, txsOnPage, txsInAPI, 0, txsOnPage},
 	}
 
 	for _, tt := range tests {
@@ -2778,6 +2773,36 @@ func Test_sanitizePagingParams(t *testing.T) {
 			page, pageSize := sanitizePagingParams(tt.page, tt.pageSize, tt.defaultPageSize, tt.maxPageSize)
 			if page != tt.wantPage || pageSize != tt.wantPageSize {
 				t.Errorf("sanitizePagingParams(%d, %d, %d, %d) = (%d, %d), want (%d, %d)",
+					tt.page, tt.pageSize, tt.defaultPageSize, tt.maxPageSize,
+					page, pageSize, tt.wantPage, tt.wantPageSize)
+			}
+		})
+	}
+}
+
+func Test_sanitizeAccountPagingParams(t *testing.T) {
+	tests := []struct {
+		name            string
+		page            int
+		pageSize        int
+		defaultPageSize int
+		maxPageSize     int
+		wantPage        int
+		wantPageSize    int
+	}{
+		{"ws getAccountInfo default", 0, 0, txsOnPage, txsInAPI, 0, txsOnPage},
+		{"ws getAccountInfo within limit", 1, 100, txsOnPage, txsInAPI, 1, 100},
+		{"ws getAccountInfo caps page size at txsInAPI", 1, txsInAPI + 1, txsOnPage, txsInAPI, 1, txsInAPI},
+		{"ws getAccountInfo negative defaults", 0, -5, txsOnPage, txsInAPI, 0, txsOnPage},
+		{"api address caps history offset", maxPageNumber, txsInAPI, txsInAPI, txsInAPI, maxAccountHistoryPagingOffset / txsInAPI, txsInAPI},
+		{"explorer address caps history offset", maxPageNumber, txsOnPage, txsOnPage, txsOnPage, maxAccountHistoryPagingOffset / txsOnPage, txsOnPage},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, pageSize := sanitizeAccountPagingParams(tt.page, tt.pageSize, tt.defaultPageSize, tt.maxPageSize)
+			if page != tt.wantPage || pageSize != tt.wantPageSize {
+				t.Errorf("sanitizeAccountPagingParams(%d, %d, %d, %d) = (%d, %d), want (%d, %d)",
 					tt.page, tt.pageSize, tt.defaultPageSize, tt.maxPageSize,
 					page, pageSize, tt.wantPage, tt.wantPageSize)
 			}

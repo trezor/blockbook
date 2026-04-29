@@ -36,6 +36,7 @@ const maxWebsocketBlockPageSize = 10000
 const maxPageNumber = 1000000
 const maxGapValue = 10000
 const maxSafePagingOffset = 1000000000
+const maxAccountHistoryPagingOffset = 100000
 const maxSendTxBodyBytes int64 = 8 * 1024 * 1024
 
 const secondaryCoinCookieName = "secondary_coin"
@@ -908,13 +909,21 @@ func validateIntParam(value string, defaultValue int, min int, max int) int {
 }
 
 func sanitizePagingParams(page, pageSize, defaultPageSize, maxPageSize int) (int, int) {
+	return sanitizePagingParamsWithMaxOffset(page, pageSize, defaultPageSize, maxPageSize, maxSafePagingOffset)
+}
+
+func sanitizeAccountPagingParams(page, pageSize, defaultPageSize, maxPageSize int) (int, int) {
+	return sanitizePagingParamsWithMaxOffset(page, pageSize, defaultPageSize, maxPageSize, maxAccountHistoryPagingOffset)
+}
+
+func sanitizePagingParamsWithMaxOffset(page, pageSize, defaultPageSize, maxPageSize, maxPagingOffset int) (int, int) {
 	page = validateIntValue(page, 0, 0, maxPageNumber)
 	pageSize = validateIntValue(pageSize, defaultPageSize, 0, maxPageSize)
 	if pageSize == 0 {
 		pageSize = defaultPageSize
 	}
-	if page > 0 && pageSize > 0 && page > maxSafePagingOffset/pageSize {
-		page = maxSafePagingOffset / pageSize
+	if page > 0 && pageSize > 0 && page > maxPagingOffset/pageSize {
+		page = maxPagingOffset / pageSize
 	}
 	return page, pageSize
 }
@@ -923,7 +932,7 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	var voutFilter = api.AddressFilterVoutOff
 	page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
 	pageSize := validateIntParam(r.URL.Query().Get("pageSize"), maxPageSize, 0, maxPageSize)
-	page, pageSize = sanitizePagingParams(page, pageSize, maxPageSize, maxPageSize)
+	page, pageSize = sanitizeAccountPagingParams(page, pageSize, maxPageSize, maxPageSize)
 	from := validateIntParam(r.URL.Query().Get("from"), 0, 0, 10000000000)
 	to := validateIntParam(r.URL.Query().Get("to"), 0, 0, 10000000000)
 
