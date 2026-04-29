@@ -566,7 +566,9 @@ func (s *WebsocketServer) Shutdown(ctx context.Context) error {
 		glog.Info("websocket: shutdown complete, all in-flight requests drained")
 		return nil
 	case <-ctx.Done():
-		glog.Warning("websocket: shutdown timed out waiting for in-flight requests; proceeding anyway")
+		glog.Warning("websocket: shutdown timed out waiting for in-flight requests; waiting to avoid RocksDB close race")
+		<-done
+		glog.Info("websocket: shutdown complete after timeout")
 		return ctx.Err()
 	}
 }
