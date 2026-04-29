@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -100,6 +101,7 @@ type WebsocketServer struct {
 	fiatRatesSubscriptionsLock   sync.Mutex
 	allowedOrigins               map[string]struct{}
 	allowedRpcCallTo             map[string]struct{}
+	trustedProxyPrefixes         []netip.Prefix
 	websocketLimiter             *websocketConnectionLimiter
 }
 
@@ -159,6 +161,15 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		}
 		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
 	}
+	trustedEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_TRUSTED_PROXIES"
+	prefixes, err := parseTrustedProxies(trustedEnvName, os.Getenv(trustedEnvName))
+	if err != nil {
+		return nil, err
+	}
+	s.trustedProxyPrefixes = prefixes
+	if len(prefixes) > 0 {
+		glog.Info("Trusted proxy CIDRs: ", prefixes)
+	}
 	if s.metrics != nil {
 		s.metrics.WebsocketNewBlockTxsSubscriptions.Set(0)
 	}
@@ -190,6 +201,42 @@ func parseAllowedOrigins(originEnvName, envAllowedOrigins string) map[string]str
 	}
 	glog.Info("Websocket origin allowlist enabled: ", envAllowedOrigins)
 	return allowedOrigins
+}
+
+// parseTrustedProxies parses a comma-separated list of CIDRs that augment the
+// loopback/RFC1918/link-local defaults for trusting X-Real-Ip. Any prefix
+// broad enough to cover meaningful chunks of the public internet is rejected
+// with an error so misconfiguration fails fast at startup rather than
+// silently turning X-Real-Ip into an IP-spoofing primitive.
+func parseTrustedProxies(envName, value string) ([]netip.Prefix, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	const minIPv4Bits = 8
+	const minIPv6Bits = 16
+	var prefixes []netip.Prefix
+	for _, raw := range strings.Split(value, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		p, err := netip.ParsePrefix(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%s: invalid CIDR %q: %w", envName, raw, err)
+		}
+		if p.Addr().Is4In6() {
+			return nil, fmt.Errorf("%s: refusing IPv4-mapped CIDR %q; use IPv4 CIDR notation", envName, raw)
+		}
+		bits := p.Bits()
+		if p.Addr().Is4() && bits < minIPv4Bits {
+			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv4)", envName, raw, bits, minIPv4Bits)
+		}
+		if p.Addr().Is6() && !p.Addr().Is4In6() && bits < minIPv6Bits {
+			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv6)", envName, raw, bits, minIPv6Bits)
+		}
+		prefixes = append(prefixes, p.Masked())
+	}
+	return prefixes, nil
 }
 
 func (s *WebsocketServer) checkOrigin(r *http.Request) bool {
@@ -310,12 +357,14 @@ func (client *websocketClientLimit) trimAttempts(now time.Time) {
 	}
 }
 
-func getIP(r *http.Request) string {
-	if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
-		return ip
-	}
-	if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
-		return ip
+func getIP(r *http.Request, trustedProxies []netip.Prefix) string {
+	if len(trustedProxies) == 0 {
+		if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
+			return ip
+		}
+		if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
+			return ip
+		}
 	}
 
 	host := r.RemoteAddr
@@ -324,11 +373,11 @@ func getIP(r *http.Request) string {
 	}
 	remote, remoteOK := parseAddr(host)
 
-	// Trust X-Real-Ip only when the TCP peer is on a private/loopback network,
-	// i.e. an upstream proxy on the same host or LAN. For direct internet
-	// peers the header is attacker-controlled and would let any client spoof
-	// their IP past the per-IP rate limiter.
-	if remoteOK && isTrustedProxy(remote) {
+	// Trust X-Real-Ip only when the TCP peer is on a private/loopback network
+	// (an upstream proxy on the same host or LAN) or in a configured trusted
+	// CIDR. For direct internet peers the header is attacker-controlled and
+	// would let any client spoof their IP past the per-IP rate limiter.
+	if remoteOK && isTrustedProxy(remote, trustedProxies) {
 		if ip, ok := parseIP(r.Header.Get("X-Real-Ip")); ok {
 			return ip
 		}
@@ -360,8 +409,16 @@ func parseAddr(value string) (netip.Addr, bool) {
 	return addr, true
 }
 
-func isTrustedProxy(addr netip.Addr) bool {
-	return addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast()
+func isTrustedProxy(addr netip.Addr, extras []netip.Prefix) bool {
+	if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() {
+		return true
+	}
+	for _, p := range extras {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 func getWebsocketPayloadPreview(d []byte) string {
@@ -377,7 +434,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	ip := getIP(r)
+	ip := getIP(r, s.trustedProxyPrefixes)
 	limited := false
 	if s.websocketLimiter != nil {
 		ok, reason := s.websocketLimiter.accept(ip, time.Now())
