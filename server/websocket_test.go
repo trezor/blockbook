@@ -4,6 +4,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -290,6 +291,30 @@ func TestWebsocketConnectionLimiterCleanup(t *testing.T) {
 	_, _ = limiter.accept("192.0.2.31", now.Add(websocketConnectionLimiterTTL+websocketConnectionLimiterCleanupInterval+time.Second))
 	if _, ok := limiter.clients[ip]; ok {
 		t.Fatal("idle client limit entry was not cleaned up")
+	}
+}
+
+func TestEstimateFeeRejectsTooManyBlocks(t *testing.T) {
+	blocks := make([]int, maxWebsocketEstimateFeeBlocks+1)
+	params, err := json.Marshal(WsEstimateFeeReq{Blocks: blocks})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := &WebsocketServer{}
+	_, err = s.estimateFee(params)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*api.APIError)
+	if !ok {
+		t.Fatalf("expected *api.APIError, got %T", err)
+	}
+	if !apiErr.Public {
+		t.Fatal("expected public api error")
+	}
+	if !strings.Contains(apiErr.Error(), "blocks max 32") {
+		t.Fatalf("unexpected error message %q", apiErr.Error())
 	}
 }
 
