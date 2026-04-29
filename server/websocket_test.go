@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
@@ -158,6 +159,137 @@ func TestParseAllowedOrigins(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGetIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		headers    map[string]string
+		remoteAddr string
+		want       string
+	}{
+		{
+			name: "cloudflare ipv6 is preferred",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "2001:db8::1",
+				"CF-Connecting-IP":   "192.0.2.10",
+			},
+			remoteAddr: "198.51.100.1:12345",
+			want:       "2001:db8::1",
+		},
+		{
+			name: "cloudflare ip is canonicalized",
+			headers: map[string]string{
+				"CF-Connecting-IP": " 192.0.2.10 ",
+			},
+			remoteAddr: "198.51.100.1:12345",
+			want:       "192.0.2.10",
+		},
+		{
+			name: "invalid cloudflare ip falls back to remote address",
+			headers: map[string]string{
+				"CF-Connecting-IP": "not-an-ip",
+				"X-Real-Ip":        "203.0.113.10",
+			},
+			remoteAddr: "198.51.100.1:12345",
+			want:       "198.51.100.1",
+		},
+		{
+			name:       "remote ipv6 address strips port",
+			remoteAddr: "[2001:db8::2]:443",
+			want:       "2001:db8::2",
+		},
+		{
+			name:       "remote address without port is accepted",
+			remoteAddr: "198.51.100.2",
+			want:       "198.51.100.2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &http.Request{
+				Header:     make(http.Header),
+				RemoteAddr: tt.remoteAddr,
+			}
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
+			}
+
+			got := getIP(r)
+			if got != tt.want {
+				t.Fatalf("getIP() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWebsocketConnectionLimiterConnectionAttempts(t *testing.T) {
+	limiter := newWebsocketConnectionLimiter()
+	now := time.Unix(1700000000, 0)
+	ip := "192.0.2.10"
+
+	for i := 0; i < maxWebsocketConnectionAttemptsPerIP; i++ {
+		ok, reason := limiter.accept(ip, now)
+		if !ok {
+			t.Fatalf("accept(%d) rejected with %q", i, reason)
+		}
+		limiter.release(ip, now)
+	}
+
+	ok, reason := limiter.accept(ip, now)
+	if ok || reason != "connection_attempt_limit" {
+		t.Fatalf("accept() = %v, %q, want false, connection_attempt_limit", ok, reason)
+	}
+
+	ok, reason = limiter.accept(ip, now.Add(websocketConnectionAttemptWindow+time.Second))
+	if !ok {
+		t.Fatalf("accept() after window rejected with %q", reason)
+	}
+}
+
+func TestWebsocketConnectionLimiterActiveConnections(t *testing.T) {
+	limiter := newWebsocketConnectionLimiter()
+	now := time.Unix(1700000000, 0)
+	ip := "192.0.2.20"
+
+	for i := 0; i < maxWebsocketConnectionsPerIP; i++ {
+		if i > 0 && i%maxWebsocketConnectionAttemptsPerIP == 0 {
+			now = now.Add(websocketConnectionAttemptWindow + time.Second)
+		}
+		ok, reason := limiter.accept(ip, now)
+		if !ok {
+			t.Fatalf("accept(%d) rejected with %q", i, reason)
+		}
+	}
+
+	ok, reason := limiter.accept(ip, now)
+	if ok || reason != "connection_limit" {
+		t.Fatalf("accept() = %v, %q, want false, connection_limit", ok, reason)
+	}
+
+	limiter.release(ip, now)
+	ok, reason = limiter.accept(ip, now.Add(websocketConnectionAttemptWindow+time.Second))
+	if !ok {
+		t.Fatalf("accept() after release rejected with %q", reason)
+	}
+}
+
+func TestWebsocketConnectionLimiterCleanup(t *testing.T) {
+	limiter := newWebsocketConnectionLimiter()
+	now := time.Unix(1700000000, 0)
+	ip := "192.0.2.30"
+
+	ok, reason := limiter.accept(ip, now)
+	if !ok {
+		t.Fatalf("accept() rejected with %q", reason)
+	}
+	limiter.release(ip, now)
+
+	_, _ = limiter.accept("192.0.2.31", now.Add(websocketConnectionLimiterTTL+websocketConnectionLimiterCleanupInterval+time.Second))
+	if _, ok := limiter.clients[ip]; ok {
+		t.Fatal("idle client limit entry was not cleaned up")
 	}
 }
 
