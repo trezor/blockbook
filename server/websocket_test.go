@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -163,11 +164,62 @@ func TestParseAllowedOrigins(t *testing.T) {
 	}
 }
 
+func TestParseTrustedProxies(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     string
+		want      []string
+		wantErr   bool
+		errSubstr string
+	}{
+		{name: "empty value yields nil", value: "", want: nil},
+		{name: "whitespace only yields nil", value: "  , ,  ", want: nil},
+		{name: "single ipv4 cidr", value: "203.0.113.0/24", want: []string{"203.0.113.0/24"}},
+		{name: "multiple cidrs with spaces", value: " 203.0.113.0/24 , 2001:db8::/32 ", want: []string{"203.0.113.0/24", "2001:db8::/32"}},
+		{name: "single host as /32 is fine", value: "10.0.0.5/32", want: []string{"10.0.0.5/32"}},
+		{name: "rejects 0.0.0.0/0", value: "0.0.0.0/0", wantErr: true, errSubstr: "too broad"},
+		{name: "rejects ::/0", value: "::/0", wantErr: true, errSubstr: "too broad"},
+		{name: "rejects ipv4 broader than /8", value: "10.0.0.0/4", wantErr: true, errSubstr: "too broad"},
+		{name: "rejects ipv6 broader than /16", value: "2000::/8", wantErr: true, errSubstr: "too broad"},
+		{name: "rejects broad ipv4-mapped cidr", value: "::ffff:0.0.0.0/0", wantErr: true, errSubstr: "IPv4-mapped"},
+		{name: "rejects specific ipv4-mapped cidr", value: "::ffff:192.0.2.0/120", wantErr: true, errSubstr: "IPv4-mapped"},
+		{name: "rejects malformed cidr", value: "not-a-cidr", wantErr: true, errSubstr: "invalid CIDR"},
+		{name: "rejects bare ip without prefix", value: "10.0.0.5", wantErr: true, errSubstr: "invalid CIDR"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseTrustedProxies("TEST_ENV", tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseTrustedProxies(%q) = nil err, want error containing %q", tt.value, tt.errSubstr)
+				}
+				if !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Fatalf("parseTrustedProxies(%q) err = %q, want substring %q", tt.value, err.Error(), tt.errSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseTrustedProxies(%q) unexpected error: %v", tt.value, err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseTrustedProxies(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+			for i, p := range got {
+				if p.String() != tt.want[i] {
+					t.Errorf("parseTrustedProxies(%q)[%d] = %q, want %q", tt.value, i, p.String(), tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestGetIP(t *testing.T) {
 	tests := []struct {
 		name       string
 		headers    map[string]string
 		remoteAddr string
+		trusted    []netip.Prefix
 		want       string
 	}{
 		{
@@ -238,6 +290,43 @@ func TestGetIP(t *testing.T) {
 			remoteAddr: "127.0.0.1:54321",
 			want:       "127.0.0.1",
 		},
+		{
+			name: "x-real-ip honored when remote matches configured public CIDR",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.50",
+			},
+			remoteAddr: "198.51.100.5:54321",
+			trusted:    []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
+			want:       "203.0.113.50",
+		},
+		{
+			name: "custom trusted proxy ignores spoofed cloudflare header",
+			headers: map[string]string{
+				"CF-Connecting-IP": "192.0.2.99",
+				"X-Real-Ip":        "203.0.113.52",
+			},
+			remoteAddr: "198.51.100.5:54321",
+			trusted:    []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
+			want:       "203.0.113.52",
+		},
+		{
+			name: "custom trusted proxy ignores cloudflare header without x-real-ip",
+			headers: map[string]string{
+				"CF-Connecting-IP": "192.0.2.100",
+			},
+			remoteAddr: "198.51.100.5:54321",
+			trusted:    []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
+			want:       "198.51.100.5",
+		},
+		{
+			name: "x-real-ip ignored for public remote outside configured CIDRs",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.51",
+			},
+			remoteAddr: "198.51.100.6:54321",
+			trusted:    []netip.Prefix{netip.MustParsePrefix("203.0.113.0/24")},
+			want:       "198.51.100.6",
+		},
 	}
 
 	for _, tt := range tests {
@@ -250,7 +339,7 @@ func TestGetIP(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			got := getIP(r)
+			got := getIP(r, tt.trusted)
 			if got != tt.want {
 				t.Fatalf("getIP() = %q, want %q", got, tt.want)
 			}
