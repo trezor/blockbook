@@ -33,6 +33,7 @@ const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 const maxWebsocketPendingRequests = 48
 const maxWebsocketConnectionAttemptsPerIP = 64
 const maxWebsocketConnectionsPerIP = 128
+const maxWebsocketEstimateFeeBlocks = 32
 const websocketConnectionAttemptWindow = time.Minute
 const websocketConnectionLimiterTTL = 10 * time.Minute
 const websocketConnectionLimiterCleanupInterval = time.Minute
@@ -919,6 +920,9 @@ func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 	err := json.Unmarshal(params, &r)
 	if err != nil {
 		return nil, err
+	}
+	if len(r.Blocks) > maxWebsocketEstimateFeeBlocks {
+		return nil, api.NewAPIError("blocks max "+strconv.Itoa(maxWebsocketEstimateFeeBlocks), true)
 	}
 	res := make([]WsEstimateFeeRes, len(r.Blocks))
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
