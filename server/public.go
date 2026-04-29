@@ -251,10 +251,18 @@ func (s *PublicServer) Close() error {
 	return s.https.Close()
 }
 
-// Shutdown shuts down the server
+// Shutdown shuts down the server. http.Server.Shutdown does not drain
+// hijacked WebSocket connections, so after the HTTP listener stops we also
+// drain the WebSocket server's in-flight DB-touching goroutines; otherwise a
+// long getAccountInfo can race rocksdb_close in cgo and SIGSEGV the process.
 func (s *PublicServer) Shutdown(ctx context.Context) error {
 	glog.Infof("public server: shutdown")
-	return s.https.Shutdown(ctx)
+	httpErr := s.https.Shutdown(ctx)
+	wsErr := s.websocket.Shutdown(ctx)
+	if httpErr != nil {
+		return httpErr
+	}
+	return wsErr
 }
 
 // OnNewBlock notifies users subscribed to bitcoind/hashblock about new block

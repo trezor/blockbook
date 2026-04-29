@@ -4,6 +4,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -734,5 +735,83 @@ func TestPopulateBitcoinVinAddrDescsEnablesSenderOnlyMatching(t *testing.T) {
 	withResolvedVins := s.getNewTxSubscriptions(vins, tx.Vout, nil, nil)
 	if _, ok := withResolvedVins[string(addr3Desc)]; !ok {
 		t.Fatal("sender subscription did not match after vin descriptor resolution")
+	}
+}
+
+func newShutdownTestServer() *WebsocketServer {
+	return &WebsocketServer{activeChannels: make(map[*websocketChannel]struct{})}
+}
+
+func TestWebsocketShutdownWaitsForInFlightWork(t *testing.T) {
+	s := newShutdownTestServer()
+	if !s.trackWork() {
+		t.Fatal("trackWork() returned false before shutdown")
+	}
+
+	finished := make(chan struct{})
+	go func() {
+		// Simulate a DB-touching goroutine that takes some time.
+		time.Sleep(50 * time.Millisecond)
+		s.workDone()
+		close(finished)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	start := time.Now()
+	if err := s.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown() = %v, want nil", err)
+	}
+	elapsed := time.Since(start)
+	if elapsed < 50*time.Millisecond {
+		t.Fatalf("Shutdown returned in %v, expected to wait for in-flight work (~50ms)", elapsed)
+	}
+	select {
+	case <-finished:
+	default:
+		t.Fatal("Shutdown returned before tracked goroutine finished")
+	}
+}
+
+func TestWebsocketShutdownTimesOutOnStuckWork(t *testing.T) {
+	s := newShutdownTestServer()
+	if !s.trackWork() {
+		t.Fatal("trackWork() returned false before shutdown")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	if err := s.Shutdown(ctx); err == nil {
+		t.Fatal("Shutdown() = nil, want context deadline error")
+	}
+	// Release after the timeout so the test goroutine doesn't leak.
+	s.workDone()
+}
+
+func TestWebsocketShutdownRefusesNewWork(t *testing.T) {
+	s := newShutdownTestServer()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := s.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown() = %v, want nil", err)
+	}
+	if s.trackWork() {
+		t.Fatal("trackWork() returned true after shutdown")
+	}
+	dummy := &websocketChannel{}
+	if s.registerChannel(dummy) {
+		t.Fatal("registerChannel() returned true after shutdown")
+	}
+}
+
+func TestWebsocketShutdownIsIdempotent(t *testing.T) {
+	s := newShutdownTestServer()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := s.Shutdown(ctx); err != nil {
+		t.Fatalf("first Shutdown() = %v, want nil", err)
+	}
+	if err := s.Shutdown(ctx); err != nil {
+		t.Fatalf("second Shutdown() = %v, want nil", err)
 	}
 }
