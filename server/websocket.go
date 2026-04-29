@@ -820,9 +820,8 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		TokensToReturn: tokensToReturn,
 		Protocols:      req.Protocols,
 	}
-	if req.PageSize == 0 {
-		req.PageSize = txsOnPage
-	}
+	req.Page, req.PageSize = sanitizePagingParams(req.Page, req.PageSize, txsOnPage, txsInAPI)
+	req.Gap = validateIntValue(req.Gap, 0, 0, maxGapValue)
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, req.Gap, strings.ToLower(req.SecondaryCurrency))
 	if err != nil {
 		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, strings.ToLower(req.SecondaryCurrency))
