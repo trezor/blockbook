@@ -122,7 +122,7 @@ func (p *whatTheFeeProvider) whatTheFeeGetData(res interface{}) error {
 		p.observeRequest("http_" + strconv.Itoa(httpRes.StatusCode))
 		return errors.New("whatthefee.io returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	if err := common.SafeDecodeResponseFromReader(httpRes.Body, &res); err != nil {
+	if err := common.SafeDecodeResponseFromReader(httpRes.Body, res); err != nil {
 		p.observeRequest("decode_error")
 		return err
 	}

@@ -190,7 +190,7 @@ func (p *infuraFeeProvider) getData(res interface{}) error {
 		p.observeRequest("http_" + strconv.Itoa(httpRes.StatusCode))
 		return errors.New(p.params.URL + " returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	if err := common.SafeDecodeResponseFromReader(httpRes.Body, &res); err != nil {
+	if err := common.SafeDecodeResponseFromReader(httpRes.Body, res); err != nil {
 		p.observeRequest("decode_error")
 		return err
 	}
