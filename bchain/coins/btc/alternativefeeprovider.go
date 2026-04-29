@@ -9,6 +9,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 type alternativeFeeProviderFee struct {
@@ -22,6 +23,15 @@ type alternativeFeeProvider struct {
 	chain                          bchain.BlockChain
 	mux                            sync.Mutex
 	fallbackFeePerKBIfNotAvailable int
+	metrics                        *common.Metrics
+	name                           string
+}
+
+func (p *alternativeFeeProvider) observeRequest(status string) {
+	if p.metrics == nil || p.metrics.AlternativeFeeProviderRequests == nil {
+		return
+	}
+	p.metrics.AlternativeFeeProviderRequests.With(common.Labels{"provider": p.name, "status": status}).Inc()
 }
 
 type alternativeFeeProviderInterface interface {

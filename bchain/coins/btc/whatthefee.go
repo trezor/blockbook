@@ -40,8 +40,8 @@ type whatTheFeeProvider struct {
 }
 
 // NewWhatTheFee initializes https://whatthefee.io provider
-func NewWhatTheFee(chain bchain.BlockChain, params string) (alternativeFeeProviderInterface, error) {
-	var p whatTheFeeProvider
+func NewWhatTheFee(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
+	p := whatTheFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{metrics: metrics, name: "whatthefee"}}
 	err := json.Unmarshal([]byte(params), &p.params)
 	if err != nil {
 		return nil, err
@@ -115,10 +115,17 @@ func (p *whatTheFeeProvider) whatTheFeeGetData(res interface{}) error {
 		defer httpRes.Body.Close()
 	}
 	if err != nil {
+		p.observeRequest("network_error")
 		return err
 	}
 	if httpRes.StatusCode != 200 {
+		p.observeRequest("http_" + strconv.Itoa(httpRes.StatusCode))
 		return errors.New("whatthefee.io returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
+	if err := common.SafeDecodeResponseFromReader(httpRes.Body, &res); err != nil {
+		p.observeRequest("decode_error")
+		return err
+	}
+	p.observeRequest("ok")
+	return nil
 }

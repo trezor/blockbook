@@ -87,8 +87,8 @@ type infuraFeeProvider struct {
 }
 
 // NewInfuraFeesProvider initializes https://gas.api.infura.io provider
-func NewInfuraFeesProvider(chain bchain.BlockChain, params string) (alternativeFeeProviderInterface, error) {
-	p := &infuraFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{}}
+func NewInfuraFeesProvider(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
+	p := &infuraFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{metrics: metrics, name: "infura"}}
 	err := json.Unmarshal([]byte(params), &p.params)
 	if err != nil {
 		return nil, err
@@ -183,10 +183,17 @@ func (p *infuraFeeProvider) getData(res interface{}) error {
 		defer httpRes.Body.Close()
 	}
 	if err != nil {
+		p.observeRequest("network_error")
 		return err
 	}
 	if httpRes.StatusCode != http.StatusOK {
+		p.observeRequest("http_" + strconv.Itoa(httpRes.StatusCode))
 		return errors.New(p.params.URL + " returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
+	if err := common.SafeDecodeResponseFromReader(httpRes.Body, &res); err != nil {
+		p.observeRequest("decode_error")
+		return err
+	}
+	p.observeRequest("ok")
+	return nil
 }

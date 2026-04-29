@@ -61,8 +61,8 @@ type oneInchFeeProvider struct {
 }
 
 // NewOneInchFeesProvider initializes https://api.1inch.dev provider
-func NewOneInchFeesProvider(chain bchain.BlockChain, params string) (alternativeFeeProviderInterface, error) {
-	p := &oneInchFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{}}
+func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
+	p := &oneInchFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{metrics: metrics, name: "1inch"}}
 	err := json.Unmarshal([]byte(params), &p.params)
 	if err != nil {
 		return nil, err
@@ -135,10 +135,17 @@ func (p *oneInchFeeProvider) getData(res interface{}) error {
 		defer httpRes.Body.Close()
 	}
 	if err != nil {
+		p.observeRequest("network_error")
 		return err
 	}
 	if httpRes.StatusCode != http.StatusOK {
+		p.observeRequest("http_" + strconv.Itoa(httpRes.StatusCode))
 		return errors.New(p.params.URL + " returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
+	if err := common.SafeDecodeResponseFromReader(httpRes.Body, &res); err != nil {
+		p.observeRequest("decode_error")
+		return err
+	}
+	p.observeRequest("ok")
+	return nil
 }
