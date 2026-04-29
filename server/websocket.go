@@ -34,6 +34,8 @@ const maxWebsocketPendingRequests = 48
 const maxWebsocketConnectionAttemptsPerIP = 64
 const maxWebsocketConnectionsPerIP = 128
 const maxWebsocketEstimateFeeBlocks = 32
+const maxWebsocketSubscribeAddresses = 1000
+const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
 const websocketConnectionAttemptWindow = time.Minute
 const websocketConnectionLimiterTTL = 10 * time.Minute
 const websocketConnectionLimiterCleanupInterval = time.Minute
@@ -1148,6 +1150,13 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, bool, err
 	err := json.Unmarshal(params, &r)
 	if err != nil {
 		return nil, false, api.NewAPIError("Invalid subscribeAddresses params", true)
+	}
+	limit := maxWebsocketSubscribeAddresses
+	if r.NewBlockTxs {
+		limit = maxWebsocketSubscribeAddressesWithNewBlockTxs
+	}
+	if len(r.Addresses) > limit {
+		return nil, false, api.NewAPIError("addresses max "+strconv.Itoa(limit), true)
 	}
 	rv := make([]string, len(r.Addresses))
 	for i, a := range r.Addresses {

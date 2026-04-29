@@ -318,6 +318,57 @@ func TestEstimateFeeRejectsTooManyBlocks(t *testing.T) {
 	}
 }
 
+func TestUnmarshalAddressesRejectsTooManyAddresses(t *testing.T) {
+	addresses := make([]string, maxWebsocketSubscribeAddresses+1)
+	params, err := json.Marshal(WsSubscribeAddressesReq{Addresses: addresses})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := &WebsocketServer{}
+	_, _, err = s.unmarshalAddresses(params)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*api.APIError)
+	if !ok {
+		t.Fatalf("expected *api.APIError, got %T", err)
+	}
+	if !apiErr.Public {
+		t.Fatal("expected public api error")
+	}
+	if !strings.Contains(apiErr.Error(), "addresses max 1000") {
+		t.Fatalf("unexpected error message %q", apiErr.Error())
+	}
+}
+
+func TestUnmarshalAddressesRejectsTooManyNewBlockTxAddresses(t *testing.T) {
+	addresses := make([]string, maxWebsocketSubscribeAddressesWithNewBlockTxs+1)
+	params, err := json.Marshal(WsSubscribeAddressesReq{
+		Addresses:   addresses,
+		NewBlockTxs: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := &WebsocketServer{}
+	_, _, err = s.unmarshalAddresses(params)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*api.APIError)
+	if !ok {
+		t.Fatalf("expected *api.APIError, got %T", err)
+	}
+	if !apiErr.Public {
+		t.Fatal("expected public api error")
+	}
+	if !strings.Contains(apiErr.Error(), "addresses max 100") {
+		t.Fatalf("unexpected error message %q", apiErr.Error())
+	}
+}
+
 func TestSetConfirmedBlockTxMetadataSetsConfirmedFields(t *testing.T) {
 	tx := bchain.Tx{
 		Confirmations: 0,
