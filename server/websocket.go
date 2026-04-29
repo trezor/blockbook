@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"math/big"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"runtime/debug"
@@ -29,6 +31,11 @@ const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 const maxWebsocketPendingRequests = 48
+const maxWebsocketConnectionAttemptsPerIP = 64
+const maxWebsocketConnectionsPerIP = 128
+const websocketConnectionAttemptWindow = time.Minute
+const websocketConnectionLimiterTTL = 10 * time.Minute
+const websocketConnectionLimiterCleanupInterval = time.Minute
 const websocketLogPreviewBytes = 256
 
 // allRates is a special "currency" parameter that means all available currencies
@@ -90,6 +97,19 @@ type WebsocketServer struct {
 	fiatRatesSubscriptionsLock   sync.Mutex
 	allowedOrigins               map[string]struct{}
 	allowedRpcCallTo             map[string]struct{}
+	websocketLimiter             *websocketConnectionLimiter
+}
+
+type websocketClientLimit struct {
+	active   int
+	attempts []time.Time
+	lastSeen time.Time
+}
+
+type websocketConnectionLimiter struct {
+	mux         sync.Mutex
+	clients     map[string]*websocketClientLimit
+	lastCleanup time.Time
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -118,6 +138,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		addressSubscriptions:        make(map[string]map[*websocketChannel]*addressDetails),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
+		websocketLimiter:            newWebsocketConnectionLimiter(),
 	}
 	s.upgrader = &websocket.Upgrader{
 		ReadBufferSize:    1024 * 32,
@@ -191,16 +212,106 @@ func normalizeOrigin(origin string) (string, bool) {
 	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host), true
 }
 
+func newWebsocketConnectionLimiter() *websocketConnectionLimiter {
+	return &websocketConnectionLimiter{
+		clients: make(map[string]*websocketClientLimit),
+	}
+}
+
+func (l *websocketConnectionLimiter) accept(ip string, now time.Time) (bool, string) {
+	l.mux.Lock()
+	defer l.mux.Unlock()
+
+	l.cleanupLocked(now)
+	client := l.clients[ip]
+	if client == nil {
+		client = &websocketClientLimit{}
+		l.clients[ip] = client
+	}
+	client.lastSeen = now
+	client.trimAttempts(now)
+
+	if client.active >= maxWebsocketConnectionsPerIP {
+		return false, "connection_limit"
+	}
+	if len(client.attempts) >= maxWebsocketConnectionAttemptsPerIP {
+		return false, "connection_attempt_limit"
+	}
+
+	client.attempts = append(client.attempts, now)
+	client.active++
+	return true, ""
+}
+
+func (l *websocketConnectionLimiter) release(ip string, now time.Time) {
+	l.mux.Lock()
+	defer l.mux.Unlock()
+
+	client := l.clients[ip]
+	if client == nil {
+		return
+	}
+	if client.active > 0 {
+		client.active--
+	}
+	client.lastSeen = now
+	l.cleanupLocked(now)
+}
+
+func (l *websocketConnectionLimiter) cleanupLocked(now time.Time) {
+	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < websocketConnectionLimiterCleanupInterval {
+		return
+	}
+	l.lastCleanup = now
+	for ip, client := range l.clients {
+		client.trimAttempts(now)
+		if client.active == 0 && now.Sub(client.lastSeen) > websocketConnectionLimiterTTL {
+			delete(l.clients, ip)
+		}
+	}
+}
+
+func (client *websocketClientLimit) trimAttempts(now time.Time) {
+	cutoff := now.Add(-websocketConnectionAttemptWindow)
+	i := 0
+	for i < len(client.attempts) && client.attempts[i].Before(cutoff) {
+		i++
+	}
+	if i > 0 {
+		copy(client.attempts, client.attempts[i:])
+		client.attempts = client.attempts[:len(client.attempts)-i]
+	}
+}
+
 func getIP(r *http.Request) string {
-	ip := r.Header.Get("cf-connecting-ip")
-	if ip != "" {
+	if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
 		return ip
 	}
-	ip = r.Header.Get("X-Real-Ip")
-	if ip != "" {
+	if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
 		return ip
 	}
-	return r.RemoteAddr
+
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		host = h
+	}
+	if ip, ok := parseIP(host); ok {
+		return ip
+	}
+
+	return strings.TrimSpace(r.RemoteAddr)
+}
+
+func parseIP(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	ip, err := netip.ParseAddr(value)
+	if err != nil {
+		return "", false
+	}
+	return ip.String(), true
 }
 
 func getWebsocketPayloadPreview(d []byte) string {
@@ -216,8 +327,22 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	ip := getIP(r)
+	limited := false
+	if s.websocketLimiter != nil {
+		ok, reason := s.websocketLimiter.accept(ip, time.Now())
+		if !ok {
+			glog.Warning("Websocket connection rejected, ", ip, ", ", reason)
+			http.Error(w, "Too many websocket connections", http.StatusTooManyRequests)
+			return
+		}
+		limited = true
+	}
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		if limited {
+			s.websocketLimiter.release(ip, time.Now())
+		}
 		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -227,7 +352,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		conn:            conn,
 		out:             make(chan *WsRes, outChannelSize),
 		pendingRequests: make(chan struct{}, maxWebsocketPendingRequests),
-		ip:              getIP(r),
+		ip:              ip,
 		requestHeader:   r.Header,
 		alive:           true,
 	}
@@ -381,6 +506,9 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeNewTransaction(c)
 	s.unsubscribeAddresses(c)
 	s.unsubscribeFiatRates(c)
+	if s.websocketLimiter != nil {
+		s.websocketLimiter.release(c.ip, time.Now())
+	}
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
 	s.metrics.WebsocketClients.Dec()
 }
