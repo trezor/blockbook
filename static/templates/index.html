@@ -24,7 +24,7 @@
                 </tr>
                 <tr>
                     <td>Version / Commit / Build</td>
-                    <td>{{$bb.Version}} / <a href="https://github.com/trezor/blockbook/commit/{{$bb.GitCommit}}" target="_blank" rel="noopener noreferrer">{{$bb.GitCommit}}</a> / {{$bb.BuildTime}}</td>
+                    <td>{{$bb.Version}} / <a href="{{.Branding.GithubRepoURL}}/commit/{{$bb.GitCommit}}" target="_blank" rel="noopener noreferrer">{{$bb.GitCommit}}</a> / {{$bb.BuildTime}}</td>
                 </tr>
                 <tr>
                     <td>Synchronized</td>
@@ -149,6 +149,6 @@
     </div>
 </div>
 <span class="text-muted">{{$bb.About}}
-{{if .SecondaryCoin}}<br>Exchange rates provided by Coingecko.{{end}}
+{{if and .SecondaryCoin .Branding.FiatRatesCredit}}<br>{{.Branding.FiatRatesCredit}}{{end}}
 </span>
 {{end}}

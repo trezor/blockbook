@@ -78,11 +78,15 @@ type PublicServer struct {
 	fiatRates           *fiat.FiatRates
 	useSatsAmountFormat bool
 	isFullInterface     bool
+	branding            *common.Branding
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
 // only basic functionality is mapped, to map all functions, call
-func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates, debugMode bool) (*PublicServer, error) {
+func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates, debugMode bool, branding *common.Branding) (*PublicServer, error) {
+	if branding == nil {
+		return nil, fmt.Errorf("branding is required")
+	}
 
 	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
@@ -127,6 +131,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		is:                  is,
 		fiatRates:           fiatRates,
 		useSatsAmountFormat: chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType && chain.GetChainParser().AmountDecimals() == 8,
+		branding:            branding,
 	}
 	s.htmlTemplates.newTemplateData = s.newTemplateData
 	s.htmlTemplates.newTemplateDataWithError = s.newTemplateDataWithError
@@ -331,7 +336,7 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		CoinLabel:        s.is.CoinLabel,
 		ChainType:        s.chainParser.GetChainType(),
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
-		TOSLink:          api.Text.TOSLink,
+		Branding:         s.branding,
 	}
 	if t.ChainType == bchain.ChainEthereumType {
 		t.FungibleTokenName = bchain.EthereumTokenStandardMap[bchain.FungibleToken]
@@ -430,7 +435,7 @@ type TemplateData struct {
 	PagingRange              []int
 	PageParams               template.URL
 	Minified                 string
-	TOSLink                  string
+	Branding                 *common.Branding
 	SendTxHex                string
 	Status                   string
 	NonZeroBalanceTokens     bool
