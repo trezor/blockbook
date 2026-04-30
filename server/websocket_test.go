@@ -328,6 +328,14 @@ func TestGetIP(t *testing.T) {
 			trusted:    []netip.Prefix{netip.MustParsePrefix("203.0.113.0/24")},
 			want:       "198.51.100.6",
 		},
+		{
+			name: "link-local ipv6 peer with zone is trusted and zone is stripped from key",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.60",
+			},
+			remoteAddr: "[fe80::1%eth0]:12345",
+			want:       "203.0.113.60",
+		},
 	}
 
 	for _, tt := range tests {

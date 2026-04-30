@@ -414,7 +414,9 @@ func parseAddr(value string) (netip.Addr, bool) {
 	if err != nil {
 		return netip.Addr{}, false
 	}
-	return addr, true
+	// Strip IPv6 zone identifier so that rate-limit keys are zone-free and
+	// netip.Prefix.Contains matches unzoned prefixes against link-local peers.
+	return addr.WithZone(""), true
 }
 
 func isTrustedProxy(addr netip.Addr, extras []netip.Prefix) bool {
