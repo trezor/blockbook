@@ -19,6 +19,12 @@ type WsRes struct {
 	Data interface{} `json:"data" ts_doc:"Payload of the response, structure depends on the request."`
 }
 
+type resultError struct {
+	Error struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 // WsAccountInfoReq carries parameters for the 'getAccountInfo' method.
 type WsAccountInfoReq struct {
 	Descriptor        string   `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
