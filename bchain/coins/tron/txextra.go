@@ -1,6 +1,7 @@
 package tron
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 
@@ -70,9 +71,27 @@ func tronFirstContract(txByID *tronGetTransactionByIDResponse) *tronTxContract {
 	return &txByID.RawData.Contract[0]
 }
 
+const tronNoteMaxBytes = 4096
+
+func tronDecodeNote(noteHex string) string {
+	noteHex = strip0xPrefix(strings.TrimSpace(noteHex))
+	if noteHex == "" {
+		return ""
+	}
+	b, err := hex.DecodeString(noteHex)
+	if err != nil {
+		return ""
+	}
+	if len(b) > tronNoteMaxBytes {
+		b = b[:tronNoteMaxBytes]
+	}
+	return strings.ToValidUTF8(string(b), "")
+}
+
 func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) bchain.TronChainExtraData {
 	extra := bchain.TronChainExtraData{}
 	extra.FeeLimit = tronInt64PtrToString(txByID.RawData.FeeLimit)
+	extra.Note = tronDecodeNote(txByID.RawData.Data)
 
 	if c := tronFirstContract(txByID); c != nil {
 		extra.ContractType = c.Type
