@@ -63,7 +63,6 @@ type PublicServer struct {
 	htmlTemplates[TemplateData]
 	binding             string
 	certFiles           string
-	socketio            *SocketIoServer
 	websocket           *WebsocketServer
 	https               *http.Server
 	db                  *db.RocksDB
@@ -89,11 +88,6 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		return nil, err
 	}
 
-	socketio, err := NewSocketIoServer(db, chain, mempool, txCache, metrics, is, fiatRates)
-	if err != nil {
-		return nil, err
-	}
-
 	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return nil, err
@@ -115,7 +109,6 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		certFiles:           certFiles,
 		https:               https,
 		api:                 api,
-		socketio:            socketio,
 		websocket:           websocket,
 		db:                  db,
 		txCache:             txCache,
@@ -160,7 +153,6 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux := s.https.Handler.(*http.ServeMux)
 	_, path := splitBinding(s.binding)
 	// support for test pages
-	serveMux.Handle(path+"test-socketio.html", http.FileServer(http.Dir("./static/")))
 	serveMux.Handle(path+"test-websocket.html", http.FileServer(http.Dir("./static/")))
 	if s.internalExplorer {
 		// internal explorer handlers
@@ -233,8 +225,6 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/multi-tickers/", s.jsonHandler(s.apiMultiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiAvailableVsCurrencies, apiV2))
-	// socket.io interface
-	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
 	serveMux.Handle(path+"websocket", s.websocket.GetHandler())
 	s.isFullInterface = true
@@ -267,18 +257,12 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 
 // OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
 func (s *PublicServer) OnNewBlock(block *bchain.Block) {
-	s.socketio.OnNewBlockHash(block.Hash)
 	s.websocket.OnNewBlock(block)
 }
 
 // OnNewFiatRatesTicker notifies users subscribed to bitcoind/fiatrates about new ticker
 func (s *PublicServer) OnNewFiatRatesTicker(ticker *common.CurrencyRatesTicker) {
 	s.websocket.OnNewFiatRatesTicker(ticker)
-}
-
-// OnNewTxAddr notifies users subscribed to notification about new tx
-func (s *PublicServer) OnNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
-	s.socketio.OnNewTxAddr(tx.Txid, desc)
 }
 
 // OnNewTx notifies users subscribed to notification about new tx

@@ -32,7 +32,7 @@ Good examples of coin configuration are
     * `backend_*` – Additional back-end ports can be documented here. Actually the only purpose is to get them to
        port table (prefix is removed and rest of string is used as note).
     * `blockbook_internal` – Blockbook's internal port that is used for metric collecting, debugging etc.
-    * `blockbook_public` – Blockbook's public port that is used to communicate with Trezor wallet (via Socket.IO).
+    * `blockbook_public` – Blockbook's public HTTP/API/WebSocket port.
 
 * `ipc` – Defines how Blockbook connects its back-end service.
     * `rpc_url_template` – Template that defines URL of back-end RPC service. See note on templates below. You can

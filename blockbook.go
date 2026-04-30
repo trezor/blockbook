@@ -107,7 +107,6 @@ var (
 	internalState                 *common.InternalState
 	fiatRates                     *fiat.FiatRates
 	callbacksOnNewBlock           []bchain.OnNewBlockFunc
-	callbacksOnNewTxAddr          []bchain.OnNewTxAddrFunc
 	callbacksOnNewTx              []bchain.OnNewTxFunc
 	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
 	chanOsSignal                  chan os.Signal
@@ -338,7 +337,7 @@ func mainWithExitCode() int {
 		if chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType {
 			addrDescForOutpoint = index.AddrDescForOutpoint
 		}
-		err = chain.InitializeMempool(addrDescForOutpoint, onNewTxAddr, onNewTx)
+		err = chain.InitializeMempool(addrDescForOutpoint, onNewTx)
 		if err != nil {
 			glog.Error("initializeMempool ", err)
 			return exitCodeFatal
@@ -358,7 +357,6 @@ func mainWithExitCode() int {
 	if publicServer != nil {
 		// start full public interface
 		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
-		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 		callbacksOnNewTx = append(callbacksOnNewTx, publicServer.OnNewTx)
 		callbacksOnNewFiatRatesTicker = append(callbacksOnNewFiatRatesTicker, publicServer.OnNewFiatRatesTicker)
 		publicServer.ConnectFullPublicInterface()
@@ -648,17 +646,6 @@ func storeInternalStateLoop() {
 		}
 	})
 	glog.Info("storeInternalStateLoop stopped")
-}
-
-func onNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
-	defer func() {
-		if r := recover(); r != nil {
-			glog.Error("onNewTxAddr recovered from panic: ", r)
-		}
-	}()
-	for _, c := range callbacksOnNewTxAddr {
-		c(tx, desc)
-	}
 }
 
 func onNewTx(tx *bchain.MempoolTx) {

@@ -267,9 +267,6 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, tx *Tx, chanInput chan chan
 		if len(addrDesc) > 0 {
 			io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 		}
-		if m.OnNewTxAddr != nil {
-			m.OnNewTxAddr(tx, addrDesc)
-		}
 	}
 	dispatched := 0
 	for i := range tx.Vin {

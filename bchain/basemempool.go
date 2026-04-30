@@ -29,7 +29,6 @@ type BaseMempool struct {
 	mux          sync.Mutex
 	txEntries    map[string]txEntry
 	addrDescToTx map[string][]Outpoint
-	OnNewTxAddr  OnNewTxAddrFunc
 	OnNewTx      OnNewTxFunc
 }
 
