@@ -36,6 +36,7 @@ Schema:
   - `transfer`
   - `trc10Transfer`
   - `contractCall`
+- `note` (`string`): decoded transaction memo from `raw_data.data` returned by Tron `wallet/gettransactionbyid`
 - `resource` (`string`): `energy` or `bandwidth` (if present on transaction)
 - `stakeAmount` (`string`): staked amount (sun), for freeze operations
 - `unstakeAmount` (`string`): unstaked amount (sun), for unfreeze operations
@@ -62,6 +63,7 @@ Schema:
   "chainExtraData": {
     "contractType": "TriggerSmartContract",
     "operation": "contractCall",
+    "note": "test",
     "totalFee": "3076500",
     "energyUsageTotal": "14650",
     "bandwidthUsage": "345",

@@ -10,6 +10,7 @@ type TronVoteExtra struct {
 type TronChainExtraData struct {
 	ContractType      string          `json:"contractType,omitempty"`
 	Operation         string          `json:"operation,omitempty"`
+	Note              string          `json:"note,omitempty"`
 	Resource          string          `json:"resource,omitempty"`
 	StakeAmount       string          `json:"stakeAmount,omitempty"`
 	UnstakeAmount     string          `json:"unstakeAmount,omitempty"`

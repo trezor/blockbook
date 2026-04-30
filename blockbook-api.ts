@@ -14,6 +14,7 @@ export interface TronVoteExtra {
 export interface TronChainExtraData {
     contractType?: string;
     operation?: string;
+    note?: string;
     resource?: string;
     stakeAmount?: string;
     unstakeAmount?: string;

@@ -14,7 +14,7 @@ func TestChainExtra(t *testing.T) {
 		tx := &api.Tx{
 			ChainExtraData: &api.TxChainExtraData{
 				PayloadType: "tron",
-				Payload:     json.RawMessage(`{"operation":"vote","totalFee":"3076500","energyUsageTotal":"100","energyFee":"250000","bandwidthUsage":"50","bandwidthFee":"345000","stakeAmount":"125000000","unstakeAmount":"88000000","claimedVoteReward":"6500000","votes":[{"address":"TA","count":"2"}]}`),
+				Payload:     json.RawMessage(`{"operation":"vote","note":"hello memo","totalFee":"3076500","energyUsageTotal":"100","energyFee":"250000","bandwidthUsage":"50","bandwidthFee":"345000","stakeAmount":"125000000","unstakeAmount":"88000000","claimedVoteReward":"6500000","votes":[{"address":"TA","count":"2"}]}`),
 			},
 		}
 		got := chainExtra(tx)
@@ -23,6 +23,9 @@ func TestChainExtra(t *testing.T) {
 		}
 		if got.Operation != "vote" {
 			t.Fatalf("unexpected operation %q", got.Operation)
+		}
+		if got.Note != "hello memo" {
+			t.Fatalf("unexpected note %q", got.Note)
 		}
 		if got.EnergyUsageTotal != "100" {
 			t.Fatalf("unexpected energyUsageTotal %q", got.EnergyUsageTotal)

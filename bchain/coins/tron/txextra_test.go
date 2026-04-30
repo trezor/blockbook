@@ -57,6 +57,46 @@ func TestTronBuildExtraData_AccountCreateOperation(t *testing.T) {
 	require.Equal(t, "activateAccount", extra.Operation)
 }
 
+func TestTronBuildExtraData_Note(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{
+			name: "plain hex memo",
+			data: "74657374",
+			want: "test",
+		},
+		{
+			name: "prefixed hex memo",
+			data: "0x48656c6c6f2054524f4e",
+			want: "Hello TRON",
+		},
+		{
+			name: "empty memo",
+			data: "",
+			want: "",
+		},
+		{
+			name: "invalid hex memo",
+			data: "not-hex",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			txByID := &tronGetTransactionByIDResponse{}
+			txByID.RawData.Data = tt.data
+			txInfo := &tronGetTransactionInfoByIDResponse{}
+
+			extra := tronBuildExtraData(txByID, txInfo)
+			require.Equal(t, tt.want, extra.Note)
+		})
+	}
+}
+
 func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 	t.Run("stake amount", func(t *testing.T) {
 		contract := tronTxContract{Type: "FreezeBalanceV2Contract"}

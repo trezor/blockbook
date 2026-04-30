@@ -43,6 +43,12 @@
             <td>Value</td>
             <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
         </tr>
+        {{if $chainExtra.Note}}
+        <tr>
+            <td>Note</td>
+            <td><span class="copyable" style="white-space: pre-wrap; overflow-wrap: anywhere;">{{$chainExtra.Note}}</span></td>
+        </tr>
+        {{end}}
         {{if $chainExtra.Operation}}
         <tr>
             <td>Operation</td>
