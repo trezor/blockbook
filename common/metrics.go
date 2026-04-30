@@ -8,10 +8,6 @@ import (
 
 // Metrics holds prometheus collectors for various metrics collected by Blockbook
 type Metrics struct {
-	SocketIORequests                  *prometheus.CounterVec
-	SocketIOSubscribes                *prometheus.CounterVec
-	SocketIOClients                   prometheus.Gauge
-	SocketIOReqDuration               *prometheus.HistogramVec
 	WebsocketRequests                 *prometheus.CounterVec
 	WebsocketSubscribes               *prometheus.GaugeVec
 	WebsocketClients                  prometheus.Gauge
@@ -58,7 +54,6 @@ type Metrics struct {
 	BlockbookBestHeight               prometheus.Gauge
 	ExplorerPendingRequests           *prometheus.GaugeVec
 	WebsocketPendingRequests          *prometheus.GaugeVec
-	SocketIOPendingRequests           *prometheus.GaugeVec
 	XPubCacheSize                     prometheus.Gauge
 	CoingeckoRequests                 *prometheus.CounterVec
 	CoingeckoRangeRequests            *prometheus.CounterVec
@@ -72,38 +67,6 @@ type Labels = prometheus.Labels
 func GetMetrics(coin string) (*Metrics, error) {
 	metrics := Metrics{}
 
-	metrics.SocketIORequests = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "blockbook_socketio_requests",
-			Help:        "Total number of socketio requests by method and status",
-			ConstLabels: Labels{"coin": coin},
-		},
-		[]string{"method", "status"},
-	)
-	metrics.SocketIOSubscribes = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "blockbook_socketio_subscribes",
-			Help:        "Total number of socketio subscribes by channel and status",
-			ConstLabels: Labels{"coin": coin},
-		},
-		[]string{"channel", "status"},
-	)
-	metrics.SocketIOClients = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name:        "blockbook_socketio_clients",
-			Help:        "Number of currently connected socketio clients",
-			ConstLabels: Labels{"coin": coin},
-		},
-	)
-	metrics.SocketIOReqDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:        "blockbook_socketio_req_duration",
-			Help:        "Socketio request duration by method (in microseconds)",
-			Buckets:     []float64{10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_0000_000},
-			ConstLabels: Labels{"coin": coin},
-		},
-		[]string{"method"},
-	)
 	metrics.WebsocketRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name:        "blockbook_websocket_requests",
@@ -463,14 +426,6 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.GaugeOpts{
 			Name:        "blockbook_websocket_pending_requests",
 			Help:        "Number of unfinished requests in websocket interface",
-			ConstLabels: Labels{"coin": coin},
-		},
-		[]string{"method"},
-	)
-	metrics.SocketIOPendingRequests = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name:        "blockbook_socketio_pending_requests",
-			Help:        "Number of unfinished requests in socketio interface",
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"method"},

@@ -35,7 +35,6 @@ The following methods are supported:
     - [Websocket API](#websocket-api)
   - [Legacy API V1](#legacy-api-v1)
     - [REST API](#rest-api-1)
-    - [Socket.io API](#socketio-api)
 
 #### Status page
 
@@ -1153,7 +1152,7 @@ Notes for `getBlock`:
 
 ## Legacy API V1
 
-The legacy API is a compatible subset of API provided by **Bitcore Insight**. It is supported only for Bitcoin-type coins. The details of the REST/socket.io requests can be found in the Insight's documentation.
+The legacy API is a compatible subset of API provided by **Bitcore Insight**. It is supported only for Bitcoin-type coins. The details of the REST requests can be found in the Insight's documentation.
 
 ### REST API
 
@@ -1167,10 +1166,6 @@ GET /api/v1/estimatefee/<number of blocks>
 GET /api/v1/sendtx/<hex tx data>
 POST /api/v1/sendtx/ (hex tx data in request body)
 ```
-
-### Socket.io API
-
-Socket.io interface is provided at `/socket.io/`. The interface also can be explored using Blockbook Socket.io Test Page found at `/test-socketio.html`.
 
 The legacy API is provided as is and will not be further developed.
 

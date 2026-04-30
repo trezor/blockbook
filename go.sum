@@ -185,8 +185,6 @@ github.com/martinboehm/btcutil v0.0.0-20180706230648-ab6388e0c60a/go.mod h1:NIvi
 github.com/martinboehm/btcutil v0.0.0-20210922221517-e83b0c752949/go.mod h1:8iJaVY/VHW6lnojpTXf5X4gF2dx81Xtj2R6lJp2colA=
 github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819 h1:ra2UymMEDhR0CVxqz/0minCNXO8YMeZwxdnnFDpWVJ0=
 github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819/go.mod h1:/Z9FhVDXTih0kZExhK2hRvM+z68XkmbqZhFDU3bU1jY=
-github.com/martinboehm/golang-socketio v0.0.0-20180414165752-f60b0a8befde h1:Tz7WkXgQjeQVymqSQkEapbe/ZuzKCvb6GANFHnl0uAE=
-github.com/martinboehm/golang-socketio v0.0.0-20180414165752-f60b0a8befde/go.mod h1:p35TWcm7GkAwvPcUCEq4H+yTm0gA8Aq7UvGnbK6olQk=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
