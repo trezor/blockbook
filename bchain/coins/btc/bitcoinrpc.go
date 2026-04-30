@@ -34,6 +34,12 @@ type BitcoinRPC struct {
 	mempoolFilterScripts   string
 	mempoolUseZeroedKey    bool
 	alternativeFeeProvider alternativeFeeProviderInterface
+	metrics                *common.Metrics
+}
+
+// SetMetrics sets prometheus metrics collector
+func (b *BitcoinRPC) SetMetrics(metrics *common.Metrics) {
+	b.metrics = metrics
 }
 
 // Configuration represents json config file
@@ -150,21 +156,21 @@ func (b *BitcoinRPC) Initialize() error {
 
 	if b.ChainConfig.AlternativeEstimateFee == "whatthefee" {
 		glog.Info("Using WhatTheFee")
-		if b.alternativeFeeProvider, err = NewWhatTheFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+		if b.alternativeFeeProvider, err = NewWhatTheFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
 			glog.Error("NewWhatTheFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
 		}
 	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspace" {
 		glog.Info("Using MempoolSpaceFee")
-		if b.alternativeFeeProvider, err = NewMempoolSpaceFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+		if b.alternativeFeeProvider, err = NewMempoolSpaceFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
 			glog.Error("MempoolSpaceFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
 		}
 	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspaceblock" {
 		glog.Info("Using MempoolSpaceBlockFee")
-		if b.alternativeFeeProvider, err = NewMempoolSpaceBlockFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+		if b.alternativeFeeProvider, err = NewMempoolSpaceBlockFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
 			glog.Error("MempoolSpaceBlockFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil

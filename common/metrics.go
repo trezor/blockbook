@@ -63,6 +63,7 @@ type Metrics struct {
 	CoingeckoRequests                 *prometheus.CounterVec
 	CoingeckoRangeRequests            *prometheus.CounterVec
 	FiatRatesUpdateDuration           *prometheus.HistogramVec
+	AlternativeFeeProviderRequests    *prometheus.CounterVec
 }
 
 // Labels represents a collection of label name -> value mappings.
@@ -506,6 +507,14 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"stage", "status"},
+	)
+	metrics.AlternativeFeeProviderRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_alternative_fee_provider_requests",
+			Help:        "Total number of requests to alternative fee providers by provider and status (ok, http_<code>, network_error, decode_error)",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"provider", "status"},
 	)
 
 	v := reflect.ValueOf(metrics)

@@ -33,6 +33,7 @@ const blocksOnPage = 50
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
 const maxWebsocketBlockPageSize = 10000
+const maxBlockFiltersRange = 10000
 const maxPageNumber = 1000000
 const maxGapValue = 10000
 const maxSafePagingOffset = 1000000000
@@ -1305,7 +1306,7 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 		BlockFilters map[int]blockFilterResult `json:"blockFilters"`
 	}
 
-	lastN := validateIntParam(r.URL.Query().Get("lastN"), 0, 0, 10000)
+	lastN := validateIntParam(r.URL.Query().Get("lastN"), 0, 0, maxBlockFiltersRange)
 	from := validateIntParam(r.URL.Query().Get("from"), 0, 0, 10000000000)
 	to := validateIntParam(r.URL.Query().Get("to"), 0, 0, 10000000000)
 	scriptType := r.URL.Query().Get("scriptType")
@@ -1341,6 +1342,10 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 		if to == 0 {
 			to = int(bestHeight)
 		}
+	}
+
+	if to-from+1 > maxBlockFiltersRange {
+		return nil, api.NewAPIError(fmt.Sprintf("Requested block filter range too large, max %d", maxBlockFiltersRange), true)
 	}
 
 	handleBlockFiltersResultFromTo := func(fromHeight int, toHeight int) (interface{}, error) {

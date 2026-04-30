@@ -2573,6 +2573,15 @@ func httpTestsBitcoinTypeExtendedIndex(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiBlockFilters range too large",
+			r:           newGetRequest(ts.URL + "/api/v2/block-filters?from=0&to=10000"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Requested block filter range too large, max 10000"}`,
+			},
+		},
+		{
 			name:        "apiBlockFilters scriptType=taproot",
 			r:           newGetRequest(ts.URL + "/api/v2/block-filters?lastN=2&scriptType=taproot"),
 			status:      http.StatusBadRequest,
