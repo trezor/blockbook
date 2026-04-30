@@ -85,15 +85,6 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 			addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
 		}
 	}
-	if m.OnNewTxAddr != nil {
-		sent := make(map[string]struct{})
-		for _, si := range addrIndexes {
-			if _, found := sent[si.addrDesc]; !found {
-				m.OnNewTxAddr(tx, AddressDescriptor(si.addrDesc))
-				sent[si.addrDesc] = struct{}{}
-			}
-		}
-	}
 	if m.OnNewTx != nil {
 		m.OnNewTx(mtx)
 	}
