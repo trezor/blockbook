@@ -469,11 +469,10 @@ func (b *TronRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error)
 	return b.Mempool, nil
 }
 
-func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
+func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTx bchain.OnNewTxFunc) error {
 	if b.Mempool == nil {
 		return errors.New("Tron Mempool not created")
 	}
-	b.Mempool.OnNewTxAddr = onNewTxAddr
 	b.Mempool.OnNewTx = onNewTx
 	b.newBlockNotifyOnce.Do(func() {
 		go b.newBlockNotifier()
