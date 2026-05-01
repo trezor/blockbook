@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	stdErrors "errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -901,7 +902,7 @@ func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 	defer cancel()
 	h, err := b.Client.HeaderByNumber(ctx, &n)
 	if err != nil {
-		if err == ethereum.NotFound {
+		if err == ethereum.NotFound || stdErrors.Is(err, bchain.ErrBlockNotFound) {
 			return "", bchain.ErrBlockNotFound
 		}
 		return "", errors.Annotatef(err, "height %v", height)
