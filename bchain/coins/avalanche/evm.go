@@ -93,9 +93,12 @@ func (c *AvalancheRPCClient) EthSubscribe(ctx context.Context, channel interface
 func (c *AvalancheRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	err := c.Client.CallContext(ctx, result, method, args...)
 	// unfinalized data cannot be queried error returned when trying to query a block height greater than last finalized block
-	// do not throw rpc error and instead treat as ErrBlockNotFound
+	// treat as ErrBlockNotFound so sync retries instead of processing an empty result
 	// https://docs.avax.network/quickstart/exchanges/integrate-exchange-with-avalanche#determining-finality
-	if err != nil && !strings.Contains(err.Error(), "cannot query unfinalized data") {
+	if err != nil {
+		if strings.Contains(err.Error(), "cannot query unfinalized data") {
+			return bchain.ErrBlockNotFound
+		}
 		return err
 	}
 	return nil
