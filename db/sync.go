@@ -138,19 +138,25 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	case nil:
 		d := time.Since(start)
 		glog.Info("resync: finished in ", d)
-		w.metrics.IndexResyncDuration.Observe(float64(d) / 1e6) // in milliseconds
-		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		if w.metrics != nil {
+			w.metrics.IndexResyncDuration.Observe(float64(d) / 1e6) // in milliseconds
+			w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		}
 		bh, _, err := w.db.GetBestBlock()
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
-		w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
-		w.metrics.BlockbookBestHeight.Set(float64(bh))
+		if w.metrics != nil {
+			w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
+			w.metrics.BlockbookBestHeight.Set(float64(bh))
+		}
 		return err
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
 		w.is.FinishedSyncNoChange()
-		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		if w.metrics != nil {
+			w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		}
 		if initialSync {
 			d := time.Since(start)
 			glog.Info("resync: finished in ", d)
@@ -158,7 +164,9 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return nil
 	}
 
-	w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
+	if w.metrics != nil {
+		w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
+	}
 
 	return err
 }
@@ -305,7 +313,9 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 		if onNewBlock != nil {
 			onNewBlock(res.block)
 		}
-		w.metrics.BlockbookBestHeight.Set(float64(res.block.Height))
+		if w.metrics != nil {
+			w.metrics.BlockbookBestHeight.Set(float64(res.block.Height))
+		}
 		if res.block.Height > 0 && res.block.Height%1000 == 0 {
 			glog.Info("connected block ", res.block.Height, " ", res.block.Hash)
 		}
@@ -549,7 +559,9 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 				if onNewBlock != nil {
 					onNewBlock(b)
 				}
-				w.metrics.BlockbookBestHeight.Set(float64(b.Height))
+				if w.metrics != nil {
+					w.metrics.BlockbookBestHeight.Set(float64(b.Height))
+				}
 
 				if b.Height > 0 && b.Height%1000 == 0 {
 					glog.Info("connected block ", b.Height, " ", b.Hash)
@@ -686,7 +698,9 @@ GetBlockLoop:
 					}
 					return
 				}
-				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
+				if w.metrics != nil {
+					w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
+				}
 				select {
 				case <-terminating:
 					return
@@ -815,7 +829,9 @@ ConnectLoop:
 				break ConnectLoop
 			}
 			if h > 0 && h%1000 == 0 {
-				w.metrics.BlockbookBestHeight.Set(float64(h))
+				if w.metrics != nil {
+					w.metrics.BlockbookBestHeight.Set(float64(h))
+				}
 				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
 				start = time.Now()
 			}
@@ -823,7 +839,9 @@ ConnectLoop:
 				if glog.V(1) {
 					glog.Info(w.db.GetMemoryStats())
 				}
-				w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+				if w.metrics != nil {
+					w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+				}
 				msTime = time.Now().Add(10 * time.Minute)
 			}
 			h++
