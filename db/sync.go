@@ -216,7 +216,11 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			return err
 		}
 		if remoteBestHeight < w.startHeight {
-			glog.Error("resync: error - remote best height ", remoteBestHeight, " less than sync start height ", w.startHeight)
+			// Transient race: between reading remoteBestHash and remoteBestHeight
+			// the backend can briefly report a tip a few blocks behind what we
+			// already indexed (load-balanced RPC pools, in-flight reorgs). The
+			// outer sync loop retries from this on its own.
+			glog.Warning("resync: remote best height ", remoteBestHeight, " less than sync start height ", w.startHeight)
 			return errors.New("resync: remote best height error")
 		}
 		if initialSync {
@@ -391,6 +395,14 @@ func (w *SyncWorker) shouldRestartSyncOnMissingBlockHash(height uint32) (bool, e
 	return bestHeight < height, nil
 }
 
+// IsTransientSyncError reports whether err originates from a transient
+// backend condition (timeouts, connection blips, missing-block-at-tip, etc.)
+// that the sync loop will retry from. Callers can use it to log such errors
+// at warning level instead of error.
+func IsTransientSyncError(err error) bool {
+	return isRetryableGetBlockError(err)
+}
+
 func isRetryableGetBlockError(err error) bool {
 	if err == nil {
 		return false
@@ -428,7 +440,8 @@ func isRetryableGetBlockError(err error) bool {
 			strings.Contains(msg, "503 service unavailable"),
 			strings.Contains(msg, "504 gateway timeout"),
 			strings.Contains(msg, "header not found"),
-			strings.Contains(msg, "block not found"):
+			strings.Contains(msg, "block not found"),
+			strings.Contains(msg, "remote best height error"):
 			return true
 		default:
 			return false
@@ -449,7 +462,11 @@ func (w *SyncWorker) getBlockHashForSync(height uint32, retries *int) (string, b
 		*retries = 0
 		return hash, true, nil
 	}
-	glog.Error("GetBlockHash error ", err)
+	if isRetryableGetBlockError(err) {
+		glog.Warning("GetBlockHash error ", err)
+	} else {
+		glog.Error("GetBlockHash error ", err)
+	}
 	if w.metrics != nil {
 		w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 	}
@@ -478,8 +495,8 @@ func (w *SyncWorker) getBlockHashForSync(height uint32, retries *int) (string, b
 }
 
 func recordBlockWorkerAbort(errp *error, abortErr error, context string) {
-	if stdErrors.Is(abortErr, errResync) {
-		glog.Warning("sync: ", context, " aborted, restarting sync")
+	if stdErrors.Is(abortErr, errResync) || IsTransientSyncError(abortErr) {
+		glog.Warning("sync: ", context, " aborted, restarting sync: ", abortErr)
 	} else {
 		glog.Error("sync: ", context, " aborted, worker error ", abortErr)
 	}
@@ -669,7 +686,7 @@ GetBlockLoop:
 			if err != nil {
 				if isRetryableGetBlockError(err) {
 					notFoundRetries++
-					glog.Error("getBlockWorker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
+					glog.Warning("getBlockWorker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
 					threshold := cfg.RecheckThreshold
 					// Once the hash queue is closed we are at the tail of the range; use
 					// a smaller threshold to avoid stalling on a missing tip block.
