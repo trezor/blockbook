@@ -373,6 +373,14 @@ func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash
 	return currentHash != expectedHash, nil
 }
 
+func (w *SyncWorker) shouldRestartSyncOnMissingBlockHash(height uint32) (bool, error) {
+	bestHeight, err := w.chain.GetBestBlockHeight()
+	if err != nil {
+		return false, err
+	}
+	return bestHeight < height, nil
+}
+
 func isRetryableGetBlockError(err error) bool {
 	if err == nil {
 		return false
@@ -423,6 +431,79 @@ func isRetryableGetBlockError(err error) bool {
 	return cause != nil && isRetryable(cause)
 }
 
+// getBlockHashForSync returns ok=false and err=nil when the caller should retry
+// the same height after a delay.
+func (w *SyncWorker) getBlockHashForSync(height uint32, retries *int) (string, bool, error) {
+	hash, err := w.chain.GetBlockHash(height)
+	if err == nil {
+		*retries = 0
+		return hash, true, nil
+	}
+	glog.Error("GetBlockHash error ", err)
+	if w.metrics != nil {
+		w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
+	}
+	if !isRetryableGetBlockError(err) {
+		return "", false, err
+	}
+	*retries++
+	threshold := w.missingBlockRetry.RecheckThreshold
+	if threshold < 1 {
+		threshold = 1
+	}
+	if *retries < threshold {
+		return "", false, nil
+	}
+	*retries = 0
+	restart, checkErr := w.shouldRestartSyncOnMissingBlockHash(height)
+	if checkErr != nil {
+		glog.Error("GetBlockHash missing block check error ", checkErr)
+		return "", false, nil
+	}
+	if restart {
+		glog.Warning("sync: block hash at height ", height, " no longer on chain, restarting sync")
+		return "", false, errResync
+	}
+	return "", false, nil
+}
+
+func recordBlockWorkerAbort(errp *error, abortErr error, context string) {
+	if stdErrors.Is(abortErr, errResync) {
+		glog.Warning("sync: ", context, " aborted, restarting sync")
+	} else {
+		glog.Error("sync: ", context, " aborted, worker error ", abortErr)
+	}
+	if *errp == nil {
+		*errp = abortErr
+	}
+}
+
+func (w *SyncWorker) waitForBlockWorkers(wg *sync.WaitGroup, abortCh <-chan error, closeTerminating func(), errp *error, context string) {
+	workersDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(workersDone)
+	}()
+
+	shutdownCh := w.chanOsSignal
+	for {
+		select {
+		case <-workersDone:
+			return
+		case abortErr := <-abortCh:
+			recordBlockWorkerAbort(errp, abortErr, context)
+			closeTerminating()
+		case <-shutdownCh:
+			shutdownCh = nil
+			if *errp == nil {
+				glog.Info(context, " interrupted while waiting for workers")
+				*errp = ErrOperationInterrupted
+			}
+			closeTerminating()
+		}
+	}
+}
+
 // ParallelConnectBlocks uses parallel goroutines to get data from blockchain daemon but keeps Blockbook in
 func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, lower, higher uint32, syncWorkers uint32) error {
 	var err error
@@ -440,6 +521,12 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
 	abortCh := make(chan error, 1)
+	var terminateOnce sync.Once
+	closeTerminating := func() {
+		terminateOnce.Do(func() {
+			close(terminating)
+		})
+	}
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
 		lastBlock := lower - 1
@@ -484,49 +571,60 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	}
 	go writeBlockWorker()
 	var hash string
+	hashRetries := 0
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
 		case abortErr := <-abortCh:
-			if stdErrors.Is(abortErr, errResync) {
-				glog.Warning("sync: parallel connect aborted, restarting sync")
-			} else {
-				glog.Error("sync: parallel connect aborted, worker error ", abortErr)
-			}
-			err = abortErr
-			close(terminating)
+			recordBlockWorkerAbort(&err, abortErr, "parallel connect")
+			closeTerminating()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("connectBlocksParallel interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			closeTerminating()
 			break ConnectLoop
 		default:
-			hash, err = w.chain.GetBlockHash(h)
-			if err != nil {
-				glog.Error("GetBlockHash error ", err)
-				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
+			var gotHash bool
+			var hashErr error
+			hash, gotHash, hashErr = w.getBlockHashForSync(h, &hashRetries)
+			if hashErr != nil {
+				err = hashErr
+				closeTerminating()
+				break ConnectLoop
+			}
+			if !gotHash {
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
-			hch <- hashHeight{hash, h}
-			h++
+			select {
+			case hch <- hashHeight{hash, h}:
+				h++
+			case abortErr := <-abortCh:
+				recordBlockWorkerAbort(&err, abortErr, "parallel connect")
+				closeTerminating()
+				break ConnectLoop
+			case <-w.chanOsSignal:
+				glog.Info("connectBlocksParallel interrupted at height ", h)
+				err = ErrOperationInterrupted
+				closeTerminating()
+				break ConnectLoop
+			}
 		}
 	}
 	close(hch)
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
-	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	// wait for workers while still observing abortCh; otherwise a late worker
+	// error can leave the writer waiting for a block that will never arrive.
+	w.waitForBlockWorkers(&wg, abortCh, closeTerminating, &err, "parallel connect")
 	// Hardening: a worker can report a terminal tail error after ConnectLoop has
 	// already ended (for example once hchClosed=true). Drain once so we return
 	// that error instead of silently succeeding.
 	select {
 	case abortErr := <-abortCh:
-		if err == nil {
-			err = abortErr
-		}
+		recordBlockWorkerAbort(&err, abortErr, "parallel connect")
 	default:
 	}
 	for i := 0; i < int(syncWorkers); i++ {
@@ -581,19 +679,12 @@ GetBlockLoop:
 						}
 					}
 				} else {
-					// When the hash queue is closed, stop retrying non-retryable errors.
-					if hchClosed.Load() == true {
-						glog.Error("getBlockWorker ", i, " connect block error ", err, ". Exiting...")
-						// Hardening: without surfacing this tail failure, the worker could
-						// exit and leave the sync loop stuck until manual restart.
-						select {
-						case abortCh <- err:
-						default:
-						}
-						return
+					glog.Error("getBlockWorker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err, ". Exiting...")
+					select {
+					case abortCh <- err:
+					default:
 					}
-					notFoundRetries = 0
-					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
+					return
 				}
 				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 				select {
@@ -636,6 +727,12 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
 	abortCh := make(chan error, 1)
+	var terminateOnce sync.Once
+	closeTerminating := func() {
+		terminateOnce.Do(func() {
+			close(terminating)
+		})
+	}
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
 		bc, err := w.db.InitBulkConnect()
@@ -676,36 +773,47 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	}
 	go writeBlockWorker()
 	var hash string
+	hashRetries := 0
 	start := time.Now()
 	msTime := time.Now().Add(1 * time.Minute)
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
 		case abortErr := <-abortCh:
-			if stdErrors.Is(abortErr, errResync) {
-				// Another worker observed a missing block that no longer matches the chain.
-				glog.Warning("sync: bulk connect aborted, restarting sync")
-			} else {
-				glog.Error("sync: bulk connect aborted, worker error ", abortErr)
-			}
-			err = abortErr
-			close(terminating)
+			recordBlockWorkerAbort(&err, abortErr, "bulk connect")
+			closeTerminating()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("connectBlocksParallel interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			closeTerminating()
 			break ConnectLoop
 		default:
-			hash, err = w.chain.GetBlockHash(h)
-			if err != nil {
-				glog.Error("GetBlockHash error ", err)
-				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
+			var gotHash bool
+			var hashErr error
+			hash, gotHash, hashErr = w.getBlockHashForSync(h, &hashRetries)
+			if hashErr != nil {
+				err = hashErr
+				closeTerminating()
+				break ConnectLoop
+			}
+			if !gotHash {
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
-			hch <- hashHeight{hash, h}
+			select {
+			case hch <- hashHeight{hash, h}:
+			case abortErr := <-abortCh:
+				recordBlockWorkerAbort(&err, abortErr, "bulk connect")
+				closeTerminating()
+				break ConnectLoop
+			case <-w.chanOsSignal:
+				glog.Info("connectBlocksParallel interrupted at height ", h)
+				err = ErrOperationInterrupted
+				closeTerminating()
+				break ConnectLoop
+			}
 			if h > 0 && h%1000 == 0 {
 				w.metrics.BlockbookBestHeight.Set(float64(h))
 				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
@@ -724,15 +832,14 @@ ConnectLoop:
 	close(hch)
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
-	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	// wait for workers while still observing abortCh; otherwise a late worker
+	// error can leave the writer waiting for a block that will never arrive.
+	w.waitForBlockWorkers(&wg, abortCh, closeTerminating, &err, "bulk connect")
 	// Hardening: capture a late worker error reported after the connect loop
 	// exits so the caller can retry instead of treating sync as successful.
 	select {
 	case abortErr := <-abortCh:
-		if err == nil {
-			err = abortErr
-		}
+		recordBlockWorkerAbort(&err, abortErr, "bulk connect")
 	default:
 	}
 	for i := 0; i < w.syncWorkers; i++ {
