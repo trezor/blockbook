@@ -124,6 +124,26 @@ func TestIsRetryableGetBlockError(t *testing.T) {
 	}
 }
 
+// TestIsTransientSyncErrorClassifiesAvaxAnnotatedNotFound covers the public
+// classifier used by syncIndexLoop to demote retryable errors to warnings.
+// The annotated ErrBlockNotFound shape comes from the Avalanche unfinalized
+// data path: AvalancheRPCClient.CallContext returns ErrBlockNotFound, which
+// getBlockRaw then wraps with `errors.Annotatef(err, "hash %v, height %v", ...)`.
+func TestIsTransientSyncErrorClassifiesAvaxAnnotatedNotFound(t *testing.T) {
+	annotated := jujuErrors.Annotatef(bchain.ErrBlockNotFound, "hash %v, height %v", "", uint32(84420029))
+	if !IsTransientSyncError(annotated) {
+		t.Fatalf("IsTransientSyncError(%v) = false, want true", annotated)
+	}
+
+	if !IsTransientSyncError(stdErrors.New("resync: remote best height error")) {
+		t.Fatal("synthetic 'remote best height error' must be classified as transient")
+	}
+
+	if IsTransientSyncError(nil) {
+		t.Fatal("nil must not be classified as transient")
+	}
+}
+
 type missingHashChain struct {
 	bchain.BlockChain
 	bestHeight uint32

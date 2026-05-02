@@ -547,19 +547,30 @@ func syncIndexLoop() {
 	defer close(chanSyncIndexDone)
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
+	logSyncErr := func(err error, suffix string) {
+		// Transient backend conditions (timeouts, missing-block-at-tip, connection blips)
+		// are expected during sync and the loop already retries from them,
+		// so demote the log level to keep operator alerting (set on level=ERROR) signal-rich.
+		msg := errors.ErrorStack(err) + suffix
+		if db.IsTransientSyncError(err) {
+			glog.Warning("syncIndexLoop ", msg)
+		} else {
+			glog.Error("syncIndexLoop ", msg)
+		}
+	}
 	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, time.Duration(*resyncIndexDebounceMs)*time.Millisecond, chanSyncIndex, func() {
 		if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
 			if err == db.ErrOperationInterrupted || common.IsInShutdown() {
 				return
 			}
-			glog.Error("syncIndexLoop ", errors.ErrorStack(err), ", will retry...")
+			logSyncErr(err, ", will retry...")
 			// retry once in case of random network error, after a slight delay
 			time.Sleep(time.Millisecond * 2500)
 			if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
 				if err == db.ErrOperationInterrupted || common.IsInShutdown() {
 					return
 				}
-				glog.Error("syncIndexLoop ", errors.ErrorStack(err))
+				logSyncErr(err, "")
 			}
 		}
 	})
