@@ -199,6 +199,9 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 			continue
 		}
 		amount := big.NewInt(*frozen.Amount)
+		// In Stake 2.0 only BANDWIDTH and ENERGY produce frozen TRX; TRON_POWER
+		// is a derived voting weight, not a separate stake, so any TRON_POWER
+		// entry is intentionally excluded from stakedBalance.
 		if frozen.Type == nil || *frozen.Type == tronResourceBandwidth {
 			stakedBandwidth.Add(stakedBandwidth, amount)
 		} else if *frozen.Type == tronResourceEnergy {
