@@ -516,3 +516,29 @@ func TestUpdateHistoricalTokenTickers_ReturnsInProgressError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestGetHighGranularityTickers_NotEnoughPricePoints(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// return only 1 price point
+		_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:       "ethereum",
+		tipURL:     mockServer.URL,
+		httpClient: mockServer.Client(),
+		plan:       coingeckoPlanFree,
+	}
+
+	tickers, err := cg.HourlyTickers()
+	if err == nil {
+		t.Fatal("expected error for not enough price points")
+	}
+	if !strings.Contains(err.Error(), "not enough price points") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if tickers != nil {
+		t.Fatal("expected nil tickers")
+	}
+}
