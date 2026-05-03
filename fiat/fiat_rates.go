@@ -466,6 +466,10 @@ func (fr *FiatRates) observeUpdateDuration(stage, status string, start time.Time
 }
 
 func logFiatRatesDownloaderError(message string, err error) {
+	if err == nil {
+		glog.Errorf("%sno data from provider", message)
+		return
+	}
 	if isCoingeckoThrottleRetriesExhaustedError(err) {
 		glog.Warning(message, err)
 		return

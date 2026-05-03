@@ -477,7 +477,7 @@ func (cg *Coingecko) getHighGranularityTickers(days string) (*[]common.CurrencyR
 		return nil, err
 	}
 	if len(mc.Prices) < 2 {
-		return nil, nil
+		return nil, fmt.Errorf("not enough price points: %d", len(mc.Prices))
 	}
 	// ignore the last point, it is not in granularity
 	tickers := make([]common.CurrencyRatesTicker, len(mc.Prices)-1)
