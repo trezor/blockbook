@@ -206,7 +206,7 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 		}
 	}
 
-	stakedBalance := new(big.Int).Add(new(big.Int).Set(stakedBandwidth), stakedEnergy)
+	stakedBalance := new(big.Int).Add(stakedBandwidth, stakedEnergy)
 
 	unstakingBatches := make([]bchain.TronUnstakingBatch, 0, len(accountResp.UnfrozenV2))
 	for i := range accountResp.UnfrozenV2 {
