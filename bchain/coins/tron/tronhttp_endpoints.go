@@ -493,7 +493,7 @@ func tronIsEmptyResponse(raw json.RawMessage) bool {
 }
 
 func tronAvailableResource(limit, used int64) int64 {
-	if used >= limit {
+	if limit <= 0 || used >= limit {
 		return 0
 	}
 	return limit - used
