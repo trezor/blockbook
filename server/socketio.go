@@ -162,6 +162,11 @@ type resultError struct {
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) (rv interface{}) {
 	var err error
 	method := strings.Trim(string(req["method"]), "\"")
+	f, ok := onMessageHandlers[method]
+	methodLabel := method
+	if !ok {
+		methodLabel = unknownMethodLabel
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error(c.Id(), " onMessage ", method, " recovered from panic: ", r)
@@ -170,15 +175,14 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 			e.Error.Message = "Internal error"
 			rv = e
 		}
-		s.metrics.SocketIOPendingRequests.With((common.Labels{"method": method})).Dec()
+		s.metrics.SocketIOPendingRequests.With((common.Labels{"method": methodLabel})).Dec()
 	}()
 	t := time.Now()
 	params := req["params"]
-	s.metrics.SocketIOPendingRequests.With((common.Labels{"method": method})).Inc()
+	s.metrics.SocketIOPendingRequests.With((common.Labels{"method": methodLabel})).Inc()
 	defer func() {
-		s.metrics.SocketIOReqDuration.With(common.Labels{"method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+		s.metrics.SocketIOReqDuration.With(common.Labels{"method": methodLabel}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	}()
-	f, ok := onMessageHandlers[method]
 	if ok {
 		rv, err = f(s, params)
 	} else {
@@ -186,11 +190,11 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	}
 	if err == nil {
 		glog.V(1).Info(c.Id(), " onMessage ", method, " success")
-		s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": "success"}).Inc()
+		s.metrics.SocketIORequests.With(common.Labels{"method": methodLabel, "status": "success"}).Inc()
 		return rv
 	}
 	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err), ", data ", string(params))
-	s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": "failure"}).Inc()
+	s.metrics.SocketIORequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
 	e := resultError{}
 	e.Error.Message = err.Error()
 	return e
