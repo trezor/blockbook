@@ -132,6 +132,16 @@ Both Blockbook and back-end have separated install and data directories. They us
 
 *coin* used above is defined in *coin.alias* in coin definition file.
 
+**explorer branding**
+
+The public explorer UI and API `about` / Terms-of-Use link are driven by the `branding` object in *configs/environ.json*
+(committed defaults). To customize without editing tracked files, copy that `branding` object into
+*configs/environ.overrides.json* (gitignored) and adjust fields such as `brand_name`, `about`, `tos_link`,
+`github_repo_url`, `logo_url`, `logo_width_px`, `logo_right_padding_px`, `favicon_url`, `fiat_rates_credit`, and the
+nested `footer` object (label/href fields under *configs/environ.json* `branding.footer`). Explorer footer **layout**
+(order and Bootstrap classes) is fixed in *static/templates/base.html*; **copy** and hrefs come from `footer` except
+Terms, which uses `tos_link`. Default logo is *static/img/logo.svg*; replace that file or point `logo_url` elsewhere.
+
 **package names**
 
 Package names are defined in *backend.package_name* and *blockbook.package_name* in coin definition file. We use
