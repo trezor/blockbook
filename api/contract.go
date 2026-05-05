@@ -152,19 +152,10 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 		return result, nil
 	}
 
-	probe, isVault := w.detectErc4626Vault(contractInfo.Contract)
-	if !isVault {
+	erc4626 := w.buildErc4626Token(contractInfo)
+	if erc4626 == nil {
 		return result, nil
 	}
-
-	result.Protocols = &ContractInfoProtocols{
-		Erc4626: w.fetchErc4626TokenData(&Token{
-			Contract: contractInfo.Contract,
-			Name:     contractInfo.Name,
-			Symbol:   contractInfo.Symbol,
-			Decimals: contractInfo.Decimals,
-			Standard: contractInfo.Standard,
-		}, probe),
-	}
+	result.Protocols = &ContractInfoProtocols{Erc4626: erc4626}
 	return result, nil
 }

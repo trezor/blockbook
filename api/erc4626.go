@@ -8,13 +8,13 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
 )
 
 const (
-	erc4626MaxDecimals          = 77
-	erc4626ZeroAddress          = "0x0000000000000000000000000000000000000000"
-	erc4626DetectBatchContracts = 100
+	erc4626MaxDecimals = 77
+	erc4626ZeroAddress = "0x0000000000000000000000000000000000000000"
 )
 
 var (
@@ -24,7 +24,6 @@ var (
 	erc4626MethodConvertToShares = erc4626MethodSelector("convertToShares(uint256)")
 	erc4626MethodPreviewDeposit  = erc4626MethodSelector("previewDeposit(uint256)")
 	erc4626MethodPreviewRedeem   = erc4626MethodSelector("previewRedeem(uint256)")
-	erc4626MethodDecimals        = erc4626MethodSelector("decimals()")
 	erc4626MaxUint256            = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 )
 
@@ -41,43 +40,16 @@ func erc4626EvmFungibleStandard() bchain.TokenStandardName {
 	return bchain.ERC20TokenStandard
 }
 
-type erc4626BatchCaller interface {
-	EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error)
+// erc4626MulticallCaller is the duck-typed access to Multicall3 aggregate3.
+// The chain type implements this when its RPC client supports multicall.
+type erc4626MulticallCaller interface {
+	EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error)
 }
 
+// erc4626ContractInfoFetcher / erc4626VaultPersister isolate the deps that
+// buildErc4626TokenWithDeps reaches for, so unit tests can inject fakes.
 type erc4626ContractInfoFetcher func(contract string, standard bchain.TokenStandardName) (*bchain.ContractInfo, bool, error)
-type erc4626DecimalsFetcher func(contract string) (int, error)
-type erc4626UintArgCaller func(contract string, selector [4]byte, arg *big.Int) (*big.Int, error)
-
-type erc4626Candidate struct {
-	token *Token
-	key   string
-}
-
-type erc4626VaultProbe struct {
-	assetContract string
-	totalAssets   *big.Int
-}
-
-func erc4626CollectCandidates(tokens Tokens, standard bchain.TokenStandardName) ([]erc4626Candidate, []string) {
-	candidates := make([]erc4626Candidate, 0, len(tokens))
-	contracts := make([]string, 0, len(tokens))
-	seen := make(map[string]struct{}, len(tokens))
-	for i := range tokens {
-		token := &tokens[i]
-		if token.Contract == "" || token.Standard != standard {
-			continue
-		}
-		key := strings.ToLower(token.Contract)
-		candidates = append(candidates, erc4626Candidate{token: token, key: key})
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		contracts = append(contracts, token.Contract)
-	}
-	return candidates, contracts
-}
+type erc4626VaultPersister func(address string, assetContract string) error
 
 // enrichErc4626Tokens marks tokens whose contract is a known ERC4626 vault.
 // It reads the IsErc4626 flag from indexed contract metadata (LRU/DB lookup, no RPC);
@@ -99,199 +71,271 @@ func (w *Worker) enrichErc4626Tokens(tokens Tokens) {
 	}
 }
 
-func (w *Worker) detectErc4626VaultsBatched(contracts []string, batcher erc4626BatchCaller, probes map[string]erc4626VaultProbe) error {
-	for start := 0; start < len(contracts); start += erc4626DetectBatchContracts {
-		end := start + erc4626DetectBatchContracts
-		if end > len(contracts) {
-			end = len(contracts)
-		}
-		chunk := contracts[start:end]
-		calls := make([]bchain.EthereumTypeRPCCall, 0, 2*len(chunk))
-		for _, contract := range chunk {
-			calls = append(calls, bchain.EthereumTypeRPCCall{
-				Data: erc4626EncodeNoArg(erc4626MethodAsset),
-				To:   contract,
-			})
-		}
-		for _, contract := range chunk {
-			calls = append(calls, bchain.EthereumTypeRPCCall{
-				Data: erc4626EncodeNoArg(erc4626MethodTotalAssets),
-				To:   contract,
-			})
-		}
-		results, err := batcher.EthereumTypeRpcCallBatch(calls)
-		if err != nil {
-			return err
-		}
-		if len(results) != len(calls) {
-			return fmt.Errorf("unexpected batch result size: got %d want %d", len(results), len(calls))
-		}
-		offset := len(chunk)
-		for i, contract := range chunk {
-			assetResult := results[i]
-			totalAssetsResult := results[offset+i]
-			if assetResult.Error != nil || totalAssetsResult.Error != nil {
-				continue
-			}
-			assetContract, err := erc4626DecodeAddress(assetResult.Data)
-			if err != nil || strings.EqualFold(assetContract, erc4626ZeroAddress) {
-				continue
-			}
-			totalAssets, err := erc4626DecodeUint(totalAssetsResult.Data)
-			if err != nil {
-				continue
-			}
-			probes[strings.ToLower(contract)] = erc4626VaultProbe{
-				assetContract: assetContract,
-				totalAssets:   totalAssets,
-			}
-		}
+// buildErc4626Token returns the rich vault snapshot for a single contract on the
+// getContractInfo path. It uses Multicall3 aggregate3 to collapse the per-vault
+// eth_call flurry into a number of round-trips that does not depend on the
+// number of conversion fields requested:
+//
+//	Cold path (no cached asset address):  2 multicalls + lazy asset metadata fetch.
+//	  A: asset() + totalAssets() + convertToAssets(1share) + previewRedeem(1share)
+//	  B: convertToShares(1asset) + previewDeposit(1asset)
+//	Warm path (asset address cached):     1 multicall observing one block.
+//	  totalAssets() + the four conversion calls together.
+//
+// Returns nil if the contract is not (or no longer) a vault. The caller is
+// expected to have already filtered by standard.
+func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo) *Erc4626Token {
+	if contractInfo == nil || contractInfo.Contract == "" {
+		return nil
 	}
-	return nil
+	mc, ok := w.chain.(erc4626MulticallCaller)
+	if !ok {
+		return nil
+	}
+	persister := func(addr, asset string) error {
+		return w.db.SetContractInfoErc4626Vault(addr, asset)
+	}
+	return buildErc4626TokenWithDeps(contractInfo, mc, persister, w.GetContractInfo)
 }
 
-func (w *Worker) detectErc4626Vault(contract string) (erc4626VaultProbe, bool) {
-	assetCallResult, err := w.erc4626CallNoArg(contract, erc4626MethodAsset)
-	if err != nil {
-		return erc4626VaultProbe{}, false
+func buildErc4626TokenWithDeps(
+	ci *bchain.ContractInfo,
+	mc erc4626MulticallCaller,
+	setVault erc4626VaultPersister,
+	getContractInfo erc4626ContractInfoFetcher,
+) *Erc4626Token {
+	if ci.Erc4626AssetContract == "" {
+		return buildErc4626TokenCold(ci, mc, setVault, getContractInfo)
 	}
-	assetContract, err := erc4626DecodeAddress(assetCallResult)
+	return buildErc4626TokenWarm(ci, mc, getContractInfo)
+}
+
+// buildErc4626TokenCold runs the first-time enrichment for a vault we don't yet
+// have a cached asset address for. It also doubles as the detection path: if
+// asset() returns the zero address (or fails), the contract is not a vault and
+// we return nil without persisting anything.
+func buildErc4626TokenCold(
+	ci *bchain.ContractInfo,
+	mc erc4626MulticallCaller,
+	setVault erc4626VaultPersister,
+	getContractInfo erc4626ContractInfoFetcher,
+) *Erc4626Token {
+	contract := ci.Contract
+	shareDec := ci.Decimals
+
+	// Build multicall A. Share-side conversion calls only fit if we can compute
+	// a share unit; if shareDec is out of range we still issue asset()+totalAssets().
+	shareUnit, shareUnitErr := erc4626UnitAmount(shareDec)
+	callsA := []bchain.EthereumMulticallCall{
+		{Target: contract, CallData: erc4626EncodeNoArg(erc4626MethodAsset), AllowFailure: true},
+		{Target: contract, CallData: erc4626EncodeNoArg(erc4626MethodTotalAssets), AllowFailure: true},
+	}
+	if shareUnitErr == nil {
+		convertToAssetsData, _ := erc4626EncodeUintArg(erc4626MethodConvertToAssets, shareUnit)
+		previewRedeemData, _ := erc4626EncodeUintArg(erc4626MethodPreviewRedeem, shareUnit)
+		callsA = append(callsA,
+			bchain.EthereumMulticallCall{Target: contract, CallData: convertToAssetsData, AllowFailure: true},
+			bchain.EthereumMulticallCall{Target: contract, CallData: previewRedeemData, AllowFailure: true},
+		)
+	}
+	resA, err := mc.EthereumTypeMulticallAggregate3(callsA, nil)
+	if err != nil || len(resA) < 2 {
+		return nil
+	}
+
+	// asset() determines whether this is a vault. Failure or a zero address means no.
+	if !resA[0].Success {
+		return nil
+	}
+	assetContract, err := erc4626DecodeAddress(resA[0].Data)
 	if err != nil || strings.EqualFold(assetContract, erc4626ZeroAddress) {
-		return erc4626VaultProbe{}, false
+		return nil
 	}
-	totalAssets, err := w.erc4626CallUintNoArg(contract, erc4626MethodTotalAssets)
-	if err != nil {
-		return erc4626VaultProbe{}, false
+	if err := setVault(contract, assetContract); err != nil {
+		glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", contract, assetContract, err)
 	}
-	return erc4626VaultProbe{
-		assetContract: assetContract,
-		totalAssets:   totalAssets,
-	}, true
-}
 
-func (w *Worker) fetchErc4626TokenData(token *Token, probe erc4626VaultProbe) *Erc4626Token {
-	return erc4626FetchTokenDataWithDeps(token, probe, w.GetContractInfo, w.erc4626CallDecimals, w.erc4626CallUintWithArg)
-}
-
-func erc4626FetchTokenDataWithDeps(token *Token, probe erc4626VaultProbe, getContractInfo erc4626ContractInfoFetcher, getDecimals erc4626DecimalsFetcher, callUint erc4626UintArgCaller) *Erc4626Token {
 	result := &Erc4626Token{
-		Asset: &Erc4626TokenMetadata{
-			Contract: probe.assetContract,
-		},
+		Asset: &Erc4626TokenMetadata{Contract: assetContract},
 		Share: &Erc4626TokenMetadata{
-			Contract: token.Contract,
-			Name:     token.Name,
-			Symbol:   token.Symbol,
-			Decimals: token.Decimals,
+			Contract: contract,
+			Name:     ci.Name,
+			Symbol:   ci.Symbol,
+			Decimals: shareDec,
 		},
-		TotalAssetsSat: (*Amount)(probe.totalAssets),
 	}
-
 	var errs []string
 
-	assetInfo, validAssetContract, err := getContractInfo(probe.assetContract, bchain.UnknownTokenStandard)
+	if shareUnitErr != nil {
+		errs = append(errs, "share decimals: "+shareUnitErr.Error())
+	}
+
+	// resA[1] is totalAssets; resA[2/3] are share-side conversions when shareUnit was valid.
+	result.TotalAssetsSat = decodeMulticallAmount(resA[1], "totalAssets", &errs)
+	if len(resA) > 2 {
+		result.ConvertToAssets1ShareSat = decodeMulticallAmount(resA[2], "convertToAssets", &errs)
+	}
+	if len(resA) > 3 {
+		result.PreviewRedeem1ShareSat = decodeMulticallAmount(resA[3], "previewRedeem", &errs)
+	}
+
+	// Asset metadata: lazy fetch (3 RPCs first time per asset, cache hit afterwards).
+	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
 		errs = append(errs, "asset metadata: "+err.Error())
-	} else if assetInfo != nil {
+	} else if assetInfo == nil || !validAsset {
+		errs = append(errs, "asset metadata unavailable")
+	} else {
 		result.Asset.Name = assetInfo.Name
 		result.Asset.Symbol = assetInfo.Symbol
-		if validAssetContract {
-			result.Asset.Decimals = assetInfo.Decimals
-		} else {
-			errs = append(errs, "asset metadata unavailable")
-		}
+		result.Asset.Decimals = assetInfo.Decimals
 	}
 
-	shareDecimals, shareDecimalsResolved := erc4626ResolveDecimals(token.Contract, getContractInfo, getDecimals, nil, false, "share decimals", &errs)
-	if shareDecimalsResolved {
-		result.Share.Decimals = shareDecimals
-		shareUnit, err := erc4626UnitAmount(shareDecimals)
-		if err != nil {
-			errs = append(errs, "share decimals: "+err.Error())
-		} else {
-			result.ConvertToAssets1ShareSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodConvertToAssets, shareUnit, "convertToAssets", callUint, &errs)
-			result.PreviewRedeem1ShareSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodPreviewRedeem, shareUnit, "previewRedeem", callUint, &errs)
-		}
-	}
-
-	assetDecimals, assetDecimalsResolved := erc4626ResolveDecimals(probe.assetContract, getContractInfo, getDecimals, assetInfo, validAssetContract, "asset decimals", &errs)
-	if assetDecimalsResolved {
-		result.Asset.Decimals = assetDecimals
-		assetUnit, err := erc4626UnitAmount(assetDecimals)
+	// Multicall B: asset-side conversions, only if we have a valid asset decimals.
+	if validAsset && assetInfo != nil {
+		assetUnit, err := erc4626UnitAmount(assetInfo.Decimals)
 		if err != nil {
 			errs = append(errs, "asset decimals: "+err.Error())
 		} else {
-			result.ConvertToShares1AssetSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodConvertToShares, assetUnit, "convertToShares", callUint, &errs)
-			result.PreviewDeposit1AssetSat = erc4626FetchDerivedAmount(token.Contract, erc4626MethodPreviewDeposit, assetUnit, "previewDeposit", callUint, &errs)
+			convertToSharesData, _ := erc4626EncodeUintArg(erc4626MethodConvertToShares, assetUnit)
+			previewDepositData, _ := erc4626EncodeUintArg(erc4626MethodPreviewDeposit, assetUnit)
+			callsB := []bchain.EthereumMulticallCall{
+				{Target: contract, CallData: convertToSharesData, AllowFailure: true},
+				{Target: contract, CallData: previewDepositData, AllowFailure: true},
+			}
+			resB, err := mc.EthereumTypeMulticallAggregate3(callsB, nil)
+			if err != nil {
+				errs = append(errs, "asset-side multicall: "+err.Error())
+			} else if len(resB) >= 2 {
+				result.ConvertToShares1AssetSat = decodeMulticallAmount(resB[0], "convertToShares", &errs)
+				result.PreviewDeposit1AssetSat = decodeMulticallAmount(resB[1], "previewDeposit", &errs)
+			}
 		}
 	}
 
 	if len(errs) > 0 {
 		result.Error = strings.Join(errs, "; ")
 	}
-
 	return result
 }
 
-func erc4626ResolveDecimals(contract string, getContractInfo erc4626ContractInfoFetcher, getDecimals erc4626DecimalsFetcher, fallbackInfo *bchain.ContractInfo, fallbackValid bool, errorLabel string, errs *[]string) (int, bool) {
-	decimals, decimalsErr := getDecimals(contract)
-	if decimalsErr != nil {
-		if !fallbackValid || fallbackInfo == nil {
-			var err error
-			fallbackInfo, fallbackValid, err = getContractInfo(contract, bchain.UnknownTokenStandard)
-			if err != nil {
-				*errs = append(*errs, errorLabel+": "+err.Error())
-				return 0, false
-			}
-		}
-		if !fallbackValid || fallbackInfo == nil {
-			*errs = append(*errs, errorLabel+": "+decimalsErr.Error())
-			return 0, false
-		}
-		return fallbackInfo.Decimals, true
+// buildErc4626TokenWarm runs the steady-state enrichment. The asset address is
+// known; the asset metadata is almost always cached. All time-varying fields
+// come from a single multicall, observed at the same block.
+func buildErc4626TokenWarm(
+	ci *bchain.ContractInfo,
+	mc erc4626MulticallCaller,
+	getContractInfo erc4626ContractInfoFetcher,
+) *Erc4626Token {
+	contract := ci.Contract
+	assetContract := ci.Erc4626AssetContract
+	shareDec := ci.Decimals
+
+	result := &Erc4626Token{
+		Asset: &Erc4626TokenMetadata{Contract: assetContract},
+		Share: &Erc4626TokenMetadata{
+			Contract: contract,
+			Name:     ci.Name,
+			Symbol:   ci.Symbol,
+			Decimals: shareDec,
+		},
 	}
-	return decimals, true
+	var errs []string
+
+	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
+	if err != nil {
+		errs = append(errs, "asset metadata: "+err.Error())
+	} else if assetInfo == nil || !validAsset {
+		errs = append(errs, "asset metadata unavailable")
+	} else {
+		result.Asset.Name = assetInfo.Name
+		result.Asset.Symbol = assetInfo.Symbol
+		result.Asset.Decimals = assetInfo.Decimals
+	}
+
+	shareUnit, shareUnitErr := erc4626UnitAmount(shareDec)
+	if shareUnitErr != nil {
+		errs = append(errs, "share decimals: "+shareUnitErr.Error())
+	}
+	var assetUnit *big.Int
+	if validAsset && assetInfo != nil {
+		var assetUnitErr error
+		assetUnit, assetUnitErr = erc4626UnitAmount(assetInfo.Decimals)
+		if assetUnitErr != nil {
+			errs = append(errs, "asset decimals: "+assetUnitErr.Error())
+		}
+	}
+
+	// Compose one multicall with totalAssets first, plus any of the four
+	// conversion calls whose unit amounts are known. Skipping a conversion is
+	// preferable to issuing it with bogus inputs.
+	calls := []bchain.EthereumMulticallCall{
+		{Target: contract, CallData: erc4626EncodeNoArg(erc4626MethodTotalAssets), AllowFailure: true},
+	}
+	type sink struct {
+		idx    int
+		label  string
+		target **Amount
+	}
+	sinks := []sink{
+		{idx: 0, label: "totalAssets", target: &result.TotalAssetsSat},
+	}
+	if shareUnit != nil {
+		convertToAssetsData, _ := erc4626EncodeUintArg(erc4626MethodConvertToAssets, shareUnit)
+		previewRedeemData, _ := erc4626EncodeUintArg(erc4626MethodPreviewRedeem, shareUnit)
+		idx := len(calls)
+		calls = append(calls,
+			bchain.EthereumMulticallCall{Target: contract, CallData: convertToAssetsData, AllowFailure: true},
+			bchain.EthereumMulticallCall{Target: contract, CallData: previewRedeemData, AllowFailure: true},
+		)
+		sinks = append(sinks,
+			sink{idx: idx, label: "convertToAssets", target: &result.ConvertToAssets1ShareSat},
+			sink{idx: idx + 1, label: "previewRedeem", target: &result.PreviewRedeem1ShareSat},
+		)
+	}
+	if assetUnit != nil {
+		convertToSharesData, _ := erc4626EncodeUintArg(erc4626MethodConvertToShares, assetUnit)
+		previewDepositData, _ := erc4626EncodeUintArg(erc4626MethodPreviewDeposit, assetUnit)
+		idx := len(calls)
+		calls = append(calls,
+			bchain.EthereumMulticallCall{Target: contract, CallData: convertToSharesData, AllowFailure: true},
+			bchain.EthereumMulticallCall{Target: contract, CallData: previewDepositData, AllowFailure: true},
+		)
+		sinks = append(sinks,
+			sink{idx: idx, label: "convertToShares", target: &result.ConvertToShares1AssetSat},
+			sink{idx: idx + 1, label: "previewDeposit", target: &result.PreviewDeposit1AssetSat},
+		)
+	}
+
+	res, err := mc.EthereumTypeMulticallAggregate3(calls, nil)
+	if err != nil {
+		errs = append(errs, "multicall: "+err.Error())
+	} else {
+		for _, s := range sinks {
+			if s.idx >= len(res) {
+				continue
+			}
+			*s.target = decodeMulticallAmount(res[s.idx], s.label, &errs)
+		}
+	}
+
+	if len(errs) > 0 {
+		result.Error = strings.Join(errs, "; ")
+	}
+	return result
 }
 
-func erc4626FetchDerivedAmount(contract string, selector [4]byte, arg *big.Int, label string, callUint erc4626UintArgCaller, errs *[]string) *Amount {
-	value, err := callUint(contract, selector, arg)
+func decodeMulticallAmount(r bchain.EthereumMulticallResult, label string, errs *[]string) *Amount {
+	if !r.Success {
+		*errs = append(*errs, label+": call reverted")
+		return nil
+	}
+	v, err := erc4626DecodeUint(r.Data)
 	if err != nil {
 		*errs = append(*errs, label+": "+err.Error())
 		return nil
 	}
-	return (*Amount)(value)
-}
-
-func (w *Worker) erc4626CallNoArg(contract string, selector [4]byte) (string, error) {
-	return w.chain.EthereumTypeRpcCall(erc4626EncodeNoArg(selector), contract, "")
-}
-
-func (w *Worker) erc4626CallUintNoArg(contract string, selector [4]byte) (*big.Int, error) {
-	data, err := w.erc4626CallNoArg(contract, selector)
-	if err != nil {
-		return nil, err
-	}
-	return erc4626DecodeUint(data)
-}
-
-func (w *Worker) erc4626CallUintWithArg(contract string, selector [4]byte, arg *big.Int) (*big.Int, error) {
-	callData, err := erc4626EncodeUintArg(selector, arg)
-	if err != nil {
-		return nil, err
-	}
-	data, err := w.chain.EthereumTypeRpcCall(callData, contract, "")
-	if err != nil {
-		return nil, err
-	}
-	return erc4626DecodeUint(data)
-}
-
-func (w *Worker) erc4626CallDecimals(contract string) (int, error) {
-	decimalsValue, err := w.erc4626CallUintNoArg(contract, erc4626MethodDecimals)
-	if err != nil {
-		return 0, err
-	}
-	return erc4626BigIntToDecimals(decimalsValue)
+	return (*Amount)(v)
 }
 
 func erc4626EncodeNoArg(selector [4]byte) string {
@@ -350,20 +394,6 @@ func erc4626DecodeAddress(data string) (string, error) {
 		return "", fmt.Errorf("result too short")
 	}
 	return ethcommon.BytesToAddress(buf[12:32]).Hex(), nil
-}
-
-func erc4626BigIntToDecimals(v *big.Int) (int, error) {
-	if v == nil {
-		return 0, fmt.Errorf("missing value")
-	}
-	if !v.IsInt64() {
-		return 0, fmt.Errorf("value out of range")
-	}
-	d := int(v.Int64())
-	if d < 0 || d > erc4626MaxDecimals {
-		return 0, fmt.Errorf("unsupported decimals %d", d)
-	}
-	return d, nil
 }
 
 func erc4626UnitAmount(decimals int) (*big.Int, error) {

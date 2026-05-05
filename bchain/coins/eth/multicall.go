@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/trezor/blockbook/bchain"
 )
 
 // Canonical Multicall3 deployment, identical address on every major EVM chain.
@@ -17,29 +18,13 @@ const multicall3Address = "0xcA11bde05977b3631167028862bE2a173976CA11"
 // Verified: keccak256("aggregate3((address,bool,bytes)[])")[:4].
 const multicall3Aggregate3Signature = "0x82ad56cb"
 
-// MulticallCall is one sub-call submitted inside an aggregate3 batch.
-// Target is the destination contract; CallData is the ABI-encoded input
-// (hex string, "0x"-prefixed). When AllowFailure is true, the sub-call may
-// revert without aborting the whole batch and the caller gets Success=false.
-type MulticallCall struct {
-	Target       string
-	CallData     string
-	AllowFailure bool
-}
-
-// MulticallResult is one slot in the aggregate3 return array. Data is the
-// raw return bytes ("0x"-prefixed hex), or the revert payload when Success is false.
-type MulticallResult struct {
-	Success bool
-	Data    string
-}
-
-// MulticallAggregate3 issues a Multicall3 aggregate3 call as a single eth_call.
-// All sub-calls are observed at the same block: when blockNumber is non-nil it
-// pins the call; when nil the RPC node uses its latest block. This is the only
-// reason to prefer multicall over plain JSON-RPC batching for cross-call
-// consistency (e.g., totalAssets and conversion rates from the same vault state).
-func (b *EthereumRPC) MulticallAggregate3(calls []MulticallCall, blockNumber *big.Int) ([]MulticallResult, error) {
+// EthereumTypeMulticallAggregate3 issues a Multicall3 aggregate3 call as a single
+// eth_call. All sub-calls are observed at the same block: when blockNumber is
+// non-nil it pins the call; when nil the RPC node uses its latest block. This is
+// the main reason to prefer multicall over plain JSON-RPC batching for
+// cross-call consistency (e.g., totalAssets and conversion rates from the same
+// vault state).
+func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error) {
 	if len(calls) == 0 {
 		return nil, nil
 	}
@@ -69,7 +54,7 @@ func (b *EthereumRPC) MulticallAggregate3(calls []MulticallCall, blockNumber *bi
 //	0x60                                <- offset to bytes data within the tuple
 //	bytesLen (32 bytes)
 //	bytesData (padded up to 32-byte boundary)
-func encodeAggregate3(calls []MulticallCall) (string, error) {
+func encodeAggregate3(calls []bchain.EthereumMulticallCall) (string, error) {
 	type tuple struct {
 		target  []byte // 20 bytes
 		bool32  byte   // 0 or 1
@@ -155,7 +140,7 @@ func encodeAggregate3(calls []MulticallCall) (string, error) {
 //	N                                   <- array length
 //	headOff[0..N-1]                     <- offsets to tuples, relative to heads start
 //	tail[0..N-1]                        <- per-tuple (bool, bytes-offset, bytesLen, bytesData)
-func decodeAggregate3Result(data string) ([]MulticallResult, error) {
+func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, error) {
 	raw, err := hexToBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("decode hex: %w", err)
@@ -180,7 +165,7 @@ func decodeAggregate3Result(data string) ([]MulticallResult, error) {
 		return nil, fmt.Errorf("multicall3 response truncated in heads")
 	}
 
-	results := make([]MulticallResult, n)
+	results := make([]bchain.EthereumMulticallResult, n)
 	for i := 0; i < n; i++ {
 		offset := bigUintAt(raw, headsStart+i*32)
 		if !offset.IsUint64() {

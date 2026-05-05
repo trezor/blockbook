@@ -102,6 +102,23 @@ type EthereumTypeRPCCallResult struct {
 	Error error
 }
 
+// EthereumMulticallCall is one sub-call submitted inside a Multicall3 aggregate3
+// batch. CallData is the ABI-encoded input ("0x"-prefixed hex). When AllowFailure
+// is true, the sub-call may revert without aborting the whole batch and the
+// caller observes Success=false in the matching result slot.
+type EthereumMulticallCall struct {
+	Target       string
+	CallData     string
+	AllowFailure bool
+}
+
+// EthereumMulticallResult is one slot in the aggregate3 return array. Data is the
+// raw return bytes ("0x"-prefixed hex), or the revert payload when Success is false.
+type EthereumMulticallResult struct {
+	Success bool
+	Data    string
+}
+
 // Ethereum token standard names
 const (
 	ERC20TokenStandard   TokenStandardName = "ERC20"

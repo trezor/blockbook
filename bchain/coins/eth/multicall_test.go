@@ -32,7 +32,7 @@ func rightPadHex(s string) string {
 }
 
 func TestEncodeAggregate3KnownLayout(t *testing.T) {
-	calls := []MulticallCall{
+	calls := []bchain.EthereumMulticallCall{
 		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03", AllowFailure: false},
 		{Target: "0x00000000000000000000000000000000000000bb", CallData: "0x95d89b41", AllowFailure: true},
 	}
@@ -86,7 +86,7 @@ func TestEncodeAggregate3KnownLayout(t *testing.T) {
 // the byte-for-byte output of go-ethereum's accounts/abi package for a small
 // fixture. If this drifts, the encoder has gone non-canonical.
 func TestEncodeAggregate3MatchesCanonicalABI(t *testing.T) {
-	calls := []MulticallCall{
+	calls := []bchain.EthereumMulticallCall{
 		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03", AllowFailure: false},
 		{Target: "0x00000000000000000000000000000000000000bb", CallData: "0x95d89b41", AllowFailure: true},
 	}
@@ -116,7 +116,7 @@ func TestEncodeAggregate3MatchesCanonicalABI(t *testing.T) {
 
 func TestEncodeAggregate3EmptyAndPadding(t *testing.T) {
 	// Empty CallData should produce a tuple with 0 length bytes and no data words.
-	encoded, err := encodeAggregate3([]MulticallCall{
+	encoded, err := encodeAggregate3([]bchain.EthereumMulticallCall{
 		{Target: "0x00000000000000000000000000000000000000ee", CallData: "0x", AllowFailure: false},
 	})
 	if err != nil {
@@ -129,7 +129,7 @@ func TestEncodeAggregate3EmptyAndPadding(t *testing.T) {
 		t.Fatalf("empty-payload size: got %d want %d", got, want)
 	}
 	// 5-byte payload should pad up to 32 bytes.
-	encoded2, err := encodeAggregate3([]MulticallCall{
+	encoded2, err := encodeAggregate3([]bchain.EthereumMulticallCall{
 		{Target: "0x00000000000000000000000000000000000000ee", CallData: "0x1234567890"},
 	})
 	if err != nil {
@@ -142,13 +142,13 @@ func TestEncodeAggregate3EmptyAndPadding(t *testing.T) {
 }
 
 func TestEncodeAggregate3RejectsBadInput(t *testing.T) {
-	if _, err := encodeAggregate3([]MulticallCall{{Target: "0xnothex"}}); err == nil {
+	if _, err := encodeAggregate3([]bchain.EthereumMulticallCall{{Target: "0xnothex"}}); err == nil {
 		t.Fatal("expected error for invalid target")
 	}
-	if _, err := encodeAggregate3([]MulticallCall{{Target: "0x1234"}}); err == nil {
+	if _, err := encodeAggregate3([]bchain.EthereumMulticallCall{{Target: "0x1234"}}); err == nil {
 		t.Fatal("expected error for too-short address")
 	}
-	if _, err := encodeAggregate3([]MulticallCall{{Target: "0x00000000000000000000000000000000000000aa", CallData: "zz"}}); err == nil {
+	if _, err := encodeAggregate3([]bchain.EthereumMulticallCall{{Target: "0x00000000000000000000000000000000000000aa", CallData: "zz"}}); err == nil {
 		t.Fatal("expected error for invalid calldata hex")
 	}
 }
@@ -156,7 +156,7 @@ func TestEncodeAggregate3RejectsBadInput(t *testing.T) {
 // fixtureAggregate3Result builds a canonical aggregate3 return payload by hand for
 // a small number of (success, data) tuples. Used to verify the decoder against bytes
 // the test author can fully reason about.
-func fixtureAggregate3Result(results []MulticallResult) string {
+func fixtureAggregate3Result(results []bchain.EthereumMulticallResult) string {
 	type encoded struct {
 		successByte byte
 		data        []byte
@@ -207,7 +207,7 @@ func fixtureAggregate3Result(results []MulticallResult) string {
 }
 
 func TestDecodeAggregate3RoundTripFixture(t *testing.T) {
-	expected := []MulticallResult{
+	expected := []bchain.EthereumMulticallResult{
 		{Success: true, Data: "0x1234567890"},
 		{Success: false, Data: "0x"},
 		{Success: true, Data: "0x" + strings.Repeat("ab", 64)}, // 64 bytes, exactly two padded words
@@ -290,7 +290,7 @@ func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, 
 }
 
 func TestMulticallAggregate3EndToEnd(t *testing.T) {
-	expected := []MulticallResult{
+	expected := []bchain.EthereumMulticallResult{
 		{Success: true, Data: "0xdeadbeef"},
 		{Success: true, Data: "0xcafebabe"},
 	}
@@ -301,7 +301,7 @@ func TestMulticallAggregate3EndToEnd(t *testing.T) {
 	}
 	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
 
-	got, err := rpcClient.MulticallAggregate3([]MulticallCall{
+	got, err := rpcClient.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
 		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
 		{Target: "0x00000000000000000000000000000000000000bb", CallData: "0x95d89b41"},
 	}, nil)
@@ -323,7 +323,7 @@ func TestMulticallAggregate3EmptyCalls(t *testing.T) {
 		t.Fatal("RPC should not be called for empty input")
 		return "", nil
 	}}, Timeout: time.Second}
-	got, err := rpcClient.MulticallAggregate3(nil, nil)
+	got, err := rpcClient.EthereumTypeMulticallAggregate3(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

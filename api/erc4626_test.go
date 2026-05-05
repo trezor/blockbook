@@ -12,294 +12,249 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-type fakeErc4626Batcher struct {
-	calls [][]bchain.EthereumTypeRPCCall
-	fn    func(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error)
+// fakeMulticaller records calls and replays a sequence of canned responses.
+type fakeMulticaller struct {
+	calls    [][]bchain.EthereumMulticallCall
+	handlers []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error)
+	idx      int
 }
 
-func (f *fakeErc4626Batcher) EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error) {
-	copied := append([]bchain.EthereumTypeRPCCall(nil), calls...)
+func (f *fakeMulticaller) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, _ *big.Int) ([]bchain.EthereumMulticallResult, error) {
+	copied := append([]bchain.EthereumMulticallCall(nil), calls...)
 	f.calls = append(f.calls, copied)
-	if f.fn != nil {
-		return f.fn(calls)
+	if f.idx >= len(f.handlers) {
+		return nil, fmt.Errorf("unexpected multicall call %d", f.idx)
 	}
-	return make([]bchain.EthereumTypeRPCCallResult, len(calls)), nil
+	h := f.handlers[f.idx]
+	f.idx++
+	return h(calls)
 }
 
-func testEncodeWordAddress(address string) string {
+func encodeWordAddress(address string) string {
 	a := ethcommon.HexToAddress(address)
 	word := make([]byte, 32)
 	copy(word[12:], a.Bytes())
 	return "0x" + hex.EncodeToString(word)
 }
 
-func testEncodeWordUint(v *big.Int) string {
+func encodeWordUint(v *big.Int) string {
 	word := make([]byte, 32)
 	v.FillBytes(word)
 	return "0x" + hex.EncodeToString(word)
 }
 
-func TestErc4626CollectCandidates(t *testing.T) {
-	standard := erc4626EvmFungibleStandard()
-	tokens := Tokens{
-		{Contract: "0xAa", Standard: standard},
-		{Contract: "0xBb", Standard: bchain.ERC1155TokenStandard},
-		{Contract: "0xAa", Standard: standard},
-		{Contract: "", Standard: standard},
-		{Contract: "0xCc", Standard: standard},
-	}
+func TestBuildErc4626Token_ColdPath_PersistsAssetAndIssuesTwoMulticalls(t *testing.T) {
+	const vault = "0x00000000000000000000000000000000000000a1"
+	const asset = "0x00000000000000000000000000000000000000b2"
+	totalAssets := big.NewInt(123456)
+	convertToAssets := big.NewInt(2_000_000_000_000_000_000)
+	previewRedeem := big.NewInt(1_999_000_000_000_000_000)
+	convertToShares := big.NewInt(500_000)
+	previewDeposit := big.NewInt(499_750)
 
-	candidates, contracts := erc4626CollectCandidates(tokens, standard)
-
-	if len(candidates) != 3 {
-		t.Fatalf("expected 3 candidates, got %d", len(candidates))
-	}
-	if len(contracts) != 2 {
-		t.Fatalf("expected 2 unique contracts, got %d", len(contracts))
-	}
-	if candidates[0].token != &tokens[0] || candidates[1].token != &tokens[2] || candidates[2].token != &tokens[4] {
-		t.Fatalf("candidate token pointers are not in expected order")
-	}
-	if contracts[0] != "0xAa" || contracts[1] != "0xCc" {
-		t.Fatalf("unexpected unique contracts order: %v", contracts)
-	}
-	if candidates[0].key != "0xaa" || candidates[1].key != "0xaa" || candidates[2].key != "0xcc" {
-		t.Fatalf("unexpected normalized keys: %+v", candidates)
-	}
-}
-
-func TestErc4626DetectVaultsBatched(t *testing.T) {
-	contracts := []string{
-		"0x00000000000000000000000000000000000000a1",
-		"0x00000000000000000000000000000000000000b2",
-		"0x00000000000000000000000000000000000000c3",
-	}
-	assetToken := "0x0000000000000000000000000000000000000dA1"
-	expectedTotalAssets := big.NewInt(123456)
-
-	batcher := &fakeErc4626Batcher{
-		fn: func(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error) {
-			if len(calls) != 6 {
-				return nil, fmt.Errorf("expected 6 calls, got %d", len(calls))
-			}
-			results := make([]bchain.EthereumTypeRPCCallResult, len(calls))
-			// First contract: valid vault.
-			results[0].Data = testEncodeWordAddress(assetToken)
-			results[3].Data = testEncodeWordUint(expectedTotalAssets)
-			// Second contract: zero asset address -> not a vault.
-			results[1].Data = testEncodeWordAddress(erc4626ZeroAddress)
-			results[4].Data = testEncodeWordUint(big.NewInt(1))
-			// Third contract: invalid output -> ignored.
-			results[2].Data = "0x1234"
-			results[5].Data = "0x"
-			return results, nil
-		},
-	}
-
-	probes := map[string]erc4626VaultProbe{}
-	if err := (&Worker{}).detectErc4626VaultsBatched(contracts, batcher, probes); err != nil {
-		t.Fatalf("detectErc4626VaultsBatched failed: %v", err)
-	}
-	if len(batcher.calls) != 1 {
-		t.Fatalf("expected one batch call, got %d", len(batcher.calls))
-	}
-	gotCalls := batcher.calls[0]
-	expectedAssetCallData := erc4626EncodeNoArg(erc4626MethodAsset)
-	expectedTotalAssetsCallData := erc4626EncodeNoArg(erc4626MethodTotalAssets)
-	for i, contract := range contracts {
-		if gotCalls[i].Data != expectedAssetCallData || gotCalls[i].To != contract {
-			t.Fatalf("asset call[%d] mismatch: got %+v", i, gotCalls[i])
-		}
-		if gotCalls[len(contracts)+i].Data != expectedTotalAssetsCallData || gotCalls[len(contracts)+i].To != contract {
-			t.Fatalf("totalAssets call[%d] mismatch: got %+v", i, gotCalls[len(contracts)+i])
-		}
-	}
-
-	if len(probes) != 1 {
-		t.Fatalf("expected 1 detected vault, got %d", len(probes))
-	}
-	probe, ok := probes[strings.ToLower(contracts[0])]
-	if !ok {
-		t.Fatalf("expected probe for %s", contracts[0])
-	}
-	if !strings.EqualFold(probe.assetContract, assetToken) {
-		t.Fatalf("asset contract mismatch: got %s want %s", probe.assetContract, assetToken)
-	}
-	if probe.totalAssets.Cmp(expectedTotalAssets) != 0 {
-		t.Fatalf("totalAssets mismatch: got %s want %s", probe.totalAssets, expectedTotalAssets)
-	}
-}
-
-func TestErc4626DetectVaultsBatchedChunking(t *testing.T) {
-	contracts := make([]string, 205)
-	for i := range contracts {
-		contracts[i] = fmt.Sprintf("0x%040x", i+1)
-	}
-
-	batcher := &fakeErc4626Batcher{
-		fn: func(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error) {
-			return make([]bchain.EthereumTypeRPCCallResult, len(calls)), nil
-		},
-	}
-	probes := map[string]erc4626VaultProbe{}
-	if err := (&Worker{}).detectErc4626VaultsBatched(contracts, batcher, probes); err != nil {
-		t.Fatalf("detectErc4626VaultsBatched failed: %v", err)
-	}
-	if len(batcher.calls) != 3 {
-		t.Fatalf("expected 3 chunked batch calls, got %d", len(batcher.calls))
-	}
-	if len(batcher.calls[0]) != 200 || len(batcher.calls[1]) != 200 || len(batcher.calls[2]) != 10 {
-		t.Fatalf("unexpected chunk sizes: %d, %d, %d", len(batcher.calls[0]), len(batcher.calls[1]), len(batcher.calls[2]))
-	}
-}
-
-func TestErc4626DetectVaultsBatchedErrors(t *testing.T) {
-	t.Run("batch rpc error", func(t *testing.T) {
-		batcher := &fakeErc4626Batcher{
-			fn: func(_ []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error) {
-				return nil, errors.New("boom")
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			// Multicall A: asset, totalAssets, convertToAssets(1share), previewRedeem(1share)
+			func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				if len(calls) != 4 {
+					t.Fatalf("expected 4 calls in multicall A, got %d", len(calls))
+				}
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(asset)},
+					{Success: true, Data: encodeWordUint(totalAssets)},
+					{Success: true, Data: encodeWordUint(convertToAssets)},
+					{Success: true, Data: encodeWordUint(previewRedeem)},
+				}, nil
 			},
-		}
-		probes := map[string]erc4626VaultProbe{}
-		err := (&Worker{}).detectErc4626VaultsBatched([]string{"0x0000000000000000000000000000000000000001"}, batcher, probes)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
-
-	t.Run("result size mismatch", func(t *testing.T) {
-		batcher := &fakeErc4626Batcher{
-			fn: func(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error) {
-				return make([]bchain.EthereumTypeRPCCallResult, len(calls)-1), nil
+			// Multicall B: convertToShares(1asset), previewDeposit(1asset)
+			func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				if len(calls) != 2 {
+					t.Fatalf("expected 2 calls in multicall B, got %d", len(calls))
+				}
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordUint(convertToShares)},
+					{Success: true, Data: encodeWordUint(previewDeposit)},
+				}, nil
 			},
+		},
+	}
+
+	var persistedAddr, persistedAsset string
+	persisted := 0
+	persister := func(addr, ast string) error {
+		persisted++
+		persistedAddr, persistedAsset = addr, ast
+		return nil
+	}
+	getContractInfo := func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		if !strings.EqualFold(contract, asset) {
+			t.Fatalf("unexpected getContractInfo target %s", contract)
 		}
-		probes := map[string]erc4626VaultProbe{}
-		err := (&Worker{}).detectErc4626VaultsBatched([]string{"0x0000000000000000000000000000000000000001"}, batcher, probes)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
-}
-
-func TestErc4626FetchTokenDataOmitsDerivedFieldsOnUnresolvedDecimals(t *testing.T) {
-	token := &Token{
-		Contract: "0x00000000000000000000000000000000000000a1",
-		Name:     "Vault Share",
-		Symbol:   "vSHARE",
-		Decimals: 0,
-	}
-	probe := erc4626VaultProbe{
-		assetContract: "0x00000000000000000000000000000000000000b2",
-		totalAssets:   big.NewInt(999),
+		return &bchain.ContractInfo{Contract: asset, Name: "USD Coin", Symbol: "USDC", Decimals: 6}, true, nil
 	}
 
-	uintCalls := 0
-	result := erc4626FetchTokenDataWithDeps(
-		token,
-		probe,
-		func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
-			return nil, false, nil
-		},
-		func(contract string) (int, error) {
-			if strings.EqualFold(contract, token.Contract) {
-				return 0, errors.New("share decimals unavailable")
-			}
-			if strings.EqualFold(contract, probe.assetContract) {
-				return 0, errors.New("asset decimals unavailable")
-			}
-			return 0, fmt.Errorf("unexpected decimals contract %s", contract)
-		},
-		func(_ string, _ [4]byte, _ *big.Int) (*big.Int, error) {
-			uintCalls++
-			return nil, errors.New("unexpected call")
-		},
-	)
-
-	if uintCalls != 0 {
-		t.Fatalf("expected no derived uint calls, got %d", uintCalls)
+	ci := &bchain.ContractInfo{Contract: vault, Name: "Vault Share", Symbol: "vUSDC", Decimals: 18}
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo)
+	if got == nil {
+		t.Fatal("expected non-nil result")
 	}
-	if result.ConvertToAssets1ShareSat != nil || result.PreviewRedeem1ShareSat != nil || result.ConvertToShares1AssetSat != nil || result.PreviewDeposit1AssetSat != nil {
-		t.Fatalf("expected derived fields to be omitted on unresolved decimals, got %+v", result)
+	if got.Error != "" {
+		t.Fatalf("expected no error string, got %q", got.Error)
 	}
-	if result.TotalAssetsSat == nil || (*big.Int)(result.TotalAssetsSat).Cmp(probe.totalAssets) != 0 {
-		t.Fatalf("unexpected total assets: got %v want %v", result.TotalAssetsSat, probe.totalAssets)
+	if got.Asset == nil || got.Asset.Decimals != 6 || got.Asset.Symbol != "USDC" {
+		t.Fatalf("asset metadata wrong: %+v", got.Asset)
 	}
-	if !strings.Contains(result.Error, "share decimals: share decimals unavailable") {
-		t.Fatalf("missing share decimals error: %q", result.Error)
+	if got.Share == nil || got.Share.Decimals != 18 || got.Share.Symbol != "vUSDC" {
+		t.Fatalf("share metadata wrong: %+v", got.Share)
 	}
-	if !strings.Contains(result.Error, "asset decimals: asset decimals unavailable") {
-		t.Fatalf("missing asset decimals error: %q", result.Error)
+	if got.TotalAssetsSat == nil || (*big.Int)(got.TotalAssetsSat).Cmp(totalAssets) != 0 {
+		t.Fatalf("totalAssets wrong: %v", got.TotalAssetsSat)
+	}
+	if got.ConvertToAssets1ShareSat == nil || got.PreviewRedeem1ShareSat == nil {
+		t.Fatal("share-side conversions missing")
+	}
+	if got.ConvertToShares1AssetSat == nil || got.PreviewDeposit1AssetSat == nil {
+		t.Fatal("asset-side conversions missing")
+	}
+	if persisted != 1 || persistedAddr != vault || !strings.EqualFold(persistedAsset, asset) {
+		t.Fatalf("persister not called correctly: count=%d addr=%s asset=%s", persisted, persistedAddr, persistedAsset)
+	}
+	if len(mc.calls) != 2 {
+		t.Fatalf("expected 2 multicalls, got %d", len(mc.calls))
 	}
 }
 
-func TestErc4626FetchTokenDataUsesTrustedMetadataFallbackForDecimals(t *testing.T) {
-	token := &Token{
-		Contract: "0x00000000000000000000000000000000000000a1",
-		Name:     "Vault Share",
-		Symbol:   "vSHARE",
-		Decimals: 0,
-	}
-	probe := erc4626VaultProbe{
-		assetContract: "0x00000000000000000000000000000000000000b2",
-		totalAssets:   big.NewInt(1234),
-	}
-
-	type uintCall struct {
-		selector [4]byte
-		arg      *big.Int
-	}
-	var calls []uintCall
-
-	result := erc4626FetchTokenDataWithDeps(
-		token,
-		probe,
-		func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
-			switch {
-			case strings.EqualFold(contract, token.Contract):
-				return &bchain.ContractInfo{Contract: token.Contract, Name: token.Name, Symbol: token.Symbol, Decimals: 18}, true, nil
-			case strings.EqualFold(contract, probe.assetContract):
-				return &bchain.ContractInfo{Contract: probe.assetContract, Name: "USD Coin", Symbol: "USDC", Decimals: 6}, true, nil
-			default:
-				return nil, false, fmt.Errorf("unexpected metadata contract %s", contract)
-			}
+func TestBuildErc4626Token_WarmPath_OneMulticall(t *testing.T) {
+	const vault = "0x00000000000000000000000000000000000000a1"
+	const asset = "0x00000000000000000000000000000000000000b2"
+	totalAssets := big.NewInt(50)
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				if len(calls) != 5 {
+					t.Fatalf("expected 5 calls, got %d", len(calls))
+				}
+				results := make([]bchain.EthereumMulticallResult, 5)
+				results[0] = bchain.EthereumMulticallResult{Success: true, Data: encodeWordUint(totalAssets)}
+				for i := 1; i < 5; i++ {
+					results[i] = bchain.EthereumMulticallResult{Success: true, Data: encodeWordUint(big.NewInt(int64(i)))}
+				}
+				return results, nil
+			},
 		},
-		func(_ string) (int, error) {
-			return 0, errors.New("decimals unavailable")
-		},
-		func(_ string, selector [4]byte, arg *big.Int) (*big.Int, error) {
-			calls = append(calls, uintCall{selector: selector, arg: new(big.Int).Set(arg)})
-			return big.NewInt(int64(len(calls))), nil
-		},
-	)
+	}
+	persister := func(string, string) error {
+		t.Fatal("warm path must not persist")
+		return nil
+	}
+	getContractInfo := func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		return &bchain.ContractInfo{Contract: asset, Name: "USDC", Symbol: "USDC", Decimals: 6}, true, nil
+	}
+	ci := &bchain.ContractInfo{
+		Contract:             vault,
+		Name:                 "Vault Share",
+		Symbol:               "vUSDC",
+		Decimals:             18,
+		IsErc4626:            true,
+		Erc4626AssetContract: asset,
+	}
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo)
+	if got == nil || got.Error != "" {
+		t.Fatalf("warm-path failed: %+v", got)
+	}
+	if len(mc.calls) != 1 {
+		t.Fatalf("warm path expected 1 multicall, got %d", len(mc.calls))
+	}
+	if got.TotalAssetsSat == nil || (*big.Int)(got.TotalAssetsSat).Cmp(totalAssets) != 0 {
+		t.Fatalf("totalAssets wrong: %v", got.TotalAssetsSat)
+	}
+	if got.ConvertToAssets1ShareSat == nil || got.PreviewRedeem1ShareSat == nil ||
+		got.ConvertToShares1AssetSat == nil || got.PreviewDeposit1AssetSat == nil {
+		t.Fatalf("conversion fields missing: %+v", got)
+	}
+}
 
-	if result.Error != "" {
-		t.Fatalf("expected trusted fallback to avoid error, got %q", result.Error)
+func TestBuildErc4626Token_NotAVault_ReturnsNil(t *testing.T) {
+	const vault = "0x00000000000000000000000000000000000000c1"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(erc4626ZeroAddress)}, // asset() = 0x0
+					{Success: true, Data: encodeWordUint(big.NewInt(0))},
+					{Success: true, Data: encodeWordUint(big.NewInt(0))},
+					{Success: true, Data: encodeWordUint(big.NewInt(0))},
+				}, nil
+			},
+		},
 	}
-	if result.Share == nil || result.Share.Decimals != 18 {
-		t.Fatalf("unexpected share metadata: %+v", result.Share)
+	persister := func(string, string) error {
+		t.Fatal("must not persist when contract is not a vault")
+		return nil
 	}
-	if result.Asset == nil || result.Asset.Decimals != 6 || result.Asset.Symbol != "USDC" {
-		t.Fatalf("unexpected asset metadata: %+v", result.Asset)
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		t.Fatal("must not fetch asset metadata when contract is not a vault")
+		return nil, false, nil
 	}
-	if len(calls) != 4 {
-		t.Fatalf("expected 4 derived uint calls, got %d", len(calls))
+	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
+	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo); got != nil {
+		t.Fatalf("expected nil for non-vault, got %+v", got)
 	}
-	shareUnit := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-	assetUnit := new(big.Int).Exp(big.NewInt(10), big.NewInt(6), nil)
-	if calls[0].selector != erc4626MethodConvertToAssets || calls[0].arg.Cmp(shareUnit) != 0 {
-		t.Fatalf("unexpected first call: %+v", calls[0])
+}
+
+func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T) {
+	const vault = "0x00000000000000000000000000000000000000a1"
+	const asset = "0x00000000000000000000000000000000000000b2"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(asset)},
+					{Success: true, Data: encodeWordUint(big.NewInt(7))},
+					{Success: true, Data: encodeWordUint(big.NewInt(8))},
+					{Success: true, Data: encodeWordUint(big.NewInt(9))},
+				}, nil
+			},
+			// Multicall B should NOT be issued because asset metadata is invalid.
+		},
 	}
-	if calls[1].selector != erc4626MethodPreviewRedeem || calls[1].arg.Cmp(shareUnit) != 0 {
-		t.Fatalf("unexpected second call: %+v", calls[1])
+	persister := func(string, string) error { return nil }
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		return nil, false, nil // asset contract not a known fungible token
 	}
-	if calls[2].selector != erc4626MethodConvertToShares || calls[2].arg.Cmp(assetUnit) != 0 {
-		t.Fatalf("unexpected third call: %+v", calls[2])
+	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo)
+	if got == nil {
+		t.Fatal("expected partial result, got nil")
 	}
-	if calls[3].selector != erc4626MethodPreviewDeposit || calls[3].arg.Cmp(assetUnit) != 0 {
-		t.Fatalf("unexpected fourth call: %+v", calls[3])
+	if got.TotalAssetsSat == nil {
+		t.Fatal("totalAssets should still be populated from multicall A")
 	}
-	if result.ConvertToAssets1ShareSat == nil || result.PreviewRedeem1ShareSat == nil || result.ConvertToShares1AssetSat == nil || result.PreviewDeposit1AssetSat == nil {
-		t.Fatalf("expected all derived fields to be populated, got %+v", result)
+	if got.ConvertToShares1AssetSat != nil || got.PreviewDeposit1AssetSat != nil {
+		t.Fatalf("asset-side conversions should be skipped when asset metadata invalid")
+	}
+	if !strings.Contains(got.Error, "asset metadata unavailable") {
+		t.Fatalf("expected error to mention asset metadata, got %q", got.Error)
+	}
+	if len(mc.calls) != 1 {
+		t.Fatalf("expected 1 multicall when asset metadata invalid, got %d", len(mc.calls))
+	}
+}
+
+func TestBuildErc4626Token_MulticallError_ReturnsNil(t *testing.T) {
+	const vault = "0x00000000000000000000000000000000000000a1"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return nil, errors.New("rpc down")
+			},
+		},
+	}
+	persister := func(string, string) error { return nil }
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) { return nil, false, nil }
+	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
+	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo); got != nil {
+		t.Fatalf("expected nil on multicall error, got %+v", got)
 	}
 }
 
@@ -313,14 +268,11 @@ func TestErc4626MathAndEncodingBoundaries(t *testing.T) {
 	if _, err := erc4626EncodeUintArg(erc4626MethodConvertToShares, new(big.Int).Add(erc4626MaxUint256, big.NewInt(1))); err == nil {
 		t.Fatal("expected overflow arg error")
 	}
-	if _, err := erc4626BigIntToDecimals(big.NewInt(78)); err == nil {
-		t.Fatal("expected unsupported decimals error")
-	}
-	if _, err := erc4626BigIntToDecimals(big.NewInt(-1)); err == nil {
-		t.Fatal("expected negative decimals error")
-	}
 	if _, err := erc4626UnitAmount(78); err == nil {
 		t.Fatal("expected unsupported decimals error")
+	}
+	if _, err := erc4626UnitAmount(-1); err == nil {
+		t.Fatal("expected negative decimals error")
 	}
 	unit, err := erc4626UnitAmount(0)
 	if err != nil || unit.Cmp(big.NewInt(1)) != 0 {

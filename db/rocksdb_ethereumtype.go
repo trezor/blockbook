@@ -1065,6 +1065,42 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFro
 	return contractInfo, nil
 }
 
+// SetContractInfoErc4626Vault persists the cached ERC4626 invariants for a
+// detected vault: marks IsErc4626=true and stores the underlying asset address.
+// If the row does not yet exist, this is a no-op - the contractInfo path will
+// have triggered a lazy ContractInfo fetch separately, so the row will be
+// present by the time we reach here in normal flow. Idempotent.
+func (d *RocksDB) SetContractInfoErc4626Vault(address string, assetContract string) error {
+	contract, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil || contract == nil {
+		return err
+	}
+	contractInfo, err := d.GetContractInfo(contract, "")
+	if err != nil {
+		return err
+	}
+	if contractInfo == nil {
+		return nil
+	}
+	changed := false
+	if !contractInfo.IsErc4626 {
+		contractInfo.IsErc4626 = true
+		changed = true
+	}
+	if contractInfo.Erc4626AssetContract != assetContract {
+		contractInfo.Erc4626AssetContract = assetContract
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	if err := d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo)); err != nil {
+		return err
+	}
+	cachedContracts.add(string(contract), contractInfo)
+	return nil
+}
+
 // markContractInfoErc4626 sets IsErc4626=true on the stored ContractInfo for the
 // given address if a row already exists. If no row exists yet (the contract was
 // detected emitting a vault event before its metadata has been queried by any
