@@ -53,3 +53,10 @@ func TestMempoolEthereumType_removeTransactionsMissingFromBackend(t *testing.T) 
 		t.Fatalf("addrDescToTx = %+v, want %+v", m.addrDescToTx, wantAddrDescToTx)
 	}
 }
+
+func TestNewMempoolEthereumTypeUsesDuration(t *testing.T) {
+	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
+	if m.mempoolTimeoutTime != 10*time.Minute {
+		t.Fatalf("mempoolTimeoutTime = %s, want %s", m.mempoolTimeoutTime, 10*time.Minute)
+	}
+}

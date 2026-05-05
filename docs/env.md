@@ -29,6 +29,14 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 -   `<coin shortcut>_ALLOWED_RPC_CALL_TO` - Addresses to which `rpcCall` websocket requests can be made, as a comma-separated list. If omitted, `rpcCall` is enabled for all addresses.
 
+-   `<network or coin shortcut>_ALTERNATIVE_SENDTX_URLS` - Comma-separated list of alternative EVM `eth_sendRawTransaction` providers, used for private/MEV-protected transaction submission. The prefix is the configured `network` value when present (for example `OP`, `BASE`, `POL`, `BSC`, `ARB`, `AVAX`), otherwise the coin shortcut (for example `ETH`). If omitted, Blockbook sends transactions through the normal backend RPC.
+
+-   `<network or coin shortcut>_ALTERNATIVE_SENDTX_ONLY` - Set to `TRUE` to use only the alternative send transaction provider and avoid fallback to the normal backend RPC if alternative submission fails.
+
+-   `<network or coin shortcut>_ALTERNATIVE_FETCH_MEMPOOL_TX` - Set to `TRUE` to fetch and cache transactions submitted through the alternative provider, so Blockbook can expose them as pending even if they are not visible in the public backend mempool. When the alternative provider is enabled, the default alternative cache timeout is 5 minutes and the default Blockbook EVM mempool timeout is 10 minutes; both can be overridden in coin config with `alternativeMempoolTxTimeout` and `mempoolTxTimeout`.
+
+    WebSocket `sendTransaction` can bypass the alternative provider for a single request by setting `disableAlternativeRPC` to `true`.
+
 ## Build-time variables
 
 -   `BB_BUILD_ENV` - Selects the active RPC URL override family during package/config generation. Defaults to `dev`.

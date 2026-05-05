@@ -67,7 +67,9 @@ func (b *BaseRPC) Initialize() error {
 		return errors.Errorf("Unknown network id %v", id)
 	}
 
-	b.InitAlternativeProviders()
+	if err = b.InitAlternativeProviders(); err != nil {
+		return err
+	}
 
 	glog.Info("rpc: block chain ", b.Network)
 

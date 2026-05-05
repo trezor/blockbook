@@ -18,8 +18,7 @@ type MempoolEthereumType struct {
 }
 
 // NewMempoolEthereumType creates new mempool handler.
-func NewMempoolEthereumType(chain BlockChain, mempoolTxTimeoutHours int, queryBackendOnResync bool) *MempoolEthereumType {
-	mempoolTimeoutTime := time.Duration(mempoolTxTimeoutHours) * time.Hour
+func NewMempoolEthereumType(chain BlockChain, mempoolTimeoutTime time.Duration, queryBackendOnResync bool) *MempoolEthereumType {
 	return &MempoolEthereumType{
 		BaseMempool: BaseMempool{
 			chain:        chain,
