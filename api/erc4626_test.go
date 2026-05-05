@@ -94,7 +94,7 @@ func TestBuildErc4626Token_ColdPath_PersistsAssetAndIssuesTwoMulticalls(t *testi
 	}
 
 	ci := &bchain.ContractInfo{Contract: vault, Name: "Vault Share", Symbol: "vUSDC", Decimals: 18}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo)
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
 	if got == nil {
 		t.Fatal("expected non-nil result")
 	}
@@ -158,7 +158,7 @@ func TestBuildErc4626Token_WarmPath_OneMulticall(t *testing.T) {
 		IsErc4626:            true,
 		Erc4626AssetContract: asset,
 	}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo)
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
 	if got == nil || got.Error != "" {
 		t.Fatalf("warm-path failed: %+v", got)
 	}
@@ -197,7 +197,7 @@ func TestBuildErc4626Token_NotAVault_ReturnsNil(t *testing.T) {
 		return nil, false, nil
 	}
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo); got != nil {
+	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
 		t.Fatalf("expected nil for non-vault, got %+v", got)
 	}
 }
@@ -223,7 +223,7 @@ func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T
 		return nil, false, nil // asset contract not a known fungible token
 	}
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo)
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
 	if got == nil {
 		t.Fatal("expected partial result, got nil")
 	}
@@ -253,7 +253,7 @@ func TestBuildErc4626Token_MulticallError_ReturnsNil(t *testing.T) {
 	persister := func(string, string) error { return nil }
 	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) { return nil, false, nil }
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo); got != nil {
+	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
 		t.Fatalf("expected nil on multicall error, got %+v", got)
 	}
 }

@@ -82,6 +82,11 @@ func (w *Worker) enrichErc4626Tokens(tokens Tokens) {
 //	Warm path (asset address cached):     1 multicall observing one block.
 //	  totalAssets() + the four conversion calls together.
 //
+// Results are cached per (contract, blockHeight) and shared across concurrent
+// callers via singleflight; identical requests within the same block see zero
+// upstream traffic. The multicall is pinned to the same height the cache key
+// uses, so all live values for one cache entry come from the same block.
+//
 // Returns nil if the contract is not (or no longer) a vault. The caller is
 // expected to have already filtered by standard.
 func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo) *Erc4626Token {
@@ -95,7 +100,20 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo) *Erc4626To
 	persister := func(addr, asset string) error {
 		return w.db.SetContractInfoErc4626Vault(addr, asset)
 	}
-	return buildErc4626TokenWithDeps(contractInfo, mc, persister, w.GetContractInfo)
+
+	// Prefer pinning to the indexed best block: that way every multicall a
+	// single cache entry comprises is observed at the same chain state, and the
+	// cache key matches what we asked the chain for. If best-block lookup
+	// fails, fall through to "latest" - we just lose the in-block caching for
+	// this request.
+	bestHeight, _, err := w.db.GetBestBlock()
+	if err != nil || bestHeight == 0 {
+		return buildErc4626TokenWithDeps(contractInfo, mc, persister, w.GetContractInfo, nil)
+	}
+	blockNumber := new(big.Int).SetUint64(uint64(bestHeight))
+	return erc4626CacheLookupOrBuild(erc4626LiveCache, erc4626CacheKey(contractInfo.Contract, bestHeight), func() *Erc4626Token {
+		return buildErc4626TokenWithDeps(contractInfo, mc, persister, w.GetContractInfo, blockNumber)
+	})
 }
 
 func buildErc4626TokenWithDeps(
@@ -103,11 +121,12 @@ func buildErc4626TokenWithDeps(
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
 	getContractInfo erc4626ContractInfoFetcher,
+	blockNumber *big.Int,
 ) *Erc4626Token {
 	if ci.Erc4626AssetContract == "" {
-		return buildErc4626TokenCold(ci, mc, setVault, getContractInfo)
+		return buildErc4626TokenCold(ci, mc, setVault, getContractInfo, blockNumber)
 	}
-	return buildErc4626TokenWarm(ci, mc, getContractInfo)
+	return buildErc4626TokenWarm(ci, mc, getContractInfo, blockNumber)
 }
 
 // buildErc4626TokenCold runs the first-time enrichment for a vault we don't yet
@@ -119,6 +138,7 @@ func buildErc4626TokenCold(
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
 	getContractInfo erc4626ContractInfoFetcher,
+	blockNumber *big.Int,
 ) *Erc4626Token {
 	contract := ci.Contract
 	shareDec := ci.Decimals
@@ -138,7 +158,7 @@ func buildErc4626TokenCold(
 			bchain.EthereumMulticallCall{Target: contract, CallData: previewRedeemData, AllowFailure: true},
 		)
 	}
-	resA, err := mc.EthereumTypeMulticallAggregate3(callsA, nil)
+	resA, err := mc.EthereumTypeMulticallAggregate3(callsA, blockNumber)
 	if err != nil || len(resA) < 2 {
 		return nil
 	}
@@ -203,7 +223,7 @@ func buildErc4626TokenCold(
 				{Target: contract, CallData: convertToSharesData, AllowFailure: true},
 				{Target: contract, CallData: previewDepositData, AllowFailure: true},
 			}
-			resB, err := mc.EthereumTypeMulticallAggregate3(callsB, nil)
+			resB, err := mc.EthereumTypeMulticallAggregate3(callsB, blockNumber)
 			if err != nil {
 				errs = append(errs, "asset-side multicall: "+err.Error())
 			} else if len(resB) >= 2 {
@@ -226,6 +246,7 @@ func buildErc4626TokenWarm(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
 	getContractInfo erc4626ContractInfoFetcher,
+	blockNumber *big.Int,
 ) *Erc4626Token {
 	contract := ci.Contract
 	assetContract := ci.Erc4626AssetContract
@@ -307,7 +328,7 @@ func buildErc4626TokenWarm(
 		)
 	}
 
-	res, err := mc.EthereumTypeMulticallAggregate3(calls, nil)
+	res, err := mc.EthereumTypeMulticallAggregate3(calls, blockNumber)
 	if err != nil {
 		errs = append(errs, "multicall: "+err.Error())
 	} else {
