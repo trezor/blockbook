@@ -579,6 +579,17 @@ func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bch
 	return r, nil
 }
 
+// EthereumTypeGetErc4626VaultsFromTx returns contract addresses observed emitting
+// ERC4626 Deposit or Withdraw events in this transaction. Only receipt-bearing
+// transactions are inspected; calldata-only paths cannot identify vaults.
+func (p *EthereumParser) EthereumTypeGetErc4626VaultsFromTx(tx *bchain.Tx) []string {
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok || csd.Receipt == nil {
+		return nil
+	}
+	return contractGetErc4626VaultsFromLog(csd.Receipt.Logs)
+}
+
 // FormatAddressAlias adds .eth to a name alias
 func (p *EthereumParser) FormatAddressAlias(address string, name string) string {
 	return name + p.EnsSuffix

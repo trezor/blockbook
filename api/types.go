@@ -199,10 +199,17 @@ type ContractInfoRates struct {
 	SecondaryRate float64 `json:"secondaryRate,omitempty" ts_doc:"Current price of one whole token in the requested secondary currency, when available."`
 }
 
-// ContractInfoProtocols contains optional protocol-specific contract enrichments.
+// ContractInfoProtocols contains optional protocol-specific contract enrichments
+// returned by getContractInfo. Holds the rich, freshly-fetched data per contract.
 type ContractInfoProtocols struct {
 	Erc4626 *Erc4626Token `json:"erc4626,omitempty" ts_doc:"ERC4626 vault details when explicitly requested and detected."`
 }
+
+// TokenProtocols lists protocol identifiers a token's contract participates in.
+// Populated from indexed contract metadata at request time (no RPC). Membership is
+// the signal: presence of "erc4626" means the contract has been observed acting as
+// an ERC4626 vault. Callers that need fresh per-vault data should use getContractInfo.
+type TokenProtocols []string
 
 // ContractInfoResult contains contract metadata and optional enrichments for a single contract.
 type ContractInfoResult struct {
@@ -238,7 +245,7 @@ type Token struct {
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"Multiple ERC1155 token balances (id + value)."`
 	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty" ts_doc:"Total amount of tokens received."`
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
-	Protocols        *ContractInfoProtocols   `json:"protocols,omitempty" ts_doc:"Optional protocol-specific enrichments requested by the caller."`
+	Protocols        TokenProtocols           `json:"protocols,omitempty" ts_doc:"Protocol identifiers the contract participates in (e.g., \"erc4626\"); for fresh per-vault data, use getContractInfo."`
 	ContractIndex    string                   `json:"-"`
 }
 

@@ -80,6 +80,9 @@ type ContractInfo struct {
 	Decimals          int               `json:"decimals" ts_doc:"Number of decimal places, if applicable."`
 	CreatedInBlock    uint32            `json:"createdInBlock,omitempty" ts_doc:"Block height where contract was first created."`
 	DestructedInBlock uint32            `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
+	// IsErc4626 is true if the contract has been observed emitting ERC4626 Deposit/Withdraw events.
+	// Set during indexing (no RPC); never reset to false once true.
+	IsErc4626 bool `json:"-"`
 }
 
 // EthereumTypeRPCCall defines one eth_call request payload.

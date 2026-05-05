@@ -1751,6 +1751,19 @@ func Test_packUnpackContractInfo(t *testing.T) {
 				DestructedInBlock: 2,
 			},
 		},
+		{
+			name: "ERC20-ERC4626",
+			contractInfo: bchain.ContractInfo{
+				Type:              bchain.ERC20TokenStandard,
+				Standard:          bchain.ERC20TokenStandard,
+				Name:              "Vault Share",
+				Symbol:            "vSHARE",
+				Decimals:          18,
+				CreatedInBlock:    100,
+				DestructedInBlock: 0,
+				IsErc4626:         true,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

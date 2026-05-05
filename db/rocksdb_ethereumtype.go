@@ -656,6 +656,11 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 	if err != nil {
 		glog.Warningf("rocksdb: processContractTransfers %v, tx %v", err, tx.Txid)
 	}
+	for _, vaultAddr := range d.chainParser.EthereumTypeGetErc4626VaultsFromTx(tx) {
+		if err := d.markContractInfoErc4626(vaultAddr); err != nil {
+			glog.Warningf("rocksdb: markContractInfoErc4626 %v, tx %v, contract %v", err, tx.Txid, vaultAddr)
+		}
+	}
 	blockTx.contracts = make([]ethBlockTxContract, len(tokenTransfers))
 	for i, t := range tokenTransfers {
 		var contract, from, to bchain.AddressDescriptor
@@ -975,6 +980,13 @@ func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
 	buf = append(buf, varBuf[:l]...)
 	l = packVaruint(uint(contractInfo.DestructedInBlock), varBuf)
 	buf = append(buf, varBuf[:l]...)
+	// Trailing field: records written by older versions stop here, and unpack reads 0 (false).
+	var flags uint
+	if contractInfo.IsErc4626 {
+		flags |= 1
+	}
+	l = packVaruint(flags, varBuf)
+	buf = append(buf, varBuf[:l]...)
 	return buf
 }
 
@@ -997,8 +1009,12 @@ func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
 	ui, l = unpackVaruint(buf)
 	contractInfo.CreatedInBlock = uint32(ui)
 	buf = buf[l:]
-	ui, _ = unpackVaruint(buf)
+	ui, l = unpackVaruint(buf)
 	contractInfo.DestructedInBlock = uint32(ui)
+	buf = buf[l:]
+	// Older records may not have flags; unpackVaruint on empty buf returns 0 (false).
+	ui, _ = unpackVaruint(buf)
+	contractInfo.IsErc4626 = ui&1 != 0
 	return &contractInfo, nil
 }
 
@@ -1042,6 +1058,31 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFro
 		cachedContracts.add(cacheKey, contractInfo)
 	}
 	return contractInfo, nil
+}
+
+// markContractInfoErc4626 sets IsErc4626=true on the stored ContractInfo for the
+// given address if a row already exists. If no row exists yet (the contract was
+// detected emitting a vault event before its metadata has been queried by any
+// caller), we skip - the next vault event will set the bit once the row is
+// created via the lazy fetch path. No RPC is performed here.
+func (d *RocksDB) markContractInfoErc4626(address string) error {
+	contract, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil || contract == nil {
+		return err
+	}
+	contractInfo, err := d.GetContractInfo(contract, "")
+	if err != nil {
+		return err
+	}
+	if contractInfo == nil || contractInfo.IsErc4626 {
+		return nil
+	}
+	contractInfo.IsErc4626 = true
+	if err := d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo)); err != nil {
+		return err
+	}
+	cachedContracts.add(string(contract), contractInfo)
+	return nil
 }
 
 // StoreContractInfo stores contractInfo in DB

@@ -79,38 +79,23 @@ func erc4626CollectCandidates(tokens Tokens, standard bchain.TokenStandardName) 
 	return candidates, contracts
 }
 
+// enrichErc4626Tokens marks tokens whose contract is a known ERC4626 vault.
+// It reads the IsErc4626 flag from indexed contract metadata (LRU/DB lookup, no RPC);
+// the flag is populated during block indexing whenever the contract emits ERC4626
+// Deposit/Withdraw events. Fresh per-vault data (asset, conversions, totals) is the
+// responsibility of getContractInfo, not this account-level path.
 func (w *Worker) enrichErc4626Tokens(tokens Tokens) {
 	standard := erc4626EvmFungibleStandard()
-	candidates, contracts := erc4626CollectCandidates(tokens, standard)
-	if len(candidates) == 0 {
-		return
-	}
-
-	probes := make(map[string]erc4626VaultProbe, len(contracts))
-	if batcher, ok := w.chain.(erc4626BatchCaller); ok {
-		_ = w.detectErc4626VaultsBatched(contracts, batcher, probes)
-	}
-	for _, contract := range contracts {
-		key := strings.ToLower(contract)
-		if _, ok := probes[key]; ok {
+	for i := range tokens {
+		token := &tokens[i]
+		if token.Contract == "" || token.Standard != standard {
 			continue
 		}
-		probe, isVault := w.detectErc4626Vault(contract)
-		if !isVault {
+		ci, _, err := w.GetContractInfo(token.Contract, standard)
+		if err != nil || ci == nil || !ci.IsErc4626 {
 			continue
 		}
-		probes[key] = probe
-	}
-
-	for _, candidate := range candidates {
-		probe, ok := probes[candidate.key]
-		if !ok {
-			continue
-		}
-		if candidate.token.Protocols == nil {
-			candidate.token.Protocols = &ContractInfoProtocols{}
-		}
-		candidate.token.Protocols.Erc4626 = w.fetchErc4626TokenData(candidate.token, probe)
+		token.Protocols = append(token.Protocols, contractInfoProtocolErc4626)
 	}
 }
 

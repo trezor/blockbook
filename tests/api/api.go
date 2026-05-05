@@ -240,13 +240,13 @@ type evmAddressTokenBalanceResponse struct {
 }
 
 type evmTokenResponse struct {
-	Type             string                        `json:"type"`
-	Standard         string                        `json:"standard"`
-	Contract         string                        `json:"contract"`
-	Balance          string                        `json:"balance"`
-	IDs              []string                      `json:"ids"`
-	MultiTokenValues []evmMultiTokenValue          `json:"multiTokenValues"`
-	Protocols        *evmContractProtocolsResponse `json:"protocols,omitempty"`
+	Type             string               `json:"type"`
+	Standard         string               `json:"standard"`
+	Contract         string               `json:"contract"`
+	Balance          string               `json:"balance"`
+	IDs              []string             `json:"ids"`
+	MultiTokenValues []evmMultiTokenValue `json:"multiTokenValues"`
+	Protocols        []string             `json:"protocols,omitempty"`
 }
 
 type evmMultiTokenValue struct {
