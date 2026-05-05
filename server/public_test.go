@@ -799,7 +799,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","balance":"0","totalReceived":"1234567890123","totalSent":"1234567890123","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2}`,
+				`{"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","balance":"0","totalReceived":"1234567890123","totalSent":"1234567890123","unconfirmedTxs":0,"txs":2}`,
 			},
 		},
 		{
@@ -862,7 +862,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"address":"upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q","balance":"118641975500","totalReceived":"118641975501","totalSent":"1","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":3,"addrTxCount":3,"usedTokens":2}`,
+				`{"address":"upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q","balance":"118641975500","totalReceived":"118641975501","totalSent":"1","unconfirmedTxs":0,"txs":3,"addrTxCount":3,"usedTokens":2}`,
 			},
 		},
 		{

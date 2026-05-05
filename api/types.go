@@ -423,7 +423,7 @@ type Address struct {
 	BalanceSat            *Amount             `json:"balance" ts_doc:"Current confirmed balance (in satoshi or base units)."`
 	TotalReceivedSat      *Amount             `json:"totalReceived,omitempty" ts_doc:"Total amount ever received by this address."`
 	TotalSentSat          *Amount             `json:"totalSent,omitempty" ts_doc:"Total amount ever sent by this address."`
-	UnconfirmedBalanceSat *Amount             `json:"unconfirmedBalance" ts_doc:"Unconfirmed balance for this address."`
+	UnconfirmedBalanceSat *Amount             `json:"unconfirmedBalance,omitempty" ts_doc:"Unconfirmed balance for this address. Omitted for AccountDetailsBasic, where mempool transactions are not aggregated."`
 	UnconfirmedTxs        int                 `json:"unconfirmedTxs" ts_doc:"Number of unconfirmed transactions for this address."`
 	UnconfirmedSending    *Amount             `json:"unconfirmedSending,omitempty" ts_doc:"Unconfirmed outgoing balance for this address."`
 	UnconfirmedReceiving  *Amount             `json:"unconfirmedReceiving,omitempty" ts_doc:"Unconfirmed incoming balance for this address."`
