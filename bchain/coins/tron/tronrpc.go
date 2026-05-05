@@ -464,7 +464,11 @@ func (b *TronRPC) GetChainParser() bchain.BlockChainParser {
 
 func (b *TronRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
+		mempoolTxTimeout, err := b.ChainConfig.MempoolTxTimeoutDuration(false)
+		if err != nil {
+			return nil, err
+		}
+		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 	}
 	return b.Mempool, nil
 }
