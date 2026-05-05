@@ -158,12 +158,13 @@ func enrichErc4626TokensWithDeps(
 //
 // Results are cached per (contract, blockHeight) and shared across concurrent
 // callers via singleflight; identical requests within the same block see zero
-// upstream traffic. The multicall is pinned to the same height the cache key
-// uses, so all live values for one cache entry come from the same block.
+// upstream traffic. The caller provides the response block height, and the
+// multicall is pinned to that exact height so protocols.erc4626 matches the
+// blockHeight returned to the client.
 //
 // Returns nil if the contract is not (or no longer) a vault. The caller is
 // expected to have already filtered by standard.
-func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo) *Erc4626Token {
+func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight uint32) *Erc4626Token {
 	if contractInfo == nil || contractInfo.Contract == "" {
 		return nil
 	}
@@ -175,13 +176,10 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo) *Erc4626To
 		return w.db.SetContractInfoErc4626Vault(addr, asset)
 	}
 
-	// Prefer pinning to the indexed best block: that way every multicall a
-	// single cache entry comprises is observed at the same chain state, and the
-	// cache key matches what we asked the chain for. If best-block lookup
-	// fails, fall through to "latest" - we just lose the in-block caching for
-	// this request.
-	bestHeight, _, err := w.db.GetBestBlock()
-	if err != nil || bestHeight == 0 {
+	// The caller owns bestHeight selection. If it has no usable height (0), fall
+	// through to "latest" for the live read; we just lose the in-block caching
+	// for this request.
+	if bestHeight == 0 {
 		return buildErc4626TokenWithDeps(contractInfo, mc, setVault, w.GetContractInfo, nil)
 	}
 	blockNumber := new(big.Int).SetUint64(uint64(bestHeight))

@@ -152,7 +152,7 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 		return result, nil
 	}
 
-	erc4626 := w.buildErc4626Token(contractInfo)
+	erc4626 := w.buildErc4626Token(contractInfo, bestHeight)
 	if erc4626 == nil {
 		return result, nil
 	}
