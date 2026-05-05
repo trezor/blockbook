@@ -83,6 +83,10 @@ type ContractInfo struct {
 	// IsErc4626 is true if the contract has been observed emitting ERC4626 Deposit/Withdraw events.
 	// Set during indexing (no RPC); never reset to false once true.
 	IsErc4626 bool `json:"-"`
+	// Erc4626AssetContract is the underlying-asset address (EIP-55) read from the vault's
+	// asset() method. Populated by the contractInfo path on first enrichment of a known
+	// vault, then reused as a cached invariant. Empty when not yet probed.
+	Erc4626AssetContract string `json:"-"`
 }
 
 // EthereumTypeRPCCall defines one eth_call request payload.

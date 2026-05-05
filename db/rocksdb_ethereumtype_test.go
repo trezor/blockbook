@@ -299,7 +299,9 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 			"0b436f6e7472616374203734" + // Contract 74
 				"03533734" + // S74
 				"054552433230" + // ERC20
-				varuintToHex(12) + varuintToHex(44444) + varuintToHex(destructedInBlock),
+				varuintToHex(12) + varuintToHex(44444) + varuintToHex(destructedInBlock) +
+				varuintToHex(0) + // trailing flags (IsErc4626 not set)
+				varuintToHex(0), // empty Erc4626AssetContract length prefix
 			nil,
 		},
 	}); err != nil {
@@ -451,7 +453,9 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 			"0b436f6e7472616374203734" + // Contract 74
 				"03533734" + // S74
 				"054552433230" + // ERC20
-				varuintToHex(12) + varuintToHex(44444) + varuintToHex(44445),
+				varuintToHex(12) + varuintToHex(44444) + varuintToHex(44445) +
+				varuintToHex(0) + // trailing flags (IsErc4626 not set)
+				varuintToHex(0), // empty Erc4626AssetContract length prefix
 			nil,
 		},
 	}); err != nil {
@@ -1762,6 +1766,20 @@ func Test_packUnpackContractInfo(t *testing.T) {
 				CreatedInBlock:    100,
 				DestructedInBlock: 0,
 				IsErc4626:         true,
+			},
+		},
+		{
+			name: "ERC20-ERC4626-with-asset",
+			contractInfo: bchain.ContractInfo{
+				Type:                 bchain.ERC20TokenStandard,
+				Standard:             bchain.ERC20TokenStandard,
+				Name:                 "Vault Share",
+				Symbol:               "vSHARE",
+				Decimals:             18,
+				CreatedInBlock:       200,
+				DestructedInBlock:    0,
+				IsErc4626:            true,
+				Erc4626AssetContract: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
 			},
 		},
 	}

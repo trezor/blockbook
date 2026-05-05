@@ -980,13 +980,15 @@ func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
 	buf = append(buf, varBuf[:l]...)
 	l = packVaruint(uint(contractInfo.DestructedInBlock), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	// Trailing field: records written by older versions stop here, and unpack reads 0 (false).
+	// Trailing fields below were appended after the original layout. Records written
+	// by older versions stop earlier, and unpack reads back zero values for them.
 	var flags uint
 	if contractInfo.IsErc4626 {
 		flags |= 1
 	}
 	l = packVaruint(flags, varBuf)
 	buf = append(buf, varBuf[:l]...)
+	buf = append(buf, packString(contractInfo.Erc4626AssetContract)...)
 	return buf
 }
 
@@ -1012,9 +1014,12 @@ func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
 	ui, l = unpackVaruint(buf)
 	contractInfo.DestructedInBlock = uint32(ui)
 	buf = buf[l:]
-	// Older records may not have flags; unpackVaruint on empty buf returns 0 (false).
-	ui, _ = unpackVaruint(buf)
+	// Older records may not have these trailing fields; vlq decode of an empty buffer
+	// returns 0, and unpackString reads "" when its length-prefix is 0.
+	ui, l = unpackVaruint(buf)
 	contractInfo.IsErc4626 = ui&1 != 0
+	buf = buf[l:]
+	contractInfo.Erc4626AssetContract, _ = unpackString(buf)
 	return &contractInfo, nil
 }
 
