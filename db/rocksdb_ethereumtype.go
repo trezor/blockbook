@@ -1112,11 +1112,10 @@ func (d *RocksDB) SetContractInfoErc4626Vault(address string, assetContract stri
 	return nil
 }
 
-// MarkContractInfoErc4626Probed records that the asset()+totalAssets()
-// interface was probed and the contract is NOT a vault. Combined with
-// IsErc4626=false (the natural default), this state lets the lazy probe in
-// accountInfo skip future re-probing of plain fungible tokens. Idempotent;
-// no-op when the row is absent.
+// MarkContractInfoErc4626Probed records a legacy negative ERC4626 probe in the
+// stored ContractInfo. New detection code persists only positive matches, but
+// the bit remains on disk for backward compatibility with older records and
+// tests. Idempotent; no-op when the row is absent.
 func (d *RocksDB) MarkContractInfoErc4626Probed(address string) error {
 	contract, err := d.chainParser.GetAddrDescFromAddress(address)
 	if err != nil || contract == nil {

@@ -86,10 +86,6 @@ func TestBuildErc4626Token_ColdPath_PersistsAssetAndIssuesTwoMulticalls(t *testi
 		persistedAddr, persistedAsset = addr, ast
 		return nil
 	}
-	markProbed := func(string) error {
-		t.Fatal("markProbed must not be called on positive detection")
-		return nil
-	}
 	getContractInfo := func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 		if !strings.EqualFold(contract, asset) {
 			t.Fatalf("unexpected getContractInfo target %s", contract)
@@ -98,7 +94,7 @@ func TestBuildErc4626Token_ColdPath_PersistsAssetAndIssuesTwoMulticalls(t *testi
 	}
 
 	ci := &bchain.ContractInfo{Contract: vault, Name: "Vault Share", Symbol: "vUSDC", Decimals: 18}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, markProbed, getContractInfo, nil)
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
 	if got == nil {
 		t.Fatal("expected non-nil result")
 	}
@@ -151,10 +147,6 @@ func TestBuildErc4626Token_WarmPath_OneMulticall(t *testing.T) {
 		t.Fatal("warm path must not persist")
 		return nil
 	}
-	markProbed := func(string) error {
-		t.Fatal("warm path must not call markProbed")
-		return nil
-	}
 	getContractInfo := func(contract string, _ bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 		return &bchain.ContractInfo{Contract: asset, Name: "USDC", Symbol: "USDC", Decimals: 6}, true, nil
 	}
@@ -166,7 +158,7 @@ func TestBuildErc4626Token_WarmPath_OneMulticall(t *testing.T) {
 		IsErc4626:            true,
 		Erc4626AssetContract: asset,
 	}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, markProbed, getContractInfo, nil)
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
 	if got == nil || got.Error != "" {
 		t.Fatalf("warm-path failed: %+v", got)
 	}
@@ -215,26 +207,16 @@ func TestBuildErc4626Token_TotalAssetsFails_NoPersistAndReturnsNil(t *testing.T)
 				persisted++
 				return nil
 			}
-			probedCount := 0
-			var probedAddr string
-			markProbed := func(addr string) error {
-				probedCount++
-				probedAddr = addr
-				return nil
-			}
 			getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 				t.Fatal("must not lazy-fetch asset metadata when detection fails")
 				return nil, false, nil
 			}
 			ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-			if got := buildErc4626TokenWithDeps(ci, mc, persister, markProbed, getContractInfo, nil); got != nil {
+			if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
 				t.Fatalf("expected nil when totalAssets fails, got %+v", got)
 			}
 			if persisted != 0 {
 				t.Fatalf("must not persist when totalAssets fails (persisted=%d)", persisted)
-			}
-			if probedCount != 1 || probedAddr != vault {
-				t.Fatalf("expected markProbed once with vault addr, got count=%d addr=%s", probedCount, probedAddr)
 			}
 			if len(mc.calls) != 1 {
 				t.Fatalf("expected exactly 1 multicall (no asset-side fetch), got %d", len(mc.calls))
@@ -261,55 +243,44 @@ func TestBuildErc4626Token_NotAVault_ReturnsNil(t *testing.T) {
 		t.Fatal("must not persist as vault when contract is not a vault")
 		return nil
 	}
-	probedCount := 0
-	markProbed := func(addr string) error {
-		probedCount++
-		if addr != vault {
-			t.Fatalf("markProbed called with wrong addr %s", addr)
-		}
-		return nil
-	}
 	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 		t.Fatal("must not fetch asset metadata when contract is not a vault")
 		return nil, false, nil
 	}
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, markProbed, getContractInfo, nil); got != nil {
+	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
 		t.Fatalf("expected nil for non-vault, got %+v", got)
-	}
-	if probedCount != 1 {
-		t.Fatalf("expected markProbed exactly once, got %d", probedCount)
 	}
 }
 
-func TestBuildErc4626Token_AlreadyProbedNotVault_NoRPC(t *testing.T) {
+func TestBuildErc4626Token_AlreadyProbedNotVault_Reprobes(t *testing.T) {
 	const vault = "0x00000000000000000000000000000000000000c2"
 	mc := &fakeMulticaller{
 		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
 			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
-				t.Fatal("must not call multicall when Erc4626Probed=true && IsErc4626=false")
-				return nil, nil
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(erc4626ZeroAddress)},
+					{Success: true, Data: encodeWordUint(big.NewInt(0))},
+					{Success: true, Data: encodeWordUint(big.NewInt(0))},
+					{Success: true, Data: encodeWordUint(big.NewInt(0))},
+				}, nil
 			},
 		},
 	}
 	persister := func(string, string) error {
-		t.Fatal("must not persist again on cached negative")
-		return nil
-	}
-	markProbed := func(string) error {
-		t.Fatal("must not re-mark on cached negative")
+		t.Fatal("must not persist non-vault legacy negative")
 		return nil
 	}
 	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
-		t.Fatal("must not fetch metadata on cached negative")
+		t.Fatal("must not fetch metadata on non-vault legacy negative")
 		return nil, false, nil
 	}
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18, Erc4626Probed: true}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, markProbed, getContractInfo, nil); got != nil {
-		t.Fatalf("expected nil for cached negative, got %+v", got)
+	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
+		t.Fatalf("expected nil for non-vault legacy negative, got %+v", got)
 	}
-	if len(mc.calls) != 0 {
-		t.Fatalf("expected zero multicalls for cached negative, got %d", len(mc.calls))
+	if len(mc.calls) != 1 {
+		t.Fatalf("expected one multicall re-probe for legacy negative, got %d", len(mc.calls))
 	}
 }
 
@@ -330,15 +301,11 @@ func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T
 		},
 	}
 	persister := func(string, string) error { return nil }
-	markProbed := func(string) error {
-		t.Fatal("markProbed must not be called when detection succeeded")
-		return nil
-	}
 	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 		return nil, false, nil // asset contract not a known fungible token
 	}
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, markProbed, getContractInfo, nil)
+	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
 	if got == nil {
 		t.Fatal("expected partial result, got nil")
 	}
@@ -369,13 +336,9 @@ func TestBuildErc4626Token_MulticallError_ReturnsNil(t *testing.T) {
 		t.Fatal("must not persist on transport error")
 		return nil
 	}
-	markProbed := func(string) error {
-		t.Fatal("must not mark probed on transport error - retry next request")
-		return nil
-	}
 	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) { return nil, false, nil }
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, markProbed, getContractInfo, nil); got != nil {
+	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
 		t.Fatalf("expected nil on multicall error, got %+v", got)
 	}
 }
@@ -437,16 +400,11 @@ func TestEnrichErc4626Tokens_FlagsKnownVaultAndProbesUnprobed(t *testing.T) {
 		persisted[addr] = asset
 		return nil
 	}
-	markProbed := func(string) error {
-		t.Fatal("markProbed must not be called when probe confirms a vault")
-		return nil
-	}
-
 	tokens := Tokens{
 		{Contract: knownVault, Standard: erc4626Standard},
 		{Contract: unprobedVault, Standard: erc4626Standard},
 	}
-	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, markProbed, nil)
+	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, nil)
 
 	if !slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("known vault must be flagged: %v", tokens[0].Protocols)
@@ -462,7 +420,7 @@ func TestEnrichErc4626Tokens_FlagsKnownVaultAndProbesUnprobed(t *testing.T) {
 	}
 }
 
-func TestEnrichErc4626Tokens_SkipsAlreadyProbedNegative(t *testing.T) {
+func TestEnrichErc4626Tokens_ReprobesAlreadyProbedNegative(t *testing.T) {
 	const probedNegative = "0x00000000000000000000000000000000000000c1"
 
 	store := fakeContractInfoStore{
@@ -470,32 +428,33 @@ func TestEnrichErc4626Tokens_SkipsAlreadyProbedNegative(t *testing.T) {
 			Contract:      probedNegative,
 			Standard:      erc4626Standard,
 			Erc4626Probed: true,
-			// IsErc4626=false: contract was probed and confirmed not a vault.
+			// IsErc4626=false: legacy negative probe bit is present in stored metadata.
 		},
 	}
 	mc := &fakeMulticaller{
 		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
 			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
-				t.Fatal("must not multicall when all candidates are already probed")
-				return nil, nil
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(erc4626ZeroAddress)},
+					{Success: true, Data: encodeWordUint(big.NewInt(0))},
+				}, nil
 			},
 		},
 	}
 	tokens := Tokens{{Contract: probedNegative, Standard: erc4626Standard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("setVault must not be called"); return nil },
-		func(string) error { t.Fatal("markProbed must not be called"); return nil },
 		nil)
 
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("probed-negative token must not be flagged: %v", tokens[0].Protocols)
 	}
-	if len(mc.calls) != 0 {
-		t.Fatalf("expected zero multicalls, got %d", len(mc.calls))
+	if len(mc.calls) != 1 {
+		t.Fatalf("expected one multicall re-probe, got %d", len(mc.calls))
 	}
 }
 
-func TestEnrichErc4626Tokens_NegativeProbePersistsMarkProbedOnly(t *testing.T) {
+func TestEnrichErc4626Tokens_NegativeProbeDoesNotPersist(t *testing.T) {
 	const fakeFungible = "0x00000000000000000000000000000000000000d1"
 
 	store := fakeContractInfoStore{
@@ -511,20 +470,15 @@ func TestEnrichErc4626Tokens_NegativeProbePersistsMarkProbedOnly(t *testing.T) {
 			},
 		},
 	}
-	probedAddrs := map[string]int{}
 	tokens := Tokens{{Contract: fakeFungible, Standard: erc4626Standard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("setVault must not be called for non-vault"); return nil },
-		func(addr string) error {
-			probedAddrs[addr]++
-			return nil
-		},
 		nil)
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("non-vault must not be flagged: %v", tokens[0].Protocols)
 	}
-	if probedAddrs[fakeFungible] != 1 {
-		t.Fatalf("markProbed should be called once for non-vault, got %v", probedAddrs)
+	if len(mc.calls) != 1 {
+		t.Fatalf("expected one batched probe for non-vault, got %d", len(mc.calls))
 	}
 }
 
@@ -543,7 +497,6 @@ func TestEnrichErc4626Tokens_TransportErrorDoesNotPersist(t *testing.T) {
 	tokens := Tokens{{Contract: unprobed, Standard: erc4626Standard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("must not setVault on transport error"); return nil },
-		func(string) error { t.Fatal("must not markProbed on transport error - retry next request"); return nil },
 		nil)
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("must not flag on transport error: %v", tokens[0].Protocols)
@@ -562,7 +515,7 @@ func TestEnrichErc4626Tokens_NoMulticallerStillFlagsKnown(t *testing.T) {
 		{Contract: unprobed, Standard: erc4626Standard},
 	}
 	// nil multicaller (chain doesn't support multicall): must still flag known vaults.
-	enrichErc4626TokensWithDeps(tokens, store.get, nil, nil, nil, nil)
+	enrichErc4626TokensWithDeps(tokens, store.get, nil, nil, nil)
 
 	if !slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("known vault must be flagged even without multicaller: %v", tokens[0].Protocols)
@@ -607,13 +560,8 @@ func TestEnrichErc4626Tokens_BatchedMixed(t *testing.T) {
 	}
 
 	persistedVaults := map[string]string{}
-	probedNegatives := map[string]bool{}
 	setVault := func(addr, asset string) error {
 		persistedVaults[addr] = asset
-		return nil
-	}
-	markProbed := func(addr string) error {
-		probedNegatives[addr] = true
 		return nil
 	}
 
@@ -622,7 +570,7 @@ func TestEnrichErc4626Tokens_BatchedMixed(t *testing.T) {
 		{Contract: fakeB, Standard: erc4626Standard},
 		{Contract: brokenC, Standard: erc4626Standard},
 	}
-	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, markProbed, nil)
+	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, nil)
 
 	if !slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("vaultA should be flagged: %v", tokens[0].Protocols)
@@ -635,9 +583,6 @@ func TestEnrichErc4626Tokens_BatchedMixed(t *testing.T) {
 	}
 	if !strings.EqualFold(persistedVaults[vaultA], assetA) {
 		t.Fatalf("vaultA should be persisted with asset %s, got %v", assetA, persistedVaults)
-	}
-	if !probedNegatives[fakeB] || !probedNegatives[brokenC] {
-		t.Fatalf("fakeB and brokenC should be marked probed-negative, got %v", probedNegatives)
 	}
 }
 
@@ -655,7 +600,6 @@ func TestEnrichErc4626Tokens_NonFungibleSkipped(t *testing.T) {
 	tokens := Tokens{{Contract: nft, Standard: bchain.ERC771TokenStandard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { return nil },
-		func(string) error { return nil },
 		nil)
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("non-fungible must not be flagged: %v", tokens[0].Protocols)
