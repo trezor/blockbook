@@ -337,7 +337,7 @@ export interface Address {
     totalReceived?: string;
     /** Total amount ever sent by this address. */
     totalSent?: string;
-    /** Unconfirmed balance for this address. */
+    /** Unconfirmed balance for this address. Omitted for AccountDetailsBasic, where mempool transactions are not aggregated. */
     unconfirmedBalance?: string;
     /** Number of unconfirmed transactions for this address. */
     unconfirmedTxs: number;

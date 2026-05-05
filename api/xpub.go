@@ -586,6 +586,10 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		}
 	}
 
+	var unconfirmedBalanceSat *Amount
+	if option > AccountDetailsBasic {
+		unconfirmedBalanceSat = (*Amount)(&uBalSat)
+	}
 	addr := Address{
 		Paging:                pg,
 		AddrStr:               xpub,
@@ -594,7 +598,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		TotalSentSat:          (*Amount)(&data.sentSat),
 		Txs:                   txCount,
 		AddrTxCount:           addrTxCount,
-		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
+		UnconfirmedBalanceSat: unconfirmedBalanceSat,
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txids:                 txids,

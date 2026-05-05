@@ -476,7 +476,7 @@ The optional query parameters:
 -   _pageSize_: number of transactions returned by call (default and maximum 1000)
 -   _from_, _to_: filter of the returned transactions _from_ block height _to_ block height (default no filter)
 -   _details_: specifies level of details returned by request (default _txids_)
-    -   _basic_: return only address balances, without any transactions
+    -   _basic_: return only address balances, without any transactions. Mempool transactions are not aggregated at this level: the `unconfirmedBalance`, `unconfirmedSending` and `unconfirmedReceiving` fields are omitted from the response, and `unconfirmedTxs` reports the raw mempool index size for the address (it may transiently include entries that have just been confirmed but not yet evicted from the mempool).
     -   _tokens_: _basic_ + tokens belonging to the address (applicable only to some coins)
     -   _tokenBalances_: _basic_ + tokens with balances + belonging to the address (applicable only to some coins)
     -   _txids_: _tokenBalances_ + list of txids, subject to _from_, _to_ filter and paging
@@ -644,7 +644,7 @@ The optional query parameters:
 -   _pageSize_: number of transactions returned by call (default and maximum 1000)
 -   _from_, _to_: filter of the returned transactions _from_ block height _to_ block height (default no filter)
 -   _details_: specifies level of details returned by request (default _txids_)
-    -   _basic_: return only xpub balances, without any derived addresses and transactions
+    -   _basic_: return only xpub balances, without any derived addresses and transactions. The `unconfirmedBalance` field is omitted from the response at this detail level (`unconfirmedSending`/`unconfirmedReceiving` are not produced by the xpub path at any level).
     -   _tokens_: _basic_ + tokens (addresses) derived from the xpub, subject to _tokens_ parameter
     -   _tokenBalances_: _basic_ + tokens (addresses) derived from the xpub with balances, subject to _tokens_ parameter
     -   _txids_: _tokenBalances_ + list of txids, subject to _from_, _to_ filter and paging
@@ -1155,6 +1155,12 @@ Notes for `getBlock`:
 -   response format matches REST `GET /api/v2/block/<block height|block hash>`
 -   _pageSize_ defaults to `1000` and is capped at `10000`
 -   _page_ is sanitized to stay within safe internal limits
+
+Notes for `getAccountInfo`:
+
+-   response format matches REST `GET /api/v2/address/<address>` (or `/api/v2/xpub/<xpub>` when a descriptor is supplied)
+-   _details_ defaults to `basic` when not specified in the request (this differs from the REST default of `txids`)
+-   at `details: basic`, mempool transactions are not aggregated: the `unconfirmedBalance`, `unconfirmedSending` and `unconfirmedReceiving` fields are omitted from the response, and `unconfirmedTxs` reports the raw mempool index size for the address. Clients that need an exact unconfirmed delta should request a higher detail level (`tokens` or above)
 
 ## Legacy API V1
 
