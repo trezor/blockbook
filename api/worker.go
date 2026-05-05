@@ -1047,7 +1047,7 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int) (*Token, error) {
+func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool) (*Token, error) {
 	standard := bchain.EthereumTokenStandardMap[c.Standard]
 	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standard)
 	if err != nil {
@@ -1068,8 +1068,11 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 		if c.Standard == bchain.FungibleToken {
 			// get Erc20 Contract Balance from blockchain, balance obtained from adding and subtracting transfers is not correct
 			// Prefer pre-fetched batch balance when available to avoid redundant RPC calls.
+			// If the contract was already part of a batch attempt, skip the per-contract fallback:
+			// a nil result there indicates the call failed or returned an unparseable value, and
+			// retrying as a single call would only amplify RPC load without changing the outcome.
 			b := erc20Balance
-			if b == nil {
+			if b == nil && !erc20Batched {
 				b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
 				if err != nil {
 					// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
@@ -1257,17 +1260,18 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				}
 				erc20Contracts = append(erc20Contracts, c.Contract)
 			}
-			if len(erc20Contracts) > 1 {
+			if len(erc20Contracts) >= 1 {
 				balances, err := w.chain.EthereumTypeGetErc20ContractBalances(addrDesc, erc20Contracts)
 				if err != nil {
 					glog.Warningf("EthereumTypeGetErc20ContractBalances addr %v: %v", addrDesc, err)
 				} else if len(balances) == len(erc20Contracts) {
-					// Keep only successful batch results; missing entries will trigger per-contract calls.
+					// Record every batched contract as a key, even when the value is nil. Map presence
+					// signals that the batch already covered this contract so the consumer must not
+					// fall back to a single call - that fallback was the source of N-fold RPC
+					// amplification when batches returned per-element errors or unparseable results.
 					erc20Balances = make(map[string]*big.Int, len(erc20Contracts))
 					for i, bal := range balances {
-						if bal != nil {
-							erc20Balances[string(erc20Contracts[i])] = bal
-						}
+						erc20Balances[string(erc20Contracts[i])] = bal
 					}
 				}
 			}
@@ -1284,12 +1288,14 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					// filter only transactions of this contract
 					filter.Vout = i + db.ContractIndexOffset
 				}
-				// Use prefetched batch balances when available; nil triggers per-contract RPC in helper.
+				// Use prefetched batch balances when available. Map presence (not value) marks the
+				// contract as batched so the helper skips its per-contract RPC fallback.
 				var erc20Balance *big.Int
+				var erc20Batched bool
 				if erc20Balances != nil {
-					erc20Balance = erc20Balances[string(c.Contract)]
+					erc20Balance, erc20Batched = erc20Balances[string(c.Contract)]
 				}
-				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance)
+				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance, erc20Batched)
 				if err != nil {
 					return nil, nil, err
 				}
