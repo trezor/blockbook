@@ -982,9 +982,14 @@ func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
 	buf = append(buf, varBuf[:l]...)
 	// Trailing fields below were appended after the original layout. Records written
 	// by older versions stop earlier, and unpack reads back zero values for them.
+	// The flags varuint packs multiple bits to keep the on-disk shape stable as we
+	// add more boolean signals; bit 0 is IsErc4626, bit 1 is Erc4626Probed.
 	var flags uint
 	if contractInfo.IsErc4626 {
 		flags |= 1
+	}
+	if contractInfo.Erc4626Probed {
+		flags |= 1 << 1
 	}
 	l = packVaruint(flags, varBuf)
 	buf = append(buf, varBuf[:l]...)
@@ -1018,6 +1023,7 @@ func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
 	// returns 0, and unpackString reads "" when its length-prefix is 0.
 	ui, l = unpackVaruint(buf)
 	contractInfo.IsErc4626 = ui&1 != 0
+	contractInfo.Erc4626Probed = ui&(1<<1) != 0
 	buf = buf[l:]
 	contractInfo.Erc4626AssetContract, _ = unpackString(buf)
 	return &contractInfo, nil
@@ -1066,10 +1072,11 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFro
 }
 
 // SetContractInfoErc4626Vault persists the cached ERC4626 invariants for a
-// detected vault: marks IsErc4626=true and stores the underlying asset address.
-// If the row does not yet exist, this is a no-op - the contractInfo path will
-// have triggered a lazy ContractInfo fetch separately, so the row will be
-// present by the time we reach here in normal flow. Idempotent.
+// detected vault: marks IsErc4626=true, Erc4626Probed=true, and stores the
+// underlying asset address. If the row does not yet exist, this is a no-op -
+// the contractInfo path will have triggered a lazy ContractInfo fetch
+// separately, so the row will be present by the time we reach here in normal
+// flow. Idempotent.
 func (d *RocksDB) SetContractInfoErc4626Vault(address string, assetContract string) error {
 	contract, err := d.chainParser.GetAddrDescFromAddress(address)
 	if err != nil || contract == nil {
@@ -1087,6 +1094,10 @@ func (d *RocksDB) SetContractInfoErc4626Vault(address string, assetContract stri
 		contractInfo.IsErc4626 = true
 		changed = true
 	}
+	if !contractInfo.Erc4626Probed {
+		contractInfo.Erc4626Probed = true
+		changed = true
+	}
 	if contractInfo.Erc4626AssetContract != assetContract {
 		contractInfo.Erc4626AssetContract = assetContract
 		changed = true
@@ -1094,6 +1105,31 @@ func (d *RocksDB) SetContractInfoErc4626Vault(address string, assetContract stri
 	if !changed {
 		return nil
 	}
+	if err := d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo)); err != nil {
+		return err
+	}
+	cachedContracts.add(string(contract), contractInfo)
+	return nil
+}
+
+// MarkContractInfoErc4626Probed records that the asset()+totalAssets()
+// interface was probed and the contract is NOT a vault. Combined with
+// IsErc4626=false (the natural default), this state lets the lazy probe in
+// accountInfo skip future re-probing of plain fungible tokens. Idempotent;
+// no-op when the row is absent.
+func (d *RocksDB) MarkContractInfoErc4626Probed(address string) error {
+	contract, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil || contract == nil {
+		return err
+	}
+	contractInfo, err := d.GetContractInfo(contract, "")
+	if err != nil {
+		return err
+	}
+	if contractInfo == nil || contractInfo.Erc4626Probed {
+		return nil
+	}
+	contractInfo.Erc4626Probed = true
 	if err := d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo)); err != nil {
 		return err
 	}

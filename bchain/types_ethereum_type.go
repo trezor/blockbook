@@ -87,6 +87,12 @@ type ContractInfo struct {
 	// asset() method. Populated by the contractInfo path on first enrichment of a known
 	// vault, then reused as a cached invariant. Empty when not yet probed.
 	Erc4626AssetContract string `json:"-"`
+	// Erc4626Probed is true once the asset()+totalAssets() interface has been
+	// authoritatively probed for this contract. Distinguishes "we know it isn't
+	// a vault" (Erc4626Probed=true && IsErc4626=false) from "we haven't checked
+	// yet" (Erc4626Probed=false). Without this distinction the lazy probe in
+	// accountInfo would re-fire on every request for plain ERC20 tokens.
+	Erc4626Probed bool `json:"-"`
 }
 
 // EthereumTypeRPCCall defines one eth_call request payload.

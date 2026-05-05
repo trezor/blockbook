@@ -46,28 +46,109 @@ type erc4626MulticallCaller interface {
 	EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error)
 }
 
-// erc4626ContractInfoFetcher / erc4626VaultPersister isolate the deps that
-// buildErc4626TokenWithDeps reaches for, so unit tests can inject fakes.
+// erc4626ContractInfoFetcher / erc4626VaultPersister / erc4626ProbedMarker
+// isolate the deps that buildErc4626TokenWithDeps reaches for, so unit tests
+// can inject fakes.
 type erc4626ContractInfoFetcher func(contract string, standard bchain.TokenStandardName) (*bchain.ContractInfo, bool, error)
 type erc4626VaultPersister func(address string, assetContract string) error
+type erc4626ProbedMarker func(address string) error
 
 // enrichErc4626Tokens marks tokens whose contract is a known ERC4626 vault.
-// It reads the IsErc4626 flag from indexed contract metadata (LRU/DB lookup, no RPC);
-// the flag is populated during block indexing whenever the contract emits ERC4626
-// Deposit/Withdraw events. Fresh per-vault data (asset, conversions, totals) is the
-// responsibility of getContractInfo, not this account-level path.
+// In steady state this is a pure cache lookup. For contracts that have not yet
+// been authoritatively probed (Erc4626Probed=false) and were never observed
+// emitting Deposit/Withdraw during indexing, it issues one batched multicall
+// (asset() + totalAssets() per unprobed candidate), persists the outcome, and
+// marks confirmed vaults in the response. The probe is the backstop for
+// already-synced databases and dormant vaults that the indexer cannot mark
+// after the fact.
 func (w *Worker) enrichErc4626Tokens(tokens Tokens) {
+	mc, _ := w.chain.(erc4626MulticallCaller)
+	setVault := func(addr, asset string) error { return w.db.SetContractInfoErc4626Vault(addr, asset) }
+	markProbed := func(addr string) error { return w.db.MarkContractInfoErc4626Probed(addr) }
+	var blockNumber *big.Int
+	if h, _, err := w.db.GetBestBlock(); err == nil && h > 0 {
+		blockNumber = new(big.Int).SetUint64(uint64(h))
+	}
+	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, markProbed, blockNumber)
+}
+
+func enrichErc4626TokensWithDeps(
+	tokens Tokens,
+	getContractInfo erc4626ContractInfoFetcher,
+	mc erc4626MulticallCaller,
+	setVault erc4626VaultPersister,
+	markProbed erc4626ProbedMarker,
+	blockNumber *big.Int,
+) {
 	standard := erc4626EvmFungibleStandard()
+
+	type candidate struct {
+		token    *Token
+		contract string
+	}
+	var candidates []candidate
+
+	// First pass: flag known vaults from indexed metadata; collect unprobed candidates.
 	for i := range tokens {
 		token := &tokens[i]
 		if token.Contract == "" || token.Standard != standard {
 			continue
 		}
-		ci, _, err := w.GetContractInfo(token.Contract, standard)
-		if err != nil || ci == nil || !ci.IsErc4626 {
+		ci, _, err := getContractInfo(token.Contract, standard)
+		if err != nil || ci == nil {
 			continue
 		}
-		token.Protocols = append(token.Protocols, contractInfoProtocolErc4626)
+		if ci.IsErc4626 {
+			token.Protocols = append(token.Protocols, contractInfoProtocolErc4626)
+			continue
+		}
+		if !ci.Erc4626Probed {
+			candidates = append(candidates, candidate{token: token, contract: token.Contract})
+		}
+	}
+
+	if len(candidates) == 0 || mc == nil {
+		return
+	}
+
+	// One multicall covers every unprobed candidate in the wallet, two sub-calls each.
+	calls := make([]bchain.EthereumMulticallCall, 0, 2*len(candidates))
+	for _, c := range candidates {
+		calls = append(calls,
+			bchain.EthereumMulticallCall{Target: c.contract, CallData: erc4626EncodeNoArg(erc4626MethodAsset), AllowFailure: true},
+			bchain.EthereumMulticallCall{Target: c.contract, CallData: erc4626EncodeNoArg(erc4626MethodTotalAssets), AllowFailure: true},
+		)
+	}
+	results, err := mc.EthereumTypeMulticallAggregate3(calls, blockNumber)
+	if err != nil || len(results) != len(calls) {
+		// Transport failure: don't persist anything; next accountInfo request retries.
+		return
+	}
+
+	for i, c := range candidates {
+		assetResult := results[i*2]
+		totalAssetsResult := results[i*2+1]
+
+		// Strict gate: both asset() (non-zero address) and totalAssets() (decodes)
+		// must pass. Same criterion as the contractInfo cold path.
+		var assetContract string
+		if assetResult.Success {
+			if addr, derr := erc4626DecodeAddress(assetResult.Data); derr == nil && !strings.EqualFold(addr, erc4626ZeroAddress) {
+				assetContract = addr
+			}
+		}
+		if assetContract == "" || !totalAssetsResult.Success {
+			persistProbedNegative(markProbed, c.contract)
+			continue
+		}
+		if _, derr := erc4626DecodeUint(totalAssetsResult.Data); derr != nil {
+			persistProbedNegative(markProbed, c.contract)
+			continue
+		}
+		if err := setVault(c.contract, assetContract); err != nil {
+			glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", c.contract, assetContract, err)
+		}
+		c.token.Protocols = append(c.token.Protocols, contractInfoProtocolErc4626)
 	}
 }
 
@@ -97,8 +178,11 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo) *Erc4626To
 	if !ok {
 		return nil
 	}
-	persister := func(addr, asset string) error {
+	setVault := func(addr, asset string) error {
 		return w.db.SetContractInfoErc4626Vault(addr, asset)
+	}
+	markProbed := func(addr string) error {
+		return w.db.MarkContractInfoErc4626Probed(addr)
 	}
 
 	// Prefer pinning to the indexed best block: that way every multicall a
@@ -108,11 +192,11 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo) *Erc4626To
 	// this request.
 	bestHeight, _, err := w.db.GetBestBlock()
 	if err != nil || bestHeight == 0 {
-		return buildErc4626TokenWithDeps(contractInfo, mc, persister, w.GetContractInfo, nil)
+		return buildErc4626TokenWithDeps(contractInfo, mc, setVault, markProbed, w.GetContractInfo, nil)
 	}
 	blockNumber := new(big.Int).SetUint64(uint64(bestHeight))
 	return erc4626CacheLookupOrBuild(erc4626LiveCache, erc4626CacheKey(contractInfo.Contract, bestHeight), func() *Erc4626Token {
-		return buildErc4626TokenWithDeps(contractInfo, mc, persister, w.GetContractInfo, blockNumber)
+		return buildErc4626TokenWithDeps(contractInfo, mc, setVault, markProbed, w.GetContractInfo, blockNumber)
 	})
 }
 
@@ -120,11 +204,12 @@ func buildErc4626TokenWithDeps(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
+	markProbed erc4626ProbedMarker,
 	getContractInfo erc4626ContractInfoFetcher,
 	blockNumber *big.Int,
 ) *Erc4626Token {
 	if ci.Erc4626AssetContract == "" {
-		return buildErc4626TokenCold(ci, mc, setVault, getContractInfo, blockNumber)
+		return buildErc4626TokenCold(ci, mc, setVault, markProbed, getContractInfo, blockNumber)
 	}
 	return buildErc4626TokenWarm(ci, mc, getContractInfo, blockNumber)
 }
@@ -137,11 +222,20 @@ func buildErc4626TokenCold(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
+	markProbed erc4626ProbedMarker,
 	getContractInfo erc4626ContractInfoFetcher,
 	blockNumber *big.Int,
 ) *Erc4626Token {
 	contract := ci.Contract
 	shareDec := ci.Decimals
+
+	// Definitive negative cache: if we have already probed this contract and
+	// determined it isn't a vault, skip the multicall entirely. This is the
+	// across-block backstop; the per-block live cache handles dedup within a
+	// single block.
+	if ci.Erc4626Probed && !ci.IsErc4626 {
+		return nil
+	}
 
 	// Build multicall A. Share-side conversion calls only fit if we can compute
 	// a share unit; if shareDec is out of range we still issue asset()+totalAssets().
@@ -159,6 +253,9 @@ func buildErc4626TokenCold(
 		)
 	}
 	resA, err := mc.EthereumTypeMulticallAggregate3(callsA, blockNumber)
+	// Transport errors are not strict-detection failures (the chain may simply
+	// be unreachable), so we don't persist a negative result; the next request
+	// retries.
 	if err != nil || len(resA) < 2 {
 		return nil
 	}
@@ -167,18 +264,23 @@ func buildErc4626TokenCold(
 	// Persisting on asset() alone would let any fungible contract that happens to
 	// expose an asset() method get permanently marked as ERC4626 in the DB. Both
 	// methods are mandated by EIP-4626, so demanding both is the correct gate.
+	// Each detection-class failure persists Erc4626Probed=true so we do not re-probe.
 	if !resA[0].Success {
+		persistProbedNegative(markProbed, contract)
 		return nil
 	}
 	assetContract, err := erc4626DecodeAddress(resA[0].Data)
 	if err != nil || strings.EqualFold(assetContract, erc4626ZeroAddress) {
+		persistProbedNegative(markProbed, contract)
 		return nil
 	}
 	if !resA[1].Success {
+		persistProbedNegative(markProbed, contract)
 		return nil
 	}
 	totalAssets, err := erc4626DecodeUint(resA[1].Data)
 	if err != nil {
+		persistProbedNegative(markProbed, contract)
 		return nil
 	}
 
@@ -356,6 +458,16 @@ func buildErc4626TokenWarm(
 		result.Error = strings.Join(errs, "; ")
 	}
 	return result
+}
+
+// persistProbedNegative records that the cold-path probe definitively
+// determined the contract is not an ERC4626 vault. Logged-and-swallowed on
+// failure: the caller path is already returning nil and the next probe
+// (after persistence retries) will reach the same conclusion.
+func persistProbedNegative(markProbed erc4626ProbedMarker, contract string) {
+	if err := markProbed(contract); err != nil {
+		glog.Warningf("MarkContractInfoErc4626Probed contract %v: %v", contract, err)
+	}
 }
 
 func decodeMulticallAmount(r bchain.EthereumMulticallResult, label string, errs *[]string) *Amount {
