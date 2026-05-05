@@ -163,7 +163,10 @@ func buildErc4626TokenCold(
 		return nil
 	}
 
-	// asset() determines whether this is a vault. Failure or a zero address means no.
+	// Strict vault detection: BOTH asset() and totalAssets() must succeed and decode.
+	// Persisting on asset() alone would let any fungible contract that happens to
+	// expose an asset() method get permanently marked as ERC4626 in the DB. Both
+	// methods are mandated by EIP-4626, so demanding both is the correct gate.
 	if !resA[0].Success {
 		return nil
 	}
@@ -171,6 +174,14 @@ func buildErc4626TokenCold(
 	if err != nil || strings.EqualFold(assetContract, erc4626ZeroAddress) {
 		return nil
 	}
+	if !resA[1].Success {
+		return nil
+	}
+	totalAssets, err := erc4626DecodeUint(resA[1].Data)
+	if err != nil {
+		return nil
+	}
+
 	if err := setVault(contract, assetContract); err != nil {
 		glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", contract, assetContract, err)
 	}
@@ -183,6 +194,7 @@ func buildErc4626TokenCold(
 			Symbol:   ci.Symbol,
 			Decimals: shareDec,
 		},
+		TotalAssetsSat: (*Amount)(totalAssets),
 	}
 	var errs []string
 
@@ -190,8 +202,8 @@ func buildErc4626TokenCold(
 		errs = append(errs, "share decimals: "+shareUnitErr.Error())
 	}
 
-	// resA[1] is totalAssets; resA[2/3] are share-side conversions when shareUnit was valid.
-	result.TotalAssetsSat = decodeMulticallAmount(resA[1], "totalAssets", &errs)
+	// resA[2/3] are share-side conversions when shareUnit was valid; failures
+	// here are non-fatal because the vault is already confirmed real.
 	if len(resA) > 2 {
 		result.ConvertToAssets1ShareSat = decodeMulticallAmount(resA[2], "convertToAssets", &errs)
 	}

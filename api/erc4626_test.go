@@ -174,6 +174,57 @@ func TestBuildErc4626Token_WarmPath_OneMulticall(t *testing.T) {
 	}
 }
 
+func TestBuildErc4626Token_TotalAssetsFails_NoPersistAndReturnsNil(t *testing.T) {
+	// Detection must require BOTH asset() and totalAssets() to succeed. A fungible
+	// contract that exposes asset() returning some non-zero value but reverts on
+	// totalAssets() must NOT be persisted as an ERC4626 vault, otherwise accountInfo
+	// would falsely advertise erc4626 support for it on every subsequent request.
+	const vault = "0x00000000000000000000000000000000000000d1"
+	const fakeAsset = "0x00000000000000000000000000000000000000ee"
+
+	for _, tc := range []struct {
+		name        string
+		totalAssets bchain.EthereumMulticallResult
+	}{
+		{"reverted", bchain.EthereumMulticallResult{Success: false, Data: "0x"}},
+		{"undecodable", bchain.EthereumMulticallResult{Success: true, Data: "0x1234"}}, // < 32 bytes
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mc := &fakeMulticaller{
+				handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+					func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+						return []bchain.EthereumMulticallResult{
+							{Success: true, Data: encodeWordAddress(fakeAsset)},
+							tc.totalAssets,
+							{Success: true, Data: encodeWordUint(big.NewInt(0))},
+							{Success: true, Data: encodeWordUint(big.NewInt(0))},
+						}, nil
+					},
+				},
+			}
+			persisted := 0
+			persister := func(string, string) error {
+				persisted++
+				return nil
+			}
+			getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+				t.Fatal("must not lazy-fetch asset metadata when detection fails")
+				return nil, false, nil
+			}
+			ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
+			if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
+				t.Fatalf("expected nil when totalAssets fails, got %+v", got)
+			}
+			if persisted != 0 {
+				t.Fatalf("must not persist when totalAssets fails (persisted=%d)", persisted)
+			}
+			if len(mc.calls) != 1 {
+				t.Fatalf("expected exactly 1 multicall (no asset-side fetch), got %d", len(mc.calls))
+			}
+		})
+	}
+}
+
 func TestBuildErc4626Token_NotAVault_ReturnsNil(t *testing.T) {
 	const vault = "0x00000000000000000000000000000000000000c1"
 	mc := &fakeMulticaller{
