@@ -456,6 +456,16 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 				for _, txid := range newTxids {
 					// the same tx can have multiple addresses from the same xpub, get it from backend it only once
 					tx, foundTx := txmMap[txid.txid]
+					if option == AccountDetailsBasic {
+						// Basic detail: skip per-tx loading. Count unique mempool txids
+						// across derived addresses; the count may transiently include
+						// entries that have just been confirmed but not yet evicted.
+						if !foundTx {
+							txmMap[txid.txid] = nil
+							unconfirmedTxs++
+						}
+						continue
+					}
 					if !foundTx {
 						tx, err = w.getTransaction(txid.txid, false, true, addresses)
 						// mempool transaction may fail
