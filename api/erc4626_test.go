@@ -656,6 +656,79 @@ func TestEnrichErc4626Tokens_BatchedMixed(t *testing.T) {
 	}
 }
 
+func TestEnrichErc4626Tokens_ChunksLargeProbe(t *testing.T) {
+	const asset = "0x0000000000000000000000000000000000000bb1"
+
+	store := fakeContractInfoStore{}
+	tokens := make(Tokens, 0, erc4626ProbeChunkCandidates+1)
+	expectedVaults := map[string]bool{}
+	for i := 0; i < erc4626ProbeChunkCandidates+1; i++ {
+		contract := fmt.Sprintf("0x%040x", 0x2000+i)
+		store[strings.ToLower(contract)] = &bchain.ContractInfo{Contract: contract, Standard: erc4626Standard}
+		tokens = append(tokens, Token{Contract: contract, Standard: erc4626Standard})
+		if i == 0 || i == erc4626ProbeChunkCandidates {
+			expectedVaults[strings.ToLower(contract)] = true
+		}
+	}
+
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				if len(calls) != 2*erc4626ProbeChunkCandidates {
+					t.Fatalf("unexpected first chunk size: %d", len(calls))
+				}
+				results := make([]bchain.EthereumMulticallResult, len(calls))
+				for i := 0; i < len(calls); i += 2 {
+					if i == 0 {
+						results[i] = bchain.EthereumMulticallResult{Success: true, Data: encodeWordAddress(asset)}
+						results[i+1] = bchain.EthereumMulticallResult{Success: true, Data: encodeWordUint(big.NewInt(1))}
+						continue
+					}
+					results[i] = bchain.EthereumMulticallResult{Success: true, Data: encodeWordAddress(erc4626ZeroAddress)}
+					results[i+1] = bchain.EthereumMulticallResult{Success: true, Data: encodeWordUint(big.NewInt(0))}
+				}
+				return results, nil
+			},
+			func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				if len(calls) != 2 {
+					t.Fatalf("unexpected second chunk size: %d", len(calls))
+				}
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(asset)},
+					{Success: true, Data: encodeWordUint(big.NewInt(1))},
+				}, nil
+			},
+		},
+	}
+
+	persistedVaults := map[string]string{}
+	enrichErc4626TokensWithDeps(tokens, store.get, mc,
+		func(addr, assetContract string) error {
+			persistedVaults[strings.ToLower(addr)] = assetContract
+			return nil
+		},
+		nil, 0, nil)
+
+	if len(mc.calls) != 2 {
+		t.Fatalf("expected two multicall chunks, got %d", len(mc.calls))
+	}
+	for i := range tokens {
+		contractKey := strings.ToLower(tokens[i].Contract)
+		if expectedVaults[contractKey] {
+			if !slicesContains(tokens[i].Protocols, contractInfoProtocolErc4626) {
+				t.Fatalf("expected vault flag for %s", tokens[i].Contract)
+			}
+			if !strings.EqualFold(persistedVaults[contractKey], asset) {
+				t.Fatalf("expected persisted asset for %s, got %q", tokens[i].Contract, persistedVaults[contractKey])
+			}
+			continue
+		}
+		if slicesContains(tokens[i].Protocols, contractInfoProtocolErc4626) {
+			t.Fatalf("unexpected vault flag for %s", tokens[i].Contract)
+		}
+	}
+}
+
 func TestEnrichErc4626Tokens_NonFungibleSkipped(t *testing.T) {
 	const nft = "0x000000000000000000000000000000000000abcd"
 	store := fakeContractInfoStore{}

@@ -15,6 +15,10 @@ import (
 const (
 	erc4626MaxDecimals = 77
 	erc4626ZeroAddress = "0x0000000000000000000000000000000000000000"
+	// accountInfo probes issue two sub-calls per candidate contract (asset + totalAssets).
+	// Chunking bounds aggregate3 payload/response size for large wallets while
+	// keeping detection amortized across many tokens.
+	erc4626ProbeChunkCandidates = 64
 )
 
 var (
@@ -114,45 +118,52 @@ func enrichErc4626TokensWithDeps(
 		return
 	}
 
-	// One multicall covers every unprobed candidate in the wallet, two sub-calls each.
-	calls := make([]bchain.EthereumMulticallCall, 0, 2*len(candidates))
-	for _, c := range candidates {
-		calls = append(calls,
-			bchain.EthereumMulticallCall{Target: c.contract, CallData: erc4626EncodeNoArg(erc4626MethodAsset), AllowFailure: true},
-			bchain.EthereumMulticallCall{Target: c.contract, CallData: erc4626EncodeNoArg(erc4626MethodTotalAssets), AllowFailure: true},
-		)
-	}
-	results, err := mc.EthereumTypeMulticallAggregate3(calls, blockNumber)
-	if err != nil || len(results) != len(calls) {
-		// Transport failure: don't persist anything; next accountInfo request retries.
-		return
-	}
+	for start := 0; start < len(candidates); start += erc4626ProbeChunkCandidates {
+		end := start + erc4626ProbeChunkCandidates
+		if end > len(candidates) {
+			end = len(candidates)
+		}
+		chunk := candidates[start:end]
+		calls := make([]bchain.EthereumMulticallCall, 0, 2*len(chunk))
+		for _, c := range chunk {
+			calls = append(calls,
+				bchain.EthereumMulticallCall{Target: c.contract, CallData: erc4626EncodeNoArg(erc4626MethodAsset), AllowFailure: true},
+				bchain.EthereumMulticallCall{Target: c.contract, CallData: erc4626EncodeNoArg(erc4626MethodTotalAssets), AllowFailure: true},
+			)
+		}
+		results, err := mc.EthereumTypeMulticallAggregate3(calls, blockNumber)
+		if err != nil || len(results) != len(calls) {
+			// Transport failure for one chunk should not poison the whole request.
+			// Skip persistence for that chunk; the next request retries it.
+			continue
+		}
 
-	for i, c := range candidates {
-		assetResult := results[i*2]
-		totalAssetsResult := results[i*2+1]
+		for i, c := range chunk {
+			assetResult := results[i*2]
+			totalAssetsResult := results[i*2+1]
 
-		// Strict gate: both asset() (non-zero address) and totalAssets() (decodes)
-		// must pass. Same criterion as the contractInfo cold path.
-		var assetContract string
-		if assetResult.Success {
-			if addr, derr := erc4626DecodeAddress(assetResult.Data); derr == nil && !strings.EqualFold(addr, erc4626ZeroAddress) {
-				assetContract = addr
+			// Strict gate: both asset() (non-zero address) and totalAssets() (decodes)
+			// must pass. Same criterion as the contractInfo cold path.
+			var assetContract string
+			if assetResult.Success {
+				if addr, derr := erc4626DecodeAddress(assetResult.Data); derr == nil && !strings.EqualFold(addr, erc4626ZeroAddress) {
+					assetContract = addr
+				}
 			}
+			if assetContract == "" || !totalAssetsResult.Success {
+				negativeCache.add(c.contract, bestHeight)
+				continue
+			}
+			if _, derr := erc4626DecodeUint(totalAssetsResult.Data); derr != nil {
+				negativeCache.add(c.contract, bestHeight)
+				continue
+			}
+			if err := setVault(c.contract, assetContract); err != nil {
+				glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", c.contract, assetContract, err)
+			}
+			negativeCache.remove(c.contract)
+			c.token.Protocols = append(c.token.Protocols, contractInfoProtocolErc4626)
 		}
-		if assetContract == "" || !totalAssetsResult.Success {
-			negativeCache.add(c.contract, bestHeight)
-			continue
-		}
-		if _, derr := erc4626DecodeUint(totalAssetsResult.Data); derr != nil {
-			negativeCache.add(c.contract, bestHeight)
-			continue
-		}
-		if err := setVault(c.contract, assetContract); err != nil {
-			glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", c.contract, assetContract, err)
-		}
-		negativeCache.remove(c.contract)
-		c.token.Protocols = append(c.token.Protocols, contractInfoProtocolErc4626)
 	}
 }
 
