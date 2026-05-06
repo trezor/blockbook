@@ -18,72 +18,62 @@ const erc4626CacheCapacity = 1024
 const erc4626NegativeProbeCacheCapacity = 4096
 const erc4626NegativeProbeTTLBlocks = 256
 
-type erc4626CacheEntry struct {
-	key   string
-	value *Erc4626Token
-}
+var erc4626LiveCache = newErc4626Cache(erc4626CacheCapacity)
+var erc4626NegativeProbeCache = newErc4626NegativeCache(erc4626NegativeProbeCacheCapacity, erc4626NegativeProbeTTLBlocks)
 
-type erc4626NegativeProbeCacheEntry struct {
-	key      string
-	expireAt uint64
-}
-
-// erc4626Cache is a tiny LRU plus a singleflight group, used to dedupe and
-// memoise Erc4626Token results within a block. The two pieces are colocated
-// because their lifecycles match: the singleflight key and the cache key are
-// the same string, and the cache write happens inside the singleflight
-// callback so concurrent requests for one (contract, height) collapse to one
-// upstream multicall. Returning a nil token (i.e., the contract turned out
-// not to be a vault) is also cached for the duration of the block to avoid
-// re-detecting every request for non-vault fungible tokens.
-type erc4626Cache struct {
+// lruCache is a small string-keyed LRU shared by the live-values and
+// negative-probe caches in this file. Methods are nil-safe so a disabled cache
+// (newX(0)) silently no-ops.
+type lruCache[V any] struct {
 	mu       sync.Mutex
 	capacity int
 	order    *list.List
 	items    map[string]*list.Element
-	sf       singleflight.Group
 }
 
-var erc4626LiveCache = newErc4626Cache(erc4626CacheCapacity)
-var erc4626NegativeProbeCache = newErc4626NegativeCache(erc4626NegativeProbeCacheCapacity, erc4626NegativeProbeTTLBlocks)
+type lruEntry[V any] struct {
+	key   string
+	value V
+}
 
-func newErc4626Cache(capacity int) *erc4626Cache {
+func newLRUCache[V any](capacity int) *lruCache[V] {
 	if capacity <= 0 {
 		return nil
 	}
-	return &erc4626Cache{
+	return &lruCache[V]{
 		capacity: capacity,
 		order:    list.New(),
 		items:    make(map[string]*list.Element, capacity),
 	}
 }
 
-func (c *erc4626Cache) get(key string) (*Erc4626Token, bool) {
+func (c *lruCache[V]) get(key string) (V, bool) {
+	var zero V
 	if c == nil {
-		return nil, false
+		return zero, false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	el, ok := c.items[key]
 	if !ok {
-		return nil, false
+		return zero, false
 	}
 	c.order.MoveToFront(el)
-	return el.Value.(*erc4626CacheEntry).value, true
+	return el.Value.(*lruEntry[V]).value, true
 }
 
-func (c *erc4626Cache) add(key string, value *Erc4626Token) {
+func (c *lruCache[V]) add(key string, value V) {
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if el, ok := c.items[key]; ok {
-		el.Value.(*erc4626CacheEntry).value = value
+		el.Value.(*lruEntry[V]).value = value
 		c.order.MoveToFront(el)
 		return
 	}
-	el := c.order.PushFront(&erc4626CacheEntry{key: key, value: value})
+	el := c.order.PushFront(&lruEntry[V]{key: key, value: value})
 	c.items[key] = el
 	if c.order.Len() <= c.capacity {
 		return
@@ -93,7 +83,38 @@ func (c *erc4626Cache) add(key string, value *Erc4626Token) {
 		return
 	}
 	c.order.Remove(oldest)
-	delete(c.items, oldest.Value.(*erc4626CacheEntry).key)
+	delete(c.items, oldest.Value.(*lruEntry[V]).key)
+}
+
+func (c *lruCache[V]) remove(key string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	el, ok := c.items[key]
+	if !ok {
+		return
+	}
+	c.order.Remove(el)
+	delete(c.items, key)
+}
+
+// erc4626Cache memoises Erc4626Token results within a block, with singleflight
+// collapsing concurrent requests for the same (contract, height) into one
+// upstream multicall. Nil tokens (non-vaults) are cached too, to suppress
+// re-detection of plain fungible tokens within the block.
+type erc4626Cache struct {
+	lru *lruCache[*Erc4626Token]
+	sf  singleflight.Group
+}
+
+func newErc4626Cache(capacity int) *erc4626Cache {
+	lru := newLRUCache[*Erc4626Token](capacity)
+	if lru == nil {
+		return nil
+	}
+	return &erc4626Cache{lru: lru}
 }
 
 func erc4626CacheKey(contract string, blockHeight uint32) string {
@@ -108,16 +129,16 @@ func erc4626CacheLookupOrBuild(cache *erc4626Cache, key string, build func() *Er
 	if cache == nil {
 		return build()
 	}
-	if cached, ok := cache.get(key); ok {
+	if cached, ok := cache.lru.get(key); ok {
 		return cached
 	}
 	v, _, _ := cache.sf.Do(key, func() (interface{}, error) {
 		// Re-check inside singleflight: a peer goroutine may have populated.
-		if cached, ok := cache.get(key); ok {
+		if cached, ok := cache.lru.get(key); ok {
 			return cached, nil
 		}
 		result := build()
-		cache.add(key, result)
+		cache.lru.add(key, result)
 		return result, nil
 	})
 	if v == nil {
@@ -135,23 +156,16 @@ func erc4626ContractKey(contract string) string {
 // are not persisted to DB; they expire after a bounded number of indexed blocks
 // so upgradeable or newly-activated contracts will eventually be re-probed.
 type erc4626NegativeCache struct {
-	mu        sync.Mutex
-	capacity  int
+	lru       *lruCache[uint64]
 	ttlBlocks uint32
-	order     *list.List
-	items     map[string]*list.Element
 }
 
 func newErc4626NegativeCache(capacity int, ttlBlocks uint32) *erc4626NegativeCache {
-	if capacity <= 0 || ttlBlocks == 0 {
+	lru := newLRUCache[uint64](capacity)
+	if lru == nil || ttlBlocks == 0 {
 		return nil
 	}
-	return &erc4626NegativeCache{
-		capacity:  capacity,
-		ttlBlocks: ttlBlocks,
-		order:     list.New(),
-		items:     make(map[string]*list.Element, capacity),
-	}
+	return &erc4626NegativeCache{lru: lru, ttlBlocks: ttlBlocks}
 }
 
 func (c *erc4626NegativeCache) contains(contract string, currentHeight uint32) bool {
@@ -159,19 +173,14 @@ func (c *erc4626NegativeCache) contains(contract string, currentHeight uint32) b
 		return false
 	}
 	key := erc4626ContractKey(contract)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	el, ok := c.items[key]
+	expireAt, ok := c.lru.get(key)
 	if !ok {
 		return false
 	}
-	entry := el.Value.(*erc4626NegativeProbeCacheEntry)
-	if uint64(currentHeight) > entry.expireAt {
-		c.order.Remove(el)
-		delete(c.items, key)
+	if uint64(currentHeight) > expireAt {
+		c.lru.remove(key)
 		return false
 	}
-	c.order.MoveToFront(el)
 	return true
 }
 
@@ -179,40 +188,12 @@ func (c *erc4626NegativeCache) add(contract string, currentHeight uint32) {
 	if c == nil || currentHeight == 0 {
 		return
 	}
-	key := erc4626ContractKey(contract)
-	expireAt := uint64(currentHeight) + uint64(c.ttlBlocks)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if el, ok := c.items[key]; ok {
-		entry := el.Value.(*erc4626NegativeProbeCacheEntry)
-		entry.expireAt = expireAt
-		c.order.MoveToFront(el)
-		return
-	}
-	el := c.order.PushFront(&erc4626NegativeProbeCacheEntry{key: key, expireAt: expireAt})
-	c.items[key] = el
-	if c.order.Len() <= c.capacity {
-		return
-	}
-	oldest := c.order.Back()
-	if oldest == nil {
-		return
-	}
-	c.order.Remove(oldest)
-	delete(c.items, oldest.Value.(*erc4626NegativeProbeCacheEntry).key)
+	c.lru.add(erc4626ContractKey(contract), uint64(currentHeight)+uint64(c.ttlBlocks))
 }
 
 func (c *erc4626NegativeCache) remove(contract string) {
 	if c == nil {
 		return
 	}
-	key := erc4626ContractKey(contract)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	el, ok := c.items[key]
-	if !ok {
-		return
-	}
-	c.order.Remove(el)
-	delete(c.items, key)
+	c.lru.remove(erc4626ContractKey(contract))
 }

@@ -70,11 +70,7 @@ type erc4626VaultPersister func(address string, assetContract string) error
 func (w *Worker) enrichErc4626Tokens(tokens Tokens, bestHeight uint32) {
 	mc, _ := w.chain.(erc4626MulticallCaller)
 	setVault := func(addr, asset string) error { return w.db.SetContractInfoErc4626Vault(addr, asset) }
-	var blockNumber *big.Int
-	if bestHeight > 0 {
-		blockNumber = new(big.Int).SetUint64(uint64(bestHeight))
-	}
-	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, erc4626NegativeProbeCache, bestHeight, blockNumber)
+	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, erc4626NegativeProbeCache, bestHeight)
 }
 
 func enrichErc4626TokensWithDeps(
@@ -84,8 +80,11 @@ func enrichErc4626TokensWithDeps(
 	setVault erc4626VaultPersister,
 	negativeCache *erc4626NegativeCache,
 	bestHeight uint32,
-	blockNumber *big.Int,
 ) {
+	var blockNumber *big.Int
+	if bestHeight > 0 {
+		blockNumber = new(big.Int).SetUint64(uint64(bestHeight))
+	}
 	standard := erc4626EvmFungibleStandard()
 
 	type candidate struct {

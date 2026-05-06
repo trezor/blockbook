@@ -65,13 +65,13 @@ func TestErc4626Cache_LRUEvictsOldest(t *testing.T) {
 	_ = erc4626CacheLookupOrBuild(cache, "a", func() *Erc4626Token { t.Fatal("a should be cached"); return nil })
 	// Add c -> b should be evicted, a should remain.
 	_ = erc4626CacheLookupOrBuild(cache, "c", func() *Erc4626Token { return &Erc4626Token{Error: "c"} })
-	if v, ok := cache.get("a"); !ok || v != a {
+	if v, ok := cache.lru.get("a"); !ok || v != a {
 		t.Fatalf("a evicted unexpectedly")
 	}
-	if _, ok := cache.get("b"); ok {
+	if _, ok := cache.lru.get("b"); ok {
 		t.Fatal("b should have been evicted")
 	}
-	if _, ok := cache.get("c"); !ok {
+	if _, ok := cache.lru.get("c"); !ok {
 		t.Fatal("c not cached")
 	}
 }
