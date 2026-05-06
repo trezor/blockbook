@@ -98,12 +98,23 @@ type Configuration struct {
 	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
 }
 
-func parsePositiveDuration(name string, value string) (time.Duration, error) {
+func parseNonNegativeDuration(name string, value string) (time.Duration, error) {
 	d, err := time.ParseDuration(value)
 	if err != nil {
 		return 0, errors.Annotatef(err, "invalid %s", name)
 	}
-	if d <= 0 {
+	if d < 0 {
+		return 0, errors.Errorf("%s must not be negative", name)
+	}
+	return d, nil
+}
+
+func parsePositiveDuration(name string, value string) (time.Duration, error) {
+	d, err := parseNonNegativeDuration(name, value)
+	if err != nil {
+		return 0, err
+	}
+	if d == 0 {
 		return 0, errors.Errorf("%s must be positive", name)
 	}
 	return d, nil
@@ -112,7 +123,7 @@ func parsePositiveDuration(name string, value string) (time.Duration, error) {
 // MempoolTxTimeoutDuration returns the Blockbook-side EVM mempool retention.
 func (c *Configuration) MempoolTxTimeoutDuration(alternativeSendTxProviderEnabled bool) (time.Duration, error) {
 	if c.MempoolTxTimeout != "" {
-		return parsePositiveDuration("mempoolTxTimeout", c.MempoolTxTimeout)
+		return parseNonNegativeDuration("mempoolTxTimeout", c.MempoolTxTimeout)
 	}
 	// Keep the shorter timeout scoped to alternative/private submission only.
 	if alternativeSendTxProviderEnabled {

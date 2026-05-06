@@ -107,8 +107,8 @@ Good examples of coin configuration are
               Cached Infura fees remain usable for 30 failed polling periods, so `periodSeconds: 60` keeps the last successful fees for up to 30 minutes before native fallback.
           * Ethereum mempool timeout configuration:
             * `mempoolTxTimeoutHours` – Legacy Blockbook-side EVM mempool retention in whole hours. It is used when `mempoolTxTimeout` is not set and no alternative send transaction provider is enabled.
-            * `mempoolTxTimeout` – Optional Blockbook-side EVM mempool retention as a Go duration string such as `"10m"`. If omitted and an alternative send transaction provider is enabled, Blockbook uses **10 minutes** instead of the legacy hour-based value.
-            * `alternativeMempoolTxTimeout` – Optional alternative-provider transaction cache retention as a Go duration string such as `"5m"`. Defaults to **5 minutes** when the alternative send transaction provider is enabled.
+            * `mempoolTxTimeout` – Optional Blockbook-side EVM mempool retention as a Go duration string such as `"10m"`; `"0s"` preserves the legacy zero-retention setting. If omitted and an alternative send transaction provider is enabled, Blockbook uses **10 minutes** instead of the legacy hour-based value.
+            * `alternativeMempoolTxTimeout` – Optional alternative-provider transaction cache retention as a positive Go duration string such as `"5m"`. Defaults to **5 minutes** when the alternative send transaction provider is enabled.
           * Hot-address configuration (Blockbook, Ethereum-type indexing):
             * `hot_address_min_contracts` – Minimum number of contracts before hotness tracking applies (default **192**).
             * `hot_address_min_hits` – Lookups within the current block required to mark an address hot (default **3**, clamped to **10**).

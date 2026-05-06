@@ -44,6 +44,14 @@ func TestConfigurationMempoolTxTimeoutDuration(t *testing.T) {
 			},
 			want: 0,
 		},
+		{
+			name: "explicit zero duration is preserved",
+			config: Configuration{
+				MempoolTxTimeoutHours: 12,
+				MempoolTxTimeout:      "0s",
+			},
+			want: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -113,6 +121,16 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 				"coin_shortcut":"ETH",
 				"rpc_timeout":25,
 				"alternativeMempoolTxTimeout":"0s",
+				"block_addresses_to_keep":600
+			}`,
+		},
+		{
+			name: "negative blockbook mempool timeout",
+			config: `{
+				"coin_name":"Ethereum",
+				"coin_shortcut":"ETH",
+				"rpc_timeout":25,
+				"mempoolTxTimeout":"-1s",
 				"block_addresses_to_keep":600
 			}`,
 		},
