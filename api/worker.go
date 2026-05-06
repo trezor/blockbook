@@ -1260,7 +1260,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				}
 				erc20Contracts = append(erc20Contracts, c.Contract)
 			}
-			if len(erc20Contracts) >= 1 {
+			if len(erc20Contracts) > 1 {
 				balances, err := w.chain.EthereumTypeGetErc20ContractBalances(addrDesc, erc20Contracts)
 				if err != nil {
 					glog.Warningf("EthereumTypeGetErc20ContractBalances addr %v: %v", addrDesc, err)
