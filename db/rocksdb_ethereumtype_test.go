@@ -299,9 +299,7 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 			"0b436f6e7472616374203734" + // Contract 74
 				"03533734" + // S74
 				"054552433230" + // ERC20
-				varuintToHex(12) + varuintToHex(44444) + varuintToHex(destructedInBlock) +
-				varuintToHex(0) + // trailing flags (IsErc4626 not set)
-				varuintToHex(0), // empty Erc4626AssetContract length prefix
+				varuintToHex(12) + varuintToHex(44444) + varuintToHex(destructedInBlock),
 			nil,
 		},
 	}); err != nil {
@@ -453,9 +451,7 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 			"0b436f6e7472616374203734" + // Contract 74
 				"03533734" + // S74
 				"054552433230" + // ERC20
-				varuintToHex(12) + varuintToHex(44444) + varuintToHex(44445) +
-				varuintToHex(0) + // trailing flags (IsErc4626 not set)
-				varuintToHex(0), // empty Erc4626AssetContract length prefix
+				varuintToHex(12) + varuintToHex(44444) + varuintToHex(44445),
 			nil,
 		},
 	}); err != nil {
@@ -1717,77 +1713,6 @@ func Test_packUnpackFourByteSignature(t *testing.T) {
 			buf := packFourByteSignature(&tt.signature)
 			if got, err := unpackFourByteSignature(buf); !reflect.DeepEqual(*got, tt.signature) || err != nil {
 				t.Errorf("packUnpackFourByteSignature() = %v, want %v, error %v", *got, tt.signature, err)
-			}
-		})
-	}
-}
-
-func Test_packUnpackContractInfo(t *testing.T) {
-	tests := []struct {
-		name         string
-		contractInfo bchain.ContractInfo
-	}{
-		{
-			name:         "empty",
-			contractInfo: bchain.ContractInfo{},
-		},
-		{
-			name: "unknown",
-			contractInfo: bchain.ContractInfo{
-				Type:              bchain.UnknownTokenStandard,
-				Standard:          bchain.UnknownTokenStandard,
-				Name:              "Test contract",
-				Symbol:            "TCT",
-				Decimals:          18,
-				CreatedInBlock:    1234567,
-				DestructedInBlock: 234567890,
-			},
-		},
-		{
-			name: "ERC20",
-			contractInfo: bchain.ContractInfo{
-				Type:              bchain.ERC20TokenStandard,
-				Standard:          bchain.ERC20TokenStandard,
-				Name:              "GreenContract🟢",
-				Symbol:            "🟢",
-				Decimals:          0,
-				CreatedInBlock:    1,
-				DestructedInBlock: 2,
-			},
-		},
-		{
-			name: "ERC20-ERC4626",
-			contractInfo: bchain.ContractInfo{
-				Type:              bchain.ERC20TokenStandard,
-				Standard:          bchain.ERC20TokenStandard,
-				Name:              "Vault Share",
-				Symbol:            "vSHARE",
-				Decimals:          18,
-				CreatedInBlock:    100,
-				DestructedInBlock: 0,
-				IsErc4626:         true,
-			},
-		},
-		{
-			name: "ERC20-ERC4626-with-asset",
-			contractInfo: bchain.ContractInfo{
-				Type:                 bchain.ERC20TokenStandard,
-				Standard:             bchain.ERC20TokenStandard,
-				Name:                 "Vault Share",
-				Symbol:               "vSHARE",
-				Decimals:             18,
-				CreatedInBlock:       200,
-				DestructedInBlock:    0,
-				IsErc4626:            true,
-				Erc4626AssetContract: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			buf := packContractInfo(&tt.contractInfo)
-			if got, err := unpackContractInfo(buf); !reflect.DeepEqual(*got, tt.contractInfo) || err != nil {
-				t.Errorf("packUnpackContractInfo() = %v, want %v, error %v", *got, tt.contractInfo, err)
 			}
 		})
 	}
