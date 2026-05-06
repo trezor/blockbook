@@ -62,11 +62,13 @@ type erc4626VaultPersister func(address string, assetContract string) error
 func (w *Worker) enrichErc4626Tokens(tokens Tokens) {
 	mc, _ := w.chain.(erc4626MulticallCaller)
 	setVault := func(addr, asset string) error { return w.db.SetContractInfoErc4626Vault(addr, asset) }
+	var bestHeight uint32
 	var blockNumber *big.Int
 	if h, _, err := w.db.GetBestBlock(); err == nil && h > 0 {
+		bestHeight = h
 		blockNumber = new(big.Int).SetUint64(uint64(h))
 	}
-	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, blockNumber)
+	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, erc4626NegativeProbeCache, bestHeight, blockNumber)
 }
 
 func enrichErc4626TokensWithDeps(
@@ -74,6 +76,8 @@ func enrichErc4626TokensWithDeps(
 	getContractInfo erc4626ContractInfoFetcher,
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
+	negativeCache *erc4626NegativeCache,
+	bestHeight uint32,
 	blockNumber *big.Int,
 ) {
 	standard := erc4626EvmFungibleStandard()
@@ -96,7 +100,11 @@ func enrichErc4626TokensWithDeps(
 			continue
 		}
 		if ci.IsErc4626 {
+			negativeCache.remove(token.Contract)
 			token.Protocols = append(token.Protocols, contractInfoProtocolErc4626)
+			continue
+		}
+		if negativeCache.contains(token.Contract, bestHeight) {
 			continue
 		}
 		candidates = append(candidates, candidate{token: token, contract: token.Contract})
@@ -133,14 +141,17 @@ func enrichErc4626TokensWithDeps(
 			}
 		}
 		if assetContract == "" || !totalAssetsResult.Success {
+			negativeCache.add(c.contract, bestHeight)
 			continue
 		}
 		if _, derr := erc4626DecodeUint(totalAssetsResult.Data); derr != nil {
+			negativeCache.add(c.contract, bestHeight)
 			continue
 		}
 		if err := setVault(c.contract, assetContract); err != nil {
 			glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", c.contract, assetContract, err)
 		}
+		negativeCache.remove(c.contract)
 		c.token.Protocols = append(c.token.Protocols, contractInfoProtocolErc4626)
 	}
 }

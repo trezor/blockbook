@@ -137,3 +137,27 @@ func TestErc4626CacheLookupOrBuild_NilCacheFallsThrough(t *testing.T) {
 		t.Fatalf("nil cache should bypass: called=%d got=%+v", called, got)
 	}
 }
+
+func TestErc4626NegativeProbeCache_HitExpireAndRemove(t *testing.T) {
+	cache := newErc4626NegativeCache(2, 2)
+	if cache.contains("0xabc", 10) {
+		t.Fatal("empty cache should miss")
+	}
+
+	cache.add("0xAbC", 10)
+	if !cache.contains("0xabc", 10) {
+		t.Fatal("expected hit at insertion height")
+	}
+	if !cache.contains("0xABC", 12) {
+		t.Fatal("expected hit before expiry")
+	}
+	if cache.contains("0xabc", 13) {
+		t.Fatal("expected miss after expiry")
+	}
+
+	cache.add("0xabc", 20)
+	cache.remove("0xABC")
+	if cache.contains("0xabc", 20) {
+		t.Fatal("expected miss after explicit remove")
+	}
+}

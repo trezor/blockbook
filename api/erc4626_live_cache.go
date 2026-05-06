@@ -15,10 +15,17 @@ import (
 // active vault count per block, not request volume - 1024 covers far more
 // distinct vaults than any wallet portfolio actually holds.
 const erc4626CacheCapacity = 1024
+const erc4626NegativeProbeCacheCapacity = 4096
+const erc4626NegativeProbeTTLBlocks = 256
 
 type erc4626CacheEntry struct {
 	key   string
 	value *Erc4626Token
+}
+
+type erc4626NegativeProbeCacheEntry struct {
+	key      string
+	expireAt uint64
 }
 
 // erc4626Cache is a tiny LRU plus a singleflight group, used to dedupe and
@@ -38,6 +45,7 @@ type erc4626Cache struct {
 }
 
 var erc4626LiveCache = newErc4626Cache(erc4626CacheCapacity)
+var erc4626NegativeProbeCache = newErc4626NegativeCache(erc4626NegativeProbeCacheCapacity, erc4626NegativeProbeTTLBlocks)
 
 func newErc4626Cache(capacity int) *erc4626Cache {
 	if capacity <= 0 {
@@ -89,7 +97,7 @@ func (c *erc4626Cache) add(key string, value *Erc4626Token) {
 }
 
 func erc4626CacheKey(contract string, blockHeight uint32) string {
-	return strings.ToLower(contract) + ":" + strconv.FormatUint(uint64(blockHeight), 10)
+	return erc4626ContractKey(contract) + ":" + strconv.FormatUint(uint64(blockHeight), 10)
 }
 
 // erc4626CacheLookupOrBuild returns the cached Erc4626Token for the given key
@@ -116,4 +124,95 @@ func erc4626CacheLookupOrBuild(cache *erc4626Cache, key string, build func() *Er
 		return nil
 	}
 	return v.(*Erc4626Token)
+}
+
+func erc4626ContractKey(contract string) string {
+	return strings.ToLower(contract)
+}
+
+// erc4626NegativeCache is a tiny in-memory LRU of recent "not a vault"
+// probe results for the accountInfo path. Unlike positive detections, negatives
+// are not persisted to DB; they expire after a bounded number of indexed blocks
+// so upgradeable or newly-activated contracts will eventually be re-probed.
+type erc4626NegativeCache struct {
+	mu        sync.Mutex
+	capacity  int
+	ttlBlocks uint32
+	order     *list.List
+	items     map[string]*list.Element
+}
+
+func newErc4626NegativeCache(capacity int, ttlBlocks uint32) *erc4626NegativeCache {
+	if capacity <= 0 || ttlBlocks == 0 {
+		return nil
+	}
+	return &erc4626NegativeCache{
+		capacity:  capacity,
+		ttlBlocks: ttlBlocks,
+		order:     list.New(),
+		items:     make(map[string]*list.Element, capacity),
+	}
+}
+
+func (c *erc4626NegativeCache) contains(contract string, currentHeight uint32) bool {
+	if c == nil || currentHeight == 0 {
+		return false
+	}
+	key := erc4626ContractKey(contract)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	el, ok := c.items[key]
+	if !ok {
+		return false
+	}
+	entry := el.Value.(*erc4626NegativeProbeCacheEntry)
+	if uint64(currentHeight) > entry.expireAt {
+		c.order.Remove(el)
+		delete(c.items, key)
+		return false
+	}
+	c.order.MoveToFront(el)
+	return true
+}
+
+func (c *erc4626NegativeCache) add(contract string, currentHeight uint32) {
+	if c == nil || currentHeight == 0 {
+		return
+	}
+	key := erc4626ContractKey(contract)
+	expireAt := uint64(currentHeight) + uint64(c.ttlBlocks)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if el, ok := c.items[key]; ok {
+		entry := el.Value.(*erc4626NegativeProbeCacheEntry)
+		entry.expireAt = expireAt
+		c.order.MoveToFront(el)
+		return
+	}
+	el := c.order.PushFront(&erc4626NegativeProbeCacheEntry{key: key, expireAt: expireAt})
+	c.items[key] = el
+	if c.order.Len() <= c.capacity {
+		return
+	}
+	oldest := c.order.Back()
+	if oldest == nil {
+		return
+	}
+	c.order.Remove(oldest)
+	delete(c.items, oldest.Value.(*erc4626NegativeProbeCacheEntry).key)
+}
+
+func (c *erc4626NegativeCache) remove(contract string) {
+	if c == nil {
+		return
+	}
+	key := erc4626ContractKey(contract)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	el, ok := c.items[key]
+	if !ok {
+		return
+	}
+	c.order.Remove(el)
+	delete(c.items, key)
 }
