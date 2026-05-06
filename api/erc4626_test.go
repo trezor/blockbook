@@ -253,37 +253,6 @@ func TestBuildErc4626Token_NotAVault_ReturnsNil(t *testing.T) {
 	}
 }
 
-func TestBuildErc4626Token_AlreadyProbedNotVault_Reprobes(t *testing.T) {
-	const vault = "0x00000000000000000000000000000000000000c2"
-	mc := &fakeMulticaller{
-		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
-			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
-				return []bchain.EthereumMulticallResult{
-					{Success: true, Data: encodeWordAddress(erc4626ZeroAddress)},
-					{Success: true, Data: encodeWordUint(big.NewInt(0))},
-					{Success: true, Data: encodeWordUint(big.NewInt(0))},
-					{Success: true, Data: encodeWordUint(big.NewInt(0))},
-				}, nil
-			},
-		},
-	}
-	persister := func(string, string) error {
-		t.Fatal("must not persist non-vault legacy negative")
-		return nil
-	}
-	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
-		t.Fatal("must not fetch metadata on non-vault legacy negative")
-		return nil, false, nil
-	}
-	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18, Erc4626Probed: true}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
-		t.Fatalf("expected nil for non-vault legacy negative, got %+v", got)
-	}
-	if len(mc.calls) != 1 {
-		t.Fatalf("expected one multicall re-probe for legacy negative, got %d", len(mc.calls))
-	}
-}
-
 func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T) {
 	const vault = "0x00000000000000000000000000000000000000a1"
 	const asset = "0x00000000000000000000000000000000000000b2"
@@ -368,13 +337,11 @@ func TestEnrichErc4626Tokens_FlagsKnownVaultAndProbesUnprobed(t *testing.T) {
 			Contract:             knownVault,
 			Standard:             erc4626Standard,
 			IsErc4626:            true,
-			Erc4626Probed:        true,
 			Erc4626AssetContract: knownAsset,
 		},
 		strings.ToLower(unprobedVault): {
 			Contract: unprobedVault,
 			Standard: erc4626Standard,
-			// IsErc4626=false, Erc4626Probed=false (default zero values).
 		},
 	}
 
@@ -417,40 +384,6 @@ func TestEnrichErc4626Tokens_FlagsKnownVaultAndProbesUnprobed(t *testing.T) {
 	}
 	if len(mc.calls) != 1 {
 		t.Fatalf("expected exactly 1 batched multicall, got %d", len(mc.calls))
-	}
-}
-
-func TestEnrichErc4626Tokens_ReprobesAlreadyProbedNegative(t *testing.T) {
-	const probedNegative = "0x00000000000000000000000000000000000000c1"
-
-	store := fakeContractInfoStore{
-		strings.ToLower(probedNegative): {
-			Contract:      probedNegative,
-			Standard:      erc4626Standard,
-			Erc4626Probed: true,
-			// IsErc4626=false: legacy negative probe bit is present in stored metadata.
-		},
-	}
-	mc := &fakeMulticaller{
-		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
-			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
-				return []bchain.EthereumMulticallResult{
-					{Success: true, Data: encodeWordAddress(erc4626ZeroAddress)},
-					{Success: true, Data: encodeWordUint(big.NewInt(0))},
-				}, nil
-			},
-		},
-	}
-	tokens := Tokens{{Contract: probedNegative, Standard: erc4626Standard}}
-	enrichErc4626TokensWithDeps(tokens, store.get, mc,
-		func(string, string) error { t.Fatal("setVault must not be called"); return nil },
-		nil, 0, nil)
-
-	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
-		t.Fatalf("probed-negative token must not be flagged: %v", tokens[0].Protocols)
-	}
-	if len(mc.calls) != 1 {
-		t.Fatalf("expected one multicall re-probe, got %d", len(mc.calls))
 	}
 }
 
@@ -577,7 +510,7 @@ func TestEnrichErc4626Tokens_NoMulticallerStillFlagsKnown(t *testing.T) {
 	const knownVault = "0x00000000000000000000000000000000000000f1"
 	const unprobed = "0x00000000000000000000000000000000000000f2"
 	store := fakeContractInfoStore{
-		strings.ToLower(knownVault): {Contract: knownVault, Standard: erc4626Standard, IsErc4626: true, Erc4626Probed: true},
+		strings.ToLower(knownVault): {Contract: knownVault, Standard: erc4626Standard, IsErc4626: true},
 		strings.ToLower(unprobed):   {Contract: unprobed, Standard: erc4626Standard},
 	}
 	tokens := Tokens{

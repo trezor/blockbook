@@ -63,14 +63,16 @@ type erc4626VaultPersister func(address string, assetContract string) error
 // detections, and marks confirmed vaults in the response. Negative results are
 // intentionally not persisted so dormant or upgradeable contracts remain
 // probeable on future requests.
-func (w *Worker) enrichErc4626Tokens(tokens Tokens) {
+//
+// The caller passes the response's best block height so the multicall and
+// negative-cache TTL key both observe the same chain state used elsewhere in
+// the same request.
+func (w *Worker) enrichErc4626Tokens(tokens Tokens, bestHeight uint32) {
 	mc, _ := w.chain.(erc4626MulticallCaller)
 	setVault := func(addr, asset string) error { return w.db.SetContractInfoErc4626Vault(addr, asset) }
-	var bestHeight uint32
 	var blockNumber *big.Int
-	if h, _, err := w.db.GetBestBlock(); err == nil && h > 0 {
-		bestHeight = h
-		blockNumber = new(big.Int).SetUint64(uint64(h))
+	if bestHeight > 0 {
+		blockNumber = new(big.Int).SetUint64(uint64(bestHeight))
 	}
 	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, erc4626NegativeProbeCache, bestHeight, blockNumber)
 }

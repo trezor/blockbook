@@ -87,11 +87,6 @@ type ContractInfo struct {
 	// asset() method. Populated by the contractInfo path on first enrichment of a known
 	// vault, then reused as a cached invariant. Empty when not yet probed.
 	Erc4626AssetContract string `json:"-"`
-	// Erc4626Probed is true once positive ERC4626 invariants were cached for this
-	// contract. Older databases may also carry legacy negative probes
-	// (Erc4626Probed=true && IsErc4626=false); current detection logic does not
-	// treat those negatives as authoritative and may re-probe them on demand.
-	Erc4626Probed bool `json:"-"`
 }
 
 // EthereumTypeRPCCall defines one eth_call request payload.

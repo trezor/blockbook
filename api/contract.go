@@ -57,11 +57,11 @@ func (w *Worker) ValidateProtocolsForChain(protocols []string) error {
 	return ValidateContractProtocols(protocols)
 }
 
-func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string) {
+func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string, bestHeight uint32) {
 	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) {
 		return
 	}
-	w.enrichErc4626Tokens(tokens)
+	w.enrichErc4626Tokens(tokens, bestHeight)
 }
 
 // contractInfoResultFromBchain wraps bchain.ContractInfo into the API-level
