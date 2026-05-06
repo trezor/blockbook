@@ -124,8 +124,7 @@ func (a *Amount) AsBigInt() big.Int {
 }
 
 // AsInt64 returns Amount as int64 (0 if Amount is nil).
-// It is used only for legacy interfaces (socket.io)
-// and generally not recommended to use for possible loss of precision.
+// It is generally not recommended to use for possible loss of precision.
 func (a *Amount) AsInt64() int64 {
 	if a == nil {
 		return 0

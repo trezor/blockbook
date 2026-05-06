@@ -7,7 +7,7 @@
 -   index of addresses and address balances of the connected block chain
 -   fast index search
 -   simple blockchain explorer
--   websocket, API and legacy Bitcore Insight compatible socket.io interfaces
+-   websocket, API and legacy Bitcore Insight compatible REST interfaces
 -   support of multiple coins (Bitcoin and Ethereum type) with easy extensibility to other coins
 -   scripts for easy creation of debian packages for backend and blockbook
 
