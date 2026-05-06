@@ -86,6 +86,8 @@ type infuraFeeProvider struct {
 	apiKey string
 }
 
+const infuraFeeStalePeriods = 30
+
 // NewInfuraFeesProvider initializes https://gas.api.infura.io provider
 func NewInfuraFeesProvider(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
 	p := &infuraFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{metrics: metrics, name: "infura"}}
@@ -93,7 +95,7 @@ func NewInfuraFeesProvider(chain bchain.BlockChain, params string, metrics *comm
 	if err != nil {
 		return nil, err
 	}
-	if p.params.URL == "" || p.params.PeriodSeconds == 0 {
+	if p.params.URL == "" || p.params.PeriodSeconds <= 0 {
 		return nil, errors.New("NewInfuraFeesProvider: missing config parameters 'url' or 'periodSeconds'.")
 	}
 	p.apiKey = os.Getenv("INFURA_API_KEY")
@@ -102,10 +104,15 @@ func NewInfuraFeesProvider(chain bchain.BlockChain, params string, metrics *comm
 	}
 	p.params.URL = strings.Replace(p.params.URL, "${api_key}", p.apiKey, -1)
 	p.chain = chain
-	// if the data are not successfully downloaded 10 times, stop providing data
-	p.staleSyncDuration = time.Duration(p.params.PeriodSeconds*10) * time.Second
+	// Keep cached Infura fees through throttling bursts.
+	// Current archive configs poll every 60s, which gives a 30-minute window.
+	p.staleSyncDuration = infuraFeeStaleDuration(p.params.PeriodSeconds)
 	go p.FeeDownloader()
 	return p, nil
+}
+
+func infuraFeeStaleDuration(periodSeconds int) time.Duration {
+	return time.Duration(periodSeconds*infuraFeeStalePeriods) * time.Second
 }
 
 func (p *infuraFeeProvider) FeeDownloader() {
