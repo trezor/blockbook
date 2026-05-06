@@ -9,10 +9,12 @@ import (
 var cachedContracts = newContractInfoLRU(cachedContractsLRUMaxSize)
 
 const (
-	// Legacy flag reused inside the ERC4626 protocol payload.
-	contractInfoLegacyFlagErc4626 = 1 << 0
+	// Bit 0 of the ERC4626 protocol payload's flags varuint — IsErc4626.
+	contractInfoFlagErc4626 uint = 1 << 0
 
-	// New protocol-extension tail header.
+	// Protocol-extension tail header. Marker bit 15 identifies a versioned
+	// extensions block; any trailing varuint without it is treated as junk and
+	// skipped, so the core record decodes unaffected.
 	contractInfoExtensionsMarker   uint = 1 << 15
 	contractInfoExtensionsVersion1 uint = contractInfoExtensionsMarker | 1
 
@@ -97,7 +99,7 @@ func packContractInfoProtocolExtensions(contractInfo *bchain.ContractInfo) []byt
 func packContractInfoErc4626Payload(contractInfo *bchain.ContractInfo) []byte {
 	var flags uint
 	if contractInfo.IsErc4626 {
-		flags |= contractInfoLegacyFlagErc4626
+		flags |= contractInfoFlagErc4626
 	}
 	varBuf := make([]byte, vlq.MaxLen64)
 	l := packVaruint(flags, varBuf)
@@ -144,7 +146,7 @@ func unpackContractInfoErc4626Payload(contractInfo *bchain.ContractInfo, payload
 	if !ok {
 		return
 	}
-	contractInfo.IsErc4626 = flags&contractInfoLegacyFlagErc4626 != 0
+	contractInfo.IsErc4626 = flags&contractInfoFlagErc4626 != 0
 	if l == len(payload) {
 		return
 	}
