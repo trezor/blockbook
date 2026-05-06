@@ -24,12 +24,6 @@ const tokenTransferEventSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f16
 const tokenERC1155TransferSingleEventSignature = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
 const tokenERC1155TransferBatchEventSignature = "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
 
-// EIP-4626 vault events. Their topic hashes are deterministic from the canonical
-// signatures (no parameter names), so seeing one identifies the emitting contract
-// as an ERC4626 vault without any extra RPC.
-const erc4626DepositEventSignature = "0xdcbc1c05240f31ff3ad067ef1ee35ce4997762752e3a095284754544f4c709d7"  // Deposit(address,address,uint256,uint256)
-const erc4626WithdrawEventSignature = "0xfbde797d201c681b91056529119e0b02407c7bb96a4a2c75c01fc9667232c8db" // Withdraw(address,address,address,uint256,uint256)
-
 const nameRegisteredEventSignature = "0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f"
 
 const contractNameSignature = "0x06fdde03"
@@ -206,35 +200,6 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 		To:               EIP55AddressFromAddress(to),
 		MultiTokenValues: idValues,
 	}, nil
-}
-
-// contractGetErc4626VaultsFromLog scans receipt logs for ERC4626 Deposit/Withdraw
-// events and returns the unique emitting contract addresses (lowercased EIP-55).
-// Only the topic hash is consulted; payload bytes are ignored. The same hot loop
-// the indexer already runs over Topics[0] - one extra equality check per log per
-// matched event - so this is effectively free during block processing.
-func contractGetErc4626VaultsFromLog(logs []*bchain.RpcLog) []string {
-	var seen map[string]struct{}
-	var vaults []string
-	for _, l := range logs {
-		if len(l.Topics) == 0 {
-			continue
-		}
-		sig := l.Topics[0]
-		if sig != erc4626DepositEventSignature && sig != erc4626WithdrawEventSignature {
-			continue
-		}
-		addr := EIP55AddressFromAddress(l.Address)
-		if seen == nil {
-			seen = make(map[string]struct{})
-		}
-		if _, ok := seen[addr]; ok {
-			continue
-		}
-		seen[addr] = struct{}{}
-		vaults = append(vaults, addr)
-	}
-	return vaults
 }
 
 func contractGetTransfersFromLog(logs []*bchain.RpcLog) (bchain.TokenTransfers, error) {

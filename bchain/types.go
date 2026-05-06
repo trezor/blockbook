@@ -410,7 +410,6 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
-	EthereumTypeGetErc4626VaultsFromTx(tx *Tx) []string
 	GetEthereumTxData(tx *Tx) *EthereumTxData
 	GetChainExtraPayloadType() ChainExtraPayloadType
 	GetChainExtraData(tx *Tx) (json.RawMessage, error)

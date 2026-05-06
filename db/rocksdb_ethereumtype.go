@@ -656,11 +656,6 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 	if err != nil {
 		glog.Warningf("rocksdb: processContractTransfers %v, tx %v", err, tx.Txid)
 	}
-	for _, vaultAddr := range d.chainParser.EthereumTypeGetErc4626VaultsFromTx(tx) {
-		if err := d.markContractInfoErc4626(vaultAddr); err != nil {
-			glog.Warningf("rocksdb: markContractInfoErc4626 %v, tx %v, contract %v", err, tx.Txid, vaultAddr)
-		}
-	}
 	blockTx.contracts = make([]ethBlockTxContract, len(tokenTransfers))
 	for i, t := range tokenTransfers {
 		var contract, from, to bchain.AddressDescriptor
@@ -1098,31 +1093,6 @@ func (d *RocksDB) SetContractInfoErc4626Vault(address string, assetContract stri
 	if !changed {
 		return nil
 	}
-	if err := d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo)); err != nil {
-		return err
-	}
-	cachedContracts.add(string(contract), contractInfo)
-	return nil
-}
-
-// markContractInfoErc4626 sets IsErc4626=true on the stored ContractInfo for the
-// given address if a row already exists. If no row exists yet (the contract was
-// detected emitting a vault event before its metadata has been queried by any
-// caller), we skip - the next vault event will set the bit once the row is
-// created via the lazy fetch path. No RPC is performed here.
-func (d *RocksDB) markContractInfoErc4626(address string) error {
-	contract, err := d.chainParser.GetAddrDescFromAddress(address)
-	if err != nil || contract == nil {
-		return err
-	}
-	contractInfo, err := d.GetContractInfo(contract, "")
-	if err != nil {
-		return err
-	}
-	if contractInfo == nil || contractInfo.IsErc4626 {
-		return nil
-	}
-	contractInfo.IsErc4626 = true
 	if err := d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo)); err != nil {
 		return err
 	}

@@ -408,11 +408,6 @@ func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers
 	return nil, errors.New("Not supported")
 }
 
-// EthereumTypeGetErc4626VaultsFromTx is unsupported on non-Ethereum-like chains.
-func (p *BaseParser) EthereumTypeGetErc4626VaultsFromTx(tx *Tx) []string {
-	return nil
-}
-
 // GetEthereumTxData returns default pending status for non-Ethereum-like chains.
 func (p *BaseParser) GetEthereumTxData(tx *Tx) *EthereumTxData {
 	return &EthereumTxData{Status: TxStatusPending}
