@@ -519,6 +519,10 @@ func (b *EthereumRPC) erc20BalancesBatchAtBlock(batcher batchCaller, callData st
 	defer cancel()
 	if err := batcher.BatchCallContext(ctx, batch); err != nil {
 		b.observeEthCallError("batch", "rpc")
+		// Distinct fallback metric so monitoring can alert on this path even
+		// though we suppress the error to keep callers (e.g. account info)
+		// usable on transient batch-level RPC failures.
+		b.ObserveChainDataFallback("erc20_batch", "rpc")
 		glog.Warningf("erc20 batch eth_call failed: %v, falling back to single calls", err)
 		balances := make([]*big.Int, len(contractDescs))
 		for i, contractDesc := range contractDescs {
