@@ -98,6 +98,11 @@ type Configuration struct {
 	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
 	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
 	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
+	// AverageBlockTimeMs is the chain's nominal block production cadence in
+	// milliseconds. Set per-coin in additional_params so chain-time-derived
+	// settings (e.g. reorg-safety depth) translate from a duration to a per-coin
+	// block count. Required for EVM coins.
+	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
 }
 
 func parseNonNegativeDuration(name string, value string) (time.Duration, error) {
@@ -140,6 +145,17 @@ func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, er
 		return parsePositiveDuration("alternativeMempoolTxTimeout", c.AlternativeMempoolTxTimeout)
 	}
 	return defaultAlternativeMempoolTxTimeout, nil
+}
+
+// AverageBlockTimeDuration returns the configured nominal block cadence as a
+// time.Duration. The value comes from each coin's additional_params and is the
+// per-chain "time weight" used to translate duration-based settings into a
+// block count (e.g. reorg-safety depth in minutes -> blocks).
+func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
+	if c.AverageBlockTimeMs <= 0 {
+		return 0, errors.Errorf("averageBlockTimeMs must be a positive integer")
+	}
+	return time.Duration(c.AverageBlockTimeMs) * time.Millisecond, nil
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -233,6 +249,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		return nil, err
 	}
 	if _, err := c.AlternativeMempoolTxTimeoutDuration(); err != nil {
+		return nil, err
+	}
+	if _, err := c.AverageBlockTimeDuration(); err != nil {
 		return nil, err
 	}
 
