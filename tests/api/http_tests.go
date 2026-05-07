@@ -197,6 +197,111 @@ func testGetMultiTickers(t *testing.T, h *TestHandler) {
 	}
 }
 
+func testGetHistoricalFiatRatesTruth(t *testing.T, h *TestHandler) {
+	status := h.getStatus(t)
+	if !status.HasFiatRates {
+		t.Skipf("Skipping test, endpoint reports hasFiatRates=false")
+	}
+
+	fixtures, err := loadAPIFiatTruthTestData(h.Coin)
+	if err != nil {
+		t.Fatalf("load fiat truth fixtures for %s: %v", h.Coin, err)
+	}
+	if len(fixtures.Cases) == 0 {
+		t.Fatalf("fiat truth fixtures for %s have no cases", h.Coin)
+	}
+
+	for _, fixture := range fixtures.Cases {
+		t.Run(fixture.Name, func(t *testing.T) {
+			validateFiatTruthFixture(t, fixture)
+
+			for _, expected := range fixture.ExpectedRates {
+				timestamp := expected.Timestamp()
+				expectedRate := expected.Rate()
+				t.Run(fmt.Sprintf("%d", timestamp), func(t *testing.T) {
+					path := fmt.Sprintf(
+						"/api/v2/tickers?timestamp=%d&currency=%s&token=%s",
+						timestamp,
+						url.QueryEscape(fixture.Currency),
+						url.QueryEscape(fixture.Contract),
+					)
+					httpStatus, body := h.getHTTP(t, path)
+					if httpStatus != http.StatusOK {
+						t.Fatalf("GET %s returned HTTP %d: %s", path, httpStatus, preview(body))
+					}
+
+					var got fiatTickerResponse
+					if err := json.Unmarshal(body, &got); err != nil {
+						t.Fatalf("decode %s: %v", path, err)
+					}
+					if got.Timestamp != timestamp {
+						t.Fatalf("%s timestamp mismatch: got %d, want %d", fixture.Name, got.Timestamp, timestamp)
+					}
+					rate, found := got.Rates[strings.ToLower(fixture.Currency)]
+					if !found {
+						t.Fatalf("%s missing %s rate in %v", fixture.Name, fixture.Currency, got.Rates)
+					}
+					if rate <= 0 {
+						t.Fatalf("%s returned non-positive %s rate: %v", fixture.Name, fixture.Currency, rate)
+					}
+					if diff := relativeDifference(float64(rate), expectedRate); diff > fixture.RelativeTolerance {
+						t.Fatalf(
+							"%s %s rate mismatch: got %v, want %v within %.4f relative tolerance, diff %.4f; source %s",
+							fixture.Name,
+							fixture.Currency,
+							rate,
+							expectedRate,
+							fixture.RelativeTolerance,
+							diff,
+							fixture.Source,
+						)
+					}
+				})
+			}
+		})
+	}
+}
+
+func validateFiatTruthFixture(t *testing.T, fixture fiatTruthFixture) {
+	t.Helper()
+
+	assertNonEmptyString(t, fixture.Name, "fiatTruth.name")
+	assertNonEmptyString(t, fixture.CoinID, "fiatTruth.coinId")
+	assertNonEmptyString(t, fixture.Symbol, "fiatTruth.symbol")
+	assertNonEmptyString(t, fixture.Contract, "fiatTruth.contract")
+	assertNonEmptyString(t, fixture.Currency, "fiatTruth.currency")
+	assertNonEmptyString(t, fixture.Source, "fiatTruth.source")
+	assertNonEmptyString(t, fixture.FetchedAt, "fiatTruth.fetchedAt")
+	if len(fixture.ExpectedRates) == 0 {
+		t.Fatalf("%s has no expectedRates", fixture.Name)
+	}
+	previousTimestamp := int64(0)
+	for _, expected := range fixture.ExpectedRates {
+		timestamp := expected.Timestamp()
+		if timestamp <= 0 {
+			t.Fatalf("%s has invalid timestamp %d", fixture.Name, timestamp)
+		}
+		if timestamp <= previousTimestamp {
+			t.Fatalf("%s has non-increasing timestamp %d after %d", fixture.Name, timestamp, previousTimestamp)
+		}
+		if expected.Rate() <= 0 {
+			t.Fatalf("%s has invalid expected rate %v", fixture.Name, expected.Rate())
+		}
+		previousTimestamp = timestamp
+	}
+	if fixture.RelativeTolerance <= 0 {
+		t.Fatalf("%s has invalid relativeTolerance %v", fixture.Name, fixture.RelativeTolerance)
+	}
+}
+
+func relativeDifference(got, want float64) float64 {
+	diff := got - want
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff / want
+}
+
 func testGetAddressTxids(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 	txid := h.sampleTxIDOrSkip(t)
