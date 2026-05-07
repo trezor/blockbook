@@ -904,6 +904,33 @@ func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	return tx, nil
 }
 
+// GetTransactionForMempool returns a transaction by the transaction ID using
+// the full node HTTP API
+func (b *TronRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	txByID, err := b.requestTransactionByID(ctx, txid, false)
+	if err != nil {
+		if isTronTxNotFound(err) {
+			return nil, bchain.ErrTxNotFound
+		}
+		return nil, err
+	}
+
+	txInfo, err := b.requestTransactionInfoByID(ctx, txid, false)
+	if err != nil {
+		if !isTronTxNotFound(err) {
+			return nil, err
+		}
+		txInfo = &tronGetTransactionInfoByIDResponse{ID: strip0xPrefix(txid)}
+	}
+
+	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
+	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
+	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, false)
+}
+
 // GetTransactionSpecific returns tx-specific JSON in Tron API format (without 0x in tx hash fields).
 func (b *TronRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)

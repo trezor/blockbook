@@ -245,6 +245,54 @@ func TestTronRPC_GetTransaction_FallbackToFullNodeKeepsPendingEvenWithBlockNumbe
 	require.Nil(t, csd.Receipt)
 }
 
+func TestTronRPC_GetTransactionForMempool_UsesFullNodeHTTP(t *testing.T) {
+	txByID := tronGetTransactionByIDResponse{
+		TxID: "abc",
+	}
+	txByID.RawData.Contract = []tronTxContract{{
+		Type: "TransferContract",
+	}}
+	txByID.RawData.Contract[0].Parameter.Value.OwnerAddress = "410000000000000000000000000000000000000001"
+	txByID.RawData.Contract[0].Parameter.Value.ToAddress = "410000000000000000000000000000000000000002"
+	txByID.RawData.Contract[0].Parameter.Value.Amount = int64Ptr(123)
+
+	solidityHTTP := &MockTronHTTPClient{
+		Resp: map[string]any{},
+	}
+	fullNodeHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/gettransactionbyid":     txByID,
+			"/wallet/gettransactioninfobyid": map[string]any{},
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		Parser:           NewTronParser(1, false),
+		fullNodeHTTP:     fullNodeHTTP,
+		solidityNodeHTTP: solidityHTTP,
+	}
+
+	tx, err := tronRPC.GetTransactionForMempool("0xabc")
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+	require.Equal(t, "abc", tx.Txid)
+	require.Equal(t, int64(123), tx.Vout[0].ValueSat.Int64())
+	requireMockLastPath(t, solidityHTTP, "")
+
+	paths, _ := fullNodeHTTP.SnapshotRequests()
+	require.Equal(t, []string{
+		"/wallet/gettransactionbyid",
+		"/wallet/gettransactioninfobyid",
+	}, paths)
+
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	require.True(t, ok)
+	require.Nil(t, csd.Receipt)
+}
+
 func TestTronRPC_ReconcileTronMempoolWithPendingList_RemovesMissingTxs(t *testing.T) {
 	m := &tronTestMempool{
 		txTimes: map[string]uint32{
