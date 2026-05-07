@@ -3,6 +3,7 @@ package api
 import (
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
 )
 
@@ -57,9 +58,16 @@ func (w *Worker) ValidateProtocolsForChain(protocols []string) error {
 	return ValidateContractProtocols(protocols)
 }
 
-func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string, bestHeight uint32, bestHash string) {
+func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string) {
 	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) {
 		return
+	}
+	// Read best block lazily, only once a relevant protocol was requested, so
+	// accountInfo requests without protocol enrichment skip the CF seek.
+	// On error proceed with bestHeight==0 (no in-block caching) but log.
+	bestHeight, bestHash, err := w.db.GetBestBlock()
+	if err != nil {
+		glog.Warningf("GetBestBlock for protocol enrichment: %v", err)
 	}
 	w.enrichErc4626Tokens(tokens, bestHeight, bestHash)
 }

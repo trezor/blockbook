@@ -1311,13 +1311,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 			d.tokens = d.tokens[:j]
 			sort.Sort(d.tokens)
-			// Read best block once so multicall + negative-TTL share chain state.
-			// On error proceed with bestHeight==0 (no in-block caching) but log.
-			bestHeight, bestHash, bestErr := w.db.GetBestBlock()
-			if bestErr != nil {
-				glog.Warningf("GetBestBlock for protocol enrichment: %v", bestErr)
-			}
-			w.enrichTokenProtocols(d.tokens, filter.Protocols, bestHeight, bestHash)
+			w.enrichTokenProtocols(d.tokens, filter.Protocols)
 		}
 		d.contractInfo, err = w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
 		if err != nil {

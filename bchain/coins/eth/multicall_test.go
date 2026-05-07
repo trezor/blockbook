@@ -397,11 +397,11 @@ func TestProbeMulticall3_DetectsDeployedAndCachesResult(t *testing.T) {
 	}
 	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
 
-	if !rpc.probeMulticall3() {
-		t.Fatal("probe should report deployed for non-empty bytecode")
+	if got, err := rpc.probeMulticall3(); err != nil || !got {
+		t.Fatalf("probe should report deployed for non-empty bytecode, got=%v err=%v", got, err)
 	}
-	if !rpc.probeMulticall3() {
-		t.Fatal("probe should still report deployed on second call")
+	if got, err := rpc.probeMulticall3(); err != nil || !got {
+		t.Fatalf("probe should still report deployed on second call, got=%v err=%v", got, err)
 	}
 	if _, getCode := mock.callCounts(); getCode != 1 {
 		t.Fatalf("expected 1 eth_getCode call (cached on 2nd), got %d", getCode)
@@ -417,11 +417,11 @@ func TestProbeMulticall3_DetectsNotDeployedAndCachesResult(t *testing.T) {
 	}
 	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
 
-	if rpc.probeMulticall3() {
-		t.Fatal("probe should report not-deployed for '0x'")
+	if got, err := rpc.probeMulticall3(); err != nil || got {
+		t.Fatalf("probe should report not-deployed for '0x', got=%v err=%v", got, err)
 	}
-	if rpc.probeMulticall3() {
-		t.Fatal("probe should still report not-deployed on second call")
+	if got, err := rpc.probeMulticall3(); err != nil || got {
+		t.Fatalf("probe should still report not-deployed on second call, got=%v err=%v", got, err)
 	}
 	if _, getCode := mock.callCounts(); getCode != 1 {
 		t.Fatalf("expected 1 eth_getCode call (cached on 2nd), got %d", getCode)
@@ -446,14 +446,18 @@ func TestProbeMulticall3_TransientErrorRetriesNextCall(t *testing.T) {
 	}
 	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
 
-	if rpc.probeMulticall3() {
-		t.Fatal("first probe should report not-deployed because the RPC errored")
+	got, err := rpc.probeMulticall3()
+	if err == nil {
+		t.Fatal("first probe should propagate the transient RPC error")
+	}
+	if got {
+		t.Fatalf("first probe should report deployed=false on transient error, got=%v", got)
 	}
 	if state := rpc.multicall3Probe.Load(); state != multicall3Unprobed {
 		t.Fatalf("transient error must NOT cache state, got %d", state)
 	}
-	if !rpc.probeMulticall3() {
-		t.Fatal("second probe should detect deployed (transient error not cached)")
+	if got, err := rpc.probeMulticall3(); err != nil || !got {
+		t.Fatalf("second probe should detect deployed (transient error not cached), got=%v err=%v", got, err)
 	}
 	if _, getCode := mock.callCounts(); getCode != 2 {
 		t.Fatalf("expected 2 eth_getCode calls (no caching after transient), got %d", getCode)
@@ -476,14 +480,19 @@ func TestProbeMulticall3_ConcurrentFirstCallsCollapseToOneRPC(t *testing.T) {
 	}
 	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
 
-	results := make([]bool, concurrency)
+	type probeOutcome struct {
+		deployed bool
+		err      error
+	}
+	results := make([]probeOutcome, concurrency)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
 		i := i
 		go func() {
 			defer wg.Done()
-			results[i] = rpc.probeMulticall3()
+			deployed, err := rpc.probeMulticall3()
+			results[i] = probeOutcome{deployed: deployed, err: err}
 		}()
 	}
 	// Wait for the in-flight probe to register one eth_getCode call before
@@ -506,9 +515,9 @@ func TestProbeMulticall3_ConcurrentFirstCallsCollapseToOneRPC(t *testing.T) {
 	if _, gc := mock.callCounts(); gc != 1 {
 		t.Fatalf("singleflight must collapse concurrent probes to 1 RPC, got %d", gc)
 	}
-	for i, ok := range results {
-		if !ok {
-			t.Fatalf("result[%d]: expected deployed=true", i)
+	for i, r := range results {
+		if r.err != nil || !r.deployed {
+			t.Fatalf("result[%d]: expected deployed=true, got=%+v", i, r)
 		}
 	}
 }
@@ -537,6 +546,42 @@ func TestEthereumTypeMulticallAggregate3_NotDeployed_ShortCircuits(t *testing.T)
 	}
 	if !errors.Is(err, errMulticall3NotDeployed) {
 		t.Fatalf("expected errMulticall3NotDeployed, got %v", err)
+	}
+}
+
+// A transient probe failure must surface as a real error to callers rather
+// than being collapsed to errMulticall3NotDeployed — otherwise an RPC blip
+// during the first request would look indistinguishable from "this chain
+// has no Multicall3" in caller telemetry and short-circuit logic.
+func TestEthereumTypeMulticallAggregate3_TransientProbeError_PropagatesAndIsDistinct(t *testing.T) {
+	probeErr := errors.New("rpc down")
+	mock := &mockMulticallRPC{
+		handler: func(string) (string, error) {
+			t.Fatal("eth_call must not be issued when probe failed transiently")
+			return "", nil
+		},
+		getCodeHandler: func(string) (string, error) { return "", probeErr },
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	got, err := rpc.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
+		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
+	}, nil)
+	if got != nil {
+		t.Fatalf("expected nil result, got %+v", got)
+	}
+	if err == nil {
+		t.Fatal("expected non-nil error from transient probe failure")
+	}
+	if errors.Is(err, errMulticall3NotDeployed) {
+		t.Fatalf("transient error must be distinguishable from errMulticall3NotDeployed, got %v", err)
+	}
+	if !errors.Is(err, probeErr) {
+		t.Fatalf("expected wrapped probe error, got %v", err)
+	}
+	// Probe state must remain unprobed so the next call retries.
+	if state := rpc.multicall3Probe.Load(); state != multicall3Unprobed {
+		t.Fatalf("transient probe failure must not cache state, got %d", state)
 	}
 }
 

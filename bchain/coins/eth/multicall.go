@@ -40,7 +40,13 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	if len(calls) == 0 {
 		return nil, nil
 	}
-	if !b.probeMulticall3() {
+	deployed, err := b.probeMulticall3()
+	if err != nil {
+		// Transient probe failure — surface as-is so callers can retry rather
+		// than treat the chain as permanently unsupported.
+		return nil, fmt.Errorf("multicall3 probe: %w", err)
+	}
+	if !deployed {
 		return nil, errMulticall3NotDeployed
 	}
 	encoded, err := encodeAggregate3(calls)
@@ -54,22 +60,33 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	return decodeAggregate3Result(resp)
 }
 
-// probeMulticall3 reports whether Multicall3 is deployed; deterministic
-// answers are cached, transient probe failures are not (so an RPC blip
-// during the first request doesn't permanently disable enrichment).
-// Concurrent probers are collapsed via singleflight.
-func (b *EthereumRPC) probeMulticall3() bool {
+// probeMulticall3 reports whether Multicall3 is deployed at the canonical
+// address. Three outcomes:
+//
+//   - (true, nil)  — deployed; deterministic, cached for the process lifetime.
+//   - (false, nil) — not deployed; deterministic, cached.
+//   - (false, err) — transient probe failure (RPC down, timeout). NOT cached;
+//     the next call retries. Returned to callers so they can distinguish
+//     "this chain has no Multicall3" from "RPC is having a moment."
+//
+// Concurrent probers are collapsed via singleflight, so a thundering herd
+// at process start performs at most one eth_getCode.
+func (b *EthereumRPC) probeMulticall3() (bool, error) {
 	switch b.multicall3Probe.Load() {
 	case multicall3Deployed:
-		return true
+		return true, nil
 	case multicall3NotDeployed:
-		return false
+		return false, nil
 	}
 
+	type probeResult struct {
+		deployed bool
+		err      error
+	}
 	v, _, _ := b.multicall3ProbeSF.Do("multicall3", func() (interface{}, error) {
 		// Re-check: a peer may have completed before we entered Do.
 		if state := b.multicall3Probe.Load(); state != multicall3Unprobed {
-			return state == multicall3Deployed, nil
+			return probeResult{deployed: state == multicall3Deployed}, nil
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
@@ -77,18 +94,19 @@ func (b *EthereumRPC) probeMulticall3() bool {
 		var code string
 		if err := b.RPC.CallContext(ctx, &code, "eth_getCode", multicall3Address, "latest"); err != nil {
 			glog.Warningf("multicall3 probe at %s failed: %v (will retry on next call)", multicall3Address, err)
-			return false, nil
+			return probeResult{err: err}, nil
 		}
 		// "0x" means no code at the address.
 		if len(code) <= 2 {
 			glog.Infof("multicall3 not deployed at %s on this chain; multicall enrichments will be disabled", multicall3Address)
 			b.multicall3Probe.Store(multicall3NotDeployed)
-			return false, nil
+			return probeResult{}, nil
 		}
 		b.multicall3Probe.Store(multicall3Deployed)
-		return true, nil
+		return probeResult{deployed: true}, nil
 	})
-	return v.(bool)
+	r := v.(probeResult)
+	return r.deployed, r.err
 }
 
 // encodeAggregate3 hand-rolls the ABI encoding for aggregate3((address,bool,bytes)[]).
