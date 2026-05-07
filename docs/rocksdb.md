@@ -187,47 +187,54 @@ Column families used only by **Ethereum type** coins:
 
 - **contracts** (used only by Ethereum type coins)
 
-  Maps contract _addrDesc_ to contract metadata and optional protocol-specific cached data.
+  Maps contract _addrDesc_ to indexed contract metadata. Sync owns this column
+  family; API code does not write here. Protocol-specific detection records
+  (e.g. ERC-4626 vault status) live in **ercProtocols** so API-time
+  writes cannot collide with sync's whole-row writes.
 
   ```
   (addrDesc []byte) -> (name string)+(symbol string)+(type string)+(decimals vuint)+
-                       (createdInBlock vuint)+(destroyedInBlock vuint)+
-                       [protocol extensions]
+                       (createdInBlock vuint)+(destroyedInBlock vuint)
   ```
 
-  This is a **base record with optional tagged protocol extensions**:
+- **ercProtocols** (used only by EVM coins)
 
-  - base contract fields are always first:
-    - _name_
-    - _symbol_
-    - _type_
-    - _decimals_
-    - _createdInBlock_
-    - _destroyedInBlock_
-  - if no protocol data is present, the row ends here
-  - if protocol data is present, it is stored as a protocol-extension section:
+  Per-protocol detection records keyed by contract address. Decoupled from
+  **contracts** so API-driven protocol writes never clobber sync-driven
+  contract metadata, and so disconnect can revert protocol records
+  independently.
+
+  Two prefixes share the column family:
 
   ```
-  [protocol extensions] :=
-    (extensionsHeader vuint)+(extensionsCount vuint)+
-    []((protocolId vuint)+(payloadLength vuint)+(payload []byte))
+  (0x00 || protocolId byte || addrDesc []byte) -> (persistHeight vuint)+(payload []byte)
+  (0x01 || protocolId byte || persistHeight uint32 || addrDesc []byte) -> ()
   ```
 
-  Current protocol payloads:
+  - **byContract** (prefix `0x00`) is the read path: one row per
+    `(contract, protocolId)`, value carries the persist-height and the
+    protocol-specific payload.
+  - **byHeight** (prefix `0x01`) is the secondary index used by `DisconnectBlockRangeEthereumType`: 
+    a small range scan over the disconnected height range yields exactly the rows 
+    whose persistence is no longer canonical, and both rows are deleted 
+    in the same batch as the rest of the disconnect.
 
-  - `protocolId = 1` (`erc4626`)
+  Reserved protocol IDs:
+
+  - `protocolId = 1` (`erc4626`): payload is the ERC-4626 vault's underlying
+    asset address.
 
     ```
-    erc4626 payload := (flags vuint)+(underlyingAssetContract string)
+    erc4626 payload := (underlyingAssetContract string)
     ```
 
-    `flags` is a bitfield. Currently only the lowest bit is used:
-    `flags = 1` means the contract is marked as ERC-4626, `flags = 0` means it is not.
-    Both `flags` and `underlyingAssetContract` are populated together by the
-    contractInfo API path on a successful Multicall3 probe of `asset()` and
-    `totalAssets()`; indexing itself does not mark vaults.
+    Presence of the row implies the contract was observed as a vault at
+    `persistHeight`; absence means either not-a-vault or never observed.
+    The asset address is captured by the contractInfo API path on a
+    successful Multicall3 probe of `asset()` and `totalAssets()`; indexing
+    itself does not mark vaults.
 
-  This layout is optimized for small per-contract metadata with room for future protocol containers.
+  Future protocol IDs append the next free byte. `0x00` is reserved.
 
 - **functionSignatures** (used only by Ethereum type coins)
 

@@ -283,6 +283,13 @@ func (b *EthereumRPC) SetMetrics(metrics *common.Metrics) {
 	b.metrics = metrics
 }
 
+// AverageBlockTimeDuration exposes the configured chain-time weight to higher
+// layers (e.g. the API translating a chain-time reorg-safety duration to a
+// per-coin block count).
+func (b *EthereumRPC) AverageBlockTimeDuration() (time.Duration, error) {
+	return b.ChainConfig.AverageBlockTimeDuration()
+}
+
 func (b *EthereumRPC) observeEthCall(mode string, count int) {
 	if b.metrics == nil || count <= 0 {
 		return

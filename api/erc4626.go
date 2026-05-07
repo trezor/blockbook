@@ -54,7 +54,11 @@ type erc4626MulticallCaller interface {
 // isolate the deps that buildErc4626TokenWithDeps reaches for, so unit tests
 // can inject fakes.
 type erc4626ContractInfoFetcher func(contract string, standard bchain.TokenStandardName) (*bchain.ContractInfo, bool, error)
-type erc4626VaultPersister func(address string, assetContract string) error
+
+// erc4626VaultPersister persists a confirmed vault. The implementation
+// anchors the persisted row to the request's bestHeight (observation height)
+// so a future disconnect of that range removes the row.
+type erc4626VaultPersister func(address, assetContract string) error
 
 // enrichErc4626Tokens marks tokens whose contract is a known ERC4626 vault.
 // In steady state this is a pure cache lookup for contracts already confirmed
@@ -67,10 +71,16 @@ type erc4626VaultPersister func(address string, assetContract string) error
 // The caller passes the response's best block height so the multicall and
 // negative-cache TTL key both observe the same chain state used elsewhere in
 // the same request.
-func (w *Worker) enrichErc4626Tokens(tokens Tokens, bestHeight uint32) {
+func (w *Worker) enrichErc4626Tokens(tokens Tokens, bestHeight uint32, bestHash string) {
 	mc, _ := w.chain.(erc4626MulticallCaller)
-	setVault := func(addr, asset string) error { return w.db.SetContractInfoErc4626Vault(addr, asset) }
-	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, erc4626NegativeProbeCache, bestHeight)
+	// Capture reorgGen at the top of the request, before issuing the
+	// multicall. The writer compares this and bestHash against the live chain
+	// state and refuses if the observed block is no longer canonical.
+	reorgGen := w.db.ReorgGeneration()
+	setVault := func(addr, asset string) error {
+		return w.db.SetContractInfoErc4626Vault(addr, asset, bestHeight, bestHash, reorgGen)
+	}
+	enrichErc4626TokensWithDeps(tokens, w.GetContractInfo, mc, setVault, erc4626NegativeProbeCache, bestHeight, reorgGen)
 }
 
 func enrichErc4626TokensWithDeps(
@@ -80,6 +90,7 @@ func enrichErc4626TokensWithDeps(
 	setVault erc4626VaultPersister,
 	negativeCache *erc4626NegativeCache,
 	bestHeight uint32,
+	reorgGen uint64,
 ) {
 	var blockNumber *big.Int
 	if bestHeight > 0 {
@@ -109,7 +120,7 @@ func enrichErc4626TokensWithDeps(
 			token.Protocols = append(token.Protocols, contractInfoProtocolErc4626)
 			continue
 		}
-		if negativeCache.contains(token.Contract, bestHeight) {
+		if negativeCache.contains(token.Contract, bestHeight, reorgGen) {
 			continue
 		}
 		candidates = append(candidates, candidate{token: token, contract: token.Contract})
@@ -152,11 +163,11 @@ func enrichErc4626TokensWithDeps(
 				}
 			}
 			if assetContract == "" || !totalAssetsResult.Success {
-				negativeCache.add(c.contract, bestHeight)
+				negativeCache.add(c.contract, bestHeight, reorgGen)
 				continue
 			}
 			if _, derr := erc4626DecodeUint(totalAssetsResult.Data); derr != nil {
-				negativeCache.add(c.contract, bestHeight)
+				negativeCache.add(c.contract, bestHeight, reorgGen)
 				continue
 			}
 			if err := setVault(c.contract, assetContract); err != nil {
@@ -187,7 +198,7 @@ func enrichErc4626TokensWithDeps(
 //
 // Returns nil if the contract is not (or no longer) a vault. The caller is
 // expected to have already filtered by standard.
-func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight uint32) *Erc4626Token {
+func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight uint32, bestHash string) *Erc4626Token {
 	if contractInfo == nil || contractInfo.Contract == "" {
 		return nil
 	}
@@ -195,8 +206,14 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight
 	if !ok {
 		return nil
 	}
+	// Capture reorgGen at the top, before issuing the multicall. Used both
+	// as the live-cache key (so a same-height reorg lazily invalidates) and
+	// as the writer's gen-snapshot. Together with bestHash it lets persistence
+	// refuse if the in-flight multicall observed a block that is no longer
+	// canonical by the time the DB write runs.
+	reorgGen := w.db.ReorgGeneration()
 	setVault := func(addr, asset string) error {
-		return w.db.SetContractInfoErc4626Vault(addr, asset)
+		return w.db.SetContractInfoErc4626Vault(addr, asset, bestHeight, bestHash, reorgGen)
 	}
 
 	// The caller owns bestHeight selection. If it has no usable height (0), fall
@@ -208,7 +225,7 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight
 		return token
 	}
 	blockNumber := new(big.Int).SetUint64(uint64(bestHeight))
-	return erc4626CacheLookupOrBuild(erc4626LiveCache, erc4626CacheKey(contractInfo.Contract, bestHeight), func() (*Erc4626Token, error) {
+	return erc4626CacheLookupOrBuild(erc4626LiveCache, erc4626CacheKey(contractInfo.Contract, bestHeight, reorgGen), func() (*Erc4626Token, error) {
 		return buildErc4626TokenWithDeps(contractInfo, mc, setVault, w.GetContractInfo, blockNumber)
 	})
 }

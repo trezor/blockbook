@@ -117,8 +117,12 @@ func newErc4626Cache(capacity int) *erc4626Cache {
 	return &erc4626Cache{lru: lru}
 }
 
-func erc4626CacheKey(contract string, blockHeight uint32) string {
-	return erc4626ContractKey(contract) + ":" + strconv.FormatUint(uint64(blockHeight), 10)
+// erc4626CacheKey scopes cache entries by (contract, height, reorgGen).
+// reorgGen is the in-memory generation counter that advances on every
+// successful disconnect, so a same-height reorg lazily invalidates entries
+// observed on the previous canonical chain (their key no longer matches).
+func erc4626CacheKey(contract string, blockHeight uint32, reorgGen uint64) string {
+	return erc4626ContractKey(contract) + ":" + strconv.FormatUint(uint64(blockHeight), 10) + ":" + strconv.FormatUint(reorgGen, 10)
 }
 
 // erc4626CacheLookupOrBuild returns the cached Erc4626Token for the given key
@@ -175,42 +179,52 @@ func erc4626ContractKey(contract string) string {
 
 // erc4626NegativeCache is a tiny in-memory LRU of recent "not a vault"
 // probe results for the accountInfo path. Unlike positive detections, negatives
-// are not persisted to DB; they expire after a bounded number of indexed blocks
-// so upgradeable or newly-activated contracts will eventually be re-probed.
+// are not persisted to DB; they expire after a bounded number of indexed
+// blocks, and they are also tagged with the reorg generation observed at
+// insertion so an entry from the pre-reorg canonical chain misses lookup
+// after the next disconnect.
+type erc4626NegativeCacheEntry struct {
+	expireAt uint64
+	reorgGen uint64
+}
+
 type erc4626NegativeCache struct {
-	lru       *lruCache[uint64]
+	lru       *lruCache[erc4626NegativeCacheEntry]
 	ttlBlocks uint32
 }
 
 func newErc4626NegativeCache(capacity int, ttlBlocks uint32) *erc4626NegativeCache {
-	lru := newLRUCache[uint64](capacity)
+	lru := newLRUCache[erc4626NegativeCacheEntry](capacity)
 	if lru == nil || ttlBlocks == 0 {
 		return nil
 	}
 	return &erc4626NegativeCache{lru: lru, ttlBlocks: ttlBlocks}
 }
 
-func (c *erc4626NegativeCache) contains(contract string, currentHeight uint32) bool {
+func (c *erc4626NegativeCache) contains(contract string, currentHeight uint32, reorgGen uint64) bool {
 	if c == nil || currentHeight == 0 {
 		return false
 	}
 	key := erc4626ContractKey(contract)
-	expireAt, ok := c.lru.get(key)
+	entry, ok := c.lru.get(key)
 	if !ok {
 		return false
 	}
-	if uint64(currentHeight) > expireAt {
+	if entry.reorgGen != reorgGen || uint64(currentHeight) > entry.expireAt {
 		c.lru.remove(key)
 		return false
 	}
 	return true
 }
 
-func (c *erc4626NegativeCache) add(contract string, currentHeight uint32) {
+func (c *erc4626NegativeCache) add(contract string, currentHeight uint32, reorgGen uint64) {
 	if c == nil || currentHeight == 0 {
 		return
 	}
-	c.lru.add(erc4626ContractKey(contract), uint64(currentHeight)+uint64(c.ttlBlocks))
+	c.lru.add(erc4626ContractKey(contract), erc4626NegativeCacheEntry{
+		expireAt: uint64(currentHeight) + uint64(c.ttlBlocks),
+		reorgGen: reorgGen,
+	})
 }
 
 func (c *erc4626NegativeCache) remove(contract string) {

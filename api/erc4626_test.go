@@ -525,7 +525,7 @@ func TestEnrichErc4626Tokens_FlagsKnownVaultAndProbesUnprobed(t *testing.T) {
 		{Contract: knownVault, Standard: erc4626Standard},
 		{Contract: unprobedVault, Standard: erc4626Standard},
 	}
-	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, nil, 0)
+	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, nil, 0, 0)
 
 	if !slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("known vault must be flagged: %v", tokens[0].Protocols)
@@ -560,7 +560,7 @@ func TestEnrichErc4626Tokens_NegativeProbeDoesNotPersist(t *testing.T) {
 	tokens := Tokens{{Contract: fakeFungible, Standard: erc4626Standard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("setVault must not be called for non-vault"); return nil },
-		nil, 0)
+		nil, 0, 0)
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("non-vault must not be flagged: %v", tokens[0].Protocols)
 	}
@@ -576,7 +576,7 @@ func TestEnrichErc4626Tokens_RecentNegativeSkipsReprobe(t *testing.T) {
 		strings.ToLower(fakeFungible): {Contract: fakeFungible, Standard: erc4626Standard},
 	}
 	negativeCache := newErc4626NegativeCache(4, 2)
-	negativeCache.add(fakeFungible, 100)
+	negativeCache.add(fakeFungible, 100, 0)
 	mc := &fakeMulticaller{
 		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
 			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
@@ -589,7 +589,7 @@ func TestEnrichErc4626Tokens_RecentNegativeSkipsReprobe(t *testing.T) {
 	tokens := Tokens{{Contract: fakeFungible, Standard: erc4626Standard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("setVault must not be called for non-vault"); return nil },
-		negativeCache, 101)
+		negativeCache, 101, 0)
 
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("non-vault must not be flagged: %v", tokens[0].Protocols)
@@ -626,13 +626,13 @@ func TestEnrichErc4626Tokens_NegativeCacheExpiresAndReprobes(t *testing.T) {
 	tokens := Tokens{{Contract: fakeFungible, Standard: erc4626Standard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("setVault must not be called for non-vault"); return nil },
-		negativeCache, 100)
+		negativeCache, 100, 0)
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("setVault must not be called for non-vault"); return nil },
-		negativeCache, 101)
+		negativeCache, 101, 0)
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("setVault must not be called for non-vault"); return nil },
-		negativeCache, 103)
+		negativeCache, 103, 0)
 
 	if len(mc.calls) != 2 {
 		t.Fatalf("expected probe, cached skip, then reprobe after expiry; got %d multicalls", len(mc.calls))
@@ -654,7 +654,7 @@ func TestEnrichErc4626Tokens_TransportErrorDoesNotPersist(t *testing.T) {
 	tokens := Tokens{{Contract: unprobed, Standard: erc4626Standard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { t.Fatal("must not setVault on transport error"); return nil },
-		nil, 0)
+		nil, 0, 0)
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("must not flag on transport error: %v", tokens[0].Protocols)
 	}
@@ -672,7 +672,7 @@ func TestEnrichErc4626Tokens_NoMulticallerStillFlagsKnown(t *testing.T) {
 		{Contract: unprobed, Standard: erc4626Standard},
 	}
 	// nil multicaller (chain doesn't support multicall): must still flag known vaults.
-	enrichErc4626TokensWithDeps(tokens, store.get, nil, nil, nil, 0)
+	enrichErc4626TokensWithDeps(tokens, store.get, nil, nil, nil, 0, 0)
 
 	if !slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("known vault must be flagged even without multicaller: %v", tokens[0].Protocols)
@@ -727,7 +727,7 @@ func TestEnrichErc4626Tokens_BatchedMixed(t *testing.T) {
 		{Contract: fakeB, Standard: erc4626Standard},
 		{Contract: brokenC, Standard: erc4626Standard},
 	}
-	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, nil, 0)
+	enrichErc4626TokensWithDeps(tokens, store.get, mc, setVault, nil, 0, 0)
 
 	if !slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("vaultA should be flagged: %v", tokens[0].Protocols)
@@ -794,7 +794,7 @@ func TestEnrichErc4626Tokens_ChunksLargeProbe(t *testing.T) {
 			persistedVaults[strings.ToLower(addr)] = assetContract
 			return nil
 		},
-		nil, 0)
+		nil, 0, 0)
 
 	if len(mc.calls) != 2 {
 		t.Fatalf("expected two multicall chunks, got %d", len(mc.calls))
@@ -830,7 +830,7 @@ func TestEnrichErc4626Tokens_NonFungibleSkipped(t *testing.T) {
 	tokens := Tokens{{Contract: nft, Standard: bchain.ERC771TokenStandard}}
 	enrichErc4626TokensWithDeps(tokens, store.get, mc,
 		func(string, string) error { return nil },
-		nil, 0)
+		nil, 0, 0)
 	if slicesContains(tokens[0].Protocols, contractInfoProtocolErc4626) {
 		t.Fatalf("non-fungible must not be flagged: %v", tokens[0].Protocols)
 	}

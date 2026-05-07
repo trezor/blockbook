@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -61,19 +62,24 @@ const addrContractsCacheMinSize = 300_000 // limit for caching address contracts
 
 // RocksDB handle
 type RocksDB struct {
-	path                  string
-	db                    *grocksdb.DB
-	wo                    *grocksdb.WriteOptions
-	ro                    *grocksdb.ReadOptions
-	cfh                   []*grocksdb.ColumnFamilyHandle
-	chainParser           bchain.BlockChainParser
-	is                    *common.InternalState
-	metrics               *common.Metrics
-	cache                 *grocksdb.Cache
-	maxOpenFiles          int
-	cbs                   connectBlockStats
-	extendedIndex         bool
-	connectBlockMux       sync.Mutex
+	path            string
+	db              *grocksdb.DB
+	wo              *grocksdb.WriteOptions
+	ro              *grocksdb.ReadOptions
+	cfh             []*grocksdb.ColumnFamilyHandle
+	chainParser     bchain.BlockChainParser
+	is              *common.InternalState
+	metrics         *common.Metrics
+	cache           *grocksdb.Cache
+	maxOpenFiles    int
+	cbs             connectBlockStats
+	extendedIndex   bool
+	connectBlockMux sync.Mutex
+	// reorgGen advances on every successful Ethereum-type disconnect. In-memory
+	// caches that depend on the canonical chain state include this generation
+	// in their keys (or compare against it on read) so a same-height reorg
+	// invalidates them lazily.
+	reorgGen              atomic.Uint64
 	addrContractsCacheMux sync.Mutex
 	addrContractsCache    map[string]*unpackedAddrContracts
 	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.
@@ -113,6 +119,12 @@ const (
 
 	// TODO move to common section
 	cfAddressAliases
+
+	// cfErcProtocols stores per-protocol detection records keyed by
+	// contract address. Decoupled from cfContracts so API-driven protocol
+	// writes never collide with sync-driven contract metadata writes, and so
+	// disconnect can revert protocol records without touching sync state.
+	cfErcProtocols
 )
 
 // common columns
@@ -121,7 +133,7 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses", "blockFilter"}
-var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
+var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases", "ercProtocols"}
 
 func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
@@ -401,6 +413,14 @@ const (
 	opInsert = 0
 	opDelete = 1
 )
+
+// ReorgGeneration returns the current value of the in-memory reorg-generation
+// counter. The counter advances on every successful Ethereum-type disconnect
+// and is meant to be embedded in cache keys (or compared on read) so callers
+// invalidate cache entries that referred to the pre-reorg canonical chain.
+func (d *RocksDB) ReorgGeneration() uint64 {
+	return d.reorgGen.Load()
+}
 
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {

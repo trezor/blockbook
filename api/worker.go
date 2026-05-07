@@ -1311,18 +1311,18 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 			d.tokens = d.tokens[:j]
 			sort.Sort(d.tokens)
-			// Read best height once and pass it down so the protocol multicall
+			// Read best block once and pass it down so the protocol multicall
 			// and any negative-cache TTL anchor observe the same chain state.
 			// On error we still proceed: enrichTokenProtocols and the multicall
 			// path treat bestHeight==0 as "no usable height" and degrade
 			// gracefully (no in-block caching, no negative-TTL anchoring), but
 			// surface the underlying problem so a real DB issue is visible
 			// rather than silently disabling enrichment.
-			bestHeight, _, bestErr := w.db.GetBestBlock()
+			bestHeight, bestHash, bestErr := w.db.GetBestBlock()
 			if bestErr != nil {
 				glog.Warningf("GetBestBlock for protocol enrichment: %v", bestErr)
 			}
-			w.enrichTokenProtocols(d.tokens, filter.Protocols, bestHeight)
+			w.enrichTokenProtocols(d.tokens, filter.Protocols, bestHeight, bestHash)
 		}
 		d.contractInfo, err = w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
 		if err != nil {

@@ -57,11 +57,11 @@ func (w *Worker) ValidateProtocolsForChain(protocols []string) error {
 	return ValidateContractProtocols(protocols)
 }
 
-func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string, bestHeight uint32) {
+func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string, bestHeight uint32, bestHash string) {
 	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) {
 		return
 	}
-	w.enrichErc4626Tokens(tokens, bestHeight)
+	w.enrichErc4626Tokens(tokens, bestHeight, bestHash)
 }
 
 // contractInfoResultFromBchain wraps bchain.ContractInfo into the API-level
@@ -130,7 +130,7 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 		return nil, NewAPIError("Contract not found", true)
 	}
 
-	bestHeight, _, err := w.db.GetBestBlock()
+	bestHeight, bestHash, err := w.db.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 		return result, nil
 	}
 
-	erc4626 := w.buildErc4626Token(contractInfo, bestHeight)
+	erc4626 := w.buildErc4626Token(contractInfo, bestHeight, bestHash)
 	if erc4626 == nil {
 		return result, nil
 	}

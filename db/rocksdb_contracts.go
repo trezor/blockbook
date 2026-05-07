@@ -8,19 +8,6 @@ import (
 
 var cachedContracts = newContractInfoLRU(cachedContractsLRUMaxSize)
 
-const (
-	// Bit 0 of the ERC4626 protocol payload's flags varuint — IsErc4626.
-	contractInfoFlagErc4626 uint = 1 << 0
-
-	// Protocol-extension tail header. Marker bit 15 identifies a versioned
-	// extensions block; any trailing varuint without it is treated as junk and
-	// skipped, so the core record decodes unaffected.
-	contractInfoExtensionsMarker   uint = 1 << 15
-	contractInfoExtensionsVersion1 uint = contractInfoExtensionsMarker | 1
-
-	contractInfoProtocolErc4626 uint = 1
-)
-
 func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
 	buf := packString(contractInfo.Name)
 	buf = append(buf, packString(contractInfo.Symbol)...)
@@ -32,7 +19,6 @@ func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
 	buf = append(buf, varBuf[:l]...)
 	l = packVaruint(uint(contractInfo.DestructedInBlock), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	buf = append(buf, packContractInfoProtocolExtensions(contractInfo)...)
 	return buf
 }
 
@@ -55,104 +41,9 @@ func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
 	ui, l = unpackVaruint(buf)
 	contractInfo.CreatedInBlock = uint32(ui)
 	buf = buf[l:]
-	ui, l = unpackVaruint(buf)
+	ui, _ = unpackVaruint(buf)
 	contractInfo.DestructedInBlock = uint32(ui)
-	buf = buf[l:]
-	if len(buf) == 0 {
-		return &contractInfo, nil
-	}
-	ui, l = unpackVaruint(buf)
-	if l == 0 {
-		return &contractInfo, nil
-	}
-	if ui&contractInfoExtensionsMarker != 0 {
-		unpackContractInfoProtocolExtensions(&contractInfo, ui, buf[l:])
-	}
 	return &contractInfo, nil
-}
-
-func packContractInfoProtocolExtensions(contractInfo *bchain.ContractInfo) []byte {
-	extensionCount := 0
-	if contractInfo.IsErc4626 || contractInfo.Erc4626AssetContract != "" {
-		extensionCount++
-	}
-	if extensionCount == 0 {
-		return nil
-	}
-	varBuf := make([]byte, vlq.MaxLen64)
-	buf := make([]byte, 0, 64)
-	l := packVaruint(contractInfoExtensionsVersion1, varBuf)
-	buf = append(buf, varBuf[:l]...)
-	l = packVaruint(uint(extensionCount), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	if contractInfo.IsErc4626 || contractInfo.Erc4626AssetContract != "" {
-		payload := packContractInfoErc4626Payload(contractInfo)
-		l = packVaruint(contractInfoProtocolErc4626, varBuf)
-		buf = append(buf, varBuf[:l]...)
-		l = packVaruint(uint(len(payload)), varBuf)
-		buf = append(buf, varBuf[:l]...)
-		buf = append(buf, payload...)
-	}
-	return buf
-}
-
-func packContractInfoErc4626Payload(contractInfo *bchain.ContractInfo) []byte {
-	var flags uint
-	if contractInfo.IsErc4626 {
-		flags |= contractInfoFlagErc4626
-	}
-	varBuf := make([]byte, vlq.MaxLen64)
-	l := packVaruint(flags, varBuf)
-	buf := make([]byte, 0, l+len(contractInfo.Erc4626AssetContract)+4)
-	buf = append(buf, varBuf[:l]...)
-	buf = append(buf, packString(contractInfo.Erc4626AssetContract)...)
-	return buf
-}
-
-func unpackContractInfoProtocolExtensions(contractInfo *bchain.ContractInfo, header uint, buf []byte) {
-	if header != contractInfoExtensionsVersion1 {
-		return
-	}
-	count, l, ok := unpackVaruintSafe(buf)
-	if !ok {
-		return
-	}
-	buf = buf[l:]
-	for i := uint(0); i < count && len(buf) > 0; i++ {
-		protocolID, ll, ok := unpackVaruintSafe(buf)
-		if !ok {
-			return
-		}
-		buf = buf[ll:]
-		payloadLen, ll, ok := unpackVaruintSafe(buf)
-		if !ok {
-			return
-		}
-		buf = buf[ll:]
-		if int(payloadLen) > len(buf) {
-			return
-		}
-		payload := buf[:payloadLen]
-		switch protocolID {
-		case contractInfoProtocolErc4626:
-			unpackContractInfoErc4626Payload(contractInfo, payload)
-		}
-		buf = buf[payloadLen:]
-	}
-}
-
-func unpackContractInfoErc4626Payload(contractInfo *bchain.ContractInfo, payload []byte) {
-	flags, l, ok := unpackVaruintSafe(payload)
-	if !ok {
-		return
-	}
-	contractInfo.IsErc4626 = flags&contractInfoFlagErc4626 != 0
-	if l == len(payload) {
-		return
-	}
-	if assetContract, _, ok := unpackStringSafe(payload[l:]); ok {
-		contractInfo.Erc4626AssetContract = assetContract
-	}
 }
 
 func unpackVaruintSafe(buf []byte) (uint, int, bool) {
@@ -218,45 +109,51 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFro
 				return nil, err
 			}
 		}
+		// Merge ERC4626 detection record from the per-protocol column family.
+		// Sourced from API-time probes (gated by reorgSafetyBlocks); decoupled
+		// from cfContracts so sync writes can't clobber and disconnect can
+		// revert independently.
+		if assetContract, ok, err := d.GetContractInfoErc4626Vault(contract); err != nil {
+			return nil, err
+		} else if ok {
+			contractInfo.IsErc4626 = true
+			contractInfo.Erc4626AssetContract = assetContract
+		}
 		cachedContracts.add(cacheKey, contractInfo)
 	}
 	return contractInfo, nil
 }
 
-// SetContractInfoErc4626Vault persists the cached ERC4626 invariants for a
-// detected vault: marks IsErc4626=true and stores the underlying asset address.
-// If the row does not yet exist, this is a no-op - the contractInfo path will
-// have triggered a lazy ContractInfo fetch separately, so the row will be
-// present by the time we reach here in normal flow. Idempotent.
-func (d *RocksDB) SetContractInfoErc4626Vault(address string, assetContract string) error {
+// SetContractInfoErc4626Vault persists a detected ERC4626 vault by recording
+// its underlying asset() address into the per-protocol column family.
+// persistHeight is the API request's bestHeight at the moment of detection,
+// anchoring the row to the block where the vault was first observed so
+// disconnect can revert it on reorg. observedBlockHash and observedReorgGen
+// identify the canonical block sampled at the start of the API request; the
+// writer refuses the write if that block is no longer canonical. See
+// SetContractProtocol for the full race rationale. Idempotent; refuses to
+// overwrite an existing row whose stored asset differs from the supplied
+// one (logs a warning and returns nil).
+func (d *RocksDB) SetContractInfoErc4626Vault(address, assetContract string, persistHeight uint32, observedBlockHash string, observedReorgGen uint64) error {
 	contract, err := d.chainParser.GetAddrDescFromAddress(address)
 	if err != nil || contract == nil {
 		return err
 	}
-	contractInfo, err := d.GetContractInfo(contract, "")
-	if err != nil {
-		return err
+	return d.SetContractProtocol(contract, ContractProtocolErc4626, packString(assetContract), persistHeight, observedBlockHash, observedReorgGen)
+}
+
+// GetContractInfoErc4626Vault reads the persisted ERC4626 detection record
+// for the contract, returning the underlying asset() address.
+func (d *RocksDB) GetContractInfoErc4626Vault(contract bchain.AddressDescriptor) (assetContract string, ok bool, err error) {
+	payload, _, ok, err := d.GetContractProtocol(contract, ContractProtocolErc4626)
+	if err != nil || !ok {
+		return "", ok, err
 	}
-	if contractInfo == nil {
-		return nil
+	asset, _, ok := unpackStringSafe(payload)
+	if !ok {
+		return "", false, nil
 	}
-	changed := false
-	if !contractInfo.IsErc4626 {
-		contractInfo.IsErc4626 = true
-		changed = true
-	}
-	if contractInfo.Erc4626AssetContract != assetContract {
-		contractInfo.Erc4626AssetContract = assetContract
-		changed = true
-	}
-	if !changed {
-		return nil
-	}
-	if err := d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo)); err != nil {
-		return err
-	}
-	cachedContracts.add(string(contract), contractInfo)
-	return nil
+	return asset, true, nil
 }
 
 // StoreContractInfo stores contractInfo in DB

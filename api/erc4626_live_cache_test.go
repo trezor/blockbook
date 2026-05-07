@@ -256,11 +256,14 @@ func TestErc4626Cache_ConcurrentErrorsDoNotPoisonCache(t *testing.T) {
 }
 
 func TestErc4626CacheKey_NormalizesContract(t *testing.T) {
-	if a, b := erc4626CacheKey("0xAbCd", 7), erc4626CacheKey("0xabcd", 7); a != b {
+	if a, b := erc4626CacheKey("0xAbCd", 7, 0), erc4626CacheKey("0xabcd", 7, 0); a != b {
 		t.Fatalf("expected case-insensitive key, got %q vs %q", a, b)
 	}
-	if a, b := erc4626CacheKey("0xabcd", 7), erc4626CacheKey("0xabcd", 8); a == b {
+	if a, b := erc4626CacheKey("0xabcd", 7, 0), erc4626CacheKey("0xabcd", 8, 0); a == b {
 		t.Fatal("different heights must yield different keys")
+	}
+	if a, b := erc4626CacheKey("0xabcd", 7, 0), erc4626CacheKey("0xabcd", 7, 1); a == b {
+		t.Fatal("different reorg generations must yield different keys")
 	}
 }
 
@@ -288,24 +291,39 @@ func TestErc4626CacheLookupOrBuild_NilCacheFallsThrough(t *testing.T) {
 
 func TestErc4626NegativeProbeCache_HitExpireAndRemove(t *testing.T) {
 	cache := newErc4626NegativeCache(2, 2)
-	if cache.contains("0xabc", 10) {
+	if cache.contains("0xabc", 10, 0) {
 		t.Fatal("empty cache should miss")
 	}
 
-	cache.add("0xAbC", 10)
-	if !cache.contains("0xabc", 10) {
+	cache.add("0xAbC", 10, 0)
+	if !cache.contains("0xabc", 10, 0) {
 		t.Fatal("expected hit at insertion height")
 	}
-	if !cache.contains("0xABC", 12) {
+	if !cache.contains("0xABC", 12, 0) {
 		t.Fatal("expected hit before expiry")
 	}
-	if cache.contains("0xabc", 13) {
+	if cache.contains("0xabc", 13, 0) {
 		t.Fatal("expected miss after expiry")
 	}
 
-	cache.add("0xabc", 20)
+	cache.add("0xabc", 20, 0)
 	cache.remove("0xABC")
-	if cache.contains("0xabc", 20) {
+	if cache.contains("0xabc", 20, 0) {
 		t.Fatal("expected miss after explicit remove")
+	}
+}
+
+func TestErc4626NegativeProbeCache_ReorgGenInvalidates(t *testing.T) {
+	cache := newErc4626NegativeCache(2, 100)
+	cache.add("0xabc", 10, 7)
+	if !cache.contains("0xabc", 10, 7) {
+		t.Fatal("hit on matching reorg generation expected")
+	}
+	if cache.contains("0xabc", 10, 8) {
+		t.Fatal("entry from older reorg generation must miss")
+	}
+	// the mismatched-gen lookup also evicts the entry, so a same-gen reprobe sees a fresh miss
+	if cache.contains("0xabc", 10, 7) {
+		t.Fatal("entry should have been evicted on reorg-gen mismatch")
 	}
 }
