@@ -72,6 +72,11 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 // Concurrent probers are collapsed via singleflight, so a thundering herd
 // at process start performs at most one eth_getCode.
 func (b *EthereumRPC) probeMulticall3() (bool, error) {
+	// The probe is set exactly once per process to either multicall3Deployed
+	// or multicall3NotDeployed and is never cleared back to the zero value,
+	// so any other observed state is multicall3Unprobed and falls through to
+	// the singleflight below. The Do callback re-checks the state under
+	// singleflight, so no correctness depends on the invariant above.
 	switch b.multicall3Probe.Load() {
 	case multicall3Deployed:
 		return true, nil
@@ -229,6 +234,10 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 	}
 	n := int(length.Uint64())
 	if n == 0 {
+		// Degenerate: encoder short-circuits empty input upstream, so a
+		// well-formed n==0 response can only arise from a malformed batch
+		// or unusual node behavior. nil matches encodeAggregate3's empty
+		// case and the caller's nil-means-no-results contract.
 		return nil, nil
 	}
 	if len(raw) < headsStart+n*32 {

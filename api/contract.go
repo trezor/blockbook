@@ -159,7 +159,7 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 	// Probe only for ERC20-shaped contracts (or unknown/unhandled, which covers
 	// freshly RPC-fetched contracts with no tagged standard); ERC721/ERC1155
 	// would always fail the probe.
-	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) || w.chainType != bchain.ChainEthereumType ||
+	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) ||
 		(contractInfo.Standard != bchain.UnknownTokenStandard && contractInfo.Standard != bchain.UnhandledTokenStandard && contractInfo.Standard != erc4626EvmFungibleStandard()) {
 		return result, nil
 	}

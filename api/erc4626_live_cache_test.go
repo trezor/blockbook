@@ -290,12 +290,13 @@ func TestErc4626CacheLookupOrBuild_NilCacheFallsThrough(t *testing.T) {
 }
 
 func TestErc4626NegativeProbeCache_HitExpireAndRemove(t *testing.T) {
-	cache := newErc4626NegativeCache(2, 2)
+	cache := newErc4626NegativeCache(2)
+	const ttl = uint32(2)
 	if cache.contains("0xabc", 10, 0) {
 		t.Fatal("empty cache should miss")
 	}
 
-	cache.add("0xAbC", 10, 0)
+	cache.add("0xAbC", 10, ttl, 0)
 	if !cache.contains("0xabc", 10, 0) {
 		t.Fatal("expected hit at insertion height")
 	}
@@ -306,16 +307,27 @@ func TestErc4626NegativeProbeCache_HitExpireAndRemove(t *testing.T) {
 		t.Fatal("expected miss after expiry")
 	}
 
-	cache.add("0xabc", 20, 0)
+	cache.add("0xabc", 20, ttl, 0)
 	cache.remove("0xABC")
 	if cache.contains("0xabc", 20, 0) {
 		t.Fatal("expected miss after explicit remove")
 	}
 }
 
+func TestErc4626NegativeProbeCache_ZeroTTLBlocksIsNoOp(t *testing.T) {
+	// ttlBlocks == 0 represents "chain block time unavailable" — the cache
+	// must drop the add silently and treat it as a miss on lookup.
+	cache := newErc4626NegativeCache(2)
+	cache.add("0xabc", 10, 0, 0)
+	if cache.contains("0xabc", 10, 0) {
+		t.Fatal("entry inserted with ttlBlocks==0 should be absent")
+	}
+}
+
 func TestErc4626NegativeProbeCache_ReorgGenInvalidates(t *testing.T) {
-	cache := newErc4626NegativeCache(2, 100)
-	cache.add("0xabc", 10, 7)
+	cache := newErc4626NegativeCache(2)
+	const ttl = uint32(100)
+	cache.add("0xabc", 10, ttl, 7)
 	if !cache.contains("0xabc", 10, 7) {
 		t.Fatal("hit on matching reorg generation expected")
 	}
@@ -325,5 +337,27 @@ func TestErc4626NegativeProbeCache_ReorgGenInvalidates(t *testing.T) {
 	// the mismatched-gen lookup also evicts the entry, so a same-gen reprobe sees a fresh miss
 	if cache.contains("0xabc", 10, 7) {
 		t.Fatal("entry should have been evicted on reorg-gen mismatch")
+	}
+}
+
+func TestErc4626BlocksForDuration(t *testing.T) {
+	// 15 minutes / 12s blocks → 75 blocks (Ethereum).
+	if got := erc4626BlocksForDuration(15*time.Minute, 12*time.Second); got != 75 {
+		t.Fatalf("Ethereum: got %d, want 75", got)
+	}
+	// 15 minutes / 250ms blocks → 3600 blocks (Arbitrum).
+	if got := erc4626BlocksForDuration(15*time.Minute, 250*time.Millisecond); got != 3600 {
+		t.Fatalf("Arbitrum: got %d, want 3600", got)
+	}
+	// Rounding up: 1ns under a clean block boundary still uses one full block.
+	if got := erc4626BlocksForDuration(13*time.Second, 12*time.Second); got != 2 {
+		t.Fatalf("ceil division: got %d, want 2", got)
+	}
+	// Zero / negative inputs disable the optimization.
+	if got := erc4626BlocksForDuration(0, time.Second); got != 0 {
+		t.Fatalf("zero duration must yield 0, got %d", got)
+	}
+	if got := erc4626BlocksForDuration(time.Minute, 0); got != 0 {
+		t.Fatalf("zero blockTime must yield 0, got %d", got)
 	}
 }

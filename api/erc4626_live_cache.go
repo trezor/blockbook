@@ -13,10 +13,9 @@ import (
 // (contract, height, reorgGen). Old entries age out as best-block advances.
 const erc4626CacheCapacity = 1024
 const erc4626NegativeProbeCacheCapacity = 4096
-const erc4626NegativeProbeTTLBlocks = 256
 
 var erc4626LiveCache = newErc4626Cache(erc4626CacheCapacity)
-var erc4626NegativeProbeCache = newErc4626NegativeCache(erc4626NegativeProbeCacheCapacity, erc4626NegativeProbeTTLBlocks)
+var erc4626NegativeProbeCache = newErc4626NegativeCache(erc4626NegativeProbeCacheCapacity)
 
 // lruCache is a string-keyed LRU shared by the live-values and negative
 // caches. Methods are nil-safe so a disabled (capacity<=0) cache no-ops.
@@ -152,24 +151,28 @@ func erc4626ContractKey(contract string) string {
 }
 
 // erc4626NegativeCache is an in-memory LRU of recent "not a vault" results
-// for accountInfo. Not persisted; expires after ttlBlocks and on reorgGen
-// mismatch (so a pre-reorg negative misses after disconnect).
+// for accountInfo. Not persisted; entries expire after the per-add ttlBlocks
+// and on reorgGen mismatch (so a pre-reorg negative misses after disconnect).
+//
+// ttlBlocks is supplied per add() rather than fixed at construction so the
+// caller can derive it from the chain's averageBlockTimeMs at request time.
+// That keeps the user-visible TTL roughly the same wall-clock duration
+// across chains regardless of block cadence.
 type erc4626NegativeCacheEntry struct {
 	expireAt uint64
 	reorgGen uint64
 }
 
 type erc4626NegativeCache struct {
-	lru       *lruCache[erc4626NegativeCacheEntry]
-	ttlBlocks uint32
+	lru *lruCache[erc4626NegativeCacheEntry]
 }
 
-func newErc4626NegativeCache(capacity int, ttlBlocks uint32) *erc4626NegativeCache {
+func newErc4626NegativeCache(capacity int) *erc4626NegativeCache {
 	lru := newLRUCache[erc4626NegativeCacheEntry](capacity)
-	if lru == nil || ttlBlocks == 0 {
+	if lru == nil {
 		return nil
 	}
-	return &erc4626NegativeCache{lru: lru, ttlBlocks: ttlBlocks}
+	return &erc4626NegativeCache{lru: lru}
 }
 
 func (c *erc4626NegativeCache) contains(contract string, currentHeight uint32, reorgGen uint64) bool {
@@ -188,12 +191,12 @@ func (c *erc4626NegativeCache) contains(contract string, currentHeight uint32, r
 	return true
 }
 
-func (c *erc4626NegativeCache) add(contract string, currentHeight uint32, reorgGen uint64) {
-	if c == nil || currentHeight == 0 {
+func (c *erc4626NegativeCache) add(contract string, currentHeight, ttlBlocks uint32, reorgGen uint64) {
+	if c == nil || currentHeight == 0 || ttlBlocks == 0 {
 		return
 	}
 	c.lru.add(erc4626ContractKey(contract), erc4626NegativeCacheEntry{
-		expireAt: uint64(currentHeight) + uint64(c.ttlBlocks),
+		expireAt: uint64(currentHeight) + uint64(ttlBlocks),
 		reorgGen: reorgGen,
 	})
 }
