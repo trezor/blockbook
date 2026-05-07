@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestErc4626Cache_HitAndMiss(t *testing.T) {
@@ -98,12 +99,18 @@ func TestErc4626Cache_SingleflightCollapsesConcurrentCalls(t *testing.T) {
 			results[i] = erc4626CacheLookupOrBuild(cache, "shared-key", build)
 		}()
 	}
-	// Give the goroutines time to enter Do; the singleflight group only
-	// dedupes calls that arrive while the first is still in flight.
-	for {
-		if calls.Load() == 1 {
-			break
+	// Wait for the first builder to enter Do; the singleflight group only
+	// dedupes calls that arrive while the first is still in flight. Bounded
+	// by a deadline so a regression that prevents calls from ever reaching 1
+	// fails the test instead of hanging CI.
+	deadline := time.Now().Add(2 * time.Second)
+	for calls.Load() < 1 {
+		if time.Now().After(deadline) {
+			close(gate)
+			wg.Wait()
+			t.Fatalf("timed out waiting for first builder; calls=%d", calls.Load())
 		}
+		time.Sleep(time.Millisecond)
 	}
 	close(gate)
 	wg.Wait()
