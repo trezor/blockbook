@@ -214,9 +214,9 @@ Column families used only by **Ethereum type** coins:
   - **byContract** (prefix `0x00`) is the read path: one row per
     `(contract, protocolId)`, value carries the persist-height and the
     protocol-specific payload.
-  - **byHeight** (prefix `0x01`) is the secondary index used by `DisconnectBlockRangeEthereumType`: 
-    a small range scan over the disconnected height range yields exactly the rows 
-    whose persistence is no longer canonical, and both rows are deleted 
+  - **byHeight** (prefix `0x01`) is the secondary index used by `DisconnectBlockRangeEthereumType`:
+    a small range scan over the disconnected height range yields exactly the rows
+    whose persistence is no longer canonical, and both rows are deleted
     in the same batch as the rest of the disconnect.
 
   Reserved protocol IDs:

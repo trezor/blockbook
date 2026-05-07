@@ -84,7 +84,13 @@ func (d *RocksDB) GetContractInfoForAddress(address string) (*bchain.ContractInf
 // it is hard to guess the standard of the contract using API, it is easier to set it the first time the contract is processed in a tx
 func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName) (*bchain.ContractInfo, error) {
 	cacheKey := string(contract)
-	contractInfo, found := cachedContracts.get(cacheKey)
+	// Sample both counters before the CF reads. If a disconnect bumps reorgGen
+	// (populate-after-delete race) or a SetErcProtocol bumps protocolGen
+	// (populate-after-write race) during this call, the stamped entry will
+	// mismatch on the next get and miss.
+	reorgGen := d.reorgGen.Load()
+	protocolGen := d.protocolGen.Load()
+	contractInfo, found := cachedContracts.get(cacheKey, reorgGen, protocolGen)
 	if !found {
 		val, err := d.db.GetCF(d.ro, d.cfh[cfContracts], contract)
 		if err != nil {
@@ -116,7 +122,7 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFro
 			contractInfo.IsErc4626 = true
 			contractInfo.Erc4626AssetContract = assetContract
 		}
-		cachedContracts.add(cacheKey, contractInfo)
+		cachedContracts.add(cacheKey, contractInfo, reorgGen, protocolGen)
 	}
 	return contractInfo, nil
 }

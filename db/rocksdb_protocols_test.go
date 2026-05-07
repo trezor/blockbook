@@ -346,3 +346,189 @@ func TestSetErcProtocol_DoesNotRaceWithStoreContractInfo(t *testing.T) {
 		}
 	}
 }
+
+// Reproduces the cache populate-after-write race: a reader caches IsErc4626=false
+// just after a concurrent SetErcProtocol wrote the row. A subsequent
+// SetErcProtocol with the same payload (idempotent path) must invalidate the
+// stale entry so it doesn't drive a re-probe loop.
+func TestSetErcProtocol_IdempotentInvalidatesStaleCache(t *testing.T) {
+	d := newProtocolTestDB(t)
+	defer closeAndDestroyRocksDB(t, d)
+
+	address := "0x000000000000000000000000000000000000c0de"
+	addrDesc, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		t.Fatalf("addr desc: %v", err)
+	}
+	if err := d.StoreContractInfo(&bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 50,
+	}); err != nil {
+		t.Fatalf("StoreContractInfo: %v", err)
+	}
+
+	if err := d.SetContractInfoErc4626Vault(address, "0x00000000000000000000000000000000000000a5", 100, "", 0); err != nil {
+		t.Fatalf("SetContractInfoErc4626Vault: %v", err)
+	}
+	// Simulate the race: reader's CF read pre-dated the write, populates stale
+	// entry under the post-write protocolGen (so the protocolGen-mismatch path
+	// can't help — only the writer's cache delete can).
+	stale := &bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 50,
+		IsErc4626: false, Erc4626AssetContract: "",
+	}
+	cachedContracts.add(string(addrDesc), stale, d.ReorgGeneration(), d.protocolGen.Load())
+
+	// Idempotent re-write must clear the stale cache entry.
+	if err := d.SetContractInfoErc4626Vault(address, "0x00000000000000000000000000000000000000a5", 100, "", 0); err != nil {
+		t.Fatalf("idempotent SetContractInfoErc4626Vault: %v", err)
+	}
+	ci, err := d.GetContractInfo(addrDesc, "")
+	if err != nil || ci == nil {
+		t.Fatalf("GetContractInfo: ci=%v err=%v", ci, err)
+	}
+	if !ci.IsErc4626 || ci.Erc4626AssetContract == "" {
+		t.Fatalf("expected fresh ERC4626 fields after idempotent re-write, got %+v", ci)
+	}
+}
+
+// Same shape as the idempotent test, but exercises the conflict-refusal path
+// (existing row, different payload). The write is refused but any stale cache
+// entry must still be invalidated; otherwise stale negatives survive past a
+// conflict and keep driving re-probes.
+func TestSetErcProtocol_ConflictRefusalInvalidatesStaleCache(t *testing.T) {
+	d := newProtocolTestDB(t)
+	defer closeAndDestroyRocksDB(t, d)
+
+	address := "0x000000000000000000000000000000000000c1ff"
+	addrDesc, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		t.Fatalf("addr desc: %v", err)
+	}
+	if err := d.StoreContractInfo(&bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 50,
+	}); err != nil {
+		t.Fatalf("StoreContractInfo: %v", err)
+	}
+
+	const original = "0x00000000000000000000000000000000000000a5"
+	if err := d.SetContractInfoErc4626Vault(address, original, 100, "", 0); err != nil {
+		t.Fatalf("initial SetContractInfoErc4626Vault: %v", err)
+	}
+	stale := &bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 50,
+		IsErc4626: false, Erc4626AssetContract: "",
+	}
+	cachedContracts.add(string(addrDesc), stale, d.ReorgGeneration(), d.protocolGen.Load())
+
+	// Write with a *different* asset; conflict path refuses and warns.
+	if err := d.SetContractInfoErc4626Vault(address, "0x00000000000000000000000000000000000000ff", 100, "", 0); err != nil {
+		t.Fatalf("conflict SetContractInfoErc4626Vault: %v", err)
+	}
+	ci, err := d.GetContractInfo(addrDesc, "")
+	if err != nil || ci == nil {
+		t.Fatalf("GetContractInfo: ci=%v err=%v", ci, err)
+	}
+	if !ci.IsErc4626 || ci.Erc4626AssetContract != original {
+		t.Fatalf("expected fresh read of original asset after conflict refusal, got %+v", ci)
+	}
+}
+
+// Reproduces the reorg populate-after-delete race: a reader populates the
+// cache stamped at the old reorgGen; a later disconnect bumps the counter.
+// The next reader sees the stamped entry mismatch and re-reads the post-disconnect
+// CF state (IsErc4626=false) instead of the stale true.
+func TestGetContractInfo_RejectsCacheEntryStampedAtOldReorgGen(t *testing.T) {
+	d := newProtocolTestDB(t)
+	defer closeAndDestroyRocksDB(t, d)
+
+	address := "0x000000000000000000000000000000000000beef"
+	addrDesc, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		t.Fatalf("addr desc: %v", err)
+	}
+	if err := d.StoreContractInfo(&bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 100,
+	}); err != nil {
+		t.Fatalf("StoreContractInfo: %v", err)
+	}
+
+	// Plant a stale-true entry stamped at the current generation, mimicking a
+	// reader who saw the old-fork protocol row before it was deleted.
+	staleGen := d.ReorgGeneration()
+	staleProtocolGen := d.protocolGen.Load()
+	stale := &bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 100,
+		IsErc4626: true, Erc4626AssetContract: "0x00000000000000000000000000000000000000a5",
+	}
+	cachedContracts.add(string(addrDesc), stale, staleGen, staleProtocolGen)
+
+	// Disconnect bumps the generation; cfErcProtocols is empty (row never persisted).
+	d.reorgGen.Add(1)
+
+	ci, err := d.GetContractInfo(addrDesc, "")
+	if err != nil || ci == nil {
+		t.Fatalf("GetContractInfo: ci=%v err=%v", ci, err)
+	}
+	if ci.IsErc4626 || ci.Erc4626AssetContract != "" {
+		t.Fatalf("expected stale cache entry to be rejected after reorgGen bump, got %+v", ci)
+	}
+}
+
+// Reproduces the populate-after-write race that the conflict/idempotent cache
+// deletes alone don't cover: reader misses, samples (reorgGen, protocolGen),
+// reads cfErcProtocols (row absent), then a writer lands the row and bumps
+// protocolGen. The reader's add lands AFTER the writer's cache delete, leaving
+// a stale IsErc4626=false stamped at the pre-write protocolGen. The next
+// GetContractInfo samples the bumped protocolGen and must miss.
+//
+// Without the protocolGen counter this stale entry would survive until LRU
+// eviction, even though the protocol row exists on disk and no further
+// SetErcProtocol call is guaranteed to clear it.
+func TestGetContractInfo_RejectsCacheEntryStampedAtOldProtocolGen(t *testing.T) {
+	d := newProtocolTestDB(t)
+	defer closeAndDestroyRocksDB(t, d)
+
+	address := "0x000000000000000000000000000000000000abba"
+	addrDesc, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		t.Fatalf("addr desc: %v", err)
+	}
+	if err := d.StoreContractInfo(&bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 50,
+	}); err != nil {
+		t.Fatalf("StoreContractInfo: %v", err)
+	}
+
+	// Snapshot the pre-write protocolGen (the racing reader's view).
+	staleReorgGen := d.ReorgGeneration()
+	staleProtocolGen := d.protocolGen.Load()
+
+	// Writer lands the protocol row (bumps protocolGen).
+	if err := d.SetContractInfoErc4626Vault(address, "0x00000000000000000000000000000000000000a5", 100, "", 0); err != nil {
+		t.Fatalf("SetContractInfoErc4626Vault: %v", err)
+	}
+
+	// Racing reader's stale-false entry lands AFTER the writer's cache delete,
+	// stamped at the old protocolGen.
+	stale := &bchain.ContractInfo{
+		Contract: address, Standard: bchain.ERC20TokenStandard, Type: bchain.ERC20TokenStandard,
+		Name: "T", Symbol: "T", Decimals: 18, CreatedInBlock: 50,
+		IsErc4626: false, Erc4626AssetContract: "",
+	}
+	cachedContracts.add(string(addrDesc), stale, staleReorgGen, staleProtocolGen)
+
+	ci, err := d.GetContractInfo(addrDesc, "")
+	if err != nil || ci == nil {
+		t.Fatalf("GetContractInfo: ci=%v err=%v", ci, err)
+	}
+	if !ci.IsErc4626 || ci.Erc4626AssetContract == "" {
+		t.Fatalf("expected fresh ERC4626 fields after protocolGen bump, got %+v", ci)
+	}
+}

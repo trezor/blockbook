@@ -77,7 +77,13 @@ type RocksDB struct {
 	connectBlockMux sync.Mutex
 	// reorgGen advances on every successful Ethereum-type disconnect; embed
 	// in cache keys so a same-height reorg invalidates them lazily.
-	reorgGen              atomic.Uint64
+	reorgGen atomic.Uint64
+	// protocolGen advances on every successful per-protocol row write
+	// (cfErcProtocols). cachedContracts stamps entries with this counter
+	// so a populate-after-write race (reader reads cfErcProtocols before the
+	// row exists, then caches the stale negative under an unchanged reorgGen)
+	// is invalidated lazily on the next read.
+	protocolGen           atomic.Uint64
 	addrContractsCacheMux sync.Mutex
 	addrContractsCache    map[string]*unpackedAddrContracts
 	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.

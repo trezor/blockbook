@@ -102,11 +102,16 @@ func (d *RocksDB) SetErcProtocol(addrDesc bchain.AddressDescriptor, protocolID b
 	defer val.Free()
 	if buf := val.Data(); len(buf) > 0 {
 		_, existingPayload, ok := unpackErcProtocolValue(buf)
-		if ok && bytes.Equal(existingPayload, payload) {
-			return nil
-		}
 		if ok {
-			glog.Warningf("SetErcProtocol: refusing to overwrite protocol %d row for %x: stored payload differs", protocolID, addrDesc)
+			// Drop any cachedContracts entry that may have been populated
+			// before the existing row landed and still carries
+			// IsErc4626=false. Applies on both the idempotent path and the
+			// conflict-refusal path — neither writes, but both must clear
+			// stale negatives so the next reader sees the persisted row.
+			cachedContracts.delete(string(addrDesc))
+			if !bytes.Equal(existingPayload, payload) {
+				glog.Warningf("SetErcProtocol: refusing to overwrite protocol %d row for %x: stored payload differs", protocolID, addrDesc)
+			}
 			return nil
 		}
 	}
@@ -118,6 +123,11 @@ func (d *RocksDB) SetErcProtocol(addrDesc bchain.AddressDescriptor, protocolID b
 	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
+	// Bump before the cache delete: a concurrent GetContractInfo that already
+	// sampled the old protocolGen and is about to add a stale-negative entry
+	// will mismatch on the next read and miss, even if its add lands after our
+	// delete clears the slot.
+	d.protocolGen.Add(1)
 	cachedContracts.delete(string(addrDesc))
 	return nil
 }
