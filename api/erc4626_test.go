@@ -269,7 +269,7 @@ func TestBuildErc4626Token_NotAVault_ReturnsNil(t *testing.T) {
 	}
 }
 
-func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T) {
+func TestBuildErc4626Token_AssetMetadataInvalid_OmitsAssetMetadata(t *testing.T) {
 	const vault = "0x00000000000000000000000000000000000000a1"
 	const asset = "0x00000000000000000000000000000000000000b2"
 	mc := &fakeMulticaller{
@@ -302,6 +302,9 @@ func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T
 	}
 	if got.TotalAssetsSat == nil {
 		t.Fatal("totalAssets should still be populated from multicall A")
+	}
+	if got.Asset != nil {
+		t.Fatalf("asset metadata must be omitted when decimals are unavailable, got %+v", got.Asset)
 	}
 	if got.ConvertToShares1AssetSat != nil || got.PreviewDeposit1AssetSat != nil {
 		t.Fatalf("asset-side conversions should be skipped when asset metadata invalid")
@@ -374,8 +377,62 @@ func TestBuildErc4626Token_ColdAssetMetadataError_ReturnsResultAndTransientErr(t
 	if !strings.Contains(got.Error, "asset metadata") {
 		t.Fatalf("expected got.Error to mention asset metadata, got %q", got.Error)
 	}
+	if got.Asset != nil {
+		t.Fatalf("asset metadata must be omitted when metadata fetcher errors, got %+v", got.Asset)
+	}
 	if got.TotalAssetsSat == nil {
 		t.Fatal("totalAssets should still be populated from multicall A")
+	}
+}
+
+func TestBuildErc4626Token_WarmAssetMetadataInvalid_OmitsAssetMetadata(t *testing.T) {
+	const vault = "0x00000000000000000000000000000000000000a1"
+	const asset = "0x00000000000000000000000000000000000000b2"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				if len(calls) != 3 {
+					t.Fatalf("expected totalAssets and share-side calls only, got %d calls", len(calls))
+				}
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordUint(big.NewInt(7))},
+					{Success: true, Data: encodeWordUint(big.NewInt(1))},
+					{Success: true, Data: encodeWordUint(big.NewInt(2))},
+				}, nil
+			},
+		},
+	}
+	persister := func(string, string) error {
+		t.Fatal("warm path must not persist")
+		return nil
+	}
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		return nil, false, nil
+	}
+	ci := &bchain.ContractInfo{
+		Contract:             vault,
+		Decimals:             18,
+		IsErc4626:            true,
+		Erc4626AssetContract: asset,
+	}
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if err != nil {
+		t.Fatalf("deterministic asset metadata miss should remain cacheable, got %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected partial warm result")
+	}
+	if got.Asset != nil {
+		t.Fatalf("asset metadata must be omitted when decimals are unavailable, got %+v", got.Asset)
+	}
+	if got.ConvertToShares1AssetSat != nil || got.PreviewDeposit1AssetSat != nil {
+		t.Fatalf("asset-side conversions should be skipped without asset decimals: %+v", got)
+	}
+	if got.ConvertToAssets1ShareSat == nil || got.PreviewRedeem1ShareSat == nil {
+		t.Fatalf("share-side conversions should still be returned: %+v", got)
+	}
+	if !strings.Contains(got.Error, "asset metadata unavailable") {
+		t.Fatalf("expected error to mention asset metadata, got %q", got.Error)
 	}
 }
 

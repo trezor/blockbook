@@ -181,7 +181,7 @@ type Erc4626TokenMetadata struct {
 
 // Erc4626Token contains ERC4626 vault details for a fungible token.
 type Erc4626Token struct {
-	Asset                    *Erc4626TokenMetadata `json:"asset,omitempty" ts_doc:"Metadata of the underlying asset token."`
+	Asset                    *Erc4626TokenMetadata `json:"asset,omitempty" ts_doc:"Metadata of the underlying asset token. Omitted when decimals cannot be resolved."`
 	Share                    *Erc4626TokenMetadata `json:"share,omitempty" ts_doc:"Metadata of the vault share token."`
 	TotalAssetsSat           *Amount               `json:"totalAssets,omitempty" ts_doc:"Total underlying assets managed by the vault."`
 	ConvertToAssets1ShareSat *Amount               `json:"convertToAssets1Share,omitempty" ts_doc:"Underlying assets for one whole share unit."`

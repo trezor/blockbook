@@ -561,6 +561,12 @@ Parameters:
 
 `blockHeight` reflects the indexer's best block at request time. ERC-4626 fields inside `protocols.erc4626` are fetched via JSON-RPC `eth_call` (batched through Multicall3) pinned to that exact `blockHeight`, so all values inside `protocols.erc4626` are a consistent snapshot at that height.
 
+For ERC-4626, `asset` is returned only when Blockbook can resolve underlying
+asset metadata including `decimals`. If a vault is detected but asset metadata
+cannot be resolved, Blockbook returns `protocols.erc4626` with `error` and
+without `asset`; callers must not derive fiat rates or human-unit exchange rates
+from such a partial response.
+
 Response (`ContractInfoResult` type):
 
 ```javascript

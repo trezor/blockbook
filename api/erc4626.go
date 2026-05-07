@@ -265,7 +265,6 @@ func buildErc4626TokenCold(
 	}
 
 	result := &Erc4626Token{
-		Asset: &Erc4626TokenMetadata{Contract: assetContract},
 		Share: &Erc4626TokenMetadata{
 			Contract: contract,
 			Name:     ci.Name,
@@ -291,6 +290,8 @@ func buildErc4626TokenCold(
 	}
 
 	// Asset metadata: fetcher error is transient; (nil, false, nil) is a stable absence.
+	// Do not emit asset until decimals are known: callers use asset presence as
+	// the signal that conversion amounts can be scaled into whole asset units.
 	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
 		errs = append(errs, "asset metadata: "+err.Error())
@@ -298,9 +299,12 @@ func buildErc4626TokenCold(
 	} else if assetInfo == nil || !validAsset {
 		errs = append(errs, "asset metadata unavailable")
 	} else {
-		result.Asset.Name = assetInfo.Name
-		result.Asset.Symbol = assetInfo.Symbol
-		result.Asset.Decimals = assetInfo.Decimals
+		result.Asset = &Erc4626TokenMetadata{
+			Contract: assetContract,
+			Name:     assetInfo.Name,
+			Symbol:   assetInfo.Symbol,
+			Decimals: assetInfo.Decimals,
+		}
 	}
 
 	// Multicall B: asset-side conversions, only if we have a valid asset decimals.
@@ -348,7 +352,6 @@ func buildErc4626TokenWarm(
 	shareDec := ci.Decimals
 
 	result := &Erc4626Token{
-		Asset: &Erc4626TokenMetadata{Contract: assetContract},
 		Share: &Erc4626TokenMetadata{
 			Contract: contract,
 			Name:     ci.Name,
@@ -359,6 +362,8 @@ func buildErc4626TokenWarm(
 	var errs []string
 	var transientErr error // first upstream failure; non-nil tells cache to skip
 
+	// Do not emit asset until decimals are known: callers use asset presence as
+	// the signal that conversion amounts can be scaled into whole asset units.
 	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
 		errs = append(errs, "asset metadata: "+err.Error())
@@ -366,9 +371,12 @@ func buildErc4626TokenWarm(
 	} else if assetInfo == nil || !validAsset {
 		errs = append(errs, "asset metadata unavailable")
 	} else {
-		result.Asset.Name = assetInfo.Name
-		result.Asset.Symbol = assetInfo.Symbol
-		result.Asset.Decimals = assetInfo.Decimals
+		result.Asset = &Erc4626TokenMetadata{
+			Contract: assetContract,
+			Name:     assetInfo.Name,
+			Symbol:   assetInfo.Symbol,
+			Decimals: assetInfo.Decimals,
+		}
 	}
 
 	shareUnit, shareUnitErr := erc4626UnitAmount(shareDec)
