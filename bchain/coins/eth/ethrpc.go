@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -26,6 +27,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/sync/singleflight"
 )
 
 // Network type specifies the type of ethereum network
@@ -121,6 +123,12 @@ type EthereumRPC struct {
 	alternativeSendTxProvider *AlternativeSendTxProvider
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
+	// Multicall3 deployment state at the canonical address. Probed lazily on
+	// the first EthereumTypeMulticallAggregate3 call (and again after transient
+	// probe failures); deterministic answers stick for the process lifetime.
+	// See multicall.go for the state machine.
+	multicall3Probe   atomic.Int32
+	multicall3ProbeSF singleflight.Group
 }
 
 // NewEthereumRPC returns new EthRPC instance.

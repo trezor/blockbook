@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -248,10 +250,26 @@ func TestDecodeAggregate3Rejects(t *testing.T) {
 	}
 }
 
-// mockMulticallRPC routes eth_call to multicall3Address through a hand-written handler,
-// so MulticallAggregate3 can be exercised end-to-end without a chain.
+// mockMulticallRPC routes eth_call and eth_getCode through hand-written
+// handlers so MulticallAggregate3 (and the deployment probe in front of it)
+// can be exercised end-to-end without a chain.
 type mockMulticallRPC struct {
+	mu sync.Mutex
+	// eth_call handler. Required for tests that exercise the multicall path.
 	handler func(callData string) (string, error)
+	// eth_getCode handler for the deployment probe. When nil, the probe is
+	// answered with a stub "deployed" bytecode so existing multicall tests
+	// don't need to care about the probe.
+	getCodeHandler func(address string) (string, error)
+
+	ethCallCalls int
+	getCodeCalls int
+}
+
+func (m *mockMulticallRPC) callCounts() (ethCall, getCode int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ethCallCalls, m.getCodeCalls
 }
 
 func (m *mockMulticallRPC) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -262,31 +280,62 @@ func (m *mockMulticallRPC) BatchCallContext(ctx context.Context, batch []rpc.Bat
 	return errors.New("not implemented")
 }
 func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	if method != "eth_call" {
-		return errors.New("unexpected method")
-	}
-	if len(args) < 2 {
-		return errors.New("missing args")
-	}
-	argMap, ok := args[0].(map[string]interface{})
-	if !ok {
-		return errors.New("bad args")
-	}
-	to, _ := argMap["to"].(string)
-	if !strings.EqualFold(to, multicall3Address) {
-		return fmt.Errorf("unexpected target: %s", to)
-	}
-	data, _ := argMap["data"].(string)
 	out, ok := result.(*string)
 	if !ok {
 		return errors.New("bad result type")
 	}
-	resp, err := m.handler(data)
-	if err != nil {
-		return err
+	switch method {
+	case "eth_getCode":
+		m.mu.Lock()
+		m.getCodeCalls++
+		m.mu.Unlock()
+		if len(args) < 2 {
+			return errors.New("eth_getCode: missing args")
+		}
+		addr, _ := args[0].(string)
+		if !strings.EqualFold(addr, multicall3Address) {
+			return fmt.Errorf("unexpected eth_getCode target: %s", addr)
+		}
+		if m.getCodeHandler == nil {
+			// Default: report deployed with stub bytecode. Lets unrelated
+			// tests proceed straight to the eth_call handler.
+			*out = "0x6080604052"
+			return nil
+		}
+		s, err := m.getCodeHandler(addr)
+		if err != nil {
+			return err
+		}
+		*out = s
+		return nil
+	case "eth_call":
+		m.mu.Lock()
+		m.ethCallCalls++
+		m.mu.Unlock()
+		if len(args) < 2 {
+			return errors.New("eth_call: missing args")
+		}
+		argMap, ok := args[0].(map[string]interface{})
+		if !ok {
+			return errors.New("eth_call: bad args")
+		}
+		to, _ := argMap["to"].(string)
+		if !strings.EqualFold(to, multicall3Address) {
+			return fmt.Errorf("unexpected eth_call target: %s", to)
+		}
+		data, _ := argMap["data"].(string)
+		if m.handler == nil {
+			return errors.New("no eth_call handler installed")
+		}
+		resp, err := m.handler(data)
+		if err != nil {
+			return err
+		}
+		*out = resp
+		return nil
+	default:
+		return fmt.Errorf("unexpected method: %s", method)
 	}
-	*out = resp
-	return nil
 }
 
 func TestMulticallAggregate3EndToEnd(t *testing.T) {
@@ -319,15 +368,204 @@ func TestMulticallAggregate3EndToEnd(t *testing.T) {
 }
 
 func TestMulticallAggregate3EmptyCalls(t *testing.T) {
-	rpcClient := &EthereumRPC{RPC: &mockMulticallRPC{handler: func(string) (string, error) {
-		t.Fatal("RPC should not be called for empty input")
-		return "", nil
-	}}, Timeout: time.Second}
+	mock := &mockMulticallRPC{
+		handler: func(string) (string, error) {
+			t.Fatal("eth_call should not be issued for empty input")
+			return "", nil
+		},
+		getCodeHandler: func(string) (string, error) {
+			t.Fatal("eth_getCode probe should not fire for empty input")
+			return "", nil
+		},
+	}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
 	got, err := rpcClient.EthereumTypeMulticallAggregate3(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got != nil {
 		t.Fatalf("expected nil result, got %v", got)
+	}
+}
+
+// --- Multicall3 deployment probe ---
+
+func TestProbeMulticall3_DetectsDeployedAndCachesResult(t *testing.T) {
+	mock := &mockMulticallRPC{
+		// Any non-empty bytecode counts as deployed.
+		getCodeHandler: func(string) (string, error) { return "0x6080604052348015", nil },
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	if !rpc.probeMulticall3() {
+		t.Fatal("probe should report deployed for non-empty bytecode")
+	}
+	if !rpc.probeMulticall3() {
+		t.Fatal("probe should still report deployed on second call")
+	}
+	if _, getCode := mock.callCounts(); getCode != 1 {
+		t.Fatalf("expected 1 eth_getCode call (cached on 2nd), got %d", getCode)
+	}
+	if state := rpc.multicall3Probe.Load(); state != multicall3Deployed {
+		t.Fatalf("expected state=Deployed, got %d", state)
+	}
+}
+
+func TestProbeMulticall3_DetectsNotDeployedAndCachesResult(t *testing.T) {
+	mock := &mockMulticallRPC{
+		getCodeHandler: func(string) (string, error) { return "0x", nil },
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	if rpc.probeMulticall3() {
+		t.Fatal("probe should report not-deployed for '0x'")
+	}
+	if rpc.probeMulticall3() {
+		t.Fatal("probe should still report not-deployed on second call")
+	}
+	if _, getCode := mock.callCounts(); getCode != 1 {
+		t.Fatalf("expected 1 eth_getCode call (cached on 2nd), got %d", getCode)
+	}
+	if state := rpc.multicall3Probe.Load(); state != multicall3NotDeployed {
+		t.Fatalf("expected state=NotDeployed, got %d", state)
+	}
+}
+
+func TestProbeMulticall3_TransientErrorRetriesNextCall(t *testing.T) {
+	// First eth_getCode errors (RPC blip); second succeeds. The probe must
+	// retry rather than caching the transient failure.
+	var attempt atomic.Int32
+	mock := &mockMulticallRPC{
+		getCodeHandler: func(string) (string, error) {
+			n := attempt.Add(1)
+			if n == 1 {
+				return "", errors.New("rpc down")
+			}
+			return "0x6080604052", nil
+		},
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	if rpc.probeMulticall3() {
+		t.Fatal("first probe should report not-deployed because the RPC errored")
+	}
+	if state := rpc.multicall3Probe.Load(); state != multicall3Unprobed {
+		t.Fatalf("transient error must NOT cache state, got %d", state)
+	}
+	if !rpc.probeMulticall3() {
+		t.Fatal("second probe should detect deployed (transient error not cached)")
+	}
+	if _, getCode := mock.callCounts(); getCode != 2 {
+		t.Fatalf("expected 2 eth_getCode calls (no caching after transient), got %d", getCode)
+	}
+	if state := rpc.multicall3Probe.Load(); state != multicall3Deployed {
+		t.Fatalf("expected state=Deployed after recovery, got %d", state)
+	}
+}
+
+func TestProbeMulticall3_ConcurrentFirstCallsCollapseToOneRPC(t *testing.T) {
+	// 32 concurrent first-time probes against a slow eth_getCode must result
+	// in exactly one upstream RPC and a deployed verdict for every caller.
+	const concurrency = 32
+	gate := make(chan struct{})
+	mock := &mockMulticallRPC{
+		getCodeHandler: func(string) (string, error) {
+			<-gate
+			return "0x6080", nil
+		},
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	results := make([]bool, concurrency)
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for i := 0; i < concurrency; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			results[i] = rpc.probeMulticall3()
+		}()
+	}
+	// Wait for the in-flight probe to register one eth_getCode call before
+	// releasing it; concurrent peers will join singleflight in the meantime.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, gc := mock.callCounts(); gc >= 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			close(gate)
+			wg.Wait()
+			t.Fatal("timed out waiting for first eth_getCode")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(gate)
+	wg.Wait()
+
+	if _, gc := mock.callCounts(); gc != 1 {
+		t.Fatalf("singleflight must collapse concurrent probes to 1 RPC, got %d", gc)
+	}
+	for i, ok := range results {
+		if !ok {
+			t.Fatalf("result[%d]: expected deployed=true", i)
+		}
+	}
+}
+
+func TestEthereumTypeMulticallAggregate3_NotDeployed_ShortCircuits(t *testing.T) {
+	// With probe state pre-set to NotDeployed, MulticallAggregate3 must return
+	// errMulticall3NotDeployed without issuing any eth_call.
+	mock := &mockMulticallRPC{
+		handler: func(string) (string, error) {
+			t.Fatal("eth_call must not be issued when multicall3 is known absent")
+			return "", nil
+		},
+		getCodeHandler: func(string) (string, error) {
+			t.Fatal("eth_getCode must not be issued when probe state is already known")
+			return "", nil
+		},
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	rpc.multicall3Probe.Store(multicall3NotDeployed)
+
+	got, err := rpc.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
+		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
+	}, nil)
+	if got != nil {
+		t.Fatalf("expected nil result, got %+v", got)
+	}
+	if !errors.Is(err, errMulticall3NotDeployed) {
+		t.Fatalf("expected errMulticall3NotDeployed, got %v", err)
+	}
+}
+
+func TestEthereumTypeMulticallAggregate3_ProbesOnFirstCall(t *testing.T) {
+	// First call on a fresh EthereumRPC must probe via eth_getCode then
+	// proceed to eth_call. Subsequent calls must skip the probe.
+	expected := []bchain.EthereumMulticallResult{{Success: true, Data: "0xdead"}}
+	mock := &mockMulticallRPC{
+		handler:        func(string) (string, error) { return fixtureAggregate3Result(expected), nil },
+		getCodeHandler: func(string) (string, error) { return "0x6080", nil },
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	for i := 0; i < 3; i++ {
+		got, err := rpc.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
+			{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
+		}, nil)
+		if err != nil {
+			t.Fatalf("call %d: unexpected error %v", i, err)
+		}
+		if len(got) != 1 || !strings.EqualFold(got[0].Data, expected[0].Data) {
+			t.Fatalf("call %d: unexpected result %+v", i, got)
+		}
+	}
+	ethCall, getCode := mock.callCounts()
+	if getCode != 1 {
+		t.Fatalf("expected exactly 1 eth_getCode (probe runs once), got %d", getCode)
+	}
+	if ethCall != 3 {
+		t.Fatalf("expected 3 eth_call (one per request), got %d", ethCall)
 	}
 }
