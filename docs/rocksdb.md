@@ -107,6 +107,14 @@ Column families used only by **Ethereum type** coins:
                          <(nr_values vuint)+[]((id bigInt)+(value bigInt)) if ERC1155>
   ```
 
+  This is a **dense counted-entry record**:
+
+  - a small fixed prefix with address-level counters
+  - a counted list of per-contract entries
+  - each contract entry stores a compact standard-discriminated payload
+
+  It is optimized for compactness and hot-path account reads, not for extensibility.
+
   - Contract ordering & hotness lookup
 
   Contract entries are appended in discovery order (they are not sorted). Lookups are normally a linear scan, but for
@@ -179,12 +187,48 @@ Column families used only by **Ethereum type** coins:
 
 - **contracts** (used only by Ethereum type coins)
 
-  Maps contract _addrDesc_ to information about contract - _name_, _symbol_, _type_ (ERC20,ERC721 or ERC1155), _decimals_, _created_ and _destructed_ in block height
+  Maps contract _addrDesc_ to contract metadata and optional protocol-specific cached data.
 
   ```
   (addrDesc []byte) -> (name string)+(symbol string)+(type string)+(decimals vuint)+
-                       (createdInBlock vuint)+(destroyedInBlock vuint)
+                       (createdInBlock vuint)+(destroyedInBlock vuint)+
+                       [protocol extensions]
   ```
+
+  This is a **base record with optional tagged protocol extensions**:
+
+  - base contract fields are always first:
+    - _name_
+    - _symbol_
+    - _type_
+    - _decimals_
+    - _createdInBlock_
+    - _destroyedInBlock_
+  - if no protocol data is present, the row ends here
+  - if protocol data is present, it is stored as a protocol-extension section:
+
+  ```
+  [protocol extensions] :=
+    (extensionsHeader vuint)+(extensionsCount vuint)+
+    []((protocolId vuint)+(payloadLength vuint)+(payload []byte))
+  ```
+
+  Current protocol payloads:
+
+  - `protocolId = 1` (`erc4626`)
+
+    ```
+    erc4626 payload := (flags vuint)+(underlyingAssetContract string)
+    ```
+
+    `flags` is a bitfield. Currently only the lowest bit is used:
+    `flags = 1` means the contract is marked as ERC-4626, `flags = 0` means it is not.
+    `underlyingAssetContract` is optional 
+        when present, it is the contract address of the vault's underlying asset token;
+        when empty, sync/indexing marked the contract as ERC-4626 from observed vault events 
+        but the underlying asset address has not been cached yet
+
+  This layout is optimized for small per-contract metadata with room for future protocol containers.
 
 - **functionSignatures** (used only by Ethereum type coins)
 
