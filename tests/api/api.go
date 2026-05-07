@@ -66,6 +66,7 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"GetAddressTokenBalances":             testGetAddressTokenBalances,
 	"GetAddressProtocolsEVM":              testGetAddressProtocolsEVM,
 	"GetContractInfoEVM":                  testGetContractInfoEVM,
+	"GetHistoricalFiatRatesTruth":         testGetHistoricalFiatRatesTruth,
 	"GetAddressTxidsPaginationEVM":        testGetAddressTxidsPaginationEVM,
 	"GetAddressTxsPaginationEVM":          testGetAddressTxsPaginationEVM,
 	"GetAddressContractFilterEVM":         testGetAddressContractFilterEVM,

@@ -104,6 +104,11 @@ Public Blockbook API checks are implemented in package `blockbook/tests/api` and
 in *blockbook/tests/tests.json*.
 Use `make test-e2e` to run this suite only.
 
+Ethereum also has a historical fiat truth check for selected ERC-20 token USD rates. The test reads deterministic
+fixtures from *tests/api/testdata/ethereum_fiat_truth.json* and does not call CoinGecko during the test run. Refresh the
+fixture intentionally with `python3 contrib/scripts/refresh_eth_fiat_truth.py`, which stores 20 spread daily points per
+token by default; for dates outside CoinGecko's public history window, use a paid API key and `--plan=pro --days=max`.
+
 Phase 1 covers smoke checks for:
 
 * HTTP: `Status`, `GetBlockIndex`, `GetBlockByHeight`, `GetBlock`, `GetTransaction`, `GetTransactionSpecific`, `GetAddress`, `GetAddressTxids`, `GetAddressTxs`, `GetUtxo`, `GetUtxoConfirmedFilter`
