@@ -534,6 +534,28 @@ func TestUnmarshalAddressesRejectsTooManyNewBlockTxAddresses(t *testing.T) {
 	}
 }
 
+func TestUnmarshalAddressesDeduplicatesDescriptors(t *testing.T) {
+	parser, _ := setupChain(t)
+	params, err := json.Marshal(WsSubscribeAddressesReq{
+		Addresses: []string{dbtestdata.Addr1, dbtestdata.Addr1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := &WebsocketServer{chainParser: parser}
+	addresses, newBlockTxs, err := s.unmarshalAddresses(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newBlockTxs {
+		t.Fatal("newBlockTxs = true, want false")
+	}
+	if len(addresses) != 1 {
+		t.Fatalf("len(addresses) = %d, want 1", len(addresses))
+	}
+}
+
 func TestSetConfirmedBlockTxMetadataSetsConfirmedFields(t *testing.T) {
 	tx := bchain.Tx{
 		Confirmations: 0,
@@ -729,7 +751,7 @@ func TestPopulateBitcoinVinAddrDescsEnablesSenderOnlyMatching(t *testing.T) {
 		},
 	}
 
-	withoutResolvedVins := s.getNewTxSubscriptions(vins, tx.Vout, nil, nil)
+	withoutResolvedVins := s.getNewTxSubscriptions(vins, tx.Vout, nil, nil, true)
 	if _, ok := withoutResolvedVins[string(addr3Desc)]; ok {
 		t.Fatal("sender subscription unexpectedly matched before vin descriptor resolution")
 	}
@@ -745,9 +767,40 @@ func TestPopulateBitcoinVinAddrDescsEnablesSenderOnlyMatching(t *testing.T) {
 		}
 	})
 
-	withResolvedVins := s.getNewTxSubscriptions(vins, tx.Vout, nil, nil)
+	withResolvedVins := s.getNewTxSubscriptions(vins, tx.Vout, nil, nil, true)
 	if _, ok := withResolvedVins[string(addr3Desc)]; !ok {
 		t.Fatal("sender subscription did not match after vin descriptor resolution")
+	}
+}
+
+func TestGetNewTxSubscriptionsFiltersMempoolOnlyForNewBlockTxs(t *testing.T) {
+	parser, _ := setupChain(t)
+	addrDesc, err := parser.GetAddrDescFromAddress(dbtestdata.Addr1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stringAddrDesc := string(addrDesc)
+	dummy := &websocketChannel{}
+	s := &WebsocketServer{
+		addressSubscriptions: map[string]map[*websocketChannel]*addressDetails{
+			stringAddrDesc: {dummy: {requestID: "mempool-only", publishNewBlockTxs: false}},
+		},
+	}
+	vins := []bchain.MempoolVin{{AddrDesc: addrDesc}}
+
+	mempoolSubscribed := s.getNewTxSubscriptions(vins, nil, nil, nil, false)
+	if _, ok := mempoolSubscribed[stringAddrDesc]; !ok {
+		t.Fatal("mempool notification did not match mempool-only subscriber")
+	}
+	newBlockSubscribed := s.getNewTxSubscriptions(vins, nil, nil, nil, true)
+	if _, ok := newBlockSubscribed[stringAddrDesc]; ok {
+		t.Fatal("newBlockTxs matching included mempool-only subscriber")
+	}
+
+	s.addressSubscriptions[stringAddrDesc][dummy].publishNewBlockTxs = true
+	newBlockSubscribed = s.getNewTxSubscriptions(vins, nil, nil, nil, true)
+	if _, ok := newBlockSubscribed[stringAddrDesc]; !ok {
+		t.Fatal("newBlockTxs matching did not include newBlockTxs subscriber")
 	}
 }
 
