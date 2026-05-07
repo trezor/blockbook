@@ -10,8 +10,8 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// helper: drive the generic SetContractProtocol with a payload of bytes("asset") and
-// fetch back via GetContractProtocol. Most tests below operate at this level so we
+// helper: drive the generic SetErcProtocol with a payload of bytes("asset") and
+// fetch back via GetErcProtocol. Most tests below operate at this level so we
 // exercise the generic path; one spot-checks the ERC4626 shim too.
 
 func newProtocolTestDB(t *testing.T) *RocksDB {
@@ -34,17 +34,17 @@ func seedProtocolTestBlockHash(t *testing.T, d *RocksDB, height uint32, hash str
 	}
 }
 
-func TestSetContractProtocol_PersistsAndReadsBack(t *testing.T) {
+func TestSetErcProtocol_PersistsAndReadsBack(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 
 	addr := makeTestAddrDesc(0x4001)
 	payload := []byte("asset")
 
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, payload, 100, "", 0); err != nil {
-		t.Fatalf("SetContractProtocol: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, payload, 100, "", 0); err != nil {
+		t.Fatalf("SetErcProtocol: %v", err)
 	}
-	got, h, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626)
+	got, h, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626)
 	if err != nil || !ok {
 		t.Fatalf("expected row, ok=%v err=%v", ok, err)
 	}
@@ -56,7 +56,7 @@ func TestSetContractProtocol_PersistsAndReadsBack(t *testing.T) {
 	}
 }
 
-func TestSetContractProtocol_RefusesZeroPersistHeight(t *testing.T) {
+func TestSetErcProtocol_RefusesZeroPersistHeight(t *testing.T) {
 	// Direct chain.GetContractInfo can return metadata without a known
 	// CreatedInBlock, leaving persistHeight==0. A row keyed at height 0
 	// would never be cleaned up by any realistic disconnect range, so the
@@ -65,26 +65,26 @@ func TestSetContractProtocol_RefusesZeroPersistHeight(t *testing.T) {
 	defer closeAndDestroyRocksDB(t, d)
 
 	addr := makeTestAddrDesc(0x4001)
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("asset"), 0, "", 0); err != nil {
-		t.Fatalf("SetContractProtocol: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("asset"), 0, "", 0); err != nil {
+		t.Fatalf("SetErcProtocol: %v", err)
 	}
-	if _, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626); err != nil || ok {
+	if _, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626); err != nil || ok {
 		t.Fatalf("expected no row for persistHeight==0, ok=%v err=%v", ok, err)
 	}
 }
 
-func TestSetContractProtocol_RefusesConflictingOverwrite(t *testing.T) {
+func TestSetErcProtocol_RefusesConflictingOverwrite(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 
 	addr := makeTestAddrDesc(0x4002)
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("first"), 100, "", 0); err != nil {
-		t.Fatalf("SetContractProtocol: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("first"), 100, "", 0); err != nil {
+		t.Fatalf("SetErcProtocol: %v", err)
 	}
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("different"), 100, "", 0); err != nil {
-		t.Fatalf("SetContractProtocol on conflict should not return error: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("different"), 100, "", 0); err != nil {
+		t.Fatalf("SetErcProtocol on conflict should not return error: %v", err)
 	}
-	got, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626)
+	got, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626)
 	if err != nil || !ok {
 		t.Fatalf("row missing after conflict refusal, ok=%v err=%v", ok, err)
 	}
@@ -93,20 +93,20 @@ func TestSetContractProtocol_RefusesConflictingOverwrite(t *testing.T) {
 	}
 }
 
-func TestSetContractProtocol_IdempotentOnSamePayload(t *testing.T) {
+func TestSetErcProtocol_IdempotentOnSamePayload(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 
 	addr := makeTestAddrDesc(0x4003)
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("asset"), 100, "", 0); err != nil {
-		t.Fatalf("first SetContractProtocol: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("asset"), 100, "", 0); err != nil {
+		t.Fatalf("first SetErcProtocol: %v", err)
 	}
 	// Second call with the same payload at a different persistHeight should be a no-op
 	// (the existing row already records what we'd write).
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("asset"), 200, "", 0); err != nil {
-		t.Fatalf("idempotent SetContractProtocol: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("asset"), 200, "", 0); err != nil {
+		t.Fatalf("idempotent SetErcProtocol: %v", err)
 	}
-	_, h, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626)
+	_, h, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626)
 	if err != nil || !ok {
 		t.Fatalf("row missing, ok=%v err=%v", ok, err)
 	}
@@ -115,7 +115,7 @@ func TestSetContractProtocol_IdempotentOnSamePayload(t *testing.T) {
 	}
 }
 
-func TestSetContractProtocol_DifferentProtocolsCoexist(t *testing.T) {
+func TestSetErcProtocol_DifferentProtocolsCoexist(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 
@@ -123,50 +123,50 @@ func TestSetContractProtocol_DifferentProtocolsCoexist(t *testing.T) {
 	addr := makeTestAddrDesc(0x4004)
 	const otherProtocolID byte = 0x02
 
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("vaultAsset"), 100, "", 0); err != nil {
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("vaultAsset"), 100, "", 0); err != nil {
 		t.Fatalf("4626 set: %v", err)
 	}
-	if err := d.SetContractProtocol(addr, otherProtocolID, []byte("foreign"), 100, "", 0); err != nil {
+	if err := d.SetErcProtocol(addr, otherProtocolID, []byte("foreign"), 100, "", 0); err != nil {
 		t.Fatalf("foreign set: %v", err)
 	}
 
-	got1, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626)
+	got1, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626)
 	if err != nil || !ok || string(got1) != "vaultAsset" {
 		t.Fatalf("4626 readback: ok=%v err=%v payload=%s", ok, err, got1)
 	}
-	got2, _, ok, err := d.GetContractProtocol(addr, otherProtocolID)
+	got2, _, ok, err := d.GetErcProtocol(addr, otherProtocolID)
 	if err != nil || !ok || string(got2) != "foreign" {
 		t.Fatalf("foreign readback: ok=%v err=%v payload=%s", ok, err, got2)
 	}
 }
 
-func TestDisconnectContractProtocols_RemovesInRange(t *testing.T) {
+func TestDisconnectErcProtocols_RemovesInRange(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 
 	in := makeTestAddrDesc(0x5001)
 	out := makeTestAddrDesc(0x5002)
 
-	if err := d.SetContractProtocol(in, ContractProtocolErc4626, []byte("a"), 105, "", 0); err != nil {
+	if err := d.SetErcProtocol(in, ErcProtocolErc4626, []byte("a"), 105, "", 0); err != nil {
 		t.Fatalf("set in-range: %v", err)
 	}
-	if err := d.SetContractProtocol(out, ContractProtocolErc4626, []byte("b"), 90, "", 0); err != nil {
+	if err := d.SetErcProtocol(out, ErcProtocolErc4626, []byte("b"), 90, "", 0); err != nil {
 		t.Fatalf("set out-of-range: %v", err)
 	}
 
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
-	if err := d.disconnectContractProtocols(wb, 100, 110); err != nil {
+	if err := d.disconnectErcProtocols(wb, 100, 110); err != nil {
 		t.Fatalf("disconnect: %v", err)
 	}
 	if err := d.WriteBatch(wb); err != nil {
 		t.Fatalf("flush: %v", err)
 	}
 
-	if _, _, ok, err := d.GetContractProtocol(in, ContractProtocolErc4626); err != nil || ok {
+	if _, _, ok, err := d.GetErcProtocol(in, ErcProtocolErc4626); err != nil || ok {
 		t.Fatalf("expected in-range row removed, ok=%v err=%v", ok, err)
 	}
-	got, _, ok, err := d.GetContractProtocol(out, ContractProtocolErc4626)
+	got, _, ok, err := d.GetErcProtocol(out, ErcProtocolErc4626)
 	if err != nil || !ok || string(got) != "b" {
 		t.Fatalf("out-of-range row should survive, ok=%v err=%v payload=%s", ok, err, got)
 	}
@@ -177,7 +177,7 @@ func TestDisconnectBlockRangeEthereumType_BumpsReorgGenAndRevertsProtocols(t *te
 	defer closeAndDestroyRocksDB(t, d)
 
 	addr := makeTestAddrDesc(0x6001)
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("a"), 50, "", 0); err != nil {
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("a"), 50, "", 0); err != nil {
 		t.Fatalf("set: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func TestDisconnectBlockRangeEthereumType_BumpsReorgGenAndRevertsProtocols(t *te
 	if d.ReorgGeneration() != prevGen+1 {
 		t.Fatalf("reorg generation not bumped: was %d now %d", prevGen, d.ReorgGeneration())
 	}
-	if _, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626); err != nil || ok {
+	if _, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626); err != nil || ok {
 		t.Fatalf("expected protocol row to be reverted by disconnect, ok=%v err=%v", ok, err)
 	}
 }
@@ -233,7 +233,7 @@ func TestErc4626VaultShim_RoundTrip(t *testing.T) {
 // disconnect runs and bumps reorgGen. The writer must refuse the now-stale
 // observation rather than persist a row at H that no future disconnect would
 // catch.
-func TestSetContractProtocol_RefusesStaleReorgGen(t *testing.T) {
+func TestSetErcProtocol_RefusesStaleReorgGen(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 
@@ -243,24 +243,24 @@ func TestSetContractProtocol_RefusesStaleReorgGen(t *testing.T) {
 	// Disconnect happens between observation and write — bump reorgGen.
 	d.reorgGen.Add(1)
 
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("asset"), 100, "", observedGen); err != nil {
-		t.Fatalf("SetContractProtocol: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("asset"), 100, "", observedGen); err != nil {
+		t.Fatalf("SetErcProtocol: %v", err)
 	}
-	if _, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626); err != nil || ok {
+	if _, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626); err != nil || ok {
 		t.Fatalf("expected stale observation to be refused, ok=%v err=%v", ok, err)
 	}
 
 	// A fresh observation under the new gen must succeed.
 	freshGen := d.ReorgGeneration()
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("asset"), 100, "", freshGen); err != nil {
-		t.Fatalf("SetContractProtocol after re-observation: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("asset"), 100, "", freshGen); err != nil {
+		t.Fatalf("SetErcProtocol after re-observation: %v", err)
 	}
-	if _, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626); err != nil || !ok {
+	if _, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626); err != nil || !ok {
 		t.Fatalf("expected fresh-gen write to land, ok=%v err=%v", ok, err)
 	}
 }
 
-func TestSetContractProtocol_RefusesStaleObservedHash(t *testing.T) {
+func TestSetErcProtocol_RefusesStaleObservedHash(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 
@@ -270,17 +270,17 @@ func TestSetContractProtocol_RefusesStaleObservedHash(t *testing.T) {
 	seedProtocolTestBlockHash(t, d, 100, currentHash)
 	gen := d.ReorgGeneration()
 
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("asset"), 100, observedHash, gen); err != nil {
-		t.Fatalf("SetContractProtocol stale hash: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("asset"), 100, observedHash, gen); err != nil {
+		t.Fatalf("SetErcProtocol stale hash: %v", err)
 	}
-	if _, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626); err != nil || ok {
+	if _, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626); err != nil || ok {
 		t.Fatalf("expected stale observed hash to be refused, ok=%v err=%v", ok, err)
 	}
 
-	if err := d.SetContractProtocol(addr, ContractProtocolErc4626, []byte("asset"), 100, currentHash, gen); err != nil {
-		t.Fatalf("SetContractProtocol current hash: %v", err)
+	if err := d.SetErcProtocol(addr, ErcProtocolErc4626, []byte("asset"), 100, currentHash, gen); err != nil {
+		t.Fatalf("SetErcProtocol current hash: %v", err)
 	}
-	if _, _, ok, err := d.GetContractProtocol(addr, ContractProtocolErc4626); err != nil || !ok {
+	if _, _, ok, err := d.GetErcProtocol(addr, ErcProtocolErc4626); err != nil || !ok {
 		t.Fatalf("expected current observed hash to land, ok=%v err=%v", ok, err)
 	}
 }
@@ -289,7 +289,7 @@ func TestSetContractProtocol_RefusesStaleObservedHash(t *testing.T) {
 // either side dropping the other's data. The two writes target different column
 // families and the API writer holds connectBlockMux, so this should pass even
 // with -race.
-func TestSetContractProtocol_DoesNotRaceWithStoreContractInfo(t *testing.T) {
+func TestSetErcProtocol_DoesNotRaceWithStoreContractInfo(t *testing.T) {
 	d := newProtocolTestDB(t)
 	defer closeAndDestroyRocksDB(t, d)
 

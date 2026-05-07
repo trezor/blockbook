@@ -9,11 +9,8 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// erc4626CacheCapacity bounds the package-level live-values cache. The cache
-// is keyed by (contract, blockHeight); old block entries age out of the LRU as
-// best-block advances and new requests displace them. Sizing is a function of
-// active vault count per block, not request volume - 1024 covers far more
-// distinct vaults than any wallet portfolio actually holds.
+// erc4626CacheCapacity bounds the live-values cache, keyed by
+// (contract, height, reorgGen). Old entries age out as best-block advances.
 const erc4626CacheCapacity = 1024
 const erc4626NegativeProbeCacheCapacity = 4096
 const erc4626NegativeProbeTTLBlocks = 256
@@ -21,9 +18,8 @@ const erc4626NegativeProbeTTLBlocks = 256
 var erc4626LiveCache = newErc4626Cache(erc4626CacheCapacity)
 var erc4626NegativeProbeCache = newErc4626NegativeCache(erc4626NegativeProbeCacheCapacity, erc4626NegativeProbeTTLBlocks)
 
-// lruCache is a small string-keyed LRU shared by the live-values and
-// negative-probe caches in this file. Methods are nil-safe so a disabled cache
-// (newX(0)) silently no-ops.
+// lruCache is a string-keyed LRU shared by the live-values and negative
+// caches. Methods are nil-safe so a disabled (capacity<=0) cache no-ops.
 type lruCache[V any] struct {
 	mu       sync.Mutex
 	capacity int
@@ -100,10 +96,8 @@ func (c *lruCache[V]) remove(key string) {
 	delete(c.items, key)
 }
 
-// erc4626Cache memoises Erc4626Token results within a block, with singleflight
-// collapsing concurrent requests for the same (contract, height) into one
-// upstream multicall. Nil tokens (non-vaults) are cached too, to suppress
-// re-detection of plain fungible tokens within the block.
+// erc4626Cache memoises Erc4626Token (including nil for non-vaults) per
+// (contract, height, gen); singleflight dedupes concurrent builds.
 type erc4626Cache struct {
 	lru *lruCache[*Erc4626Token]
 	sf  singleflight.Group
@@ -117,32 +111,16 @@ func newErc4626Cache(capacity int) *erc4626Cache {
 	return &erc4626Cache{lru: lru}
 }
 
-// erc4626CacheKey scopes cache entries by (contract, height, reorgGen).
-// reorgGen is the in-memory generation counter that advances on every
-// successful disconnect, so a same-height reorg lazily invalidates entries
-// observed on the previous canonical chain (their key no longer matches).
+// erc4626CacheKey scopes entries by (contract, height, reorgGen) so a
+// same-height reorg invalidates pre-reorg entries via key mismatch.
 func erc4626CacheKey(contract string, blockHeight uint32, reorgGen uint64) string {
 	return erc4626ContractKey(contract) + ":" + strconv.FormatUint(uint64(blockHeight), 10) + ":" + strconv.FormatUint(reorgGen, 10)
 }
 
-// erc4626CacheLookupOrBuild returns the cached Erc4626Token for the given key
-// or invokes build() exactly once across concurrent callers. Singleflight
-// dedupes concurrent builds; the LRU memoises the result.
-//
-// Caching policy is governed by build's error return:
-//
-//   - build returns (token, nil): cached. token may be nil ("definitively not
-//     a vault" — observed at this block). Subsequent same-key requests in the
-//     same block return the cached value at zero RPC cost.
-//   - build returns (token, err): NOT cached. The (possibly partial) token is
-//     still returned to all concurrent waiters via singleflight, but the LRU
-//     is left untouched so the next non-concurrent request retries the
-//     upstream call. This prevents one transient transport/DB failure from
-//     poisoning detection for the rest of the block.
-//
-// The error return is purely a cache-policy signal. Callers receive only the
-// token pointer; they treat nil as "no enrichment available" regardless of
-// why build did not produce one.
+// erc4626CacheLookupOrBuild returns the cached token, or runs build() once
+// across concurrent callers via singleflight. build's error is a cache-policy
+// signal: nil ⇒ memoise; non-nil ⇒ skip cache (so a transient failure doesn't
+// poison detection for the rest of the block). Callers see only the token.
 func erc4626CacheLookupOrBuild(cache *erc4626Cache, key string, build func() (*Erc4626Token, error)) *Erc4626Token {
 	if cache == nil {
 		token, _ := build()
@@ -152,8 +130,7 @@ func erc4626CacheLookupOrBuild(cache *erc4626Cache, key string, build func() (*E
 		return cached
 	}
 	v, _, _ := cache.sf.Do(key, func() (interface{}, error) {
-		// Re-check inside singleflight: a peer goroutine may have populated
-		// while this one was waiting to enter Do.
+		// Re-check: a peer may have populated while we waited to enter Do.
 		if cached, ok := cache.lru.get(key); ok {
 			return cached, nil
 		}
@@ -161,10 +138,7 @@ func erc4626CacheLookupOrBuild(cache *erc4626Cache, key string, build func() (*E
 		if err == nil {
 			cache.lru.add(key, token)
 		}
-		// Always return nil err to singleflight: every concurrent waiter for
-		// this in-flight key sees the same token, and the cache decision was
-		// already applied above. Returning the error here would only echo it
-		// to waiters; the value is what they want.
+		// Never echo build's error to waiters; they want the token.
 		return token, nil
 	})
 	if v == nil {
@@ -177,12 +151,9 @@ func erc4626ContractKey(contract string) string {
 	return strings.ToLower(contract)
 }
 
-// erc4626NegativeCache is a tiny in-memory LRU of recent "not a vault"
-// probe results for the accountInfo path. Unlike positive detections, negatives
-// are not persisted to DB; they expire after a bounded number of indexed
-// blocks, and they are also tagged with the reorg generation observed at
-// insertion so an entry from the pre-reorg canonical chain misses lookup
-// after the next disconnect.
+// erc4626NegativeCache is an in-memory LRU of recent "not a vault" results
+// for accountInfo. Not persisted; expires after ttlBlocks and on reorgGen
+// mismatch (so a pre-reorg negative misses after disconnect).
 type erc4626NegativeCacheEntry struct {
 	expireAt uint64
 	reorgGen uint64

@@ -1358,15 +1358,10 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height
 	return nil
 }
 
-// DisconnectBlockRangeEthereumType removes all data belonging to blocks in range lower-higher
-// it is able to disconnect only blocks for which there are data in the blockTxs column.
-//
-// Holds connectBlockMux for the whole operation: this serializes the
-// protocol scan + flush against API-driven SetContractProtocol writers, so
-// the byContract / byHeight pair cannot race with a concurrent vault
-// detection writing into the disconnected range. Sync calls
-// ConnectBlock/DisconnectBlockRangeEthereumType serially, so taking the
-// mutex here can't deadlock against ConnectBlock either.
+// DisconnectBlockRangeEthereumType removes all data for blocks in [lower,higher].
+// Requires blockTxs data for the range. Holds connectBlockMux to serialize the
+// protocol scan + flush against SetErcProtocol writers; sync calls
+// connect/disconnect serially so this can't deadlock against ConnectBlock.
 func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) error {
 	d.connectBlockMux.Lock()
 	defer d.connectBlockMux.Unlock()
@@ -1396,12 +1391,8 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], key)
 	}
 	d.storeUnpackedAddressContracts(wb, contracts)
-	// Revert any contract-protocol rows whose persist-height (the API request's
-	// bestHeight at detection time) falls into the disconnected range. This is
-	// the load-bearing correctness mechanism for protocol persistence under
-	// reorgs; it must run under the same mutex as SetContractProtocol so the
-	// byContract / byHeight pair stays consistent.
-	if err := d.disconnectContractProtocols(wb, lower, higher); err != nil {
+	// Revert protocol rows whose persistHeight fell into [lower,higher].
+	if err := d.disconnectErcProtocols(wb, lower, higher); err != nil {
 		return err
 	}
 	err := d.WriteBatch(wb)

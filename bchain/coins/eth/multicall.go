@@ -21,33 +21,21 @@ const multicall3Address = "0xcA11bde05977b3631167028862bE2a173976CA11"
 // Verified: keccak256("aggregate3((address,bool,bytes)[])")[:4].
 const multicall3Aggregate3Signature = "0x82ad56cb"
 
-// Probe states stored in EthereumRPC.multicall3Probe. Unprobed is the zero value
-// so a freshly-constructed EthereumRPC starts there with no extra initialization.
+// multicall3Probe states; Unprobed is the zero value.
 const (
 	multicall3Unprobed    int32 = 0
 	multicall3Deployed    int32 = 1
 	multicall3NotDeployed int32 = 2
 )
 
-// errMulticall3NotDeployed is returned when the canonical Multicall3 contract
-// is known to be absent on this chain. Treated as a transient-shaped error by
-// upper layers so they degrade gracefully (no enrichment) without coupling to
-// this package; the deterministic answer is cached on EthereumRPC so the
-// per-call cost on an unsupported chain is one atomic load.
+// errMulticall3NotDeployed is returned on chains without the canonical
+// Multicall3 deployment; the answer is cached for the process lifetime.
 var errMulticall3NotDeployed = errors.New("multicall3 not deployed at canonical address on this chain")
 
-// EthereumTypeMulticallAggregate3 issues a Multicall3 aggregate3 call as a single
-// eth_call. All sub-calls are observed at the same block: when blockNumber is
-// non-nil it pins the call; when nil the RPC node uses its latest block. This is
-// the main reason to prefer multicall over plain JSON-RPC batching for
-// cross-call consistency (e.g., totalAssets and conversion rates from the same
-// vault state).
-//
-// The first call on a fresh EthereumRPC probes whether Multicall3 is deployed
-// at the canonical address (one eth_getCode); the result is cached for the
-// process lifetime. On chains without Multicall3 the call short-circuits with
-// errMulticall3NotDeployed instead of submitting an eth_call to a non-contract
-// address, which would otherwise return "0x" and decode-fail downstream.
+// EthereumTypeMulticallAggregate3 issues an aggregate3 batch as one eth_call,
+// observing all sub-calls at the same block (pinned to blockNumber, or
+// "latest" if nil). The first call probes deployment with one eth_getCode;
+// the deterministic result is cached.
 func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error) {
 	if len(calls) == 0 {
 		return nil, nil
@@ -66,16 +54,10 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	return decodeAggregate3Result(resp)
 }
 
-// probeMulticall3 reports whether Multicall3 is deployed at multicall3Address
-// on this chain. The first non-concurrent caller performs an eth_getCode RPC
-// at "latest"; the deterministic deployed/not-deployed answer is cached for
-// the process lifetime via an atomic. Concurrent first-time probers are
-// collapsed into a single upstream call by singleflight, so a thundering herd
-// at process start performs at most one eth_getCode.
-//
-// Transient probe failures (RPC down, timeout) are NOT cached: the next call
-// retries. This keeps a one-off RPC blip during a process's first request
-// from permanently disabling enrichment.
+// probeMulticall3 reports whether Multicall3 is deployed; deterministic
+// answers are cached, transient probe failures are not (so an RPC blip
+// during the first request doesn't permanently disable enrichment).
+// Concurrent probers are collapsed via singleflight.
 func (b *EthereumRPC) probeMulticall3() bool {
 	switch b.multicall3Probe.Load() {
 	case multicall3Deployed:
@@ -85,8 +67,7 @@ func (b *EthereumRPC) probeMulticall3() bool {
 	}
 
 	v, _, _ := b.multicall3ProbeSF.Do("multicall3", func() (interface{}, error) {
-		// Re-check inside the singleflight gate: a peer may have completed
-		// between our first atomic load and entering Do.
+		// Re-check: a peer may have completed before we entered Do.
 		if state := b.multicall3Probe.Load(); state != multicall3Unprobed {
 			return state == multicall3Deployed, nil
 		}
@@ -95,19 +76,15 @@ func (b *EthereumRPC) probeMulticall3() bool {
 		defer cancel()
 		var code string
 		if err := b.RPC.CallContext(ctx, &code, "eth_getCode", multicall3Address, "latest"); err != nil {
-			// Transient: don't poison the cache. Next call retries.
 			glog.Warningf("multicall3 probe at %s failed: %v (will retry on next call)", multicall3Address, err)
 			return false, nil
 		}
-		// eth_getCode returns "0x" when no contract exists at the address.
-		// Any non-empty bytecode means there's code there; we trust the
-		// canonical CREATE2-deployed address rather than verifying its hash.
+		// "0x" means no code at the address.
 		if len(code) <= 2 {
 			glog.Infof("multicall3 not deployed at %s on this chain; multicall enrichments will be disabled", multicall3Address)
 			b.multicall3Probe.Store(multicall3NotDeployed)
 			return false, nil
 		}
-		glog.Infof("multicall3 detected at %s", multicall3Address)
 		b.multicall3Probe.Store(multicall3Deployed)
 		return true, nil
 	})

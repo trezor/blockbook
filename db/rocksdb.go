@@ -75,10 +75,8 @@ type RocksDB struct {
 	cbs             connectBlockStats
 	extendedIndex   bool
 	connectBlockMux sync.Mutex
-	// reorgGen advances on every successful Ethereum-type disconnect. In-memory
-	// caches that depend on the canonical chain state include this generation
-	// in their keys (or compare against it on read) so a same-height reorg
-	// invalidates them lazily.
+	// reorgGen advances on every successful Ethereum-type disconnect; embed
+	// in cache keys so a same-height reorg invalidates them lazily.
 	reorgGen              atomic.Uint64
 	addrContractsCacheMux sync.Mutex
 	addrContractsCache    map[string]*unpackedAddrContracts
@@ -120,10 +118,8 @@ const (
 	// TODO move to common section
 	cfAddressAliases
 
-	// cfErcProtocols stores per-protocol detection records keyed by
-	// contract address. Decoupled from cfContracts so API-driven protocol
-	// writes never collide with sync-driven contract metadata writes, and so
-	// disconnect can revert protocol records without touching sync state.
+	// cfErcProtocols stores per-protocol detection records keyed by contract;
+	// decoupled from cfContracts so API writes never collide with sync.
 	cfErcProtocols
 )
 
@@ -414,10 +410,7 @@ const (
 	opDelete = 1
 )
 
-// ReorgGeneration returns the current value of the in-memory reorg-generation
-// counter. The counter advances on every successful Ethereum-type disconnect
-// and is meant to be embedded in cache keys (or compared on read) so callers
-// invalidate cache entries that referred to the pre-reorg canonical chain.
+// ReorgGeneration returns the current generation counter; bumps on disconnect.
 func (d *RocksDB) ReorgGeneration() uint64 {
 	return d.reorgGen.Load()
 }

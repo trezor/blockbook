@@ -109,10 +109,7 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFro
 				return nil, err
 			}
 		}
-		// Merge ERC4626 detection record from the per-protocol column family.
-		// Sourced from API-time probes (gated by reorgSafetyBlocks); decoupled
-		// from cfContracts so sync writes can't clobber and disconnect can
-		// revert independently.
+		// Merge ERC4626 detection from the per-protocol CF.
 		if assetContract, ok, err := d.GetContractInfoErc4626Vault(contract); err != nil {
 			return nil, err
 		} else if ok {
@@ -124,28 +121,20 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFro
 	return contractInfo, nil
 }
 
-// SetContractInfoErc4626Vault persists a detected ERC4626 vault by recording
-// its underlying asset() address into the per-protocol column family.
-// persistHeight is the API request's bestHeight at the moment of detection,
-// anchoring the row to the block where the vault was first observed so
-// disconnect can revert it on reorg. observedBlockHash and observedReorgGen
-// identify the canonical block sampled at the start of the API request; the
-// writer refuses the write if that block is no longer canonical. See
-// SetContractProtocol for the full race rationale. Idempotent; refuses to
-// overwrite an existing row whose stored asset differs from the supplied
-// one (logs a warning and returns nil).
+// SetContractInfoErc4626Vault persists a detected vault's asset() address to
+// the per-protocol CF. See SetErcProtocol for the persistHeight /
+// observedBlockHash / observedReorgGen race rationale and refusal policy.
 func (d *RocksDB) SetContractInfoErc4626Vault(address, assetContract string, persistHeight uint32, observedBlockHash string, observedReorgGen uint64) error {
 	contract, err := d.chainParser.GetAddrDescFromAddress(address)
 	if err != nil || contract == nil {
 		return err
 	}
-	return d.SetContractProtocol(contract, ContractProtocolErc4626, packString(assetContract), persistHeight, observedBlockHash, observedReorgGen)
+	return d.SetErcProtocol(contract, ErcProtocolErc4626, packString(assetContract), persistHeight, observedBlockHash, observedReorgGen)
 }
 
-// GetContractInfoErc4626Vault reads the persisted ERC4626 detection record
-// for the contract, returning the underlying asset() address.
+// GetContractInfoErc4626Vault returns the persisted asset() address, if any.
 func (d *RocksDB) GetContractInfoErc4626Vault(contract bchain.AddressDescriptor) (assetContract string, ok bool, err error) {
-	payload, _, ok, err := d.GetContractProtocol(contract, ContractProtocolErc4626)
+	payload, _, ok, err := d.GetErcProtocol(contract, ErcProtocolErc4626)
 	if err != nil || !ok {
 		return "", ok, err
 	}

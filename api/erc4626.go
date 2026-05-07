@@ -15,9 +15,7 @@ import (
 const (
 	erc4626MaxDecimals = 77
 	erc4626ZeroAddress = "0x0000000000000000000000000000000000000000"
-	// accountInfo probes issue two sub-calls per candidate contract (asset + totalAssets).
-	// Chunking bounds aggregate3 payload/response size for large wallets while
-	// keeping detection amortized across many tokens.
+	// Two sub-calls per candidate (asset + totalAssets); chunk to bound aggregate3 payload size.
 	erc4626ProbeChunkCandidates = 64
 )
 
@@ -44,38 +42,26 @@ func erc4626EvmFungibleStandard() bchain.TokenStandardName {
 	return bchain.ERC20TokenStandard
 }
 
-// erc4626MulticallCaller is the duck-typed access to Multicall3 aggregate3.
-// The chain type implements this when its RPC client supports multicall.
+// erc4626MulticallCaller is the chain-side seam used by enrichment; satisfied
+// by chains whose RPC client supports Multicall3 aggregate3.
 type erc4626MulticallCaller interface {
 	EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error)
 }
 
-// erc4626ContractInfoFetcher / erc4626VaultPersister
-// isolate the deps that buildErc4626TokenWithDeps reaches for, so unit tests
-// can inject fakes.
 type erc4626ContractInfoFetcher func(contract string, standard bchain.TokenStandardName) (*bchain.ContractInfo, bool, error)
 
-// erc4626VaultPersister persists a confirmed vault. The implementation
-// anchors the persisted row to the request's bestHeight (observation height)
-// so a future disconnect of that range removes the row.
+// erc4626VaultPersister anchors the row to the observation height so a
+// future disconnect of that range removes it.
 type erc4626VaultPersister func(address, assetContract string) error
 
 // enrichErc4626Tokens marks tokens whose contract is a known ERC4626 vault.
-// In steady state this is a pure cache lookup for contracts already confirmed
-// as vaults. For every other fungible-token contract, it issues one batched
-// multicall (asset() + totalAssets() per candidate), persists only positive
-// detections, and marks confirmed vaults in the response. Negative results are
-// intentionally not persisted so dormant or upgradeable contracts remain
-// probeable on future requests.
-//
-// The caller passes the response's best block height so the multicall and
-// negative-cache TTL key both observe the same chain state used elsewhere in
-// the same request.
+// Known vaults are flagged from indexed metadata; remaining fungibles are
+// probed in one batched multicall, with positives persisted and negatives kept
+// in-memory only (so dormant/upgradeable contracts stay probeable).
 func (w *Worker) enrichErc4626Tokens(tokens Tokens, bestHeight uint32, bestHash string) {
 	mc, _ := w.chain.(erc4626MulticallCaller)
-	// Capture reorgGen at the top of the request, before issuing the
-	// multicall. The writer compares this and bestHash against the live chain
-	// state and refuses if the observed block is no longer canonical.
+	// Sample reorgGen+bestHash before the multicall; writer rejects if the
+	// observed block is no longer canonical (see SetErcProtocol).
 	reorgGen := w.db.ReorgGeneration()
 	setVault := func(addr, asset string) error {
 		return w.db.SetContractInfoErc4626Vault(addr, asset, bestHeight, bestHash, reorgGen)
@@ -104,8 +90,6 @@ func enrichErc4626TokensWithDeps(
 	}
 	var candidates []candidate
 
-	// First pass: flag known vaults from indexed metadata; collect every other
-	// fungible token as a candidate for the batched probe.
 	for i := range tokens {
 		token := &tokens[i]
 		if token.Contract == "" || token.Standard != standard {
@@ -145,8 +129,7 @@ func enrichErc4626TokensWithDeps(
 		}
 		results, err := mc.EthereumTypeMulticallAggregate3(calls, blockNumber)
 		if err != nil || len(results) != len(calls) {
-			// Transport failure for one chunk should not poison the whole request.
-			// Skip persistence for that chunk; the next request retries it.
+			// Skip chunk on transport failure; the next request retries.
 			continue
 		}
 
@@ -154,8 +137,7 @@ func enrichErc4626TokensWithDeps(
 			assetResult := results[i*2]
 			totalAssetsResult := results[i*2+1]
 
-			// Strict gate: both asset() (non-zero address) and totalAssets() (decodes)
-			// must pass. Same criterion as the contractInfo cold path.
+			// EIP-4626 mandates both asset() and totalAssets(); detection requires both.
 			var assetContract string
 			if assetResult.Success {
 				if addr, derr := erc4626DecodeAddress(assetResult.Data); derr == nil && !strings.EqualFold(addr, erc4626ZeroAddress) {
@@ -179,25 +161,11 @@ func enrichErc4626TokensWithDeps(
 	}
 }
 
-// buildErc4626Token returns the rich vault snapshot for a single contract on the
-// getContractInfo path. It uses Multicall3 aggregate3 to collapse the per-vault
-// eth_call flurry into a number of round-trips that does not depend on the
-// number of conversion fields requested:
-//
-//	Cold path (no cached asset address):  2 multicalls + lazy asset metadata fetch.
-//	  A: asset() + totalAssets() + convertToAssets(1share) + previewRedeem(1share)
-//	  B: convertToShares(1asset) + previewDeposit(1asset)
-//	Warm path (asset address cached):     1 multicall observing one block.
-//	  totalAssets() + the four conversion calls together.
-//
-// Results are cached per (contract, blockHeight) and shared across concurrent
-// callers via singleflight; identical requests within the same block see zero
-// upstream traffic. The caller provides the response block height, and the
-// multicall is pinned to that exact height so protocols.erc4626 matches the
-// blockHeight returned to the client.
-//
-// Returns nil if the contract is not (or no longer) a vault. The caller is
-// expected to have already filtered by standard.
+// buildErc4626Token returns the vault snapshot for one contract pinned to
+// bestHeight. Cold path: 2 multicalls + lazy asset metadata. Warm (asset
+// address cached): 1 multicall. Results memoized per (contract, height,
+// reorgGen) and deduped by singleflight. Returns nil for non-vaults; caller
+// is expected to have filtered by standard.
 func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight uint32, bestHash string) *Erc4626Token {
 	if contractInfo == nil || contractInfo.Contract == "" {
 		return nil
@@ -206,20 +174,13 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight
 	if !ok {
 		return nil
 	}
-	// Capture reorgGen at the top, before issuing the multicall. Used both
-	// as the live-cache key (so a same-height reorg lazily invalidates) and
-	// as the writer's gen-snapshot. Together with bestHash it lets persistence
-	// refuse if the in-flight multicall observed a block that is no longer
-	// canonical by the time the DB write runs.
+	// Sample reorgGen+bestHash before the multicall; see SetErcProtocol.
 	reorgGen := w.db.ReorgGeneration()
 	setVault := func(addr, asset string) error {
 		return w.db.SetContractInfoErc4626Vault(addr, asset, bestHeight, bestHash, reorgGen)
 	}
 
-	// The caller owns bestHeight selection. If it has no usable height (0), fall
-	// through to "latest" for the live read; we just lose the in-block caching
-	// for this request. The error from build is dropped here because there is
-	// no cache to skip; the caller treats nil as "no enrichment available."
+	// bestHeight==0: no usable height, skip cache and read "latest" once.
 	if bestHeight == 0 {
 		token, _ := buildErc4626TokenWithDeps(contractInfo, mc, setVault, w.GetContractInfo, nil)
 		return token
@@ -230,13 +191,9 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight
 	})
 }
 
-// buildErc4626TokenWithDeps returns the enrichment for one contract along with
-// a cache-policy signal. err == nil means the result is a stable answer (vault
-// data, partial-with-on-chain-decode-errors, or definitively-not-a-vault) and
-// is safe to cache for the block. err != nil means a transient external call
-// (multicall RPC, asset-metadata fetcher) failed; the returned token may still
-// carry useful partial data, but the caller should not cache it so the next
-// request retries.
+// buildErc4626TokenWithDeps returns the enrichment plus a cache-policy signal:
+// err==nil ⇒ stable answer (cacheable); err!=nil ⇒ transient external failure,
+// don't cache.
 func buildErc4626TokenWithDeps(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
@@ -250,19 +207,9 @@ func buildErc4626TokenWithDeps(
 	return buildErc4626TokenWarm(ci, mc, getContractInfo, blockNumber)
 }
 
-// buildErc4626TokenCold runs the first-time enrichment for a vault we don't yet
-// have a cached asset address for. It also doubles as the detection path: if
-// asset() returns the zero address (or reverts), the contract is deterministically
-// not a vault and we return (nil, nil) — a result the cache layer is welcome
-// to memoise as a negative answer for the rest of the block.
-//
-// Two distinct error shapes can arise:
-//
-//   - On-chain "no" answers (revert, asset()=0, on-chain bytes that don't
-//     decode as expected): deterministic at this block. Returned as (nil, nil).
-//   - Transient external failures (multicall RPC, asset-metadata fetcher):
-//     the chain/DB couldn't deliver this block's truth. Returned as
-//     (nil-or-partial, err) so the cache skips and the next request retries.
+// buildErc4626TokenCold is detection + first-time enrichment. (nil,nil) means
+// deterministically not-a-vault at this block (cacheable). (_,err) means
+// transient upstream failure (don't cache).
 func buildErc4626TokenCold(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
@@ -273,8 +220,7 @@ func buildErc4626TokenCold(
 	contract := ci.Contract
 	shareDec := ci.Decimals
 
-	// Build multicall A. Share-side conversion calls only fit if we can compute
-	// a share unit; if shareDec is out of range we still issue asset()+totalAssets().
+	// Multicall A: detection + share-side conversions (skipped if shareUnit invalid).
 	shareUnit, shareUnitErr := erc4626UnitAmount(shareDec)
 	callsA := []bchain.EthereumMulticallCall{
 		{Target: contract, CallData: erc4626EncodeNoArg(erc4626MethodAsset), AllowFailure: true},
@@ -290,20 +236,15 @@ func buildErc4626TokenCold(
 	}
 	resA, err := mc.EthereumTypeMulticallAggregate3(callsA, blockNumber)
 	if err != nil {
-		// Transport error before vault is confirmed. Don't poison the cache.
 		return nil, err
 	}
 	if len(resA) < 2 {
-		// Short response is transport-shaped, not a deterministic on-chain
-		// "no". Treat as transient.
+		// Short response is transport-shaped, not a deterministic "no".
 		return nil, fmt.Errorf("multicall aggregate3: short response %d", len(resA))
 	}
 
-	// Strict vault detection: BOTH asset() and totalAssets() must succeed and decode.
-	// Persisting on asset() alone would let any fungible contract that happens to
-	// expose an asset() method get permanently marked as ERC4626 in the DB. Both
-	// methods are mandated by EIP-4626, so demanding both is the correct gate.
-	// These are deterministic on-chain answers, so (nil, nil) is cacheable.
+	// EIP-4626 mandates both asset() and totalAssets(); detection requires both.
+	// Deterministic answers — (nil,nil) is cacheable.
 	if !resA[0].Success {
 		return nil, nil
 	}
@@ -334,18 +275,14 @@ func buildErc4626TokenCold(
 		TotalAssetsSat: (*Amount)(totalAssets),
 	}
 	var errs []string
-	// transientErr captures the first transient external failure during
-	// post-detection enrichment. Sub-call decode failures of multicall A/B
-	// results stay in errs only — the upstream call succeeded, the contract
-	// just returned bytes that didn't decode, which is a stable on-chain fact.
+	// transientErr captures upstream transport failures only; on-chain decode
+	// failures stay in errs (stable, vault is already confirmed).
 	var transientErr error
 
 	if shareUnitErr != nil {
 		errs = append(errs, "share decimals: "+shareUnitErr.Error())
 	}
 
-	// resA[2/3] are share-side conversions when shareUnit was valid; failures
-	// here are non-fatal because the vault is already confirmed real.
 	if len(resA) > 2 {
 		result.ConvertToAssets1ShareSat = decodeMulticallAmount(resA[2], "convertToAssets", &errs)
 	}
@@ -353,9 +290,7 @@ func buildErc4626TokenCold(
 		result.PreviewRedeem1ShareSat = decodeMulticallAmount(resA[3], "previewRedeem", &errs)
 	}
 
-	// Asset metadata: lazy fetch (3 RPCs first time per asset, cache hit afterwards).
-	// A fetcher error is transient (DB or RPC); a (nil, false, nil) "not in our
-	// store" is a stable answer that we accept and cache.
+	// Asset metadata: fetcher error is transient; (nil, false, nil) is a stable absence.
 	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
 		errs = append(errs, "asset metadata: "+err.Error())
@@ -399,14 +334,9 @@ func buildErc4626TokenCold(
 	return result, transientErr
 }
 
-// buildErc4626TokenWarm runs the steady-state enrichment. The asset address is
-// known; the asset metadata is almost always cached. All time-varying fields
-// come from a single multicall, observed at the same block.
-//
-// Unlike the cold path, the contract is already known to be a vault, so the
-// metadata-only result is always returned even when the multicall errors —
-// the caller still gets share/asset names and decimals. A transient external
-// error is propagated to the cache layer so the next request retries.
+// buildErc4626TokenWarm is the steady-state path: one multicall for all
+// time-varying fields. Always returns the metadata-only result on multicall
+// error (vault is already confirmed); transient errors signal cache to skip.
 func buildErc4626TokenWarm(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
@@ -427,9 +357,7 @@ func buildErc4626TokenWarm(
 		},
 	}
 	var errs []string
-	// transientErr is the first transient external failure (asset-metadata fetch,
-	// multicall RPC). When non-nil, the cache layer skips memoising this result.
-	var transientErr error
+	var transientErr error // first upstream failure; non-nil tells cache to skip
 
 	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
@@ -456,9 +384,7 @@ func buildErc4626TokenWarm(
 		}
 	}
 
-	// Compose one multicall with totalAssets first, plus any of the four
-	// conversion calls whose unit amounts are known. Skipping a conversion is
-	// preferable to issuing it with bogus inputs.
+	// totalAssets first, then any conversion calls whose unit amount is known.
 	calls := []bchain.EthereumMulticallCall{
 		{Target: contract, CallData: erc4626EncodeNoArg(erc4626MethodTotalAssets), AllowFailure: true},
 	}

@@ -80,13 +80,9 @@ type ContractInfo struct {
 	Decimals          int               `json:"decimals" ts_doc:"Number of decimal places, if applicable."`
 	CreatedInBlock    uint32            `json:"createdInBlock,omitempty" ts_doc:"Block height where contract was first created."`
 	DestructedInBlock uint32            `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
-	// IsErc4626 is true if the contract has been confirmed as an ERC4626 vault by a
-	// successful asset()+totalAssets() Multicall3 probe on the contractInfo API path.
-	// Set lazily on first detection (no indexing-time marking); never reset to false.
+	// IsErc4626 is set on a successful asset()+totalAssets() probe; lazy and one-way.
 	IsErc4626 bool `json:"-"`
-	// Erc4626AssetContract is the underlying-asset address (EIP-55) read from the vault's
-	// asset() method during that same probe. Populated together with IsErc4626 and
-	// reused thereafter as a cached invariant.
+	// Erc4626AssetContract is the underlying asset (EIP-55), read on the same probe.
 	Erc4626AssetContract string `json:"-"`
 }
 
@@ -103,18 +99,17 @@ type EthereumTypeRPCCallResult struct {
 	Error error
 }
 
-// EthereumMulticallCall is one sub-call submitted inside a Multicall3 aggregate3
-// batch. CallData is the ABI-encoded input ("0x"-prefixed hex). When AllowFailure
-// is true, the sub-call may revert without aborting the whole batch and the
-// caller observes Success=false in the matching result slot.
+// EthereumMulticallCall is one sub-call in a Multicall3 aggregate3 batch.
+// CallData is "0x"-prefixed hex. AllowFailure=true lets a revert produce
+// Success=false in the result slot instead of failing the batch.
 type EthereumMulticallCall struct {
 	Target       string
 	CallData     string
 	AllowFailure bool
 }
 
-// EthereumMulticallResult is one slot in the aggregate3 return array. Data is the
-// raw return bytes ("0x"-prefixed hex), or the revert payload when Success is false.
+// EthereumMulticallResult is one slot of the aggregate3 return; Data is the
+// "0x"-prefixed return bytes (or revert payload when Success=false).
 type EthereumMulticallResult struct {
 	Success bool
 	Data    string

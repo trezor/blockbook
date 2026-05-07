@@ -98,10 +98,8 @@ type Configuration struct {
 	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
 	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
 	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
-	// AverageBlockTimeMs is the chain's nominal block production cadence in
-	// milliseconds. Set per-coin in additional_params so chain-time-derived
-	// settings (e.g. reorg-safety depth) translate from a duration to a per-coin
-	// block count. Required for EVM coins.
+	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
+	// required for EVM coins (translates duration settings to block counts).
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
 }
 
@@ -147,10 +145,7 @@ func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, er
 	return defaultAlternativeMempoolTxTimeout, nil
 }
 
-// AverageBlockTimeDuration returns the configured nominal block cadence as a
-// time.Duration. The value comes from each coin's additional_params and is the
-// per-chain "time weight" used to translate duration-based settings into a
-// block count (e.g. reorg-safety depth in minutes -> blocks).
+// AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.
 func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
 	if c.AverageBlockTimeMs <= 0 {
 		return 0, errors.Errorf("averageBlockTimeMs must be a positive integer")
@@ -190,10 +185,7 @@ type EthereumRPC struct {
 	alternativeSendTxProvider *AlternativeSendTxProvider
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
-	// Multicall3 deployment state at the canonical address. Probed lazily on
-	// the first EthereumTypeMulticallAggregate3 call (and again after transient
-	// probe failures); deterministic answers stick for the process lifetime.
-	// See multicall.go for the state machine.
+	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
 	multicall3Probe   atomic.Int32
 	multicall3ProbeSF singleflight.Group
 }
@@ -283,9 +275,7 @@ func (b *EthereumRPC) SetMetrics(metrics *common.Metrics) {
 	b.metrics = metrics
 }
 
-// AverageBlockTimeDuration exposes the configured chain-time weight to higher
-// layers (e.g. the API translating a chain-time reorg-safety duration to a
-// per-coin block count).
+// AverageBlockTimeDuration exposes the chain's nominal block cadence.
 func (b *EthereumRPC) AverageBlockTimeDuration() (time.Duration, error) {
 	return b.ChainConfig.AverageBlockTimeDuration()
 }

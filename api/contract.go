@@ -148,11 +148,9 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 		BlockHeight:       bestHeight,
 	}
 
-	// Probe when Standard is the ERC20 analogue or unknown/unhandled. Empty
-	// covers freshly RPC-fetched contracts whose Standard was never set (only
-	// transfer-derived lookups carry a context standard), and persisted vaults
-	// whose original fetch path didn't tag a Standard. Skip only on a known
-	// non-ERC20 standard (ERC721/ERC1155), where probing would always fail.
+	// Probe only for ERC20-shaped contracts (or unknown/unhandled, which covers
+	// freshly RPC-fetched contracts with no tagged standard); ERC721/ERC1155
+	// would always fail the probe.
 	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) || w.chainType != bchain.ChainEthereumType ||
 		(contractInfo.Standard != bchain.UnknownTokenStandard && contractInfo.Standard != bchain.UnhandledTokenStandard && contractInfo.Standard != erc4626EvmFungibleStandard()) {
 		return result, nil
