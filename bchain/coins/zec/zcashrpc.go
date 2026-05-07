@@ -3,7 +3,6 @@ package zec
 import (
 	"bytes"
 	"encoding/json"
-	"os/exec"
 	"reflect"
 	"strings"
 
@@ -88,16 +87,13 @@ func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		return nil, chainInfo.Error
 	}
 
-	// networkinfo not supported by zebra
 	networkInfo := btc.ResGetNetworkInfo{}
-
-	zebrad := "zebra"
-	cmd := exec.Command("/opt/coins/nodes/zcash/bin/zebrad", "--version")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err = cmd.Run()
-	if err == nil {
-		zebrad = out.String()
+	err = z.Call(&btc.CmdGetNetworkInfo{Method: "getnetworkinfo"}, &networkInfo)
+	if err != nil {
+		return nil, err
+	}
+	if networkInfo.Error != nil {
+		return nil, networkInfo.Error
 	}
 
 	return &bchain.ChainInfo{
@@ -107,7 +103,7 @@ func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		Difficulty:      string(chainInfo.Result.Difficulty),
 		Headers:         chainInfo.Result.Headers,
 		SizeOnDisk:      chainInfo.Result.SizeOnDisk,
-		Version:         zebrad,
+		Version:         string(networkInfo.Result.Version),
 		Subversion:      string(networkInfo.Result.Subversion),
 		ProtocolVersion: string(networkInfo.Result.ProtocolVersion),
 		Timeoffset:      networkInfo.Result.Timeoffset,
