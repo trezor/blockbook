@@ -201,23 +201,32 @@ func (w *Worker) buildErc4626Token(contractInfo *bchain.ContractInfo, bestHeight
 
 	// The caller owns bestHeight selection. If it has no usable height (0), fall
 	// through to "latest" for the live read; we just lose the in-block caching
-	// for this request.
+	// for this request. The error from build is dropped here because there is
+	// no cache to skip; the caller treats nil as "no enrichment available."
 	if bestHeight == 0 {
-		return buildErc4626TokenWithDeps(contractInfo, mc, setVault, w.GetContractInfo, nil)
+		token, _ := buildErc4626TokenWithDeps(contractInfo, mc, setVault, w.GetContractInfo, nil)
+		return token
 	}
 	blockNumber := new(big.Int).SetUint64(uint64(bestHeight))
-	return erc4626CacheLookupOrBuild(erc4626LiveCache, erc4626CacheKey(contractInfo.Contract, bestHeight), func() *Erc4626Token {
+	return erc4626CacheLookupOrBuild(erc4626LiveCache, erc4626CacheKey(contractInfo.Contract, bestHeight), func() (*Erc4626Token, error) {
 		return buildErc4626TokenWithDeps(contractInfo, mc, setVault, w.GetContractInfo, blockNumber)
 	})
 }
 
+// buildErc4626TokenWithDeps returns the enrichment for one contract along with
+// a cache-policy signal. err == nil means the result is a stable answer (vault
+// data, partial-with-on-chain-decode-errors, or definitively-not-a-vault) and
+// is safe to cache for the block. err != nil means a transient external call
+// (multicall RPC, asset-metadata fetcher) failed; the returned token may still
+// carry useful partial data, but the caller should not cache it so the next
+// request retries.
 func buildErc4626TokenWithDeps(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
 	getContractInfo erc4626ContractInfoFetcher,
 	blockNumber *big.Int,
-) *Erc4626Token {
+) (*Erc4626Token, error) {
 	if ci.Erc4626AssetContract == "" {
 		return buildErc4626TokenCold(ci, mc, setVault, getContractInfo, blockNumber)
 	}
@@ -226,15 +235,24 @@ func buildErc4626TokenWithDeps(
 
 // buildErc4626TokenCold runs the first-time enrichment for a vault we don't yet
 // have a cached asset address for. It also doubles as the detection path: if
-// asset() returns the zero address (or fails), the contract is not a vault and
-// we return nil without persisting anything.
+// asset() returns the zero address (or reverts), the contract is deterministically
+// not a vault and we return (nil, nil) — a result the cache layer is welcome
+// to memoise as a negative answer for the rest of the block.
+//
+// Two distinct error shapes can arise:
+//
+//   - On-chain "no" answers (revert, asset()=0, on-chain bytes that don't
+//     decode as expected): deterministic at this block. Returned as (nil, nil).
+//   - Transient external failures (multicall RPC, asset-metadata fetcher):
+//     the chain/DB couldn't deliver this block's truth. Returned as
+//     (nil-or-partial, err) so the cache skips and the next request retries.
 func buildErc4626TokenCold(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
 	getContractInfo erc4626ContractInfoFetcher,
 	blockNumber *big.Int,
-) *Erc4626Token {
+) (*Erc4626Token, error) {
 	contract := ci.Contract
 	shareDec := ci.Decimals
 
@@ -254,31 +272,34 @@ func buildErc4626TokenCold(
 		)
 	}
 	resA, err := mc.EthereumTypeMulticallAggregate3(callsA, blockNumber)
-	// Transport errors are not strict-detection failures (the chain may simply
-	// be unreachable), so we don't persist a negative result; the next request
-	// retries.
-	if err != nil || len(resA) < 2 {
-		return nil
+	if err != nil {
+		// Transport error before vault is confirmed. Don't poison the cache.
+		return nil, err
+	}
+	if len(resA) < 2 {
+		// Short response is transport-shaped, not a deterministic on-chain
+		// "no". Treat as transient.
+		return nil, fmt.Errorf("multicall aggregate3: short response %d", len(resA))
 	}
 
 	// Strict vault detection: BOTH asset() and totalAssets() must succeed and decode.
 	// Persisting on asset() alone would let any fungible contract that happens to
 	// expose an asset() method get permanently marked as ERC4626 in the DB. Both
 	// methods are mandated by EIP-4626, so demanding both is the correct gate.
-	// Detection failures remain ephemeral; only positive matches are persisted.
+	// These are deterministic on-chain answers, so (nil, nil) is cacheable.
 	if !resA[0].Success {
-		return nil
+		return nil, nil
 	}
 	assetContract, err := erc4626DecodeAddress(resA[0].Data)
 	if err != nil || strings.EqualFold(assetContract, erc4626ZeroAddress) {
-		return nil
+		return nil, nil
 	}
 	if !resA[1].Success {
-		return nil
+		return nil, nil
 	}
 	totalAssets, err := erc4626DecodeUint(resA[1].Data)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	if err := setVault(contract, assetContract); err != nil {
@@ -296,6 +317,11 @@ func buildErc4626TokenCold(
 		TotalAssetsSat: (*Amount)(totalAssets),
 	}
 	var errs []string
+	// transientErr captures the first transient external failure during
+	// post-detection enrichment. Sub-call decode failures of multicall A/B
+	// results stay in errs only — the upstream call succeeded, the contract
+	// just returned bytes that didn't decode, which is a stable on-chain fact.
+	var transientErr error
 
 	if shareUnitErr != nil {
 		errs = append(errs, "share decimals: "+shareUnitErr.Error())
@@ -311,9 +337,12 @@ func buildErc4626TokenCold(
 	}
 
 	// Asset metadata: lazy fetch (3 RPCs first time per asset, cache hit afterwards).
+	// A fetcher error is transient (DB or RPC); a (nil, false, nil) "not in our
+	// store" is a stable answer that we accept and cache.
 	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
 		errs = append(errs, "asset metadata: "+err.Error())
+		transientErr = err
 	} else if assetInfo == nil || !validAsset {
 		errs = append(errs, "asset metadata unavailable")
 	} else {
@@ -337,6 +366,9 @@ func buildErc4626TokenCold(
 			resB, err := mc.EthereumTypeMulticallAggregate3(callsB, blockNumber)
 			if err != nil {
 				errs = append(errs, "asset-side multicall: "+err.Error())
+				if transientErr == nil {
+					transientErr = err
+				}
 			} else if len(resB) >= 2 {
 				result.ConvertToShares1AssetSat = decodeMulticallAmount(resB[0], "convertToShares", &errs)
 				result.PreviewDeposit1AssetSat = decodeMulticallAmount(resB[1], "previewDeposit", &errs)
@@ -347,18 +379,23 @@ func buildErc4626TokenCold(
 	if len(errs) > 0 {
 		result.Error = strings.Join(errs, "; ")
 	}
-	return result
+	return result, transientErr
 }
 
 // buildErc4626TokenWarm runs the steady-state enrichment. The asset address is
 // known; the asset metadata is almost always cached. All time-varying fields
 // come from a single multicall, observed at the same block.
+//
+// Unlike the cold path, the contract is already known to be a vault, so the
+// metadata-only result is always returned even when the multicall errors —
+// the caller still gets share/asset names and decimals. A transient external
+// error is propagated to the cache layer so the next request retries.
 func buildErc4626TokenWarm(
 	ci *bchain.ContractInfo,
 	mc erc4626MulticallCaller,
 	getContractInfo erc4626ContractInfoFetcher,
 	blockNumber *big.Int,
-) *Erc4626Token {
+) (*Erc4626Token, error) {
 	contract := ci.Contract
 	assetContract := ci.Erc4626AssetContract
 	shareDec := ci.Decimals
@@ -373,10 +410,14 @@ func buildErc4626TokenWarm(
 		},
 	}
 	var errs []string
+	// transientErr is the first transient external failure (asset-metadata fetch,
+	// multicall RPC). When non-nil, the cache layer skips memoising this result.
+	var transientErr error
 
 	assetInfo, validAsset, err := getContractInfo(assetContract, bchain.UnknownTokenStandard)
 	if err != nil {
 		errs = append(errs, "asset metadata: "+err.Error())
+		transientErr = err
 	} else if assetInfo == nil || !validAsset {
 		errs = append(errs, "asset metadata unavailable")
 	} else {
@@ -442,6 +483,9 @@ func buildErc4626TokenWarm(
 	res, err := mc.EthereumTypeMulticallAggregate3(calls, blockNumber)
 	if err != nil {
 		errs = append(errs, "multicall: "+err.Error())
+		if transientErr == nil {
+			transientErr = err
+		}
 	} else {
 		for _, s := range sinks {
 			if s.idx >= len(res) {
@@ -454,7 +498,7 @@ func buildErc4626TokenWarm(
 	if len(errs) > 0 {
 		result.Error = strings.Join(errs, "; ")
 	}
-	return result
+	return result, transientErr
 }
 
 func decodeMulticallAmount(r bchain.EthereumMulticallResult, label string, errs *[]string) *Amount {

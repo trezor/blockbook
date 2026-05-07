@@ -94,7 +94,10 @@ func TestBuildErc4626Token_ColdPath_PersistsAssetAndIssuesTwoMulticalls(t *testi
 	}
 
 	ci := &bchain.ContractInfo{Contract: vault, Name: "Vault Share", Symbol: "vUSDC", Decimals: 18}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if err != nil {
+		t.Fatalf("expected nil err on a fully-successful build (cacheable), got %v", err)
+	}
 	if got == nil {
 		t.Fatal("expected non-nil result")
 	}
@@ -158,7 +161,10 @@ func TestBuildErc4626Token_WarmPath_OneMulticall(t *testing.T) {
 		IsErc4626:            true,
 		Erc4626AssetContract: asset,
 	}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if err != nil {
+		t.Fatalf("expected nil err on a fully-successful warm build, got %v", err)
+	}
 	if got == nil || got.Error != "" {
 		t.Fatalf("warm-path failed: %+v", got)
 	}
@@ -212,8 +218,14 @@ func TestBuildErc4626Token_TotalAssetsFails_NoPersistAndReturnsNil(t *testing.T)
 				return nil, false, nil
 			}
 			ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-			if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
+			got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+			if got != nil {
 				t.Fatalf("expected nil when totalAssets fails, got %+v", got)
+			}
+			// Detection failure is a deterministic on-chain answer ("not a vault")
+			// and must be cacheable: err must be nil so the LRU memoises (nil).
+			if err != nil {
+				t.Fatalf("deterministic 'not a vault' must return nil err so the cache memoises it, got %v", err)
 			}
 			if persisted != 0 {
 				t.Fatalf("must not persist when totalAssets fails (persisted=%d)", persisted)
@@ -248,8 +260,12 @@ func TestBuildErc4626Token_NotAVault_ReturnsNil(t *testing.T) {
 		return nil, false, nil
 	}
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if got != nil {
 		t.Fatalf("expected nil for non-vault, got %+v", got)
+	}
+	if err != nil {
+		t.Fatalf("'not a vault' must return nil err so the cache can memoise it, got %v", err)
 	}
 }
 
@@ -274,9 +290,15 @@ func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T
 		return nil, false, nil // asset contract not a known fungible token
 	}
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
 	if got == nil {
 		t.Fatal("expected partial result, got nil")
+	}
+	// (nil, false, nil) from the fetcher is a deterministic "not in our store"
+	// answer (no transport problem), so the build must report no transient
+	// error and stay cacheable for the block.
+	if err != nil {
+		t.Fatalf("deterministic 'asset metadata unavailable' must remain cacheable, got err %v", err)
 	}
 	if got.TotalAssetsSat == nil {
 		t.Fatal("totalAssets should still be populated from multicall A")
@@ -292,7 +314,9 @@ func TestBuildErc4626Token_AssetMetadataInvalid_StillReturnsPartial(t *testing.T
 	}
 }
 
-func TestBuildErc4626Token_MulticallError_ReturnsNil(t *testing.T) {
+func TestBuildErc4626Token_ColdMulticallError_ReturnsNilAndTransientErr(t *testing.T) {
+	// A multicall A transport error must return (nil, err) — caller sees no
+	// enrichment, and the cache layer must skip persisting the negative.
 	const vault = "0x00000000000000000000000000000000000000a1"
 	mc := &fakeMulticaller{
 		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
@@ -307,8 +331,138 @@ func TestBuildErc4626Token_MulticallError_ReturnsNil(t *testing.T) {
 	}
 	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) { return nil, false, nil }
 	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
-	if got := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil); got != nil {
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if got != nil {
 		t.Fatalf("expected nil on multicall error, got %+v", got)
+	}
+	if err == nil {
+		t.Fatal("transport error must propagate so the cache skips memoising the negative")
+	}
+}
+
+func TestBuildErc4626Token_ColdAssetMetadataError_ReturnsResultAndTransientErr(t *testing.T) {
+	// Cold detection succeeds, then the asset-metadata fetcher errors transiently
+	// (e.g. DB or RPC blip). The vault is real, so the caller must receive the
+	// confirmed-vault snapshot — but the build must propagate the error so the
+	// cache does not memoise a metadata-less view of the vault for the block.
+	const vault = "0x00000000000000000000000000000000000000a1"
+	const asset = "0x00000000000000000000000000000000000000b2"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(asset)},
+					{Success: true, Data: encodeWordUint(big.NewInt(7))},
+					{Success: true, Data: encodeWordUint(big.NewInt(1))},
+					{Success: true, Data: encodeWordUint(big.NewInt(2))},
+				}, nil
+			},
+		},
+	}
+	persister := func(string, string) error { return nil }
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		return nil, false, errors.New("db blip")
+	}
+	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if got == nil {
+		t.Fatal("expected confirmed-vault result even when asset metadata fetcher errors")
+	}
+	if err == nil {
+		t.Fatal("metadata-fetcher transient error must propagate so the cache skips this entry")
+	}
+	if !strings.Contains(got.Error, "asset metadata") {
+		t.Fatalf("expected got.Error to mention asset metadata, got %q", got.Error)
+	}
+	if got.TotalAssetsSat == nil {
+		t.Fatal("totalAssets should still be populated from multicall A")
+	}
+}
+
+func TestBuildErc4626Token_ColdMulticallBError_ReturnsResultAndTransientErr(t *testing.T) {
+	// Cold detection succeeds, asset metadata is available, but multicall B
+	// (asset-side conversions) errors transiently. The caller gets the partial
+	// snapshot; the cache must skip so a fresh attempt happens next request.
+	const vault = "0x00000000000000000000000000000000000000a1"
+	const asset = "0x00000000000000000000000000000000000000b2"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return []bchain.EthereumMulticallResult{
+					{Success: true, Data: encodeWordAddress(asset)},
+					{Success: true, Data: encodeWordUint(big.NewInt(42))},
+					{Success: true, Data: encodeWordUint(big.NewInt(1))},
+					{Success: true, Data: encodeWordUint(big.NewInt(2))},
+				}, nil
+			},
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return nil, errors.New("multicall B down")
+			},
+		},
+	}
+	persister := func(string, string) error { return nil }
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		return &bchain.ContractInfo{Contract: asset, Name: "USDC", Symbol: "USDC", Decimals: 6}, true, nil
+	}
+	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18}
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if got == nil {
+		t.Fatal("expected partial result on multicall B error")
+	}
+	if err == nil {
+		t.Fatal("multicall B transient error must propagate so the cache skips this entry")
+	}
+	if got.ConvertToShares1AssetSat != nil || got.PreviewDeposit1AssetSat != nil {
+		t.Fatalf("asset-side conversions must be nil when multicall B failed, got %+v", got)
+	}
+	if !strings.Contains(got.Error, "asset-side multicall") {
+		t.Fatalf("expected got.Error to mention asset-side multicall, got %q", got.Error)
+	}
+}
+
+func TestBuildErc4626Token_WarmMulticallError_ReturnsPartialAndTransientErr(t *testing.T) {
+	// Warm path: vault is already known. Multicall transport failure must yield
+	// the metadata-only partial result AND a non-nil err so the cache layer
+	// skips this entry rather than memoising a totalAssets-less view.
+	const vault = "0x00000000000000000000000000000000000000a1"
+	const asset = "0x00000000000000000000000000000000000000b2"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return nil, errors.New("rpc down")
+			},
+		},
+	}
+	persister := func(string, string) error {
+		t.Fatal("warm path must not persist")
+		return nil
+	}
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		return &bchain.ContractInfo{Contract: asset, Name: "USDC", Symbol: "USDC", Decimals: 6}, true, nil
+	}
+	ci := &bchain.ContractInfo{
+		Contract:             vault,
+		Name:                 "Vault Share",
+		Symbol:               "vUSDC",
+		Decimals:             18,
+		IsErc4626:            true,
+		Erc4626AssetContract: asset,
+	}
+	got, err := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if got == nil {
+		t.Fatal("warm path must return partial result even on multicall error")
+	}
+	if err == nil {
+		t.Fatal("warm-path multicall error must propagate so the cache skips this entry")
+	}
+	if got.TotalAssetsSat != nil {
+		t.Fatalf("totalAssets must be nil when multicall failed, got %v", got.TotalAssetsSat)
+	}
+	if got.Asset == nil || got.Asset.Decimals != 6 || got.Asset.Symbol != "USDC" {
+		t.Fatalf("asset metadata should still be populated: %+v", got.Asset)
+	}
+	if !strings.Contains(got.Error, "multicall:") {
+		t.Fatalf("expected got.Error to mention multicall, got %q", got.Error)
 	}
 }
 

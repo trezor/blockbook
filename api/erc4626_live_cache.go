@@ -122,24 +122,46 @@ func erc4626CacheKey(contract string, blockHeight uint32) string {
 }
 
 // erc4626CacheLookupOrBuild returns the cached Erc4626Token for the given key
-// or invokes build() exactly once across concurrent callers, caching its
-// result. Nil results (non-vaults) are cached for the lifetime of the block to
-// suppress repeated detection on plain fungible tokens.
-func erc4626CacheLookupOrBuild(cache *erc4626Cache, key string, build func() *Erc4626Token) *Erc4626Token {
+// or invokes build() exactly once across concurrent callers. Singleflight
+// dedupes concurrent builds; the LRU memoises the result.
+//
+// Caching policy is governed by build's error return:
+//
+//   - build returns (token, nil): cached. token may be nil ("definitively not
+//     a vault" — observed at this block). Subsequent same-key requests in the
+//     same block return the cached value at zero RPC cost.
+//   - build returns (token, err): NOT cached. The (possibly partial) token is
+//     still returned to all concurrent waiters via singleflight, but the LRU
+//     is left untouched so the next non-concurrent request retries the
+//     upstream call. This prevents one transient transport/DB failure from
+//     poisoning detection for the rest of the block.
+//
+// The error return is purely a cache-policy signal. Callers receive only the
+// token pointer; they treat nil as "no enrichment available" regardless of
+// why build did not produce one.
+func erc4626CacheLookupOrBuild(cache *erc4626Cache, key string, build func() (*Erc4626Token, error)) *Erc4626Token {
 	if cache == nil {
-		return build()
+		token, _ := build()
+		return token
 	}
 	if cached, ok := cache.lru.get(key); ok {
 		return cached
 	}
 	v, _, _ := cache.sf.Do(key, func() (interface{}, error) {
-		// Re-check inside singleflight: a peer goroutine may have populated.
+		// Re-check inside singleflight: a peer goroutine may have populated
+		// while this one was waiting to enter Do.
 		if cached, ok := cache.lru.get(key); ok {
 			return cached, nil
 		}
-		result := build()
-		cache.lru.add(key, result)
-		return result, nil
+		token, err := build()
+		if err == nil {
+			cache.lru.add(key, token)
+		}
+		// Always return nil err to singleflight: every concurrent waiter for
+		// this in-flight key sees the same token, and the cache decision was
+		// already applied above. Returning the error here would only echo it
+		// to waiters; the value is what they want.
+		return token, nil
 	})
 	if v == nil {
 		return nil

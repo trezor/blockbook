@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -9,7 +10,7 @@ import (
 
 func TestErc4626Cache_HitAndMiss(t *testing.T) {
 	cache := newErc4626Cache(4)
-	build := func() *Erc4626Token { return &Erc4626Token{Error: "first"} }
+	build := func() (*Erc4626Token, error) { return &Erc4626Token{Error: "first"}, nil }
 
 	got := erc4626CacheLookupOrBuild(cache, "k1", build)
 	if got == nil || got.Error != "first" {
@@ -18,9 +19,9 @@ func TestErc4626Cache_HitAndMiss(t *testing.T) {
 
 	// Same key returns cached entry without invoking build.
 	called := 0
-	again := erc4626CacheLookupOrBuild(cache, "k1", func() *Erc4626Token {
+	again := erc4626CacheLookupOrBuild(cache, "k1", func() (*Erc4626Token, error) {
 		called++
-		return &Erc4626Token{Error: "second"}
+		return &Erc4626Token{Error: "second"}, nil
 	})
 	if called != 0 {
 		t.Fatalf("build invoked on cache hit (called=%d)", called)
@@ -30,8 +31,8 @@ func TestErc4626Cache_HitAndMiss(t *testing.T) {
 	}
 
 	// Different key triggers build.
-	other := erc4626CacheLookupOrBuild(cache, "k2", func() *Erc4626Token {
-		return &Erc4626Token{Error: "other"}
+	other := erc4626CacheLookupOrBuild(cache, "k2", func() (*Erc4626Token, error) {
+		return &Erc4626Token{Error: "other"}, nil
 	})
 	if other == nil || other.Error != "other" {
 		t.Fatalf("k2 wrong: %+v", other)
@@ -40,15 +41,15 @@ func TestErc4626Cache_HitAndMiss(t *testing.T) {
 
 func TestErc4626Cache_StoresNil(t *testing.T) {
 	cache := newErc4626Cache(4)
-	got := erc4626CacheLookupOrBuild(cache, "non-vault", func() *Erc4626Token { return nil })
+	got := erc4626CacheLookupOrBuild(cache, "non-vault", func() (*Erc4626Token, error) { return nil, nil })
 	if got != nil {
 		t.Fatalf("expected nil, got %+v", got)
 	}
 	// Subsequent call must not re-invoke build for the same key.
 	called := 0
-	got = erc4626CacheLookupOrBuild(cache, "non-vault", func() *Erc4626Token {
+	got = erc4626CacheLookupOrBuild(cache, "non-vault", func() (*Erc4626Token, error) {
 		called++
-		return nil
+		return nil, nil
 	})
 	if called != 0 {
 		t.Fatalf("build invoked on cached nil (called=%d)", called)
@@ -58,14 +59,77 @@ func TestErc4626Cache_StoresNil(t *testing.T) {
 	}
 }
 
+// A transient transport error must surface the value to the caller (so the
+// current request still gets a sensible response) without polluting the LRU.
+// Two consecutive calls must both invoke build, and the LRU must contain no
+// entry for the key after either call.
+func TestErc4626Cache_TransportErrorNotCached(t *testing.T) {
+	cache := newErc4626Cache(4)
+	var calls atomic.Int32
+	build := func() (*Erc4626Token, error) {
+		calls.Add(1)
+		return nil, errors.New("rpc down")
+	}
+
+	if got := erc4626CacheLookupOrBuild(cache, "k1", build); got != nil {
+		t.Fatalf("expected nil on transport error, got %+v", got)
+	}
+	if got := erc4626CacheLookupOrBuild(cache, "k1", build); got != nil {
+		t.Fatalf("expected nil on transport error, got %+v", got)
+	}
+	if n := calls.Load(); n != 2 {
+		t.Fatalf("transport-errored build must not be cached: expected 2 invocations, got %d", n)
+	}
+	if _, ok := cache.lru.get("k1"); ok {
+		t.Fatal("LRU must not contain an entry for a transport-errored build")
+	}
+
+	// A successful follow-up must still land in the cache.
+	follow := erc4626CacheLookupOrBuild(cache, "k1", func() (*Erc4626Token, error) {
+		return &Erc4626Token{Error: "recovered"}, nil
+	})
+	if follow == nil || follow.Error != "recovered" {
+		t.Fatalf("post-error retry must rebuild and cache, got %+v", follow)
+	}
+	if _, ok := cache.lru.get("k1"); !ok {
+		t.Fatal("LRU must contain an entry after a successful build")
+	}
+}
+
+// A partial result paired with a transient error (e.g. warm-path multicall RPC
+// failed but metadata is populated) must reach the caller without being cached.
+func TestErc4626Cache_PartialResultWithErrorNotCached(t *testing.T) {
+	cache := newErc4626Cache(4)
+	var calls atomic.Int32
+	build := func() (*Erc4626Token, error) {
+		calls.Add(1)
+		return &Erc4626Token{Error: "multicall: rpc down"}, errors.New("multicall: rpc down")
+	}
+
+	first := erc4626CacheLookupOrBuild(cache, "k1", build)
+	if first == nil || first.Error == "" {
+		t.Fatalf("expected partial result returned to caller, got %+v", first)
+	}
+	second := erc4626CacheLookupOrBuild(cache, "k1", build)
+	if second == nil {
+		t.Fatal("expected partial result on second call")
+	}
+	if n := calls.Load(); n != 2 {
+		t.Fatalf("partial-with-error must not be cached: expected 2 invocations, got %d", n)
+	}
+	if _, ok := cache.lru.get("k1"); ok {
+		t.Fatal("LRU must not contain an entry for a partial result paired with an error")
+	}
+}
+
 func TestErc4626Cache_LRUEvictsOldest(t *testing.T) {
 	cache := newErc4626Cache(2)
-	a := erc4626CacheLookupOrBuild(cache, "a", func() *Erc4626Token { return &Erc4626Token{Error: "a"} })
-	_ = erc4626CacheLookupOrBuild(cache, "b", func() *Erc4626Token { return &Erc4626Token{Error: "b"} })
+	a := erc4626CacheLookupOrBuild(cache, "a", func() (*Erc4626Token, error) { return &Erc4626Token{Error: "a"}, nil })
+	_ = erc4626CacheLookupOrBuild(cache, "b", func() (*Erc4626Token, error) { return &Erc4626Token{Error: "b"}, nil })
 	// Touch a to keep it hot.
-	_ = erc4626CacheLookupOrBuild(cache, "a", func() *Erc4626Token { t.Fatal("a should be cached"); return nil })
+	_ = erc4626CacheLookupOrBuild(cache, "a", func() (*Erc4626Token, error) { t.Fatal("a should be cached"); return nil, nil })
 	// Add c -> b should be evicted, a should remain.
-	_ = erc4626CacheLookupOrBuild(cache, "c", func() *Erc4626Token { return &Erc4626Token{Error: "c"} })
+	_ = erc4626CacheLookupOrBuild(cache, "c", func() (*Erc4626Token, error) { return &Erc4626Token{Error: "c"}, nil })
 	if v, ok := cache.lru.get("a"); !ok || v != a {
 		t.Fatalf("a evicted unexpectedly")
 	}
@@ -83,10 +147,10 @@ func TestErc4626Cache_SingleflightCollapsesConcurrentCalls(t *testing.T) {
 
 	var calls atomic.Int32
 	gate := make(chan struct{})
-	build := func() *Erc4626Token {
+	build := func() (*Erc4626Token, error) {
 		calls.Add(1)
 		<-gate // hold first caller until peers have all entered Do
-		return &Erc4626Token{Error: "shared"}
+		return &Erc4626Token{Error: "shared"}, nil
 	}
 
 	var wg sync.WaitGroup
@@ -125,6 +189,64 @@ func TestErc4626Cache_SingleflightCollapsesConcurrentCalls(t *testing.T) {
 	}
 }
 
+// Singleflight must collapse concurrent build attempts even when build errors,
+// AND the errored result must not be cached. After the in-flight group ends,
+// the first non-concurrent caller must rebuild fresh.
+func TestErc4626Cache_SingleflightCollapsesErrorsButDoesNotCache(t *testing.T) {
+	cache := newErc4626Cache(4)
+	const concurrency = 16
+
+	var calls atomic.Int32
+	gate := make(chan struct{})
+	build := func() (*Erc4626Token, error) {
+		calls.Add(1)
+		<-gate
+		return nil, errors.New("rpc down")
+	}
+
+	var wg sync.WaitGroup
+	results := make([]*Erc4626Token, concurrency)
+	wg.Add(concurrency)
+	for i := 0; i < concurrency; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			results[i] = erc4626CacheLookupOrBuild(cache, "errored-key", build)
+		}()
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for calls.Load() < 1 {
+		if time.Now().After(deadline) {
+			close(gate)
+			wg.Wait()
+			t.Fatalf("timed out waiting for first builder; calls=%d", calls.Load())
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(gate)
+	wg.Wait()
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("singleflight must collapse concurrent errors to 1 build, got %d", got)
+	}
+	for i, r := range results {
+		if r != nil {
+			t.Fatalf("result[%d] expected nil, got %+v", i, r)
+		}
+	}
+	if _, ok := cache.lru.get("errored-key"); ok {
+		t.Fatal("LRU must not contain an entry for an errored singleflight build")
+	}
+
+	// Post-error: the next caller must rebuild fresh (no stale negative).
+	follow := erc4626CacheLookupOrBuild(cache, "errored-key", func() (*Erc4626Token, error) {
+		return &Erc4626Token{Error: "recovered"}, nil
+	})
+	if follow == nil || follow.Error != "recovered" {
+		t.Fatalf("post-error retry must rebuild, got %+v", follow)
+	}
+}
+
 func TestErc4626CacheKey_NormalizesContract(t *testing.T) {
 	if a, b := erc4626CacheKey("0xAbCd", 7), erc4626CacheKey("0xabcd", 7); a != b {
 		t.Fatalf("expected case-insensitive key, got %q vs %q", a, b)
@@ -136,12 +258,23 @@ func TestErc4626CacheKey_NormalizesContract(t *testing.T) {
 
 func TestErc4626CacheLookupOrBuild_NilCacheFallsThrough(t *testing.T) {
 	called := 0
-	got := erc4626CacheLookupOrBuild(nil, "k", func() *Erc4626Token {
+	got := erc4626CacheLookupOrBuild(nil, "k", func() (*Erc4626Token, error) {
 		called++
-		return &Erc4626Token{Error: "bypass"}
+		return &Erc4626Token{Error: "bypass"}, nil
 	})
 	if called != 1 || got == nil || got.Error != "bypass" {
 		t.Fatalf("nil cache should bypass: called=%d got=%+v", called, got)
+	}
+
+	// Nil cache also drops the build error and surfaces the value (matches the
+	// no-bestHeight path in buildErc4626Token, which has no cache to skip).
+	called = 0
+	got = erc4626CacheLookupOrBuild(nil, "k2", func() (*Erc4626Token, error) {
+		called++
+		return &Erc4626Token{Error: "partial"}, errors.New("transient")
+	})
+	if called != 1 || got == nil || got.Error != "partial" {
+		t.Fatalf("nil cache should still pass through partial result on error: called=%d got=%+v", called, got)
 	}
 }
 
