@@ -80,12 +80,13 @@ type ContractInfo struct {
 	Decimals          int               `json:"decimals" ts_doc:"Number of decimal places, if applicable."`
 	CreatedInBlock    uint32            `json:"createdInBlock,omitempty" ts_doc:"Block height where contract was first created."`
 	DestructedInBlock uint32            `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
-	// IsErc4626 is true if the contract has been observed emitting ERC4626 Deposit/Withdraw events.
-	// Set during indexing (no RPC); never reset to false once true.
+	// IsErc4626 is true if the contract has been confirmed as an ERC4626 vault by a
+	// successful asset()+totalAssets() Multicall3 probe on the contractInfo API path.
+	// Set lazily on first detection (no indexing-time marking); never reset to false.
 	IsErc4626 bool `json:"-"`
 	// Erc4626AssetContract is the underlying-asset address (EIP-55) read from the vault's
-	// asset() method. Populated by the contractInfo path on first enrichment of a known
-	// vault, then reused as a cached invariant. Empty when not yet probed.
+	// asset() method during that same probe. Populated together with IsErc4626 and
+	// reused thereafter as a cached invariant.
 	Erc4626AssetContract string `json:"-"`
 }
 

@@ -223,10 +223,9 @@ Column families used only by **Ethereum type** coins:
 
     `flags` is a bitfield. Currently only the lowest bit is used:
     `flags = 1` means the contract is marked as ERC-4626, `flags = 0` means it is not.
-    `underlyingAssetContract` is optional 
-        when present, it is the contract address of the vault's underlying asset token;
-        when empty, sync/indexing marked the contract as ERC-4626 from observed vault events 
-        but the underlying asset address has not been cached yet
+    Both `flags` and `underlyingAssetContract` are populated together by the
+    contractInfo API path on a successful Multicall3 probe of `asset()` and
+    `totalAssets()`; indexing itself does not mark vaults.
 
   This layout is optimized for small per-contract metadata with room for future protocol containers.
 
