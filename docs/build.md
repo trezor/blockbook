@@ -286,7 +286,7 @@ Example for Bitcoin:
 ./blockbook -sync -blockchaincfg=build/blockchaincfg.json -internal=:9030 -public=:9130 -certfile=server/testcert -logtostderr
 ```
 
-This command starts Blockbook with parallel synchronization and providing HTTP and Socket.IO interface, with database
+This command starts Blockbook with parallel synchronization and providing HTTP API and WebSocket interfaces, with database
 in local directory *data* and established ZeroMQ and RPC connections to back-end daemon specified in configuration
 file passed to *-blockchaincfg* option.
 

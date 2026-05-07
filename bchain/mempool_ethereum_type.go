@@ -18,8 +18,7 @@ type MempoolEthereumType struct {
 }
 
 // NewMempoolEthereumType creates new mempool handler.
-func NewMempoolEthereumType(chain BlockChain, mempoolTxTimeoutHours int, queryBackendOnResync bool) *MempoolEthereumType {
-	mempoolTimeoutTime := time.Duration(mempoolTxTimeoutHours) * time.Hour
+func NewMempoolEthereumType(chain BlockChain, mempoolTimeoutTime time.Duration, queryBackendOnResync bool) *MempoolEthereumType {
 	return &MempoolEthereumType{
 		BaseMempool: BaseMempool{
 			chain:        chain,
@@ -83,15 +82,6 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 		for i := range t {
 			addrIndexes, _ = appendAddress(addrIndexes, ^int32(i+1), t[i].From, parser)
 			addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
-		}
-	}
-	if m.OnNewTxAddr != nil {
-		sent := make(map[string]struct{})
-		for _, si := range addrIndexes {
-			if _, found := sent[si.addrDesc]; !found {
-				m.OnNewTxAddr(tx, AddressDescriptor(si.addrDesc))
-				sent[si.addrDesc] = struct{}{}
-			}
 		}
 	}
 	if m.OnNewTx != nil {

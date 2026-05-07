@@ -297,9 +297,6 @@ type ENSResolution struct {
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(block *Block)
 
-// OnNewTxAddrFunc is used to send notification about a new transaction/address
-type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
-
 // OnNewTxFunc is used to send notification about a new transaction/address
 type OnNewTxFunc func(tx *MempoolTx)
 
@@ -319,7 +316,7 @@ type BlockChain interface {
 	// create mempool but do not initialize it
 	CreateMempool(BlockChain) (Mempool, error)
 	// initialize mempool, create ZeroMQ (or other) subscription
-	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc, OnNewTxFunc) error
+	InitializeMempool(AddrDescForOutpointFunc, OnNewTxFunc) error
 	// shutdown mempool, ZeroMQ and block chain connections
 	Shutdown(ctx context.Context) error
 	// chain info

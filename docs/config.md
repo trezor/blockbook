@@ -32,7 +32,7 @@ Good examples of coin configuration are
     * `backend_*` – Additional back-end ports can be documented here. Actually the only purpose is to get them to
        port table (prefix is removed and rest of string is used as note).
     * `blockbook_internal` – Blockbook's internal port that is used for metric collecting, debugging etc.
-    * `blockbook_public` – Blockbook's public port that is used to communicate with Trezor wallet (via Socket.IO).
+    * `blockbook_public` – Blockbook's public HTTP/API/WebSocket port.
 
 * `ipc` – Defines how Blockbook connects its back-end service.
     * `rpc_url_template` – Template that defines URL of back-end RPC service. See note on templates below. You can
@@ -101,6 +101,14 @@ Good examples of coin configuration are
         * `block_addresses_to_keep` – Number of blocks that are to be kept in blockaddresses column.
         * `additional_params` – Object of coin-specific params.
           * Tron-specific endpoint configuration is documented in [Tron Config](/docs/tron-config.md).
+          * Infura alternative EIP-1559 fee provider configuration:
+            * `alternative_estimate_fee` – Set to `infura` to use Infura Gas API fee suggestions instead of native node fee estimation.
+            * `alternative_estimate_fee_params` – JSON string with `url` and `periodSeconds`. `periodSeconds` controls how often Blockbook polls Infura.
+              Cached Infura fees remain usable for 30 failed polling periods, so `periodSeconds: 60` keeps the last successful fees for up to 30 minutes before native fallback.
+          * Ethereum mempool timeout configuration:
+            * `mempoolTxTimeoutHours` – Legacy Blockbook-side EVM mempool retention in whole hours. It is used when `mempoolTxTimeout` is not set and no alternative send transaction provider is enabled.
+            * `mempoolTxTimeout` – Optional Blockbook-side EVM mempool retention as a Go duration string such as `"10m"`; `"0s"` preserves the legacy zero-retention setting. If omitted and an alternative send transaction provider is enabled, Blockbook uses **10 minutes** instead of the legacy hour-based value.
+            * `alternativeMempoolTxTimeout` – Optional alternative-provider transaction cache retention as a positive Go duration string such as `"5m"`. Defaults to **5 minutes** when the alternative send transaction provider is enabled.
           * Hot-address configuration (Blockbook, Ethereum-type indexing):
             * `hot_address_min_contracts` – Minimum number of contracts before hotness tracking applies (default **192**).
             * `hot_address_min_hits` – Lookups within the current block required to mark an address hot (default **3**, clamped to **10**).

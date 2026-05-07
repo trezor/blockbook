@@ -44,7 +44,14 @@ const (
 	TestNetHoodi Network = 560048
 )
 
-const defaultErc20BatchSize = 100
+const (
+	defaultErc20BatchSize = 100
+
+	// Alternative/private relays expire pending txs quickly, so local pending state
+	// must not inherit the legacy hour-scale public mempool timeout.
+	defaultMempoolTxTimeoutWithAlternativeProvider = 10 * time.Minute
+	defaultAlternativeMempoolTxTimeout             = 5 * time.Minute
+)
 
 // Ethereum address constants
 const (
@@ -81,6 +88,8 @@ type Configuration struct {
 	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
 	AddressAliases                    bool   `json:"address_aliases,omitempty"`
 	MempoolTxTimeoutHours             int    `json:"mempoolTxTimeoutHours"`
+	MempoolTxTimeout                  string `json:"mempoolTxTimeout,omitempty"`
+	AlternativeMempoolTxTimeout       string `json:"alternativeMempoolTxTimeout,omitempty"`
 	QueryBackendOnMempoolResync       bool   `json:"queryBackendOnMempoolResync"`
 	ProcessInternalTransactions       bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions   bool   `json:"processZeroInternalTransactions"`
@@ -89,6 +98,48 @@ type Configuration struct {
 	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
 	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
 	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
+}
+
+func parseNonNegativeDuration(name string, value string) (time.Duration, error) {
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, errors.Annotatef(err, "invalid %s", name)
+	}
+	if d < 0 {
+		return 0, errors.Errorf("%s must not be negative", name)
+	}
+	return d, nil
+}
+
+func parsePositiveDuration(name string, value string) (time.Duration, error) {
+	d, err := parseNonNegativeDuration(name, value)
+	if err != nil {
+		return 0, err
+	}
+	if d == 0 {
+		return 0, errors.Errorf("%s must be positive", name)
+	}
+	return d, nil
+}
+
+// MempoolTxTimeoutDuration returns the Blockbook-side EVM mempool retention.
+func (c *Configuration) MempoolTxTimeoutDuration(alternativeSendTxProviderEnabled bool) (time.Duration, error) {
+	if c.MempoolTxTimeout != "" {
+		return parseNonNegativeDuration("mempoolTxTimeout", c.MempoolTxTimeout)
+	}
+	// Keep the shorter timeout scoped to alternative/private submission only.
+	if alternativeSendTxProviderEnabled {
+		return defaultMempoolTxTimeoutWithAlternativeProvider, nil
+	}
+	return time.Duration(c.MempoolTxTimeoutHours) * time.Hour, nil
+}
+
+// AlternativeMempoolTxTimeoutDuration returns the alternative-provider cache retention.
+func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, error) {
+	if c.AlternativeMempoolTxTimeout != "" {
+		return parsePositiveDuration("alternativeMempoolTxTimeout", c.AlternativeMempoolTxTimeout)
+	}
+	return defaultAlternativeMempoolTxTimeout, nil
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -177,6 +228,12 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		if _, err := time.ParseDuration(c.TraceTimeout); err != nil {
 			return nil, errors.Annotatef(err, "invalid trace_timeout")
 		}
+	}
+	if _, err := c.MempoolTxTimeoutDuration(false); err != nil {
+		return nil, err
+	}
+	if _, err := c.AlternativeMempoolTxTimeoutDuration(); err != nil {
+		return nil, err
 	}
 
 	s := &EthereumRPC{
@@ -408,7 +465,9 @@ func (b *EthereumRPC) Initialize() error {
 		return err
 	}
 
-	b.InitAlternativeProviders()
+	if err = b.InitAlternativeProviders(); err != nil {
+		return err
+	}
 
 	b.consensusMonitor = newConsensusVersionMonitor(b.ChainConfig.ConsensusNodeVersionURL)
 	b.consensusMonitor.start()
@@ -524,21 +583,31 @@ func (m *consensusVersionMonitor) shutdown() {
 }
 
 // InitAlternativeProviders initializes alternative providers
-func (b *EthereumRPC) InitAlternativeProviders() {
+func (b *EthereumRPC) InitAlternativeProviders() error {
 	b.initAlternativeFeeProvider()
 
+	// Env prefix follows explicit network aliases such as OP/BASE, otherwise ETH.
 	network := b.ChainConfig.Network
 	if network == "" {
 		network = b.ChainConfig.CoinShortcut
 	}
-	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, b.ChainConfig.MempoolTxTimeoutHours)
+	alternativeMempoolTxTimeout, err := b.ChainConfig.AlternativeMempoolTxTimeoutDuration()
+	if err != nil {
+		return err
+	}
+	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, alternativeMempoolTxTimeout)
+	return nil
 }
 
 // CreateMempool creates mempool if not already created, however does not initialize it
 func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
-		glog.Info("mempool created, MempoolTxTimeoutHours=", b.ChainConfig.MempoolTxTimeoutHours, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
+		mempoolTxTimeout, err := b.ChainConfig.MempoolTxTimeoutDuration(b.alternativeSendTxProvider != nil)
+		if err != nil {
+			return nil, err
+		}
+		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
+		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
 		if b.alternativeSendTxProvider != nil {
 			b.alternativeSendTxProvider.SetupMempool(b.Mempool, b.removeTransactionFromMempool)
 		}
@@ -548,7 +617,7 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 }
 
 // InitializeMempool creates subscriptions to newHeads and newPendingTransactions
-func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
+func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTx bchain.OnNewTxFunc) error {
 	if b.Mempool == nil {
 		return errors.New("Mempool not created")
 	}
@@ -570,7 +639,6 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 		b.Mempool.AddTransactionToMempool(txid)
 	}
 
-	b.Mempool.OnNewTxAddr = onNewTxAddr
 	b.Mempool.OnNewTx = onNewTx
 
 	if err = b.subscribeEvents(); err != nil {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/trezor/blockbook/bchain"
 )
@@ -19,7 +20,7 @@ func NewFakeBlockChainEthereumType(parser bchain.BlockChainParser) (bchain.Block
 }
 
 func (c *fakeBlockChainEthereumType) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
-	return bchain.NewMempoolEthereumType(chain, 1, false), nil
+	return bchain.NewMempoolEthereumType(chain, time.Hour, false), nil
 }
 
 func (c *fakeBlockChainEthereumType) GetChainInfo() (v *bchain.ChainInfo, err error) {

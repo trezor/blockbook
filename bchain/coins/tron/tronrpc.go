@@ -464,16 +464,19 @@ func (b *TronRPC) GetChainParser() bchain.BlockChainParser {
 
 func (b *TronRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
+		mempoolTxTimeout, err := b.ChainConfig.MempoolTxTimeoutDuration(false)
+		if err != nil {
+			return nil, err
+		}
+		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 	}
 	return b.Mempool, nil
 }
 
-func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
+func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTx bchain.OnNewTxFunc) error {
 	if b.Mempool == nil {
 		return errors.New("Tron Mempool not created")
 	}
-	b.Mempool.OnNewTxAddr = onNewTxAddr
 	b.Mempool.OnNewTx = onNewTx
 	b.newBlockNotifyOnce.Do(func() {
 		go b.newBlockNotifier()
