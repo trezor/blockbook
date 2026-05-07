@@ -219,7 +219,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_rpc_latency",
 			Help:        "Latency of blockchain RPC by method (in milliseconds)",
-			Buckets:     []float64{0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 250},
+			Buckets:     []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000},
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"method", "error"},
