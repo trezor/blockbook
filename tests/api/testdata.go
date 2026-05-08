@@ -16,6 +16,12 @@ type erc4626Fixture struct {
 
 type testData struct {
 	ERC4626Fixtures []erc4626Fixture `json:"erc4626Fixtures,omitempty"`
+	// NonVaultContracts is a list of EIP-55 addresses known not to be ERC-4626
+	// vaults. The strict-gate negative test asserts that even with
+	// ?protocols=erc4626, none of these come back with a protocols.erc4626
+	// payload — protecting against a regression where the detection gate
+	// falsely accepts contracts that merely expose asset() or totalAssets().
+	NonVaultContracts []string `json:"nonVaultContracts,omitempty"`
 }
 
 func loadAPITestData(coin string) (*testData, error) {
