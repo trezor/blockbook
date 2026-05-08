@@ -308,6 +308,29 @@ type MempoolBatcher interface {
 	GetRawTransactionsForMempoolBatch(txids []string) (map[string]*Tx, error)
 }
 
+// SyncIntent describes why the index sync is reading chain data.
+type SyncIntent int
+
+const (
+	SyncIntentDefault SyncIntent = iota
+	SyncIntentChainTip
+)
+
+// BlockChainSyncIntentProvider optionally returns a chain view specialized for a sync intent.
+type BlockChainSyncIntentProvider interface {
+	BlockChainForSyncIntent(intent SyncIntent) BlockChain
+}
+
+// BlockChainForSyncIntent returns an intent-specific chain view when the chain supports it.
+func BlockChainForSyncIntent(chain BlockChain, intent SyncIntent) BlockChain {
+	if provider, ok := chain.(BlockChainSyncIntentProvider); ok {
+		if intentChain := provider.BlockChainForSyncIntent(intent); intentChain != nil {
+			return intentChain
+		}
+	}
+	return chain
+}
+
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods

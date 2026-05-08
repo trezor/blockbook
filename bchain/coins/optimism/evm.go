@@ -39,6 +39,11 @@ func (c *OptimismRPCClient) CallContext(ctx context.Context, result interface{},
 	return nil
 }
 
+// CallContextWithIntent performs a JSON-RPC call on this client.
+func (c *OptimismRPCClient) CallContextWithIntent(ctx context.Context, intent bchain.EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	return c.CallContext(ctx, result, method, args...)
+}
+
 // BatchCallContext forwards batch JSON-RPC calls to the underlying client.
 func (c *OptimismRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
 	return c.Client.BatchCallContext(ctx, batch)

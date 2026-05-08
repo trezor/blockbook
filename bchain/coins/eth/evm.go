@@ -47,40 +47,8 @@ type EthereumRPCClient struct {
 	*rpc.Client
 }
 
-// DualRPCClient routes calls over HTTP and subscriptions over WebSocket.
-type DualRPCClient struct {
-	CallClient *rpc.Client
-	SubClient  *rpc.Client
-}
-
-// CallContext forwards JSON-RPC calls to the HTTP client.
-func (c *DualRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	return c.CallClient.CallContext(ctx, result, method, args...)
-}
-
-// BatchCallContext forwards batch JSON-RPC calls to the HTTP client.
-func (c *DualRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
-	return c.CallClient.BatchCallContext(ctx, batch)
-}
-
-// EthSubscribe forwards subscriptions to the WebSocket client.
-func (c *DualRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
-	sub, err := c.SubClient.EthSubscribe(ctx, channel, args...)
-	if err != nil {
-		return nil, err
-	}
-	return &EthereumClientSubscription{ClientSubscription: sub}, nil
-}
-
-// Close shuts down both underlying clients.
-func (c *DualRPCClient) Close() {
-	if c.SubClient != nil {
-		c.SubClient.Close()
-	}
-	if c.CallClient != nil && c.CallClient != c.SubClient {
-		c.CallClient.Close()
-	}
-}
+// DualRPCClient routes ordinary calls over HTTP and subscriptions/chain-tip calls over WebSocket.
+type DualRPCClient = bchain.DualEVMRPCClient
 
 // EthSubscribe subscribes to events and returns a client subscription that implements the EVMClientSubscription interface
 func (c *EthereumRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -90,6 +58,11 @@ func (c *EthereumRPCClient) EthSubscribe(ctx context.Context, channel interface{
 	}
 
 	return &EthereumClientSubscription{ClientSubscription: sub}, nil
+}
+
+// CallContextWithIntent performs a JSON-RPC call on this client.
+func (c *EthereumRPCClient) CallContextWithIntent(ctx context.Context, intent bchain.EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	return c.CallContext(ctx, result, method, args...)
 }
 
 // EthereumHeader wraps a block header to implement the EVMHeader interface

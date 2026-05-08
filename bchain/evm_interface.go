@@ -23,7 +23,62 @@ type EVMClient interface {
 type EVMRPCClient interface {
 	EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (EVMClientSubscription, error)
 	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error
+	CallContextWithIntent(ctx context.Context, intent EVMRPCIntent, result interface{}, method string, args ...interface{}) error
 	Close()
+}
+
+// EVMRPCIntent describes why a JSON-RPC call is being made, so routing can be
+// explicit without changing the public BlockChain methods.
+type EVMRPCIntent int
+
+const (
+	EVMRPCIntentDefault EVMRPCIntent = iota
+	EVMRPCIntentChainTip
+)
+
+// EVMBatchRPCClient provides batch JSON-RPC calls in addition to the base RPC client.
+type EVMBatchRPCClient interface {
+	EVMRPCClient
+	BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error
+}
+
+// DualEVMRPCClient routes ordinary calls over one RPC client and subscriptions/chain-tip calls over another.
+type DualEVMRPCClient struct {
+	CallClient EVMBatchRPCClient
+	SubClient  EVMRPCClient
+}
+
+// CallContext forwards JSON-RPC calls to the ordinary call client.
+func (c *DualEVMRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	return c.CallClient.CallContext(ctx, result, method, args...)
+}
+
+// CallContextWithIntent forwards chain-tip JSON-RPC calls to the subscription client.
+func (c *DualEVMRPCClient) CallContextWithIntent(ctx context.Context, intent EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	if intent == EVMRPCIntentChainTip {
+		return c.SubClient.CallContextWithIntent(ctx, intent, result, method, args...)
+	}
+	return c.CallClient.CallContextWithIntent(ctx, intent, result, method, args...)
+}
+
+// BatchCallContext forwards batch JSON-RPC calls to the ordinary call client.
+func (c *DualEVMRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
+	return c.CallClient.BatchCallContext(ctx, batch)
+}
+
+// EthSubscribe forwards subscriptions to the subscription client.
+func (c *DualEVMRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (EVMClientSubscription, error) {
+	return c.SubClient.EthSubscribe(ctx, channel, args...)
+}
+
+// Close shuts down both underlying clients.
+func (c *DualEVMRPCClient) Close() {
+	if c.SubClient != nil {
+		c.SubClient.Close()
+	}
+	if c.CallClient != nil && c.CallClient != c.SubClient {
+		c.CallClient.Close()
+	}
 }
 
 // EVMHeader provides access to the necessary header data for evm chain sync

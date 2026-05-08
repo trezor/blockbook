@@ -126,10 +126,15 @@ func (w *SyncWorker) updateBackendInfo() {
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
 func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
+	return w.ResyncIndexWithIntent(onNewBlock, initialSync, bchain.SyncIntentDefault)
+}
+
+// ResyncIndexWithIntent synchronizes index using a chain view selected for the sync intent.
+func (w *SyncWorker) ResyncIndexWithIntent(onNewBlock bchain.OnNewBlockFunc, initialSync bool, intent bchain.SyncIntent) error {
 	start := time.Now()
 	w.is.StartedSync()
 
-	err := w.resyncIndex(onNewBlock, initialSync)
+	err := w.resyncIndex(onNewBlock, initialSync, intent)
 
 	// update backend info after each resync
 	w.updateBackendInfo()
@@ -163,8 +168,19 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	return err
 }
 
-func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
-	remoteBestHash, err := w.chain.GetBestBlockHash()
+func (w *SyncWorker) chainForSyncIntent(intent bchain.SyncIntent) bchain.BlockChain {
+	return bchain.BlockChainForSyncIntent(w.chain, intent)
+}
+
+func (w *SyncWorker) canUseParallelSync(intent bchain.SyncIntent, initialSync bool, chain bchain.BlockChain) bool {
+	return (intent != bchain.SyncIntentChainTip || chain == w.chain) &&
+		w.syncWorkers > 1 &&
+		(initialSync || chain.GetChainParser().GetChainType() == bchain.ChainEthereumType)
+}
+
+func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool, intent bchain.SyncIntent) error {
+	syncChain := w.chainForSyncIntent(intent)
+	remoteBestHash, err := syncChain.GetBestBlockHash()
 	if err != nil {
 		return err
 	}
@@ -178,7 +194,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return errSynced
 	}
 	if localBestHash != "" {
-		remoteHash, err := w.chain.GetBlockHash(localBestHeight)
+		remoteHash, err := syncChain.GetBlockHash(localBestHeight)
 		// for some coins (eth) remote can be at lower best height after rollback
 		if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
 			return err
@@ -194,7 +210,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		// database is empty, start genesis
 		glog.Info("resync: genesis from block ", w.startHeight)
 	}
-	w.startHash, err = w.chain.GetBlockHash(w.startHeight)
+	w.startHash, err = syncChain.GetBlockHash(w.startHeight)
 	if err != nil {
 		return err
 	}
@@ -202,8 +218,8 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	// use parallel routine to load majority of blocks
 	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
 	// or in case of ChainEthereumType if the tip is farther
-	if w.syncWorkers > 1 && (initialSync || w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType) {
-		remoteBestHeight, err := w.chain.GetBestBlockHeight()
+	if w.canUseParallelSync(intent, initialSync, syncChain) {
+		remoteBestHeight, err := syncChain.GetBestBlockHeight()
 		if err != nil {
 			return err
 		}
@@ -220,16 +236,16 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 				if err != nil {
 					if stdErrors.Is(err, errResync) {
 						// block hash changed during parallel sync, restart the full resync
-						return w.resyncIndex(onNewBlock, initialSync)
+						return w.resyncIndex(onNewBlock, initialSync, bchain.SyncIntentDefault)
 					}
 					return err
 				}
 				// after parallel load finish the sync using standard way,
 				// new blocks may have been created in the meantime
-				return w.resyncIndex(onNewBlock, initialSync)
+				return w.resyncIndex(onNewBlock, initialSync, bchain.SyncIntentDefault)
 			}
 		}
-		if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
+		if syncChain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
 			syncWorkers := uint32(4)
 			if remoteBestHeight-w.startHeight >= syncWorkers {
 				glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, syncWorkers)
@@ -239,19 +255,19 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 				if err != nil {
 					if stdErrors.Is(err, errResync) {
 						// block hash changed during parallel sync, restart the full resync
-						return w.resyncIndex(onNewBlock, initialSync)
+						return w.resyncIndex(onNewBlock, initialSync, bchain.SyncIntentDefault)
 					}
 					return err
 				}
 				// after parallel load finish the sync using standard way,
 				// new blocks may have been created in the meantime
-				return w.resyncIndex(onNewBlock, initialSync)
+				return w.resyncIndex(onNewBlock, initialSync, bchain.SyncIntentDefault)
 			}
 		}
 	}
-	err = w.connectBlocks(onNewBlock, initialSync)
+	err = w.connectBlocks(syncChain, onNewBlock, initialSync)
 	if stdErrors.Is(err, errFork) || stdErrors.Is(err, errResync) {
-		return w.resyncIndex(onNewBlock, initialSync)
+		return w.resyncIndex(onNewBlock, initialSync, bchain.SyncIntentDefault)
 	}
 	return err
 }
@@ -281,15 +297,15 @@ func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, on
 	if err := w.DisconnectBlocks(height+1, localBestHeight, hashes); err != nil {
 		return err
 	}
-	return w.resyncIndex(onNewBlock, initialSync)
+	return w.resyncIndex(onNewBlock, initialSync, bchain.SyncIntentDefault)
 }
 
-func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
+func (w *SyncWorker) connectBlocks(chain bchain.BlockChain, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
 	bch := make(chan blockResult, 8)
 	done := make(chan struct{})
 	defer close(done)
 
-	go w.getBlockChain(bch, done)
+	go w.getBlockChain(chain, bch, done)
 
 	var lastRes, empty blockResult
 
@@ -747,7 +763,7 @@ type blockResult struct {
 	err   error
 }
 
-func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
+func (w *SyncWorker) getBlockChain(chain bchain.BlockChain, out chan blockResult, done chan struct{}) {
 	defer close(out)
 
 	hash := w.startHash
@@ -760,7 +776,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			return
 		default:
 		}
-		block, err := w.chain.GetBlock(hash, height)
+		block, err := chain.GetBlock(hash, height)
 		if err != nil {
 			if stdErrors.Is(err, bchain.ErrBlockNotFound) {
 				break

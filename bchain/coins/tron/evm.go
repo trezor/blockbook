@@ -245,6 +245,11 @@ func (c *TronRPCClient) CallContext(ctx context.Context, result interface{}, met
 	return json.Unmarshal(rawData, result)
 }
 
+// CallContextWithIntent performs a JSON-RPC call on this client.
+func (c *TronRPCClient) CallContextWithIntent(ctx context.Context, intent bchain.EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	return c.CallContext(ctx, result, method, args...)
+}
+
 // fixStateRoot works around Tron JSON-RPC returning stateRoot in a format incompatible with go-ethereum
 // Issue: Tron returns stateRoot as "0x" (empty) or with incorrect length, which causes go-ethereum
 // deserialization to fail since it expects a valid 32-byte hash (66 chars: "0x" + 64 hex digits)

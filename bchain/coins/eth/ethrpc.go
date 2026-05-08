@@ -190,6 +190,73 @@ type EthereumRPC struct {
 	multicall3ProbeSF singleflight.Group
 }
 
+type rpcIntentHeader struct {
+	hash       string
+	number     *big.Int
+	difficulty *big.Int
+}
+
+func (h *rpcIntentHeader) Hash() string {
+	return h.hash
+}
+
+func (h *rpcIntentHeader) Number() *big.Int {
+	return h.number
+}
+
+func (h *rpcIntentHeader) Difficulty() *big.Int {
+	return h.difficulty
+}
+
+func (b *EthereumRPC) callContextWithSyncIntent(ctx context.Context, intent bchain.SyncIntent, result interface{}, method string, args ...interface{}) error {
+	if intent == bchain.SyncIntentChainTip {
+		return b.RPC.CallContextWithIntent(ctx, bchain.EVMRPCIntentChainTip, result, method, args...)
+	}
+	return b.RPC.CallContext(ctx, result, method, args...)
+}
+
+func (b *EthereumRPC) headerByNumberWithSyncIntent(ctx context.Context, intent bchain.SyncIntent, number *big.Int) (bchain.EVMHeader, error) {
+	if intent != bchain.SyncIntentChainTip {
+		return b.Client.HeaderByNumber(ctx, number)
+	}
+	var head rpcHeader
+	err := b.callContextWithSyncIntent(ctx, intent, &head, "eth_getBlockByNumber", bchain.ToBlockNumArg(number), false)
+	if err != nil {
+		return nil, err
+	}
+	if head.Hash == "" || head.Number == "" {
+		return nil, ethereum.NotFound
+	}
+	n, err := hexutil.DecodeBig(head.Number)
+	if err != nil {
+		return nil, errors.Annotatef(err, "number %v", head.Number)
+	}
+	difficulty := big.NewInt(0)
+	if head.Difficulty != "" {
+		difficulty, err = hexutil.DecodeBig(head.Difficulty)
+		if err != nil {
+			return nil, errors.Annotatef(err, "difficulty %v", head.Difficulty)
+		}
+	}
+	return &rpcIntentHeader{
+		hash:       head.Hash,
+		number:     n,
+		difficulty: difficulty,
+	}, nil
+}
+
+type ethereumRPCSyncIntentView struct {
+	*EthereumRPC
+	intent bchain.SyncIntent
+}
+
+func (b *EthereumRPC) BlockChainForSyncIntent(intent bchain.SyncIntent) bchain.BlockChain {
+	if intent == bchain.SyncIntentChainTip {
+		return &ethereumRPCSyncIntentView{EthereumRPC: b, intent: intent}
+	}
+	return b
+}
+
 // NewEthereumRPC returns new EthRPC instance.
 func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	var err error
@@ -421,15 +488,17 @@ var OpenRPC = func(httpURL, wsURL string) (bchain.EVMRPCClient, bchain.EVMClient
 	if err != nil {
 		return nil, nil, err
 	}
-	subClient := callClient
+	callRPC := &EthereumRPCClient{Client: callClient}
+	subRPC := callRPC
 	if subURL != callURL {
-		subClient, err = dialRPC(subURL)
+		subClient, err := dialRPC(subURL)
 		if err != nil {
 			callClient.Close()
 			return nil, nil, err
 		}
+		subRPC = &EthereumRPCClient{Client: subClient}
 	}
-	rc := &DualRPCClient{CallClient: callClient, SubClient: subClient}
+	rc := &DualRPCClient{CallClient: callRPC, SubClient: subRPC}
 	ec := &EthereumClient{Client: ethclient.NewClient(callClient)}
 	return rc, ec, nil
 }
@@ -891,7 +960,7 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 		var err error
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 		defer cancel()
-		b.bestHeader, err = b.Client.HeaderByNumber(ctx, nil)
+		b.bestHeader, err = b.headerByNumberWithSyncIntent(ctx, bchain.SyncIntentDefault, nil)
 		if err != nil {
 			b.bestHeader = nil
 			return nil, err
@@ -937,7 +1006,7 @@ func (b *EthereumRPC) refreshBestHeaderFromChain() (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
-	h, err := b.Client.HeaderByNumber(ctx, nil)
+	h, err := b.headerByNumberWithSyncIntent(ctx, bchain.SyncIntentChainTip, nil)
 	if err != nil {
 		return false, err
 	}
@@ -986,13 +1055,56 @@ func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 	return uint32(h.Number().Uint64()), nil
 }
 
+func (b *EthereumRPC) getBestHeaderWithSyncIntent(intent bchain.SyncIntent) (bchain.EVMHeader, error) {
+	b.bestHeaderLock.Lock()
+	if b.bestHeader != nil && b.bestHeader.Number() != nil {
+		h := b.bestHeader
+		b.bestHeaderLock.Unlock()
+		return h, nil
+	}
+	b.bestHeaderLock.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	h, err := b.headerByNumberWithSyncIntent(ctx, intent, nil)
+	if err != nil {
+		return nil, err
+	}
+	b.setBestHeader(h)
+	return h, nil
+}
+
+func (v *ethereumRPCSyncIntentView) GetBestBlockHash() (string, error) {
+	h, err := v.EthereumRPC.getBestHeaderWithSyncIntent(v.intent)
+	if err != nil {
+		return "", err
+	}
+	return h.Hash(), nil
+}
+
+func (v *ethereumRPCSyncIntentView) GetBestBlockHeight() (uint32, error) {
+	h, err := v.EthereumRPC.getBestHeaderWithSyncIntent(v.intent)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(h.Number().Uint64()), nil
+}
+
 // GetBlockHash returns hash of block in best-block-chain at given height
 func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
+	return b.getBlockHashWithSyncIntent(bchain.SyncIntentDefault, height)
+}
+
+func (v *ethereumRPCSyncIntentView) GetBlockHash(height uint32) (string, error) {
+	return v.EthereumRPC.getBlockHashWithSyncIntent(v.intent, height)
+}
+
+func (b *EthereumRPC) getBlockHashWithSyncIntent(intent bchain.SyncIntent, height uint32) (string, error) {
 	var n big.Int
 	n.SetUint64(uint64(height))
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
-	h, err := b.Client.HeaderByNumber(ctx, &n)
+	h, err := b.headerByNumberWithSyncIntent(ctx, intent, &n)
 	if err != nil {
 		if err == ethereum.NotFound || stdErrors.Is(err, bchain.ErrBlockNotFound) {
 			return "", bchain.ErrBlockNotFound
@@ -1053,18 +1165,25 @@ func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 }
 
 func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
+	return b.getBlockRawWithSyncIntent(bchain.SyncIntentDefault, hash, height, fullTxs)
+}
+
+func (b *EthereumRPC) getBlockRawWithSyncIntent(intent bchain.SyncIntent, hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var raw json.RawMessage
 	var err error
+	if hash == "pending" {
+		intent = bchain.SyncIntentDefault
+	}
 	if hash != "" {
 		if hash == "pending" {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", hash, fullTxs)
+			err = b.callContextWithSyncIntent(ctx, intent, &raw, "eth_getBlockByNumber", hash, fullTxs)
 		} else {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
+			err = b.callContextWithSyncIntent(ctx, intent, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
 		}
 	} else {
-		err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
+		err = b.callContextWithSyncIntent(ctx, intent, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
 	}
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
@@ -1080,11 +1199,15 @@ func (b *EthereumRPC) GetBlockRawByHashOrHeight(hash string, height uint32, full
 }
 
 func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
+	return b.processEventsForBlockWithSyncIntent(bchain.SyncIntentDefault, blockNumber)
+}
+
+func (b *EthereumRPC) processEventsForBlockWithSyncIntent(intent bchain.SyncIntent, blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var logs []rpcLogWithTxHash
 	var ensRecords []bchain.AddressAliasRecord
-	err := b.RPC.CallContext(ctx, &logs, "eth_getLogs", map[string]interface{}{
+	err := b.callContextWithSyncIntent(ctx, intent, &logs, "eth_getLogs", map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
 	})
@@ -1257,7 +1380,15 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	raw, err := b.getBlockRaw(hash, height, true)
+	return b.getBlockWithSyncIntent(bchain.SyncIntentDefault, hash, height)
+}
+
+func (v *ethereumRPCSyncIntentView) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	return v.EthereumRPC.getBlockWithSyncIntent(v.intent, hash, height)
+}
+
+func (b *EthereumRPC) getBlockWithSyncIntent(intent bchain.SyncIntent, hash string, height uint32) (*bchain.Block, error) {
+	raw, err := b.getBlockRawWithSyncIntent(intent, hash, height, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1290,7 +1421,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	logsCh := make(chan logsResult, 1)         // Buffered so send won't block if we return early.
 	internalCh := make(chan internalResult, 1) // Buffered to avoid goroutine leak on early return.
 	go func() {
-		logs, ens, err := b.processEventsForBlock(head.Number)
+		logs, ens, err := b.processEventsForBlockWithSyncIntent(intent, head.Number)
 		logsCh <- logsResult{logs: logs, ens: ens, err: err} // Send result without shared state.
 	}()
 	go func() {

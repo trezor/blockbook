@@ -205,6 +205,10 @@ var OpenRPC = func(url, _ string) (bchain.EVMRPCClient, bchain.EVMClient, error)
 	return rpcClient, tc, nil
 }
 
+func (b *TronRPC) BlockChainForSyncIntent(intent bchain.SyncIntent) bchain.BlockChain {
+	return b
+}
+
 // Initialize Tron RPC
 func (b *TronRPC) Initialize() error {
 	b.OpenRPC = OpenRPC

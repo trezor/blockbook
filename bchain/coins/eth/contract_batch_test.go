@@ -30,6 +30,10 @@ func (m *mockBatchRPC) CallContext(ctx context.Context, result interface{}, meth
 	return errors.New("not implemented")
 }
 
+func (m *mockBatchRPC) CallContextWithIntent(ctx context.Context, intent bchain.EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	return m.CallContext(ctx, result, method, args...)
+}
+
 func (m *mockBatchRPC) Close() {}
 
 func (m *mockBatchRPC) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
@@ -118,6 +122,10 @@ func (m *mockBatchCallRPC) CallContext(ctx context.Context, result interface{}, 
 	}
 	*out = res
 	return nil
+}
+
+func (m *mockBatchCallRPC) CallContextWithIntent(ctx context.Context, intent bchain.EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	return m.CallContext(ctx, result, method, args...)
 }
 
 func (m *mockBatchCallRPC) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -110,6 +111,7 @@ var (
 	callbacksOnNewTx              []bchain.OnNewTxFunc
 	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
 	chanOsSignal                  chan os.Signal
+	chainTipSyncIndexRequested    atomic.Bool
 )
 
 func init() {
@@ -544,16 +546,23 @@ func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool)
 func syncIndexLoop() {
 	defer close(chanSyncIndexDone)
 	glog.Info("syncIndexLoop starting")
+	resync := func(intent bchain.SyncIntent) error {
+		return syncWorker.ResyncIndexWithIntent(onNewBlock, false, intent)
+	}
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, time.Duration(*resyncIndexDebounceMs)*time.Millisecond, chanSyncIndex, func() {
-		if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
+		intent := bchain.SyncIntentDefault
+		if chainTipSyncIndexRequested.Swap(false) {
+			intent = bchain.SyncIntentChainTip
+		}
+		if err := resync(intent); err != nil {
 			if err == db.ErrOperationInterrupted || common.IsInShutdown() {
 				return
 			}
 			glog.Error("syncIndexLoop ", errors.ErrorStack(err), ", will retry...")
 			// retry once in case of random network error, after a slight delay
 			time.Sleep(time.Millisecond * 2500)
-			if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
+			if err := resync(intent); err != nil {
 				if err == db.ErrOperationInterrupted || common.IsInShutdown() {
 					return
 				}
@@ -665,6 +674,7 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 		return
 	}
 	if nt == bchain.NotificationNewBlock {
+		chainTipSyncIndexRequested.Store(true)
 		chanSyncIndex <- struct{}{}
 	} else if nt == bchain.NotificationNewTx {
 		chanSyncMempool <- struct{}{}

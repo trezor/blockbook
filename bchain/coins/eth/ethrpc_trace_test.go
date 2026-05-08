@@ -27,6 +27,10 @@ func (m *mockTraceRPC) CallContext(ctx context.Context, result interface{}, meth
 	return nil
 }
 
+func (m *mockTraceRPC) CallContextWithIntent(ctx context.Context, intent bchain.EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	return m.CallContext(ctx, result, method, args...)
+}
+
 func (m *mockTraceRPC) Close() {}
 
 func TestNewEthereumRPCRejectsInvalidTraceTimeout(t *testing.T) {

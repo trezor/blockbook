@@ -338,6 +338,10 @@ func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, 
 	}
 }
 
+func (m *mockMulticallRPC) CallContextWithIntent(ctx context.Context, intent bchain.EVMRPCIntent, result interface{}, method string, args ...interface{}) error {
+	return m.CallContext(ctx, result, method, args...)
+}
+
 func TestMulticallAggregate3EndToEnd(t *testing.T) {
 	expected := []bchain.EthereumMulticallResult{
 		{Success: true, Data: "0xdeadbeef"},
