@@ -12,14 +12,47 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// EthereumClient wraps a client to implement the EVMClient interface
+// stickyKey is the unexported context-value key used to mark calls that must
+// follow the WebSocket connection (see WithSyncRoute / isSyncRoute). Marked
+// calls hit the WS-pinned backend; unmarked calls go via the HTTP pool.
+type stickyKey struct{}
+
+// WithSyncRoute returns a child context tagged so DualRPCClient.CallContext and
+// EthereumClient methods route the call over the WebSocket connection. Used by
+// the sync facade (ethSyncView) and by refreshBestHeaderFromChain to keep the
+// chain-tip block fetch sticky to the node that delivered newHeads.
+func WithSyncRoute(ctx context.Context) context.Context {
+	return context.WithValue(ctx, stickyKey{}, true)
+}
+
+// isSyncRoute reports whether ctx carries the sync-route tag set by WithSyncRoute.
+func isSyncRoute(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(stickyKey{}).(bool)
+	return v
+}
+
+// EthereumClient wraps both an HTTP-backed and a WebSocket-backed *ethclient.Client.
+// Each method dispatches based on isSyncRoute(ctx): tagged calls go to wsClient,
+// untagged calls go to httpClient. When the same underlying *rpc.Client serves
+// both, wsClient is aliased to httpClient.
 type EthereumClient struct {
-	*ethclient.Client
+	httpClient *ethclient.Client
+	wsClient   *ethclient.Client
+}
+
+func (c *EthereumClient) pick(ctx context.Context) *ethclient.Client {
+	if isSyncRoute(ctx) && c.wsClient != nil {
+		return c.wsClient
+	}
+	return c.httpClient
 }
 
 // HeaderByNumber returns a block header that implements the EVMHeader interface
 func (c *EthereumClient) HeaderByNumber(ctx context.Context, number *big.Int) (bchain.EVMHeader, error) {
-	h, err := c.Client.HeaderByNumber(ctx, number)
+	h, err := c.pick(ctx).HeaderByNumber(ctx, number)
 	if err != nil {
 		return nil, err
 	}
@@ -29,17 +62,27 @@ func (c *EthereumClient) HeaderByNumber(ctx context.Context, number *big.Int) (b
 
 // EstimateGas returns the current estimated gas cost for executing a transaction
 func (c *EthereumClient) EstimateGas(ctx context.Context, msg interface{}) (uint64, error) {
-	return c.Client.EstimateGas(ctx, msg.(ethereum.CallMsg))
+	return c.pick(ctx).EstimateGas(ctx, msg.(ethereum.CallMsg))
 }
 
 // BalanceAt returns the balance for the given account at a specific block, or latest known block if no block number is provided
 func (c *EthereumClient) BalanceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (*big.Int, error) {
-	return c.Client.BalanceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
+	return c.pick(ctx).BalanceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
 }
 
 // NonceAt returns the nonce for the given account at a specific block, or latest known block if no block number is provided
 func (c *EthereumClient) NonceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (uint64, error) {
-	return c.Client.NonceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
+	return c.pick(ctx).NonceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
+}
+
+// NetworkID returns the chain id reported by the backend.
+func (c *EthereumClient) NetworkID(ctx context.Context) (*big.Int, error) {
+	return c.pick(ctx).NetworkID(ctx)
+}
+
+// SuggestGasPrice asks the backend for a gas-price suggestion.
+func (c *EthereumClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	return c.pick(ctx).SuggestGasPrice(ctx)
 }
 
 // EthereumRPCClient wraps an rpc client to implement the EVMRPCClient interface
@@ -47,18 +90,29 @@ type EthereumRPCClient struct {
 	*rpc.Client
 }
 
-// DualRPCClient routes calls over HTTP and subscriptions over WebSocket.
+// DualRPCClient holds an HTTP-backed CallClient and a WebSocket-backed SubClient.
+// CallContext routes by isSyncRoute(ctx): tagged calls go over WS to keep
+// chain-tip RPC traffic sticky to the announcer node; untagged calls go over
+// HTTP so bulk/parallel sync and public API traffic can fan out across the LB
+// pool. BatchCallContext stays on HTTP unconditionally — batching is HTTP-shaped
+// in this codebase. EthSubscribe always uses WS.
 type DualRPCClient struct {
 	CallClient *rpc.Client
 	SubClient  *rpc.Client
 }
 
-// CallContext forwards JSON-RPC calls to the HTTP client.
+// CallContext routes the JSON-RPC call to SubClient when ctx carries the
+// sync-route tag, otherwise to CallClient.
 func (c *DualRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	if isSyncRoute(ctx) && c.SubClient != nil {
+		return c.SubClient.CallContext(ctx, result, method, args...)
+	}
 	return c.CallClient.CallContext(ctx, result, method, args...)
 }
 
-// BatchCallContext forwards batch JSON-RPC calls to the HTTP client.
+// BatchCallContext forwards batch JSON-RPC calls to the HTTP client. WS is not
+// used for batching: only the eth package's contract.go ERC-20 fan-out batches,
+// and that path is HTTP-only by convention.
 func (c *DualRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
 	return c.CallClient.BatchCallContext(ctx, batch)
 }

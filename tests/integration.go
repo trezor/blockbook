@@ -204,10 +204,11 @@ func initBlockChain(coinName string, cfg json.RawMessage, initMempool bool) (bch
 }
 
 func isNetError(err error) bool {
-	if _, ok := err.(net.Error); ok {
-		return true
-	}
-	return false
+	// errors.As walks the wrapping chain so go-ethereum's wsHandshakeError
+	// (which wraps a net.OpError on connection refused) is recognised as a
+	// network error and the test fails fast instead of retrying for 5 minutes.
+	var ne net.Error
+	return errors.As(err, &ne)
 }
 
 func requiresMempool(cfg map[string]json.RawMessage) bool {

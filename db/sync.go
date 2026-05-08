@@ -20,8 +20,15 @@ import (
 
 // SyncWorker is handle to SyncWorker
 type SyncWorker struct {
-	db                     *RocksDB
-	chain                  bchain.BlockChain
+	db    *RocksDB
+	chain bchain.BlockChain
+	// tipChain is used inside the sequential connectBlocks / getBlockChain
+	// path (the per-newHeads tip-sync case). It typically routes RPC over a
+	// sticky transport (e.g. WebSocket) to keep follow-up block fetches on the
+	// same backend that announced the block. For chains without a separate
+	// tip view it is the same value as chain. Bulk and parallel paths keep
+	// using chain so they can fan out across the LB pool.
+	tipChain               bchain.BlockChain
 	syncWorkers, syncChunk int
 	dryRun                 bool
 	startHeight            uint32
@@ -60,14 +67,21 @@ func defaultSyncWorkerConfig() SyncWorkerConfig {
 }
 
 // NewSyncWorker creates new SyncWorker and returns its handle
-func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState) (*SyncWorker, error) {
-	return NewSyncWorkerWithConfig(db, chain, syncWorkers, syncChunk, minStartHeight, dryRun, chanOsSignal, metrics, is, nil)
+//
+// tipChain is the BlockChain view used by the sequential connectBlocks path
+// (per-newHeads tip-sync). Pass the same value as chain when no special
+// tip-side routing is required.
+func NewSyncWorker(db *RocksDB, chain, tipChain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState) (*SyncWorker, error) {
+	return NewSyncWorkerWithConfig(db, chain, tipChain, syncWorkers, syncChunk, minStartHeight, dryRun, chanOsSignal, metrics, is, nil)
 }
 
 // NewSyncWorkerWithConfig allows tests or callers to override SyncWorker defaults.
-func NewSyncWorkerWithConfig(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState, cfg *SyncWorkerConfig) (*SyncWorker, error) {
+func NewSyncWorkerWithConfig(db *RocksDB, chain, tipChain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState, cfg *SyncWorkerConfig) (*SyncWorker, error) {
 	if minStartHeight < 0 {
 		minStartHeight = 0
+	}
+	if tipChain == nil {
+		tipChain = chain
 	}
 	effectiveCfg := defaultSyncWorkerConfig()
 	if cfg != nil {
@@ -76,6 +90,7 @@ func NewSyncWorkerWithConfig(db *RocksDB, chain bchain.BlockChain, syncWorkers, 
 	return &SyncWorker{
 		db:                db,
 		chain:             chain,
+		tipChain:          tipChain,
 		syncWorkers:       syncWorkers,
 		syncChunk:         syncChunk,
 		dryRun:            dryRun,
@@ -760,7 +775,11 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			return
 		default:
 		}
-		block, err := w.chain.GetBlock(hash, height)
+		// Sequential tip-sync path: route through tipChain so the per-newHeads
+		// follow-up block fetches stay sticky to the backend that announced
+		// the block (avoids the load-balancer drift where another node behind
+		// the LB returns null for a block it has not yet observed).
+		block, err := w.tipChain.GetBlock(hash, height)
 		if err != nil {
 			if stdErrors.Is(err, bchain.ErrBlockNotFound) {
 				break

@@ -361,6 +361,16 @@ type BlockChain interface {
 	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 
+// SyncableBlockChain is an optional interface implemented by chains that
+// expose a separate BlockChain view for the SyncWorker's tip-sync path.
+// The returned view shares all backing state with the original; only the
+// underlying RPC routing differs (e.g. HTTP pool vs sticky WebSocket).
+// Chains that do not implement this interface are used unchanged for both
+// bulk and tip sync.
+type SyncableBlockChain interface {
+	SyncBlockChain() BlockChain
+}
+
 // BlockChainParser defines common interface to parsing and conversions of block chain data
 type BlockChainParser interface {
 	// type of the blockchain

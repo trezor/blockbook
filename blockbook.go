@@ -267,7 +267,14 @@ func mainWithExitCode() int {
 		return exitCodeOK
 	}
 
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState)
+	// Chains can opt into a separate BlockChain view for the sync worker's
+	// sequential connectBlocks path (e.g. EVM coins route tip-sync RPC over a
+	// sticky WebSocket while bulk catch-up keeps using the HTTP pool).
+	tipChain := chain
+	if s, ok := chain.(bchain.SyncableBlockChain); ok {
+		tipChain = s.SyncBlockChain()
+	}
+	syncWorker, err = db.NewSyncWorker(index, chain, tipChain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState)
 	if err != nil {
 		glog.Errorf("NewSyncWorker %v", err)
 		return exitCodeFatal

@@ -201,7 +201,7 @@ func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, startHeight uint32, 
 
 	ch := make(chan os.Signal)
 
-	sw, err := db.NewSyncWorkerWithConfig(d, h.Chain, 8, 0, int(startHeight), false, ch, m, is, testSyncWorkerConfig)
+	sw, err := db.NewSyncWorkerWithConfig(d, h.Chain, h.Chain, 8, 0, int(startHeight), false, ch, m, is, testSyncWorkerConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

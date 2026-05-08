@@ -430,7 +430,12 @@ var OpenRPC = func(httpURL, wsURL string) (bchain.EVMRPCClient, bchain.EVMClient
 		}
 	}
 	rc := &DualRPCClient{CallClient: callClient, SubClient: subClient}
-	ec := &EthereumClient{Client: ethclient.NewClient(callClient)}
+	httpEC := ethclient.NewClient(callClient)
+	wsEC := httpEC
+	if subClient != callClient {
+		wsEC = ethclient.NewClient(subClient)
+	}
+	ec := &EthereumClient{httpClient: httpEC, wsClient: wsEC}
 	return rc, ec, nil
 }
 
@@ -876,6 +881,13 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 }
 
 func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
+	return b.getBestHeaderWithCtx(context.Background())
+}
+
+// getBestHeaderWithCtx is the ctx-aware variant of getBestHeader. If parent
+// carries the sync-route tag (set by the sync facade or refreshBestHeaderFromChain),
+// the underlying HeaderByNumber call is dispatched to the WS-backed ethclient.
+func (b *EthereumRPC) getBestHeaderWithCtx(parent context.Context) (bchain.EVMHeader, error) {
 	b.bestHeaderLock.Lock()
 	defer b.bestHeaderLock.Unlock()
 	// if the best header was not updated for 15 minutes, there could be a subscription problem, reconnect RPC
@@ -889,7 +901,7 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 	}
 	if b.bestHeader == nil {
 		var err error
-		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+		ctx, cancel := context.WithTimeout(parent, b.Timeout)
 		defer cancel()
 		b.bestHeader, err = b.Client.HeaderByNumber(ctx, nil)
 		if err != nil {
@@ -935,7 +947,10 @@ func (b *EthereumRPC) refreshBestHeaderFromChain() (bool, error) {
 	if b.Client == nil {
 		return false, errors.New("rpc client not initialized")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	// The fetch races the load balancer that just delivered newHeads from a
+	// specific backend; tag the ctx so the call rides the WS connection (which
+	// is pinned to that backend) and observes the same canonical tip.
+	ctx, cancel := context.WithTimeout(WithSyncRoute(context.Background()), b.Timeout)
 	defer cancel()
 	h, err := b.Client.HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -970,7 +985,11 @@ func (b *EthereumRPC) setBestHeader(h bchain.EVMHeader) bool {
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain
 func (b *EthereumRPC) GetBestBlockHash() (string, error) {
-	h, err := b.getBestHeader()
+	return b.getBestBlockHashWithCtx(context.Background())
+}
+
+func (b *EthereumRPC) getBestBlockHashWithCtx(parent context.Context) (string, error) {
+	h, err := b.getBestHeaderWithCtx(parent)
 	if err != nil {
 		return "", err
 	}
@@ -979,7 +998,11 @@ func (b *EthereumRPC) GetBestBlockHash() (string, error) {
 
 // GetBestBlockHeight returns height of the tip of the best-block-chain
 func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
-	h, err := b.getBestHeader()
+	return b.getBestBlockHeightWithCtx(context.Background())
+}
+
+func (b *EthereumRPC) getBestBlockHeightWithCtx(parent context.Context) (uint32, error) {
+	h, err := b.getBestHeaderWithCtx(parent)
 	if err != nil {
 		return 0, err
 	}
@@ -988,9 +1011,13 @@ func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 
 // GetBlockHash returns hash of block in best-block-chain at given height
 func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
+	return b.getBlockHashWithCtx(context.Background(), height)
+}
+
+func (b *EthereumRPC) getBlockHashWithCtx(parent context.Context, height uint32) (string, error) {
 	var n big.Int
 	n.SetUint64(uint64(height))
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(parent, b.Timeout)
 	defer cancel()
 	h, err := b.Client.HeaderByNumber(ctx, &n)
 	if err != nil {
@@ -1053,7 +1080,14 @@ func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 }
 
 func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	return b.getBlockRawWithCtx(context.Background(), hash, height, fullTxs)
+}
+
+// getBlockRawWithCtx is the ctx-aware variant. The caller-supplied parent ctx
+// determines whether the underlying eth_getBlockBy* call rides WS (sync facade)
+// or HTTP (default).
+func (b *EthereumRPC) getBlockRawWithCtx(parent context.Context, hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(parent, b.Timeout)
 	defer cancel()
 	var raw json.RawMessage
 	var err error
@@ -1079,8 +1113,8 @@ func (b *EthereumRPC) GetBlockRawByHashOrHeight(hash string, height uint32, full
 	return b.getBlockRaw(hash, height, fullTxs)
 }
 
-func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+func (b *EthereumRPC) processEventsForBlock(parent context.Context, blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
+	ctx, cancel := context.WithTimeout(parent, b.Timeout)
 	defer cancel()
 	var logs []rpcLogWithTxHash
 	var ensRecords []bchain.AddressAliasRecord
@@ -1257,7 +1291,15 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	raw, err := b.getBlockRaw(hash, height, true)
+	return b.getBlockWithCtx(context.Background(), hash, height)
+}
+
+// getBlockWithCtx is the ctx-aware variant of GetBlock. The caller-supplied
+// parent ctx propagates into getBlockRawWithCtx, processEventsForBlock and
+// getInternalDataForBlock, so a sync-route tag set by ethSyncView reaches every
+// underlying RPC (eth_getBlockBy*, eth_getLogs, debug_traceBlockByHash).
+func (b *EthereumRPC) getBlockWithCtx(parent context.Context, hash string, height uint32) (*bchain.Block, error) {
+	raw, err := b.getBlockRawWithCtx(parent, hash, height, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1275,9 +1317,9 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
 	// Run event/log processing and internal data extraction in parallel; allow early return on log failure.
-	ctxInternal, cancelInternal := context.WithTimeout(context.Background(), b.Timeout) // Cancel trace RPC on log error or timeout.
-	defer cancelInternal()                                                              // Ensure timer resources are released on any return path.
-	type logsResult struct {                                                            // Bundles processEventsForBlock outputs for channel return.
+	ctxInternal, cancelInternal := context.WithTimeout(parent, b.Timeout) // Cancel trace RPC on log error or timeout.
+	defer cancelInternal()                                                // Ensure timer resources are released on any return path.
+	type logsResult struct {                                              // Bundles processEventsForBlock outputs for channel return.
 		logs map[string][]*bchain.RpcLog
 		ens  []bchain.AddressAliasRecord
 		err  error
@@ -1290,7 +1332,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	logsCh := make(chan logsResult, 1)         // Buffered so send won't block if we return early.
 	internalCh := make(chan internalResult, 1) // Buffered to avoid goroutine leak on early return.
 	go func() {
-		logs, ens, err := b.processEventsForBlock(head.Number)
+		logs, ens, err := b.processEventsForBlock(parent, head.Number)
 		logsCh <- logsResult{logs: logs, ens: ens, err: err} // Send result without shared state.
 	}()
 	go func() {
