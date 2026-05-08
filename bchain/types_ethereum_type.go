@@ -80,6 +80,10 @@ type ContractInfo struct {
 	Decimals          int               `json:"decimals" ts_doc:"Number of decimal places, if applicable."`
 	CreatedInBlock    uint32            `json:"createdInBlock,omitempty" ts_doc:"Block height where contract was first created."`
 	DestructedInBlock uint32            `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
+	// IsErc4626 is set on a successful asset()+totalAssets() probe; lazy and one-way.
+	IsErc4626 bool `json:"-"`
+	// Erc4626AssetContract is the underlying asset (EIP-55), read on the same probe.
+	Erc4626AssetContract string `json:"-"`
 }
 
 // EthereumTypeRPCCall defines one eth_call request payload.
@@ -93,6 +97,22 @@ type EthereumTypeRPCCall struct {
 type EthereumTypeRPCCallResult struct {
 	Data  string
 	Error error
+}
+
+// EthereumMulticallCall is one sub-call in a Multicall3 aggregate3 batch.
+// CallData is "0x"-prefixed hex. AllowFailure=true lets a revert produce
+// Success=false in the result slot instead of failing the batch.
+type EthereumMulticallCall struct {
+	Target       string
+	CallData     string
+	AllowFailure bool
+}
+
+// EthereumMulticallResult is one slot of the aggregate3 return; Data is the
+// "0x"-prefixed return bytes (or revert payload when Success=false).
+type EthereumMulticallResult struct {
+	Success bool
+	Data    string
 }
 
 // Ethereum token standard names

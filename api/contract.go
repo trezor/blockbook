@@ -3,12 +3,13 @@ package api
 import (
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
 )
 
 const contractInfoProtocolErc4626 = "erc4626"
 
-var knownContractProtocols = []string{contractInfoProtocolErc4626}
+var knownErcProtocols = []string{contractInfoProtocolErc4626}
 
 func contractInfoSupportsRates(standard bchain.TokenStandardName) bool {
 	return standard == erc4626EvmFungibleStandard()
@@ -23,16 +24,16 @@ func contractInfoIncludesProtocol(protocols []string, protocol string) bool {
 	return false
 }
 
-// ValidateContractProtocols rejects protocol values not recognised by this API.
+// ValidateErcProtocols rejects protocol values not recognised by this API.
 // Empty and whitespace-only entries are tolerated for convenience.
-func ValidateContractProtocols(protocols []string) error {
+func ValidateErcProtocols(protocols []string) error {
 	for _, p := range protocols {
 		normalized := strings.ToLower(strings.TrimSpace(p))
 		if normalized == "" {
 			continue
 		}
 		known := false
-		for _, k := range knownContractProtocols {
+		for _, k := range knownErcProtocols {
 			if normalized == k {
 				known = true
 				break
@@ -54,14 +55,21 @@ func (w *Worker) ValidateProtocolsForChain(protocols []string) error {
 	if w.chainType != bchain.ChainEthereumType {
 		return NewAPIError("protocols parameter is not supported on this coin", true)
 	}
-	return ValidateContractProtocols(protocols)
+	return ValidateErcProtocols(protocols)
 }
 
 func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string) {
 	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) {
 		return
 	}
-	w.enrichErc4626Tokens(tokens)
+	// Read best block lazily, only once a relevant protocol was requested, so
+	// accountInfo requests without protocol enrichment skip the CF seek.
+	// On error proceed with bestHeight==0 (no in-block caching) but log.
+	bestHeight, bestHash, err := w.db.GetBestBlock()
+	if err != nil {
+		glog.Warningf("GetBestBlock for protocol enrichment: %v", err)
+	}
+	w.enrichErc4626Tokens(tokens, bestHeight, bestHash)
 }
 
 // contractInfoResultFromBchain wraps bchain.ContractInfo into the API-level
@@ -118,7 +126,7 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 	if strings.TrimSpace(contract) == "" {
 		return nil, NewAPIError("Missing contract", true)
 	}
-	if err := ValidateContractProtocols(protocols); err != nil {
+	if err := ValidateErcProtocols(protocols); err != nil {
 		return nil, err
 	}
 
@@ -130,7 +138,7 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 		return nil, NewAPIError("Contract not found", true)
 	}
 
-	bestHeight, _, err := w.db.GetBestBlock()
+	bestHeight, bestHash, err := w.db.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -148,23 +156,18 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 		BlockHeight:       bestHeight,
 	}
 
-	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) || w.chainType != bchain.ChainEthereumType || contractInfo.Standard != erc4626EvmFungibleStandard() {
+	// Probe only for ERC20-shaped contracts (or unknown/unhandled, which covers
+	// freshly RPC-fetched contracts with no tagged standard); ERC721/ERC1155
+	// would always fail the probe.
+	if !contractInfoIncludesProtocol(protocols, contractInfoProtocolErc4626) ||
+		(contractInfo.Standard != bchain.UnknownTokenStandard && contractInfo.Standard != bchain.UnhandledTokenStandard && contractInfo.Standard != erc4626EvmFungibleStandard()) {
 		return result, nil
 	}
 
-	probe, isVault := w.detectErc4626Vault(contractInfo.Contract)
-	if !isVault {
+	erc4626 := w.buildErc4626Token(contractInfo, bestHeight, bestHash)
+	if erc4626 == nil {
 		return result, nil
 	}
-
-	result.Protocols = &ContractInfoProtocols{
-		Erc4626: w.fetchErc4626TokenData(&Token{
-			Contract: contractInfo.Contract,
-			Name:     contractInfo.Name,
-			Symbol:   contractInfo.Symbol,
-			Decimals: contractInfo.Decimals,
-			Standard: contractInfo.Standard,
-		}, probe),
-	}
+	result.Protocols = &ContractInfoProtocols{Erc4626: erc4626}
 	return result, nil
 }

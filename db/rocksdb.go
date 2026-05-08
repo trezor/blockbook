@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -61,19 +62,28 @@ const addrContractsCacheMinSize = 300_000 // limit for caching address contracts
 
 // RocksDB handle
 type RocksDB struct {
-	path                  string
-	db                    *grocksdb.DB
-	wo                    *grocksdb.WriteOptions
-	ro                    *grocksdb.ReadOptions
-	cfh                   []*grocksdb.ColumnFamilyHandle
-	chainParser           bchain.BlockChainParser
-	is                    *common.InternalState
-	metrics               *common.Metrics
-	cache                 *grocksdb.Cache
-	maxOpenFiles          int
-	cbs                   connectBlockStats
-	extendedIndex         bool
-	connectBlockMux       sync.Mutex
+	path            string
+	db              *grocksdb.DB
+	wo              *grocksdb.WriteOptions
+	ro              *grocksdb.ReadOptions
+	cfh             []*grocksdb.ColumnFamilyHandle
+	chainParser     bchain.BlockChainParser
+	is              *common.InternalState
+	metrics         *common.Metrics
+	cache           *grocksdb.Cache
+	maxOpenFiles    int
+	cbs             connectBlockStats
+	extendedIndex   bool
+	connectBlockMux sync.Mutex
+	// reorgGen advances on every successful Ethereum-type disconnect; embed
+	// in cache keys so a same-height reorg invalidates them lazily.
+	reorgGen atomic.Uint64
+	// protocolGen advances on every successful per-protocol row write
+	// (cfErcProtocols). cachedContracts stamps entries with this counter
+	// so a populate-after-write race (reader reads cfErcProtocols before the
+	// row exists, then caches the stale negative under an unchanged reorgGen)
+	// is invalidated lazily on the next read.
+	protocolGen           atomic.Uint64
 	addrContractsCacheMux sync.Mutex
 	addrContractsCache    map[string]*unpackedAddrContracts
 	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.
@@ -113,6 +123,10 @@ const (
 
 	// TODO move to common section
 	cfAddressAliases
+
+	// cfErcProtocols stores per-protocol detection records keyed by contract;
+	// decoupled from cfContracts so API writes never collide with sync.
+	cfErcProtocols
 )
 
 // common columns
@@ -121,7 +135,7 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses", "blockFilter"}
-var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
+var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases", "ercProtocols"}
 
 func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
@@ -401,6 +415,11 @@ const (
 	opInsert = 0
 	opDelete = 1
 )
+
+// ReorgGeneration returns the current generation counter; bumps on disconnect.
+func (d *RocksDB) ReorgGeneration() uint64 {
+	return d.reorgGen.Load()
+}
 
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {

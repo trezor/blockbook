@@ -400,6 +400,17 @@ func (c *blockChainWithMetrics) EthereumTypeRpcCallBatch(calls []bchain.Ethereum
 	return batcher.EthereumTypeRpcCallBatch(calls)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) (v []bchain.EthereumMulticallResult, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeMulticallAggregate3", s, err) }(time.Now())
+	caller, ok := c.b.(interface {
+		EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error)
+	})
+	if !ok {
+		return nil, errors.New("EthereumTypeMulticallAggregate3: not supported")
+	}
+	return caller.EthereumTypeMulticallAggregate3(calls, blockNumber)
+}
+
 func (c *blockChainWithMetrics) EthereumTypeGetRawTransaction(txid string) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetRawTransaction", s, err) }(time.Now())
 	return c.b.EthereumTypeGetRawTransaction(txid)

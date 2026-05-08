@@ -181,7 +181,7 @@ type Erc4626TokenMetadata struct {
 
 // Erc4626Token contains ERC4626 vault details for a fungible token.
 type Erc4626Token struct {
-	Asset                    *Erc4626TokenMetadata `json:"asset,omitempty" ts_doc:"Metadata of the underlying asset token."`
+	Asset                    *Erc4626TokenMetadata `json:"asset,omitempty" ts_doc:"Metadata of the underlying asset token. Omitted when decimals cannot be resolved."`
 	Share                    *Erc4626TokenMetadata `json:"share,omitempty" ts_doc:"Metadata of the vault share token."`
 	TotalAssetsSat           *Amount               `json:"totalAssets,omitempty" ts_doc:"Total underlying assets managed by the vault."`
 	ConvertToAssets1ShareSat *Amount               `json:"convertToAssets1Share,omitempty" ts_doc:"Underlying assets for one whole share unit."`
@@ -198,10 +198,16 @@ type ContractInfoRates struct {
 	SecondaryRate float64 `json:"secondaryRate,omitempty" ts_doc:"Current price of one whole token in the requested secondary currency, when available."`
 }
 
-// ContractInfoProtocols contains optional protocol-specific contract enrichments.
+// ContractInfoProtocols holds rich, freshly-fetched protocol enrichments
+// returned by getContractInfo.
 type ContractInfoProtocols struct {
 	Erc4626 *Erc4626Token `json:"erc4626,omitempty" ts_doc:"ERC4626 vault details when explicitly requested and detected."`
 }
+
+// TokenProtocols lists protocol identifiers the contract participates in
+// (e.g., "erc4626"). Sourced from indexed metadata; no RPC. Use
+// getContractInfo for fresh per-vault data.
+type TokenProtocols []string
 
 // ContractInfoResult contains contract metadata and optional enrichments for a single contract.
 type ContractInfoResult struct {
@@ -237,7 +243,7 @@ type Token struct {
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"Multiple ERC1155 token balances (id + value)."`
 	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty" ts_doc:"Total amount of tokens received."`
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
-	Protocols        *ContractInfoProtocols   `json:"protocols,omitempty" ts_doc:"Optional protocol-specific enrichments requested by the caller."`
+	Protocols        TokenProtocols           `json:"protocols,omitempty" ts_doc:"Protocol identifiers the contract participates in (e.g., \"erc4626\"); for fresh per-vault data, use getContractInfo."`
 	ContractIndex    string                   `json:"-"`
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -376,10 +377,9 @@ func assertErc4626FixturesInAccountInfo(t *testing.T, h *TestHandler, testName s
 				if !strings.EqualFold(token.Contract, fixture.Contract) {
 					t.Fatalf("%s contract mismatch: got %s want %s", context, token.Contract, fixture.Contract)
 				}
-				if token.Protocols == nil || token.Protocols.Erc4626 == nil {
-					t.Fatalf("%s missing erc4626 payload for known ERC4626 contract %s", context, fixture.Contract)
+				if !slices.Contains(token.Protocols, "erc4626") {
+					t.Fatalf("%s missing erc4626 in protocols for known ERC4626 contract %s, got %v", context, fixture.Contract, token.Protocols)
 				}
-				assertErc4626Payload(t, context+".protocols.erc4626", fixture.Contract, token.Protocols.Erc4626)
 			}
 
 			validatedFixtures++

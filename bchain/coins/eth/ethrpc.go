@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -26,6 +27,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/sync/singleflight"
 )
 
 // Network type specifies the type of ethereum network
@@ -96,6 +98,9 @@ type Configuration struct {
 	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
 	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
 	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
+	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
+	// required for EVM coins (translates duration settings to block counts).
+	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
 }
 
 func parseNonNegativeDuration(name string, value string) (time.Duration, error) {
@@ -140,6 +145,14 @@ func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, er
 	return defaultAlternativeMempoolTxTimeout, nil
 }
 
+// AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.
+func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
+	if c.AverageBlockTimeMs <= 0 {
+		return 0, errors.Errorf("averageBlockTimeMs must be a positive integer")
+	}
+	return time.Duration(c.AverageBlockTimeMs) * time.Millisecond, nil
+}
+
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
@@ -172,6 +185,9 @@ type EthereumRPC struct {
 	alternativeSendTxProvider *AlternativeSendTxProvider
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
+	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
+	multicall3Probe   atomic.Int32
+	multicall3ProbeSF singleflight.Group
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -227,6 +243,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	if _, err := c.AlternativeMempoolTxTimeoutDuration(); err != nil {
 		return nil, err
 	}
+	if _, err := c.AverageBlockTimeDuration(); err != nil {
+		return nil, err
+	}
 
 	s := &EthereumRPC{
 		BaseChain:   &bchain.BaseChain{},
@@ -254,6 +273,11 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 func (b *EthereumRPC) SetMetrics(metrics *common.Metrics) {
 	b.metrics = metrics
+}
+
+// AverageBlockTimeDuration exposes the chain's nominal block cadence.
+func (b *EthereumRPC) AverageBlockTimeDuration() (time.Duration, error) {
+	return b.ChainConfig.AverageBlockTimeDuration()
 }
 
 func (b *EthereumRPC) observeEthCall(mode string, count int) {

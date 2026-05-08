@@ -1718,50 +1718,6 @@ func Test_packUnpackFourByteSignature(t *testing.T) {
 	}
 }
 
-func Test_packUnpackContractInfo(t *testing.T) {
-	tests := []struct {
-		name         string
-		contractInfo bchain.ContractInfo
-	}{
-		{
-			name:         "empty",
-			contractInfo: bchain.ContractInfo{},
-		},
-		{
-			name: "unknown",
-			contractInfo: bchain.ContractInfo{
-				Type:              bchain.UnknownTokenStandard,
-				Standard:          bchain.UnknownTokenStandard,
-				Name:              "Test contract",
-				Symbol:            "TCT",
-				Decimals:          18,
-				CreatedInBlock:    1234567,
-				DestructedInBlock: 234567890,
-			},
-		},
-		{
-			name: "ERC20",
-			contractInfo: bchain.ContractInfo{
-				Type:              bchain.ERC20TokenStandard,
-				Standard:          bchain.ERC20TokenStandard,
-				Name:              "GreenContract🟢",
-				Symbol:            "🟢",
-				Decimals:          0,
-				CreatedInBlock:    1,
-				DestructedInBlock: 2,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			buf := packContractInfo(&tt.contractInfo)
-			if got, err := unpackContractInfo(buf); !reflect.DeepEqual(*got, tt.contractInfo) || err != nil {
-				t.Errorf("packUnpackContractInfo() = %v, want %v, error %v", *got, tt.contractInfo, err)
-			}
-		})
-	}
-}
-
 func Benchmark_contractIndexLookup(b *testing.B) {
 	sizes := []int{192, 256}
 	for _, n := range sizes {

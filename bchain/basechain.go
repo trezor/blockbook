@@ -108,6 +108,11 @@ func (b *BaseChain) EthereumTypeRpcCallBatch(calls []EthereumTypeRPCCall) ([]Eth
 	return nil, errors.New("not supported")
 }
 
+// EthereumTypeMulticallAggregate3 issues a Multicall3 aggregate3 call.
+func (b *BaseChain) EthereumTypeMulticallAggregate3(calls []EthereumMulticallCall, blockNumber *big.Int) ([]EthereumMulticallResult, error) {
+	return nil, errors.New("not supported")
+}
+
 func (b *BaseChain) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	return "", errors.New("not supported")
 }

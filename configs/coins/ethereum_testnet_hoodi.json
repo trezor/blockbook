@@ -58,6 +58,7 @@
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 3000,
             "additional_params": {
+                "averageBlockTimeMs": 12000,
                 "consensusNodeVersion": "http://localhost:17506/eth/v1/node/version",
                 "eip1559Fees": true,
                 "mempoolTxTimeoutHours": 12,

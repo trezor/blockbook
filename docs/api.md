@@ -559,7 +559,13 @@ Parameters:
 -   _currency_: optional secondary currency code (for example `usd`). When present, the response may include `rates.secondaryRate` in that currency.
 -   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`. Unknown values are rejected with an error.
 
-`blockHeight` reflects the indexer's best block at request time. ERC-4626 fields inside `protocols.erc4626` are fetched via live JSON-RPC `eth_call` against the backend node, which may already be one or more blocks ahead of the indexer. Treat `blockHeight` as a floor, not an exact pin.
+`blockHeight` reflects the indexer's best block at request time. ERC-4626 fields inside `protocols.erc4626` are fetched via JSON-RPC `eth_call` (batched through Multicall3) pinned to that exact `blockHeight`, so all values inside `protocols.erc4626` are a consistent snapshot at that height.
+
+For ERC-4626, `asset` is returned only when Blockbook can resolve underlying
+asset metadata including `decimals`. If a vault is detected but asset metadata
+cannot be resolved, Blockbook returns `protocols.erc4626` with `error` and
+without `asset`; callers must not derive fiat rates or human-unit exchange rates
+from such a partial response.
 
 Response (`ContractInfoResult` type):
 
