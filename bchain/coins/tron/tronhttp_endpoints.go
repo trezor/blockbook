@@ -345,6 +345,27 @@ func (b *TronRPC) requestTransactionInfoByID(ctx context.Context, txid string, i
 	return &resp, nil
 }
 
+func (b *TronRPC) requestTransactionFromPending(ctx context.Context, txid string) (*tronGetTransactionByIDResponse, error) {
+	raw, err := requestRawMessage(
+		ctx,
+		b.fullNodeHTTP,
+		"/wallet/gettransactionfrompending",
+		map[string]string{"value": strip0xPrefix(txid)},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if tronIsEmptyObject(raw) {
+		return nil, errors.Annotatef(bchain.ErrTxNotFound, "txid %v", txid)
+	}
+
+	var resp tronGetTransactionByIDResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (b *TronRPC) requestMempoolTransactions(ctx context.Context) ([]string, error) {
 	var resp tronGetTransactionListFromPendingResponse
 	if err := b.fullNodeHTTP.Request(ctx, "/wallet/gettransactionlistfrompending", map[string]any{}, &resp); err != nil {

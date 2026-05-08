@@ -885,6 +885,9 @@ func (b *TronRPC) getTransactionInfoByIDWithFallback(txid string) (*tronGetTrans
 func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	txInfo, isSolidified, err := b.getTransactionInfoByIDWithFallback(txid)
 	if err != nil {
+		if isTronTxNotFound(err) {
+			return b.GetTransactionForMempool(txid)
+		}
 		return nil, err
 	}
 	txByID, err := b.getTransactionByID(txid, isSolidified)
@@ -910,22 +913,18 @@ func (b *TronRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	txByID, err := b.requestTransactionByID(ctx, txid, false)
+	txByID, err := b.requestTransactionFromPending(ctx, txid)
 	if err != nil {
 		if isTronTxNotFound(err) {
+			if b.Mempool != nil {
+				b.Mempool.RemoveTransactionFromMempool(strip0xPrefix(txid))
+			}
 			return nil, bchain.ErrTxNotFound
 		}
 		return nil, err
 	}
 
-	txInfo, err := b.requestTransactionInfoByID(ctx, txid, false)
-	if err != nil {
-		if !isTronTxNotFound(err) {
-			return nil, err
-		}
-		txInfo = &tronGetTransactionInfoByIDResponse{ID: strip0xPrefix(txid)}
-	}
-
+	txInfo := &tronGetTransactionInfoByIDResponse{ID: strip0xPrefix(txid)}
 	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
 	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
 	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, false)

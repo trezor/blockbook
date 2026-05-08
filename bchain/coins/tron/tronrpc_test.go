@@ -245,7 +245,7 @@ func TestTronRPC_GetTransaction_FallbackToFullNodeKeepsPendingEvenWithBlockNumbe
 	require.Nil(t, csd.Receipt)
 }
 
-func TestTronRPC_GetTransactionForMempool_UsesFullNodeHTTP(t *testing.T) {
+func TestTronRPC_GetTransactionForMempool_UsesPendingPoolHTTP(t *testing.T) {
 	txByID := tronGetTransactionByIDResponse{
 		TxID: "abc",
 	}
@@ -261,8 +261,7 @@ func TestTronRPC_GetTransactionForMempool_UsesFullNodeHTTP(t *testing.T) {
 	}
 	fullNodeHTTP := &MockTronHTTPClient{
 		RespByPath: map[string]interface{}{
-			"/wallet/gettransactionbyid":     txByID,
-			"/wallet/gettransactioninfobyid": map[string]any{},
+			"/wallet/gettransactionfrompending": txByID,
 		},
 	}
 
@@ -284,8 +283,56 @@ func TestTronRPC_GetTransactionForMempool_UsesFullNodeHTTP(t *testing.T) {
 
 	paths, _ := fullNodeHTTP.SnapshotRequests()
 	require.Equal(t, []string{
-		"/wallet/gettransactionbyid",
+		"/wallet/gettransactionfrompending",
+	}, paths)
+
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	require.True(t, ok)
+	require.Nil(t, csd.Receipt)
+}
+
+func TestTronRPC_GetTransaction_FallsBackToPendingPool(t *testing.T) {
+	txByID := tronGetTransactionByIDResponse{
+		TxID: "abc",
+	}
+	txByID.RawData.Contract = []tronTxContract{{
+		Type: "TransferContract",
+	}}
+	txByID.RawData.Contract[0].Parameter.Value.OwnerAddress = "410000000000000000000000000000000000000001"
+	txByID.RawData.Contract[0].Parameter.Value.ToAddress = "410000000000000000000000000000000000000002"
+	txByID.RawData.Contract[0].Parameter.Value.Amount = int64Ptr(123)
+
+	solidityHTTP := &MockTronHTTPClient{
+		Resp: map[string]any{},
+	}
+	fullNodeHTTP := &MockTronHTTPClient{
+		RespByPath: map[string]interface{}{
+			"/wallet/gettransactioninfobyid":    map[string]any{},
+			"/wallet/gettransactionfrompending": txByID,
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		Parser:           NewTronParser(1, false),
+		fullNodeHTTP:     fullNodeHTTP,
+		solidityNodeHTTP: solidityHTTP,
+	}
+
+	tx, err := tronRPC.GetTransaction("0xabc")
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+	require.Equal(t, "abc", tx.Txid)
+	require.Equal(t, uint32(0), tx.Confirmations)
+	require.Equal(t, int64(123), tx.Vout[0].ValueSat.Int64())
+
+	requireMockLastPath(t, solidityHTTP, "/walletsolidity/gettransactioninfobyid")
+	paths, _ := fullNodeHTTP.SnapshotRequests()
+	require.Equal(t, []string{
 		"/wallet/gettransactioninfobyid",
+		"/wallet/gettransactionfrompending",
 	}, paths)
 
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
