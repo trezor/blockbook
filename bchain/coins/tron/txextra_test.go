@@ -347,11 +347,24 @@ func TestTronBuildRpcReceipt_UsesTopLevelResultOmittedAsSuccess(t *testing.T) {
 	receipt := tronBuildRpcReceipt(txInfo)
 	require.NotNil(t, receipt)
 	require.Equal(t, "0x1", receipt.Status)
+	require.Equal(t, "0x0", receipt.GasUsed)
 
 	txInfo.Result = "FAILED"
 	receipt = tronBuildRpcReceipt(txInfo)
 	require.NotNil(t, receipt)
 	require.Equal(t, "0x0", receipt.Status)
+	require.Equal(t, "0x0", receipt.GasUsed)
+}
+
+func TestTronBuildRpcReceipt_UsesEnergyUsageTotalAsGasUsed(t *testing.T) {
+	txInfo := &tronGetTransactionInfoByIDResponse{
+		ID: "tx1",
+	}
+	txInfo.Receipt.EnergyUsageTotal = int64Ptr(14650)
+
+	receipt := tronBuildRpcReceipt(txInfo)
+	require.NotNil(t, receipt)
+	require.Equal(t, "0x393a", receipt.GasUsed)
 }
 
 func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
