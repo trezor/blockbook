@@ -146,7 +146,9 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 }
 
 func tronBuildRpcReceipt(txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
-	receipt := &bchain.RpcReceipt{}
+	receipt := &bchain.RpcReceipt{
+		GasUsed: "0x0",
+	}
 	if strings.TrimSpace(txInfo.Result) == "" {
 		receipt.Status = "0x1" // success
 	} else {
