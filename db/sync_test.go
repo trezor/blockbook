@@ -461,6 +461,130 @@ func TestShouldRestartSyncOnMissingBlock(t *testing.T) {
 	}
 }
 
+// flickeringBestHeightChain returns a sequence of GetBestBlockHeight values,
+// one per call, repeating the last entry once the sequence is exhausted.
+// Models a load-balanced RPC pool where consecutive HTTPS calls land on
+// pods at different chain heights.
+type flickeringBestHeightChain struct {
+	bchain.BlockChain
+	samples []uint32
+	next    int
+	mu      sync.Mutex
+}
+
+func (c *flickeringBestHeightChain) GetBestBlockHeight() (uint32, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	h := c.samples[c.next]
+	if c.next+1 < len(c.samples) {
+		c.next++
+	}
+	return h, nil
+}
+
+func (c *flickeringBestHeightChain) GetBlockHash(height uint32) (string, error) {
+	return "expected", nil
+}
+
+type hashSample struct {
+	hash string
+	err  error
+}
+
+// flickeringHashChain reports a stable best height but flickers GetBlockHash
+// responses, modeling an LB pod that lags only the per-block hash lookup.
+type flickeringHashChain struct {
+	bchain.BlockChain
+	bestHeight uint32
+	samples    []hashSample
+	next       int
+	mu         sync.Mutex
+}
+
+func (c *flickeringHashChain) GetBestBlockHeight() (uint32, error) {
+	return c.bestHeight, nil
+}
+
+func (c *flickeringHashChain) GetBlockHash(height uint32) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s := c.samples[c.next]
+	if c.next+1 < len(c.samples) {
+		c.next++
+	}
+	return s.hash, s.err
+}
+
+func TestShouldRestartSyncOnMissingBlockRequiresConsistentSamples(t *testing.T) {
+	w := &SyncWorker{
+		chain: &flickeringBestHeightChain{samples: []uint32{5, 20}},
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckConfirmDelay: time.Millisecond,
+		},
+	}
+	restart, err := w.shouldRestartSyncOnMissingBlock(10, "expected")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if restart {
+		t.Fatal("must not restart when only the first sample says the tip is below requested height")
+	}
+}
+
+func TestShouldRestartSyncOnMissingBlockToleratesFlakyHashLookup(t *testing.T) {
+	w := &SyncWorker{
+		chain: &flickeringHashChain{
+			bestHeight: 20,
+			samples: []hashSample{
+				{err: bchain.ErrBlockNotFound}, // first pod is stale
+				{hash: "expected"},             // second pod confirms the block
+			},
+		},
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckConfirmDelay: time.Millisecond,
+		},
+	}
+	restart, err := w.shouldRestartSyncOnMissingBlock(10, "expected")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if restart {
+		t.Fatal("must not restart when the second hash lookup confirms the block exists")
+	}
+}
+
+func TestShouldRestartSyncOnMissingBlockConfirmsRealReorg(t *testing.T) {
+	w := &SyncWorker{
+		chain: &flickeringBestHeightChain{samples: []uint32{5}},
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckConfirmDelay: time.Millisecond,
+		},
+	}
+	restart, err := w.shouldRestartSyncOnMissingBlock(10, "expected")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !restart {
+		t.Fatal("must restart when both samples confirm the tip is below requested height")
+	}
+}
+
+func TestShouldRestartSyncOnMissingBlockHashRequiresConsistentSamples(t *testing.T) {
+	w := &SyncWorker{
+		chain: &flickeringBestHeightChain{samples: []uint32{5, 20}},
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckConfirmDelay: time.Millisecond,
+		},
+	}
+	restart, err := w.shouldRestartSyncOnMissingBlockHash(10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if restart {
+		t.Fatal("must not restart when only the first sample says the tip is below requested height")
+	}
+}
+
 // TestGetBlockWorkerSignalsResyncOnReorg verifies that once the per-block
 // retry threshold is exceeded and the chain confirms a reorg, the worker
 // aborts the parallel sync via errResync rather than spinning forever.

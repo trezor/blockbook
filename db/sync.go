@@ -42,6 +42,11 @@ type MissingBlockRetryConfig struct {
 	TipRecheckThreshold int
 	// RetryDelay keeps retry pressure low while still reacting quickly to transient backend gaps.
 	RetryDelay time.Duration
+	// RecheckConfirmDelay is the wait between the two consensus samples that
+	// confirm a reorg before we abort sync. Guards against load-balanced RPC
+	// pools (e.g. QuickNode) where one stale pod could otherwise falsely
+	// trigger a full resync.
+	RecheckConfirmDelay time.Duration
 }
 
 // SyncWorkerConfig bundles optional tuning knobs for SyncWorker.
@@ -52,9 +57,10 @@ type SyncWorkerConfig struct {
 func defaultSyncWorkerConfig() SyncWorkerConfig {
 	return SyncWorkerConfig{
 		MissingBlockRetry: MissingBlockRetryConfig{
-			RecheckThreshold:    10,              // - RecheckThreshold >= 1
-			RetryDelay:          1 * time.Second, // - TipRecheckThreshold >= 1 && TipRecheckThreshold <= RecheckThreshold
-			TipRecheckThreshold: 3,               // - RetryDelay > 0
+			RecheckThreshold:    10,
+			TipRecheckThreshold: 3,
+			RetryDelay:          1 * time.Second,
+			RecheckConfirmDelay: 500 * time.Millisecond,
 		},
 	}
 }
@@ -367,14 +373,26 @@ type hashHeight struct {
 }
 
 func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash string) (bool, error) {
-	// When a block hash disappears at a given height, it usually indicates a
-	// reorg/rollback. Confirm by checking the current tip and block hash.
+	// Load-balanced RPC pools can route consecutive HTTPS calls to different
+	// pods; a single pod that lags by a few blocks can answer "missing" or
+	// "different hash" while the canonical chain is fine. Sample twice with a
+	// short delay and require both readings to agree before we tear down sync.
+	restart, err := w.checkReorgOnMissingBlock(height, expectedHash)
+	if err != nil || !restart {
+		return restart, err
+	}
+	if d := w.missingBlockRetry.RecheckConfirmDelay; d > 0 {
+		time.Sleep(d)
+	}
+	return w.checkReorgOnMissingBlock(height, expectedHash)
+}
+
+func (w *SyncWorker) checkReorgOnMissingBlock(height uint32, expectedHash string) (bool, error) {
 	bestHeight, err := w.chain.GetBestBlockHeight()
 	if err != nil {
 		return false, err
 	}
 	if bestHeight < height {
-		// The tip moved below the requested height, so this block is no longer valid.
 		return true, nil
 	}
 	currentHash, err := w.chain.GetBlockHash(height)
@@ -388,6 +406,20 @@ func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash
 }
 
 func (w *SyncWorker) shouldRestartSyncOnMissingBlockHash(height uint32) (bool, error) {
+	// Same LB-stale-pod guard as shouldRestartSyncOnMissingBlock: require two
+	// consistent samples before treating GetBestBlockHeight < height as a real
+	// reorg.
+	restart, err := w.checkReorgOnMissingBlockHash(height)
+	if err != nil || !restart {
+		return restart, err
+	}
+	if d := w.missingBlockRetry.RecheckConfirmDelay; d > 0 {
+		time.Sleep(d)
+	}
+	return w.checkReorgOnMissingBlockHash(height)
+}
+
+func (w *SyncWorker) checkReorgOnMissingBlockHash(height uint32) (bool, error) {
 	bestHeight, err := w.chain.GetBestBlockHeight()
 	if err != nil {
 		return false, err
