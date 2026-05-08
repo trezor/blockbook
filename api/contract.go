@@ -9,7 +9,7 @@ import (
 
 const contractInfoProtocolErc4626 = "erc4626"
 
-var knownContractProtocols = []string{contractInfoProtocolErc4626}
+var knownErcProtocols = []string{contractInfoProtocolErc4626}
 
 func contractInfoSupportsRates(standard bchain.TokenStandardName) bool {
 	return standard == erc4626EvmFungibleStandard()
@@ -24,16 +24,16 @@ func contractInfoIncludesProtocol(protocols []string, protocol string) bool {
 	return false
 }
 
-// ValidateContractProtocols rejects protocol values not recognised by this API.
+// ValidateErcProtocols rejects protocol values not recognised by this API.
 // Empty and whitespace-only entries are tolerated for convenience.
-func ValidateContractProtocols(protocols []string) error {
+func ValidateErcProtocols(protocols []string) error {
 	for _, p := range protocols {
 		normalized := strings.ToLower(strings.TrimSpace(p))
 		if normalized == "" {
 			continue
 		}
 		known := false
-		for _, k := range knownContractProtocols {
+		for _, k := range knownErcProtocols {
 			if normalized == k {
 				known = true
 				break
@@ -55,7 +55,7 @@ func (w *Worker) ValidateProtocolsForChain(protocols []string) error {
 	if w.chainType != bchain.ChainEthereumType {
 		return NewAPIError("protocols parameter is not supported on this coin", true)
 	}
-	return ValidateContractProtocols(protocols)
+	return ValidateErcProtocols(protocols)
 }
 
 func (w *Worker) enrichTokenProtocols(tokens Tokens, protocols []string) {
@@ -126,7 +126,7 @@ func (w *Worker) GetContractInfoData(contract string, currency string, protocols
 	if strings.TrimSpace(contract) == "" {
 		return nil, NewAPIError("Missing contract", true)
 	}
-	if err := ValidateContractProtocols(protocols); err != nil {
+	if err := ValidateErcProtocols(protocols); err != nil {
 		return nil, err
 	}
 
