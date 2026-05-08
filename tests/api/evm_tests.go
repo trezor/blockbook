@@ -186,6 +186,8 @@ func testGetAddressProtocolsOptInEVM(t *testing.T, h *TestHandler) {
 		t.Skipf("api/testdata/%s.json has no erc4626Fixtures entries", h.Coin)
 	}
 
+	validatedFixtures := 0
+
 	for _, fixture := range td.ERC4626Fixtures {
 		t.Run(fixture.Name, func(t *testing.T) {
 			path := buildAddressDetailsPath(fixture.Holder, "tokenBalances", addressPage, addressPageSize) +
@@ -193,13 +195,24 @@ func testGetAddressProtocolsOptInEVM(t *testing.T, h *TestHandler) {
 			var resp evmAddressTokenBalanceResponse
 			h.mustGetJSON(t, path, &resp)
 
+			assertAddressMatches(t, resp.Address, fixture.Holder, "GetAddressProtocolsOptInEVM.address")
+			if len(resp.Tokens) == 0 {
+				t.Skipf("fixture %s returned no tokens for contract %s", fixture.Name, fixture.Contract)
+			}
+
 			for i := range resp.Tokens {
 				if len(resp.Tokens[i].Protocols) > 0 {
 					t.Fatalf("opt-in gate broken: tokens[%d].protocols=%v without ?protocols= request",
 						i, resp.Tokens[i].Protocols)
 				}
 			}
+
+			validatedFixtures++
 		})
+	}
+
+	if validatedFixtures == 0 {
+		t.Fatalf("GetAddressProtocolsOptInEVM did not validate any ERC4626 fixture")
 	}
 }
 
