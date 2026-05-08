@@ -269,27 +269,42 @@ func testErc4626FeeInvariantEVM(t *testing.T, h *TestHandler) {
 	}
 }
 
+func parseOptionalNonNegativeDecimalBigInt(t *testing.T, value, field, context string) (*big.Int, bool) {
+	t.Helper()
+
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			t.Fatalf("%s: %s not a valid non-negative decimal integer: %s", context, field, value)
+		}
+	}
+	n, ok := new(big.Int).SetString(value, 10)
+	if !ok {
+		t.Fatalf("%s: %s not a valid non-negative decimal integer: %s", context, field, value)
+	}
+	return n, true
+}
+
 // assertFeeInvariantGE checks lhs ≥ rhs as big integers. Empty operands are
 // silently tolerated since the conversion fields are optional in the
 // response (a vault with malformed share/asset decimals may legitimately
 // omit them).
 func assertFeeInvariantGE(t *testing.T, lhs, rhs, context string) {
 	t.Helper()
-	lhs = strings.TrimSpace(lhs)
-	rhs = strings.TrimSpace(rhs)
-	if lhs == "" || rhs == "" {
+
+	a, ok := parseOptionalNonNegativeDecimalBigInt(t, lhs, "lhs", context)
+	if !ok {
 		return
 	}
-	a, ok := new(big.Int).SetString(lhs, 10)
+	b, ok := parseOptionalNonNegativeDecimalBigInt(t, rhs, "rhs", context)
 	if !ok {
-		t.Fatalf("%s: lhs not a valid integer: %s", context, lhs)
-	}
-	b, ok := new(big.Int).SetString(rhs, 10)
-	if !ok {
-		t.Fatalf("%s: rhs not a valid integer: %s", context, rhs)
+		return
 	}
 	if a.Cmp(b) < 0 {
-		t.Fatalf("%s violated: %s < %s", context, lhs, rhs)
+		t.Fatalf("%s violated: %s < %s", context, strings.TrimSpace(lhs), strings.TrimSpace(rhs))
 	}
 }
 
