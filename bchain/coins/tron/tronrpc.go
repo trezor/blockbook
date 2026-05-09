@@ -242,6 +242,13 @@ func (b *TronRPC) Initialize() error {
 	return nil
 }
 
+// Tron also does not depend on a separate WS endpoint for newHeads (see
+// Initialize / startNewBlockNotifier in this file), so there is no LB-drift
+// problem to route around in the first place.
+func (b *TronRPC) SyncBlockChain() bchain.BlockChain {
+	return b
+}
+
 // GetBestBlockHash returns hash of the tip of the best-block-chain
 // need to overwrite this because the getBestHeader method in EthRpc is
 // relying on the subscription

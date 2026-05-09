@@ -558,3 +558,23 @@ func TestTronRPC_RequestLatestSolidifiedBlockHeight_MissingNumber(t *testing.T) 
 	_, err := tronRPC.requestLatestSolidifiedBlockHeight(context.Background())
 	require.Error(t, err)
 }
+
+// TestTronRPC_SyncBlockChainOptsOut pins the explicit opt-out from the EVM
+// sync facade. Without the override, *eth.EthereumRPC.SyncBlockChain promotes
+// through embedding and returns an *eth.ethSyncView that calls eth's
+// getBlockWithCtx and bypasses Tron's GetBlock (HTTP-enriched), GetBlockHash
+// (0x-prefix stripping), and the custom getBestHeader paths. Returning b
+// itself keeps tipChain == chain in the SyncWorker.
+func TestTronRPC_SyncBlockChainOptsOut(t *testing.T) {
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+	}
+
+	syncable, ok := bchain.BlockChain(tronRPC).(bchain.SyncableBlockChain)
+	require.True(t, ok, "TronRPC must satisfy SyncableBlockChain (it inherits the interface from eth.EthereumRPC and overrides it)")
+
+	got := syncable.SyncBlockChain()
+	require.Same(t, tronRPC, got, "TronRPC.SyncBlockChain must return itself, not the inherited eth.ethSyncView, so Tron's BlockChain method overrides survive")
+}
