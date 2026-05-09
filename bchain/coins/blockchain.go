@@ -421,6 +421,21 @@ func (c *blockChainWithMetrics) EthereumTypeGetTransactionReceipt(txid string) (
 	return c.b.EthereumTypeGetTransactionReceipt(txid)
 }
 
+// SyncBlockChain forwards the optional bchain.SyncableBlockChain capability
+// from the underlying chain. Without this, the type assertion in
+// blockbook.go's main wiring fails on the wrapper and the SyncWorker's
+// tipChain silently collapses to the HTTP-routed chain - i.e. the WS routing
+// for tip-sync would be inert in production. The returned view is wrapped in
+// blockChainWithMetrics too so RPC latency on tip-sync calls is still
+// observed.
+func (c *blockChainWithMetrics) SyncBlockChain() bchain.BlockChain {
+	s, ok := c.b.(bchain.SyncableBlockChain)
+	if !ok {
+		return c
+	}
+	return &blockChainWithMetrics{b: s.SyncBlockChain(), m: c.m}
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics

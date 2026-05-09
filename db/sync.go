@@ -22,12 +22,22 @@ import (
 type SyncWorker struct {
 	db    *RocksDB
 	chain bchain.BlockChain
-	// tipChain is used inside the sequential connectBlocks / getBlockChain
-	// path (the per-newHeads tip-sync case). It typically routes RPC over a
-	// sticky transport (e.g. WebSocket) to keep follow-up block fetches on the
-	// same backend that announced the block. For chains without a separate
-	// tip view it is the same value as chain. Bulk and parallel paths keep
-	// using chain so they can fan out across the LB pool.
+	// tipChain is used by every call site that operates at or near the chain
+	// tip: the sequential connectBlocks / getBlockChain path, the
+	// fork-detection and start-hash lookups in resyncIndex / handleFork, and
+	// the missing-block re-check in shouldRestartSyncOnMissingBlock. It
+	// typically routes RPC over a sticky transport (e.g. WebSocket) to keep
+	// these follow-up calls on the same backend that announced the block,
+	// avoiding the LB-drift case where a slightly behind node returns
+	// ErrBlockNotFound for a block another node already announced.
+	//
+	// Note that connectBlocks always uses tipChain regardless of how the
+	// resyncIndex flow reached it - the rule is mechanical, not gap-based.
+	// In production for ETH the gap reaching connectBlocks is bounded
+	// because ParallelConnectBlocks / BulkConnectBlocks handle gap >= 4 (or
+	// >= syncChunk on initial sync) on the chain (HTTP) path, so connectBlocks
+	// only ever processes the small tail at the tip. For chains without a
+	// separate tip view tipChain is the same value as chain.
 	tipChain               bchain.BlockChain
 	syncWorkers, syncChunk int
 	dryRun                 bool
@@ -179,7 +189,14 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 }
 
 func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
-	remoteBestHash, err := w.chain.GetBestBlockHash()
+	// Tip-discovery and fork-detection RPCs go through tipChain so they stay
+	// sticky to the backend that announced the new head. Routing these via
+	// chain (HTTP pool) is the QuickNode LB drift case: a slightly lagging
+	// node returns ErrBlockNotFound for a block another node already
+	// announced, which would either trigger spurious fork handling or fail
+	// the first tip block fetch. These calls are O(1) per resync, so the
+	// extra WS load is negligible.
+	remoteBestHash, err := w.tipChain.GetBestBlockHash()
 	if err != nil {
 		return err
 	}
@@ -193,7 +210,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return errSynced
 	}
 	if localBestHash != "" {
-		remoteHash, err := w.chain.GetBlockHash(localBestHeight)
+		remoteHash, err := w.tipChain.GetBlockHash(localBestHeight)
 		// for some coins (eth) remote can be at lower best height after rollback
 		if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
 			return err
@@ -209,7 +226,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		// database is empty, start genesis
 		glog.Info("resync: genesis from block ", w.startHeight)
 	}
-	w.startHash, err = w.chain.GetBlockHash(w.startHeight)
+	w.startHash, err = w.tipChain.GetBlockHash(w.startHeight)
 	if err != nil {
 		return err
 	}
@@ -218,7 +235,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
 	// or in case of ChainEthereumType if the tip is farther
 	if w.syncWorkers > 1 && (initialSync || w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType) {
-		remoteBestHeight, err := w.chain.GetBestBlockHeight()
+		remoteBestHeight, err := w.tipChain.GetBestBlockHeight()
 		if err != nil {
 			return err
 		}
@@ -283,7 +300,10 @@ func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, on
 		if local == "" {
 			break
 		}
-		remote, err := w.chain.GetBlockHash(height)
+		// tipChain: walking the fork is tip-adjacent and benefits from the
+		// announcer-stickiness for the same reason as resyncIndex's
+		// fork-detection at localBestHeight.
+		remote, err := w.tipChain.GetBlockHash(height)
 		// for some coins (eth) remote can be at lower best height after rollback
 		if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
 			return err
@@ -370,7 +390,10 @@ type hashHeight struct {
 func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash string) (bool, error) {
 	// When a block hash disappears at a given height, it usually indicates a
 	// reorg/rollback. Confirm by checking the current tip and block hash.
-	bestHeight, err := w.chain.GetBestBlockHeight()
+	// Use tipChain: this re-check is the exact LB-drift scenario where one
+	// HTTP node returns ErrBlockNotFound while the announcer node still has
+	// the block. Sticky routing avoids a false-positive "restart sync".
+	bestHeight, err := w.tipChain.GetBestBlockHeight()
 	if err != nil {
 		return false, err
 	}
@@ -378,7 +401,7 @@ func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash
 		// The tip moved below the requested height, so this block is no longer valid.
 		return true, nil
 	}
-	currentHash, err := w.chain.GetBlockHash(height)
+	currentHash, err := w.tipChain.GetBlockHash(height)
 	if err != nil {
 		if stdErrors.Is(err, bchain.ErrBlockNotFound) {
 			return true, nil
