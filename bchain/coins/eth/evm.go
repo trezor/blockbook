@@ -34,6 +34,16 @@ func isSyncRoute(ctx context.Context) bool {
 	return v
 }
 
+// IsSyncRoute is the exported form of isSyncRoute, intended for forked EVM
+// coin packages (e.g. avalanche) that have their own DualRPCClient / Client
+// equivalents and need to dispatch on the same tag the eth package sets via
+// WithSyncRoute. Keeping the context key (stickyKey) unexported and routing
+// reads through this helper guarantees interop without exposing the key
+// itself.
+func IsSyncRoute(ctx context.Context) bool {
+	return isSyncRoute(ctx)
+}
+
 // EthereumClient wraps both an HTTP-backed and a WebSocket-backed *ethclient.Client.
 // Each method dispatches based on isSyncRoute(ctx): tagged calls go to wsClient,
 // untagged calls go to httpClient. When the same underlying *rpc.Client serves

@@ -10,18 +10,51 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
-// AvalancheClient wraps a client to implement the EVMClient interface
+// AvalancheClient wraps both an HTTP-backed and a WebSocket-backed pair of
+// inner clients (mirroring eth.EthereumClient). Methods dispatch based on
+// eth.IsSyncRoute(ctx): tagged calls go to the WS-side clients, untagged
+// calls go to the HTTP-side. When the same underlying *rpc.Client serves
+// both, the WS fields are aliased to the HTTP fields.
 type AvalancheClient struct {
-	*ethclient.Client
-	*AvalancheRPCClient
+	httpEC  *ethclient.Client
+	wsEC    *ethclient.Client
+	httpRPC *AvalancheRPCClient
+	wsRPC   *AvalancheRPCClient
+}
+
+func (c *AvalancheClient) pickEC(ctx context.Context) *ethclient.Client {
+	if eth.IsSyncRoute(ctx) && c.wsEC != nil {
+		return c.wsEC
+	}
+	return c.httpEC
+}
+
+func (c *AvalancheClient) pickRPC(ctx context.Context) *AvalancheRPCClient {
+	if eth.IsSyncRoute(ctx) && c.wsRPC != nil {
+		return c.wsRPC
+	}
+	return c.httpRPC
+}
+
+// Close shuts down both inner ethclient.Clients. Aliased clients are closed
+// only once. The AvalancheRPCClient pair is owned by AvalancheDualRPCClient,
+// which closes them itself.
+func (c *AvalancheClient) Close() {
+	if c.httpEC != nil {
+		c.httpEC.Close()
+	}
+	if c.wsEC != nil && c.wsEC != c.httpEC {
+		c.wsEC.Close()
+	}
 }
 
 // HeaderByNumber returns a block header that implements the EVMHeader interface
 func (c *AvalancheClient) HeaderByNumber(ctx context.Context, number *big.Int) (bchain.EVMHeader, error) {
 	var head *Header
-	err := c.AvalancheRPCClient.CallContext(ctx, &head, "eth_getBlockByNumber", bchain.ToBlockNumArg(number), false)
+	err := c.pickRPC(ctx).CallContext(ctx, &head, "eth_getBlockByNumber", bchain.ToBlockNumArg(number), false)
 	if err == nil && head == nil {
 		err = ethereum.NotFound
 	}
@@ -30,17 +63,27 @@ func (c *AvalancheClient) HeaderByNumber(ctx context.Context, number *big.Int) (
 
 // EstimateGas returns the current estimated gas cost for executing a transaction
 func (c *AvalancheClient) EstimateGas(ctx context.Context, msg interface{}) (uint64, error) {
-	return c.Client.EstimateGas(ctx, msg.(ethereum.CallMsg))
+	return c.pickEC(ctx).EstimateGas(ctx, msg.(ethereum.CallMsg))
 }
 
 // BalanceAt returns the balance for the given account at a specific block, or latest known block if no block number is provided
 func (c *AvalancheClient) BalanceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (*big.Int, error) {
-	return c.Client.BalanceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
+	return c.pickEC(ctx).BalanceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
 }
 
 // NonceAt returns the nonce for the given account at a specific block, or latest known block if no block number is provided
 func (c *AvalancheClient) NonceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (uint64, error) {
-	return c.Client.NonceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
+	return c.pickEC(ctx).NonceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
+}
+
+// NetworkID returns the chain id reported by the backend.
+func (c *AvalancheClient) NetworkID(ctx context.Context) (*big.Int, error) {
+	return c.pickEC(ctx).NetworkID(ctx)
+}
+
+// SuggestGasPrice asks the backend for a gas-price suggestion.
+func (c *AvalancheClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	return c.pickEC(ctx).SuggestGasPrice(ctx)
 }
 
 // AvalancheRPCClient wraps an rpc client to implement the EVMRPCClient interface
@@ -49,13 +92,24 @@ type AvalancheRPCClient struct {
 }
 
 // AvalancheDualRPCClient routes calls and subscriptions to separate RPC clients.
+// CallContext routes by eth.IsSyncRoute(ctx): tagged calls go over WS to keep
+// chain-tip RPC traffic sticky to the announcer node; untagged calls go over
+// HTTP so bulk/parallel sync and public API traffic can fan out across the
+// LB pool. BatchCallContext stays on HTTP unconditionally. EthSubscribe
+// always uses WS.
 type AvalancheDualRPCClient struct {
 	CallClient *AvalancheRPCClient
 	SubClient  *AvalancheRPCClient
 }
 
-// CallContext forwards JSON-RPC calls to the HTTP client with Avalanche-specific handling.
+// CallContext routes the JSON-RPC call to SubClient when ctx carries the
+// sync-route tag, otherwise to CallClient. Avalanche-specific error
+// translation is performed inside AvalancheRPCClient.CallContext on whichever
+// side handles the call.
 func (c *AvalancheDualRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	if eth.IsSyncRoute(ctx) && c.SubClient != nil {
+		return c.SubClient.CallContext(ctx, result, method, args...)
+	}
 	return c.CallClient.CallContext(ctx, result, method, args...)
 }
 

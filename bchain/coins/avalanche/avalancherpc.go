@@ -35,6 +35,11 @@ func dialRPC(rawURL string) (*rpc.Client, error) {
 }
 
 // OpenRPC opens RPC connections for Avalanche to separate HTTP and WS endpoints.
+// Mirrors eth.OpenRPC: when distinct URLs are configured, a separate WS
+// *rpc.Client is dialed and wrapped into both an AvalancheRPCClient (for
+// custom JSON-RPC dispatch) and an *ethclient.Client (for typed Avalanche
+// methods). When the same URL serves both, the WS-side fields alias the
+// HTTP-side so Close does not double-close.
 var OpenRPC = func(httpURL, wsURL string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
 	callURL, subURL, err := eth.NormalizeRPCURLs(httpURL, wsURL)
 	if err != nil {
@@ -45,17 +50,28 @@ var OpenRPC = func(httpURL, wsURL string) (bchain.EVMRPCClient, bchain.EVMClient
 		return nil, nil, err
 	}
 	callRPC := &AvalancheRPCClient{Client: callClient}
+	httpEC := ethclient.NewClient(callClient)
+
 	subRPC := callRPC
+	wsEC := httpEC
 	if subURL != callURL {
 		subClient, err := dialRPC(subURL)
 		if err != nil {
 			callClient.Close()
+			httpEC.Close()
 			return nil, nil, err
 		}
 		subRPC = &AvalancheRPCClient{Client: subClient}
+		wsEC = ethclient.NewClient(subClient)
 	}
+
 	rc := &AvalancheDualRPCClient{CallClient: callRPC, SubClient: subRPC}
-	c := &AvalancheClient{Client: ethclient.NewClient(callClient), AvalancheRPCClient: callRPC}
+	c := &AvalancheClient{
+		httpEC:  httpEC,
+		wsEC:    wsEC,
+		httpRPC: callRPC,
+		wsRPC:   subRPC,
+	}
 	return rc, c, nil
 }
 
