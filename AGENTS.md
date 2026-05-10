@@ -33,3 +33,9 @@ is testnet4.
   fingerprints test binary + args, but it does NOT notice when GitHub Actions repository
   variables (the URLs/credentials your tests dial) change between runs, so a previously
   cached PASS can mask a real failure.
+
+## Facts to keep in mind to avoid regressions
+
+Blockbook instance should be able to : 
+ - handle at least 20 000 websocket connections from trezor suite
+ - index and catchup with fast L2 chains like Arbitrum or Base 
