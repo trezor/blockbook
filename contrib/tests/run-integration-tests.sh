@@ -5,15 +5,15 @@
 # the integration suite. Args are forwarded to `go test`; narrow with -run.
 #
 # Examples:
-#   tests/run-integration-tests.sh
-#   tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc'
-#   tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc/GetBlock' -count=1
+#   contrib/tests/run-integration-tests.sh
+#   contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc'
+#   contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc/GetBlock' -count=1
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/.." && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
 
-source "$script_dir/lib/gh-vars.sh"
+source "$script_dir/../gh-vars.sh"
 bb_export_gh_vars
 
 export BB_BUILD_ENV="${BB_BUILD_ENV:-dev}"

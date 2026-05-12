@@ -4,17 +4,17 @@
 
 Test your changes before declaring done. Start with unit tests :
 ```
-tests/run-unit-tests.sh [go args]
+contrib/tests/run-unit-tests.sh [go args]
 ```
 Then connectivity tests :
 ```
-tests/run-integration-tests.sh -run 'TestIntegration/.*/connectivity' # make sure we can reach backends
+contrib/tests/run-integration-tests.sh -run 'TestIntegration/.*/connectivity' # make sure we can reach backends
 ```
 Then continue with integration tests, but start narrow, broaden only when needed :
 ```
-tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc/GetBlock'
-tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc'
-tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main'
+contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc/GetBlock'
+contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc'
+contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main'
 ```
 Test path convention :
 ```
@@ -28,7 +28,7 @@ mempool and are slow. Prefer `ethereum`, `bsc`, `tron`, or `bcash`.
 (`bitcoin_regtest` → `bitcoin_regtest=main`). Collisions are disambiguated
 with `#01`, `#02`, ... — today `bitcoin=test` is testnet, `bitcoin=test#01`
 is testnet4.
-- `tests/run-all-tests.sh` is for CI/CD only — too slow for an agent feedback loop, do not run it.
+- `contrib/tests/run-all-tests.sh` is for CI/CD only — too slow for an agent feedback loop, do not run it.
 - `-count=1` bypasses the test cache. Use it when you suspect stale results: `go test`
   fingerprints test binary + args, but it does NOT notice when GitHub Actions repository
   variables (the URLs/credentials your tests dial) change between runs, so a previously
