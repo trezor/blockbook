@@ -11,6 +11,11 @@
 # token that has `repo` (or `actions:read`) scope, and make sure your GitHub
 # account is a member of the Trezor organisation with access to the repo.
 # Override the source repo with BB_GH_REPO if you fork under a different org.
+#
+# Cache: exports are persisted to ${XDG_CACHE_HOME:-$HOME/.cache}/blockbook/
+# with a 60-minute TTL (chmod 600 — values include QuickNode endpoint paths).
+# Force a fresh fetch with BB_GH_REFRESH=1. Override the TTL with
+# BB_GH_CACHE_TTL=<seconds>.
 
 # Keep in sync with .github/actions/export-env-vars/action.yml.
 _bb_gh_prefixes=(
@@ -26,12 +31,38 @@ _bb_gh_prefixes=(
     BB_DEV_API_URL_WS_
 )
 
+# Bump if the cache file format changes; older caches are then ignored.
+_BB_GH_CACHE_VERSION=1
+
+_bb_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+
 bb_export_gh_vars() {
     local repo="${BB_GH_REPO:-trezor/blockbook}"
+    local ttl="${BB_GH_CACHE_TTL:-3600}"
+    local refresh="${BB_GH_REFRESH:-0}"
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/blockbook"
+    local cache_file="${cache_dir}/gh-vars-${repo//\//-}.env"
+    local schema_header="# bb-gh-vars schema ${_BB_GH_CACHE_VERSION}"
 
     if ! command -v gh >/dev/null 2>&1; then
         echo "ERROR: gh CLI is required but not installed (see https://cli.github.com/)." >&2
         return 1
+    fi
+
+    if [[ "$refresh" != "1" && -r "$cache_file" ]]; then
+        local mtime now age header
+        mtime=$(_bb_mtime "$cache_file") || mtime=0
+        now=$(date +%s)
+        age=$((now - mtime))
+        if (( age < ttl )); then
+            IFS= read -r header < "$cache_file" || header=""
+            if [[ "$header" == "$schema_header" ]]; then
+                # shellcheck disable=SC1090
+                source "$cache_file"
+                echo "Loaded BB_* variables from cache (${age}s old, ${cache_file}). Refresh with BB_GH_REFRESH=1." >&2
+                return 0
+            fi
+        fi
     fi
 
     if ! gh auth status >/dev/null 2>&1; then
@@ -69,6 +100,11 @@ EOF
         return 1
     fi
 
+    mkdir -p "$cache_dir"
+    local tmp="${cache_file}.tmp.$$"
+    (umask 077; : > "$tmp") || { echo "ERROR: cannot create cache temp file ${tmp}" >&2; return 1; }
+    printf '%s\n' "$schema_header" >> "$tmp"
+
     local count=0 name value prefix suffix normalized
     while IFS=$'\t' read -r name value; do
         [[ -z "$name" ]] && continue
@@ -81,14 +117,18 @@ EOF
                 break
             fi
         done
-        export "$normalized=$value"
+        printf 'export %s=%q\n' "$normalized" "$value" >> "$tmp"
         count=$((count + 1))
     done <<< "$raw"
 
     if [[ $count -eq 0 ]]; then
+        rm -f "$tmp"
         echo "ERROR: ${repo} returned no variables (check 'gh auth status' and Trezor-org membership)." >&2
         return 1
     fi
 
-    echo "Exported $count BB_* variables from ${repo}." >&2
+    mv "$tmp" "$cache_file"
+    # shellcheck disable=SC1090
+    source "$cache_file"
+    echo "Fetched $count BB_* variables from ${repo}, cached at ${cache_file}." >&2
 }
