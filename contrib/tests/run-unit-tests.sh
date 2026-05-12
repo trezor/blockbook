@@ -2,7 +2,7 @@
 # Run Blockbook unit tests directly (no Docker, no gh fetch). Args forwarded to `go test`.
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 mapfile -t pkgs < <(go list ./... | grep -vE '^github\.com/trezor/blockbook/(contrib|tests)')
