@@ -33,15 +33,24 @@ if [[ "$coin" == *_* && "$coin" != *_archive* ]]; then
   [[ "$infix" != "${coin}_archive" ]] && candidates+=("$infix")
 fi
 
-url=""
+# Mirror build/tools/templates.go:withEnvAliasVariants — for each alias
+# candidate, also try the env-var-safe variant with '-' normalized to '_'.
+env_candidates=()
 for alias in "${candidates[@]}"; do
+  env_candidates+=("$alias")
+  normalized_alias="${alias//-/_}"
+  [[ "$normalized_alias" != "$alias" ]] && env_candidates+=("$normalized_alias")
+done
+
+url=""
+for alias in "${env_candidates[@]}"; do
   candidate="${prefix}${alias}"
   if [[ -n "${!candidate-}" ]]; then
     url="${!candidate}"
     break
   fi
 done
-[[ -n "$url" ]] || die "no backend RPC URL exported for '${coin}' (tried: ${candidates[*]/#/${prefix}})"
+[[ -n "$url" ]] || die "no backend RPC URL exported for '${coin}' (tried: ${env_candidates[*]/#/${prefix}})"
 
 user="${BB_RPC_USER-}"
 pass="${BB_RPC_PASS-}"

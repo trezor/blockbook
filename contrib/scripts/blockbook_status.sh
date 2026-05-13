@@ -18,9 +18,18 @@ command -v jq   >/dev/null 2>&1 || die "jq is not installed"
 
 bb_export_gh_vars
 
+# Mirror build/tools/templates.go:withEnvAliasVariants — also try the env-var-safe
+# variant with '-' normalized to '_' (gh-vars.sh exports BB_* names with this form).
 var="BB_DEV_API_URL_HTTP_${coin}"
 base_url="${!var-}"
-[[ -n "$base_url" ]] || die "${var} is not set (no Blockbook URL exported for '${coin}')"
+if [[ -z "$base_url" ]]; then
+    normalized_coin="${coin//-/_}"
+    if [[ "$normalized_coin" != "$coin" ]]; then
+        var="BB_DEV_API_URL_HTTP_${normalized_coin}"
+        base_url="${!var-}"
+    fi
+fi
+[[ -n "$base_url" ]] || die "no Blockbook URL exported for '${coin}' (BB_DEV_API_URL_HTTP_${coin} not set)"
 
 # Curl with response body and status; pure-bash split on the trailing newline.
 fetch() {
