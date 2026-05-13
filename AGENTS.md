@@ -23,15 +23,15 @@ TestIntegration/<coin>=main|test[#NN]/<connectivity|rpc|sync|api>/<subtest>[/<su
 
 - Avoid bitcoin during iteration : `bitcoin=main`'s `MempoolSync` and `GetTransactionForMempool` walk mainnet's
 mempool and are slow, prefer `bcash`.
-- prefer`ethereum`, `bsc`, `tron` and `avalanch` from the EVM family 
+- Prefer `ethereum`, `bsc`, `tron`, and `avalanche` from the EVM family.
 - The coin segment comes from a `tests/tests.json` key: keys containing
 `_testnet` map to `<prefix>=test`, the rest to `<key>=main`
 (`bitcoin_regtest` → `bitcoin_regtest=main`). Collisions are disambiguated
 with `#01`, `#02`, ... — today `bitcoin=test` is testnet, `bitcoin=test#01`
 is testnet4.
-- in case of unexpected integration test failures, you can run `blockbook_status.sh` or `backend_status.sh` 
+- in case of unexpected integration test failures, you can run `contrib/scripts/blockbook_status.sh` or `contrib/scripts/backend_status.sh`
 scripts to check health of particular blockbook/backend instance
-- gh-vars.sh script has a `_BB_GH_CACHE_VERSION` variable that must be changed if any `BB_*` variable name changes
+- `contrib/gh-vars.sh` has a `_BB_GH_CACHE_VERSION` variable that must be bumped when the cache file format changes (e.g. the schema header or the structure of the exported env file) to invalidate stale caches
 - `contrib/tests/run-all-tests.sh` is for CI/CD only — too slow for an agent feedback loop, do not run it.
 - `-count=1` bypasses the test cache. Use it when you suspect stale results: `go test`
   fingerprints test binary + args, but it does NOT notice when GitHub Actions repository
