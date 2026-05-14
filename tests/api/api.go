@@ -84,11 +84,12 @@ var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 }
 
 var wsOnlyTests = map[string]func(t *testing.T, th *TestHandler){
-	"WsGetInfo":        testWsGetInfo,
-	"WsGetBlockHash":   testWsGetBlockHash,
-	"WsGetTransaction": testWsGetTransaction,
-	"WsGetAccountInfo": testWsGetAccountInfo,
-	"WsPing":           testWsPing,
+	"WsGetInfo":             testWsGetInfo,
+	"WsGetBlockHash":        testWsGetBlockHash,
+	"WsGetTransaction":      testWsGetTransaction,
+	"WsGetAccountInfo":      testWsGetAccountInfo,
+	"WsGetAccountInfoBasic": testWsGetAccountInfoBasic,
+	"WsPing":                testWsPing,
 }
 
 var wsUTXOTests = map[string]func(t *testing.T, th *TestHandler){

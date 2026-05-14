@@ -3,6 +3,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -52,6 +53,36 @@ func assertAddressTxsPayload(t *testing.T, payload *addressTxsResponse, address,
 	assertPageMeta(t, payload.Page, payload.ItemsOnPage, payload.TotalPages, payload.Txs, context)
 	assertPageSizeUpperBound(t, len(payload.Transactions), payload.ItemsOnPage, pageSize, context+".transactions")
 	assertTransactionsContainTxID(t, payload.Transactions, txid, context+".transactions")
+}
+
+func assertBasicAccountInfoPayload(t *testing.T, payload map[string]json.RawMessage, address, context string) {
+	t.Helper()
+
+	rawAddress, ok := payload["address"]
+	if !ok {
+		t.Fatalf("%s missing address field", context)
+	}
+	var gotAddress string
+	if err := json.Unmarshal(rawAddress, &gotAddress); err != nil {
+		t.Fatalf("%s decode address: %v", context, err)
+	}
+	assertAddressMatches(t, gotAddress, address, context+".address")
+
+	rawUnconfirmedTxs, ok := payload["unconfirmedTxs"]
+	if !ok {
+		t.Fatalf("%s missing unconfirmedTxs field", context)
+	}
+	var unconfirmedTxs int
+	if err := json.Unmarshal(rawUnconfirmedTxs, &unconfirmedTxs); err != nil {
+		t.Fatalf("%s decode unconfirmedTxs: %v", context, err)
+	}
+	if unconfirmedTxs < 0 {
+		t.Fatalf("%s invalid unconfirmedTxs: %d", context, unconfirmedTxs)
+	}
+
+	if _, ok := payload["unconfirmedBalance"]; ok {
+		t.Fatalf("%s includes unconfirmedBalance for details=basic", context)
+	}
 }
 
 func assertPageMeta(t *testing.T, page, itemsOnPage, totalPages, totalItems int, context string) {
