@@ -69,6 +69,23 @@ func testWsGetAccountInfo(t *testing.T, h *TestHandler) {
 	assertAddressTxidsPayload(t, &info, address, txid, "WsGetAccountInfo", addressPageSize)
 }
 
+func testWsGetAccountInfoBasic(t *testing.T, h *TestHandler) {
+	address := h.sampleAddressOrSkip(t)
+
+	resp := h.wsCall(t, "getAccountInfo", map[string]interface{}{
+		"descriptor": address,
+		"details":    "basic",
+		"page":       addressPage,
+		"pageSize":   addressPageSize,
+	})
+
+	var info map[string]json.RawMessage
+	if err := json.Unmarshal(resp.Data, &info); err != nil {
+		t.Fatalf("decode websocket getAccountInfo basic response: %v", err)
+	}
+	assertBasicAccountInfoPayload(t, info, address, "WsGetAccountInfoBasic")
+}
+
 func testWsGetAccountUtxo(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 

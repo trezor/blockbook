@@ -114,12 +114,9 @@ func testGetTransactionSpecific(t *testing.T, h *TestHandler) {
 func testGetAddress(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 
-	var addr addressResponse
+	var addr map[string]json.RawMessage
 	h.mustGetJSON(t, "/api/v2/address/"+url.PathEscape(address)+"?details=basic", &addr)
-	assertNonEmptyString(t, addr.Address, "GetAddress.address")
-	if !strings.EqualFold(addr.Address, address) {
-		t.Fatalf("address mismatch: got %s, want %s", addr.Address, address)
-	}
+	assertBasicAccountInfoPayload(t, addr, address, "GetAddress")
 }
 
 func testGetCurrentFiatRates(t *testing.T, h *TestHandler) {

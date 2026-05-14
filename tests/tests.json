@@ -31,7 +31,7 @@
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
                 "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter",
-                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfo", "WsGetAccountUtxo", "WsPing"],
+                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfo", "WsGetAccountInfoBasic", "WsGetAccountUtxo", "WsPing"],
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
