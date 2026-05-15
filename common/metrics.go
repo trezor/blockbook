@@ -51,6 +51,8 @@ type Metrics struct {
 	DbColumnSize                      *prometheus.GaugeVec
 	BlockbookAppInfo                  *prometheus.GaugeVec
 	BackendBestHeight                 prometheus.Gauge
+	BackendTipAgeSeconds              prometheus.Gauge
+	AverageBlockTimeSeconds           prometheus.Gauge
 	BlockbookBestHeight               prometheus.Gauge
 	ExplorerPendingRequests           *prometheus.GaugeVec
 	WebsocketPendingRequests          *prometheus.GaugeVec
@@ -412,6 +414,20 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.GaugeOpts{
 			Name:        "blockbook_backend_best_height",
 			Help:        "Block height in backend",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
+	metrics.BackendTipAgeSeconds = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_tip_age_seconds",
+			Help:        "Seconds since the backend's best height was last observed to advance",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
+	metrics.AverageBlockTimeSeconds = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_average_block_time_seconds",
+			Help:        "Configured average block time for the chain in seconds (0 if unavailable)",
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
