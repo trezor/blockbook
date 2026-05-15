@@ -779,7 +779,10 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			if err == nil {
 				break
 			}
-			if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+			// On the first ErrBlockNotFound, check whether we are past the backend tip
+			// so we exit cleanly at end-of-chain. Subsequent retries skip this RPC and
+			// defer to shouldRestartSyncOnMissingBlock at the threshold tick.
+			if notFoundRetries == 0 && stdErrors.Is(err, bchain.ErrBlockNotFound) {
 				bestHeight, bestErr := w.chain.GetBestBlockHeight()
 				if bestErr != nil {
 					out <- blockResult{err: bestErr}
