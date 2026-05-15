@@ -8,13 +8,31 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	jujuErrors "github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
+
+var (
+	testMetricsOnce sync.Once
+	testMetrics     *common.Metrics
+)
+
+func getTestMetrics(t *testing.T) *common.Metrics {
+	testMetricsOnce.Do(func() {
+		m, err := common.GetMetrics("test")
+		if err != nil {
+			t.Fatalf("GetMetrics: %v", err)
+		}
+		testMetrics = m
+	})
+	return testMetrics
+}
 
 func TestIsRetryableGetBlockError(t *testing.T) {
 	tests := []struct {
@@ -155,7 +173,7 @@ func (c *getBlockChainTestChain) GetBlock(hash string, height uint32) (*bchain.B
 	return nil, bchain.ErrBlockNotFound
 }
 
-func newGetBlockChainTestWorker(chain *getBlockChainTestChain, startHash string, startHeight uint32) *SyncWorker {
+func newGetBlockChainTestWorker(t *testing.T, chain *getBlockChainTestChain, startHash string, startHeight uint32) *SyncWorker {
 	return &SyncWorker{
 		chain:       chain,
 		startHash:   startHash,
@@ -164,6 +182,7 @@ func newGetBlockChainTestWorker(chain *getBlockChainTestChain, startHash string,
 			TipRecheckThreshold: 2,
 			RetryDelay:          time.Millisecond,
 		},
+		metrics: getTestMetrics(t),
 	}
 }
 
@@ -190,7 +209,7 @@ func TestGetBlockChainRetriesSequentialTipBlock(t *testing.T) {
 		},
 		getBlockCalls: map[uint32]int{},
 	}
-	w := newGetBlockChainTestWorker(chain, "h1", 1)
+	w := newGetBlockChainTestWorker(t, chain, "h1", 1)
 
 	results := runGetBlockChain(w)
 	if len(results) != 1 {
@@ -215,7 +234,7 @@ func TestGetBlockChainStopsAboveBestHeight(t *testing.T) {
 		blockErrors:   map[uint32][]error{},
 		getBlockCalls: map[uint32]int{},
 	}
-	w := newGetBlockChainTestWorker(chain, "", 1)
+	w := newGetBlockChainTestWorker(t, chain, "", 1)
 
 	results := runGetBlockChain(w)
 	if len(results) != 0 {
@@ -234,7 +253,7 @@ func TestGetBlockChainMissingBlockChangedHashResyncs(t *testing.T) {
 		blockErrors:   map[uint32][]error{},
 		getBlockCalls: map[uint32]int{},
 	}
-	w := newGetBlockChainTestWorker(chain, "fake-hash", 1)
+	w := newGetBlockChainTestWorker(t, chain, "fake-hash", 1)
 
 	results := runGetBlockChain(w)
 	if len(results) != 1 {
@@ -259,7 +278,7 @@ func TestGetBlockChainNonRetryableErrorReturns(t *testing.T) {
 		},
 		getBlockCalls: map[uint32]int{},
 	}
-	w := newGetBlockChainTestWorker(chain, "h1", 1)
+	w := newGetBlockChainTestWorker(t, chain, "h1", 1)
 
 	results := runGetBlockChain(w)
 	if len(results) != 1 {
