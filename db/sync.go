@@ -806,6 +806,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 					return
 				}
 			}
+			w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 			select {
 			case <-done:
 				return
