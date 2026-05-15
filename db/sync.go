@@ -543,9 +543,9 @@ func (w *SyncWorker) getBlockWorker(i int, syncWorkers uint32, wg *sync.WaitGrou
 	cfg := w.missingBlockRetry
 GetBlockLoop:
 	for hh := range hch {
-		// Track consecutive not-found errors per block so we only re-check the
+		// Track consecutive retryable errors per block so we only re-check the
 		// chain once the backend has had a chance to catch up.
-		notFoundRetries := 0
+		retries := 0
 		for {
 			// Allow global shutdown or an abort to stop the retry loop promptly.
 			select {
@@ -558,7 +558,7 @@ GetBlockLoop:
 			block, err = w.chain.GetBlock(hh.hash, hh.height)
 			if err != nil {
 				if isRetryableGetBlockError(err) {
-					notFoundRetries++
+					retries++
 					glog.Error("getBlockWorker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
 					threshold := cfg.RecheckThreshold
 					// Once the hash queue is closed we are at the tail of the range; use
@@ -566,7 +566,7 @@ GetBlockLoop:
 					if hchClosed.Load() == true {
 						threshold = cfg.TipRecheckThreshold
 					}
-					if notFoundRetries >= threshold {
+					if retries >= threshold {
 						restart, checkErr := w.shouldRestartSyncOnMissingBlock(hh.height, hh.hash)
 						if checkErr != nil {
 							glog.Error("getBlockWorker ", i, " missing block check error ", checkErr)
@@ -592,7 +592,7 @@ GetBlockLoop:
 						}
 						return
 					}
-					notFoundRetries = 0
+					retries = 0
 					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
 				}
 				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
@@ -771,7 +771,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			return
 		default:
 		}
-		notFoundRetries := 0
+		retries := 0
 		var block *bchain.Block
 		var err error
 		for {
@@ -782,7 +782,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			// On the first ErrBlockNotFound, check whether we are past the backend tip
 			// so we exit cleanly at end-of-chain. Subsequent retries skip this RPC and
 			// defer to shouldRestartSyncOnMissingBlock at the threshold tick.
-			if notFoundRetries == 0 && stdErrors.Is(err, bchain.ErrBlockNotFound) {
+			if retries == 0 && stdErrors.Is(err, bchain.ErrBlockNotFound) {
 				bestHeight, bestErr := w.chain.GetBestBlockHeight()
 				if bestErr != nil {
 					out <- blockResult{err: bestErr}
@@ -796,9 +796,9 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 				out <- blockResult{err: err}
 				return
 			}
-			notFoundRetries++
+			retries++
 			glog.Error("getBlockChain connect block ", height, " ", hash, " error ", err, ". Retrying...")
-			if notFoundRetries >= recheckThreshold {
+			if retries >= recheckThreshold {
 				restart, checkErr := w.shouldRestartSyncOnMissingBlock(height, hash)
 				if checkErr != nil {
 					out <- blockResult{err: checkErr}
