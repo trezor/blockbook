@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"syscall"
 	"testing"
+	"time"
 
 	jujuErrors "github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
@@ -117,5 +118,157 @@ func TestIsRetryableGetBlockError(t *testing.T) {
 				t.Fatalf("isRetryableGetBlockError(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
+	}
+}
+
+type getBlockChainTestChain struct {
+	bchain.BlockChain
+	bestHeight    uint32
+	hashes        map[uint32]string
+	blocks        map[uint32]*bchain.Block
+	blockErrors   map[uint32][]error
+	getBlockCalls map[uint32]int
+}
+
+func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
+	return c.bestHeight, nil
+}
+
+func (c *getBlockChainTestChain) GetBlockHash(height uint32) (string, error) {
+	if hash, ok := c.hashes[height]; ok {
+		return hash, nil
+	}
+	return "", bchain.ErrBlockNotFound
+}
+
+func (c *getBlockChainTestChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	c.getBlockCalls[height]++
+	if errs := c.blockErrors[height]; len(errs) > 0 {
+		err := errs[0]
+		c.blockErrors[height] = errs[1:]
+		return nil, err
+	}
+	if block := c.blocks[height]; block != nil {
+		copy := *block
+		return &copy, nil
+	}
+	return nil, bchain.ErrBlockNotFound
+}
+
+func newGetBlockChainTestWorker(chain *getBlockChainTestChain, startHash string, startHeight uint32) *SyncWorker {
+	return &SyncWorker{
+		chain:       chain,
+		startHash:   startHash,
+		startHeight: startHeight,
+		missingBlockRetry: MissingBlockRetryConfig{
+			TipRecheckThreshold: 2,
+			RetryDelay:          time.Millisecond,
+		},
+	}
+}
+
+func runGetBlockChain(w *SyncWorker) []blockResult {
+	out := make(chan blockResult)
+	done := make(chan struct{})
+	go w.getBlockChain(out, done)
+	var results []blockResult
+	for res := range out {
+		results = append(results, res)
+	}
+	return results
+}
+
+func TestGetBlockChainRetriesSequentialTipBlock(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		bestHeight: 1,
+		hashes:     map[uint32]string{1: "h1"},
+		blocks: map[uint32]*bchain.Block{
+			1: {BlockHeader: bchain.BlockHeader{Hash: "h1", Height: 1}},
+		},
+		blockErrors: map[uint32][]error{
+			1: {bchain.ErrBlockNotFound, bchain.ErrBlockNotFound},
+		},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(chain, "h1", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if results[0].err != nil {
+		t.Fatalf("unexpected error: %v", results[0].err)
+	}
+	if results[0].block == nil || results[0].block.Hash != "h1" {
+		t.Fatalf("unexpected block: %+v", results[0].block)
+	}
+	if calls := chain.getBlockCalls[1]; calls != 3 {
+		t.Fatalf("GetBlock height 1 calls = %d, want 3", calls)
+	}
+}
+
+func TestGetBlockChainStopsAboveBestHeight(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		bestHeight:    0,
+		hashes:        map[uint32]string{},
+		blocks:        map[uint32]*bchain.Block{},
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(chain, "", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 0 {
+		t.Fatalf("got %d results, want 0: %+v", len(results), results)
+	}
+	if calls := chain.getBlockCalls[1]; calls != 1 {
+		t.Fatalf("GetBlock height 1 calls = %d, want 1", calls)
+	}
+}
+
+func TestGetBlockChainMissingBlockChangedHashResyncs(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		bestHeight:    1,
+		hashes:        map[uint32]string{1: "real-hash"},
+		blocks:        map[uint32]*bchain.Block{},
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(chain, "fake-hash", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if !stdErrors.Is(results[0].err, errResync) {
+		t.Fatalf("error = %v, want errResync", results[0].err)
+	}
+	if calls := chain.getBlockCalls[1]; calls != 2 {
+		t.Fatalf("GetBlock height 1 calls = %d, want 2", calls)
+	}
+}
+
+func TestGetBlockChainNonRetryableErrorReturns(t *testing.T) {
+	boom := stdErrors.New("boom")
+	chain := &getBlockChainTestChain{
+		bestHeight: 1,
+		hashes:     map[uint32]string{1: "h1"},
+		blocks:     map[uint32]*bchain.Block{},
+		blockErrors: map[uint32][]error{
+			1: {boom},
+		},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(chain, "h1", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if !stdErrors.Is(results[0].err, boom) {
+		t.Fatalf("error = %v, want %v", results[0].err, boom)
+	}
+	if calls := chain.getBlockCalls[1]; calls != 1 {
+		t.Fatalf("GetBlock height 1 calls = %d, want 1", calls)
 	}
 }

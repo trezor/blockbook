@@ -753,6 +753,15 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 	hash := w.startHash
 	height := w.startHeight
 	prevHash := ""
+	cfg := w.missingBlockRetry
+	retryDelay := cfg.RetryDelay
+	if retryDelay <= 0 || retryDelay > 250*time.Millisecond {
+		retryDelay = 250 * time.Millisecond
+	}
+	recheckThreshold := cfg.TipRecheckThreshold
+	if recheckThreshold <= 0 {
+		recheckThreshold = 1
+	}
 	// loop until error ErrBlockNotFound
 	for {
 		select {
@@ -760,13 +769,46 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			return
 		default:
 		}
-		block, err := w.chain.GetBlock(hash, height)
-		if err != nil {
-			if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+		notFoundRetries := 0
+		var block *bchain.Block
+		var err error
+		for {
+			block, err = w.chain.GetBlock(hash, height)
+			if err == nil {
 				break
 			}
-			out <- blockResult{err: err}
-			return
+			if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+				bestHeight, bestErr := w.chain.GetBestBlockHeight()
+				if bestErr != nil {
+					out <- blockResult{err: bestErr}
+					return
+				}
+				if height > bestHeight {
+					return
+				}
+			}
+			if !isRetryableGetBlockError(err) {
+				out <- blockResult{err: err}
+				return
+			}
+			notFoundRetries++
+			glog.Error("getBlockChain connect block ", height, " ", hash, " error ", err, ". Retrying...")
+			if notFoundRetries >= recheckThreshold {
+				restart, checkErr := w.shouldRestartSyncOnMissingBlock(height, hash)
+				if checkErr != nil {
+					out <- blockResult{err: checkErr}
+					return
+				}
+				if restart {
+					out <- blockResult{err: errResync}
+					return
+				}
+			}
+			select {
+			case <-done:
+				return
+			case <-time.After(retryDelay):
+			}
 		}
 		if block.Prev != "" && prevHash != "" && prevHash != block.Prev {
 			glog.Infof("sync: fork detected at height %d %s, local prevHash %s, remote prevHash %s", height, block.Hash, prevHash, block.Prev)
