@@ -767,6 +767,8 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 		select {
 		case <-done:
 			return
+		case <-w.chanOsSignal:
+			return
 		default:
 		}
 		notFoundRetries := 0
@@ -806,6 +808,8 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			}
 			select {
 			case <-done:
+				return
+			case <-w.chanOsSignal:
 				return
 			case <-time.After(retryDelay):
 			}
