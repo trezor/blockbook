@@ -66,6 +66,7 @@
             "xpub_magic_segwit_p2sh": 77429938,
             "xpub_magic_segwit_native": 78792518,
             "additional_params": {
+                "averageBlockTimeMs": 600000,
                 "alternative_estimate_fee": "mempoolspaceblock",
                 "alternative_estimate_fee_params": "{\"url\": \"https://mempool.space/api/v1/fees/mempool-blocks\", \"periodSeconds\": 20, \"feeRangeIndex\": 5, \"fallbackFeePerKB\": 1000}",
                 "fiat_rates": "coingecko",
