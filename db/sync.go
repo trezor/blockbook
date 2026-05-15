@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -373,6 +374,22 @@ func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash
 	return currentHash != expectedHash, nil
 }
 
+// onRetryableMiss bumps the retry count and, once at threshold, rechecks chain
+// state. It emits a single warning at the crossover; below threshold it stays
+// quiet because transient backend lag (e.g. load-balanced RPC routing skew)
+// is expected. The per-error signal is preserved via the IndexResyncErrors metric.
+func (w *SyncWorker) onRetryableMiss(retries *int, threshold int, label string, height uint32, hash string, err error) (bool, error) {
+	*retries++
+	if *retries < threshold {
+		return false, nil
+	}
+	if *retries == threshold {
+		glog.Warningf("%s: block %d %s still missing after %d retries (last: %v); rechecking chain state",
+			label, height, hash, *retries, err)
+	}
+	return w.shouldRestartSyncOnMissingBlock(height, hash)
+}
+
 func isRetryableGetBlockError(err error) bool {
 	if err == nil {
 		return false
@@ -541,6 +558,7 @@ func (w *SyncWorker) getBlockWorker(i int, syncWorkers uint32, wg *sync.WaitGrou
 	var err error
 	var block *bchain.Block
 	cfg := w.missingBlockRetry
+	label := "getBlockWorker " + strconv.Itoa(i)
 GetBlockLoop:
 	for hh := range hch {
 		// Track consecutive retryable errors per block so we only re-check the
@@ -558,27 +576,23 @@ GetBlockLoop:
 			block, err = w.chain.GetBlock(hh.hash, hh.height)
 			if err != nil {
 				if isRetryableGetBlockError(err) {
-					retries++
-					glog.Error("getBlockWorker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
 					threshold := cfg.RecheckThreshold
 					// Once the hash queue is closed we are at the tail of the range; use
 					// a smaller threshold to avoid stalling on a missing tip block.
 					if hchClosed.Load() == true {
 						threshold = cfg.TipRecheckThreshold
 					}
-					if retries >= threshold {
-						restart, checkErr := w.shouldRestartSyncOnMissingBlock(hh.height, hh.hash)
-						if checkErr != nil {
-							glog.Error("getBlockWorker ", i, " missing block check error ", checkErr)
-						} else if restart {
-							// The block hash at this height no longer exists; restart sync to realign.
-							glog.Warning("sync: block ", hh.height, " ", hh.hash, " no longer on chain, restarting sync")
-							select {
-							case abortCh <- errResync:
-							default:
-							}
-							return
+					restart, checkErr := w.onRetryableMiss(&retries, threshold, label, hh.height, hh.hash, err)
+					if checkErr != nil {
+						glog.Error("getBlockWorker ", i, " missing block check error ", checkErr)
+					} else if restart {
+						// The block hash at this height no longer exists; restart sync to realign.
+						glog.Warning("sync: block ", hh.height, " ", hh.hash, " no longer on chain, restarting sync")
+						select {
+						case abortCh <- errResync:
+						default:
 						}
+						return
 					}
 				} else {
 					// When the hash queue is closed, stop retrying non-retryable errors.
@@ -796,18 +810,14 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 				out <- blockResult{err: err}
 				return
 			}
-			retries++
-			glog.Error("getBlockChain connect block ", height, " ", hash, " error ", err, ". Retrying...")
-			if retries >= recheckThreshold {
-				restart, checkErr := w.shouldRestartSyncOnMissingBlock(height, hash)
-				if checkErr != nil {
-					out <- blockResult{err: checkErr}
-					return
-				}
-				if restart {
-					out <- blockResult{err: errResync}
-					return
-				}
+			resync, checkErr := w.onRetryableMiss(&retries, recheckThreshold, "getBlockChain", height, hash, err)
+			if checkErr != nil {
+				out <- blockResult{err: checkErr}
+				return
+			}
+			if resync {
+				out <- blockResult{err: errResync}
+				return
 			}
 			w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 			select {
