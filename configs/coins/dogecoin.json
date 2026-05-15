@@ -67,6 +67,7 @@
             "xpub_magic": 49990397,
             "slip44": 3,
             "additional_params": {
+                "averageBlockTimeMs": 60000,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
                 "fiat_rates_params": "{\"coin\": \"dogecoin\", \"periodSeconds\": 900}"
