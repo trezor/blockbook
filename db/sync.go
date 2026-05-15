@@ -280,6 +280,7 @@ func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, on
 		}
 		hashes = append(hashes, local)
 	}
+	w.metrics.IndexReorgEvents.With(common.Labels{"type": "disconnect"}).Inc()
 	if err := w.DisconnectBlocks(height+1, localBestHeight, hashes); err != nil {
 		return err
 	}
@@ -576,6 +577,9 @@ GetBlockLoop:
 			}
 			block, err = w.chain.GetBlock(hh.hash, hh.height)
 			if err != nil {
+				if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+					w.metrics.IndexBlockNotFoundRetries.Inc()
+				}
 				if isRetryableGetBlockError(err) {
 					threshold := cfg.RecheckThreshold
 					// Once the hash queue is closed we are at the tail of the range; use
@@ -589,6 +593,7 @@ GetBlockLoop:
 					} else if restart {
 						// The block hash at this height no longer exists; restart sync to realign.
 						glog.Warning("sync: block ", hh.height, " ", hh.hash, " no longer on chain, restarting sync")
+						w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
 						select {
 						case abortCh <- errResync:
 						default:
@@ -797,7 +802,8 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			// On the first ErrBlockNotFound, check whether we are past the backend tip
 			// so we exit cleanly at end-of-chain. Subsequent retries skip this RPC and
 			// defer to shouldRestartSyncOnMissingBlock at the threshold tick.
-			if retries == 0 && stdErrors.Is(err, bchain.ErrBlockNotFound) {
+			gotNotFound := stdErrors.Is(err, bchain.ErrBlockNotFound)
+			if retries == 0 && gotNotFound {
 				bestHeight, bestErr := w.chain.GetBestBlockHeight()
 				if bestErr != nil {
 					out <- blockResult{err: bestErr}
@@ -806,6 +812,9 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 				if height > bestHeight {
 					return
 				}
+			}
+			if gotNotFound {
+				w.metrics.IndexBlockNotFoundRetries.Inc()
 			}
 			if !isRetryableGetBlockError(err) {
 				out <- blockResult{err: err}
@@ -817,6 +826,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 				return
 			}
 			if resync {
+				w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
 				out <- blockResult{err: errResync}
 				return
 			}
@@ -831,6 +841,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 		}
 		if block.Prev != "" && prevHash != "" && prevHash != block.Prev {
 			glog.Infof("sync: fork detected at height %d %s, local prevHash %s, remote prevHash %s", height, block.Hash, prevHash, block.Prev)
+			w.metrics.IndexReorgEvents.With(common.Labels{"type": "fork"}).Inc()
 			out <- blockResult{err: errFork}
 			return
 		}

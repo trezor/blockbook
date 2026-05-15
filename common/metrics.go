@@ -35,6 +35,8 @@ type Metrics struct {
 	EthCallTokenURI                   *prometheus.CounterVec
 	EthCallStakingPool                *prometheus.CounterVec
 	IndexResyncErrors                 *prometheus.CounterVec
+	IndexBlockNotFoundRetries         prometheus.Counter
+	IndexReorgEvents                  *prometheus.CounterVec
 	IndexDBSize                       prometheus.Gauge
 	ExplorerViews                     *prometheus.CounterVec
 	MempoolSize                       prometheus.Gauge
@@ -289,6 +291,21 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"error"},
+	)
+	metrics.IndexBlockNotFoundRetries = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name:        "blockbook_index_block_not_found_retries",
+			Help:        "Number of transient ErrBlockNotFound responses from the backend during sync (load-balanced RPC routing skew, indexer ahead of backend, etc.)",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
+	metrics.IndexReorgEvents = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_index_reorg_events",
+			Help:        "Chain reorganization events detected during sync, by detection path (fork: in-stream prevHash mismatch; resync: missing block hash triggered sync restart; disconnect: local-best fork triggered DB rollback)",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"type"},
 	)
 	metrics.IndexDBSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
