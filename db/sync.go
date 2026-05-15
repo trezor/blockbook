@@ -146,6 +146,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			w.is.FinishedSync(bh)
 		}
 		w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
+		w.metrics.BackendTipAgeSeconds.Set(time.Since(w.is.GetBackendTipLastAdvance()).Seconds())
 		w.metrics.BlockbookBestHeight.Set(float64(bh))
 		return err
 	case errSynced:

@@ -189,6 +189,17 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
+	// Chains that expose a configured average block time (currently EVM coins via
+	// EthereumRPC.AverageBlockTimeDuration) publish it as a static gauge so
+	// alerts can normalize the tip-age metric across coins with different cadences.
+	if provider, ok := chain.(interface {
+		AverageBlockTimeDuration() (time.Duration, error)
+	}); ok {
+		if d, err := provider.AverageBlockTimeDuration(); err == nil && d > 0 {
+			metrics.AverageBlockTimeSeconds.Set(d.Seconds())
+		}
+	}
+
 	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics, *extendedIndex)
 	if err != nil {
 		glog.Error("rocksDB: ", err)
@@ -512,6 +523,7 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		"backend_subversion":       subversion,
 		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
 	metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
+	metrics.BackendTipAgeSeconds.Set(time.Since(is.GetBackendTipLastAdvance()).Seconds())
 	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
 	return nil
 }
