@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -442,8 +441,11 @@ var (
 )
 
 func init() {
-	maxAdditionalChangeIndexes := bchain.MaxXpubChangeIndexes - 1
-	xpubDesriptorRegex, _ = regexp.Compile(fmt.Sprintf(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+){0,%d})})|(<(?P<changelist2>\d+(;\d+){0,%d})>)|(?P<change>\d+))/\*)?\)+`, maxAdditionalChangeIndexes, maxAdditionalChangeIndexes))
+	var err error
+	xpubDesriptorRegex, err = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+`)
+	if err != nil {
+		panic(errors.Annotate(err, "Invalid bitcoinparser xpubDesriptorRegex"))
+	}
 	typeSubexpIndex = xpubDesriptorRegex.SubexpIndex("type")
 	bipSubexpIndex = xpubDesriptorRegex.SubexpIndex("bip")
 	xpubSubexpIndex = xpubDesriptorRegex.SubexpIndex("xpub")
