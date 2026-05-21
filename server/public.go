@@ -1700,6 +1700,9 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 }
 
 func countCommaSeparatedValues(s string, limit int) int {
+	if s == "" {
+		return 0
+	}
 	count := 1
 	for i := 0; i < len(s); i++ {
 		if s[i] == ',' {

@@ -2692,3 +2692,24 @@ func Test_validateIntValue_gapClamp(t *testing.T) {
 		})
 	}
 }
+
+func Test_countCommaSeparatedValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		limit int
+		want  int
+	}{
+		{"empty string", "", api.MaxFiatRatesTimestamps, 0},
+		{"single value", "1", api.MaxFiatRatesTimestamps, 1},
+		{"stops after limit exceeded", "1,2,3", 2, 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := countCommaSeparatedValues(tt.value, tt.limit); got != tt.want {
+				t.Errorf("countCommaSeparatedValues(%q, %d) = %d, want %d", tt.value, tt.limit, got, tt.want)
+			}
+		})
+	}
+}
