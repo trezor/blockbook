@@ -678,6 +678,15 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 			}
 			if ok, reason := s.trackWork(); !ok {
 				c.releaseRequestSlot()
+				if reason == "work_limit" {
+					e := resultError{}
+					e.Error.Message = reason
+					c.DataOut(&WsRes{
+						ID:   req.ID,
+						Data: e,
+					})
+					continue
+				}
 				s.closeChannel(c, reason)
 				return
 			}
