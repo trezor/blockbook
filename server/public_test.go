@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/linxGnu/grocksdb"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
@@ -773,6 +774,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"error":"Parameter 'timestamp' does not contain a valid Unix timestamp."}`,
+			},
+		},
+		{
+			name:        "apiMultiFiatRates timestamp limit",
+			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers?timestamp=" + strings.Repeat("1,", api.MaxFiatRatesTimestamps) + "1&currency=usd"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"too many timestamps, max ` + strconv.Itoa(api.MaxFiatRatesTimestamps) + `"}`,
 			},
 		},
 		{
@@ -1702,6 +1712,17 @@ var websocketTestsBitcoinType = []websocketTest{
 			},
 		},
 		want: `{"id":"44","data":{"error":{"message":"not supported"}}}`,
+	},
+	{
+		name: "websocket getFiatRatesForTimestamps timestamp limit",
+		req: websocketReq{
+			Method: "getFiatRatesForTimestamps",
+			Params: map[string]interface{}{
+				"currencies": []string{"usd"},
+				"timestamps": make([]int64, api.MaxFiatRatesTimestamps+1),
+			},
+		},
+		want: `{"id":"45","data":{"error":{"message":"too many timestamps, max ` + strconv.Itoa(api.MaxFiatRatesTimestamps) + `"}}}`,
 	},
 }
 
