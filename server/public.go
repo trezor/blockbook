@@ -1699,6 +1699,19 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	return result, nil
 }
 
+func countCommaSeparatedValues(s string, limit int) int {
+	count := 1
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' {
+			count++
+			if count > limit {
+				return count
+			}
+		}
+	}
+	return count
+}
+
 // apiMultiTickers returns FiatRates ticker prices for the specified comma separated list of timestamps.
 func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interface{}, error) {
 	var result []api.FiatTicker
@@ -1713,6 +1726,9 @@ func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interfa
 	if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-multi-tickers-date"}).Inc()
+		if countCommaSeparatedValues(timestampString, api.MaxFiatRatesTimestamps) > api.MaxFiatRatesTimestamps {
+			return nil, api.NewAPIError(fmt.Sprintf("too many timestamps, max %d", api.MaxFiatRatesTimestamps), true)
+		}
 		timestamps := strings.Split(timestampString, ",")
 		t := make([]int64, len(timestamps))
 		for i := range timestamps {

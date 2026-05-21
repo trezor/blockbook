@@ -10,6 +10,9 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
+// MaxFiatRatesTimestamps limits batch fiat-rate lookups to bounded request work.
+const MaxFiatRatesTimestamps = 1000
+
 // removeEmpty removes empty strings from a slice.
 func removeEmpty(stringSlice []string) []string {
 	ret := make([]string, 0, len(stringSlice))
@@ -127,6 +130,9 @@ func makeErrorRates(currencies []string) map[string]float32 {
 func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []string, token string) (*FiatTickers, error) {
 	if len(timestamps) == 0 {
 		return nil, NewAPIError("No timestamps provided", true)
+	}
+	if len(timestamps) > MaxFiatRatesTimestamps {
+		return nil, NewAPIError(fmt.Sprintf("too many timestamps, max %d", MaxFiatRatesTimestamps), true)
 	}
 	vsCurrency := ""
 	currencies = removeEmpty(currencies)

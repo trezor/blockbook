@@ -810,8 +810,8 @@ func newShutdownTestServer() *WebsocketServer {
 
 func TestWebsocketShutdownWaitsForInFlightWork(t *testing.T) {
 	s := newShutdownTestServer()
-	if !s.trackWork() {
-		t.Fatal("trackWork() returned false before shutdown")
+	if ok, reason := s.trackWork(); !ok {
+		t.Fatalf("trackWork() returned false before shutdown, reason %q", reason)
 	}
 
 	finished := make(chan struct{})
@@ -841,8 +841,8 @@ func TestWebsocketShutdownWaitsForInFlightWork(t *testing.T) {
 
 func TestWebsocketShutdownTimesOutOnStuckWork(t *testing.T) {
 	s := newShutdownTestServer()
-	if !s.trackWork() {
-		t.Fatal("trackWork() returned false before shutdown")
+	if ok, reason := s.trackWork(); !ok {
+		t.Fatalf("trackWork() returned false before shutdown, reason %q", reason)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
@@ -875,12 +875,29 @@ func TestWebsocketShutdownRefusesNewWork(t *testing.T) {
 	if err := s.Shutdown(ctx); err != nil {
 		t.Fatalf("Shutdown() = %v, want nil", err)
 	}
-	if s.trackWork() {
-		t.Fatal("trackWork() returned true after shutdown")
+	if ok, reason := s.trackWork(); ok || reason != "server_shutdown" {
+		t.Fatalf("trackWork() = %v, %q after shutdown, want false, server_shutdown", ok, reason)
 	}
 	dummy := &websocketChannel{}
 	if s.registerChannel(dummy) {
 		t.Fatal("registerChannel() returned true after shutdown")
+	}
+}
+
+func TestWebsocketTrackWorkAppliesGlobalLimit(t *testing.T) {
+	s := newShutdownTestServer()
+	s.activeRequests = maxWebsocketActiveRequests
+	if ok, reason := s.trackWork(); ok || reason != "work_limit" {
+		t.Fatalf("trackWork() = %v, %q at global limit, want false, work_limit", ok, reason)
+	}
+
+	s.activeRequests = 0
+	if ok, reason := s.trackWork(); !ok || reason != "" {
+		t.Fatalf("trackWork() = %v, %q below global limit, want true, empty reason", ok, reason)
+	}
+	s.workDone()
+	if s.activeRequests != 0 {
+		t.Fatalf("activeRequests = %d after workDone, want 0", s.activeRequests)
 	}
 }
 

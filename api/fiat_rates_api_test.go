@@ -3,6 +3,7 @@
 package api
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -188,6 +189,17 @@ func TestGetFiatRatesForTimestamps_EmptyInput(t *testing.T) {
 	apiErr := requireAPIError(t, err, true)
 	if apiErr.Text != "No timestamps provided" {
 		t.Fatalf("unexpected error text: got %q", apiErr.Text)
+	}
+}
+
+func TestGetFiatRatesForTimestamps_LimitsInput(t *testing.T) {
+	w := &Worker{}
+	timestamps := make([]int64, MaxFiatRatesTimestamps+1)
+	_, err := w.GetFiatRatesForTimestamps(timestamps, []string{"usd"}, "")
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("too many timestamps, max %d", MaxFiatRatesTimestamps)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
 	}
 }
 

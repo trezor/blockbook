@@ -33,6 +33,7 @@ const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 const maxWebsocketPendingRequests = 48
+const maxWebsocketActiveRequests = 2048
 const maxWebsocketConnectionAttemptsPerIP = 64
 const maxWebsocketConnectionsPerIP = 128
 const maxWebsocketEstimateFeeBlocks = 32
@@ -109,6 +110,7 @@ type WebsocketServer struct {
 	shutdownMu     sync.Mutex
 	shuttingDown   bool
 	activeChannels map[*websocketChannel]struct{}
+	activeRequests int
 	requestWg      sync.WaitGroup
 }
 
@@ -522,17 +524,26 @@ func (s *WebsocketServer) unregisterChannel(c *websocketChannel) {
 // that get true must invoke workDone exactly once when the goroutine they
 // spawn returns. Used to gate goroutines that touch the DB/chain/api so that
 // Shutdown can wait for them to drain before RocksDB is closed.
-func (s *WebsocketServer) trackWork() bool {
+func (s *WebsocketServer) trackWork() (bool, string) {
 	s.shutdownMu.Lock()
 	defer s.shutdownMu.Unlock()
 	if s.shuttingDown {
-		return false
+		return false, "server_shutdown"
 	}
+	if s.activeRequests >= maxWebsocketActiveRequests {
+		return false, "work_limit"
+	}
+	s.activeRequests++
 	s.requestWg.Add(1)
-	return true
+	return true, ""
 }
 
 func (s *WebsocketServer) workDone() {
+	s.shutdownMu.Lock()
+	if s.activeRequests > 0 {
+		s.activeRequests--
+	}
+	s.shutdownMu.Unlock()
 	s.requestWg.Done()
 }
 
@@ -665,9 +676,9 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 				s.closeChannel(c, "pending_requests_limit")
 				return
 			}
-			if !s.trackWork() {
+			if ok, reason := s.trackWork(); !ok {
 				c.releaseRequestSlot()
-				s.closeChannel(c, "server_shutdown")
+				s.closeChannel(c, reason)
 				return
 			}
 			go func(req WsReq) {
@@ -1641,7 +1652,7 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 		observeNewBlockTxDuration(s.metrics, "match", matchStart)
 		if len(subscribed) > 0 {
 			incNewBlockTxMetric(s.metrics, "matched", "success", 1)
-			if !s.trackWork() {
+			if ok, _ := s.trackWork(); !ok {
 				return
 			}
 			// Convert and publish asynchronously so heavy tx conversion does not
@@ -1679,7 +1690,7 @@ func (s *WebsocketServer) OnNewBlock(block *bchain.Block) {
 	go s.onNewBlockAsync(block.Hash, block.Height)
 	if s.newBlockTxsSubscriptionCount > 0 {
 		// Skip per-tx address matching when nobody opted into newBlockTxs.
-		if s.trackWork() {
+		if ok, _ := s.trackWork(); ok {
 			go func() {
 				defer s.workDone()
 				s.publishNewBlockTxsByAddr(block)
@@ -1824,7 +1835,7 @@ func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[stri
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
 	subscribed := s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers, nil, false)
 	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
-		if s.trackWork() {
+		if ok, _ := s.trackWork(); ok {
 			go func() {
 				defer s.workDone()
 				s.onNewTxAsync(tx, subscribed)
