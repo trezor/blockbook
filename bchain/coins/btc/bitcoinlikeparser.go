@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -441,7 +442,8 @@ var (
 )
 
 func init() {
-	xpubDesriptorRegex, _ = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+`)
+	maxAdditionalChangeIndexes := bchain.MaxXpubChangeIndexes - 1
+	xpubDesriptorRegex, _ = regexp.Compile(fmt.Sprintf(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+){0,%d})})|(<(?P<changelist2>\d+(;\d+){0,%d})>)|(?P<change>\d+))/\*)?\)+`, maxAdditionalChangeIndexes, maxAdditionalChangeIndexes))
 	typeSubexpIndex = xpubDesriptorRegex.SubexpIndex("type")
 	bipSubexpIndex = xpubDesriptorRegex.SubexpIndex("bip")
 	xpubSubexpIndex = xpubDesriptorRegex.SubexpIndex("xpub")
@@ -501,6 +503,9 @@ func (p *BitcoinLikeParser) ParseXpub(xpub string) (*bchain.XpubDescriptor, erro
 				}
 				if len(changes) == 0 {
 					return nil, errors.New("Invalid xpub descriptor, cannot parse change")
+				}
+				if len(changes) > bchain.MaxXpubChangeIndexes {
+					return nil, errors.Errorf("Xpub descriptor change index count exceeds limit %d", bchain.MaxXpubChangeIndexes)
 				}
 				descriptor.ChangeIndexes = make([]uint32, len(changes))
 				for i, ch := range changes {

@@ -267,6 +267,10 @@ const (
 	P2TR
 )
 
+// MaxXpubChangeIndexes limits how many change branches one xpub descriptor can
+// expand during account scans.
+const MaxXpubChangeIndexes = 10
+
 // XpubDescriptor contains parsed data from xpub descriptor
 type XpubDescriptor struct {
 	XpubDescriptor string      `ts_doc:"Full descriptor string including xpub and script type."`
