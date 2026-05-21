@@ -22,6 +22,8 @@ const txInput = 1
 const txOutput = 2
 
 const xpubCacheExpirationSeconds = 3600
+const xpubCacheMaxEntries = 128
+const maxXpubAddressDerivations = (maxAddressesGap + 1) * 2
 
 var cachedXpubs map[string]xpubData
 var cachedXpubsMux sync.Mutex
@@ -85,9 +87,18 @@ func (w *Worker) initXpubCache() {
 }
 
 func (w *Worker) evictXpubCacheItems() {
+	now := time.Now().Unix()
 	cachedXpubsMux.Lock()
-	defer cachedXpubsMux.Unlock()
-	threshold := time.Now().Unix() - xpubCacheExpirationSeconds
+	count := evictXpubCacheItemsLocked(now)
+	cacheSize := len(cachedXpubs)
+	cachedXpubsMux.Unlock()
+
+	w.metrics.XPubCacheSize.Set(float64(cacheSize))
+	glog.Info("Evicted ", count, " items from xpub cache, cache size ", cacheSize)
+}
+
+func evictXpubCacheItemsLocked(now int64) int {
+	threshold := now - xpubCacheExpirationSeconds
 	count := 0
 	for k, v := range cachedXpubs {
 		if v.accessed < threshold {
@@ -95,8 +106,43 @@ func (w *Worker) evictXpubCacheItems() {
 			count++
 		}
 	}
-	w.metrics.XPubCacheSize.Set(float64(len(cachedXpubs)))
-	glog.Info("Evicted ", count, " items from xpub cache, cache size ", len(cachedXpubs))
+	return count + trimXpubCacheItemsLocked()
+}
+
+func trimXpubCacheItemsLocked() int {
+	if len(cachedXpubs) <= xpubCacheMaxEntries {
+		return 0
+	}
+	type cacheEntry struct {
+		key      string
+		accessed int64
+	}
+	entries := make([]cacheEntry, 0, len(cachedXpubs))
+	for k, v := range cachedXpubs {
+		entries = append(entries, cacheEntry{key: k, accessed: v.accessed})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].accessed == entries[j].accessed {
+			return entries[i].key < entries[j].key
+		}
+		return entries[i].accessed < entries[j].accessed
+	})
+	count := len(cachedXpubs) - xpubCacheMaxEntries
+	for i := 0; i < count; i++ {
+		delete(cachedXpubs, entries[i].key)
+	}
+	return count
+}
+
+func validateXpubScanLimits(xd *bchain.XpubDescriptor, gap int) error {
+	if len(xd.ChangeIndexes) > bchain.MaxXpubChangeIndexes {
+		return errors.Errorf("Xpub descriptor change index count %d exceeds limit %d", len(xd.ChangeIndexes), bchain.MaxXpubChangeIndexes)
+	}
+	derivations := len(xd.ChangeIndexes) * gap
+	if derivations > maxXpubAddressDerivations {
+		return errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", derivations, maxXpubAddressDerivations)
+	}
+	return nil
 }
 
 func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, fromHeight, toHeight uint32, maxResults int) ([]xpubTxid, bool, error) {
@@ -325,6 +371,9 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	}
 	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
 	gap++
+	if err := validateXpubScanLimits(xd, gap); err != nil {
+		return nil, 0, false, err
+	}
 	var processedHash string
 	cachedXpubsMux.Lock()
 	data, inCache := cachedXpubs[xd.XpubDescriptor]
@@ -385,8 +434,14 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	}
 	data.accessed = time.Now().Unix()
 	cachedXpubsMux.Lock()
+	if cachedXpubs == nil {
+		cachedXpubs = make(map[string]xpubData)
+	}
 	cachedXpubs[xd.XpubDescriptor] = data
+	trimXpubCacheItemsLocked()
+	cacheSize := len(cachedXpubs)
 	cachedXpubsMux.Unlock()
+	w.metrics.XPubCacheSize.Set(float64(cacheSize))
 	return &data, bestheight, inCache, nil
 }
 
