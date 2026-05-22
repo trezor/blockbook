@@ -85,6 +85,10 @@ func (p *TronParser) GetAddressesFromAddrDesc(desc bchain.AddressDescriptor) ([]
 }
 
 func ToTronAddressFromDesc(addrDesc bchain.AddressDescriptor) string {
+	if len(addrDesc) == 0 {
+		return ""
+	}
+
 	var withPrefix []byte
 
 	// check if already prefixed with 0x41
