@@ -243,26 +243,11 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 		})
 	}
 
-	totalVotingPower := resourceResp.TronPowerLimit
-	if totalVotingPower < 0 {
-		totalVotingPower = 0
-	}
-	availableVotingPower := totalVotingPower - resourceResp.TronPowerUsed
-	if availableVotingPower < 0 {
-		availableVotingPower = 0
-	}
-	unclaimedReward := rewardResp.Reward
-	if unclaimedReward < 0 {
-		unclaimedReward = 0
-	}
-	delegatedEnergy := accountResp.AccountResource.DelegatedFrozenV2BalanceForEnergy
-	if delegatedEnergy < 0 {
-		delegatedEnergy = 0
-	}
-	delegatedBandwidth := accountResp.DelegatedFrozenV2BalanceForBandwidth
-	if delegatedBandwidth < 0 {
-		delegatedBandwidth = 0
-	}
+	totalVotingPower := max(resourceResp.TronPowerLimit, 0)
+	availableVotingPower := max(totalVotingPower-resourceResp.TronPowerUsed, 0)
+	unclaimedReward := max(rewardResp.Reward, 0)
+	delegatedEnergy := max(accountResp.AccountResource.DelegatedFrozenV2BalanceForEnergy, 0)
+	delegatedBandwidth := max(accountResp.DelegatedFrozenV2BalanceForBandwidth, 0)
 
 	return &bchain.TronStakingInfo{
 		StakedBalance:             stakedBalance.String(),
