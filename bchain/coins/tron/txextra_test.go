@@ -367,6 +367,41 @@ func TestTronBuildRpcReceipt_UsesEnergyUsageTotalAsGasUsed(t *testing.T) {
 	require.Equal(t, "0x393a", receipt.GasUsed)
 }
 
+func TestTronBuildRpcReceipt_NormalizesOmittedLogDataForTxCache(t *testing.T) {
+	contract := tronTxContract{Type: "TriggerSmartContract"}
+	contract.Parameter.Value.OwnerAddress = "41b47e4a2a3b6652af6c8e4396fc5e490b3e8fa827"
+	contract.Parameter.Value.ContractAddress = "TTg3AAJBYsDNjx5Moc5EPNsgJSa4anJQ3M"
+
+	txByID := &tronGetTransactionByIDResponse{
+		TxID: "a6bf472d7fbefa1a87f63b0626a98840f37a6863f4cdadc4a4aacfceff5c1073",
+	}
+	txByID.RawData.Contract = []tronTxContract{contract}
+
+	txInfo := &tronGetTransactionInfoByIDResponse{
+		BlockNumber: int64Ptr(1),
+		Log: []*bchain.RpcLog{
+			{
+				Address: "TTg3AAJBYsDNjx5Moc5EPNsgJSa4anJQ3M",
+				Topics: []string{
+					"6917c54e363c87122ded2db643033caa7634085108272a134387eb8e5ddee762",
+					"588c52d2eba6df506d44177ddda5e60b60842d3959ecf664d2c7b756b45f4820",
+				},
+			},
+		},
+	}
+
+	csd := tronBuildEthereumSpecificData(txByID, txInfo)
+	require.NotNil(t, csd.Receipt)
+	require.Equal(t, "0x", csd.Receipt.Logs[0].Data)
+
+	parser := NewTronParser(1, false)
+	tx, err := parser.EthTxToTx(csd.Tx, csd.Receipt, nil, 0, 1, true)
+	require.NoError(t, err)
+
+	_, err = parser.PackTx(tx, 1, 0)
+	require.NoError(t, err)
+}
+
 func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
 	txByID := &tronGetTransactionByIDResponse{}
 	txInfo := &tronGetTransactionInfoByIDResponse{}

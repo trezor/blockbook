@@ -160,6 +160,10 @@ func tronNormalizeLogs(logs []*bchain.RpcLog) []*bchain.RpcLog {
 		}
 		l.Address = normalizeHexString(l.Address)
 		l.Data = normalizeHexString(l.Data)
+		if l.Data == "" {
+			// Tron omits empty log data; the Ethereum tx cache packer expects a hex string.
+			l.Data = "0x"
+		}
 		for i, t := range l.Topics {
 			l.Topics[i] = normalizeHexString(t)
 		}
