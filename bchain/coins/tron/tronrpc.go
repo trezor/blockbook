@@ -79,6 +79,7 @@ type tronGetTransactionByIDResponse struct {
 	RawData    struct {
 		Timestamp *int64           `json:"timestamp,omitempty"`
 		FeeLimit  *int64           `json:"fee_limit,omitempty"`
+		Data      string           `json:"data,omitempty"`
 		Contract  []tronTxContract `json:"contract"`
 	} `json:"raw_data"`
 }
@@ -884,6 +885,9 @@ func (b *TronRPC) getTransactionInfoByIDWithFallback(txid string) (*tronGetTrans
 func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	txInfo, isSolidified, err := b.getTransactionInfoByIDWithFallback(txid)
 	if err != nil {
+		if isTronTxNotFound(err) {
+			return b.GetTransactionForMempool(txid)
+		}
 		return nil, err
 	}
 	txByID, err := b.getTransactionByID(txid, isSolidified)
@@ -901,6 +905,29 @@ func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		b.Mempool.RemoveTransactionFromMempool(strip0xPrefix(txid))
 	}
 	return tx, nil
+}
+
+// GetTransactionForMempool returns a transaction by the transaction ID using
+// the full node HTTP API
+func (b *TronRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	txByID, err := b.requestTransactionFromPending(ctx, txid)
+	if err != nil {
+		if isTronTxNotFound(err) {
+			if b.Mempool != nil {
+				b.Mempool.RemoveTransactionFromMempool(strip0xPrefix(txid))
+			}
+			return nil, bchain.ErrTxNotFound
+		}
+		return nil, err
+	}
+
+	txInfo := &tronGetTransactionInfoByIDResponse{ID: strip0xPrefix(txid)}
+	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
+	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
+	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, false)
 }
 
 // GetTransactionSpecific returns tx-specific JSON in Tron API format (without 0x in tx hash fields).

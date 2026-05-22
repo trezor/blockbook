@@ -14,6 +14,7 @@ export interface TronVoteExtra {
 export interface TronChainExtraData {
     contractType?: string;
     operation?: string;
+    note?: string;
     resource?: string;
     stakeAmount?: string;
     unstakeAmount?: string;
@@ -29,6 +30,26 @@ export interface TronChainExtraData {
     result?: string;
     votes?: TronVoteExtra[];
 }
+export interface TronVote {
+    address: string;
+    voteCount: string;
+}
+export interface TronUnstakingBatch {
+    amount: string;
+    expireTime: number;
+}
+export interface TronStakingInfo {
+    stakedBalance: string;
+    stakedBalanceEnergy: string;
+    stakedBalanceBandwidth: string;
+    unstakingBatches: TronUnstakingBatch[];
+    totalVotingPower: string;
+    availableVotingPower: string;
+    votes: TronVote[];
+    unclaimedReward: string;
+    delegatedBalanceEnergy: string;
+    delegatedBalanceBandwidth: string;
+}
 export interface TronAccountExtraData {
     availableStakedBandwidth: number;
     totalStakedBandwidth: number;
@@ -36,6 +57,7 @@ export interface TronAccountExtraData {
     totalFreeBandwidth: number;
     availableEnergy: number;
     totalEnergy: number;
+    stakingInfo?: TronStakingInfo;
 }
 export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
 export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any };

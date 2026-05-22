@@ -5,6 +5,7 @@ package tron
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,22 +14,58 @@ import (
 )
 
 type MockTronHTTPClient struct {
-	Resp interface{}
-	Err  error
+	Resp       interface{}
+	RespByPath map[string]interface{}
+	ErrByPath  map[string]error
+	Err        error
+
+	mu sync.RWMutex
 
 	LastPath string
 	LastBody interface{}
+	Paths    []string
+	Bodies   []interface{}
 }
 
 func (m *MockTronHTTPClient) Request(ctx context.Context, path string, reqBody interface{}, respBody interface{}) error {
+	m.mu.Lock()
 	m.LastPath = path
 	m.LastBody = reqBody
+	m.Paths = append(m.Paths, path)
+	m.Bodies = append(m.Bodies, reqBody)
+	m.mu.Unlock()
 
+	if m.ErrByPath != nil {
+		if err, ok := m.ErrByPath[path]; ok {
+			return err
+		}
+	}
 	if m.Err != nil {
 		return m.Err
 	}
-	b, _ := json.Marshal(m.Resp)
+	resp := m.Resp
+	if m.RespByPath != nil {
+		if v, ok := m.RespByPath[path]; ok {
+			resp = v
+		}
+	}
+	b, _ := json.Marshal(resp)
 	return json.Unmarshal(b, respBody)
+}
+
+func (m *MockTronHTTPClient) SnapshotLastRequest() (string, interface{}) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.LastPath, m.LastBody
+}
+
+func (m *MockTronHTTPClient) SnapshotRequests() ([]string, []interface{}) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	paths := append([]string(nil), m.Paths...)
+	bodies := append([]interface{}(nil), m.Bodies...)
+	return paths, bodies
 }
 
 func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
@@ -67,8 +104,9 @@ func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify HTTP call
-	require.Equal(t, "/walletsolidity/gettransactioninfobyblocknum", mockHTTP.LastPath)
-	require.Equal(t, map[string]any{"num": uint32(99)}, mockHTTP.LastBody)
+	lastPath, lastBody := mockHTTP.SnapshotLastRequest()
+	require.Equal(t, "/walletsolidity/gettransactioninfobyblocknum", lastPath)
+	require.Equal(t, map[string]any{"num": uint32(99)}, lastBody)
 
 	// verify parsed internal data
 	require.Len(t, data, 1)
