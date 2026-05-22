@@ -16,8 +16,7 @@
         "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_user": "rpc",
         "rpc_pass": "rpc",
-        "rpc_timeout": 25,
-        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+        "rpc_timeout": 25
     },
     "backend": {
         "package_name": "backend-zcash",
