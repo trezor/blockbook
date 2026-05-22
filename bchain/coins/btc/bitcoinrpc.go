@@ -199,21 +199,29 @@ func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOut
 	}
 	b.Mempool.AddrDescForOutpoint = addrDescForOutpoint
 	b.Mempool.OnNewTx = onNewTx
-	if b.mq == nil {
-		bitcoinTopics := bchain.SubscriptionTopics{
-			BlockSubscribe: "hashblock",
-			BlockReceive:   "hashblock",
-			TxSubscribe:    "hashtx",
-			TxReceive:      "hashtx",
-		}
 
-		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler, bitcoinTopics)
-		if err != nil {
-			glog.Error("mq: ", err)
-			return err
-		}
-		b.mq = mq
+	if b.mq != nil {
+		return nil
 	}
+	if b.ChainConfig.MessageQueueBinding == "" {
+		glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
+		return nil
+	}
+
+	bitcoinTopics := bchain.SubscriptionTopics{
+		BlockSubscribe: "hashblock",
+		BlockReceive:   "hashblock",
+		TxSubscribe:    "hashtx",
+		TxReceive:      "hashtx",
+	}
+
+	mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler, bitcoinTopics)
+	if err != nil {
+		glog.Error("mq: ", err)
+		return err
+	}
+	b.mq = mq
+
 	return nil
 }
 
