@@ -249,7 +249,10 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 	return false, nil
 }
 
-func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, addresses []xpubAddress, gap int, change uint32, minDerivedIndex int, fork bool) (int, []xpubAddress, error) {
+func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, addresses []xpubAddress, gap int, change uint32, minDerivedIndex int, fork bool, derivedBefore int) (int, []xpubAddress, error) {
+	if total := derivedBefore + len(addresses); total > maxXpubAddressDerivations {
+		return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxXpubAddressDerivations)
+	}
 	// rescan known addresses
 	lastUsed := 0
 	for i := range addresses {
@@ -276,6 +279,9 @@ func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, ad
 		to := from + gap - missing
 		if to < minDerivedIndex {
 			to = minDerivedIndex
+		}
+		if total := derivedBefore + to; total > maxXpubAddressDerivations {
+			return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxXpubAddressDerivations)
 		}
 		descriptors, err := w.chainParser.DeriveAddressDescriptorsFromTo(xd, change, uint32(from), uint32(to))
 		if err != nil {
@@ -415,11 +421,13 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			data.sentSat = *new(big.Int)
 			data.txCountEstimate = 0
 			var minDerivedIndex int
+			totalDerived := 0
 			for i, change := range xd.ChangeIndexes {
-				minDerivedIndex, data.addresses[i], err = w.xpubScanAddresses(xd, &data, data.addresses[i], gap, change, minDerivedIndex, fork)
+				minDerivedIndex, data.addresses[i], err = w.xpubScanAddresses(xd, &data, data.addresses[i], gap, change, minDerivedIndex, fork, totalDerived)
 				if err != nil {
 					return nil, 0, inCache, err
 				}
+				totalDerived += len(data.addresses[i])
 			}
 		}
 		if option >= AccountDetailsTxidHistory {
