@@ -57,6 +57,12 @@
             "block_addresses_to_keep": 600,
             "additional_params": {
                 "averageBlockTimeMs": 2000,
+                "missingBlockRetry": {
+                    "retryDelayMs": 1000,
+                    "recheckThreshold": 10,
+                    "tipRecheckThreshold": 3,
+                    "maxStallMs": 60000
+                },
                 "address_aliases": true,
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "infura",

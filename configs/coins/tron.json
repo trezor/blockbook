@@ -54,6 +54,12 @@
               "mempoolTxTimeoutHours": 4,
               "queryBackendOnMempoolResync": true,
               "averageBlockTimeMs": 3000,
+              "missingBlockRetry": {
+                  "retryDelayMs": 1000,
+                  "recheckThreshold": 10,
+                  "tipRecheckThreshold": 3,
+                  "maxStallMs": 60000
+              },
               "fiat_rates": "coingecko",
               "fiat_rates_vs_currencies": "USD,EUR,CNY",
               "fiat_rates_params": "{\"coin\": \"tron\",\"platformIdentifier\": \"tron\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}",

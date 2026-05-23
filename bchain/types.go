@@ -428,3 +428,23 @@ type Mempool interface {
 	GetTransactionTime(txid string) uint32
 	GetTxidFilterEntries(filterScripts string, fromTimestamp uint32) (MempoolTxidFilterEntries, error)
 }
+
+// MissingBlockRetry is the JSON wire shape for per-chain overrides of the
+// sync-worker missing-block retry policy. Each field is optional; zero / missing
+// values fall back to the db package's built-in defaults. Operators set this
+// under `additional_params.missingBlockRetry` in `configs/coins/*.json`.
+type MissingBlockRetry struct {
+	// RetryDelayMs is the sleep between successive GetBlock attempts for the same
+	// missing block in the parallel worker path. The sequential tip path applies
+	// an additional internal cap of 250 ms regardless of this value.
+	RetryDelayMs int `json:"retryDelayMs,omitempty"`
+	// RecheckThreshold is the number of consecutive retryable errors in the
+	// parallel worker before probing the chain via shouldRestartSyncOnMissingBlock.
+	RecheckThreshold int `json:"recheckThreshold,omitempty"`
+	// TipRecheckThreshold is the equivalent threshold once the hash queue is
+	// closed (we are at the tail of a range) or for the sequential tip path.
+	TipRecheckThreshold int `json:"tipRecheckThreshold,omitempty"`
+	// MaxStallMs is the wall-clock budget per stuck block before the retry loop
+	// yields errResync to the outer machinery.
+	MaxStallMs int `json:"maxStallMs,omitempty"`
+}

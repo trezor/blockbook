@@ -101,6 +101,9 @@ type Configuration struct {
 	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
 	// required for EVM coins (translates duration settings to block counts).
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
+	// MissingBlockRetry overrides the sync-worker missing-block retry policy
+	// per chain. All fields are optional; missing fields use built-in defaults.
+	MissingBlockRetry *bchain.MissingBlockRetry `json:"missingBlockRetry,omitempty"`
 }
 
 func parseNonNegativeDuration(name string, value string) (time.Duration, error) {
@@ -278,6 +281,16 @@ func (b *EthereumRPC) SetMetrics(metrics *common.Metrics) {
 // AverageBlockTimeDuration exposes the chain's nominal block cadence.
 func (b *EthereumRPC) AverageBlockTimeDuration() (time.Duration, error) {
 	return b.ChainConfig.AverageBlockTimeDuration()
+}
+
+// MissingBlockRetryOverride exposes the per-chain sync-worker retry override
+// (or nil to use built-in defaults). Consumed by blockbook.go at SyncWorker
+// construction via a duck-typed interface assertion.
+func (b *EthereumRPC) MissingBlockRetryOverride() *bchain.MissingBlockRetry {
+	if b.ChainConfig == nil {
+		return nil
+	}
+	return b.ChainConfig.MissingBlockRetry
 }
 
 func (b *EthereumRPC) observeEthCall(mode string, count int) {

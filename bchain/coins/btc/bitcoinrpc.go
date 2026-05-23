@@ -49,6 +49,16 @@ func (b *BitcoinRPC) AverageBlockTimeDuration() (time.Duration, error) {
 	return b.ChainConfig.AverageBlockTimeDuration()
 }
 
+// MissingBlockRetryOverride exposes the per-chain sync-worker retry override
+// (or nil to use built-in defaults). Consumed by blockbook.go at SyncWorker
+// construction via a duck-typed interface assertion.
+func (b *BitcoinRPC) MissingBlockRetryOverride() *bchain.MissingBlockRetry {
+	if b.ChainConfig == nil {
+		return nil
+	}
+	return b.ChainConfig.MissingBlockRetry
+}
+
 // Configuration represents json config file
 type Configuration struct {
 	CoinName                     string `json:"coin_name"`
@@ -82,6 +92,9 @@ type Configuration struct {
 	// Optional on UTXO chains; when set it is exposed as the
 	// blockbook_average_block_time_seconds gauge for alert normalization.
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
+	// MissingBlockRetry overrides the sync-worker missing-block retry policy
+	// per chain. All fields are optional; missing fields use built-in defaults.
+	MissingBlockRetry *bchain.MissingBlockRetry `json:"missingBlockRetry,omitempty"`
 }
 
 // AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.

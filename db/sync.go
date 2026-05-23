@@ -55,15 +55,45 @@ type SyncWorkerConfig struct {
 	MissingBlockRetry MissingBlockRetryConfig
 }
 
+// DefaultMissingBlockRetryConfig returns the built-in defaults used when no
+// per-chain override is supplied. Exported so blockbook.go can overlay
+// optional bchain.MissingBlockRetry fields onto known-good defaults.
+func DefaultMissingBlockRetryConfig() MissingBlockRetryConfig {
+	return MissingBlockRetryConfig{
+		RecheckThreshold:    10,
+		RetryDelay:          1 * time.Second,
+		TipRecheckThreshold: 3,
+		MaxStallDuration:    60 * time.Second,
+	}
+}
+
 func defaultSyncWorkerConfig() SyncWorkerConfig {
 	return SyncWorkerConfig{
-		MissingBlockRetry: MissingBlockRetryConfig{
-			RecheckThreshold:    10,
-			RetryDelay:          1 * time.Second,
-			TipRecheckThreshold: 3,
-			MaxStallDuration:    60 * time.Second,
-		},
+		MissingBlockRetry: DefaultMissingBlockRetryConfig(),
 	}
+}
+
+// ApplyMissingBlockRetryOverride overlays the optional bchain.MissingBlockRetry
+// onto the defaults. Zero / unset wire fields keep their default; out-of-range
+// values fall back to the default with a warning logged in the caller.
+func ApplyMissingBlockRetryOverride(o *bchain.MissingBlockRetry) MissingBlockRetryConfig {
+	cfg := DefaultMissingBlockRetryConfig()
+	if o == nil {
+		return cfg
+	}
+	if o.RetryDelayMs > 0 {
+		cfg.RetryDelay = time.Duration(o.RetryDelayMs) * time.Millisecond
+	}
+	if o.RecheckThreshold > 0 {
+		cfg.RecheckThreshold = o.RecheckThreshold
+	}
+	if o.TipRecheckThreshold > 0 {
+		cfg.TipRecheckThreshold = o.TipRecheckThreshold
+	}
+	if o.MaxStallMs > 0 {
+		cfg.MaxStallDuration = time.Duration(o.MaxStallMs) * time.Millisecond
+	}
+	return cfg
 }
 
 // NewSyncWorker creates new SyncWorker and returns its handle
