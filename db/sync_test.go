@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -141,18 +142,28 @@ func TestIsRetryableGetBlockError(t *testing.T) {
 
 type getBlockChainTestChain struct {
 	bchain.BlockChain
-	bestHeight    uint32
-	hashes        map[uint32]string
-	blocks        map[uint32]*bchain.Block
-	blockErrors   map[uint32][]error
-	getBlockCalls map[uint32]int
+	bestHeight       uint32
+	bestHeightErr    error
+	bestHeightCalls  int
+	hashes           map[uint32]string
+	blocks           map[uint32]*bchain.Block
+	blockErrors      map[uint32][]error
+	getBlockCalls    map[uint32]int
+	getBlockHashErr  error
 }
 
 func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
+	c.bestHeightCalls++
+	if c.bestHeightErr != nil {
+		return 0, c.bestHeightErr
+	}
 	return c.bestHeight, nil
 }
 
 func (c *getBlockChainTestChain) GetBlockHash(height uint32) (string, error) {
+	if c.getBlockHashErr != nil {
+		return "", c.getBlockHashErr
+	}
 	if hash, ok := c.hashes[height]; ok {
 		return hash, nil
 	}
@@ -289,5 +300,107 @@ func TestGetBlockChainNonRetryableErrorReturns(t *testing.T) {
 	}
 	if calls := chain.getBlockCalls[1]; calls != 1 {
 		t.Fatalf("GetBlock height 1 calls = %d, want 1", calls)
+	}
+}
+
+func TestGetBlockChainWallClockCap(t *testing.T) {
+	// Block 1 exists on chain (so first ErrBlockNotFound does not short-circuit
+	// to "above best height") but GetBlock never produces it. TipRecheckThreshold
+	// is set high enough that the recheck path cannot fire before the cap.
+	chain := &getBlockChainTestChain{
+		bestHeight:    1,
+		hashes:        map[uint32]string{1: "h1"},
+		blocks:        map[uint32]*bchain.Block{},
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := &SyncWorker{
+		chain:       chain,
+		startHash:   "h1",
+		startHeight: 1,
+		missingBlockRetry: MissingBlockRetryConfig{
+			TipRecheckThreshold: 1_000_000,
+			RetryDelay:          time.Millisecond,
+			MaxStallDuration:    50 * time.Millisecond,
+		},
+		metrics: getTestMetrics(t),
+	}
+
+	start := time.Now()
+	results := runGetBlockChain(w)
+	elapsed := time.Since(start)
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if !stdErrors.Is(results[0].err, errResync) {
+		t.Fatalf("error = %v, want errResync", results[0].err)
+	}
+	if elapsed < 50*time.Millisecond {
+		t.Fatalf("wall-clock cap returned in %v, expected at least 50ms", elapsed)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("wall-clock cap took %v, expected to return shortly after 50ms", elapsed)
+	}
+	if calls := chain.getBlockCalls[1]; calls < 2 {
+		t.Fatalf("GetBlock height 1 calls = %d, want at least 2", calls)
+	}
+}
+
+func TestGetBlockWorkerCheckErrAbortsAfterStreak(t *testing.T) {
+	// GetBlock keeps returning ErrBlockNotFound (retryable). GetBestBlockHeight
+	// fails too, so onRetryableMiss returns (false, checkErr) on every call past
+	// the threshold. After three consecutive checkErrs the worker must surface
+	// the error via abortCh instead of spinning silently.
+	probeErr := stdErrors.New("backend unreachable")
+	chain := &getBlockChainTestChain{
+		bestHeight:    1,
+		bestHeightErr: probeErr,
+		hashes:        map[uint32]string{1: "h1"},
+		blocks:        map[uint32]*bchain.Block{},
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := &SyncWorker{
+		chain: chain,
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckThreshold:    1,
+			TipRecheckThreshold: 1,
+			RetryDelay:          time.Millisecond,
+			MaxStallDuration:    10 * time.Second, // do not let the wall-clock cap fire first
+		},
+		metrics: getTestMetrics(t),
+	}
+
+	const workers = 1
+	hch := make(chan hashHeight, workers)
+	bch := make([]chan *bchain.Block, workers)
+	for i := range bch {
+		bch[i] = make(chan *bchain.Block, 1)
+	}
+	var hchClosed atomic.Value
+	hchClosed.Store(true)
+	terminating := make(chan struct{})
+	abortCh := make(chan error, 1)
+	hch <- hashHeight{hash: "h1", height: 1}
+	close(hch)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go w.getBlockWorker(0, workers, &wg, hch, bch, &hchClosed, terminating, abortCh)
+
+	select {
+	case err := <-abortCh:
+		if !stdErrors.Is(err, probeErr) {
+			t.Fatalf("abortCh got %v, want %v", err, probeErr)
+		}
+	case <-time.After(2 * time.Second):
+		close(terminating)
+		t.Fatalf("worker did not abort after consecutive checkErrs")
+	}
+
+	wg.Wait()
+	if chain.bestHeightCalls < 3 {
+		t.Fatalf("GetBestBlockHeight calls = %d, want at least 3", chain.bestHeightCalls)
 	}
 }
