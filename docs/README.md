@@ -9,4 +9,5 @@
 * [RocksDB](/docs/rocksdb.md) – Description of RocksDB structures used by Blockbook
 * [API](/docs/api.md) – Description of Blockbook API
 * [API (Tron specifics)](/docs/api-tron.md) – Tron-specific behavior and data extensions for API V2
+* [Sync](/docs/sync.md) – Sync-loop architecture and the `missingBlockRetry` troubleshooting knobs
 * [Testing](/docs/testing.md) – Description of tests used during Blockbook development

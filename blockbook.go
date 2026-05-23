@@ -282,7 +282,24 @@ func mainWithExitCode() int {
 		return exitCodeOK
 	}
 
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState)
+	// Per-chain missing-block retry override, if any. Coin RPCs that opt in
+	// expose MissingBlockRetryOverride(); chains without the method keep defaults.
+	var syncCfg *db.SyncWorkerConfig
+	if provider, ok := chain.(interface {
+		MissingBlockRetryOverride() *bchain.MissingBlockRetry
+	}); ok {
+		if override := provider.MissingBlockRetryOverride(); override != nil {
+			syncCfg = &db.SyncWorkerConfig{
+				MissingBlockRetry: db.ApplyMissingBlockRetryOverride(override),
+			}
+			glog.Infof("sync: missingBlockRetry override applied: retryDelay=%s recheckThreshold=%d tipRecheckThreshold=%d maxStall=%s",
+				syncCfg.MissingBlockRetry.RetryDelay,
+				syncCfg.MissingBlockRetry.RecheckThreshold,
+				syncCfg.MissingBlockRetry.TipRecheckThreshold,
+				syncCfg.MissingBlockRetry.MaxStallDuration)
+		}
+	}
+	syncWorker, err = db.NewSyncWorkerWithConfig(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState, syncCfg)
 	if err != nil {
 		glog.Errorf("NewSyncWorker %v", err)
 		return exitCodeFatal
