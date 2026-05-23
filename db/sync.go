@@ -43,6 +43,11 @@ type MissingBlockRetryConfig struct {
 	TipRecheckThreshold int
 	// RetryDelay keeps retry pressure low while still reacting quickly to transient backend gaps.
 	RetryDelay time.Duration
+	// MaxStallDuration caps the wall-clock time a single block fetch may spend
+	// in the retry loop before yielding control to the outer resync machinery.
+	// Without this cap, a backend that keeps returning ErrBlockNotFound while
+	// shouldRestartSyncOnMissingBlock keeps reporting "no reorg" loops forever.
+	MaxStallDuration time.Duration
 }
 
 // SyncWorkerConfig bundles optional tuning knobs for SyncWorker.
@@ -53,9 +58,10 @@ type SyncWorkerConfig struct {
 func defaultSyncWorkerConfig() SyncWorkerConfig {
 	return SyncWorkerConfig{
 		MissingBlockRetry: MissingBlockRetryConfig{
-			RecheckThreshold:    10,              // - RecheckThreshold >= 1
-			RetryDelay:          1 * time.Second, // - TipRecheckThreshold >= 1 && TipRecheckThreshold <= RecheckThreshold
-			TipRecheckThreshold: 3,               // - RetryDelay > 0
+			RecheckThreshold:    10,
+			RetryDelay:          1 * time.Second,
+			TipRecheckThreshold: 3,
+			MaxStallDuration:    60 * time.Second,
 		},
 	}
 }
@@ -561,11 +567,14 @@ func (w *SyncWorker) getBlockWorker(i int, syncWorkers uint32, wg *sync.WaitGrou
 	var block *bchain.Block
 	cfg := w.missingBlockRetry
 	label := "getBlockWorker " + strconv.Itoa(i)
+	const checkErrStreakLimit = 3
 GetBlockLoop:
 	for hh := range hch {
 		// Track consecutive retryable errors per block so we only re-check the
 		// chain once the backend has had a chance to catch up.
 		retries := 0
+		checkErrStreak := 0
+		loopStart := time.Now()
 		for {
 			// Allow global shutdown or an abort to stop the retry loop promptly.
 			select {
@@ -589,10 +598,38 @@ GetBlockLoop:
 					}
 					restart, checkErr := w.onRetryableMiss(&retries, threshold, label, hh.height, hh.hash, err)
 					if checkErr != nil {
-						glog.Error("getBlockWorker ", i, " missing block check error ", checkErr)
-					} else if restart {
-						// The block hash at this height no longer exists; restart sync to realign.
-						glog.Warning("sync: block ", hh.height, " ", hh.hash, " no longer on chain, restarting sync")
+						checkErrStreak++
+						if checkErrStreak == 1 {
+							glog.Warningf("%s: chain-state probe failed for block %d %s (last: %v); will abort after %d consecutive failures",
+								label, hh.height, hh.hash, checkErr, checkErrStreakLimit)
+						}
+						if checkErrStreak >= checkErrStreakLimit {
+							// Backend cannot answer chain-state probes either; surface so the
+							// outer loop can decide how to recover instead of spinning silently.
+							glog.Errorf("%s: aborting after %d consecutive chain-state probe failures (last: %v)",
+								label, checkErrStreak, checkErr)
+							select {
+							case abortCh <- checkErr:
+							default:
+							}
+							return
+						}
+					} else {
+						checkErrStreak = 0
+						if restart {
+							// The block hash at this height no longer exists; restart sync to realign.
+							glog.Warning("sync: block ", hh.height, " ", hh.hash, " no longer on chain, restarting sync")
+							w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
+							select {
+							case abortCh <- errResync:
+							default:
+							}
+							return
+						}
+					}
+					if cfg.MaxStallDuration > 0 && time.Since(loopStart) >= cfg.MaxStallDuration {
+						glog.Warningf("%s: block %d %s stall deadline %s exceeded after %d retries (last: %v); yielding to resync",
+							label, hh.height, hh.hash, cfg.MaxStallDuration, retries, err)
 						w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
 						select {
 						case abortCh <- errResync:
@@ -613,6 +650,8 @@ GetBlockLoop:
 						return
 					}
 					retries = 0
+					checkErrStreak = 0
+					loopStart = time.Now()
 					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
 				}
 				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
@@ -782,6 +821,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 	if recheckThreshold <= 0 {
 		recheckThreshold = 1
 	}
+	maxStall := cfg.MaxStallDuration
 	// loop until error ErrBlockNotFound
 	for {
 		select {
@@ -792,6 +832,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 		default:
 		}
 		retries := 0
+		loopStart := time.Now()
 		var block *bchain.Block
 		var err error
 		for {
@@ -828,6 +869,17 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			if resync {
 				w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
 				out <- blockResult{err: errResync}
+				return
+			}
+			if maxStall > 0 && time.Since(loopStart) >= maxStall {
+				glog.Warningf("getBlockChain: block %d %s stall deadline %s exceeded after %d retries (last: %v); yielding to resync",
+					height, hash, maxStall, retries, err)
+				w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
+				select {
+				case out <- blockResult{err: errResync}:
+				case <-done:
+				case <-w.chanOsSignal:
+				}
 				return
 			}
 			w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()

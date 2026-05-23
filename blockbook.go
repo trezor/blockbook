@@ -92,8 +92,12 @@ var (
 )
 
 var (
-	chanSyncIndex                 = make(chan struct{})
-	chanSyncMempool               = make(chan struct{})
+	// Buffer 1 + non-blocking sends in pushSynchronizationHandler decouple the
+	// WebSocket/ZMQ source goroutines from sync progress. If sync is stuck inside
+	// TickAndDebounce's f(), additional notifications are dropped here rather
+	// than blocking the source; TickAndDebounce's tick-period backstop still fires.
+	chanSyncIndex                 = make(chan struct{}, 1)
+	chanSyncMempool               = make(chan struct{}, 1)
 	chanStoreInternalState        = make(chan struct{})
 	chanSyncIndexDone             = make(chan struct{})
 	chanSyncMempoolDone           = make(chan struct{})
@@ -677,9 +681,15 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 		return
 	}
 	if nt == bchain.NotificationNewBlock {
-		chanSyncIndex <- struct{}{}
+		select {
+		case chanSyncIndex <- struct{}{}:
+		default:
+		}
 	} else if nt == bchain.NotificationNewTx {
-		chanSyncMempool <- struct{}{}
+		select {
+		case chanSyncMempool <- struct{}{}:
+		default:
+		}
 	} else {
 		glog.Error("MQ: unknown notification sent")
 	}
