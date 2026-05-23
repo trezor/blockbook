@@ -37,6 +37,7 @@ type Metrics struct {
 	IndexResyncErrors                 *prometheus.CounterVec
 	IndexBlockNotFoundRetries         prometheus.Counter
 	IndexReorgEvents                  *prometheus.CounterVec
+	IndexSyncYields                   *prometheus.CounterVec
 	IndexDBSize                       prometheus.Gauge
 	ExplorerViews                     *prometheus.CounterVec
 	MempoolSize                       prometheus.Gauge
@@ -306,6 +307,14 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"type"},
+	)
+	metrics.IndexSyncYields = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_index_sync_yields",
+			Help:        "Number of times sync yielded to the outer resync machinery for non-reorg reasons (reason=deadline: MaxStallDuration elapsed in retry loop; reason=probe_failed: chain-state probe failed for the configured streak)",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"reason"},
 	)
 	metrics.IndexDBSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{

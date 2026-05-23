@@ -608,6 +608,7 @@ GetBlockLoop:
 							// outer loop can decide how to recover instead of spinning silently.
 							glog.Errorf("%s: aborting after %d consecutive chain-state probe failures (last: %v)",
 								label, checkErrStreak, checkErr)
+							w.metrics.IndexSyncYields.With(common.Labels{"reason": "probe_failed"}).Inc()
 							select {
 							case abortCh <- checkErr:
 							default:
@@ -630,7 +631,7 @@ GetBlockLoop:
 					if cfg.MaxStallDuration > 0 && time.Since(loopStart) >= cfg.MaxStallDuration {
 						glog.Warningf("%s: block %d %s stall deadline %s exceeded after %d retries (last: %v); yielding to resync",
 							label, hh.height, hh.hash, cfg.MaxStallDuration, retries, err)
-						w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
+						w.metrics.IndexSyncYields.With(common.Labels{"reason": "deadline"}).Inc()
 						select {
 						case abortCh <- errResync:
 						default:
@@ -874,7 +875,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			if maxStall > 0 && time.Since(loopStart) >= maxStall {
 				glog.Warningf("getBlockChain: block %d %s stall deadline %s exceeded after %d retries (last: %v); yielding to resync",
 					height, hash, maxStall, retries, err)
-				w.metrics.IndexReorgEvents.With(common.Labels{"type": "resync"}).Inc()
+				w.metrics.IndexSyncYields.With(common.Labels{"reason": "deadline"}).Inc()
 				select {
 				case out <- blockResult{err: errResync}:
 				case <-done:
