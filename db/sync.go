@@ -124,7 +124,9 @@ func NewSyncWorkerWithConfig(db *RocksDB, chain bchain.BlockChain, syncWorkers, 
 	}, nil
 }
 
-var errSynced = errors.New("synced")
+// syncNotNeeded is returned by resyncIndex when the local tip already matches
+// the backend tip. ResyncIndex treats it as a successful no-op.
+var syncNotNeeded = errors.New("sync not needed")
 var errFork = errors.New("fork")
 
 // errResync signals that the parallel/bulk sync should restart because the
@@ -185,8 +187,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		w.metrics.BackendTipAgeSeconds.Set(time.Since(w.is.GetBackendTipLastAdvance()).Seconds())
 		w.metrics.BlockbookBestHeight.Set(float64(bh))
 		return err
-	case errSynced:
-		// this is not actually error but flag that resync wasn't necessary
+	case syncNotNeeded:
 		w.is.FinishedSyncNoChange()
 		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 		if initialSync {
@@ -213,7 +214,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	// If the locally indexed block is the same as the best block on the network, we're done.
 	if localBestHash == remoteBestHash {
 		glog.Infof("resync: synced at %d %s", localBestHeight, localBestHash)
-		return errSynced
+		return syncNotNeeded
 	}
 	if localBestHash != "" {
 		remoteHash, err := w.chain.GetBlockHash(localBestHeight)
