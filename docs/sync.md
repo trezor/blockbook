@@ -4,76 +4,78 @@ The sync engine connects blocks from the backend RPC into the local RocksDB inde
 
 ## Sync loop
 
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280", "primaryTextColor": "#111827"}}}%%
+flowchart TD
+    trigger["Notifications or periodic tick"]
+    debounce["TickAndDebounce"]
+    loop["syncIndexLoop<br/>retry once after 2.5 s on error"]
+    resync["ResyncIndex / resyncIndex"]
+    done["syncNotNeeded<br/>(no work)"]
+    fork["fork detected<br/>handleFork + DisconnectBlocks"]
+    mode{"connect mode"}
+    bulk["BulkConnectBlocks<br/>(large initial range)"]
+    parallel["ParallelConnectBlocks"]
+    sequential["connectBlocks + getBlockChain"]
+    fetch["per-block fetch/retry<br/>(see below)"]
+    connected["blocks connected"]
+    recover["errResync / errFork<br/>restart resyncIndex"]
+    failed["terminal error<br/>returns to syncIndexLoop"]
+
+    trigger --> debounce --> loop --> resync
+    resync --> done
+    resync --> fork --> resync
+    resync --> mode
+    mode -- "initial sync" --> bulk
+    mode -- "EVM gap" --> parallel
+    mode -- "tail" --> sequential
+    bulk --> fetch
+    parallel --> fetch
+    sequential --> fetch
+    fetch -- OK --> connected
+    fetch -- "chain changed" --> recover --> resync
+    fetch -- "terminal error" --> failed --> loop
+
+    classDef normal fill:#e7f0ff,stroke:#4078c0,color:#10243e;
+    classDef error fill:#ffecec,stroke:#c03535,color:#3b0a0a;
+
+    class trigger,debounce,loop,resync,done,fork,mode,bulk,parallel,sequential,fetch,connected,recover normal;
+    class failed error;
 ```
-   ┌────────────────────┐         ┌────────────────────────────┐
-   │ EVM newHeads       │         │ resyncIndexPeriodMs timer  │
-   │ BTC ZMQ block      │         │ (default 15 min)           │
-   └─────────┬──────────┘         └──────────────┬─────────────┘
-             │                                   │
-             ▼                                   │
-   ┌────────────────────────────┐                │
-   │ pushSynchronizationHandler │                │
-   │ (non-blocking send)        │                │
-   └─────────────┬──────────────┘                │
-                 │                               │
-                 ▼                               │
-        ┌────────────────────────────┐           │
-        │ chanSyncIndex (buffer 1)   │◄──────────┘
-        └─────────────┬──────────────┘
-                      │
-                      ▼
-        ┌────────────────────────────┐
-        │ TickAndDebounce            │
-        └─────────────┬──────────────┘
-                      │
-                      ▼
-        ┌────────────────────────────┐
-        │ syncIndexLoop              │ ── 1 extra retry after 2.5 s on err
-        └─────────────┬──────────────┘
-                      │
-                      ▼
-        ┌────────────────────────────┐
-        │ ResyncIndex                │
-        └─────────────┬──────────────┘
-                      │
-        ┌─────────────┼──────────────┬─────────────────────────┐
-        ▼             ▼              ▼                         ▼
-    errSynced     handleFork    connectBlocks         ParallelConnectBlocks
-    (no work)     (local fork)  (sequential tail)     (initial / EVM gap,
-                  DisconnectBlocks   │                N × getBlockWorker)
-                  then recurse       │                          │
-                                     ▼                          │
-                          ┌──────────────────────┐              │
-                          │ getBlockChain        │              │
-                          └──────────┬───────────┘              │
-                                     │                          │
-                                     └─────────────┬────────────┘
-                                                   │
-                                                   ▼
-   ┌───────────────────────────────────────────────────────────────────┐
-   │ per-block retry loop                                              │
-   │                                                                   │
-   │   GetBlock(hash, height)                                          │
-   │     ├─ OK                ─► emit blockResult ─► db.ConnectBlock   │
-   │     ├─ non-retryable err ─► propagate (outer loop decides)        │
-   │     └─ retryable err                                              │
-   │          │                                                        │
-   │          ▼                                                        │
-   │     onRetryableMiss                                               │
-   │     retries++                                                     │
-   │       ├─ retries ≥ threshold                                      │
-   │       │     shouldRestartSyncOnMissingBlock                       │
-   │       │       ├─ restart=true   ─► errResync                      │
-   │       │       │                    IndexReorgEvents{type=resync}  │
-   │       │       └─ probe err × 3  ─► abortCh                        │
-   │       │  (worker path only)        IndexSyncYields{probe_failed}  │
-   │       └─ time.Since(loopStart) ≥ MaxStallDuration                 │
-   │             ─► errResync                                          │
-   │                IndexSyncYields{reason=deadline}                   │
-   │                                                                   │
-   │   sleep RetryDelay  (shutdown-interruptible)                      │
-   │   loop                                                            │
-   └───────────────────────────────────────────────────────────────────┘
+
+The per-block retry loop is shared by `getBlockChain` and `getBlockWorker`. Probe errors are path-specific: `getBlockChain` propagates immediately, while workers retry until three consecutive probe failures.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"actorBkg": "#e7f0ff", "actorBorder": "#4078c0", "actorTextColor": "#10243e", "activationBkgColor": "#e8f7ed", "activationBorderColor": "#2e8b57", "signalColor": "#6b7280", "signalTextColor": "#111827", "labelBoxBkgColor": "#fff6d7", "labelBoxBorderColor": "#b58400", "loopTextColor": "#312300", "noteBkgColor": "#f1ecff", "noteBorderColor": "#7a55c2"}}}%%
+sequenceDiagram
+    participant Fetch as getBlockChain/getBlockWorker
+    participant RPC as backend RPC
+    participant Probe as chain-state probe
+    participant DB as RocksDB
+
+    Fetch->>RPC: GetBlock(hash, height)
+    alt OK
+        RPC-->>Fetch: block
+        Fetch->>DB: ConnectBlock
+    else non-retryable error
+        Fetch-->>Fetch: propagate, except worker mid-queue retries
+    else retryable error
+        Fetch-->>Fetch: onRetryableMiss and increment retries
+        opt threshold reached
+            Fetch->>Probe: shouldRestartSyncOnMissingBlock
+            alt restart=true
+                Probe-->>Fetch: errResync
+            else restart=false
+                Probe-->>Fetch: keep retrying
+            else probe error
+                Probe-->>Fetch: getBlockChain propagates, worker after 3 failures
+            end
+        end
+        opt MaxStallDuration exceeded
+            Fetch-->>Fetch: errResync
+        end
+        Fetch-->>Fetch: sleep RetryDelay, then retry GetBlock
+    end
 ```
 
 `errResync` and `errFork` cause `resyncIndex` to be re-entered (handling the new chain state); any other error propagates up and `syncIndexLoop` retries once before waiting for the next trigger.
