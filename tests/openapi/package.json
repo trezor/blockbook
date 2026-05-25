@@ -1,0 +1,21 @@
+{
+  "name": "blockbook-openapi-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint:spec": "redocly lint ../../openapi.yaml --config redocly.yaml",
+    "generate": "openapi-typescript ../../openapi.yaml -o .generated/blockbook.ts",
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx src/smoke.ts"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.11.1",
+    "@types/ws": "8.18.1",
+    "openapi-fetch": "0.15.0",
+    "openapi-typescript": "7.10.1",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "undici": "6.25.0",
+    "ws": "8.18.3"
+  }
+}

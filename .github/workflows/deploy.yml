@@ -205,3 +205,29 @@ jobs:
         env:
           BB_BUILD_ENV: dev
         run: make test-e2e ARGS="-v"
+
+      - name: Setup Node.js for OpenAPI tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/openapi/package-lock.json
+
+      - name: Cache OpenAPI test dependencies
+        id: openapi-node-modules-cache
+        uses: actions/cache@v4
+        with:
+          path: tests/openapi/node_modules
+          key: openapi-node-modules-node22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/openapi/package-lock.json') }}
+          restore-keys: |
+            openapi-node-modules-node22-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install OpenAPI test dependencies
+        if: steps.openapi-node-modules-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefix tests/openapi --prefer-offline --no-audit --no-fund
+
+      - name: Validate OpenAPI against deployed Blockbook
+        env:
+          BB_BUILD_ENV: dev
+          OPENAPI_COINS: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
+        run: contrib/tests/run-openapi-tests.sh
