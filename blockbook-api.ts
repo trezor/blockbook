@@ -341,8 +341,8 @@ export interface Token {
     totalReceived?: string;
     /** Total amount of tokens sent. */
     totalSent?: string;
-    /** Optional protocol-specific enrichments requested by the caller. */
-    protocols?: ContractInfoProtocols;
+    /** Protocol identifiers the contract participates in (e.g., "erc4626"); for fresh per-vault data, use getContractInfo. */
+    protocols?: string[];
 }
 export interface Address {
     /** Current page index. */

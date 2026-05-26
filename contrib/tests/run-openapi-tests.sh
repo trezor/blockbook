@@ -19,6 +19,8 @@ export REDOCLY_SUPPRESS_UPDATE_NOTICE="${REDOCLY_SUPPRESS_UPDATE_NOTICE:-true}"
 
 npm --prefix "$openapi_dir" run lint:spec
 npm --prefix "$openapi_dir" run generate
+# typecheck also runs tests/openapi/src/parity.ts, which fails the build when
+# blockbook-api.ts (generated from Go) drifts from openapi.yaml.
 npm --prefix "$openapi_dir" run typecheck
 
 export REPO_ROOT="$repo_root"
