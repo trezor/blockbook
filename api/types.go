@@ -243,7 +243,7 @@ type Token struct {
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"Multiple ERC1155 token balances (id + value)."`
 	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty" ts_doc:"Total amount of tokens received."`
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
-	Protocols        TokenProtocols           `json:"protocols,omitempty" ts_doc:"Protocol identifiers the contract participates in (e.g., \"erc4626\"); for fresh per-vault data, use getContractInfo."`
+	Protocols        TokenProtocols           `json:"protocols,omitempty" ts_type:"string[]" ts_doc:"Protocol identifiers the contract participates in (e.g., \"erc4626\"); for fresh per-vault data, use getContractInfo."`
 	ContractIndex    string                   `json:"-"`
 }
 
