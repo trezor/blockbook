@@ -262,16 +262,14 @@ paths:
         shape are omitted here; use getTransactionSpecific for backend-native
         JSON.
 
-        Bitcoin-like confirmed transactions include blockHash, blockHeight,
-        confirmations, blockTime, size/vsize, value/valueIn, fees, and hex.
-        Unconfirmed transactions use blockHeight -1 and confirmations 0, and
-        can include confirmationETABlocks and confirmationETASeconds.
+        Bitcoin-like confirmed transactions include blockHash, confirmations,
+        blockTime, size/vsize, value/valueIn, fees, and hex. Unconfirmed
+        transactions can include confirmationETABlocks and
+        confirmationETASeconds.
 
         Ethereum-like transactions have one vin and one vout, tokenTransfers,
-        ethereumSpecific execution data, and optional addressAliases. The
-        ethereumSpecific.status value is 1 for success, 0 for failure, and -1
-        for pending. Parsed input data is included when the 4byte signature can
-        be resolved.
+        ethereumSpecific execution data, and optional addressAliases. Parsed
+        input data is included when the 4byte signature can be resolved.
 
         For mined transactions, blockTime is the block timestamp. For mempool
         transactions, blockTime is when this Blockbook instance first learned
@@ -385,7 +383,7 @@ paths:
         - name: hex
           in: path
           required: true
-          description: Hex-encoded raw transaction.
+          description: Raw transaction.
           schema:
             type: string
             pattern: "^[0-9a-fA-F]+$"
@@ -441,13 +439,8 @@ paths:
       summary: Get address/account details.
       description: |-
         Returns balances and transactions of an address. Transactions are
-        sorted by block height with newest blocks first.
-
-        The details parameter controls response size. basic returns only
-        balances and counts. tokens adds token rows. tokenBalances adds token
-        rows with balances. txids adds paged transaction ids. txslight adds
-        limited transaction data from the index. txs adds full transaction
-        details.
+        sorted by block height with newest blocks first. Response size is
+        controlled by the details parameter.
 
         At details=basic, mempool transactions are not aggregated:
         unconfirmedBalance, unconfirmedSending, and unconfirmedReceiving are
@@ -613,7 +606,7 @@ paths:
           in: path
           required: true
           allowReserved: true
-          description: Address, XPUB, or supported descriptor.
+          description: Address, XPUB, or supported descriptor. URL-encode descriptors.
           schema:
             type: string
         - name: from
@@ -1093,7 +1086,7 @@ paths:
         - name: hex
           in: path
           required: true
-          description: Hex-encoded raw transaction.
+          description: Raw transaction.
           schema:
             type: string
             pattern: "^[0-9a-fA-F]+$"
@@ -1848,10 +1841,8 @@ components:
       properties:
         Type:
           type: string
-          description: Alias type.
         Alias:
           type: string
-          description: Alias text.
 
     AddressAliases:
       type: object
@@ -1965,7 +1956,6 @@ components:
       properties:
         type:
           type: integer
-          description: Chain-specific internal transfer type.
         from:
           type: string
         to:
@@ -2058,8 +2048,7 @@ components:
         payloadType:
           type: string
           description: Discriminator for normalized chain-specific payloads, for example tron.
-        payload:
-          description: Chain-specific payload.
+        payload: {}
 
     AccountChainExtraData:
       type: object
@@ -2067,8 +2056,7 @@ components:
       properties:
         payloadType:
           type: string
-        payload:
-          description: Chain-specific payload.
+        payload: {}
 
     Tx:
       type: object
