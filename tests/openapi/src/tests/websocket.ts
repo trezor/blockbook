@@ -93,7 +93,6 @@ async function testWsGetAccountUtxo(ctx: TestContext) {
     "WS getAccountUtxo response data",
     utxos,
   );
-  ctx.recordSchemaRef("#/components/schemas/Utxo");
   assertUTXOListNonNegativeConfirmations(utxos, "WsGetAccountUtxo");
 }
 
@@ -125,45 +124,39 @@ async function testWsGetAccountInfoEVM(ctx: TestContext) {
   assertEVMTokenBalancesHaveHoldingsFields(info, address, "WsGetAccountInfoEVM");
 }
 
-async function testWsGetAccountInfoTxidsConsistencyEVM(ctx: TestContext) {
+async function accountInfoConsistencyEVM(ctx: TestContext, details: "txids" | "txs", testName: string) {
   const address = await ctx.sampleEVMAddressOrSkip();
   const status = await ctx.getStatus();
   const bestHeight = status.bestHeight ?? 0;
+
   const httpResp = await ctx.client.getJson(
     "/api/v2/address/{address}",
-    buildAddressDetailsPathWithTo(address, "txids", evmHistoryPage, evmHistoryPageSize, bestHeight),
+    buildAddressDetailsPathWithTo(address, details, evmHistoryPage, evmHistoryPageSize, bestHeight),
   );
-  assertPageMetaAllowUnknownTotal(httpResp.page, httpResp.itemsOnPage, httpResp.totalPages, httpResp.txs, "WsGetAccountInfoTxidsConsistencyEVM.http");
-
   const wsResp = await ctx.wsCall<AddressResponse>(
     "getAccountInfo",
-    { descriptor: address, details: "txids", page: evmHistoryPage, pageSize: evmHistoryPageSize, to: bestHeight },
+    { descriptor: address, details, page: evmHistoryPage, pageSize: evmHistoryPageSize, to: bestHeight },
     "#/components/schemas/Address",
   );
-  assertPageMetaAllowUnknownTotal(wsResp.page, wsResp.itemsOnPage, wsResp.totalPages, wsResp.txs, "WsGetAccountInfoTxidsConsistencyEVM.ws");
-  assertComparableAccountPages(wsResp, httpResp, "WsGetAccountInfoTxidsConsistencyEVM");
-  assertStringSlicesEqual(wsResp.txids ?? [], httpResp.txids ?? [], "WsGetAccountInfoTxidsConsistencyEVM.txids");
+
+  assertPageMetaAllowUnknownTotal(httpResp.page, httpResp.itemsOnPage, httpResp.totalPages, httpResp.txs, `${testName}.http`);
+  assertPageMetaAllowUnknownTotal(wsResp.page, wsResp.itemsOnPage, wsResp.totalPages, wsResp.txs, `${testName}.ws`);
+  assertComparableAccountPages(wsResp, httpResp, testName);
+
+  const httpTxids = details === "txids"
+    ? (httpResp.txids ?? [])
+    : txIDsFromTransactions(httpResp.transactions ?? [], `${testName}.http`);
+  const wsTxids = details === "txids"
+    ? (wsResp.txids ?? [])
+    : txIDsFromTransactions(wsResp.transactions ?? [], `${testName}.ws`);
+  assertStringSlicesEqual(wsTxids, httpTxids, `${testName}.txids`);
 }
 
-async function testWsGetAccountInfoTxsConsistencyEVM(ctx: TestContext) {
-  const address = await ctx.sampleEVMAddressOrSkip();
-  const status = await ctx.getStatus();
-  const bestHeight = status.bestHeight ?? 0;
-  const httpResp = await ctx.client.getJson(
-    "/api/v2/address/{address}",
-    buildAddressDetailsPathWithTo(address, "txs", evmHistoryPage, evmHistoryPageSize, bestHeight),
-  );
-  const httpTxids = txIDsFromTransactions(httpResp.transactions ?? [], "WsGetAccountInfoTxsConsistencyEVM.http");
+const testWsGetAccountInfoTxidsConsistencyEVM = (ctx: TestContext) =>
+  accountInfoConsistencyEVM(ctx, "txids", "WsGetAccountInfoTxidsConsistencyEVM");
 
-  const wsResp = await ctx.wsCall<AddressResponse>(
-    "getAccountInfo",
-    { descriptor: address, details: "txs", page: evmHistoryPage, pageSize: evmHistoryPageSize, to: bestHeight },
-    "#/components/schemas/Address",
-  );
-  const wsTxids = txIDsFromTransactions(wsResp.transactions ?? [], "WsGetAccountInfoTxsConsistencyEVM.ws");
-  assertComparableAccountPages(wsResp, httpResp, "WsGetAccountInfoTxsConsistencyEVM");
-  assertStringSlicesEqual(wsTxids, httpTxids, "WsGetAccountInfoTxsConsistencyEVM.txids");
-}
+const testWsGetAccountInfoTxsConsistencyEVM = (ctx: TestContext) =>
+  accountInfoConsistencyEVM(ctx, "txs", "WsGetAccountInfoTxsConsistencyEVM");
 
 async function testWsGetAccountInfoContractFilterEVM(ctx: TestContext) {
   const address = await ctx.sampleEVMAddressOrSkip();

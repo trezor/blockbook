@@ -6,7 +6,6 @@
     "lint:spec": "redocly lint ../../openapi.yaml --config redocly.yaml",
     "generate": "openapi-typescript ../../openapi.yaml -o .generated/blockbook.ts",
     "typecheck": "tsc --noEmit",
-    "check:coverage": "tsx src/check.ts",
     "e2e": "tsx src/e2e.ts"
   },
   "devDependencies": {

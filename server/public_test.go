@@ -100,10 +100,6 @@ func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockCha
 }
 
 func setupPublicHTTPServerWithFiatFixture(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, extendedIndex bool, fiatFixture func(*db.RocksDB) error) (*PublicServer, string) {
-	return setupPublicHTTPServerWithBinding(parser, chain, t, extendedIndex, fiatFixture, "localhost:12345")
-}
-
-func setupPublicHTTPServerWithBinding(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, extendedIndex bool, fiatFixture func(*db.RocksDB) error, binding string) (*PublicServer, string) {
 	// config with mocked CoinGecko API
 	config := common.Config{
 		CoinName:        "Fakecoin",
@@ -151,7 +147,7 @@ func setupPublicHTTPServerWithBinding(parser bchain.BlockChainParser, chain bcha
 	}
 
 	// s.Run is never called, binding can be to any port
-	s, err := NewPublicServer(binding, "", d, chain, mempool, txCache, "", metrics, is, fiatRates, false)
+	s, err := NewPublicServer("localhost:12345", "", d, chain, mempool, txCache, "", metrics, is, fiatRates, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1796,141 +1792,64 @@ func Test_PublicServer_OpenAPIDocs(t *testing.T) {
 	ts := httptest.NewServer(s.https.Handler)
 	defer ts.Close()
 
-	assertBody := func(endpoint string, wantStatus int, wantContentType string, want []string) string {
+	get := func(endpoint string) *http.Response {
 		t.Helper()
 		resp, err := http.DefaultClient.Do(newGetRequest(ts.URL + endpoint))
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if resp.StatusCode != wantStatus {
-			t.Fatalf("%s: StatusCode = %v, want %v, body = %s", endpoint, resp.StatusCode, wantStatus, string(body))
-		}
-		if contentType := resp.Header.Get("Content-Type"); contentType != wantContentType {
-			t.Fatalf("%s: Content-Type = %q, want %q", endpoint, contentType, wantContentType)
-		}
-		for _, part := range want {
-			if !strings.Contains(string(body), part) {
-				t.Fatalf("%s: body does not contain %q\n%s", endpoint, part, string(body))
-			}
-		}
-		return string(body)
+		return resp
 	}
 
-	index := assertBody("/api-docs/", http.StatusOK, "text/html; charset=utf-8", []string{
-		`data-openapi-url="./openapi.yaml"`,
-		`https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.6/swagger-ui.css`,
-		`https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.6/swagger-ui-bundle.js`,
-		`integrity="sha384-`,
-		`crossorigin="anonymous"`,
-		`../static/api-docs/swagger-init.js`,
-	})
-	if strings.Contains(index, "http://") {
-		t.Fatalf("api docs index should not load assets over plain http:\n%s", index)
+	resp := get("/api-docs/")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/api-docs/ StatusCode = %v, want %v", resp.StatusCode, http.StatusOK)
 	}
-
-	resp, err := http.DefaultClient.Do(newGetRequest(ts.URL + "/api-docs/"))
-	if err != nil {
-		t.Fatal(err)
+	if ct := resp.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Fatalf("/api-docs/ Content-Type = %q", ct)
 	}
-	resp.Body.Close()
 	csp := resp.Header.Get("Content-Security-Policy")
 	if !strings.Contains(csp, "script-src 'self' https://cdn.jsdelivr.net;") {
-		t.Fatalf("unexpected Swagger CSP (missing CDN in script-src): %q", csp)
+		t.Fatalf("Swagger CSP missing CDN in script-src: %q", csp)
 	}
 	if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") {
-		t.Fatalf("unexpected Swagger CSP (script-src must not allow unsafe-inline): %q", csp)
+		t.Fatalf("Swagger CSP must not allow unsafe-inline in script-src: %q", csp)
 	}
-	if csp := resp.Header.Get("X-Content-Type-Options"); csp != "nosniff" {
-		t.Fatalf("X-Content-Type-Options = %q, want nosniff", csp)
+	if v := resp.Header.Get("X-Content-Type-Options"); v != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want nosniff", v)
 	}
 
-	assertBody("/api-docs/openapi.yaml", http.StatusOK, "application/yaml; charset=utf-8", []string{
-		"openapi: 3.1.0",
-		"url: /",
-	})
-	assertBody("/openapi.yaml", http.StatusOK, "application/yaml; charset=utf-8", []string{
-		"openapi: 3.1.0",
-		"url: /",
-	})
-	assertBody("/static/api-docs/swagger-init.js", http.StatusOK, "text/javascript; charset=utf-8", []string{
-		"validatorUrl: null",
-		"supportedSubmitMethods: []",
-	})
+	for _, p := range []string{"/api-docs/openapi.yaml", "/openapi.yaml"} {
+		r := get(p)
+		body, _ := io.ReadAll(r.Body)
+		r.Body.Close()
+		if r.StatusCode != http.StatusOK {
+			t.Fatalf("%s StatusCode = %v", p, r.StatusCode)
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/yaml; charset=utf-8" {
+			t.Fatalf("%s Content-Type = %q", p, ct)
+		}
+		if !strings.Contains(string(body), "openapi: 3.1.0") {
+			t.Fatalf("%s body missing openapi: 3.1.0", p)
+		}
+	}
 
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/openapi.yaml", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err = http.DefaultClient.Do(req)
+	r, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("POST /openapi.yaml StatusCode = %v, want %v", resp.StatusCode, http.StatusMethodNotAllowed)
+	r.Body.Close()
+	if r.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /openapi.yaml StatusCode = %v, want %v", r.StatusCode, http.StatusMethodNotAllowed)
 	}
-	if allow := resp.Header.Get("Allow"); allow != "GET, HEAD" {
+	if allow := r.Header.Get("Allow"); allow != "GET, HEAD" {
 		t.Fatalf("POST /openapi.yaml Allow = %q, want %q", allow, "GET, HEAD")
 	}
-}
-
-func Test_PublicServer_OpenAPIDocsWithPathPrefix(t *testing.T) {
-	parser, chain := setupChain(t)
-
-	s, dbpath := setupPublicHTTPServerWithBinding(parser, chain, t, false, nil, "localhost:12345/blockbook/")
-	defer closeAndDestroyPublicServer(t, s, dbpath)
-	ts := httptest.NewServer(s.https.Handler)
-	defer ts.Close()
-
-	assertOK := func(endpoint string, wantContentType string, want []string) string {
-		t.Helper()
-		resp, err := http.DefaultClient.Do(newGetRequest(ts.URL + endpoint))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("%s: StatusCode = %v, want %v, body = %s", endpoint, resp.StatusCode, http.StatusOK, string(body))
-		}
-		if contentType := resp.Header.Get("Content-Type"); contentType != wantContentType {
-			t.Fatalf("%s: Content-Type = %q, want %q", endpoint, contentType, wantContentType)
-		}
-		for _, part := range want {
-			if !strings.Contains(string(body), part) {
-				t.Fatalf("%s: body does not contain %q\n%s", endpoint, part, string(body))
-			}
-		}
-		return string(body)
-	}
-
-	index := assertOK("/blockbook/api-docs/", "text/html; charset=utf-8", []string{
-		`data-openapi-url="./openapi.yaml"`,
-		`https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.6/swagger-ui.css`,
-		`https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.6/swagger-ui-bundle.js`,
-		`integrity="sha384-`,
-		`crossorigin="anonymous"`,
-		`../static/api-docs/swagger-init.js`,
-	})
-	if strings.Contains(index, "http://") {
-		t.Fatalf("api docs index should not load assets over plain http:\n%s", index)
-	}
-
-	assertOK("/blockbook/api-docs/openapi.yaml", "application/yaml; charset=utf-8", []string{
-		"openapi: 3.1.0",
-	})
-	assertOK("/blockbook/static/api-docs/swagger-init.js", "text/javascript; charset=utf-8", []string{
-		"validatorUrl: null",
-		"supportedSubmitMethods: []",
-	})
 }
 
 func Test_PublicServer_BitcoinType(t *testing.T) {

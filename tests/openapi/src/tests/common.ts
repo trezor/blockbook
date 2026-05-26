@@ -1,6 +1,6 @@
 import { preview } from "../openapi.js";
 import { SkipTest } from "../errors.js";
-import { addressPage, addressPageSize, blockPageSize, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern } from "../constants.js";
+import { addressPage, addressPageSize, blockPageSize } from "../constants.js";
 import type { GetOperationPath, GetResponse } from "../client.js";
 import {
   assertAddressTxidsPayload,
@@ -12,17 +12,12 @@ import {
   buildAddressDetailsPath,
   buildAddressDetailsPathWithRange,
   encodePathSegment,
-  extractTxIDs,
-  firstAddressFromTx,
-  firstAddressFromTxPreferVin,
-  isAddressCandidate,
   isFiatDataUnavailable,
   isObject,
   positiveNumber,
 } from "../support.js";
 
 import type { TestContext } from "../context.js";
-import type { AddressResponse, BlockResponse } from "../types.js";
 
 type TestFunction = (ctx: TestContext) => Promise<void>;
 
@@ -198,11 +193,7 @@ async function testGetAddressTxs(ctx: TestContext) {
 }
 
 async function testGetAddressTxsScientificNotation(ctx: TestContext) {
-  const found = await getSampleAddressWithScientificNotationTx(ctx);
-  if (!found) {
-    throw new SkipTest(`no tx-specific scientific-notation amounts found in last ${sciNotationWindow} blocks`);
-  }
-
+  const found = await ctx.sampleScientificNotationCaseOrSkip();
   const addr = await ctx.client.getJson(
     "/api/v2/address/{address}",
     buildAddressDetailsPathWithRange(found.address, "txs", addressPage, 1000, found.height, found.height),
@@ -223,62 +214,6 @@ async function getFiatJSONOrSkip<P extends GetOperationPath>(
     throw new SkipTest(`fiat data unavailable for ${actualPath} (HTTP ${result.status}: ${preview(result.body)})`);
   }
   throw new Error(`GET ${actualPath} returned HTTP ${result.status}: ${preview(result.body)}`);
-}
-
-async function getSampleAddressWithScientificNotationTx(ctx: TestContext) {
-  if (ctx["sampleSciAddrResolved"]) {
-    return ctx["sampleSciAddress"] && ctx["sampleSciTxID"]
-      ? { address: ctx["sampleSciAddress"], txid: ctx["sampleSciTxID"], height: ctx["sampleSciHeight"] }
-      : undefined;
-  }
-  ctx["sampleSciAddrResolved"] = true;
-
-  const status = await ctx.getStatus();
-  const lower = Math.max(1, (status.bestHeight ?? 0) - sciNotationWindow + 1);
-  for (let height = status.bestHeight ?? 0; height >= lower; height--) {
-    const hash = await ctx.getBlockHashForHeight(height, false);
-    if (!hash) {
-      continue;
-    }
-    const txids = await getBlockTxIDsForProbe(ctx, hash, sciNotationTxLimit);
-    for (const txid of txids) {
-      if (!txid || !(await txSpecificHasScientificNotationAmount(ctx, txid))) {
-        continue;
-      }
-      const tx = await ctx.getTransactionByID(txid, false);
-      if (!tx) {
-        continue;
-      }
-      const address = ctx.isEVMTxID(txid) ? firstAddressFromTxPreferVin(tx) : firstAddressFromTx(tx);
-      if (!isAddressCandidate(address)) {
-        continue;
-      }
-      ctx["sampleSciAddress"] = address;
-      ctx["sampleSciTxID"] = txid;
-      ctx["sampleSciHeight"] = height;
-      return { address, txid, height };
-    }
-  }
-  return undefined;
-}
-
-async function getBlockTxIDsForProbe(ctx: TestContext, hash: string, pageSize: number) {
-  const result = await ctx.client.getMaybe(
-    "/api/v2/block/{blockId}",
-    `/api/v2/block/${encodePathSegment(hash)}?page=1&pageSize=${pageSize}`,
-  );
-  if (result.status !== 200 || result.data === undefined) {
-    return [];
-  }
-  return extractTxIDs(result.data);
-}
-
-async function txSpecificHasScientificNotationAmount(ctx: TestContext, txid: string) {
-  const result = await ctx.client.getMaybe(
-    "/api/v2/tx-specific/{txid}",
-    `/api/v2/tx-specific/${encodePathSegment(txid)}`,
-  );
-  return result.status === 200 && scientificNotationPattern.test(result.body);
 }
 
 export const commonTests: Record<string, TestFunction> = {

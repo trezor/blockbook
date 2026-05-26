@@ -1,7 +1,6 @@
 import { OpenApiContract, preview } from "./openapi.js";
 
 import type { paths } from "../.generated/blockbook.js";
-import type { CoverageSink } from "./types.js";
 
 export type GetOperationPath = keyof {
   [P in keyof paths as paths[P] extends { get: unknown } ? P : never]: true;
@@ -33,7 +32,6 @@ export class OpenApiFetchClient {
   constructor(
     private baseUrl: string,
     private readonly contract: OpenApiContract,
-    private readonly coverage?: CoverageSink,
   ) {}
 
   getBaseUrl() {
@@ -73,7 +71,6 @@ export class OpenApiFetchClient {
         const data = parseJSON(body);
         if (response.status === 200) {
           this.contract.validateResponse("get", operationPath, response.status, data);
-          this.coverage?.recordOperation("get", operationPath, response.status);
         }
         return {
           status: response.status,

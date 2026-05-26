@@ -57,8 +57,3 @@ export type BlockSummary = {
   pageSize: number;
 };
 
-export type CoverageSink = {
-  recordOperation(method: "get" | "post", operationPath: string, status: number): void;
-  recordSchemaRef(ref: string): void;
-  recordWebSocketMethod(method: string): void;
-};

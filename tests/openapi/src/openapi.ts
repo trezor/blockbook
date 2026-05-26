@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 
 type AjvInstance = {
   addFormat: (name: string, format: unknown) => void;
+  addSchema: (schema: unknown, key?: string) => void;
   compile: (schema: unknown) => ValidateFunction;
   errorsText: (errors: ValidateFunction["errors"], options?: { dataVar?: string; separator?: string }) => string;
 };
@@ -19,22 +20,17 @@ const Ajv2020 = ("default" in ajvModule && ajvModule.default ? ajvModule.default
 const addFormatsModule = require("ajv-formats") as { default?: (ajv: AjvInstance) => void } | ((ajv: AjvInstance) => void);
 const addFormats = ("default" in addFormatsModule && addFormatsModule.default ? addFormatsModule.default : addFormatsModule) as (ajv: AjvInstance) => void;
 
-type JsonObject = Record<string, unknown>;
+const documentId = "openapi://blockbook";
+
 type HttpMethod = "get" | "post";
 
-type OpenApiOperation = {
-  responses?: Record<string, {
-    content?: Record<string, {
-      schema?: unknown;
-    }>;
-  }>;
-};
-
 type OpenApiDocument = {
-  paths?: Record<string, Partial<Record<HttpMethod, OpenApiOperation>>>;
-  components?: {
-    schemas?: Record<string, unknown>;
-  };
+  paths?: Record<string, Partial<Record<HttpMethod, {
+    responses?: Record<string, {
+      content?: Record<string, { schema?: unknown }>;
+    }>;
+  }>>>;
+  components?: { schemas?: Record<string, unknown> };
 };
 
 export class OpenApiContract {
@@ -51,110 +47,47 @@ export class OpenApiContract {
     });
     addFormats(this.ajv);
     this.ajv.addFormat("int64", true);
+    this.ajv.addSchema({ ...this.document, $id: documentId });
   }
 
   validateResponse(method: HttpMethod, operationPath: string, status: number, data: unknown) {
-    const schema = this.responseSchema(method, operationPath, status);
-    if (schema === undefined) {
+    if (!this.findResponseSchema(method, operationPath, status)) {
       throw new Error(`${method.toUpperCase()} ${operationPath} has no JSON schema for HTTP ${status}`);
     }
-    this.validateSchema(schema, `${method.toUpperCase()} ${operationPath} HTTP ${status}`, data);
+    const pointer = responsePointer(method, operationPath, status);
+    this.run(this.validatorFor(pointer), `${method.toUpperCase()} ${operationPath} HTTP ${status}`, data);
   }
 
   validateSchemaRef(ref: string, label: string, data: unknown) {
-    this.validateSchema({ $ref: ref }, label, data);
-  }
-
-  hasResponseSchema(method: HttpMethod, operationPath: string, status = 200) {
-    return this.responseSchema(method, operationPath, status) !== undefined;
-  }
-
-  hasSchemaRef(ref: string) {
-    try {
-      this.resolvePointer(ref);
-      return true;
-    } catch {
-      return false;
-    }
+    this.run(this.validatorFor(absolutePointer(ref)), label, data);
   }
 
   validateSchema(schema: unknown, label: string, data: unknown) {
-    const validator = this.compile(schema, label);
+    this.run(this.ajv.compile(schema), label, data);
+  }
+
+  private run(validator: ValidateFunction, label: string, data: unknown) {
     if (validator(data)) {
       return;
     }
-    const details = this.ajv.errorsText(validator.errors, {
-      dataVar: label,
-      separator: "\n",
-    });
+    const details = this.ajv.errorsText(validator.errors, { dataVar: label, separator: "\n" });
     throw new Error(`${label} failed OpenAPI schema validation:\n${details}`);
   }
 
-  private responseSchema(method: HttpMethod, operationPath: string, status: number) {
-    const operation = this.document.paths?.[operationPath]?.[method];
-    const response = operation?.responses?.[String(status)] ?? operation?.responses?.default;
-    return response?.content?.["application/json"]?.schema;
-  }
-
-  private compile(schema: unknown, label: string) {
-    const key = `${label}:${JSON.stringify(schema)}`;
-    const cached = this.validators.get(key);
+  private validatorFor(absoluteRef: string) {
+    const cached = this.validators.get(absoluteRef);
     if (cached) {
       return cached;
     }
-
-    const dereferenced = this.dereference(schema, new Set());
-    const validator = this.ajv.compile(dereferenced);
-    this.validators.set(key, validator);
+    const validator = this.ajv.compile({ $ref: absoluteRef });
+    this.validators.set(absoluteRef, validator);
     return validator;
   }
 
-  private dereference(value: unknown, seenRefs: Set<string>): unknown {
-    if (Array.isArray(value)) {
-      return value.map((item) => this.dereference(item, seenRefs));
-    }
-    if (!isObject(value)) {
-      return value;
-    }
-
-    const ref = typeof value.$ref === "string" ? value.$ref : "";
-    if (ref) {
-      const resolved = seenRefs.has(ref)
-        ? {}
-        : this.dereference(this.resolvePointer(ref), new Set([...seenRefs, ref]));
-      const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$ref"));
-      if (Object.keys(siblings).length === 0) {
-        return resolved;
-      }
-      return {
-        allOf: [
-          resolved,
-          this.dereference(siblings, seenRefs),
-        ],
-      };
-    }
-
-    return Object.fromEntries(
-      Object.entries(value).map(([key, nested]) => [key, this.dereference(nested, seenRefs)]),
-    );
-  }
-
-  private resolvePointer(ref: string) {
-    if (!ref.startsWith("#/")) {
-      throw new Error(`unsupported non-local OpenAPI $ref: ${ref}`);
-    }
-    let cursor: unknown = this.document;
-    for (const rawPart of ref.slice(2).split("/")) {
-      const part = rawPart.replaceAll("~1", "/").replaceAll("~0", "~");
-      if (!isObject(cursor) && !Array.isArray(cursor)) {
-        throw new Error(`invalid OpenAPI $ref ${ref}`);
-      }
-      cursor = (cursor as Record<string, unknown>)[part];
-    }
-    if (cursor === undefined) {
-      throw new Error(`OpenAPI $ref not found: ${ref}`);
-    }
-    return cursor;
+  private findResponseSchema(method: HttpMethod, operationPath: string, status: number) {
+    const operation = this.document.paths?.[operationPath]?.[method];
+    const response = operation?.responses?.[String(status)] ?? operation?.responses?.default;
+    return response?.content?.["application/json"]?.schema;
   }
 }
 
@@ -166,6 +99,17 @@ export function preview(body: string | Uint8Array, limit = 600) {
   return `${text.slice(0, limit)}...`;
 }
 
-function isObject(value: unknown): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function responsePointer(method: HttpMethod, operationPath: string, status: number) {
+  return `${documentId}#/paths/${encodePointer(operationPath)}/${method}/responses/${status}/content/${encodePointer("application/json")}/schema`;
+}
+
+function absolutePointer(ref: string) {
+  if (ref.startsWith("#")) {
+    return `${documentId}${ref}`;
+  }
+  return ref;
+}
+
+function encodePointer(segment: string) {
+  return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }

@@ -288,15 +288,6 @@ export function assertUTXOList(utxos: UtxoResponse[], context: string) {
   });
 }
 
-export function assertUTXOListConfirmed(utxos: UtxoResponse[], context: string) {
-  assertUTXOList(utxos, context);
-  utxos.forEach((utxo) => {
-    if (isUnconfirmedUtxo(utxo)) {
-      throw new Error(`${context} returned unconfirmed UTXO: txid=${utxo.txid} vout=${utxo.vout} confirmations=${utxo.confirmations} height=${utxo.height ?? 0}`);
-    }
-  });
-}
-
 export function assertUTXOListNonNegativeConfirmations(utxos: UtxoResponse[], context: string) {
   assertUTXOList(utxos, context);
   utxos.forEach((utxo) => {
@@ -304,63 +295,6 @@ export function assertUTXOListNonNegativeConfirmations(utxos: UtxoResponse[], co
       throw new Error(`${context} has negative confirmations for ${utxo.txid}`);
     }
   });
-}
-
-export function assertUTXOSetsEqualByOutpoint(got: UtxoResponse[], want: UtxoResponse[], context: string) {
-  const gotSet = utxoSetByOutpoint(got, `${context}.got`);
-  const wantSet = utxoSetByOutpoint(want, `${context}.want`);
-  if (gotSet.size !== wantSet.size) {
-    throw new Error(`${context} outpoint count mismatch: got=${gotSet.size} want=${wantSet.size}`);
-  }
-  for (const key of wantSet.keys()) {
-    if (!gotSet.has(key)) {
-      throw new Error(`${context} missing outpoint in got set: ${key}`);
-    }
-  }
-}
-
-export function assertConfirmedUTXOsIncludedByOutpoint(mixed: UtxoResponse[], confirmed: UtxoResponse[], context: string) {
-  const confirmedSet = utxoSetByOutpoint(confirmed, `${context}.confirmed`);
-  for (const utxo of mixed) {
-    if (isUnconfirmedUtxo(utxo)) {
-      continue;
-    }
-    const key = utxoOutpointKey(utxo);
-    if (!confirmedSet.has(key)) {
-      throw new Error(`${context} missing confirmed outpoint ${key} in confirmed=true response`);
-    }
-  }
-}
-
-export function utxoSetsEqualByOutpoint(a: UtxoResponse[], b: UtxoResponse[]) {
-  if (a.length !== b.length) {
-    return false;
-  }
-  const set = new Set(a.map(utxoOutpointKey));
-  if (set.size !== a.length) {
-    return false;
-  }
-  return b.every((utxo) => set.has(utxoOutpointKey(utxo)));
-}
-
-export function utxoSetByOutpoint(utxos: UtxoResponse[], context: string) {
-  const set = new Map<string, UtxoResponse>();
-  for (const utxo of utxos) {
-    const key = utxoOutpointKey(utxo);
-    if (set.has(key)) {
-      throw new Error(`${context} duplicate outpoint: ${key}`);
-    }
-    set.set(key, utxo);
-  }
-  return set;
-}
-
-export function utxoOutpointKey(utxo: UtxoResponse) {
-  return `${stringValue(utxo.txid).trim().toLowerCase()}:${String(utxo.vout ?? 0)}`;
-}
-
-export function isUnconfirmedUtxo(utxo: UtxoResponse) {
-  return (utxo.confirmations ?? 0) <= 0 || (utxo.height ?? 0) <= 0;
 }
 
 export function txIDsFromTransactions(txs: TxResponse[], context: string) {
@@ -530,4 +464,13 @@ export function upgradeWSBaseToWSS(raw: string) {
   }
   url.protocol = "wss:";
   return url.toString();
+}
+
+export class Lazy<T> {
+  private promise: Promise<T> | undefined;
+  constructor(private readonly compute: () => Promise<T>) {}
+  get(): Promise<T> {
+    this.promise ??= this.compute();
+    return this.promise;
+  }
 }
