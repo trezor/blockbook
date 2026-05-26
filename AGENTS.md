@@ -38,8 +38,9 @@ scripts to check health of particular blockbook/backend instance
   variables (the URLs/credentials your tests dial) change between runs, so a previously
   cached PASS can mask a real failure.
 
-## Facts to keep in mind to avoid regressions
+## Facts to keep in mind to avoid regressions and waste
 
-Blockbook instance should be able to : 
+- Blockbook instance should be able to : 
  - handle at least 20 000 websocket connections from trezor suite
  - index and catchup with fast L2 chains like Arbitrum or Base 
+- ignore `tests/openapi/node_modules/` and `tests/openapi/package-lock.json` when searching the codebase

@@ -30,6 +30,7 @@ if ([ $package = "blockbook" ] || [ $package = "all" ]) && [ -d build/pkg-defs/b
     export VERSION=$(cd build/pkg-defs/blockbook && dpkg-parsechangelog | sed -rne 's/^Version: ([0-9.]+)([-+~].+)?$/\1/p')
 
     cp Makefile ldb sst_dump build/pkg-defs/blockbook
+    cp /src/openapi.yaml build/pkg-defs/blockbook
     cp -r /src/static build/pkg-defs/blockbook
     mkdir build/pkg-defs/blockbook/cert && cp /src/server/testcert.* build/pkg-defs/blockbook/cert
     (cd build/pkg-defs/blockbook && dpkg-buildpackage -b -us -uc $@)

@@ -36,6 +36,27 @@ func getContentSecurityPolicy() string {
 		"upgrade-insecure-requests;"
 }
 
+func getSwaggerContentSecurityPolicy() string {
+	return "default-src 'none'; " +
+		"script-src 'self' https://cdn.jsdelivr.net; " +
+		"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+		"img-src 'self' data:; " +
+		"connect-src 'self'; " +
+		"font-src 'self' data:; " +
+		"object-src 'none'; " +
+		"frame-ancestors 'none'; " +
+		"base-uri 'none'; " +
+		"form-action 'none';"
+}
+
+func getOpenAPISpecContentSecurityPolicy() string {
+	return "default-src 'none'; " +
+		"object-src 'none'; " +
+		"frame-ancestors 'none'; " +
+		"base-uri 'none'; " +
+		"form-action 'none';"
+}
+
 type tpl int
 
 const (

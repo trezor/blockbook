@@ -18,7 +18,6 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins"
-	apitests "github.com/trezor/blockbook/tests/api"
 	"github.com/trezor/blockbook/tests/connectivity"
 	"github.com/trezor/blockbook/tests/rpc"
 	synctests "github.com/trezor/blockbook/tests/sync"
@@ -31,7 +30,7 @@ type integrationTest struct {
 	requiresChain bool
 }
 
-// integrationTests maps test group names from tests.json to their handlers.
+// integrationTests maps Go-owned test group names from tests.json to their handlers.
 // "connectivity" performs lightweight backend reachability checks.
 // "rpc" runs per-coin RPC fixtures against a fully initialized chain.
 // "sync" exercises block connection/rollback logic and needs a live backend + chain init.
@@ -39,7 +38,10 @@ var integrationTests = map[string]integrationTest{
 	"rpc":          {fn: rpc.IntegrationTest, requiresChain: true},
 	"sync":         {fn: synctests.IntegrationTest, requiresChain: true},
 	"connectivity": {fn: connectivity.IntegrationTest, requiresChain: false},
-	"api":          {fn: apitests.IntegrationTest, requiresChain: false},
+}
+
+var typescriptOwnedIntegrationTests = map[string]string{
+	"api": "API e2e tests are TypeScript/OpenAPI-owned; run contrib/tests/run-openapi-tests.sh",
 }
 
 var notConnectedError = errors.New("Not connected to backend server")
@@ -112,7 +114,11 @@ func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {
 	}
 
 	for test, c := range cfg {
-		if def, found := integrationTests[test]; found {
+		if reason, found := typescriptOwnedIntegrationTests[test]; found {
+			t.Run(test, func(t *testing.T) {
+				t.Skip(reason)
+			})
+		} else if def, found := integrationTests[test]; found {
 			t.Run(test, func(t *testing.T) {
 				if def.requiresChain {
 					ensureChain(t)

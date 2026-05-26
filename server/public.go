@@ -42,6 +42,8 @@ const maxSendTxBodyBytes int64 = 8 * 1024 * 1024
 
 const secondaryCoinCookieName = "secondary_coin"
 const templatesDir = "./static/templates"
+const apiDocsIndexFile = "./static/api-docs/index.html"
+const openAPIFile = "./openapi.yaml"
 const (
 	txBitcoinTypeTemplate         = templatesDir + "/tx_bitcointype.html"
 	txEthereumTypeTemplate        = templatesDir + "/tx_ethereumtype.html"
@@ -129,8 +131,13 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	s.templates = s.parseTemplates()
 
 	// map only basic functions, the rest is enabled by method MapFullPublicInterface
-	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
-	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
+	serveMux.Handle(publicPath(path, "favicon.ico"), prefixedStaticFileServer(publicPath(path, "")))
+	staticPath := publicPath(path, "static") + "/"
+	serveMux.Handle(staticPath, prefixedStaticFileServer(staticPath))
+	apiDocsPath := publicPath(path, "api-docs")
+	serveMux.HandleFunc(apiDocsPath, s.apiDocsHandler(path))
+	serveMux.HandleFunc(apiDocsPath+"/", s.apiDocsHandler(path))
+	serveMux.HandleFunc(publicPath(path, "openapi.yaml"), s.openAPISpecHandler)
 	// default handler
 	serveMux.HandleFunc(path, s.htmlTemplateHandler(s.explorerIndex))
 	// default API handler
@@ -154,7 +161,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux := s.https.Handler.(*http.ServeMux)
 	_, path := splitBinding(s.binding)
 	// support for test pages
-	serveMux.Handle(path+"test-websocket.html", http.FileServer(http.Dir("./static/")))
+	serveMux.Handle(publicPath(path, "test-websocket.html"), prefixedStaticFileServer(publicPath(path, "")))
 	if s.internalExplorer {
 		// internal explorer handlers
 		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
@@ -281,12 +288,105 @@ func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
 }
 
+func (s *PublicServer) apiDocsHandler(basePath string) http.HandlerFunc {
+	docsPath := publicPath(basePath, "api-docs")
+	specPath := docsPath + "/openapi.yaml"
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case docsPath:
+			if !allowGetOrHead(w, r) {
+				return
+			}
+			http.Redirect(w, r, docsPath+"/", http.StatusMovedPermanently)
+		case docsPath + "/":
+			s.serveAPIDocs(w, r)
+		case specPath:
+			s.openAPISpecHandler(w, r)
+		default:
+			setOpenAPISecurityHeaders(w, "text/plain; charset=utf-8", false)
+			http.NotFound(w, r)
+		}
+	}
+}
+
+func (s *PublicServer) serveAPIDocs(w http.ResponseWriter, r *http.Request) {
+	if !allowGetOrHead(w, r) {
+		return
+	}
+	if s.metrics != nil {
+		s.metrics.ExplorerViews.With(common.Labels{"action": "api-docs"}).Inc()
+	}
+	serveStaticContent(w, r, apiDocsIndexFile, "text/html; charset=utf-8", true)
+}
+
+func (s *PublicServer) openAPISpecHandler(w http.ResponseWriter, r *http.Request) {
+	if !allowGetOrHead(w, r) {
+		return
+	}
+	if s.metrics != nil {
+		s.metrics.ExplorerViews.With(common.Labels{"action": "openapi-spec"}).Inc()
+	}
+	serveStaticContent(w, r, openAPIFile, "application/yaml; charset=utf-8", false)
+}
+
+func serveStaticContent(w http.ResponseWriter, r *http.Request, filename string, contentType string, allowSwaggerAssets bool) {
+	body, err := os.ReadFile(filename)
+	if err != nil {
+		glog.Errorf("serve %s: %v", filename, err)
+		setOpenAPISecurityHeaders(w, "text/plain; charset=utf-8", allowSwaggerAssets)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	setOpenAPISecurityHeaders(w, contentType, allowSwaggerAssets)
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodHead {
+		return
+	}
+	if _, err := w.Write(body); err != nil {
+		glog.Warning("write response ", err)
+	}
+}
+
+func allowGetOrHead(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return true
+	}
+	w.Header().Set("Allow", "GET, HEAD")
+	setOpenAPISecurityHeaders(w, "text/plain; charset=utf-8", false)
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	return false
+}
+
+func setOpenAPISecurityHeaders(w http.ResponseWriter, contentType string, allowSwaggerAssets bool) {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()")
+	if allowSwaggerAssets {
+		w.Header().Set("Content-Security-Policy", getSwaggerContentSecurityPolicy())
+	} else {
+		w.Header().Set("Content-Security-Policy", getOpenAPISpecContentSecurityPolicy())
+	}
+}
+
+func prefixedStaticFileServer(prefix string) http.Handler {
+	return http.StripPrefix(prefix, http.FileServer(http.Dir("./static/")))
+}
+
 func splitBinding(binding string) (addr string, path string) {
 	i := strings.Index(binding, "/")
 	if i >= 0 {
 		return binding[0:i], binding[i:]
 	}
 	return binding, "/"
+}
+
+func publicPath(basePath string, item string) string {
+	if basePath == "/" {
+		return "/" + item
+	}
+	return strings.TrimRight(basePath, "/") + "/" + item
 }
 
 func joinURL(base string, part string) string {

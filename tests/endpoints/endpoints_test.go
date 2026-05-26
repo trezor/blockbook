@@ -1,6 +1,6 @@
 //go:build integration
 
-package api
+package endpoints
 
 import "testing"
 

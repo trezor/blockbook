@@ -11,6 +11,12 @@ Swagger UI:
 - `/api-docs/openapi.yaml` - OpenAPI specification used by Swagger UI
 - `/openapi.yaml` - direct machine-readable OpenAPI specification
 
+For a local Blockbook public server, open the Swagger UI at the matching coin
+port, for example:
+
+- `http://localhost:9130/api-docs/` - Bitcoin
+- `http://localhost:9116/api-docs/` - Ethereum
+
 The Swagger UI is served from local pinned assets, does not use the external
 Swagger validator, and has "Try it out" disabled so the docs page cannot submit
 requests such as transaction broadcasts. Use the OpenAPI file with Swagger UI,
