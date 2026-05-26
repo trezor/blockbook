@@ -6,16 +6,19 @@
     "lint:spec": "redocly lint ../../openapi.yaml --config redocly.yaml",
     "generate": "openapi-typescript ../../openapi.yaml -o .generated/blockbook.ts",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx src/smoke.ts"
+    "check:coverage": "tsx src/check.ts",
+    "e2e": "tsx src/e2e.ts"
   },
   "devDependencies": {
     "@redocly/cli": "2.11.1",
     "@types/ws": "8.18.1",
-    "openapi-fetch": "0.15.0",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
     "openapi-typescript": "7.10.1",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "undici": "6.25.0",
-    "ws": "8.18.3"
+    "ws": "8.18.3",
+    "yaml": "2.6.1"
   }
 }

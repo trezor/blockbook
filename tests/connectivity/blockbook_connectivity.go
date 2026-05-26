@@ -14,7 +14,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/trezor/blockbook/bchain"
-	apitests "github.com/trezor/blockbook/tests/api"
+	"github.com/trezor/blockbook/tests/endpoints"
 )
 
 type blockbookStatusEnvelope struct {
@@ -41,10 +41,11 @@ type blockbookWSInfo struct {
 func BlockbookHTTPIntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, _ bchain.Mempool, _ json.RawMessage) {
 	t.Helper()
 
-	httpBase, _, err := apitests.ResolveEndpoints(coin)
+	ep, err := endpoints.ResolveBlockbookEndpoints(coin)
 	if err != nil {
 		t.Fatalf("resolve Blockbook endpoints for %s: %v", coin, err)
 	}
+	httpBase := ep.HTTP
 
 	client := &http.Client{
 		Timeout: connectivityTimeout,
@@ -89,10 +90,11 @@ func BlockbookHTTPIntegrationTest(t *testing.T, coin string, _ bchain.BlockChain
 func BlockbookWSIntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, _ bchain.Mempool, _ json.RawMessage) {
 	t.Helper()
 
-	_, wsURL, err := apitests.ResolveEndpoints(coin)
+	ep, err := endpoints.ResolveBlockbookEndpoints(coin)
 	if err != nil {
 		t.Fatalf("resolve Blockbook endpoints for %s: %v", coin, err)
 	}
+	wsURL := ep.WS
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: connectivityTimeout,

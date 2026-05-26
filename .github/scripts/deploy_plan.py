@@ -59,7 +59,7 @@ def main() -> None:
         fail("no coins selected after validation")
     unique_test_coins = sorted(set(test_coins))
     escaped = [re.escape(name) for name in unique_names]
-    e2e_regex = "TestIntegration/(" + "|".join(escaped) + ")/api"
+    connectivity_regex = "TestIntegration/(" + "|".join(escaped) + ")/connectivity"
 
     output_file = os.environ.get("GITHUB_OUTPUT")
     if not output_file:
@@ -67,12 +67,12 @@ def main() -> None:
 
     with open(output_file, "a", encoding="utf-8") as out:
         out.write(f"runner_matrix={json.dumps(runner_matrix, separators=(',', ':'))}\n")
-        out.write(f"e2e_regex={e2e_regex}\n")
+        out.write(f"connectivity_regex={connectivity_regex}\n")
         out.write(f"coins_csv={','.join(requested)}\n")
         out.write(f"test_coins_csv={','.join(unique_test_coins)}\n")
 
     log("Selected coins: " + ", ".join(requested))
-    log("E2E regex: " + e2e_regex)
+    log("Connectivity regex: " + connectivity_regex)
 
 
 if __name__ == "__main__":

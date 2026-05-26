@@ -24,6 +24,14 @@ info:
 
     Legacy API V1 is a Bitcore Insight-compatible subset for Bitcoin-type
     coins. It is provided as-is for compatibility and is not being extended.
+
+    Load estimates are qualitative hints for client authors. Low means a small
+    constant-time lookup or cached metadata. Medium means bounded indexed work
+    or response size. High means potentially large scans, large payloads,
+    broadcast/backend work, or external RPC enrichment. Actual cost also
+    depends on chain speed, backend health, cache warmth, mempool size,
+    pageSize, gap, and the number of addresses, transactions, tokens, filters,
+    or timestamps involved.
 servers:
   - url: /
     description: Current Blockbook instance
@@ -54,7 +62,10 @@ paths:
       tags: [Status]
       operationId: getStatus
       summary: Get Blockbook and backend status.
-      description: Returns Blockbook sync state and connected backend metadata.
+      description: |-
+        Returns Blockbook sync state and connected backend metadata.
+
+        Load estimate: Low; constant-size status metadata.
       responses:
         "200":
           description: Current Blockbook and backend status.
@@ -73,7 +84,11 @@ paths:
       tags: [Status]
       operationId: getApiIndexStatus
       summary: Get status from the API index handler.
-      description: Alias served by the same handler as /api/status on full public interfaces.
+      description: |-
+        Alias served by the same handler as /api/status on full public
+        interfaces.
+
+        Load estimate: Low; constant-size status metadata.
       responses:
         "200":
           description: Current Blockbook and backend status.
@@ -96,6 +111,8 @@ paths:
         Returns the block hash for a height on the backend main chain.
         Blockbook follows the backend main chain; after a rollback or reorg,
         height lookups resolve to the current main-chain block.
+
+        Load estimate: Low; indexed height-to-hash lookup.
       parameters:
         - name: height
           in: path
@@ -130,6 +147,9 @@ paths:
         Blockbook follows the backend main chain. Height lookups always return
         the current main-chain block. Hash lookups can return a block from
         another fork only if the backend still keeps it.
+
+        Load estimate: Medium; grows mainly with block transaction count and
+        requested page.
       parameters:
         - name: blockId
           in: path
@@ -156,6 +176,11 @@ paths:
       tags: [Blocks]
       operationId: getRawBlock
       summary: Get raw block hex.
+      description: |-
+        Returns raw serialized block data.
+
+        Load estimate: High for large blocks; payload size grows with the raw
+        block size.
       parameters:
         - name: blockId
           in: path
@@ -185,6 +210,9 @@ paths:
         Returns compact block filters for the script type configured on this
         Blockbook instance. Provide either lastN or a from/to range. When to is
         omitted for a range, the current best height is used.
+
+        Load estimate: High for wide ranges; work and payload grow linearly
+        with the number of requested filters.
       parameters:
         - name: scriptType
           in: query
@@ -248,6 +276,9 @@ paths:
         For mined transactions, blockTime is the block timestamp. For mempool
         transactions, blockTime is when this Blockbook instance first learned
         about the transaction and can differ between instances.
+
+        Load estimate: Medium; grows with inputs, outputs, token transfers,
+        address aliases, and spending=true extra lookups.
       parameters:
         - name: txid
           in: path
@@ -286,6 +317,9 @@ paths:
         Returns transaction data in the exact backend-specific format. Use this
         when a chain exposes fields that are intentionally absent from the
         normalized Tx schema.
+
+        Load estimate: Medium; payload size depends on chain-specific fields
+        and transaction complexity.
       parameters:
         - name: txid
           in: path
@@ -311,7 +345,11 @@ paths:
       tags: [Transactions]
       operationId: getRawTransaction
       summary: Get raw transaction hex.
-      description: Unversioned public endpoint exposed by Blockbook for raw transaction data.
+      description: |-
+        Unversioned public endpoint exposed by Blockbook for raw transaction
+        data.
+
+        Load estimate: Medium; payload size grows with raw transaction size.
       parameters:
         - name: txid
           in: path
@@ -337,7 +375,12 @@ paths:
       tags: [Transactions]
       operationId: sendTransactionByGet
       summary: Broadcast a raw transaction using the path.
-      description: Broadcasts hex-encoded raw transaction data. Prefer POST for large payloads.
+      description: |-
+        Broadcasts hex-encoded raw transaction data. Prefer POST for large
+        payloads.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
       parameters:
         - name: hex
           in: path
@@ -368,6 +411,9 @@ paths:
         Broadcasts hex-encoded raw transaction data from the request body. The
         trailing slash is mandatory in the Blockbook handler. POST bodies are
         limited to 8 MiB.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
       requestBody:
         required: true
         content:
@@ -407,6 +453,10 @@ paths:
         unconfirmedBalance, unconfirmedSending, and unconfirmedReceiving are
         omitted, and unconfirmedTxs reports the raw mempool index size for the
         address.
+
+        Load estimate: Variable; basic is low, token/tokenBalances and
+        txids/txslight are medium, and txs can be high as it grows with
+        pageSize, transactions, token rows, filters, and protocol enrichment.
       parameters:
         - name: address
           in: path
@@ -460,6 +510,10 @@ paths:
 
         Note: usedTokens always reports the total number of used addresses for
         the XPUB, regardless of the tokens query filter.
+
+        Load estimate: High for broad accounts; grows with derived addresses,
+        gap, used address count, pageSize, transaction history, token rows, and
+        protocol enrichment.
       parameters:
         - name: xpub
           in: path
@@ -507,6 +561,10 @@ paths:
         include lockTime. XPUB and descriptor UTXOs also include address and
         derivation path when available. Coinbase UTXOs include coinbase=true
         only up to the coinbase confirmation limit, currently 100 blocks.
+
+        Load estimate: Variable; address lookups are usually medium, while
+        XPUB/descriptor lookups grow with gap, derived addresses, and UTXO
+        count.
       parameters:
         - name: descriptor
           in: path
@@ -547,6 +605,9 @@ paths:
         seconds and defaults to 3600. When fiatcurrency is omitted, rates can
         contain all available currencies. sentToSelf is the amount sent from an
         address to itself or within addresses of the same XPUB.
+
+        Load estimate: High; grows with account transaction history, time span,
+        grouping cardinality, fiat rate lookups, and XPUB/descriptor gap.
       parameters:
         - name: descriptor
           in: path
@@ -615,6 +676,9 @@ paths:
         metadata cannot be resolved, protocols.erc4626 contains error and omits
         asset; callers must not derive fiat rates or human-unit exchange rates
         from such a partial response.
+
+        Load estimate: Medium; indexed metadata is cheap, but optional protocol
+        enrichment can add backend RPC calls and token metadata lookups.
       parameters:
         - name: contract
           in: path
@@ -647,6 +711,10 @@ paths:
       tags: [Fees]
       operationId: estimateFee
       summary: Estimate a fee target.
+      description: |-
+        Returns backend fee estimation for the requested confirmation target.
+
+        Load estimate: Low; a small backend fee estimate lookup.
       parameters:
         - name: blocks
           in: path
@@ -679,6 +747,11 @@ paths:
       tags: [Fees]
       operationId: getFeeStats
       summary: Get fee statistics for a block.
+      description: |-
+        Returns fee statistics for transactions in one block.
+
+        Load estimate: Medium to high; grows with the number of transactions
+        in the requested block.
       parameters:
         - name: blockId
           in: path
@@ -710,6 +783,9 @@ paths:
         be returned. Responses include the actual rate timestamp. Without a
         currency parameter, all available currencies can be returned. A rate of
         -1 marks an unavailable or invalid currency for that timestamp.
+
+        Load estimate: Low to medium; specific currency lookups are cheap,
+        while omitted currency and token lookups increase response size.
       parameters:
         - name: currency
           in: query
@@ -755,7 +831,12 @@ paths:
       tags: [Fiat]
       operationId: getFiatTickersForTimestamps
       summary: Get fiat rates for multiple timestamps.
-      description: Returns fiat rate tickers for a comma-separated list of Unix timestamps.
+      description: |-
+        Returns fiat rate tickers for a comma-separated list of Unix
+        timestamps.
+
+        Load estimate: Medium; work and payload grow linearly with timestamp
+        count, plus token/currency selection.
       parameters:
         - name: timestamp
           in: query
@@ -796,7 +877,12 @@ paths:
       tags: [Fiat]
       operationId: getFiatTickersList
       summary: Get currencies available for a timestamp.
-      description: Returns available secondary currencies for a date together with the actual rate timestamp.
+      description: |-
+        Returns available secondary currencies for a date together with the
+        actual rate timestamp.
+
+        Load estimate: Low to medium; token lookups and wide currency lists
+        increase response size.
       parameters:
         - name: timestamp
           in: query
@@ -828,7 +914,10 @@ paths:
       tags: [Legacy]
       operationId: getLegacyBlockHashByHeight
       summary: Legacy get block hash by height.
-      description: Bitcore Insight-compatible V1 route for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 route for Bitcoin-type coins.
+
+        Load estimate: Low; indexed height-to-hash lookup.
       parameters:
         - name: height
           in: path
@@ -855,7 +944,12 @@ paths:
       tags: [Legacy]
       operationId: getLegacyTransaction
       summary: Legacy get transaction.
-      description: Bitcore Insight-compatible V1 transaction shape for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 transaction shape for Bitcoin-type
+        coins.
+
+        Load estimate: Medium; grows with inputs, outputs, scripts, and raw
+        transaction size.
       parameters:
         - name: txid
           in: path
@@ -878,7 +972,11 @@ paths:
       tags: [Legacy]
       operationId: getLegacyAddress
       summary: Legacy get address.
-      description: Bitcore Insight-compatible V1 address shape for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 address shape for Bitcoin-type coins.
+
+        Load estimate: Variable; grows with address transaction count and
+        legacy response expansion.
       parameters:
         - name: address
           in: path
@@ -901,7 +999,10 @@ paths:
       tags: [Legacy]
       operationId: getLegacyUtxo
       summary: Legacy get address UTXOs.
-      description: Bitcore Insight-compatible V1 UTXO list for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 UTXO list for Bitcoin-type coins.
+
+        Load estimate: Medium; grows with the number of unspent outputs.
       parameters:
         - name: address
           in: path
@@ -926,7 +1027,11 @@ paths:
       tags: [Legacy]
       operationId: getLegacyBlock
       summary: Legacy get block by height or hash.
-      description: Bitcore Insight-compatible V1 block shape for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 block shape for Bitcoin-type coins.
+
+        Load estimate: Medium to high; grows with block transaction count and
+        legacy payload size.
       parameters:
         - name: blockId
           in: path
@@ -949,7 +1054,10 @@ paths:
       tags: [Legacy]
       operationId: estimateLegacyFee
       summary: Legacy estimate fee target.
-      description: Bitcore Insight-compatible V1 fee estimate for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 fee estimate for Bitcoin-type coins.
+
+        Load estimate: Low; a small backend fee estimate lookup.
       parameters:
         - name: blocks
           in: path
@@ -976,7 +1084,11 @@ paths:
       tags: [Legacy]
       operationId: sendLegacyTransactionByGet
       summary: Legacy broadcast transaction using the path.
-      description: Bitcore Insight-compatible V1 broadcast route for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 broadcast route for Bitcoin-type coins.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
       parameters:
         - name: hex
           in: path
@@ -1003,7 +1115,11 @@ paths:
       tags: [Legacy]
       operationId: sendLegacyTransactionByPost
       summary: Legacy broadcast transaction using the request body.
-      description: Bitcore Insight-compatible V1 broadcast route for Bitcoin-type coins.
+      description: |-
+        Bitcore Insight-compatible V1 broadcast route for Bitcoin-type coins.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
       requestBody:
         required: true
         content:
@@ -1034,20 +1150,12 @@ paths:
         WsRequest/WsResponse schemas. The endpoint can also be explored through
         /test-websocket.html on a Blockbook instance.
 
-        Request methods include getInfo, getBlockHash, getBlock,
-        getAccountInfo, getContractInfo, getAccountUtxo, getTransaction,
-        getTransactionSpecific, getBalanceHistory, getCurrentFiatRates,
-        getFiatRatesTickersList, getFiatRatesForTimestamps, getMempoolFilters,
-        getBlockFilter, estimateFee, sendTransaction, and ping.
-
-        Subscriptions include subscribeNewBlock, subscribeNewTransaction,
-        subscribeAddresses, and subscribeFiatRates. There can be only one
-        subscription of each event type per connection, so a new address list
-        replaces the previous list. subscribeNewTransaction is disabled unless
-        Blockbook is started with -enablesubnewtx.
-
         During a backend reorg, new-block notifications can contain a block
         hash at the same or even smaller height.
+
+        Load estimate: Variable; idle connections are low, request methods
+        cost roughly like their REST equivalents, and subscriptions grow with
+        connection count, subscribed addresses, and event frequency.
       servers:
         - url: /
           description: Current Blockbook instance. Use ws or wss with the current host for WebSocket clients.
@@ -1839,9 +1947,11 @@ components:
         asm:
           type: string
         addresses:
-          type: array
-          items:
-            type: string
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: "null"
         isAddress:
           type: boolean
         isOwn:
@@ -2329,7 +2439,9 @@ components:
           type: integer
           format: int64
         version:
-          type: string
+          oneOf:
+            - type: string
+            - type: integer
         merkleRoot:
           type: string
         nonce:

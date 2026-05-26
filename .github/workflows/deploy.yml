@@ -77,7 +77,7 @@ jobs:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
-      e2e_regex: ${{ steps.plan.outputs.e2e_regex }}
+      connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
@@ -189,7 +189,7 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted]
     env:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
-      E2E_REGEX: ${{ needs.prepare_deploy.outputs.e2e_regex }}
+      CONNECTIVITY_REGEX: ${{ needs.prepare_deploy.outputs.connectivity_regex }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -201,10 +201,11 @@ jobs:
         with:
           vars_json: ${{ toJSON(vars) }}
 
-      - name: Run e2e tests
+      - name: Run Blockbook connectivity tests
         env:
           BB_BUILD_ENV: dev
-        run: make test-e2e ARGS="-v"
+          CONNECTIVITY_REGEX: ${{ env.CONNECTIVITY_REGEX }}
+        run: make test-connectivity ARGS="-v"
 
       - name: Setup Node.js for OpenAPI tests
         uses: actions/setup-node@v4
@@ -226,7 +227,7 @@ jobs:
         if: steps.openapi-node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci --prefix tests/openapi --prefer-offline --no-audit --no-fund
 
-      - name: Validate OpenAPI against deployed Blockbook
+      - name: Run OpenAPI API e2e tests
         env:
           BB_BUILD_ENV: dev
           OPENAPI_COINS: ${{ needs.prepare_deploy.outputs.test_coins_csv }}

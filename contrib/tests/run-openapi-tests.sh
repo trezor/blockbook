@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Validate openapi.yaml, generate a small typed TypeScript client, and smoke it
-# against selected deployed Blockbook instances.
+# Validate openapi.yaml, generate TypeScript API types, and run public API e2e
+# checks against selected deployed Blockbook instances.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,6 +20,7 @@ export REDOCLY_SUPPRESS_UPDATE_NOTICE="${REDOCLY_SUPPRESS_UPDATE_NOTICE:-true}"
 npm --prefix "$openapi_dir" run lint:spec
 npm --prefix "$openapi_dir" run generate
 npm --prefix "$openapi_dir" run typecheck
+npm --prefix "$openapi_dir" run check:coverage
 
 export REPO_ROOT="$repo_root"
-npm --prefix "$openapi_dir" run smoke
+npm --prefix "$openapi_dir" run e2e

@@ -1,6 +1,6 @@
 //go:build integration
 
-package api
+package endpoints
 
 import (
 	"encoding/json"
@@ -14,17 +14,32 @@ import (
 	"strings"
 )
 
-// ResolveEndpoints resolves Blockbook API endpoints for a coin alias using
-// exact BB_DEV_API_URL_* overrides first and coin config fallbacks.
-func ResolveEndpoints(coin string) (string, string, error) {
-	ep, err := resolveAPIEndpoints(coin)
-	if err != nil {
-		return "", "", err
-	}
-	return ep.HTTP, ep.WS, nil
+type Endpoints struct {
+	HTTP string
+	WS   string
 }
 
-func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
+type coinConfig struct {
+	Coin struct {
+		Alias    string `json:"alias"`
+		TestName string `json:"test_name"`
+	} `json:"coin"`
+	Ports struct {
+		BlockbookPublic int `json:"blockbook_public"`
+	} `json:"ports"`
+}
+
+// ResolveBlockbookEndpoints resolves Blockbook API endpoints for a coin alias using
+// exact BB_DEV_API_URL_* overrides first and coin config fallbacks.
+func ResolveBlockbookEndpoints(coin string) (Endpoints, error) {
+	ep, err := resolveAPIEndpoints(coin)
+	if err != nil {
+		return Endpoints{}, err
+	}
+	return Endpoints{HTTP: ep.HTTP, WS: ep.WS}, nil
+}
+
+func resolveAPIEndpoints(coin string) (*Endpoints, error) {
 	cfg, err := loadCoinConfig(coin)
 	if err != nil {
 		return nil, err
@@ -64,7 +79,7 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 		return nil, err
 	}
 
-	return &apiEndpoints{HTTP: httpURL, WS: wsURL}, nil
+	return &Endpoints{HTTP: httpURL, WS: wsURL}, nil
 }
 
 func firstNonEmptyEnv(keys ...string) string {

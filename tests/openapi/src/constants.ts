@@ -1,0 +1,13 @@
+export const wsDialTimeoutMs = 5_000;
+export const wsMessageTimeoutMs = 15_000;
+export const txSearchWindow = 12;
+export const blockPageSize = 1;
+export const sampleBlockPageSize = 3;
+export const sampleBlockProbeMax = 3;
+export const sciNotationWindow = 40;
+export const sciNotationTxLimit = 8;
+export const addressPage = 1;
+export const addressPageSize = 10;
+export const evmHistoryPage = 1;
+export const evmHistoryPageSize = 3;
+export const scientificNotationPattern = /"value(?:Zat|Sat)?"\s*:\s*-?\d+\.\d+[eE][+-]?\d+/;
