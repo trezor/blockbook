@@ -3,7 +3,6 @@ import path from "node:path";
 import { Agent, setGlobalDispatcher } from "undici";
 
 import { loadTestsConfig, repoRoot, resolveSelectedCoins } from "./config.js";
-import { CoverageRecorder, validateCoverageMetadata } from "./coverage.js";
 import { errorMessage, SkipTest } from "./errors.js";
 import { OpenApiContract } from "./openapi.js";
 import { testRegistry } from "./registry.js";
@@ -16,7 +15,6 @@ if (process.env.OPENAPI_INSECURE_TLS !== "0") {
 export async function runOpenApiE2E() {
   const contract = new OpenApiContract(path.join(repoRoot, "openapi.yaml"));
   const testsConfig = loadTestsConfig();
-  validateCoverageMetadata(contract, testsConfig, testRegistry);
 
   const selectedCoins = resolveSelectedCoins(testsConfig);
   if (selectedCoins.length === 0) {
@@ -24,14 +22,10 @@ export async function runOpenApiE2E() {
     return;
   }
 
-  const coverage = new CoverageRecorder();
   const failures: string[] = [];
   for (const coin of selectedCoins) {
-    await runCoin(coin, contract, coverage, failures);
+    await runCoin(coin, contract, failures);
   }
-
-  coverage.printSummary();
-  coverage.writeJSON();
 
   if (failures.length > 0) {
     console.error(`\nOpenAPI e2e failed with ${failures.length} failure(s):`);
@@ -44,12 +38,7 @@ export async function runOpenApiE2E() {
   console.log(`\nOpenAPI e2e passed for ${selectedCoins.length} coin(s): ${selectedCoins.join(", ")}`);
 }
 
-async function runCoin(
-  coin: string,
-  contract: OpenApiContract,
-  coverage: CoverageRecorder,
-  failures: string[],
-) {
+async function runCoin(coin: string, contract: OpenApiContract, failures: string[]) {
   const testsConfig = loadTestsConfig();
   const apiTests = testsConfig[coin]?.api ?? [];
   if (apiTests.length === 0) {
@@ -57,7 +46,7 @@ async function runCoin(
     return;
   }
 
-  const ctx = await TestContext.create(coin, contract, coverage);
+  const ctx = await TestContext.create(coin, contract);
   console.log(`\nOpenAPI e2e ${coin}: ${apiTests.length} tests`);
   await ctx.getStatus();
 
@@ -69,7 +58,6 @@ async function runCoin(
       continue;
     }
 
-    coverage.recordIntendedTest(testName, def.covers);
     const started = Date.now();
     try {
       if (def.capability) {

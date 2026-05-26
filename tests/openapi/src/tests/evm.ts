@@ -10,7 +10,6 @@ import {
   assertEVMTokenListContractsMatch,
   assertEqualString,
   assertFeeInvariantGE,
-  assertNonEmptyList,
   assertNonEmptyString,
   assertPageMeta,
   assertPageSizeUpperBound,
@@ -23,7 +22,7 @@ import {
 } from "../support.js";
 
 import type { TestContext } from "../context.js";
-import type { AddressResponse, ContractInfoResponse, Erc4626Fixture, TxResponse } from "../types.js";
+import type { AddressResponse, ContractInfoResponse, Erc4626Fixture } from "../types.js";
 
 type TestFunction = (ctx: TestContext) => Promise<void>;
 
@@ -36,65 +35,47 @@ async function testGetAddressBasicEVM(ctx: TestContext) {
   assertEVMBasicAddressPayload(resp, address, "GetAddressBasicEVM");
 }
 
-async function testGetAddressTxidsPaginationEVM(ctx: TestContext) {
+async function addressPaginationEVM(ctx: TestContext, details: "txids" | "txs", testName: string) {
   const address = await ctx.sampleEVMAddressOrSkip();
-  const page1 = await ctx.client.getJson(
-    "/api/v2/address/{address}",
-    buildAddressDetailsPath(address, "txids", evmHistoryPage, evmHistoryPageSize),
-  );
+  const itemsField = details === "txids" ? "txids" : "transactions";
+  const itemsOf = (resp: AddressResponse) =>
+    details === "txids" ? (resp.txids ?? []) : (resp.transactions ?? []);
 
-  assertAddressMatches(page1.address, address, "GetAddressTxidsPaginationEVM.page1.address");
-  assertPageMeta(page1.page, page1.itemsOnPage, page1.totalPages, page1.txs, "GetAddressTxidsPaginationEVM.page1");
-  assertPageSizeUpperBound(page1.txids?.length ?? 0, page1.itemsOnPage ?? 0, evmHistoryPageSize, "GetAddressTxidsPaginationEVM.page1.txids");
-  assertNonEmptyList(page1.txids, "GetAddressTxidsPaginationEVM page 1 returned no txids");
+  const fetchPage = (page: number) => ctx.client.getJson(
+    "/api/v2/address/{address}",
+    buildAddressDetailsPath(address, details, page, evmHistoryPageSize),
+  );
+  const assertPage = (resp: AddressResponse, label: string) => {
+    assertAddressMatches(resp.address, address, `${label}.address`);
+    assertPageMeta(resp.page, resp.itemsOnPage, resp.totalPages, resp.txs, label);
+    assertPageSizeUpperBound(itemsOf(resp).length, resp.itemsOnPage ?? 0, evmHistoryPageSize, `${label}.${itemsField}`);
+    if (itemsOf(resp).length === 0) {
+      throw new Error(`${label} returned no ${itemsField}`);
+    }
+    if (details === "txs") {
+      txIDsFromTransactions(resp.transactions ?? [], label);
+    }
+  };
+
+  const page1 = await fetchPage(evmHistoryPage);
+  assertPage(page1, `${testName}.page1`);
 
   if ((page1.totalPages ?? 0) <= 1 || (page1.txs ?? 0) <= evmHistoryPageSize) {
     throw new SkipTest(`pagination check: address ${address} has ${page1.txs ?? 0} txs and ${page1.totalPages ?? 0} page(s)`);
   }
 
-  const page2 = await ctx.client.getJson(
-    "/api/v2/address/{address}",
-    buildAddressDetailsPath(address, "txids", evmHistoryPage + 1, evmHistoryPageSize),
-  );
-  assertAddressMatches(page2.address, address, "GetAddressTxidsPaginationEVM.page2.address");
-  assertPageMeta(page2.page, page2.itemsOnPage, page2.totalPages, page2.txs, "GetAddressTxidsPaginationEVM.page2");
-  assertPageSizeUpperBound(page2.txids?.length ?? 0, page2.itemsOnPage ?? 0, evmHistoryPageSize, "GetAddressTxidsPaginationEVM.page2.txids");
+  const page2 = await fetchPage(evmHistoryPage + 1);
+  assertPage(page2, `${testName}.page2`);
   if (page2.page !== evmHistoryPage + 1) {
-    throw new Error(`GetAddressTxidsPaginationEVM page mismatch: got ${page2.page ?? 0}, want ${evmHistoryPage + 1}`);
+    throw new Error(`${testName} page mismatch: got ${page2.page ?? 0}, want ${evmHistoryPage + 1}`);
   }
-  assertNonEmptyList(page2.txids, "GetAddressTxidsPaginationEVM page 2 returned no txids");
 }
 
-async function testGetAddressTxsPaginationEVM(ctx: TestContext) {
-  const address = await ctx.sampleEVMAddressOrSkip();
-  const page1 = await ctx.client.getJson(
-    "/api/v2/address/{address}",
-    buildAddressDetailsPath(address, "txs", evmHistoryPage, evmHistoryPageSize),
-  );
+const testGetAddressTxidsPaginationEVM = (ctx: TestContext) =>
+  addressPaginationEVM(ctx, "txids", "GetAddressTxidsPaginationEVM");
 
-  assertAddressMatches(page1.address, address, "GetAddressTxsPaginationEVM.page1.address");
-  assertPageMeta(page1.page, page1.itemsOnPage, page1.totalPages, page1.txs, "GetAddressTxsPaginationEVM.page1");
-  assertPageSizeUpperBound(page1.transactions?.length ?? 0, page1.itemsOnPage ?? 0, evmHistoryPageSize, "GetAddressTxsPaginationEVM.page1.transactions");
-  assertNonEmptyList(page1.transactions, "GetAddressTxsPaginationEVM page 1 returned no transactions");
-  txIDsFromTransactions(page1.transactions ?? [], "GetAddressTxsPaginationEVM.page1");
-
-  if ((page1.totalPages ?? 0) <= 1 || (page1.txs ?? 0) <= evmHistoryPageSize) {
-    throw new SkipTest(`pagination check: address ${address} has ${page1.txs ?? 0} txs and ${page1.totalPages ?? 0} page(s)`);
-  }
-
-  const page2 = await ctx.client.getJson(
-    "/api/v2/address/{address}",
-    buildAddressDetailsPath(address, "txs", evmHistoryPage + 1, evmHistoryPageSize),
-  );
-  assertAddressMatches(page2.address, address, "GetAddressTxsPaginationEVM.page2.address");
-  assertPageMeta(page2.page, page2.itemsOnPage, page2.totalPages, page2.txs, "GetAddressTxsPaginationEVM.page2");
-  assertPageSizeUpperBound(page2.transactions?.length ?? 0, page2.itemsOnPage ?? 0, evmHistoryPageSize, "GetAddressTxsPaginationEVM.page2.transactions");
-  if (page2.page !== evmHistoryPage + 1) {
-    throw new Error(`GetAddressTxsPaginationEVM page mismatch: got ${page2.page ?? 0}, want ${evmHistoryPage + 1}`);
-  }
-  assertNonEmptyList(page2.transactions, "GetAddressTxsPaginationEVM page 2 returned no transactions");
-  txIDsFromTransactions(page2.transactions ?? [], "GetAddressTxsPaginationEVM.page2");
-}
+const testGetAddressTxsPaginationEVM = (ctx: TestContext) =>
+  addressPaginationEVM(ctx, "txs", "GetAddressTxsPaginationEVM");
 
 async function testGetAddressTokensEVM(ctx: TestContext) {
   const address = await ctx.sampleEVMAddressOrSkip();

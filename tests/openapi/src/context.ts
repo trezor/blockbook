@@ -4,7 +4,7 @@ import { OpenApiFetchClient } from "./client.js";
 import { OpenApiContract, preview } from "./openapi.js";
 import { resolveHTTPBase, resolveWSURL } from "./config.js";
 import { SkipTest } from "./errors.js";
-import { addressPage, addressPageSize, blockPageSize, sampleBlockPageSize, sampleBlockProbeMax, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
+import { addressPage, addressPageSize, blockPageSize, sampleBlockPageSize, sampleBlockProbeMax, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
 import {
   assertAddressMatches,
   buildAddressDetailsPath,
@@ -19,13 +19,14 @@ import {
   isObject,
   isTronAddress,
   isWsError,
+  Lazy,
   positiveNumber,
   stringValue,
   summarizeBlock,
   upgradeWSBaseToWSS,
 } from "./support.js";
 
-import type { Capability, CoverageSink, AddressResponse, BlockHashResponse, BlockResponse, BlockSummary, FiatTickerResponse, StatusResponse, TxResponse, UtxoResponse, WsEnvelope, WsInfoResponse, WsMethod, WsResponse } from "./types.js";
+import type { Capability, AddressResponse, BlockHashResponse, BlockResponse, BlockSummary, FiatTickerResponse, StatusResponse, TxResponse, UtxoResponse, WsEnvelope, WsInfoResponse, WsMethod, WsResponse } from "./types.js";
 
 export class TestContext {
   readonly client: OpenApiFetchClient;
@@ -51,31 +52,23 @@ export class TestContext {
   private sampleFiatResolved = false;
   private sampleFiatAvailable = false;
   private sampleFiatTicker?: FiatTickerResponse;
-  sampleSciAddrResolved = false;
-  sampleSciAddress = "";
-  sampleSciTxID = "";
-  sampleSciHeight = 0;
 
-  private capabilitiesResolved = false;
-  private supportsUTXO = false;
-  private utxoProbeMessage = "";
-  private supportsEVM = false;
-  private evmProbeMessage = "";
+  private readonly capabilities = new Lazy(() => this.probeCapabilities());
+  private readonly scientificNotationCase = new Lazy(() => this.findScientificNotationCase());
 
   private constructor(
     readonly coin: string,
     readonly contract: OpenApiContract,
     private wsURL: string,
     client: OpenApiFetchClient,
-    private readonly coverage?: CoverageSink,
   ) {
     this.client = client;
   }
 
-  static async create(coin: string, contract: OpenApiContract, coverage?: CoverageSink) {
+  static async create(coin: string, contract: OpenApiContract) {
     const httpBase = await resolveHTTPBase(coin);
     const wsURL = resolveWSURL(coin, httpBase);
-    return new TestContext(coin, contract, wsURL, new OpenApiFetchClient(httpBase, contract, coverage), coverage);
+    return new TestContext(coin, contract, wsURL, new OpenApiFetchClient(httpBase, contract));
   }
 
   async getStatus() {
@@ -99,13 +92,19 @@ export class TestContext {
   }
 
   async requireCapability(required: Capability, group: string, testName: string) {
-    await this.resolveCapabilities();
-    if (required === "utxo" && !this.supportsUTXO) {
-      throw new SkipTest(`Skipping ${testName} (${group}): UTXO capability required (${this.utxoProbeMessage})`);
+    const caps = await this.capabilities.get();
+    const probe = required === "utxo" ? caps.utxo : caps.evm;
+    if (!probe.supported) {
+      throw new SkipTest(`Skipping ${testName} (${group}): ${required.toUpperCase()} capability required (${probe.message})`);
     }
-    if (required === "evm" && !this.supportsEVM) {
-      throw new SkipTest(`Skipping ${testName} (${group}): EVM capability required (${this.evmProbeMessage})`);
+  }
+
+  async sampleScientificNotationCaseOrSkip() {
+    const found = await this.scientificNotationCase.get();
+    if (!found) {
+      throw new SkipTest(`no tx-specific scientific-notation amounts found in last ${sciNotationWindow} blocks`);
     }
+    return found;
   }
 
   async getSampleIndexedHeight() {
@@ -390,10 +389,6 @@ export class TestContext {
     }
   }
 
-  recordSchemaRef(ref: string) {
-    this.coverage?.recordSchemaRef(ref);
-  }
-
   isEVMTxID(txid: string) {
     const trimmed = txid.trim();
     return trimmed.toLowerCase().startsWith("0x") || (this.coin === "tron" && isFixedHex(trimmed, 64));
@@ -403,27 +398,25 @@ export class TestContext {
     return isEVMAddressValue(address) || (this.coin === "tron" && isTronAddress(address));
   }
 
-  private async resolveCapabilities() {
-    if (this.capabilitiesResolved) {
-      return;
-    }
-    this.capabilitiesResolved = true;
-    [this.supportsUTXO, this.utxoProbeMessage] = await this.probeUTXOSupport();
-    [this.supportsEVM, this.evmProbeMessage] = await this.probeEVMSupport();
+  private async probeCapabilities() {
+    return {
+      utxo: await this.probeUTXOSupport(),
+      evm: await this.probeEVMSupport(),
+    };
   }
 
-  private async probeUTXOSupport(): Promise<[boolean, string]> {
+  private async probeUTXOSupport(): Promise<{ supported: boolean; message: string }> {
     const txid = await this.getSampleTxID();
     if (!txid) {
-      return [false, `no sample transaction in last ${txSearchWindow} blocks`];
+      return { supported: false, message: `no sample transaction in last ${txSearchWindow} blocks` };
     }
     if (this.isEVMTxID(txid)) {
-      return [false, "detected EVM-style transaction ids"];
+      return { supported: false, message: "detected EVM-style transaction ids" };
     }
 
     const address = await this.getSampleAddress();
     if (!address) {
-      return [false, "no sample address available for probe"];
+      return { supported: false, message: "no sample address available for probe" };
     }
 
     const path = `/api/v2/utxo/${encodePathSegment(address)}?confirmed=true`;
@@ -431,21 +424,21 @@ export class TestContext {
     if (result.status !== 200) {
       throw new Error(`UTXO capability probe ${path} returned HTTP ${result.status}: ${preview(result.body)}`);
     }
-    return [true, "UTXO endpoint probe succeeded"];
+    return { supported: true, message: "UTXO endpoint probe succeeded" };
   }
 
-  private async probeEVMSupport(): Promise<[boolean, string]> {
+  private async probeEVMSupport(): Promise<{ supported: boolean; message: string }> {
     const txid = await this.getSampleTxID();
     if (!txid) {
-      return [false, `no sample transaction in last ${txSearchWindow} blocks`];
+      return { supported: false, message: `no sample transaction in last ${txSearchWindow} blocks` };
     }
     if (!this.isEVMTxID(txid)) {
-      return [false, "detected non-EVM transaction ids"];
+      return { supported: false, message: "detected non-EVM transaction ids" };
     }
 
     const address = await this.getSampleAddress();
     if (!address) {
-      return [false, "no sample address available for probe"];
+      return { supported: false, message: "no sample address available for probe" };
     }
     const path = buildAddressDetailsPath(address, "tokenBalances", addressPage, addressPageSize);
     const result = await this.client.getMaybe("/api/v2/address/{address}", path);
@@ -453,7 +446,53 @@ export class TestContext {
       throw new Error(`EVM capability probe ${path} returned HTTP ${result.status}: ${preview(result.body)}`);
     }
     assertAddressMatches(result.data.address, address, "EVM capability probe address");
-    return [true, "EVM tokenBalances endpoint probe succeeded"];
+    return { supported: true, message: "EVM tokenBalances endpoint probe succeeded" };
+  }
+
+  private async findScientificNotationCase() {
+    const status = await this.getStatus();
+    const lower = Math.max(1, (status.bestHeight ?? 0) - sciNotationWindow + 1);
+    for (let height = status.bestHeight ?? 0; height >= lower; height--) {
+      const hash = await this.getBlockHashForHeight(height, false);
+      if (!hash) {
+        continue;
+      }
+      const txids = await this.blockTxIDsForProbe(hash, sciNotationTxLimit);
+      for (const txid of txids) {
+        if (!txid || !(await this.txSpecificHasScientificNotation(txid))) {
+          continue;
+        }
+        const tx = await this.getTransactionByID(txid, false);
+        if (!tx) {
+          continue;
+        }
+        const address = this.isEVMTxID(txid) ? firstAddressFromTxPreferVin(tx) : firstAddressFromTx(tx);
+        if (!isAddressCandidate(address)) {
+          continue;
+        }
+        return { address, txid, height };
+      }
+    }
+    return undefined;
+  }
+
+  private async blockTxIDsForProbe(hash: string, pageSize: number) {
+    const result = await this.client.getMaybe(
+      "/api/v2/block/{blockId}",
+      `/api/v2/block/${encodePathSegment(hash)}?page=1&pageSize=${pageSize}`,
+    );
+    if (result.status !== 200 || result.data === undefined) {
+      return [];
+    }
+    return extractTxIDs(result.data);
+  }
+
+  private async txSpecificHasScientificNotation(txid: string) {
+    const result = await this.client.getMaybe(
+      "/api/v2/tx-specific/{txid}",
+      `/api/v2/tx-specific/${encodePathSegment(txid)}`,
+    );
+    return result.status === 200 && scientificNotationPattern.test(result.body);
   }
 
   private async findTransactionNearHeight(fromHeight: number, window: number) {
@@ -525,9 +564,7 @@ export class TestContext {
         }
         if (dataSchemaRef) {
           this.contract.validateSchemaRef(dataSchemaRef, `WS ${request.method} response data`, response.data);
-          this.coverage?.recordSchemaRef(dataSchemaRef);
         }
-        this.coverage?.recordWebSocketMethod(request.method);
         resolve(response.data as T);
       });
       ws.on("error", (error) => {

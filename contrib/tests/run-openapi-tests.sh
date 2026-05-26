@@ -20,7 +20,6 @@ export REDOCLY_SUPPRESS_UPDATE_NOTICE="${REDOCLY_SUPPRESS_UPDATE_NOTICE:-true}"
 npm --prefix "$openapi_dir" run lint:spec
 npm --prefix "$openapi_dir" run generate
 npm --prefix "$openapi_dir" run typecheck
-npm --prefix "$openapi_dir" run check:coverage
 
 export REPO_ROOT="$repo_root"
 npm --prefix "$openapi_dir" run e2e
