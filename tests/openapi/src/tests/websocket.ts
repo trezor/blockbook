@@ -88,11 +88,13 @@ async function testWsGetAccountUtxo(ctx: TestContext) {
     "getAccountUtxo",
     { descriptor: address },
   );
-  ctx.contract.validateSchema(
-    { type: "array", items: { $ref: "#/components/schemas/Utxo" } },
-    "WS getAccountUtxo response data",
-    utxos,
-  );
+  const label = "WS getAccountUtxo response data";
+  if (!Array.isArray(utxos)) {
+    throw new Error(`${label} is not an array`);
+  }
+  utxos.forEach((utxo, i) => {
+    ctx.contract.validateSchemaRef("#/components/schemas/Utxo", `${label}[${i}]`, utxo);
+  });
   assertUTXOListNonNegativeConfirmations(utxos, "WsGetAccountUtxo");
 }
 

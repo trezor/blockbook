@@ -62,10 +62,6 @@ export class OpenApiContract {
     this.run(this.validatorFor(absolutePointer(ref)), label, data);
   }
 
-  validateSchema(schema: unknown, label: string, data: unknown) {
-    this.run(this.ajv.compile(schema), label, data);
-  }
-
   private run(validator: ValidateFunction, label: string, data: unknown) {
     if (validator(data)) {
       return;
