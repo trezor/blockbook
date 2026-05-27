@@ -32,9 +32,14 @@ type addressHotness struct {
 	minHits      int
 	lru          *hotAddressLRU
 	onEvict      func(addressHotnessKey)
-	// hits tracks per-block lookup counts so we can decide when an address is hot.
-	// It is cleared at BeginBlock to avoid unbounded growth.
+	// hits tracks lookup counts so we can decide when an address is hot. Counts
+	// accumulate across blocks so an address that recurs over several blocks (not
+	// only within one busy block) can become hot; the map is reset in BeginBlock
+	// once it grows past maxPendingHits to keep memory bounded.
 	hits map[addressHotnessKey]uint16
+	// maxPendingHits bounds the hits map (set to the LRU size, the natural ceiling
+	// for promotion candidates).
+	maxPendingHits int
 	// block stats (reset after reporting) to keep logging cheap.
 	// blockEligibleLookups counts lookups with contractCount >= minContracts (i.e., eligible for hotness).
 	blockEligibleLookups uint64
@@ -51,11 +56,11 @@ func newAddressHotness(minContracts, lruSize, minHits int) *addressHotness {
 		return nil
 	}
 	return &addressHotness{
-		minContracts: minContracts,
-		minHits:      minHits,
-		lru:          newHotAddressLRU(lruSize),
-		// Pre-size the per-block hit map to avoid reallocs on busy blocks.
-		hits: make(map[addressHotnessKey]uint16),
+		minContracts:   minContracts,
+		minHits:        minHits,
+		lru:            newHotAddressLRU(lruSize),
+		maxPendingHits: lruSize,
+		hits:           make(map[addressHotnessKey]uint16),
 	}
 }
 
@@ -72,9 +77,16 @@ func (h *addressHotness) BeginBlock() {
 	if h == nil {
 		return
 	}
-	// Reset per-block hit counts; LRU survives across blocks.
-	clear(h.hits)
-	// Reset per-block stats counters.
+	// Hit counts accumulate across blocks so addresses looked up repeatedly over
+	// several blocks (not only within one busy block) can become hot — this lets
+	// the index help lower-throughput chains, not just very busy ones. Reset only
+	// when the candidate map grows past its bound; dropping pending counts merely
+	// delays a promotion and never affects correctness (lookups fall back to a
+	// linear scan when the index is not used). The LRU survives across blocks.
+	if len(h.hits) > h.maxPendingHits {
+		clear(h.hits)
+	}
+	// Reset per-block stats counters (metrics report per-block deltas).
 	h.blockEligibleLookups = 0
 	h.blockLRUHits = 0
 	h.blockPromotions = 0
