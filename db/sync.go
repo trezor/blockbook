@@ -74,24 +74,32 @@ func defaultSyncWorkerConfig() SyncWorkerConfig {
 }
 
 // ApplyMissingBlockRetryOverride overlays the optional bchain.MissingBlockRetry
-// onto the defaults. Zero / unset wire fields keep their default; out-of-range
-// values fall back to the default with a warning logged in the caller.
+// onto the defaults. Zero / unset wire fields keep their default; explicitly set
+// but invalid values (negative, or a TipRecheckThreshold above RecheckThreshold)
+// keep the default and log a warning.
 func ApplyMissingBlockRetryOverride(o *bchain.MissingBlockRetry) MissingBlockRetryConfig {
 	cfg := DefaultMissingBlockRetryConfig()
 	if o == nil {
 		return cfg
 	}
-	if o.RetryDelayMs > 0 {
-		cfg.RetryDelay = time.Duration(o.RetryDelayMs) * time.Millisecond
+	apply := func(field string, v int, set func(int)) {
+		if v == 0 {
+			return // unset: keep default
+		}
+		if v < 0 {
+			glog.Warningf("sync: missingBlockRetry.%s=%d is invalid, keeping default", field, v)
+			return
+		}
+		set(v)
 	}
-	if o.RecheckThreshold > 0 {
-		cfg.RecheckThreshold = o.RecheckThreshold
-	}
-	if o.TipRecheckThreshold > 0 {
-		cfg.TipRecheckThreshold = o.TipRecheckThreshold
-	}
-	if o.MaxStallMs > 0 {
-		cfg.MaxStallDuration = time.Duration(o.MaxStallMs) * time.Millisecond
+	apply("retryDelayMs", o.RetryDelayMs, func(v int) { cfg.RetryDelay = time.Duration(v) * time.Millisecond })
+	apply("recheckThreshold", o.RecheckThreshold, func(v int) { cfg.RecheckThreshold = v })
+	apply("tipRecheckThreshold", o.TipRecheckThreshold, func(v int) { cfg.TipRecheckThreshold = v })
+	apply("maxStallMs", o.MaxStallMs, func(v int) { cfg.MaxStallDuration = time.Duration(v) * time.Millisecond })
+	if cfg.TipRecheckThreshold > cfg.RecheckThreshold {
+		glog.Warningf("sync: missingBlockRetry.tipRecheckThreshold=%d exceeds recheckThreshold=%d, clamping to %d",
+			cfg.TipRecheckThreshold, cfg.RecheckThreshold, cfg.RecheckThreshold)
+		cfg.TipRecheckThreshold = cfg.RecheckThreshold
 	}
 	return cfg
 }
@@ -418,7 +426,7 @@ func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash
 // quiet because transient backend lag (e.g. load-balanced RPC routing skew)
 // is expected. The per-error signal is preserved via the IndexResyncErrors metric.
 func (w *SyncWorker) onRetryableMiss(retries *int, threshold int, label string, height uint32, hash string, err error) (bool, error) {
-	*retries++
+	(*retries)++
 	if *retries < threshold {
 		return false, nil
 	}

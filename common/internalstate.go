@@ -350,10 +350,15 @@ func (is *InternalState) GetBackendInfo() BackendInfo {
 }
 
 // GetBackendTipLastAdvance returns the wall-clock time when the backend's
-// Blocks height was last observed to advance.
+// Blocks height was last observed to advance. BackendTipLastAdvance is not
+// persisted, so on startup (before the first SetBackendInfo) it is zero; seed
+// it to now on first read so tip-age metrics don't report a bogus huge age.
 func (is *InternalState) GetBackendTipLastAdvance() time.Time {
 	is.mux.Lock()
 	defer is.mux.Unlock()
+	if is.BackendTipLastAdvance.IsZero() {
+		is.BackendTipLastAdvance = time.Now()
+	}
 	return is.BackendTipLastAdvance
 }
 

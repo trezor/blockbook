@@ -22,16 +22,16 @@ import (
 var (
 	testMetricsOnce sync.Once
 	testMetrics     *common.Metrics
+	testMetricsErr  error
 )
 
 func getTestMetrics(t *testing.T) *common.Metrics {
 	testMetricsOnce.Do(func() {
-		m, err := common.GetMetrics("test")
-		if err != nil {
-			t.Fatalf("GetMetrics: %v", err)
-		}
-		testMetrics = m
+		testMetrics, testMetricsErr = common.GetMetrics("test")
 	})
+	if testMetricsErr != nil {
+		t.Fatalf("GetMetrics: %v", testMetricsErr)
+	}
 	return testMetrics
 }
 
