@@ -512,3 +512,26 @@ func (c *blockChainWithMetrics) CheckENSExpiration(name string) (bool, error) {
 	}
 	return false, errors.New("ENS expiration check not supported by underlying chain")
 }
+
+// AverageBlockTimeDuration forwards the wrapped chain's configured block cadence
+// so blockbook.go's duck-typed lookup reaches it through the metrics wrapper.
+// Returns an error when the underlying chain doesn't expose one.
+func (c *blockChainWithMetrics) AverageBlockTimeDuration() (time.Duration, error) {
+	if p, ok := c.b.(interface {
+		AverageBlockTimeDuration() (time.Duration, error)
+	}); ok {
+		return p.AverageBlockTimeDuration()
+	}
+	return 0, errors.New("average block time not supported by underlying chain")
+}
+
+// MissingBlockRetryOverride forwards the wrapped chain's per-chain sync-worker
+// retry override through the metrics wrapper; nil when none is provided.
+func (c *blockChainWithMetrics) MissingBlockRetryOverride() *bchain.MissingBlockRetry {
+	if p, ok := c.b.(interface {
+		MissingBlockRetryOverride() *bchain.MissingBlockRetry
+	}); ok {
+		return p.MissingBlockRetryOverride()
+	}
+	return nil
+}
