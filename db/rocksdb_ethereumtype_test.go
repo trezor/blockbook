@@ -1586,6 +1586,107 @@ func Test_addToContract_ERC20ZeroesExistingValue(t *testing.T) {
 	}
 }
 
+func Test_ERC721_SelfTransfer_ReorgTokenLoss(t *testing.T) {
+	addrDesc := makeTestAddrDesc(0x7101)
+	contract := makeTestAddrDesc(0x7102)
+	acs := &unpackedAddrContracts{
+		TotalTxs: 6,
+		Contracts: []unpackedAddrContract{
+			{
+				Standard: bchain.NonFungibleToken,
+				Contract: contract,
+				Txs:      6,
+				Ids: unpackedIds{
+					{Value: big.NewInt(1)},
+					{Value: big.NewInt(2)},
+					{Value: big.NewInt(3)},
+				},
+			},
+		},
+	}
+	btxContract := &ethBlockTxContract{
+		from:             addrDesc,
+		to:               addrDesc,
+		contract:         contract,
+		transferStandard: bchain.NonFungibleToken,
+		value:            *big.NewInt(2),
+	}
+
+	err := (&RocksDB{}).disconnectAddress([]byte{0x01}, false, addrDesc, btxContract, map[string]map[string]struct{}{}, map[string]*unpackedAddrContracts{
+		string(addrDesc): acs,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := acs.TotalTxs, uint(5); got != want {
+		t.Fatalf("TotalTxs = %d, want %d", got, want)
+	}
+	if got, want := acs.Contracts[0].Txs, uint(5); got != want {
+		t.Fatalf("contract Txs = %d, want %d", got, want)
+	}
+
+	want := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	if got := acs.Contracts[0].Ids; len(got) != len(want) {
+		t.Fatalf("Ids length = %d, want %d: %v", len(got), len(want), got)
+	} else {
+		for i := range got {
+			if got[i].get().Cmp(want[i]) != 0 {
+				t.Fatalf("Ids[%d] = %v, want %v", i, got[i].get(), want[i])
+			}
+		}
+	}
+}
+
+func Test_ERC1155_SelfTransfer_ReorgValueLoss(t *testing.T) {
+	addrDesc := makeTestAddrDesc(0x1155)
+	contract := makeTestAddrDesc(0x1156)
+	acs := &unpackedAddrContracts{
+		TotalTxs: 6,
+		Contracts: []unpackedAddrContract{
+			{
+				Standard: bchain.MultiToken,
+				Contract: contract,
+				Txs:      6,
+				MultiTokenValues: unpackedMultiTokenValues{
+					{
+						Id:    unpackedBigInt{Value: big.NewInt(2)},
+						Value: unpackedBigInt{Value: big.NewInt(10)},
+					},
+				},
+			},
+		},
+	}
+	btxContract := &ethBlockTxContract{
+		from:             addrDesc,
+		to:               addrDesc,
+		contract:         contract,
+		transferStandard: bchain.MultiToken,
+		idValues: []bchain.MultiTokenValue{
+			{
+				Id:    *big.NewInt(2),
+				Value: *big.NewInt(3),
+			},
+		},
+	}
+
+	err := (&RocksDB{}).disconnectAddress([]byte{0x02}, false, addrDesc, btxContract, map[string]map[string]struct{}{}, map[string]*unpackedAddrContracts{
+		string(addrDesc): acs,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := acs.Contracts[0].MultiTokenValues
+	if len(got) != 1 {
+		t.Fatalf("MultiTokenValues length = %d, want 1", len(got))
+	}
+	if got[0].Id.get().Cmp(big.NewInt(2)) != 0 {
+		t.Fatalf("MultiTokenValues[0].Id = %v, want 2", got[0].Id.get())
+	}
+	if got[0].Value.get().Cmp(big.NewInt(10)) != 0 {
+		t.Fatalf("MultiTokenValues[0].Value = %v, want 10", got[0].Value.get())
+	}
+}
+
 func Test_packUnpackBlockTx(t *testing.T) {
 	parser := ethereumTestnetParser()
 	tests := []struct {
