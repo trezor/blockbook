@@ -49,7 +49,7 @@
             "parse": true,
             "mempool_workers": 8,
             "mempool_sub_workers": 2,
-            "block_addresses_to_keep": 600,
+            "block_addresses_to_keep": 1800,
             "additional_params": {
                 "averageBlockTimeMs": 250,
                 "address_aliases": true,
