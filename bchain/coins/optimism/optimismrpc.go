@@ -38,7 +38,7 @@ func NewOptimismRPC(config json.RawMessage, pushHandler func(bchain.Notification
 func (b *OptimismRPC) Initialize() error {
 	b.OpenRPC = eth.OpenRPC
 
-	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)
+	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL, b.ChainConfig.RPCURLWS)
 	if err != nil {
 		return err
 	}
@@ -67,9 +67,15 @@ func (b *OptimismRPC) Initialize() error {
 		return errors.Errorf("Unknown network id %v", id)
 	}
 
-	b.InitAlternativeProviders()
+	if err = b.InitAlternativeProviders(); err != nil {
+		return err
+	}
 
 	glog.Info("rpc: block chain ", b.Network)
 
 	return nil
+}
+
+func (b *OptimismRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	return b.EthereumRPC.ResolveENS(name)
 }

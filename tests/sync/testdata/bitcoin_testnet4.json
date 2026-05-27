@@ -39,6 +39,13 @@
                                 "scriptPubKey": {
                                     "hex": "00144237fc8335d817b911332fc9df26744215266b17"
                                 }
+                            },
+                            {
+                                "value": 0.00316052,
+                                "n": 2,
+                                "scriptPubKey": {
+                                    "hex": "a914e5bd951e8d6b10fab8cea5b103c71ae3a37b95bf87"
+                                }
                             }
                         ]
                     },
@@ -91,7 +98,7 @@
                             },
                             {
                                 "value": 0.00168669,
-                                "n": 1,
+                                "n": 2,
                                 "scriptPubKey": {
                                     "hex": "a914fa793409354d909ceaf168b7b7f91a92e0b4ba8587"
                                 }

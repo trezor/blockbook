@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 type alternativeFeeProvider struct {
@@ -13,6 +14,15 @@ type alternativeFeeProvider struct {
 	staleSyncDuration time.Duration
 	chain             bchain.BlockChain
 	mux               sync.Mutex
+	metrics           *common.Metrics
+	name              string
+}
+
+func (p *alternativeFeeProvider) observeRequest(status string) {
+	if p.metrics == nil || p.metrics.AlternativeFeeProviderRequests == nil {
+		return
+	}
+	p.metrics.AlternativeFeeProviderRequests.With(common.Labels{"provider": p.name, "status": status}).Inc()
 }
 
 type alternativeFeeProviderInterface interface {

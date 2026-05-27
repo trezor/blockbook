@@ -16,6 +16,47 @@ import (
 
 func testHandleFork(t *testing.T, h *TestHandler) {
 	for _, rng := range h.TestData.HandleFork.SyncRanges {
+		t.Run("missingBlockResync", func(t *testing.T) {
+			withRocksDBAndSyncWorker(t, h, rng.Lower, func(d *db.RocksDB, sw *db.SyncWorker, _ chan os.Signal) {
+				fakeBlocks := getFakeBlocks(h, rng)
+				if len(fakeBlocks) == 0 {
+					t.Skip("no fake blocks for missing block test")
+				}
+				chain, err := makeFakeChain(h.Chain, fakeBlocks, rng.Upper)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Use the last fake block (at upper height) to simulate a hash that disappears.
+				fakeUpper := fakeBlocks[len(fakeBlocks)-1]
+				realUpperHash, err := h.Chain.GetBlockHash(fakeUpper.Height)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if realUpperHash == fakeUpper.Hash {
+					t.Skip("fake block hash matches real hash, cannot simulate missing block")
+				}
+				missingChain := &missingBlockChain{
+					fakeBlockChain: chain,
+					missingHeight:  fakeUpper.Height,
+					missingHash:    fakeUpper.Hash,
+					switchAfter:    3,
+				}
+				db.SetBlockChain(sw, missingChain)
+				if err := sw.ResyncIndex(nil, true); err != nil {
+					t.Fatalf("ResyncIndex failed after missing block: %v", err)
+				}
+				bestHeight, bestHash, err := d.GetBestBlock()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if bestHeight != rng.Upper {
+					t.Fatalf("best height mismatch: %d != %d", bestHeight, rng.Upper)
+				}
+				if bestHash != realUpperHash {
+					t.Fatalf("best hash mismatch after resync: %s != %s", bestHash, realUpperHash)
+				}
+			})
+		})
 		withRocksDBAndSyncWorker(t, h, rng.Lower, func(d *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
 			fakeBlocks := getFakeBlocks(h, rng)
 			chain, err := makeFakeChain(h.Chain, fakeBlocks, rng.Upper)
@@ -47,11 +88,11 @@ func testHandleFork(t *testing.T, h *TestHandler) {
 			chain.returnFakes = false
 
 			upperHash := fakeBlocks[len(fakeBlocks)-1].Hash
-			db.HandleFork(sw, rng.Upper, upperHash, func(hash string, height uint32) {
-				if hash == upperHash {
-					close(ch)
-				}
-			}, true)
+				db.HandleFork(sw, rng.Upper, upperHash, func(block *bchain.Block) {
+					if block != nil && block.Hash == upperHash {
+						close(ch)
+					}
+				}, true)
 
 			realBlocks := getRealBlocks(h, rng)
 			realTxs, err := getTxs(h, d, rng, realBlocks)
@@ -65,6 +106,30 @@ func testHandleFork(t *testing.T, h *TestHandler) {
 			verifyAddresses2(t, d, h.Chain, realBlocks)
 		})
 	}
+}
+
+// missingBlockChain simulates a temporary "block not found" error for a known hash,
+// then flips the fake chain back to real hashes to emulate a reorg/rollback.
+type missingBlockChain struct {
+	*fakeBlockChain
+	missingHeight uint32
+	missingHash   string
+	switchAfter   int
+	notFoundCount int
+	switched      bool
+}
+
+func (c *missingBlockChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	if !c.switched && height == c.missingHeight && hash == c.missingHash {
+		c.notFoundCount++
+		if c.notFoundCount >= c.switchAfter {
+			// Stop serving fake hashes so GetBlockHash returns the real chain hash.
+			c.returnFakes = false
+			c.switched = true
+		}
+		return nil, bchain.ErrBlockNotFound
+	}
+	return c.fakeBlockChain.GetBlock(hash, height)
 }
 
 func verifyAddresses2(t *testing.T, d *db.RocksDB, chain bchain.BlockChain, blks []BlockID) {

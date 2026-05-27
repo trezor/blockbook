@@ -1,0 +1,61 @@
+name: Testing
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ '**' ]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: [self-hosted, bb-dev-selfhosted]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run unit tests
+        env:
+          BB_BUILD_ENV: dev
+        run: make test
+
+  connectivity-tests:
+    name: Connectivity Tests
+    runs-on: [self-hosted, bb-dev-selfhosted]
+    needs: unit-tests
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-env-vars
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Run connectivity tests
+        env:
+          BB_BUILD_ENV: dev
+        run: make test-connectivity
+
+  integration-tests:
+    name: Integration Tests (RPC + Sync)
+    runs-on: [self-hosted, bb-dev-selfhosted]
+    needs: connectivity-tests
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-env-vars
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Run integration tests
+        env:
+          BB_BUILD_ENV: dev
+        run: make test-integration ARGS="-v"

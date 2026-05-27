@@ -1,0 +1,122 @@
+{
+  "connectBlocks": {
+    "syncRanges": [
+      {
+        "lower": 102,
+        "upper": 103
+      }
+    ],
+    "blocks": {
+      "102": {
+        "height": 102,
+        "hash": "622fcc1655e8a201caf20fefde3f88a4dd4eb93681cf616365f5e71b2410ddb5",
+        "noTxs": 3,
+        "txDetails": [
+          {
+            "hex": "0200000000010178cff9cb5d5ccf92843247c29f87e63d9e3d8187d101c60ecf487a3f417428e70000000000fdffffff0200e1f50500000000160014921cedc9c74487c3d66a4f2b5f160525a6d028e173101024010000001600140fb7eb0647b669322c2dfb409d2a29712427b8c80247304402200eeb6fb2e9480311308140f5fead1b4569a3c06f455c00290ab0f354f83c7f9e02207c73aa5cc45f023d008ad4199f66e9c1e972f7fe9734f478ae39237b597adff1012103884ab8032dad60a335bc25652474dd48b8a07d0d1f6a6125f76d60c5972b4b5065000000",
+            "txid": "df238a6c104d5f3217d60d574226bd5227b91dce11fa3ca86257259d9b6bcf11",
+            "blocktime": 1731936586,
+            "time": 1731936586,
+            "locktime": 101,
+            "vsize": 141,
+            "version": 2,
+            "vin": [
+              {
+                "txid": "e72874413f7a48cf0ec601d187813d9e3de6879fc247328492cf5c5dcbf9cf78",
+                "vout": 0,
+                "scriptSig": {
+                  "hex": ""
+                },
+                "sequence": 4294967293
+              }
+            ],
+            "vout": [
+              {
+                "value": 1.00000000,
+                "n": 0,
+                "scriptPubKey": {
+                  "hex": "0014921cedc9c74487c3d66a4f2b5f160525a6d028e1"
+                }
+              },
+              {
+                "value": 48.99999859,
+                "n": 1,
+                "scriptPubKey": {
+                  "hex": "00140fb7eb0647b669322c2dfb409d2a29712427b8c8"
+                }
+              }
+            ]
+          },
+          {
+            "hex": "0200000000010111cf6b9b9d255762a83cfa11ce1db92752bd2642570dd617325f4d106c8a23df0100000000fdffffff02e62e1a1e01000000160014d1f54f4f880b22d97988ee14d7c18abd3d2685d400e1f50500000000160014921cedc9c74487c3d66a4f2b5f160525a6d028e10247304402205d9608759061ca479c6b926f6381ff16e3a048c35e5dbc99b0e66f48d0fbedab02204ba6e77b22f970dad866209488a02c96ab7ed95eb08378e3d113eafbb582495201210392442ae9fdc19e9bb07899fd5fce04cf232a19fd2a34c9a4078f300fab0df75f65000000",
+            "txid": "b640572e474471177505c3e9059d58723aa22b872e4830bf4bec0c3071fcae53",
+            "blocktime": 1731936586,
+            "time": 1731936586,
+            "locktime": 101,
+            "vsize": 141,
+            "version": 2,
+            "vin": [
+              {
+                "txid": "df238a6c104d5f3217d60d574226bd5227b91dce11fa3ca86257259d9b6bcf11",
+                "vout": 1,
+                "scriptSig": {
+                  "hex": ""
+                },
+                "sequence": 4294967293
+              }
+            ],
+            "vout": [
+              {
+                "value": 47.99999718,
+                "n": 0,
+                "scriptPubKey": {
+                  "hex": "0014d1f54f4f880b22d97988ee14d7c18abd3d2685d4"
+                }
+              },
+              {
+                "value": 1.00000000,
+                "n": 1,
+                "scriptPubKey": {
+                  "hex": "0014921cedc9c74487c3d66a4f2b5f160525a6d028e1"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "103": {
+        "height": 103,
+        "hash": "121a77facf98a364ea6ab99017cc03f528b155fabb447cdd7dc9c61c2bffc9dc",
+        "noTxs": 1
+      }
+    }
+  },
+  "handleFork": {
+    "syncRanges": [
+      {
+        "lower": 102,
+        "upper": 103
+      }
+    ],
+    "fakeBlocks": {
+      "102": {
+        "height": 102,
+        "hash": "7cebf7d9e4296219df3fcc3fd44c631da168ef9be96722ed7956d628dc8a0c71"
+      },
+      "103": {
+        "height": 103,
+        "hash": "3baf56dc79be0d4859405cd00015c1a29b642565c3b2d983cf6dc6ffd7c184dd"
+      }
+    },
+    "realBlocks": {
+      "102": {
+        "height": 102,
+        "hash": "622fcc1655e8a201caf20fefde3f88a4dd4eb93681cf616365f5e71b2410ddb5"
+      },
+      "103": {
+        "height": 103,
+        "hash": "121a77facf98a364ea6ab99017cc03f528b155fabb447cdd7dc9c61c2bffc9dc"
+      }
+    }
+  }
+}

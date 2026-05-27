@@ -1,0 +1,312 @@
+{
+  "connectBlocks": {
+    "syncRanges": [
+      {
+        "lower": 40000000,
+        "upper": 40000003
+      }
+    ],
+    "blocks": {
+      "40000000": {
+        "height": 40000000,
+        "hash": "0x0000000002625a003cdd3f3fbe99c6a0e59884bade6070424a404a665ae25121",
+        "noTxs": 2,
+        "txDetails": [
+          {
+            "txid": "0x3de22f92eb633354aa7092eaeb1be3fb57d8e22eda31463b80c33a4af1f369c0",
+            "blocktime": 1694226768,
+            "time": 1694226768,
+            "from": [
+              "TGfDnTmwhcQYTgiWcsRv3ga4hUb55ETyvu"
+            ],
+            "to": [
+              "TF17BgPaZYbz8oxbjhriubPDsA7ArKoLX3"
+            ],
+            "value": 0,
+            "vin": [
+              {
+                "addresses": [
+                  "TGfDnTmwhcQYTgiWcsRv3ga4hUb55ETyvu"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TF17BgPaZYbz8oxbjhriubPDsA7ArKoLX3"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "txid": "0xbddfa831a4f671788c68e6764ed3f8d7f079ec5074802a18fcdbf80f3c68c7a9",
+            "blocktime": 1694226768,
+            "time": 1694226768,
+            "from": [
+              "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+            ],
+            "to": [
+              "TTS9mztm6vHuGJ4qBnEZHFjVRnWsiEeDBe"
+            ],
+            "value": 0,
+            "vin": [
+              {
+                "addresses": [
+                  "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TTS9mztm6vHuGJ4qBnEZHFjVRnWsiEeDBe"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "40000001": {
+        "height": 40000001,
+        "hash": "0x0000000002625a0148de6001ba0cffd6280777fb663640367638af242e13426d",
+        "noTxs": 2,
+        "txDetails": [
+          {
+            "txid": "0xae304f9394f8b976ac29c141d3ff7bb0c7843d12b7d9b0b983c4c9cfcb84c1ad",
+            "blocktime": 1694226771,
+            "time": 1694226771,
+            "from": [
+              "TEJF8seQzsU1wu1sZcna155kjcbwX338kk"
+            ],
+            "to": [
+              "TN2czYfN4bMgFXuBJbQ9GiEvJh1zR7JqQ2"
+            ],
+            "value": 0,
+            "vin": [
+              {
+                "addresses": [
+                  "TEJF8seQzsU1wu1sZcna155kjcbwX338kk"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TN2czYfN4bMgFXuBJbQ9GiEvJh1zR7JqQ2"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "txid": "0x73441f5180be7b2ceb0a63b4ee242402043cb5accee6b8fc33d4d760e9b388d7",
+            "blocktime": 1694226771,
+            "time": 1694226771,
+            "from": [
+              "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+            ],
+            "to": [
+              "TJVjvhdTJrf4yxUJo6PT7ifrdsBcARmgkZ"
+            ],
+            "value": 0,
+            "vin": [
+              {
+                "addresses": [
+                  "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TJVjvhdTJrf4yxUJo6PT7ifrdsBcARmgkZ"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "40000002": {
+        "height": 40000002,
+        "hash": "0x0000000002625a024c12d0e3e5425241e23bcaabc8618d878380217366c3a65d",
+        "noTxs": 2,
+        "txDetails": [
+          {
+            "txid": "0x0f211c2dd1edeef0b9a857952d54369cc52e5d6e0837508c10fb93574e20b024",
+            "blocktime": 1694226774,
+            "time": 1694226774,
+            "from": [
+              "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+            ],
+            "to": [
+              "TN1kxgupDatmJzaiywyGnmtEQP8hZ6QEEs"
+            ],
+            "value": 0,
+            "vin": [
+              {
+                "addresses": [
+                  "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TN1kxgupDatmJzaiywyGnmtEQP8hZ6QEEs"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "txid": "0x463908257868982ed365a10db3692e533289db476195eb1b9e79ed4ca5180e95",
+            "blocktime": 1694226774,
+            "time": 1694226774,
+            "from": [
+              "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+            ],
+            "to": [
+              "TN1kxgupDatmJzaiywyGnmtEQP8hZ6QEEs"
+            ],
+            "value": 0,
+            "vin": [
+              {
+                "addresses": [
+                  "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TN1kxgupDatmJzaiywyGnmtEQP8hZ6QEEs"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "40000003": {
+        "height": 40000003,
+        "hash": "0x0000000002625a038c223f94eea1bb4fafdde50ec9f008ddf05fc6b3a2e71987",
+        "noTxs": 2,
+        "txDetails": [
+          {
+            "txid": "0x0f211c2dd1edeef0b9a857952d54369cc52e5d6e0837508c10fb93574e20b024",
+            "blocktime": 1694226777,
+            "time": 1694226777,
+            "from": [
+              "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+            ],
+            "to": [
+              "TN1kxgupDatmJzaiywyGnmtEQP8hZ6QEEs"
+            ],
+            "value": 0,
+            "vin": [
+              {
+                "addresses": [
+                  "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TN1kxgupDatmJzaiywyGnmtEQP8hZ6QEEs"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "txid": "0x90be178ce85f7ea2b173ad24008e9782411e77ff6fca92cf20b51997531eb5b9",
+            "blocktime": 1694226777,
+            "time": 1694226777,
+            "from": [
+              "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+            ],
+            "to": [
+              "TPfsxopnbS7U6UkDiovDzxpiHANqbqre7B"
+            ],
+            "value": 299000,
+            "vin": [
+              {
+                "addresses": [
+                  "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+                ]
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "addresses": [
+                    "TPfsxopnbS7U6UkDiovDzxpiHANqbqre7B"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "handleFork": {
+    "syncRanges": [
+      { "lower": 40000000, "upper": 40000002 },
+      { "lower": 40000001, "upper": 40000003 }
+    ],
+    "fakeBlocks": {
+      "40000001": {
+        "height": 40000001,
+        "hash": "0xfake000000000000000000000000000000000000000000000000000000000000"
+      },
+      "40000002": {
+        "height": 40000002,
+        "hash": "0xfake111111111111111111111111111111111111111111111111111111111111"
+      }
+    },
+
+    "realBlocks": {
+      "40000001": {
+        "height": 40000001,
+        "hash": "0x0000000002625a0148de6001ba0cffd6280777fb663640367638af242e13426d"
+      },
+      "40000002": {
+        "height": 40000002,
+        "hash": "0x0000000002625a024c12d0e3e5425241e23bcaabc8618d878380217366c3a65d"
+      },
+      "40000003": {
+        "height": 40000003,
+        "hash": "0x0000000002625a038c223f94eea1bb4fafdde50ec9f008ddf05fc6b3a2e71987"
+      }
+    }
+
+    }
+}

@@ -6,6 +6,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -129,6 +130,16 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 				`{"ts":1574340000,"rates":{"usd":-1}}`,
 			},
 		},
+		{
+			name:        "explorerAddress ENS resolution - valid domain",
+			r:           newGetRequest(ts.URL + "/address/vitalik.eth"),
+			status:      http.StatusOK,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`Address `, // Empty title (current behavior)
+				`0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`,
+			},
+		},
 	}
 
 	performHttpTests(tests, t, ts)
@@ -163,6 +174,62 @@ var websocketTestsEthereumType = []websocketTest{
 			},
 		},
 		want: `{"id":"2","data":{"result":"9876"}}`,
+	},
+	{
+		name: "websocket getCurrentFiatRates token usd",
+		req: websocketReq{
+			Method: "getCurrentFiatRates",
+			Params: map[string]interface{}{
+				"currencies": []string{"usd"},
+				"token":      "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"3","data":{"ts":1592821931,"rates":{"usd":8.2}}}`,
+	},
+	{
+		name: "websocket getCurrentFiatRates unknown token",
+		req: websocketReq{
+			Method: "getCurrentFiatRates",
+			Params: map[string]interface{}{
+				"currencies": []string{"usd"},
+				"token":      "0xFFFFFFFFFFe95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"4","data":{"error":{"message":"No tickers found!"}}}`,
+	},
+	{
+		name: "websocket getFiatRatesForTimestamps token usd",
+		req: websocketReq{
+			Method: "getFiatRatesForTimestamps",
+			Params: map[string]interface{}{
+				"currencies": []string{"usd"},
+				"timestamps": []int64{1574340000},
+				"token":      "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"5","data":{"tickers":[{"ts":1574380800,"rates":{"usd":1.2}}]}}`,
+	},
+	{
+		name: "websocket getFiatRatesTickersList token",
+		req: websocketReq{
+			Method: "getFiatRatesTickersList",
+			Params: map[string]interface{}{
+				"timestamp": 1574340000,
+				"token":     "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"6","data":{"ts":1574380800,"available_currencies":["eur","usd"]}}`,
+	},
+	{
+		name: "websocket getFiatRatesTickersList unknown token",
+		req: websocketReq{
+			Method: "getFiatRatesTickersList",
+			Params: map[string]interface{}{
+				"timestamp": 1574340000,
+				"token":     "0xFFFFFFFFFFe95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"7","data":{"error":{"message":"No tickers found"}}}`,
 	},
 }
 
@@ -271,4 +338,195 @@ func Test_PublicServer_EthereumType(t *testing.T) {
 
 	httpTestsEthereumType(t, ts)
 	runWebsocketTests(t, ts, websocketTestsEthereumType)
+}
+func TestENSResolution(t *testing.T) {
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		t.Fatalf("Failed to create fake blockchain: %v", err)
+	}
+
+	ensResolver, ok := chain.(interface {
+		ResolveENS(string) (*bchain.ENSResolution, error)
+	})
+	if !ok {
+		t.Fatal("Chain does not support ENS resolution")
+	}
+
+	testCases := []struct {
+		name        string
+		domain      string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid ENS domain",
+			domain:      "vitalik.eth",
+			expectError: false,
+		},
+		{
+			name:        "invalid domain format",
+			domain:      "not-an-ens-domain",
+			expectError: true,
+			errorMsg:    "invalid ENS name",
+		},
+		{
+			name:        "expired domain",
+			domain:      "expired.eth",
+			expectError: true,
+			errorMsg:    "ENS name expired",
+		},
+		{
+			name:        "non-existent domain",
+			domain:      "nonexistent.eth",
+			expectError: true,
+			errorMsg:    "ENS name not found",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ensResolver.ResolveENS(tc.domain)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error for domain %s, but got none", tc.domain)
+				}
+				if result != nil && result.Error != tc.errorMsg {
+					t.Errorf("Expected error message '%s', got '%s'", tc.errorMsg, result.Error)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for domain %s: %v", tc.domain, err)
+				}
+				if result == nil {
+					t.Errorf("Expected result for domain %s, but got nil", tc.domain)
+				}
+				if result != nil && result.Address == "" {
+					t.Errorf("Expected resolved address for domain %s, but got empty", tc.domain)
+				}
+			}
+		})
+	}
+}
+
+func TestENSExpiration(t *testing.T) {
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		t.Fatalf("Failed to create fake blockchain: %v", err)
+	}
+
+	ensResolver, ok := chain.(interface {
+		CheckENSExpiration(string) (bool, error)
+	})
+	if !ok {
+		t.Fatal("Chain does not support ENS expiration checking")
+	}
+
+	testCases := []struct {
+		name          string
+		domain        string
+		expectExpired bool
+		expectError   bool
+	}{
+		{
+			name:          "valid domain",
+			domain:        "vitalik.eth",
+			expectExpired: false,
+			expectError:   false,
+		},
+		{
+			name:          "expired domain",
+			domain:        "expired.eth",
+			expectExpired: true,
+			expectError:   false,
+		},
+		{
+			name:          "nonexistent domain",
+			domain:        "nonexistent.eth",
+			expectExpired: false,
+			expectError:   false,
+		},
+		{
+			name:        "invalid domain",
+			domain:      "invalid-domain",
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expired, err := ensResolver.CheckENSExpiration(tc.domain)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error for domain %s, but got none", tc.domain)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for domain %s: %v", tc.domain, err)
+				}
+				if expired != tc.expectExpired {
+					t.Errorf("Expected expired=%v for domain %s, got %v", tc.expectExpired, tc.domain, expired)
+				}
+			}
+		})
+	}
+}
+
+func Test_HTTPFiatRates_EthereumType_TokenCoverage(t *testing.T) {
+	timeNow = fixedTimeNow
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		glog.Fatal("fakechain: ", err)
+	}
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	token := "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3"
+
+	var currentToken fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?currency=USD&token="+token, http.StatusOK, &currentToken)
+	if currentToken.Timestamp != 1592821931 {
+		t.Fatalf("unexpected current token timestamp: got %d, want %d", currentToken.Timestamp, 1592821931)
+	}
+	if !reflect.DeepEqual(currentToken.Rates, map[string]float32{"usd": 8.2}) {
+		t.Fatalf("unexpected current token rates: got %v", currentToken.Rates)
+	}
+
+	var tickersList fiatTickersListResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers-list?timestamp=1574340000&token="+token, http.StatusOK, &tickersList)
+	if tickersList.Timestamp != 1574380800 {
+		t.Fatalf("unexpected tickers-list timestamp: got %d, want %d", tickersList.Timestamp, 1574380800)
+	}
+	if !reflect.DeepEqual(tickersList.Tickers, []string{"eur", "usd"}) {
+		t.Fatalf("unexpected tickers-list currencies: got %v", tickersList.Tickers)
+	}
+
+	unknownToken := "0xFFFFFFFFFFe95Af55f0447555c8b6aA3088562f3"
+	var listErr apiErrorResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers-list?timestamp=1574340000&token="+unknownToken, http.StatusBadRequest, &listErr)
+	if listErr.Error != "No tickers found" {
+		t.Fatalf("unexpected unknown-token tickers-list error: got %q, want %q", listErr.Error, "No tickers found")
+	}
+
+	var multiToken []fiatTickerResponse
+	mustGetJSON(
+		t,
+		ts.URL+"/api/v2/multi-tickers?timestamp=1574340000,1521545531&currency=USD&token="+token,
+		http.StatusOK,
+		&multiToken,
+	)
+	wantMulti := []fiatTickerResponse{
+		{Timestamp: 1574380800, Rates: map[string]float32{"usd": 1.2}},
+		{Timestamp: 1553126400, Rates: map[string]float32{"usd": 0.8}},
+	}
+	if !reflect.DeepEqual(multiToken, wantMulti) {
+		t.Fatalf("unexpected multi token rates: got %v, want %v", multiToken, wantMulti)
+	}
 }

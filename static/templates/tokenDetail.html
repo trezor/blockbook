@@ -51,7 +51,7 @@
     }
     async function getMetadata(url) {
         try {
-            const uri={{ jsStr $data.URI }};
+            const uri={{ $data.URI }};
             if(uri) {
                 const response = await fetch(uri);
                 const contentType=response.headers.get('content-type');

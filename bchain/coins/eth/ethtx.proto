@@ -34,4 +34,5 @@ message ProtoCompleteTransaction {
   uint64 BlockTime = 2;
   TxType Tx = 3;
   ReceiptType Receipt = 4;
+  bytes ChainExtraData = 5;
 }

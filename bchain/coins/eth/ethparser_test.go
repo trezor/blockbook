@@ -380,7 +380,53 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 	}
 }
 
+func TestEthereumParser_PackUnpackChainExtraData(t *testing.T) {
+	p := NewEthereumParser(1, false)
+	original := &bchain.Tx{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
+				AccountNonce:     "0x1",
+				GasPrice:         "0x430e23400",
+				GasLimit:         "0x5208",
+				To:               "0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f",
+				Value:            "0x0",
+				Payload:          "0x",
+				Hash:             "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
+				BlockNumber:      "0x41eee8",
+				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
+				TransactionIndex: "0x0",
+			},
+			Receipt: &bchain.RpcReceipt{
+				GasUsed: "0x5208",
+				Status:  "0x1",
+				Logs:    []*bchain.RpcLog{},
+			},
+			ChainExtraData: []byte(`{"operation":"vote","totalFee":"12345"}`),
+		},
+	}
+
+	packed, err := p.PackTx(original, 4321000, 1534858022)
+	if err != nil {
+		t.Fatalf("PackTx error: %v", err)
+	}
+
+	unpacked, _, err := p.UnpackTx(packed)
+	if err != nil {
+		t.Fatalf("UnpackTx error: %v", err)
+	}
+
+	csd, ok := unpacked.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok {
+		t.Fatalf("unexpected CoinSpecificData type: %T", unpacked.CoinSpecificData)
+	}
+
+	if !reflect.DeepEqual(csd.ChainExtraData, original.CoinSpecificData.(bchain.EthereumSpecificData).ChainExtraData) {
+		t.Fatalf("ChainExtraData mismatch, got %s, want %s", string(csd.ChainExtraData), string(original.CoinSpecificData.(bchain.EthereumSpecificData).ChainExtraData))
+	}
+}
+
 func TestEthereumParser_GetEthereumTxData(t *testing.T) {
+	p := NewEthereumParser(1, false)
 	tests := []struct {
 		name string
 		tx   *bchain.Tx
@@ -399,7 +445,7 @@ func TestEthereumParser_GetEthereumTxData(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetEthereumTxData(tt.tx)
+			got := p.GetEthereumTxData(tt.tx)
 			if got.Data != tt.want {
 				t.Errorf("EthereumParser.GetEthereumTxData() = %v, want %v", got.Data, tt.want)
 			}

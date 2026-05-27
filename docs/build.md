@@ -88,6 +88,34 @@ command: `make NO_CACHE=true all-bitcoin`.
 
 `PORTABLE`: By default, the RocksDB binaries shipped with Blockbook are optimized for the platform you're compiling on (-march=native or the equivalent). If you want to build a portable binary, use `make PORTABLE=1 all-bitcoin`.
 
+`BB_BUILD_ENV`: Selects which RPC URL override family is active during package/config generation. Defaults to `dev`.
+Accepted values are `dev` and `prod`.
+
+`BB_DEV_RPC_URL_HTTP_<coin alias>` / `BB_PROD_RPC_URL_HTTP_<coin alias>`: Override `ipc.rpc_url_template` while generating
+package definitions so you can target hosted HTTP RPC endpoints without editing coin JSON. The root `Makefile` forwards
+`BB_BUILD_ENV` and any `BB_DEV_RPC_URL_*` / `BB_PROD_RPC_URL_*` variables into the Docker build/test containers.
+Resolution prefers the exact alias and also accepts archive variants such as `<alias>_archive` and, for names like Polygon,
+`<prefix>_archive_<suffix>`.
+
+`BB_DEV_RPC_URL_WS_<coin alias>` / `BB_PROD_RPC_URL_WS_<coin alias>`: Override `ipc.rpc_url_ws_template` for WebSocket
+subscriptions. The selected value should point to the same host as the selected HTTP RPC override and follows the same
+fallback resolution.
+
+`BB_DEV_MQ_URL_<coin alias>` / `BB_PROD_MQ_URL_<coin alias>`: Override `ipc.message_queue_binding_template` during
+package/config generation. The value is used as-is and should be a full MQ endpoint such as
+`tcp://backend_hostname:28332`. The root `Makefile` forwards these variables into the Docker build/test containers and
+the same alias/archive fallback resolution applies.
+
+Example:
+`BB_BUILD_ENV=prod BB_PROD_RPC_URL_HTTP_ethereum=http://backend_hostname:1234 BB_PROD_RPC_URL_WS_ethereum_archive=ws://backend_hostname:1234 make deb-ethereum_archive`.
+
+`BB_RPC_BIND_HOST_<coin alias>`: Overrides backend RPC bind host during package generation. Defaults to `127.0.0.1`
+to avoid unintended exposure. Example: `BB_RPC_BIND_HOST_ethereum=0.0.0.0 make deb-ethereum`.
+
+`BB_RPC_ALLOW_IP_<coin alias>`: Overrides backend RPC allow list for UTXO configs (e.g. `rpcallowip`). Defaults to
+`127.0.0.1` so binding to `0.0.0.0` does not implicitly open access. Example:
+`BB_RPC_ALLOW_IP_bitcoin=10.0.0.0/24 make deb-bitcoin`.
+
 ### Naming conventions and versioning
 
 All configuration keys described below are in coin definition file in *configs/coins*.
@@ -210,7 +238,7 @@ sudo apt-get update && sudo apt-get install -y \
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
 git checkout v9.10.0
-CFLAGS=-fPIC CXXFLAGS=-fPIC make release
+CFLAGS=-fPIC CXXFLAGS="-fPIC -Wno-error=array-bounds" make release
 ```
 
 Setup variables for grocksdb
@@ -258,7 +286,7 @@ Example for Bitcoin:
 ./blockbook -sync -blockchaincfg=build/blockchaincfg.json -internal=:9030 -public=:9130 -certfile=server/testcert -logtostderr
 ```
 
-This command starts Blockbook with parallel synchronization and providing HTTP and Socket.IO interface, with database
+This command starts Blockbook with parallel synchronization and providing HTTP API and WebSocket interfaces, with database
 in local directory *data* and established ZeroMQ and RPC connections to back-end daemon specified in configuration
 file passed to *-blockchaincfg* option.
 

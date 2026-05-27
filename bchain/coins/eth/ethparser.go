@@ -22,10 +22,39 @@ const EthereumTypeTxidLen = 32
 // EtherAmountDecimalPoint defines number of decimal points in Ether amounts
 const EtherAmountDecimalPoint = 18
 
+const defaultHotAddressMinContracts = 192
+const defaultHotAddressLRUCacheSize = 20000
+const defaultHotAddressMinHits = 3
+const maxHotAddressLRUCacheSize = 100_000
+const maxHotAddressMinHits = 10
+const defaultAddressContractsCacheMinSize = 300_000
+const defaultAddressContractsCacheMaxBytes int64 = 2_000_000_000
+const defaultAddressContractsCacheBulkMaxBytes int64 = 4_000_000_000
+
+type AddressContractsCacheConfig struct {
+	MinSize      int
+	TipMaxBytes  int64
+	BulkMaxBytes int64
+}
+
+type EthereumLikeParser interface {
+	bchain.BlockChainParser
+	EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
+	SetEnsSuffix(suffix string)
+}
+
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
-	EnsSuffix string
+	EnsSuffix                      string
+	HotAddressMinContracts         int
+	HotAddressLRUCacheSize         int
+	HotAddressMinHits              int
+	AddrContractsCacheMinSize      int
+	AddrContractsCacheMaxBytes     int64
+	AddrContractsCacheBulkMaxBytes int64
+	FormatAddressFunc              func(addr string) string
+	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
 }
 
 // NewEthereumParser returns new EthereumParser instance
@@ -36,7 +65,27 @@ func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 			AmountDecimalPoint:   EtherAmountDecimalPoint,
 			AddressAliases:       addressAliases,
 		},
-		EnsSuffix: ".eth",
+		EnsSuffix:                      ".eth",
+		HotAddressMinContracts:         defaultHotAddressMinContracts,
+		HotAddressLRUCacheSize:         defaultHotAddressLRUCacheSize,
+		HotAddressMinHits:              defaultHotAddressMinHits,
+		AddrContractsCacheMinSize:      defaultAddressContractsCacheMinSize,
+		AddrContractsCacheMaxBytes:     defaultAddressContractsCacheMaxBytes,
+		AddrContractsCacheBulkMaxBytes: defaultAddressContractsCacheBulkMaxBytes,
+		FormatAddressFunc:              EIP55AddressFromAddress,
+		FromDescToAddressFunc:          EIP55Address,
+	}
+}
+
+func (p *EthereumParser) HotAddressConfig() (minContracts, lruSize, minHits int) {
+	return p.HotAddressMinContracts, p.HotAddressLRUCacheSize, p.HotAddressMinHits
+}
+
+func (p *EthereumParser) AddressContractsCacheConfig() AddressContractsCacheConfig {
+	return AddressContractsCacheConfig{
+		MinSize:      p.AddrContractsCacheMinSize,
+		TipMaxBytes:  p.AddrContractsCacheMaxBytes,
+		BulkMaxBytes: p.AddrContractsCacheBulkMaxBytes,
 	}
 }
 
@@ -63,6 +112,10 @@ type rpcBlockTxids struct {
 	Transactions []string `json:"transactions"`
 }
 
+func (p *EthereumParser) SetEnsSuffix(suffix string) {
+	p.EnsSuffix = suffix
+}
+
 func ethNumber(n string) (int64, error) {
 	if len(n) > 2 {
 		return strconv.ParseInt(n[2:], 16, 64)
@@ -70,7 +123,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
+func (p *EthereumParser) EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
@@ -78,20 +131,20 @@ func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.Rp
 	)
 	if len(tx.From) > 2 {
 		if fixEIP55 {
-			tx.From = EIP55AddressFromAddress(tx.From)
+			tx.From = p.FormatAddressFunc(tx.From)
 		}
 		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
 		if fixEIP55 {
-			tx.To = EIP55AddressFromAddress(tx.To)
+			tx.To = p.FormatAddressFunc(tx.To)
 		}
 		ta = []string{tx.To}
 	}
 	if fixEIP55 && receipt != nil && receipt.Logs != nil {
 		for _, l := range receipt.Logs {
 			if len(l.Address) > 2 {
-				l.Address = EIP55AddressFromAddress(l.Address)
+				l.Address = p.FormatAddressFunc(l.Address)
 			}
 		}
 	}
@@ -103,8 +156,8 @@ func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.Rp
 			if fixEIP55 {
 				for i := range internalData.Transfers {
 					it := &internalData.Transfers[i]
-					it.From = EIP55AddressFromAddress(it.From)
-					it.To = EIP55AddressFromAddress(it.To)
+					it.From = p.FormatAddressFunc(it.From)
+					it.To = p.FormatAddressFunc(it.To)
 				}
 			}
 		}
@@ -212,7 +265,7 @@ func EIP55AddressFromAddress(address string) string {
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
 func (p *EthereumParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
-	return []string{EIP55Address(addrDesc)}, true, nil
+	return []string{p.FromDescToAddressFunc(addrDesc)}, true, nil
 }
 
 // GetScriptFromAddrDesc returns output script for given address descriptor
@@ -369,6 +422,9 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 			}
 		}
 	}
+	if len(r.ChainExtraData) > 0 {
+		pt.ChainExtraData = r.ChainExtraData
+	}
 	return proto.Marshal(pt)
 }
 
@@ -382,7 +438,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	rt := bchain.RpcTransaction{
 		AccountNonce: hexutil.EncodeUint64(pt.Tx.AccountNonce),
 		BlockNumber:  hexutil.EncodeUint64(uint64(pt.BlockNumber)),
-		From:         EIP55Address(pt.Tx.From),
+		From:         p.FromDescToAddressFunc(pt.Tx.From),
 		GasLimit:     hexutil.EncodeUint64(pt.Tx.GasLimit),
 		Hash:         hexutil.Encode(pt.Tx.Hash),
 		Payload:      hexutil.Encode(pt.Tx.Payload),
@@ -390,7 +446,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		// R:                hexEncodeBig(pt.R),
 		// S:                hexEncodeBig(pt.S),
 		// V:                hexEncodeBig(pt.V),
-		To:               EIP55Address(pt.Tx.To),
+		To:               p.FromDescToAddressFunc(pt.Tx.To),
 		TransactionIndex: hexutil.EncodeUint64(uint64(pt.Tx.TransactionIndex)),
 		Value:            hexEncodeBig(pt.Tx.Value),
 	}
@@ -416,7 +472,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 				topics[j] = hexutil.Encode(t)
 			}
 			rr.Logs[i] = &bchain.RpcLog{
-				Address: EIP55Address(l.Address),
+				Address: p.FromDescToAddressFunc(l.Address),
 				Data:    hexutil.Encode(l.Data),
 				Topics:  topics,
 			}
@@ -439,9 +495,17 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		}
 	}
 	// TODO handle internal transactions
-	tx, err := p.ethTxToTx(&rt, rr, nil, int64(pt.BlockTime), 0, false)
+	tx, err := p.EthTxToTx(&rt, rr, nil, int64(pt.BlockTime), 0, false)
 	if err != nil {
 		return nil, 0, err
+	}
+	if len(pt.ChainExtraData) > 0 {
+		csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+		if !ok {
+			return nil, 0, errors.New("Missing CoinSpecificData")
+		}
+		csd.ChainExtraData = pt.ChainExtraData
+		tx.CoinSpecificData = csd
 	}
 	return tx, pt.BlockNumber, nil
 }
@@ -520,42 +584,9 @@ func (p *EthereumParser) FormatAddressAlias(address string, name string) string 
 	return name + p.EnsSuffix
 }
 
-// TxStatus is status of transaction
-type TxStatus int
-
-// statuses of transaction
-const (
-	TxStatusUnknown = TxStatus(iota - 2)
-	TxStatusPending
-	TxStatusFailure
-	TxStatusOK
-)
-
-// EthereumTxData contains ethereum specific transaction data
-type EthereumTxData struct {
-	Status               TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
-	Nonce                uint64   `json:"nonce"`
-	GasLimit             *big.Int `json:"gaslimit"`
-	GasUsed              *big.Int `json:"gasused"`
-	GasPrice             *big.Int `json:"gasprice"`
-	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas,omitempty"`
-	MaxFeePerGas         *big.Int `json:"maxFeePerGas,omitempty"`
-	BaseFeePerGas        *big.Int `json:"baseFeePerGas,omitempty"`
-	L1Fee                *big.Int `json:"l1Fee,omitempty"`
-	L1FeeScalar          string   `json:"l1FeeScalar,omitempty"`
-	L1GasPrice           *big.Int `json:"l1GasPrice,omitempty"`
-	L1GasUsed            *big.Int `json:"L1GasUsed,omitempty"`
-	Data                 string   `json:"data"`
-}
-
-// GetEthereumTxData returns EthereumTxData from bchain.Tx
-func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
-	return GetEthereumTxDataFromSpecificData(tx.CoinSpecificData)
-}
-
-// GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
-func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
-	etd := EthereumTxData{Status: TxStatusPending}
+// GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData.
+func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *bchain.EthereumTxData {
+	etd := bchain.EthereumTxData{Status: bchain.TxStatusPending}
 	csd, ok := coinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Tx != nil {
@@ -570,11 +601,11 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 		if csd.Receipt != nil {
 			switch csd.Receipt.Status {
 			case "0x1":
-				etd.Status = TxStatusOK
+				etd.Status = bchain.TxStatusOK
 			case "": // old transactions did not set status
-				etd.Status = TxStatusUnknown
+				etd.Status = bchain.TxStatusUnknown
 			default:
-				etd.Status = TxStatusFailure
+				etd.Status = bchain.TxStatusFailure
 			}
 			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
 			etd.L1Fee, _ = hexutil.DecodeBig(csd.Receipt.L1Fee)
@@ -584,6 +615,14 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 		}
 	}
 	return &etd
+}
+
+// GetEthereumTxData returns parsed transaction data for Ethereum-like chains.
+func (p *EthereumParser) GetEthereumTxData(tx *bchain.Tx) *bchain.EthereumTxData {
+	if tx == nil {
+		return &bchain.EthereumTxData{Status: bchain.TxStatusPending}
+	}
+	return GetEthereumTxDataFromSpecificData(tx.CoinSpecificData)
 }
 
 const errorOutputSignature = "08c379a0"

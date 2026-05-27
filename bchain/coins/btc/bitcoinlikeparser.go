@@ -297,6 +297,7 @@ func (p *BitcoinLikeParser) ParseBlock(b []byte) (*bchain.Block, error) {
 
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
+			Prev: w.Header.PrevBlock.String(), // needed for fork detection when parsing raw blocks
 			Size: len(b),
 			Time: w.Header.Timestamp.Unix(),
 		},
@@ -440,7 +441,11 @@ var (
 )
 
 func init() {
-	xpubDesriptorRegex, _ = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+`)
+	var err error
+	xpubDesriptorRegex, err = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+`)
+	if err != nil {
+		panic(errors.Annotate(err, "Invalid bitcoinparser xpubDesriptorRegex"))
+	}
 	typeSubexpIndex = xpubDesriptorRegex.SubexpIndex("type")
 	bipSubexpIndex = xpubDesriptorRegex.SubexpIndex("bip")
 	xpubSubexpIndex = xpubDesriptorRegex.SubexpIndex("xpub")
@@ -500,6 +505,9 @@ func (p *BitcoinLikeParser) ParseXpub(xpub string) (*bchain.XpubDescriptor, erro
 				}
 				if len(changes) == 0 {
 					return nil, errors.New("Invalid xpub descriptor, cannot parse change")
+				}
+				if len(changes) > bchain.MaxXpubChangeIndexes {
+					return nil, errors.Errorf("Xpub descriptor change index count exceeds limit %d", bchain.MaxXpubChangeIndexes)
 				}
 				descriptor.ChangeIndexes = make([]uint32, len(changes))
 				for i, ch := range changes {

@@ -4,6 +4,7 @@ package db
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -28,6 +29,222 @@ func bigintFromStringToHex(s string) string {
 	var b big.Int
 	b.SetString(s, 0)
 	return bigintToHex(&b)
+}
+
+func makeTestAddrDesc(seed int) bchain.AddressDescriptor {
+	b := make([]byte, eth.EthereumTypeAddressDescriptorLen)
+	b[0] = byte(seed >> 8)
+	if len(b) > 1 {
+		b[1] = byte(seed)
+	}
+	for i := 2; i < len(b); i++ {
+		b[i] = byte(seed)
+	}
+	return b
+}
+
+func Test_unpackedAddrContracts_findContractIndex_LazyMap(t *testing.T) {
+	acs := &unpackedAddrContracts{}
+	minContracts := 192
+	for i := 0; i < minContracts+2; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(i),
+		})
+	}
+	addrDesc := makeTestAddrDesc(9999)
+
+	target := acs.Contracts[minContracts].Contract
+	idx, found := acs.findContractIndex(addrDesc, target, nil)
+	if !found || idx != minContracts {
+		t.Fatalf("findContractIndex() = (%v, %v), want (%v, true)", idx, found, minContracts)
+	}
+	if acs.contractIndex != nil {
+		t.Fatal("did not expect contract index map to be built without hotness")
+	}
+
+	missing := makeTestAddrDesc(minContracts + 1024)
+	if _, found := findContractInAddressContracts(missing, acs.Contracts); found {
+		missing = makeTestAddrDesc(minContracts + 2048)
+		if _, found := findContractInAddressContracts(missing, acs.Contracts); found {
+			t.Fatal("failed to generate a missing contract for test")
+		}
+	}
+	if _, found := acs.findContractIndex(addrDesc, missing, nil); found {
+		t.Fatal("expected missing contract to be not found")
+	}
+}
+
+func Test_unpackedAddrContracts_findContractIndex_DirtyRebuild(t *testing.T) {
+	acs := &unpackedAddrContracts{}
+	minContracts := 192
+	for i := 0; i < minContracts+1; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(i),
+		})
+	}
+	addrDesc := makeTestAddrDesc(9998)
+	hot := newAddressHotness(minContracts, 4, 1)
+	if hot == nil {
+		t.Fatal("expected hotness tracker to be initialized")
+	}
+	hot.BeginBlock()
+
+	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
+	if acs.contractIndex == nil {
+		t.Fatal("expected contract index map to be built")
+	}
+
+	// Remove a contract and mark the index dirty to force rebuild.
+	removed := acs.Contracts[1].Contract
+	acs.Contracts = append(acs.Contracts[:1], acs.Contracts[2:]...)
+	acs.markContractIndexDirty()
+
+	if _, found := acs.findContractIndex(addrDesc, removed, hot); found {
+		t.Fatal("expected removed contract to be not found after rebuild")
+	}
+	if idx, found := acs.findContractIndex(addrDesc, acs.Contracts[1].Contract, hot); !found || idx != 1 {
+		t.Fatalf("findContractIndex() = (%v, %v), want (1, true)", idx, found)
+	}
+}
+
+func Test_unpackedAddrContracts_findContractIndex_InvalidLenFallback(t *testing.T) {
+	acs := &unpackedAddrContracts{}
+	minContracts := 192
+	for i := 0; i < minContracts; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(i),
+		})
+	}
+	addrDesc := makeTestAddrDesc(9997)
+	hot := newAddressHotness(minContracts, 4, 1)
+	if hot == nil {
+		t.Fatal("expected hotness tracker to be initialized")
+	}
+	hot.BeginBlock()
+	invalid := bchain.AddressDescriptor([]byte{1, 2, 3})
+	acs.Contracts = append(acs.Contracts, unpackedAddrContract{Contract: invalid})
+
+	// Build index, which will skip the invalid entry.
+	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
+	if acs.contractIndex == nil {
+		t.Fatal("expected contract index map to be built")
+	}
+
+	if idx, found := acs.findContractIndex(addrDesc, invalid, hot); !found || idx != len(acs.Contracts)-1 {
+		t.Fatalf("findContractIndex() = (%v, %v), want (%v, true)", idx, found, len(acs.Contracts)-1)
+	}
+}
+
+func Test_unpackedAddrContracts_findContractIndex_HotnessTriggers(t *testing.T) {
+	hotMinContracts := 192
+	hotMinHits := 3
+	hot := newAddressHotness(hotMinContracts, 4, hotMinHits)
+	if hot == nil {
+		t.Fatal("expected hotness tracker to be initialized")
+	}
+	hot.BeginBlock()
+
+	acs := &unpackedAddrContracts{}
+	for i := 0; i < hotMinContracts; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(i),
+		})
+	}
+	addrDesc := makeTestAddrDesc(777)
+	target := acs.Contracts[hotMinContracts/2].Contract
+
+	for i := 0; i < hotMinHits-1; i++ {
+		_, _ = acs.findContractIndex(addrDesc, target, hot)
+		if acs.contractIndex != nil {
+			t.Fatalf("unexpected index build before min hits, hit %d", i+1)
+		}
+	}
+	_, _ = acs.findContractIndex(addrDesc, target, hot)
+	if acs.contractIndex == nil {
+		t.Fatal("expected index to be built after reaching min hits")
+	}
+}
+
+func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t *testing.T) {
+	parser := ethereumTestnetParser()
+	parser.HotAddressMinContracts = 1
+	parser.HotAddressLRUCacheSize = 1
+	parser.HotAddressMinHits = 1
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: parser,
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	addr1 := makeTestAddrDesc(1100)
+	addr2 := makeTestAddrDesc(1101)
+	acs1 := &unpackedAddrContracts{Contracts: []unpackedAddrContract{{Contract: makeTestAddrDesc(1200)}}}
+	acs2 := &unpackedAddrContracts{Contracts: []unpackedAddrContract{{Contract: makeTestAddrDesc(1201)}}}
+	d.addrContractsCache[string(addr1)] = acs1
+	d.addrContractsCache[string(addr2)] = acs2
+
+	if _, found := acs1.findContractIndex(addr1, acs1.Contracts[0].Contract, d.hotAddrTracker); !found {
+		t.Fatal("expected first contract to be found")
+	}
+	if acs1.contractIndex == nil {
+		t.Fatal("expected first contract index to be built")
+	}
+	if _, found := acs2.findContractIndex(addr2, acs2.Contracts[0].Contract, d.hotAddrTracker); !found {
+		t.Fatal("expected second contract to be found")
+	}
+	if acs1.contractIndex != nil {
+		t.Fatal("expected first contract index to be dropped after LRU eviction")
+	}
+	if acs2.contractIndex == nil {
+		t.Fatal("expected second contract index to remain hot")
+	}
+}
+
+func Test_addrContractsCache_FlushOnCap(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	d.addrContractsCacheMinSize = 1
+	d.addrContractsCacheMaxBytes = 10
+
+	addrDesc := makeTestAddrDesc(42)
+	acs := &unpackedAddrContracts{
+		TotalTxs: 1,
+		Contracts: []unpackedAddrContract{
+			{
+				Contract: makeTestAddrDesc(7),
+				Standard: bchain.FungibleToken,
+				Txs:      1,
+				Value:    unpackedBigInt{Value: big.NewInt(0)},
+			},
+		},
+	}
+	buf := packUnpackedAddrContracts(acs)
+	if int64(len(buf)) <= d.addrContractsCacheMaxBytes {
+		t.Fatalf("expected packed size to exceed cap, got %d", len(buf))
+	}
+	wb := grocksdb.NewWriteBatch()
+	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+	if err := d.WriteBatch(wb); err != nil {
+		wb.Destroy()
+		t.Fatal(err)
+	}
+	wb.Destroy()
+
+	got, err := d.getUnpackedAddrDescContracts(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("expected cached address contracts to be returned")
+	}
+	if len(d.addrContractsCache) != 0 {
+		t.Fatalf("expected cache to be flushed, got %d entries", len(d.addrContractsCache))
+	}
+	if d.addrContractsCacheBytes != 0 {
+		t.Fatalf("expected cache bytes to be reset, got %d", d.addrContractsCacheBytes)
+	}
 }
 
 func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
@@ -58,7 +275,7 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "02010200", nil},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser),
-			"02010001" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("10000000000000000000000"), nil,
+			"02010001" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)), nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser),
@@ -186,15 +403,15 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser),
 			"01010102" +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(2<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("8086") +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(2<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("871180000950184"), nil,
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(2<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)) +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(2<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)), nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser),
 			"05030003" +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(2<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("10000000854307892726464") +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("0") +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("0"), nil,
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(2<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)) +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)) +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)), nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr5d, d.chainParser),
@@ -203,8 +420,8 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser),
 			"02000003" +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("0") +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintFromStringToHex("7674999999999991915") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)) +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(1<<2+uint(bchain.FungibleToken)) + bigintToHex(big.NewInt(0)) +
 				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContractCd, d.chainParser) + varuintToHex(1<<2+uint(bchain.NonFungibleToken)) + varuintToHex(1) + bigintFromStringToHex("1"), nil,
 		},
 		{
@@ -572,10 +789,15 @@ func Test_BulkConnect_EthereumType(t *testing.T) {
 		EthereumParser: ethereumTestnetParser(),
 	})
 	defer closeAndDestroyRocksDB(t, d)
+	tipMaxBytes := d.addrContractsCacheMaxBytes
+	bulkMaxBytes := d.bulkAddrContractsCacheMaxBytes
 
 	bc, err := d.InitBulkConnect()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got, want := d.addrContractsCacheMaxBytes, bulkMaxBytes; got != want {
+		t.Fatalf("InitBulkConnect() addrContractsCacheMaxBytes = %d, want %d", got, want)
 	}
 
 	if d.is.DbState != common.DbStateInconsistent {
@@ -605,6 +827,10 @@ func Test_BulkConnect_EthereumType(t *testing.T) {
 	if err := bc.Close(); err != nil {
 		t.Fatal(err)
 	}
+	assertBulkConnectReleased(t, bc)
+	if got := d.addrContractsCacheMaxBytes; got != tipMaxBytes {
+		t.Fatalf("Close() addrContractsCacheMaxBytes = %d, want %d", got, tipMaxBytes)
+	}
 
 	if d.is.DbState != common.DbStateOpen {
 		t.Fatal("DB not in DbStateOpen")
@@ -614,6 +840,81 @@ func Test_BulkConnect_EthereumType(t *testing.T) {
 
 	if len(d.is.BlockTimes) != 4321002 {
 		t.Fatal("Expecting is.BlockTimes 4321002, got ", len(d.is.BlockTimes))
+	}
+}
+
+func Test_BulkConnect_EthereumType_UsesConfiguredAddrContractsCacheMaxBytes(t *testing.T) {
+	parser := ethereumTestnetParser()
+	parser.AddrContractsCacheMaxBytes = 10
+	parser.AddrContractsCacheBulkMaxBytes = 20
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: parser,
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	tipMaxBytes := d.tipAddrContractsCacheMaxBytes
+	bulkMaxBytes := d.bulkAddrContractsCacheMaxBytes
+
+	bc1, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.addrContractsCacheMaxBytes; got != bulkMaxBytes {
+		t.Fatalf("first InitBulkConnect() addrContractsCacheMaxBytes = %d, want %d", got, bulkMaxBytes)
+	}
+
+	bc2, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.addrContractsCacheMaxBytes; got != bulkMaxBytes {
+		t.Fatalf("second InitBulkConnect() addrContractsCacheMaxBytes = %d, want %d", got, bulkMaxBytes)
+	}
+
+	if err := bc2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.addrContractsCacheMaxBytes; got != tipMaxBytes {
+		t.Fatalf("second Close() addrContractsCacheMaxBytes = %d, want %d", got, tipMaxBytes)
+	}
+
+	if err := bc1.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.addrContractsCacheMaxBytes; got != tipMaxBytes {
+		t.Fatalf("first Close() addrContractsCacheMaxBytes = %d, want %d", got, tipMaxBytes)
+	}
+}
+
+func Test_BulkConnect_EthereumType_CloseFlushesAddrContractsCacheOverTipCap(t *testing.T) {
+	parser := ethereumTestnetParser()
+	parser.AddrContractsCacheMaxBytes = 10
+	parser.AddrContractsCacheBulkMaxBytes = 20
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: parser,
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	bc, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d.addrContractsCacheMux.Lock()
+	d.addrContractsCache[string(makeTestAddrDesc(99))] = &unpackedAddrContracts{TotalTxs: 1}
+	d.addrContractsCacheBytes = d.tipAddrContractsCacheMaxBytes + 1
+	d.addrContractsCacheMux.Unlock()
+
+	if err := bc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.addrContractsCacheMaxBytes; got != d.tipAddrContractsCacheMaxBytes {
+		t.Fatalf("Close() addrContractsCacheMaxBytes = %d, want %d", got, d.tipAddrContractsCacheMaxBytes)
+	}
+	if got := len(d.addrContractsCache); got != 0 {
+		t.Fatalf("Close() addrContractsCache entries = %d, want 0", got)
+	}
+	if got := d.addrContractsCacheBytes; got != 0 {
+		t.Fatalf("Close() addrContractsCacheBytes = %d, want 0", got)
 	}
 }
 
@@ -962,7 +1263,7 @@ func Test_addToContracts(t *testing.T) {
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
 						Txs:      1,
-						Value:    *big.NewInt(123456),
+						Value:    *big.NewInt(0),
 					},
 				},
 			},
@@ -984,7 +1285,7 @@ func Test_addToContracts(t *testing.T) {
 					{
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
-						Value:    *big.NewInt(100000),
+						Value:    *big.NewInt(0),
 						Txs:      2,
 					},
 				},
@@ -1007,7 +1308,7 @@ func Test_addToContracts(t *testing.T) {
 					{
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
-						Value:    *big.NewInt(100000),
+						Value:    *big.NewInt(0),
 						Txs:      2,
 					},
 					{
@@ -1036,7 +1337,7 @@ func Test_addToContracts(t *testing.T) {
 					{
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
-						Value:    *big.NewInt(100000),
+						Value:    *big.NewInt(0),
 						Txs:      2,
 					},
 					{
@@ -1065,7 +1366,7 @@ func Test_addToContracts(t *testing.T) {
 					{
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
-						Value:    *big.NewInt(100000),
+						Value:    *big.NewInt(0),
 						Txs:      2,
 					},
 					{
@@ -1099,7 +1400,7 @@ func Test_addToContracts(t *testing.T) {
 					{
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
-						Value:    *big.NewInt(100000),
+						Value:    *big.NewInt(0),
 						Txs:      2,
 					},
 					{
@@ -1148,7 +1449,7 @@ func Test_addToContracts(t *testing.T) {
 					{
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
-						Value:    *big.NewInt(100000),
+						Value:    *big.NewInt(0),
 						Txs:      2,
 					},
 					{
@@ -1201,7 +1502,7 @@ func Test_addToContracts(t *testing.T) {
 					{
 						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
-						Value:    *big.NewInt(100000),
+						Value:    *big.NewInt(0),
 						Txs:      2,
 					},
 					{
@@ -1249,6 +1550,39 @@ func Test_addToContracts(t *testing.T) {
 				t.Errorf("addToContracts() = %+v, want %+v", addrContracts, tt.wantAddrContracts)
 			}
 		})
+	}
+}
+
+func Test_addToContract_ERC20ZeroesExistingValue(t *testing.T) {
+	transfer := &bchain.TokenTransfer{
+		Standard: bchain.FungibleToken,
+		Value:    *big.NewInt(1),
+	}
+
+	c := &unpackedAddrContract{
+		Standard: bchain.FungibleToken,
+		Contract: makeTestAddrDesc(123),
+		Value:    unpackedBigInt{Value: big.NewInt(123456)},
+	}
+	addToContract(c, 0, 1, c.Contract, transfer, false)
+	if c.Value.Value == nil || c.Value.Value.Sign() != 0 {
+		t.Fatalf("expected ERC20 value to be zeroed, got %v", c.Value.Value)
+	}
+	if len(c.Value.Slice) != 0 {
+		t.Fatalf("expected ERC20 packed slice to be cleared, got %d bytes", len(c.Value.Slice))
+	}
+
+	c = &unpackedAddrContract{
+		Standard: bchain.FungibleToken,
+		Contract: makeTestAddrDesc(124),
+		Value:    unpackedBigInt{Slice: []byte{0x1, 0x2}},
+	}
+	addToContract(c, 0, 1, c.Contract, transfer, false)
+	if c.Value.Value == nil || c.Value.Value.Sign() != 0 {
+		t.Fatalf("expected ERC20 value to be zeroed after slice, got %v", c.Value.Value)
+	}
+	if len(c.Value.Slice) != 0 {
+		t.Fatalf("expected ERC20 packed slice to be cleared, got %d bytes", len(c.Value.Slice))
 	}
 }
 
@@ -1384,45 +1718,47 @@ func Test_packUnpackFourByteSignature(t *testing.T) {
 	}
 }
 
-func Test_packUnpackContractInfo(t *testing.T) {
-	tests := []struct {
-		name         string
-		contractInfo bchain.ContractInfo
-	}{
-		{
-			name:         "empty",
-			contractInfo: bchain.ContractInfo{},
-		},
-		{
-			name: "unknown",
-			contractInfo: bchain.ContractInfo{
-				Type:              bchain.UnknownTokenStandard,
-				Standard:          bchain.UnknownTokenStandard,
-				Name:              "Test contract",
-				Symbol:            "TCT",
-				Decimals:          18,
-				CreatedInBlock:    1234567,
-				DestructedInBlock: 234567890,
-			},
-		},
-		{
-			name: "ERC20",
-			contractInfo: bchain.ContractInfo{
-				Type:              bchain.ERC20TokenStandard,
-				Standard:          bchain.ERC20TokenStandard,
-				Name:              "GreenContract🟢",
-				Symbol:            "🟢",
-				Decimals:          0,
-				CreatedInBlock:    1,
-				DestructedInBlock: 2,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			buf := packContractInfo(&tt.contractInfo)
-			if got, err := unpackContractInfo(buf); !reflect.DeepEqual(*got, tt.contractInfo) || err != nil {
-				t.Errorf("packUnpackContractInfo() = %v, want %v, error %v", *got, tt.contractInfo, err)
+func Benchmark_contractIndexLookup(b *testing.B) {
+	sizes := []int{192, 256}
+	for _, n := range sizes {
+		contracts := make([]unpackedAddrContract, n)
+		for i := 0; i < n; i++ {
+			contracts[i].Contract = makeTestAddrDesc(i)
+		}
+		addrDesc := makeTestAddrDesc(1234)
+		target := contracts[n/2].Contract
+		hot := newAddressHotness(192, 8, 1)
+		if hot != nil {
+			hot.BeginBlock()
+		}
+
+		b.Run(fmt.Sprintf("ScanHit_%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, _ = findContractInAddressContracts(target, contracts)
+			}
+		})
+
+		b.Run(fmt.Sprintf("MapHit_%d", n), func(b *testing.B) {
+			acs := &unpackedAddrContracts{Contracts: contracts}
+			// Build once to isolate lookup cost.
+			_, _ = acs.findContractIndex(addrDesc, target, hot)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, _ = acs.findContractIndex(addrDesc, target, hot)
+			}
+		})
+
+		b.Run(fmt.Sprintf("MapBuildHit_%d", n), func(b *testing.B) {
+			acs := &unpackedAddrContracts{Contracts: contracts}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				acs.contractIndex = nil
+				acs.contractIndexDirty = false
+				_, _ = acs.findContractIndex(addrDesc, target, hot)
 			}
 		})
 	}

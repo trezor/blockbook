@@ -17,6 +17,25 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
+// getContentSecurityPolicy returns a Content Security Policy header value
+// to help prevent XSS attacks by controlling which resources can be loaded.
+//
+// Note: Uses 'unsafe-inline' for scripts and styles due to inline QRCode initialization
+// and Bootstrap requirements. Consider migrating to nonces for better security.
+func getContentSecurityPolicy() string {
+	return "default-src 'self'; " +
+		"script-src 'self' 'unsafe-inline'; " +
+		"style-src 'self' 'unsafe-inline'; " +
+		"img-src 'self' data: https: ipfs: https://ipfs.io; " +
+		"connect-src 'self' https: ipfs: https://ipfs.io; " +
+		"font-src 'self' data:; " +
+		"object-src 'none'; " +
+		"frame-ancestors 'none'; " +
+		"base-uri 'self'; " +
+		"form-action 'self'; " +
+		"upgrade-insecure-requests;"
+}
+
 type tpl int
 
 const (
@@ -56,6 +75,7 @@ func (s *htmlTemplates[TD]) jsonHandler(handler func(r *http.Request, apiVersion
 				}
 			}
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set("Content-Security-Policy", getContentSecurityPolicy())
 			if e, isError := data.(jsonError); isError {
 				w.WriteHeader(e.HTTPStatus)
 			}
@@ -116,6 +136,7 @@ func (s *htmlTemplates[TD]) htmlTemplateHandler(handler func(w http.ResponseWrit
 			// noTpl means the handler completely handled the request
 			if t != noTpl {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Header().Set("Content-Security-Policy", getContentSecurityPolicy())
 				// return 500 Internal Server Error with errorInternalTpl
 				if t == errorInternalTpl {
 					w.WriteHeader(http.StatusInternalServerError)

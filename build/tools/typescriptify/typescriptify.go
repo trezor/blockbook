@@ -25,9 +25,12 @@ func main() {
 
 	// API - REST and Websocket
 	t.Add(api.APIError{})
+	t.Add(bchain.TronChainExtraData{})
+	t.Add(bchain.TronAccountExtraData{})
 	t.Add(api.Tx{})
 	t.Add(api.FeeStats{})
 	t.Add(api.Address{})
+	t.Add(api.ContractInfoResult{})
 	t.Add(api.Utxo{})
 	t.Add(api.BalanceHistory{})
 	t.Add(api.Blocks{})
@@ -42,6 +45,7 @@ func main() {
 	t.Add(server.WsReq{})
 	t.Add(server.WsRes{})
 	t.Add(server.WsAccountInfoReq{})
+	t.Add(server.WsContractInfoReq{})
 	t.Add(server.WsInfoRes{})
 	t.Add(server.WsBlockHashReq{})
 	t.Add(server.WsBlockHashRes{})

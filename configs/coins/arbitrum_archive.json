@@ -4,7 +4,8 @@
         "shortcut": "ETH",
         "network": "ARB",
         "label": "Arbitrum",
-        "alias": "arbitrum_archive"
+        "alias": "arbitrum_archive",
+        "test_name": "arbitrum"
     },
     "ports": {
         "backend_rpc": 8306,
@@ -13,7 +14,8 @@
         "blockbook_public": 9306
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 25
     },
     "backend": {
@@ -43,19 +45,21 @@
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
         "explorer_url": "",
-        "additional_params": "-workers=16",
+        "additional_params": "-workers=16 -resyncindexdebounce=1509",
         "block_chain": {
             "parse": true,
             "mempool_workers": 8,
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 600,
             "additional_params": {
+                "averageBlockTimeMs": 250,
                 "address_aliases": true,
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "infura",
-                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/42161/suggestedGasFees\", \"periodSeconds\": 16}",
-                "mempoolTxTimeoutHours": 48,
+                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/42161/suggestedGasFees\", \"periodSeconds\": 60}",
+                "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
+                "trace_timeout": "20s",
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",

@@ -17,18 +17,24 @@ See all the referred types (`typescript` interfaces) in the [blockbook-api.ts](.
 
 The following methods are supported:
 
--   [Status](#status)
--   [Get block hash](#get-block-hash)
--   [Get transaction](#get-transaction)
--   [Get transaction specific](#get-transaction-specific)
--   [Get address](#get-address)
--   [Get xpub](#get-xpub)
--   [Get utxo](#get-utxo)
--   [Get block](#get-block)
--   [Send transaction](#send-transaction)
--   [Tickers list](#tickers-list)
--   [Tickers](#tickers)
--   [Balance history](#balance-history)
+- [Blockbook API](#blockbook-api)
+  - [API V2](#api-v2)
+    - [REST API](#rest-api)
+      - [Status page](#status-page)
+      - [Get block hash](#get-block-hash)
+      - [Get transaction](#get-transaction)
+      - [Get transaction specific](#get-transaction-specific)
+      - [Get address](#get-address)
+      - [Get xpub](#get-xpub)
+      - [Get utxo](#get-utxo)
+      - [Get block](#get-block)
+      - [Send transaction](#send-transaction)
+      - [Tickers list](#tickers-list)
+      - [Tickers](#tickers)
+      - [Balance history](#balance-history)
+    - [Websocket API](#websocket-api)
+  - [Legacy API V1](#legacy-api-v1)
+    - [REST API](#rest-api-1)
 
 #### Status page
 
@@ -48,7 +54,7 @@ Response (`SystemInfo` type):
     "coin": "Bitcoin",
     "network": "BTC",
     "host": "backend5",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "gitCommit": "a0960c8e",
     "buildTime": "2024-08-08T12:32:50+00:00",
     "syncMode": true,
@@ -461,7 +467,7 @@ Example response:
 Returns balances and transactions of an address. The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&secondary=usd]
+GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&protocols=<protocol1,protocol2,...>&secondary=usd]
 ```
 
 The optional query parameters:
@@ -470,13 +476,14 @@ The optional query parameters:
 -   _pageSize_: number of transactions returned by call (default and maximum 1000)
 -   _from_, _to_: filter of the returned transactions _from_ block height _to_ block height (default no filter)
 -   _details_: specifies level of details returned by request (default _txids_)
-    -   _basic_: return only address balances, without any transactions
+    -   _basic_: return only address balances, without any transactions. Mempool transactions are not aggregated at this level: the `unconfirmedBalance`, `unconfirmedSending` and `unconfirmedReceiving` fields are omitted from the response, and `unconfirmedTxs` reports the raw mempool index size for the address (it may transiently include entries that have just been confirmed but not yet evicted from the mempool).
     -   _tokens_: _basic_ + tokens belonging to the address (applicable only to some coins)
     -   _tokenBalances_: _basic_ + tokens with balances + belonging to the address (applicable only to some coins)
     -   _txids_: _tokenBalances_ + list of txids, subject to _from_, _to_ filter and paging
     -   _txslight_: _tokenBalances_ + list of transaction with limited details (only data from index), subject to _from_, _to_ filter and paging
     -   _txs_: _tokenBalances_ + list of transaction with details, subject to _from_, _to_ filter and paging
 -   _contract_: return only transactions which affect specified contract (applicable only to coins which support contracts)
+-   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`. Unknown values are rejected with an error. In account responses, protocol payloads are returned under `tokens[].protocols`.
 -   _secondary_: specifies secondary (fiat) currency in which the token and total balances are returned in addition to crypto values
 
 Example response for bitcoin type coin, _details_ set to _txids_ (`Address` type):
@@ -537,6 +544,68 @@ Example response for ethereum type coin, _details_ set to _tokenBalances_ and _s
 
 ```
 
+#### Get contract info
+
+Returns metadata for a single contract together with optional enrichments requested by the caller.
+
+This endpoint exists in part because `erc4626` data returned from `getAccountInfo` or `/api/v2/address` is only a snapshot taken when that broader account response was fetched. Suite can fetch current contract-level metadata for the token the user is actively interacting with without reloading full account data.
+
+```
+GET /api/v2/contract/<contract>[?currency=<currency>&protocols=<protocol1,protocol2,...>]
+```
+
+Parameters:
+
+-   _currency_: optional secondary currency code (for example `usd`). When present, the response may include `rates.secondaryRate` in that currency.
+-   _protocols_: optional comma-separated list of protocol enrichments to include. Currently supported value: `erc4626`. Unknown values are rejected with an error.
+
+`blockHeight` reflects the indexer's best block at request time. ERC-4626 fields inside `protocols.erc4626` are fetched via JSON-RPC `eth_call` (batched through Multicall3) pinned to that exact `blockHeight`, so all values inside `protocols.erc4626` are a consistent snapshot at that height.
+
+For ERC-4626, `asset` is returned only when Blockbook can resolve underlying
+asset metadata including `decimals`. If a vault is detected but asset metadata
+cannot be resolved, Blockbook returns `protocols.erc4626` with `error` and
+without `asset`; callers must not derive fiat rates or human-unit exchange rates
+from such a partial response.
+
+Response (`ContractInfoResult` type):
+
+```javascript
+{
+  "contract": "0x...",
+  "standard": "ERC20",
+  "name": "Vault Share",
+  "symbol": "vETH",
+  "decimals": 18,
+  "rates": {
+    "baseRate": 0.000523,
+    "currency": "usd",
+    "secondaryRate": 1.24
+  },
+  "protocols": {
+    "erc4626": {
+      "asset": {
+        "contract": "0x...",
+        "name": "Wrapped Ether",
+        "symbol": "WETH",
+        "decimals": 18
+      },
+      "share": {
+        "contract": "0x...",
+        "name": "Vault Share",
+        "symbol": "vETH",
+        "decimals": 18
+      },
+      "totalAssets": "123456789",
+      "convertToAssets1Share": "1000000000000000000",
+      "convertToShares1Asset": "1000000000000000000",
+      "previewDeposit1Asset": "999999999999999999",
+      "previewRedeem1Share": "1000000000000000000"
+    }
+  },
+  "blockHeight": 12345678
+}
+```
+
 #### Get xpub
 
 Returns balances and transactions of an xpub or output descriptor, applicable only for Bitcoin-type coins.
@@ -575,7 +644,7 @@ The optional query parameters:
 -   _pageSize_: number of transactions returned by call (default and maximum 1000)
 -   _from_, _to_: filter of the returned transactions _from_ block height _to_ block height (default no filter)
 -   _details_: specifies level of details returned by request (default _txids_)
-    -   _basic_: return only xpub balances, without any derived addresses and transactions
+    -   _basic_: return only xpub balances, without any derived addresses and transactions. The `unconfirmedBalance` field is omitted from the response at this detail level (`unconfirmedSending`/`unconfirmedReceiving` are not produced by the xpub path at any level).
     -   _tokens_: _basic_ + tokens (addresses) derived from the xpub, subject to _tokens_ parameter
     -   _tokenBalances_: _basic_ + tokens (addresses) derived from the xpub with balances, subject to _tokens_ parameter
     -   _txids_: _tokenBalances_ + list of txids, subject to _from_, _to_ filter and paging
@@ -793,6 +862,8 @@ GET /api/v2/sendtx/<hex tx data>
 POST /api/v2/sendtx/ (hex tx data in request body)  NB: the '/' symbol at the end is mandatory.
 ```
 
+POST request body is limited to 8 MiB.
+
 Response:
 
 ```javascript
@@ -986,7 +1057,9 @@ The websocket interface provides the following requests:
 
 -   getInfo
 -   getBlockHash
+-   getBlock
 -   getAccountInfo
+-   getContractInfo
 -   getAccountUtxo
 -   getTransaction
 -   getTransactionSpecific
@@ -1004,7 +1077,7 @@ The client can subscribe to the following events:
 
 -   `subscribeNewBlock` - new block added to blockchain
 -   `subscribeNewTransaction` - new transaction added to blockchain (all addresses)
--   `subscribeAddresses` - new transaction for a given address (list of addresses) added to mempool
+-   `subscribeAddresses` - new transaction for a given address (list of addresses) added to mempool (and optionally confirmed in a new block)
 -   `subscribeFiatRates` - new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
@@ -1035,9 +1108,63 @@ Example for subscribing to an address (or multiple addresses)
 }
 ```
 
+Example for subscribing to an address (or multiple addresses) including new block (confirmed) transactions
+
+```javascript
+{
+  "id":"1",
+  "method":"subscribeAddresses",
+  "params":{
+    "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"],
+    "newBlockTxs": true,
+   }
+}
+```
+
+Example for getting current contract info including ERC4626 enrichment
+
+```javascript
+{
+  "id":"1",
+  "method":"getContractInfo",
+  "params":{
+    "contract":"0x...",
+    "currency":"usd",
+    "protocols":["erc4626"]
+   }
+}
+```
+
+Example for getting a block with paged transactions
+
+```javascript
+{
+  "id":"1",
+  "method":"getBlock",
+  "params":{
+    "id":"760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
+    "page":1,
+    "pageSize":1000
+  }
+}
+```
+
+Notes for `getBlock`:
+
+-   available only when Blockbook runs with extended index enabled
+-   response format matches REST `GET /api/v2/block/<block height|block hash>`
+-   _pageSize_ defaults to `1000` and is capped at `10000`
+-   _page_ is sanitized to stay within safe internal limits
+
+Notes for `getAccountInfo`:
+
+-   response format matches REST `GET /api/v2/address/<address>` (or `/api/v2/xpub/<xpub>` when a descriptor is supplied)
+-   _details_ defaults to `basic` when not specified in the request (this differs from the REST default of `txids`)
+-   at `details: basic`, mempool transactions are not aggregated: the `unconfirmedBalance`, `unconfirmedSending` and `unconfirmedReceiving` fields are omitted from the response, and `unconfirmedTxs` reports the raw mempool index size for the address. Clients that need an exact unconfirmed delta should request a higher detail level (`tokens` or above)
+
 ## Legacy API V1
 
-The legacy API is a compatible subset of API provided by **Bitcore Insight**. It is supported only for Bitcoin-type coins. The details of the REST/socket.io requests can be found in the Insight's documentation.
+The legacy API is a compatible subset of API provided by **Bitcore Insight**. It is supported only for Bitcoin-type coins. The details of the REST requests can be found in the Insight's documentation.
 
 ### REST API
 
@@ -1051,10 +1178,6 @@ GET /api/v1/estimatefee/<number of blocks>
 GET /api/v1/sendtx/<hex tx data>
 POST /api/v1/sendtx/ (hex tx data in request body)
 ```
-
-### Socket.io API
-
-Socket.io interface is provided at `/socket.io/`. The interface also can be explored using Blockbook Socket.io Test Page found at `/test-socketio.html`.
 
 The legacy API is provided as is and will not be further developed.
 

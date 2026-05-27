@@ -34,10 +34,11 @@ type AlternativeSendTxProvider struct {
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
-func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTimeout int) *AlternativeSendTxProvider {
+func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTimeout time.Duration) *AlternativeSendTxProvider {
 	urls := strings.Split(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_URLS"), ",")
 	onlyAlternative := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
 	fetchMempoolTx := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_FETCH_MEMPOOL_TX")) == "TRUE"
+	// Empty URL keeps the normal public RPC send path.
 	if len(urls) == 0 || urls[0] == "" {
 		return nil
 	}
@@ -47,7 +48,7 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 		onlyAlternative:   onlyAlternative,
 		fetchMempoolTx:    fetchMempoolTx,
 		rpcTimeout:        time.Duration(rpcTimeout) * time.Second,
-		mempoolTxsTimeout: time.Duration(mempoolTxsTimeout) * time.Hour,
+		mempoolTxsTimeout: mempoolTxsTimeout,
 		mempoolTxs:        make(map[string]storedTx),
 	}
 

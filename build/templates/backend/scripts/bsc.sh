@@ -14,18 +14,19 @@ if [ ! -d "$CHAINDATA_DIR" ]; then
   $GETH_BIN init --datadir $DATA_DIR $INSTALL_DIR/genesis.json
 fi
 
+# Bind RPC endpoints based on BB_RPC_BIND_HOST_* so defaults remain local unless explicitly overridden.
 $GETH_BIN \
   --config $INSTALL_DIR/config.toml \
   --datadir $DATA_DIR \
   --port {{.Ports.BackendP2P}} \
   --http \
-  --http.addr 127.0.0.1 \
+  --http.addr {{.Env.RPCBindHost}} \
   --http.port {{.Ports.BackendHttp}} \
   --http.api eth,net,web3,debug,txpool \
   --http.vhosts '*' \
   --http.corsdomain '*' \
   --ws \
-  --ws.addr 127.0.0.1 \
+  --ws.addr {{.Env.RPCBindHost}} \
   --ws.port {{.Ports.BackendRPC}} \
   --ws.api eth,net,web3,debug,txpool \
   --ws.origins '*' \

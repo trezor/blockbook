@@ -6,6 +6,17 @@
     "blockTxs": [
         "0x59a1c3ce0f901e71c4f1c88dc829e35d29ce900ae3a74366d16aedb4a2e33992"
     ],
+    "ethCallBatch": {
+        "address": "0x60aE616a2155Ee3d9A68541Ba4544862310933d4",
+        "contracts": [
+            "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+            "0xA7D7079b0FEAD91F3e65f86E8915Cb59c1a4C664",
+            "0xc7198437980c041c805A1EDcbA50c1Ce5db95118",
+            "0xd586e7f844cea2f87f50152665bcbc2c279d8d70",
+            "0x49D5c2BdFfac6Ce2BFdB6640F4F80f226bc10bAB",
+            "0x60781C2586D68229fde47564546784ab3fACA982"
+        ]
+    },
     "txDetails": {
         "0x59a1c3ce0f901e71c4f1c88dc829e35d29ce900ae3a74366d16aedb4a2e33992": {
             "txid": "0x59a1c3ce0f901e71c4f1c88dc829e35d29ce900ae3a74366d16aedb4a2e33992",

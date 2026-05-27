@@ -17,19 +17,20 @@ if [ ! -d "$CHAINDATA_DIR" ]; then
   wget -c $SNAPSHOT -O - | zstd -cd | tar xf - -C $DATA_DIR
 fi
 
+# Bind RPC endpoints based on BB_RPC_BIND_HOST_* so defaults remain local unless explicitly overridden.
 $GETH_BIN \
   --networkid 10 \
   --datadir $DATA_DIR \
   --port {{.Ports.BackendP2P}} \
   --rpc \
   --rpcport {{.Ports.BackendHttp}} \
-  --rpcaddr 127.0.0.1 \
+  --rpcaddr {{.Env.RPCBindHost}} \
   --rpcapi eth,rollup,net,web3,debug \
   --rpcvhosts "*" \
   --rpccorsdomain "*" \
   --ws \
   --wsport {{.Ports.BackendRPC}} \
-  --wsaddr 0.0.0.0 \
+  --wsaddr {{.Env.RPCBindHost}} \
   --wsapi eth,rollup,net,web3,debug \
   --wsorigins "*" \
   --nousb \

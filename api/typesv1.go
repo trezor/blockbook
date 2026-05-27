@@ -178,6 +178,12 @@ func (w *Worker) transactionsToV1(txs []*Tx) []*TxV1 {
 // AddressToV1 converts Address to AddressV1
 func (w *Worker) AddressToV1(a *Address) *AddressV1 {
 	d := w.chainParser.AmountDecimals()
+	// v1 always serializes UnconfirmedBalance as a decimal string;
+	// when the v2 field is omitted (AccountDetailsBasic), preserve "0".
+	unconfirmedBalance := "0"
+	if a.UnconfirmedBalanceSat != nil {
+		unconfirmedBalance = a.UnconfirmedBalanceSat.DecimalString(d)
+	}
 	return &AddressV1{
 		AddrStr:                 a.AddrStr,
 		Balance:                 a.BalanceSat.DecimalString(d),
@@ -187,7 +193,7 @@ func (w *Worker) AddressToV1(a *Address) *AddressV1 {
 		Transactions:            w.transactionsToV1(a.Transactions),
 		TxApperances:            a.Txs,
 		Txids:                   a.Txids,
-		UnconfirmedBalance:      a.UnconfirmedBalanceSat.DecimalString(d),
+		UnconfirmedBalance:      unconfirmedBalance,
 		UnconfirmedTxApperances: a.UnconfirmedTxs,
 	}
 }

@@ -13,6 +13,7 @@
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
     "rpc_user": "divirpc",
     "rpc_pass": "divipass",
     "rpc_timeout": 25,
@@ -37,10 +38,7 @@
     "protect_memory": false,
     "mainnet": true,
     "server_config_file": "bitcoin_like.conf",
-    "client_config_file": "bitcoin_like_client.conf",
-    "additional_params": {
-      "rpcallowip": "127.0.0.1"
-    }
+    "client_config_file": "bitcoin_like_client.conf"
   },
   "blockbook": {
     "package_name": "blockbook-divi",
