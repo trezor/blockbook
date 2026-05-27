@@ -64,6 +64,7 @@ type Metrics struct {
 	CoingeckoRangeRequests            *prometheus.CounterVec
 	FiatRatesUpdateDuration           *prometheus.HistogramVec
 	AlternativeFeeProviderRequests    *prometheus.CounterVec
+	EthSyncRpcErrors                  *prometheus.CounterVec
 }
 
 // Labels represents a collection of label name -> value mappings.
@@ -512,6 +513,14 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"provider", "status"},
+	)
+	metrics.EthSyncRpcErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_eth_sync_rpc_errors",
+			Help:        "Total number of failed Ethereum sync RPC calls by method and status (timeout, http_4xx, http_5xx, http_other, rpc, error)",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"method", "status"},
 	)
 
 	v := reflect.ValueOf(metrics)

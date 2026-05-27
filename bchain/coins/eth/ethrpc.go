@@ -343,6 +343,35 @@ func (b *EthereumRPC) observeEthCallStakingPool(field string) {
 	b.metrics.EthCallStakingPool.With(common.Labels{"field": field}).Inc()
 }
 
+func ethSyncRpcErrStatus(err error) string {
+	if stdErrors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	var httpErr rpc.HTTPError
+	if stdErrors.As(err, &httpErr) {
+		switch {
+		case httpErr.StatusCode >= 500:
+			return "http_5xx"
+		case httpErr.StatusCode >= 400:
+			return "http_4xx"
+		default:
+			return "http_other"
+		}
+	}
+	var rpcErr rpc.Error
+	if stdErrors.As(err, &rpcErr) {
+		return "rpc"
+	}
+	return "error"
+}
+
+func (b *EthereumRPC) observeEthSyncRpcError(method string, err error) {
+	if b.metrics == nil || err == nil {
+		return
+	}
+	b.metrics.EthSyncRpcErrors.With(common.Labels{"method": method, "status": ethSyncRpcErrStatus(err)}).Inc()
+}
+
 // EnsureSameRPCHost validates both RPC URLs and logs a warning if hosts differ.
 func EnsureSameRPCHost(httpURL, wsURL string) error {
 	if httpURL == "" || wsURL == "" {
@@ -1070,15 +1099,20 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	defer cancel()
 	var raw json.RawMessage
 	var err error
+	var method string
 	if hash != "" {
 		if hash == "pending" {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", hash, fullTxs)
+			method = "eth_getBlockByNumber"
+			err = b.RPC.CallContext(ctx, &raw, method, hash, fullTxs)
 		} else {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
+			method = "eth_getBlockByHash"
+			err = b.RPC.CallContext(ctx, &raw, method, ethcommon.HexToHash(hash), fullTxs)
 		}
 	} else {
-		err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
+		method = "eth_getBlockByNumber"
+		err = b.RPC.CallContext(ctx, &raw, method, fmt.Sprintf("%#x", height), fullTxs)
 	}
+	b.observeEthSyncRpcError(method, err)
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	} else if len(raw) == 0 || (len(raw) == 4 && string(raw) == "null") {
@@ -1097,12 +1131,14 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 	defer cancel()
 	var logs []rpcLogWithTxHash
 	var ensRecords []bchain.AddressAliasRecord
-	err := b.RPC.CallContext(ctx, &logs, "eth_getLogs", map[string]interface{}{
+	var method = "eth_getLogs"
+	err := b.RPC.CallContext(ctx, &logs, method, map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
 	})
+	b.observeEthSyncRpcError(method, err)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "eth_getLogs blockNumber %v", blockNumber)
+		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
 	for i := range logs {
@@ -1201,6 +1237,7 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 			traceConfig["timeout"] = b.ChainConfig.TraceTimeout
 		}
 		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, traceConfig) // Use caller-provided ctx for timeout/cancel.
+		b.observeEthSyncRpcError("debug_traceBlockByHash", err)
 		if err != nil {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
 			return data, contracts, err
