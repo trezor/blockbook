@@ -1248,17 +1248,24 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 						addrContracts.markContractIndexDirty()
 					} else {
 						// update the values of the contract, reverse the direction
-						var index int32
-						if bytes.Equal(addrDesc, btxContract.to) {
-							index = transferFrom
-						} else {
-							index = transferTo
-						}
-						addToContract(addrContract, contractIndex, index, btxContract.contract, &bchain.TokenTransfer{
+						transfer := &bchain.TokenTransfer{
 							Standard:         btxContract.transferStandard,
 							Value:            btxContract.value,
 							MultiTokenValues: btxContract.idValues,
-						}, false)
+						}
+						if bytes.Equal(btxContract.from, btxContract.to) {
+							// Self-transfers were connected through both sides while counting one tx.
+							addToContract(addrContract, contractIndex, transferTo, btxContract.contract, transfer, false)
+							addToContract(addrContract, contractIndex, transferFrom, btxContract.contract, transfer, false)
+						} else {
+							var index int32
+							if bytes.Equal(addrDesc, btxContract.to) {
+								index = transferFrom
+							} else {
+								index = transferTo
+							}
+							addToContract(addrContract, contractIndex, index, btxContract.contract, transfer, false)
+						}
 					}
 				} else {
 					glog.Warning("AddressContracts ", addrDesc, ", contract ", contractIndex, " Txs would be negative, tx ", hex.EncodeToString(btxID))
