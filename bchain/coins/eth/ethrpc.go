@@ -352,11 +352,11 @@ func ethSyncRpcErrStatus(err error) string {
 	return "error"
 }
 
-func (b *EthereumRPC) observeEthSyncRpc(method string, err error) {
+func (b *EthereumRPC) observeEthSyncRpcError(method string, err error) {
 	if b.metrics == nil || err == nil {
 		return
 	}
-	b.metrics.EthSyncRpcRequests.With(common.Labels{"method": method, "status": ethSyncRpcErrStatus(err)}).Inc()
+	b.metrics.EthSyncRpcErrors.With(common.Labels{"method": method, "status": ethSyncRpcErrStatus(err)}).Inc()
 }
 
 // EnsureSameRPCHost validates both RPC URLs and logs a warning if hosts differ.
@@ -1099,7 +1099,7 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 		method = "eth_getBlockByNumber"
 		err = b.RPC.CallContext(ctx, &raw, method, fmt.Sprintf("%#x", height), fullTxs)
 	}
-	b.observeEthSyncRpc(method, err)
+	b.observeEthSyncRpcError(method, err)
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	} else if len(raw) == 0 || (len(raw) == 4 && string(raw) == "null") {
@@ -1123,7 +1123,7 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
 	})
-	b.observeEthSyncRpc(method, err)
+	b.observeEthSyncRpcError(method, err)
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
@@ -1224,7 +1224,7 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 			traceConfig["timeout"] = b.ChainConfig.TraceTimeout
 		}
 		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, traceConfig) // Use caller-provided ctx for timeout/cancel.
-		b.observeEthSyncRpc("debug_traceBlockByHash", err)
+		b.observeEthSyncRpcError("debug_traceBlockByHash", err)
 		if err != nil {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
 			return data, contracts, err
