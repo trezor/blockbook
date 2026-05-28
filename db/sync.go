@@ -43,10 +43,11 @@ type MissingBlockRetryConfig struct {
 	TipRecheckThreshold int
 	// RetryDelay keeps retry pressure low while still reacting quickly to transient backend gaps.
 	RetryDelay time.Duration
-	// MaxStallDuration caps the wall-clock time a single block fetch may spend
-	// in the retry loop before yielding control to the outer resync machinery.
-	// Without this cap, a backend that keeps returning ErrBlockNotFound while
-	// shouldRestartSyncOnMissingBlock keeps reporting "no reorg" loops forever.
+	// MaxStallDuration caps the wall-clock time a single block fetch may spend in
+	// the retry loop before yielding errResync. Liveness invariant: since lagging
+	// probes report "no reorg" and known hashes get retried, a genuinely-behind
+	// backend or chain-shortening reorg relies on this cap. Must stay > 0
+	// (ApplyMissingBlockRetryOverride enforces it).
 	MaxStallDuration time.Duration
 }
 
@@ -255,44 +256,44 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			return err
 		}
 		if remoteBestHeight < w.startHeight {
-			glog.Error("resync: error - remote best height ", remoteBestHeight, " less than sync start height ", w.startHeight)
-			return errors.New("resync: remote best height error")
-		}
-		if initialSync {
-			if remoteBestHeight-w.startHeight > uint32(w.syncChunk) {
-				glog.Infof("resync: bulk sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, w.syncWorkers)
-				// Bulk sync can encounter a disappearing block hash during reorgs.
-				// When that happens, it returns errResync to trigger a full restart.
-				err = w.BulkConnectBlocks(w.startHeight, remoteBestHeight)
-				if err != nil {
-					if stdErrors.Is(err, errResync) {
-						// block hash changed during parallel sync, restart the full resync
-						return w.resyncIndex(onNewBlock, initialSync)
+			glog.Warning("resync: observed remote best height ", remoteBestHeight, " less than sync start height ", w.startHeight, ", falling back to sequential sync")
+		} else {
+			if initialSync {
+				if remoteBestHeight-w.startHeight > uint32(w.syncChunk) {
+					glog.Infof("resync: bulk sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, w.syncWorkers)
+					// Bulk sync can encounter a disappearing block hash during reorgs.
+					// When that happens, it returns errResync to trigger a full restart.
+					err = w.BulkConnectBlocks(w.startHeight, remoteBestHeight)
+					if err != nil {
+						if stdErrors.Is(err, errResync) {
+							// block hash changed during parallel sync, restart the full resync
+							return w.resyncIndex(onNewBlock, initialSync)
+						}
+						return err
 					}
-					return err
+					// after parallel load finish the sync using standard way,
+					// new blocks may have been created in the meantime
+					return w.resyncIndex(onNewBlock, initialSync)
 				}
-				// after parallel load finish the sync using standard way,
-				// new blocks may have been created in the meantime
-				return w.resyncIndex(onNewBlock, initialSync)
 			}
-		}
-		if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
-			syncWorkers := uint32(4)
-			if remoteBestHeight-w.startHeight >= syncWorkers {
-				glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, syncWorkers)
-				// Parallel sync also returns errResync when a requested hash no longer
-				// exists at its height; restart to realign with the canonical chain.
-				err = w.ParallelConnectBlocks(onNewBlock, w.startHeight, remoteBestHeight, syncWorkers)
-				if err != nil {
-					if stdErrors.Is(err, errResync) {
-						// block hash changed during parallel sync, restart the full resync
-						return w.resyncIndex(onNewBlock, initialSync)
+			if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
+				syncWorkers := uint32(4)
+				if remoteBestHeight-w.startHeight >= syncWorkers {
+					glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, syncWorkers)
+					// Parallel sync also returns errResync when a requested hash no longer
+					// exists at its height; restart to realign with the canonical chain.
+					err = w.ParallelConnectBlocks(onNewBlock, w.startHeight, remoteBestHeight, syncWorkers)
+					if err != nil {
+						if stdErrors.Is(err, errResync) {
+							// block hash changed during parallel sync, restart the full resync
+							return w.resyncIndex(onNewBlock, initialSync)
+						}
+						return err
 					}
-					return err
+					// after parallel load finish the sync using standard way,
+					// new blocks may have been created in the meantime
+					return w.resyncIndex(onNewBlock, initialSync)
 				}
-				// after parallel load finish the sync using standard way,
-				// new blocks may have been created in the meantime
-				return w.resyncIndex(onNewBlock, initialSync)
 			}
 		}
 	}
@@ -400,21 +401,37 @@ type hashHeight struct {
 	height uint32
 }
 
+// sendHashHeight queues hh but stays abort-aware: if a full hch made this a blocking
+// send, the coordinator could never read abortCh and sync would wedge. On abort hh is
+// intentionally dropped since the round is being torn down anyway.
+func (w *SyncWorker) sendHashHeight(hch chan<- hashHeight, abortCh <-chan error, hh hashHeight) error {
+	select {
+	case hch <- hh:
+		return nil
+	case abortErr := <-abortCh:
+		return abortErr
+	case <-w.chanOsSignal:
+		return ErrOperationInterrupted
+	}
+}
+
 func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash string) (bool, error) {
-	// When a block hash disappears at a given height, it usually indicates a
-	// reorg/rollback. Confirm by checking the current tip and block hash.
+	// When a block hash disappears at a given height, it can indicate a
+	// reorg/rollback, but on load-balanced EVM RPCs a single lagging backend can
+	// also report an older tip. Only restart immediately when another probe can
+	// prove the height exists with a different hash; otherwise let the retry
+	// loop or wall-clock cap yield control to the outer resync.
 	bestHeight, err := w.chain.GetBestBlockHeight()
 	if err != nil {
 		return false, err
 	}
 	if bestHeight < height {
-		// The tip moved below the requested height, so this block is no longer valid.
-		return true, nil
+		return false, nil
 	}
 	currentHash, err := w.chain.GetBlockHash(height)
 	if err != nil {
 		if stdErrors.Is(err, bchain.ErrBlockNotFound) {
-			return true, nil
+			return false, nil
 		}
 		return false, err
 	}
@@ -574,7 +591,17 @@ ConnectLoop:
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
-			hch <- hashHeight{hash, h}
+			if err = w.sendHashHeight(hch, abortCh, hashHeight{hash, h}); err != nil {
+				if stdErrors.Is(err, errResync) {
+					glog.Warning("sync: parallel connect aborted while queueing block hash, restarting sync")
+				} else if stdErrors.Is(err, ErrOperationInterrupted) {
+					glog.Info("connectBlocksParallel interrupted at height ", h)
+				} else {
+					glog.Error("sync: parallel connect aborted while queueing block hash, worker error ", err)
+				}
+				close(terminating)
+				break ConnectLoop
+			}
 			h++
 		}
 	}
@@ -791,7 +818,7 @@ ConnectLoop:
 			close(terminating)
 			break ConnectLoop
 		case <-w.chanOsSignal:
-			glog.Info("connectBlocksParallel interrupted at height ", h)
+			glog.Info("BulkConnectBlocks interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
 			close(terminating)
@@ -804,7 +831,17 @@ ConnectLoop:
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
-			hch <- hashHeight{hash, h}
+			if err = w.sendHashHeight(hch, abortCh, hashHeight{hash, h}); err != nil {
+				if stdErrors.Is(err, errResync) {
+					glog.Warning("sync: bulk connect aborted while queueing block hash, restarting sync")
+				} else if stdErrors.Is(err, ErrOperationInterrupted) {
+					glog.Info("BulkConnectBlocks interrupted at height ", h)
+				} else {
+					glog.Error("sync: bulk connect aborted while queueing block hash, worker error ", err)
+				}
+				close(terminating)
+				break ConnectLoop
+			}
 			if h > 0 && h%1000 == 0 {
 				w.metrics.BlockbookBestHeight.Set(float64(h))
 				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
@@ -891,7 +928,10 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 					return
 				}
 				if height > bestHeight {
-					return
+					if hash == "" {
+						return
+					}
+					glog.Warningf("getBlockChain: block %d %s is above observed backend height %d; retrying because the block hash was already observed", height, hash, bestHeight)
 				}
 			}
 			if gotNotFound {
