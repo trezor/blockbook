@@ -84,7 +84,11 @@ func (h *addressHotness) BeginBlock() {
 	// delays a promotion and never affects correctness (lookups fall back to a
 	// linear scan when the index is not used). The LRU survives across blocks.
 	if len(h.hits) > h.maxPendingHits {
-		clear(h.hits)
+		// Reinitialize rather than clear(): Go's clear() does not shrink a map's
+		// underlying bucket allocation, so a single oversized block would leave the
+		// allocation at its high-water mark. Pre-size to maxPendingHits, the
+		// steady-state ceiling, so the oversized buckets can be released.
+		h.hits = make(map[addressHotnessKey]uint16, h.maxPendingHits)
 	}
 	// Reset per-block stats counters (metrics report per-block deltas).
 	h.blockEligibleLookups = 0
