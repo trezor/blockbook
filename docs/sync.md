@@ -1,6 +1,6 @@
 # Sync
 
-The sync engine connects blocks from the backend RPC into the local RocksDB index. It is driven by external block notifications (EVM `newHeads`, BTC ZMQ) and an internal periodic tick. This page documents the loop and the knobs that govern how it recovers from transient backend trouble.
+The sync engine connects blocks from the backend RPC into the local RocksDB index. It is driven by external block notifications (EVM `newHeads` WebSocket, Tron ZeroMQ, BTC ZMQ) and an internal periodic tick. This page documents the loop, the [tip feed](#tip-feed-and-the-stall-watchdog) that drives it, and the knobs that govern how it recovers from transient backend trouble.
 
 ## Sync loop
 
@@ -80,6 +80,67 @@ sequenceDiagram
 
 `errResync` and `errFork` cause `resyncIndex` to be re-entered (handling the new chain state); any other error propagates up and `syncIndexLoop` retries once before waiting for the next trigger.
 
+## Tip feed and the stall watchdog
+
+The "Notifications" that wake the loop above are not free-standing — for EVM and Tron they come from a single cached best-header that is advanced **only** by a backend push feed (EVM `newHeads` WebSocket, Tron ZeroMQ). `resyncIndex` reads that cached tip to decide whether work is needed, so a feed that goes quiet freezes the tip and the loop silently concludes `syncNotNeeded`.
+
+The failure mode that motivated this is a load balancer that drops the upstream **without** signalling `sub.Err()`: the error-driven resubscribe never fires, the cached tip freezes, and the index stalls until the ~15-minute periodic tick — with no error logged and no metric moving. The `tipWatchdog` closes that gap by watching feed liveness directly and healing a silent feed.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280", "primaryTextColor": "#111827"}}}%%
+flowchart TD
+    feed["Backend push feed<br/>EVM newHeads WS · Tron ZeroMQ"]
+    notifier["newBlockNotifier<br/>(channel reader)"]
+    mark["markSubscriptionAlive"]
+    refresh["refreshBestHeaderFromChain"]
+    push["PushHandler(NotificationNewBlock)"]
+    trigger["chanSyncIndex → syncIndexLoop<br/>(sync loop above)"]
+    ts[("lastSubNotifyNs<br/>liveness timestamp")]
+    cache[("cached bestHeader<br/>read by resyncIndex → synced?")]
+
+    feed -- notification --> notifier
+    notifier --> mark
+    mark -. stamps .-> ts
+    notifier --> refresh
+    refresh -. advances .-> cache
+    refresh -- "tip advanced" --> push --> trigger
+
+    subgraph wd ["tipWatchdog (EVM + Tron, started once)"]
+        tick["tick every<br/>clamp(threshold/3, 5s, 60s)"]
+        check{"age ≥ TipStaleThreshold?<br/>clamp(30 × blockTime, 30s, 5min)"}
+        ok["set age gauge · feed alive<br/>return"]
+        stall["watchdog_stall<br/>feed silent, sub.Err() never fired"]
+        wpoll["poll tip directly<br/>refreshBestHeaderFromChain"]
+        wadv["watchdog_tip_advanced"]
+        wrec["EVM: reconnectRPC<br/>watchdog_reconnect / _failed<br/>Tron: poll-only (ZeroMQ self-heals)"]
+    end
+
+    ts -. read by .-> check
+    tick --> check
+    check -- "no (fresh)" --> ok
+    check -- "yes (silent)" --> stall --> wpoll
+    wpoll -. advances .-> cache
+    wpoll -- "tip advanced" --> wadv --> push
+    wpoll --> wrec
+    wrec -. "re-arm window<br/>+ restore push" .-> feed
+
+    classDef normal fill:#e7f0ff,stroke:#4078c0,color:#10243e;
+    classDef store fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
+    classDef watch fill:#fff6d7,stroke:#b58400,color:#312300;
+
+    class feed,notifier,mark,refresh,push,trigger,tick,check,ok normal;
+    class ts,cache store;
+    class stall,wpoll,wadv,wrec watch;
+```
+
+Key invariants this design relies on:
+
+- **The liveness timestamp is stamped only by the feed.** `markSubscriptionAlive` (EVM) / `markNotifyAlive` (Tron) is called from `newBlockNotifier` — i.e. only when the push feed actually delivered. The watchdog's own fallback poll deliberately does **not** stamp it, so a watchdog that is carrying sync can never mask a dead feed: `age` keeps growing until real push delivery resumes. The watchdog only re-arms the window after a *successful* EVM reconnect (and Tron re-arms after each poll to avoid polling every tick during a legitimate lull).
+- **`TipStaleThreshold` is chain-aware.** `clamp(30 × averageBlockTimeMs, 30s, 5min)` replaces the old fixed 15 minutes, which on Polygon's 2 s blocks meant ~450 missed blocks before any reaction. Per-chain values: Polygon/Optimism/Base/Avalanche 60 s, BSC/Tron 90 s, Arbitrum 30 s (floor), Ethereum 5 min (cap). The sample interval is `clamp(threshold/3, 5s, 60s)`.
+- **Reader goroutines start once.** `newBlockNotifier`, `tipWatchdog`, and the `NewBlock`/`NewTx` channel readers are launched under a `sync.Once`; `reconnectRPC` only re-creates the `EthSubscribe`-bound subscriptions, so a reconnect no longer leaks a fresh reader set. `getBestHeader` no longer does a lock-held passive reconnect — liveness is owned by the watchdog, off the `bestHeaderLock`, so a reconnect can't block concurrent tip readers.
+
+EVM coverage is inherited by every coin built on `EthereumRPC` (Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche); Tron runs the same watchdog poll-only over its ZeroMQ feed. BTC-family coins do not use this cached-tip feed and are unaffected.
+
 ## Troubleshooting
 
 The retry policy is exposed per chain under `additional_params.missingBlockRetry` in `configs/coins/*.json`. Each field is optional; missing or `<= 0` values fall back to the built-in defaults below.
@@ -111,3 +172,8 @@ Related Prometheus counters for observing the budget at runtime:
 - `blockbook_index_block_not_found_retries` — every transient `ErrBlockNotFound` observed during sync.
 - `blockbook_index_sync_yields{reason="deadline"|"probe_failed"}` — wall-clock cap fired vs chain-state probe failed three times.
 - `blockbook_index_reorg_events{type="fork"|"resync"|"disconnect"}` — real reorg signals (not stall yields).
+
+For the [tip feed](#tip-feed-and-the-stall-watchdog) (EVM and Tron only):
+
+- `blockbook_backend_subscription_age_seconds` — seconds since the feed last delivered a notification. Healthy: hovers near the chain's block time. A sustained climb to `TipStaleThreshold` (the value `clamp(30 × blockTime, 30s, 5min)` from the watchdog section) means the feed went silent and the watchdog is carrying sync; climbing without bound means the backend is unreachable.
+- `blockbook_backend_subscription_events{subscription,event}` — feed lifecycle. `subscription` ∈ `newHeads`, `newPendingTransactions`, `rpc`, `zeromq`; `event` ∈ `error`, `resubscribed`, `resubscribe_failed`, `watchdog_stall`, `watchdog_tip_advanced`, `watchdog_reconnect`, `watchdog_reconnect_failed`. The two to alert on are `watchdog_tip_advanced` (the fallback poll found blocks the feed had dropped — the push feed is broken) and a sustained `subscription_age_seconds` at the threshold.
