@@ -484,31 +484,37 @@ func (b *TronRPC) tipWatchdog() {
 		if common.IsInShutdown() {
 			return
 		}
-		lastNs := b.lastNotifyNs.Load()
-		if lastNs == 0 {
-			continue
-		}
-		age := time.Since(time.Unix(0, lastNs))
-		b.SetSubscriptionAgeSeconds(age.Seconds())
-		if age < threshold {
-			continue
-		}
-		glog.Warningf("TronRPC: ZeroMQ block feed silent for %s (threshold %s); polling tip", age.Truncate(time.Second), threshold)
-		b.ObserveSubscriptionEvent("zeromq", "watchdog_stall")
-		updated, err := b.refreshBestHeaderFromChain()
-		if err != nil {
-			glog.Error("TronRPC: tip watchdog tip poll error ", err)
-			continue
-		}
-		if updated && b.PushHandler != nil {
-			b.ObserveSubscriptionEvent("zeromq", "watchdog_tip_advanced")
-			b.PushHandler(bchain.NotificationNewBlock)
-			b.PushHandler(bchain.NotificationNewTx)
-		}
-		// Reset the window so a quiet-but-healthy chain is judged from now, not from
-		// the last block, avoiding a poll every tick during legitimate lulls.
-		b.markNotifyAlive()
+		b.tipWatchdogTick(threshold)
 	}
+}
+
+// tipWatchdogTick is one watchdog evaluation, split out from the ticker loop so
+// it is unit-testable with an injected threshold and a fake client (no wait).
+func (b *TronRPC) tipWatchdogTick(threshold time.Duration) {
+	lastNs := b.lastNotifyNs.Load()
+	if lastNs == 0 {
+		return
+	}
+	age := time.Since(time.Unix(0, lastNs))
+	b.SetSubscriptionAgeSeconds(age.Seconds())
+	if age < threshold {
+		return
+	}
+	glog.Warningf("TronRPC: ZeroMQ block feed silent for %s (threshold %s); polling tip", age.Truncate(time.Second), threshold)
+	b.ObserveSubscriptionEvent("zeromq", "watchdog_stall")
+	updated, err := b.refreshBestHeaderFromChain()
+	if err != nil {
+		glog.Error("TronRPC: tip watchdog tip poll error ", err)
+		return
+	}
+	if updated && b.PushHandler != nil {
+		b.ObserveSubscriptionEvent("zeromq", "watchdog_tip_advanced")
+		b.PushHandler(bchain.NotificationNewBlock)
+		b.PushHandler(bchain.NotificationNewTx)
+	}
+	// Reset the window so a quiet-but-healthy chain is judged from now, not from
+	// the last block, avoiding a poll every tick during legitimate lulls.
+	b.markNotifyAlive()
 }
 
 func (b *TronRPC) handleMQNotification(nt bchain.NotificationType) {

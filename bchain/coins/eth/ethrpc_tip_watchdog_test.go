@@ -1,11 +1,16 @@
 package eth
 
 import (
+	"context"
+	"errors"
+	"math/big"
 	"testing"
 	"time"
+
+	"github.com/trezor/blockbook/bchain"
 )
 
-// tipStaleThreshold scales the silent-subscription window to the chain's block
+// TipStaleThreshold scales the silent-subscription window to the chain's block
 // cadence (replacing the old fixed 15m), clamped so fast chains don't react to
 // jitter and slow chains still recover in bounded time.
 func TestTipStaleThreshold(t *testing.T) {
@@ -26,7 +31,7 @@ func TestTipStaleThreshold(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &EthereumRPC{ChainConfig: &Configuration{AverageBlockTimeMs: tt.averageBlockTime}}
 			if got := b.TipStaleThreshold(); got != tt.want {
-				t.Fatalf("tipStaleThreshold() = %s, want %s", got, tt.want)
+				t.Fatalf("TipStaleThreshold() = %s, want %s", got, tt.want)
 			}
 		})
 	}
@@ -39,8 +44,80 @@ func TestMarkSubscriptionAlive(t *testing.T) {
 	}
 	before := time.Now().UnixNano()
 	b.markSubscriptionAlive()
-	got := b.lastSubNotifyNs.Load()
-	if got < before {
+	if got := b.lastSubNotifyNs.Load(); got < before {
 		t.Fatalf("markSubscriptionAlive() recorded %d, want >= %d", got, before)
+	}
+}
+
+// --- minimal fakes implementing only what the watchdog touches ---
+
+type stubHeader struct{ n int64 }
+
+func (h stubHeader) Hash() string         { return string(rune(h.n)) }
+func (h stubHeader) Number() *big.Int     { return big.NewInt(h.n) }
+func (h stubHeader) Difficulty() *big.Int { return big.NewInt(0) }
+
+type stubHeaderClient struct {
+	bchain.EVMClient // embed for the methods the watchdog never calls
+	height           int64
+}
+
+func (c *stubHeaderClient) HeaderByNumber(context.Context, *big.Int) (bchain.EVMHeader, error) {
+	return stubHeader{n: c.height}, nil
+}
+
+// On a stale feed the watchdog must poll the tip, push a new-block notification,
+// and attempt a reconnect — exercised here without waiting on the real ticker.
+// Reconnect runs after the poll/push, so we let OpenRPC fail (closeRPC is nil-safe)
+// to assert it was attempted without standing up subscription plumbing whose only
+// job would be to echo success back.
+func TestEthereumTipWatchdogTickOnStaleFeed(t *testing.T) {
+	pushes := make(chan bchain.NotificationType, 4)
+	reconnectAttempted := false
+	b := &EthereumRPC{
+		ChainConfig: &Configuration{AverageBlockTimeMs: 2000},
+		Timeout:     time.Second,
+		PushHandler: func(nt bchain.NotificationType) { pushes <- nt },
+	}
+	b.Client = &stubHeaderClient{height: 100}
+	b.OpenRPC = func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
+		reconnectAttempted = true
+		return nil, nil, errors.New("reconnect disabled in test")
+	}
+	// Simulate a silently stalled subscription: last notification long ago.
+	b.lastSubNotifyNs.Store(time.Now().Add(-time.Hour).UnixNano())
+
+	b.tipWatchdogTick(time.Millisecond)
+
+	select {
+	case nt := <-pushes:
+		if nt != bchain.NotificationNewBlock {
+			t.Fatalf("pushed %v, want NotificationNewBlock", nt)
+		}
+	default:
+		t.Fatal("watchdog did not push NotificationNewBlock on a stale feed")
+	}
+	if !reconnectAttempted {
+		t.Fatal("watchdog did not attempt reconnect on a stale feed")
+	}
+}
+
+// A fresh feed (recent notification) must not poll or reconnect.
+func TestEthereumTipWatchdogTickFreshFeedNoop(t *testing.T) {
+	pushes := make(chan bchain.NotificationType, 1)
+	b := &EthereumRPC{
+		ChainConfig: &Configuration{AverageBlockTimeMs: 2000},
+		PushHandler: func(nt bchain.NotificationType) { pushes <- nt },
+	}
+	b.OpenRPC = func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
+		t.Fatal("watchdog reconnected on a fresh feed")
+		return nil, nil, nil
+	}
+	b.lastSubNotifyNs.Store(time.Now().UnixNano())
+
+	b.tipWatchdogTick(time.Minute)
+
+	if len(pushes) != 0 {
+		t.Fatal("watchdog pushed on a fresh feed")
 	}
 }

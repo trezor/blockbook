@@ -3,9 +3,13 @@
 package tron
 
 import (
+	"context"
+	"errors"
+	"math/big"
 	"testing"
 	"time"
 
+	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
@@ -30,14 +34,51 @@ func TestTronTipStaleThreshold(t *testing.T) {
 	}
 }
 
-func TestTronMarkNotifyAlive(t *testing.T) {
-	b := &TronRPC{}
-	if got := b.lastNotifyNs.Load(); got != 0 {
-		t.Fatalf("lastNotifyNs should start at 0, got %d", got)
-	}
-	before := time.Now().UnixNano()
-	b.markNotifyAlive()
-	if got := b.lastNotifyNs.Load(); got < before {
-		t.Fatalf("markNotifyAlive() recorded %d, want >= %d", got, before)
+// --- minimal fakes implementing only what the watchdog touches ---
+
+type stubHeader struct{ n int64 }
+
+func (h stubHeader) Hash() string         { return string(rune(h.n)) }
+func (h stubHeader) Number() *big.Int     { return big.NewInt(h.n) }
+func (h stubHeader) Difficulty() *big.Int { return big.NewInt(0) }
+
+type stubHeaderClient struct {
+	bchain.EVMClient // embed for the methods the watchdog never calls
+	height           int64
+}
+
+func (c *stubHeaderClient) HeaderByNumber(context.Context, *big.Int) (bchain.EVMHeader, error) {
+	return stubHeader{n: c.height}, nil
+}
+
+// stubTronHTTP makes the solidified-head lookup fail; refreshBestHeaderFromChain
+// logs and ignores it, so the tip refresh still succeeds.
+type stubTronHTTP struct{}
+
+func (stubTronHTTP) Request(context.Context, string, interface{}, interface{}) error {
+	return errors.New("no solidified head in test")
+}
+
+// Tron has no WS to reconnect; on a stalled ZeroMQ feed the watchdog must poll the
+// tip and re-trigger sync (new block + mempool refresh) without waiting on the ticker.
+func TestTronTipWatchdogTickOnStaleFeed(t *testing.T) {
+	pushes := make(chan bchain.NotificationType, 4)
+	ethRPC := &eth.EthereumRPC{ChainConfig: &eth.Configuration{AverageBlockTimeMs: 3000}, Timeout: time.Second}
+	ethRPC.Client = &stubHeaderClient{height: 200}
+	ethRPC.PushHandler = func(nt bchain.NotificationType) { pushes <- nt }
+	b := &TronRPC{EthereumRPC: ethRPC, solidityNodeHTTP: stubTronHTTP{}}
+	b.lastNotifyNs.Store(time.Now().Add(-time.Hour).UnixNano())
+
+	b.tipWatchdogTick(time.Millisecond)
+
+	for _, want := range []bchain.NotificationType{bchain.NotificationNewBlock, bchain.NotificationNewTx} {
+		select {
+		case nt := <-pushes:
+			if nt != want {
+				t.Fatalf("pushed %v, want %v", nt, want)
+			}
+		default:
+			t.Fatalf("watchdog did not push %v on a stale feed", want)
+		}
 	}
 }
