@@ -348,7 +348,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 
 	go w.getBlockChain(bch, done)
 
-	var lastRes, empty blockResult
+	var lastRes blockResult
 
 	connect := func(res blockResult) error {
 		lastRes = res
@@ -386,8 +386,14 @@ ConnectLoop:
 		case <-w.chanOsSignal:
 			logInterrupted()
 			return ErrOperationInterrupted
-		case res := <-bch:
-			if res == empty {
+		case res, ok := <-bch:
+			if !ok {
+				select {
+				case <-w.chanOsSignal:
+					logInterrupted()
+					return ErrOperationInterrupted
+				default:
+				}
 				break ConnectLoop
 			}
 			err := connect(res)

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -18,6 +19,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/common"
 )
 
 const (
@@ -99,6 +101,10 @@ type TronRPC struct {
 	hasSolidifiedHeight  bool
 	newBlockNotifyCh     chan struct{}
 	newBlockNotifyOnce   sync.Once
+	// lastNotifyNs is the UnixNano of the last ZeroMQ block notification that drove
+	// a tip refresh. tipWatchdog uses it to detect a silently stalled ZeroMQ feed
+	// (Tron has no newHeads WS subscription; if the publisher stops, nothing errors).
+	lastNotifyNs atomic.Int64
 }
 
 func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
@@ -432,8 +438,16 @@ func (b *TronRPC) signalNewBlock() {
 	}
 }
 
+func (b *TronRPC) markNotifyAlive() {
+	b.lastNotifyNs.Store(time.Now().UnixNano())
+}
+
 func (b *TronRPC) newBlockNotifier() {
 	for range b.newBlockNotifyCh {
+		// Record that the ZeroMQ feed is delivering (the signal tipWatchdog watches);
+		// watchdog fallback polls deliberately do not touch this, so they cannot mask
+		// a dead feed.
+		b.markNotifyAlive()
 		updated, err := b.refreshBestHeaderFromChain()
 		if err != nil {
 			glog.Error("refreshBestHeaderFromChain ", err)
@@ -445,6 +459,55 @@ func (b *TronRPC) newBlockNotifier() {
 			// subscriptions, so a new block should also trigger a mempool refresh.
 			b.PushHandler(bchain.NotificationNewTx)
 		}
+	}
+}
+
+// tipWatchdog detects a silently stalled ZeroMQ block feed. Unlike the EVM
+// watchdog there is no WS subscription to reconnect (Tron's ZeroMQ SUB
+// auto-reconnects at the transport level), so on a stall it polls the tip
+// directly and, if it advanced, re-triggers sync. This keeps the index moving
+// when the publisher goes quiet instead of waiting for the ~15-minute periodic
+// resync tick. Started exactly once via newBlockNotifyOnce.
+func (b *TronRPC) tipWatchdog() {
+	threshold := b.TipStaleThreshold()
+	interval := threshold / 3
+	if interval < 5*time.Second {
+		interval = 5 * time.Second
+	}
+	if interval > 60*time.Second {
+		interval = 60 * time.Second
+	}
+	glog.Infof("TronRPC: tip watchdog started, stall threshold %s, sampling every %s", threshold, interval)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		if common.IsInShutdown() {
+			return
+		}
+		lastNs := b.lastNotifyNs.Load()
+		if lastNs == 0 {
+			continue
+		}
+		age := time.Since(time.Unix(0, lastNs))
+		b.SetSubscriptionAgeSeconds(age.Seconds())
+		if age < threshold {
+			continue
+		}
+		glog.Warningf("TronRPC: ZeroMQ block feed silent for %s (threshold %s); polling tip", age.Truncate(time.Second), threshold)
+		b.ObserveSubscriptionEvent("zeromq", "watchdog_stall")
+		updated, err := b.refreshBestHeaderFromChain()
+		if err != nil {
+			glog.Error("TronRPC: tip watchdog tip poll error ", err)
+			continue
+		}
+		if updated && b.PushHandler != nil {
+			b.ObserveSubscriptionEvent("zeromq", "watchdog_tip_advanced")
+			b.PushHandler(bchain.NotificationNewBlock)
+			b.PushHandler(bchain.NotificationNewTx)
+		}
+		// Reset the window so a quiet-but-healthy chain is judged from now, not from
+		// the last block, avoiding a poll every tick during legitimate lulls.
+		b.markNotifyAlive()
 	}
 }
 
@@ -481,6 +544,7 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 	b.Mempool.OnNewTx = onNewTx
 	b.newBlockNotifyOnce.Do(func() {
 		go b.newBlockNotifier()
+		go b.tipWatchdog()
 	})
 
 	if b.mq == nil {

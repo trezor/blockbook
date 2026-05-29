@@ -55,6 +55,8 @@ type Metrics struct {
 	BlockbookAppInfo                  *prometheus.GaugeVec
 	BackendBestHeight                 prometheus.Gauge
 	BackendTipAgeSeconds              prometheus.Gauge
+	BackendSubscriptionAgeSeconds     prometheus.Gauge
+	BackendSubscriptionEvents         *prometheus.CounterVec
 	AverageBlockTimeSeconds           prometheus.Gauge
 	BlockbookBestHeight               prometheus.Gauge
 	ExplorerPendingRequests           *prometheus.GaugeVec
@@ -450,6 +452,21 @@ func GetMetrics(coin string) (*Metrics, error) {
 			Help:        "Seconds since the backend's best height was last observed to advance",
 			ConstLabels: Labels{"coin": coin},
 		},
+	)
+	metrics.BackendSubscriptionAgeSeconds = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_backend_subscription_age_seconds",
+			Help:        "Seconds since the backend newHeads push-subscription last delivered a notification (high or growing values indicate a silently stalled subscription, e.g. a load balancer that dropped the upstream without erroring)",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
+	metrics.BackendSubscriptionEvents = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_backend_subscription_events",
+			Help:        "Backend tip-feed lifecycle events by subscription (newHeads, newPendingTransactions, rpc, or zeromq for Tron) and event (error, resubscribed, resubscribe_failed, watchdog_stall, watchdog_reconnect, watchdog_reconnect_failed, watchdog_tip_advanced)",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"subscription", "event"},
 	)
 	metrics.AverageBlockTimeSeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
