@@ -119,6 +119,14 @@ func NewSyncWorkerWithConfig(db *RocksDB, chain bchain.BlockChain, syncWorkers, 
 	if cfg != nil {
 		effectiveCfg = *cfg
 	}
+	// MaxStallDuration is the load-bearing liveness cap (see its doc): the retry
+	// loops disable the cap when it's <= 0, which would let a chain-shortening
+	// reorg spin forever. Enforce the invariant structurally here so every caller
+	// (including tests passing a partial cfg) gets a safe value, not just the
+	// ApplyMissingBlockRetryOverride path.
+	if effectiveCfg.MissingBlockRetry.MaxStallDuration <= 0 {
+		effectiveCfg.MissingBlockRetry.MaxStallDuration = DefaultMissingBlockRetryConfig().MaxStallDuration
+	}
 	return &SyncWorker{
 		db:                db,
 		chain:             chain,

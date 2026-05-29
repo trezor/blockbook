@@ -170,6 +170,9 @@ var testSyncWorkerConfig = &db.SyncWorkerConfig{
 		RecheckThreshold:    3,
 		TipRecheckThreshold: 2,
 		RetryDelay:          50 * time.Millisecond,
+		// Keep the liveness cap exercised but short so a stall yields quickly
+		// instead of waiting on the 60s production default.
+		MaxStallDuration: 5 * time.Second,
 	},
 }
 

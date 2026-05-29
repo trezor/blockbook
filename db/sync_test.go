@@ -504,3 +504,43 @@ func TestParallelConnectBlocksReturnsWorkerAbortWhenHashQueueFull(t *testing.T) 
 		t.Fatal("ParallelConnectBlocks did not return after worker abort")
 	}
 }
+
+// MaxStallDuration is the load-bearing liveness cap: the retry loops disable the
+// cap when it is <= 0, so construction must clamp it to a safe default regardless
+// of which caller (or partial test cfg) supplied the config.
+func TestNewSyncWorkerClampsMaxStallDuration(t *testing.T) {
+	def := DefaultMissingBlockRetryConfig().MaxStallDuration
+	cases := []struct {
+		name string
+		cfg  *SyncWorkerConfig
+		want time.Duration
+	}{
+		{name: "nil cfg keeps default", cfg: nil, want: def},
+		{
+			name: "zero stall clamped to default",
+			cfg:  &SyncWorkerConfig{MissingBlockRetry: MissingBlockRetryConfig{MaxStallDuration: 0}},
+			want: def,
+		},
+		{
+			name: "negative stall clamped to default",
+			cfg:  &SyncWorkerConfig{MissingBlockRetry: MissingBlockRetryConfig{MaxStallDuration: -time.Second}},
+			want: def,
+		},
+		{
+			name: "explicit positive stall preserved",
+			cfg:  &SyncWorkerConfig{MissingBlockRetry: MissingBlockRetryConfig{MaxStallDuration: 5 * time.Second}},
+			want: 5 * time.Second,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := NewSyncWorkerWithConfig(nil, nil, 1, 0, 0, false, nil, getTestMetrics(t), nil, tc.cfg)
+			if err != nil {
+				t.Fatalf("NewSyncWorkerWithConfig: %v", err)
+			}
+			if got := w.missingBlockRetry.MaxStallDuration; got != tc.want {
+				t.Fatalf("MaxStallDuration = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
