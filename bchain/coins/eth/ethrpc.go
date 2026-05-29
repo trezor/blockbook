@@ -1075,40 +1075,46 @@ func (b *EthereumRPC) tipWatchdog() {
 		if common.IsInShutdown() {
 			return
 		}
-		// lastSubNotifyNs is set only once the subscription has delivered at least
-		// one notification, which cannot happen before InitializeMempool wires it
-		// up, so this atomic read alone gates the watchdog race-free (no need to
-		// also read the plain mempoolInitialized flag).
-		lastNs := b.lastSubNotifyNs.Load()
-		if lastNs == 0 {
-			continue
-		}
-		age := time.Since(time.Unix(0, lastNs))
-		b.SetSubscriptionAgeSeconds(age.Seconds())
-		if age < threshold {
-			continue
-		}
-		glog.Warningf("rpc: newHeads subscription silent for %s (threshold %s); polling tip and reconnecting", age.Truncate(time.Second), threshold)
-		b.ObserveSubscriptionEvent("newHeads", "watchdog_stall")
-		// Keep sync alive immediately: poll the canonical tip directly so a dead
-		// push channel can no longer freeze the cached tip into a false "synced".
-		if updated, err := b.refreshBestHeaderFromChain(); err != nil {
-			glog.Error("rpc: tip watchdog tip poll error ", err)
-		} else if updated {
-			b.ObserveSubscriptionEvent("newHeads", "watchdog_tip_advanced")
-			b.PushHandler(bchain.NotificationNewBlock)
-		}
-		// Restore push delivery by reconnecting the RPC and re-subscribing.
-		if err := b.reconnectRPC(); err != nil {
-			glog.Error("rpc: tip watchdog reconnect error ", err)
-			b.ObserveSubscriptionEvent("rpc", "watchdog_reconnect_failed")
-			continue
-		}
-		b.ObserveSubscriptionEvent("rpc", "watchdog_reconnect")
-		// Give the fresh subscription a full window before judging it again so a
-		// flapping backend cannot trigger a reconnect storm.
-		b.markSubscriptionAlive()
+		b.tipWatchdogTick(threshold)
 	}
+}
+
+// tipWatchdogTick is one watchdog evaluation, split out from the ticker loop so
+// it is unit-testable with an injected threshold and a fake client (no 30s wait).
+func (b *EthereumRPC) tipWatchdogTick(threshold time.Duration) {
+	// lastSubNotifyNs is set only once the subscription has delivered at least one
+	// notification, which cannot happen before InitializeMempool wires it up, so
+	// this atomic read alone gates the watchdog race-free (no need to also read the
+	// plain mempoolInitialized flag).
+	lastNs := b.lastSubNotifyNs.Load()
+	if lastNs == 0 {
+		return
+	}
+	age := time.Since(time.Unix(0, lastNs))
+	b.SetSubscriptionAgeSeconds(age.Seconds())
+	if age < threshold {
+		return
+	}
+	glog.Warningf("rpc: newHeads subscription silent for %s (threshold %s); polling tip and reconnecting", age.Truncate(time.Second), threshold)
+	b.ObserveSubscriptionEvent("newHeads", "watchdog_stall")
+	// Keep sync alive immediately: poll the canonical tip directly so a dead push
+	// channel can no longer freeze the cached tip into a false "synced".
+	if updated, err := b.refreshBestHeaderFromChain(); err != nil {
+		glog.Error("rpc: tip watchdog tip poll error ", err)
+	} else if updated {
+		b.ObserveSubscriptionEvent("newHeads", "watchdog_tip_advanced")
+		b.PushHandler(bchain.NotificationNewBlock)
+	}
+	// Restore push delivery by reconnecting the RPC and re-subscribing.
+	if err := b.reconnectRPC(); err != nil {
+		glog.Error("rpc: tip watchdog reconnect error ", err)
+		b.ObserveSubscriptionEvent("rpc", "watchdog_reconnect_failed")
+		return
+	}
+	b.ObserveSubscriptionEvent("rpc", "watchdog_reconnect")
+	// Give the fresh subscription a full window before judging it again so a
+	// flapping backend cannot trigger a reconnect storm.
+	b.markSubscriptionAlive()
 }
 
 func (b *EthereumRPC) refreshBestHeaderFromChain() (bool, error) {
