@@ -369,7 +369,7 @@ func ethSyncRpcErrStatus(err error) string {
 	}
 	var rpcErr rpc.Error
 	if stdErrors.As(err, &rpcErr) {
-		return "rpc"
+		return "rpc_" + strconv.Itoa(rpcErr.ErrorCode())
 	}
 	return "error"
 }
