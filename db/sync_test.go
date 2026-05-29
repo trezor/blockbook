@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -138,6 +139,21 @@ func TestIsRetryableGetBlockError(t *testing.T) {
 				t.Fatalf("isRetryableGetBlockError(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestConnectBlocksHonorsClosedShutdownBeforeStart(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		ch := make(chan os.Signal)
+		close(ch)
+
+		w := &SyncWorker{
+			chanOsSignal: ch,
+		}
+
+		if err := w.connectBlocks(nil, false); !stdErrors.Is(err, ErrOperationInterrupted) {
+			t.Fatalf("connectBlocks error = %v, want %v", err, ErrOperationInterrupted)
+		}
 	}
 }
 
