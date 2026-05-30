@@ -90,20 +90,20 @@ The failure mode that motivated this is a load balancer that drops the upstream 
 %%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280", "primaryTextColor": "#111827"}}}%%
 flowchart TD
     feed["Backend push feed<br/>EVM newHeads WS · Tron ZeroMQ"]
-    notifier["newBlockNotifier<br/>(channel reader)"]
-    mark["markSubscriptionAlive"]
-    refresh["refreshBestHeaderFromChain"]
+    notifier["feed reader<br/>(newHeads / ZeroMQ)"]
+    advance["advance cached tip<br/>EVM: setBestHeader(feed header)<br/>Tron: refreshBestHeaderFromChain"]
+    mark["markSubscriptionAlive<br/>(EVM: only on tip advance)"]
     push["PushHandler(NotificationNewBlock)"]
     trigger["chanSyncIndex → syncIndexLoop<br/>(sync loop above)"]
     ts[("lastSubNotifyNs<br/>liveness timestamp")]
     cache[("cached bestHeader<br/>read by resyncIndex → synced?")]
 
     feed -- notification --> notifier
-    notifier --> mark
+    notifier --> advance
+    advance -. advances .-> cache
+    advance -- "tip advanced" --> mark
     mark -. stamps .-> ts
-    notifier --> refresh
-    refresh -. advances .-> cache
-    refresh -- "tip advanced" --> push --> trigger
+    advance -- "tip advanced" --> push --> trigger
 
     subgraph wd ["tipWatchdog (EVM + Tron, started once)"]
         tick["tick every<br/>clamp(threshold/3, 5s, 60s)"]
@@ -128,14 +128,15 @@ flowchart TD
     classDef store fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
     classDef watch fill:#fff6d7,stroke:#b58400,color:#312300;
 
-    class feed,notifier,mark,refresh,push,trigger,tick,check,ok normal;
+    class feed,notifier,mark,advance,push,trigger,tick,check,ok normal;
     class ts,cache store;
     class stall,wpoll,wadv,wrec watch;
 ```
 
 Key invariants this design relies on:
 
-- **The liveness timestamp is stamped only by the feed.** `markSubscriptionAlive` (EVM) / `markNotifyAlive` (Tron) is called from `newBlockNotifier` — i.e. only when the push feed actually delivered. The watchdog's own fallback poll deliberately does **not** stamp it, so a watchdog that is carrying sync can never mask a dead feed: `age` keeps growing until real push delivery resumes. The watchdog only re-arms the window after a *successful* EVM reconnect (and Tron re-arms after each poll to avoid polling every tick during a legitimate lull).
+- **The cached tip is advanced from the feed's own header, not re-derived over the load-balanced call path (EVM).** `newHeads` (WS) is sticky to one upstream, but JSON-RPC calls (`HeaderByNumber`, `GetBlock`) are load-balanced across the pool and can land on a lagging node. Re-querying the tip over that path could read a stale height and silently freeze sync into a false "synced" even while `newHeads` keeps flowing; instead the header delivered by the feed sets the tip directly via `setBestHeader`, which is **monotonic** so a resubscribe onto a slightly-behind node cannot regress the tip and trip a spurious fork. Blocks the call path cannot yet serve surface as ordinary `ErrBlockNotFound` and are absorbed by the [retry budget](#troubleshooting) — visible via `block_not_found_retries` / `sync_yields` — rather than hidden as a frozen tip. (Tron's ZeroMQ notification carries no header, so it still re-queries via `refreshBestHeaderFromChain`.)
+- **The liveness timestamp is stamped only by the feed, and (EVM) only when the feed advances the tip.** `markSubscriptionAlive` (EVM) / `markNotifyAlive` (Tron) is stamped on the push-feed path, never by the watchdog's own fallback poll — so a watchdog that is carrying sync can never mask a dead feed: `age` keeps growing until real push delivery resumes. On EVM it is stamped **only when the delivered header actually moved the tip forward**, so the watchdog also catches a feed that keeps delivering but is stuck on one height (a load-balancer upstream that stopped advancing), not just one that went fully silent. The watchdog only re-arms the window after a *successful* EVM reconnect (and Tron re-arms after each poll to avoid polling every tick during a legitimate lull).
 - **`TipStaleThreshold` is chain-aware.** `clamp(30 × averageBlockTimeMs, 30s, 5min)` replaces the old fixed 15 minutes, which on Polygon's 2 s blocks meant ~450 missed blocks before any reaction. Per-chain values: Polygon/Optimism/Base/Avalanche 60 s, BSC/Tron 90 s, Arbitrum 30 s (floor), Ethereum 5 min (cap). The sample interval is `clamp(threshold/3, 5s, 60s)`.
 - **Reader goroutines start once.** `newBlockNotifier`, `tipWatchdog`, and the `NewBlock`/`NewTx` channel readers are launched under a `sync.Once`; `reconnectRPC` only re-creates the `EthSubscribe`-bound subscriptions, so a reconnect no longer leaks a fresh reader set. `getBestHeader` no longer does a lock-held passive reconnect — liveness is owned by the watchdog, off the `bestHeaderLock`, so a reconnect can't block concurrent tip readers.
 
