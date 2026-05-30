@@ -179,10 +179,10 @@ type EthereumRPC struct {
 	// subscribeEvents only re-creates the connection-bound subscriptions and never
 	// leaks a fresh set of readers on every reconnect.
 	subscribeReadersOnce sync.Once
-	// lastSubNotifyNs is the UnixNano of the last newHeads notification actually
-	// delivered by the subscription (set only on the subscription-driven path, not
-	// by watchdog polls). The watchdog uses it to tell a live subscription from one
-	// that silently stopped delivering without erroring on sub.Err().
+	// lastSubNotifyNs is the UnixNano of the last newHeads notification that
+	// advanced the cached tip (subscription path only, never watchdog polls).
+	// Keying liveness on tip advance, not mere arrival, lets the watchdog also
+	// catch a feed that keeps delivering but is stuck on one height.
 	lastSubNotifyNs           atomic.Int64
 	NewBlock                  bchain.EVMNewBlockSubscriber
 	newBlockSubscription      bchain.EVMClientSubscription
@@ -728,11 +728,13 @@ func (b *EthereumRPC) subscribeEvents() error {
 		// new block notifications handling
 		go func() {
 			for {
-				_, ok := b.NewBlock.Read()
+				h, ok := b.NewBlock.Read()
 				if !ok {
 					break
 				}
-				b.signalNewBlock()
+				// Advance the tip from the delivered header, not a re-query over
+				// the load-balanced HTTP path (see onFeedHeader).
+				b.onFeedHeader(h)
 			}
 		}()
 		// new mempool transaction notifications handling
@@ -957,38 +959,43 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 	return b.bestHeader, nil
 }
 
-// UpdateBestHeader keeps track of the latest block header confirmed on chain
+// UpdateBestHeader keeps track of the latest block header confirmed on chain.
+// Non-monotonic: callers (Tron's ZeroMQ feed) own their ordering/reorg handling.
 func (b *EthereumRPC) UpdateBestHeader(h bchain.EVMHeader) {
 	if h == nil || h.Number() == nil {
 		return
 	}
 	glog.V(2).Info("rpc: new block header ", h.Number().Uint64())
-	b.setBestHeader(h)
+	b.setBestHeader(h, false)
 }
 
 func (b *EthereumRPC) signalNewBlock() {
-	// Non-blocking send: one pending signal is enough to refresh the tip.
+	// Non-blocking send: one pending signal is enough to wake the sync loop.
 	select {
 	case b.newBlockNotifyCh <- struct{}{}:
 	default:
 	}
 }
 
+// onFeedHeader advances the cached tip from the header the newHeads feed just
+// delivered (not a re-query over HTTP) and, only on a real advance, refreshes
+// liveness and wakes the sync loop. Behind a load balancer an HTTP re-query can
+// hit a lagging node and report a stale tip, freezing sync into a false "synced"
+// while newHeads still flows; the feed's header is authoritative. The update is
+// monotonic so a resubscribe onto a behind node cannot regress the tip.
+func (b *EthereumRPC) onFeedHeader(h bchain.EVMHeader) {
+	if b.setBestHeader(h, true) {
+		b.markSubscriptionAlive()
+		b.signalNewBlock()
+	}
+}
+
+// newBlockNotifier wakes the sync loop after onFeedHeader advanced the tip. It is
+// decoupled from the reader via newBlockNotifyCh so a slow PushHandler cannot
+// stall the reader and back the newHeads channel up.
 func (b *EthereumRPC) newBlockNotifier() {
 	for range b.newBlockNotifyCh {
-		// Record that the subscription is alive *before* refreshing: this is the
-		// only place that proves the newHeads feed is still delivering, which is
-		// what tipWatchdog watches. Watchdog fallback polls deliberately do not
-		// touch this timestamp, so they cannot mask a dead subscription.
-		b.markSubscriptionAlive()
-		updated, err := b.refreshBestHeaderFromChain()
-		if err != nil {
-			glog.Error("refreshBestHeaderFromChain ", err)
-			continue
-		}
-		if updated {
-			b.PushHandler(bchain.NotificationNewBlock)
-		}
+		b.PushHandler(bchain.NotificationNewBlock)
 	}
 }
 
@@ -1029,9 +1036,9 @@ func (b *EthereumRPC) SetSubscriptionAgeSeconds(seconds float64) {
 	b.metrics.BackendSubscriptionAgeSeconds.Set(seconds)
 }
 
-// markSubscriptionAlive records that the newHeads subscription just delivered a
-// notification, the signal tipWatchdog uses to tell a live subscription from one
-// that went silent behind a load balancer without erroring.
+// markSubscriptionAlive records that the feed just advanced the cached tip — the
+// signal tipWatchdog uses to tell a live, progressing feed from one that went
+// silent or got stuck on a single height.
 func (b *EthereumRPC) markSubscriptionAlive() {
 	b.lastSubNotifyNs.Store(time.Now().UnixNano())
 }
@@ -1117,6 +1124,9 @@ func (b *EthereumRPC) tipWatchdogTick(threshold time.Duration) {
 	b.markSubscriptionAlive()
 }
 
+// refreshBestHeaderFromChain polls the tip over HTTP. It is the watchdog's
+// fallback when the push feed is silent (no longer on the hot path). Monotonic so
+// a lagging load-balancer node cannot regress the tip.
 func (b *EthereumRPC) refreshBestHeaderFromChain() (bool, error) {
 	if b.Client == nil {
 		return false, errors.New("rpc client not initialized")
@@ -1130,28 +1140,32 @@ func (b *EthereumRPC) refreshBestHeaderFromChain() (bool, error) {
 	if h == nil || h.Number() == nil {
 		return false, errors.New("best header is nil")
 	}
-	return b.setBestHeader(h), nil
+	return b.setBestHeader(h, true), nil
 }
 
-func (b *EthereumRPC) setBestHeader(h bchain.EVMHeader) bool {
+// setBestHeader stores h as the cached tip and reports whether it changed (new
+// height, or same-height hash change i.e. a tip reorg). When monotonic, a lower
+// height is rejected so a lagging load-balancer node cannot regress the tip and
+// trip a spurious fork; a deeper real rollback is handled via the retry budget.
+func (b *EthereumRPC) setBestHeader(h bchain.EVMHeader, monotonic bool) bool {
 	if h == nil || h.Number() == nil {
 		return false
 	}
 	b.bestHeaderLock.Lock()
 	defer b.bestHeaderLock.Unlock()
-	changed := false
-	if b.bestHeader == nil || b.bestHeader.Number() == nil {
-		changed = true
-	} else {
+	if b.bestHeader != nil && b.bestHeader.Number() != nil {
 		prevNum := b.bestHeader.Number().Uint64()
 		newNum := h.Number().Uint64()
-		if prevNum != newNum || b.bestHeader.Hash() != h.Hash() {
-			changed = true
+		if newNum == prevNum && b.bestHeader.Hash() == h.Hash() {
+			return false // identical tip: not progress
+		}
+		if monotonic && newNum < prevNum {
+			return false // lagging node: keep the higher tip
 		}
 	}
 	b.bestHeader = h
 	b.bestHeaderTime = time.Now()
-	return changed
+	return true
 }
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain

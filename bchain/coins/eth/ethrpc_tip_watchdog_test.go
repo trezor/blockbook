@@ -51,9 +51,17 @@ func TestMarkSubscriptionAlive(t *testing.T) {
 
 // --- minimal fakes implementing only what the watchdog touches ---
 
-type stubHeader struct{ n int64 }
+type stubHeader struct {
+	n int64
+	h string // optional hash override; defaults to a value derived from n
+}
 
-func (h stubHeader) Hash() string         { return string(rune(h.n)) }
+func (h stubHeader) Hash() string {
+	if h.h != "" {
+		return h.h
+	}
+	return string(rune(h.n))
+}
 func (h stubHeader) Number() *big.Int     { return big.NewInt(h.n) }
 func (h stubHeader) Difficulty() *big.Int { return big.NewInt(0) }
 
@@ -119,5 +127,89 @@ func TestEthereumTipWatchdogTickFreshFeedNoop(t *testing.T) {
 
 	if len(pushes) != 0 {
 		t.Fatal("watchdog pushed on a fresh feed")
+	}
+}
+
+// The feed's own header must drive the cached tip even when HTTP (HeaderByNumber)
+// is pinned to a lagging height, so a stale load-balanced HTTP view can no longer
+// freeze sync into a false "synced". The advance must also stamp liveness and wake
+// the sync loop.
+func TestEthereumFeedHeaderAdvancesTipDespiteStaleHTTP(t *testing.T) {
+	b := &EthereumRPC{
+		ChainConfig: &Configuration{AverageBlockTimeMs: 2000},
+		Timeout:     time.Second,
+	}
+	b.newBlockNotifyCh = make(chan struct{}, 1)
+	// HTTP call path is pinned to a stale, lagging height; it must not be consulted.
+	b.Client = &stubHeaderClient{height: 100}
+
+	b.onFeedHeader(stubHeader{n: 200})
+
+	h, err := b.getBestHeader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := h.Number().Int64(); got != 200 {
+		t.Fatalf("tip = %d, want 200 (the feed header), not the stale HTTP height 100", got)
+	}
+	if b.lastSubNotifyNs.Load() == 0 {
+		t.Fatal("feed advance did not stamp subscription liveness")
+	}
+	select {
+	case <-b.newBlockNotifyCh:
+	default:
+		t.Fatal("feed advance did not wake the sync loop")
+	}
+}
+
+// The cached tip must not regress to a lower height reported by a lagging
+// load-balancer node (which would trip a spurious fork), but a same-height reorg
+// must still be applied so resyncIndex can detect and handle it.
+func TestEthereumSetBestHeaderMonotonic(t *testing.T) {
+	b := &EthereumRPC{Timeout: time.Second}
+
+	if !b.setBestHeader(stubHeader{n: 200}, true) {
+		t.Fatal("first header should be accepted")
+	}
+	if b.setBestHeader(stubHeader{n: 150}, true) {
+		t.Fatal("a lower height must be rejected under a monotonic update")
+	}
+	if h, _ := b.getBestHeader(); h.Number().Int64() != 200 {
+		t.Fatalf("tip = %d, want 200 retained", h.Number().Int64())
+	}
+	if !b.setBestHeader(stubHeader{n: 200, h: "reorg"}, true) {
+		t.Fatal("a same-height tip reorg must be applied")
+	}
+	// A non-monotonic update (the authoritative-feed/Tron path) may move down.
+	if !b.setBestHeader(stubHeader{n: 150}, false) {
+		t.Fatal("a non-monotonic update should accept a lower height")
+	}
+}
+
+// A feed that re-delivers the same head (a stuck upstream) is not progress:
+// liveness must not be refreshed and the sync loop must not be woken, so the
+// watchdog can eventually treat the feed as stale.
+func TestEthereumIdenticalFeedHeaderDoesNotRefreshLiveness(t *testing.T) {
+	b := &EthereumRPC{}
+	b.newBlockNotifyCh = make(chan struct{}, 1)
+
+	b.onFeedHeader(stubHeader{n: 100})
+	first := b.lastSubNotifyNs.Load()
+	if first == 0 {
+		t.Fatal("first feed header should stamp liveness")
+	}
+	select { // drain the wake-up from the first delivery
+	case <-b.newBlockNotifyCh:
+	default:
+	}
+
+	b.onFeedHeader(stubHeader{n: 100}) // identical head: no progress
+	if b.lastSubNotifyNs.Load() != first {
+		t.Fatal("an identical feed header must not refresh liveness")
+	}
+	select {
+	case <-b.newBlockNotifyCh:
+		t.Fatal("an identical feed header must not wake the sync loop")
+	default:
 	}
 }
