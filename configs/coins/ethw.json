@@ -1,0 +1,73 @@
+{
+    "coin": {
+        "name": "Ethereum PoW",
+        "shortcut": "ETHW",
+        "network": "ETHW",
+        "label": "Ethereum PoW",
+        "alias": "ethw"
+    },
+    "ports": {
+        "backend_rpc": 8063,
+        "backend_message_queue": 0,
+        "backend_p2p": 38363,
+        "backend_http": 8163,
+        "blockbook_internal": 9063,
+        "blockbook_public": 9163
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-ethw",
+        "package_revision": "satoshilabs-1",
+        "system_user": "ethw",
+        "version": "1.10.23.1",
+        "binary_url": "https://github.com/ethereumpow/go-ethereum/releases/download/v1.10.23.1/geth_linux_amd64_1.10.23_2a4c42d43eb7ea0a20ec096946e8a80c52f4000c75001d115c29395abafe2a7c.zip",
+        "verification_type": "sha256",
+        "verification_source": "2a4c42d43eb7ea0a20ec096946e8a80c52f4000c75001d115c29395abafe2a7c",
+        "extract_command": "unzip -d backend",
+        "exclude_files": [
+            "checksum.txt"
+        ],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --txlookuplimit 0 --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr {{.Env.RPCBindHost}} --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendRPC}} --http.addr {{.Env.RPCBindHost}} --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-ethw",
+        "system_user": "blockbook-ethw",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 300,
+            "additional_params": {
+                "averageBlockTimeMs": 13000,
+                "address_aliases": true,
+                "eip1559Fees": true,
+                "mempoolTxTimeoutHours": 48,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates": "coingecko",
+                "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+                "fiat_rates_params": "{\"coin\": \"ethereum-pow-iou\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}",
+                "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}
