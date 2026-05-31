@@ -512,9 +512,15 @@ func (b *TronRPC) tipWatchdogTick(threshold time.Duration) {
 		b.PushHandler(bchain.NotificationNewBlock)
 		b.PushHandler(bchain.NotificationNewTx)
 	}
-	// Reset the window so a quiet-but-healthy chain is judged from now, not from
-	// the last block, avoiding a poll every tick during legitimate lulls.
-	b.markNotifyAlive()
+	// Deliberately do NOT re-arm liveness here: lastNotifyNs is refreshed only by a
+	// real ZeroMQ delivery (newBlockNotifier), never by the watchdog's own poll —
+	// the same invariant the EVM watchdog keeps. If the poll re-armed it, a feed that
+	// has gone permanently silent while the poll keeps advancing the tip would look
+	// alive and subscription_age_seconds would sawtooth below the threshold instead
+	// of climbing past it, hiding the dead feed from any age-based alert. Polling
+	// every sample interval while the feed stays silent is the intended recovery, not
+	// a problem: Tron blocks are seconds apart, so reaching the threshold already
+	// means an abnormal gap, and the poll keeps sync moving until delivery resumes.
 }
 
 func (b *TronRPC) handleMQNotification(nt bchain.NotificationType) {

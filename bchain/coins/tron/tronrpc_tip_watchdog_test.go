@@ -82,3 +82,23 @@ func TestTronTipWatchdogTickOnStaleFeed(t *testing.T) {
 		}
 	}
 }
+
+// The watchdog's own tip poll must not refresh feed liveness: lastNotifyNs is
+// stamped only by a real ZeroMQ delivery (newBlockNotifier). If the poll re-armed
+// it, a feed that has gone permanently silent while the poll keeps advancing the
+// tip would keep looking alive and subscription_age_seconds would sawtooth below
+// the threshold instead of climbing past it, hiding the dead feed from alerts.
+func TestTronTipWatchdogPollDoesNotRefreshLiveness(t *testing.T) {
+	ethRPC := &eth.EthereumRPC{ChainConfig: &eth.Configuration{AverageBlockTimeMs: 3000}, Timeout: time.Second}
+	ethRPC.Client = &stubHeaderClient{height: 200}
+	ethRPC.PushHandler = func(bchain.NotificationType) {}
+	b := &TronRPC{EthereumRPC: ethRPC, solidityNodeHTTP: stubTronHTTP{}}
+	stale := time.Now().Add(-time.Hour).UnixNano()
+	b.lastNotifyNs.Store(stale)
+
+	b.tipWatchdogTick(time.Millisecond)
+
+	if got := b.lastNotifyNs.Load(); got != stale {
+		t.Fatalf("watchdog poll refreshed liveness (lastNotifyNs %d -> %d); a permanently dead feed would be masked", stale, got)
+	}
+}
