@@ -363,6 +363,22 @@ func (b *TronRPC) getBestHeader() (bchain.EVMHeader, error) {
 	return b.bestHeader, nil
 }
 
+// setBestHeader stores h as the cached tip and reports whether it changed.
+//
+// Unlike EthereumRPC.setBestHeader this is intentionally NON-monotonic: a lower
+// height is accepted. Tron's tip is never taken from the feed header (the ZeroMQ
+// notification carries none) — it is always an HTTP re-query (refreshBestHeaderFromChain),
+// refreshed on every notification and on a tronBestHeaderMaxAge timer, so the cache
+// is meant to track whatever the backend currently reports. Accepting a lower height
+// is what lets a genuine rollback surface immediately to resyncIndex, so Tron is not
+// subject to the frozen-tip masking that the EVM monotonic guard introduces (and which
+// EVM has to undo with a watchdog regress).
+//
+// Tradeoff: with a load-balanced Tron RPC, a single lagging node answering a re-query
+// could regress the tip and trip a spurious fork in resyncIndex (the case the EVM
+// monotonic guard exists to prevent). That is acceptable for the common single-node
+// java-tron backend; if Tron is ever fronted by a load balancer, port the EVM pattern
+// here (monotonic hot path + on-advance liveness + allowRegress watchdog poll).
 func (b *TronRPC) setBestHeader(h bchain.EVMHeader) bool {
 	if h == nil || h.Number() == nil {
 		return false
