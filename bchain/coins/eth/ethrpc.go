@@ -775,6 +775,14 @@ func (b *EthereumRPC) subscribeEvents() error {
 		return err
 	}
 
+	// Arm lastSubNotifyNs at subscribe time, not only on the first tip advance.
+	// Liveness is otherwise stamped only when a header advances the tip, so a
+	// subscription that never delivers a usable header leaves it at 0 and keeps
+	// tipWatchdog's lastNs == 0 gate closed forever: the cached tip never refreshes
+	// and resyncIndex reports a silent syncNotNeeded. Seeding here lets a stalled
+	// feed age past the threshold so the watchdog polls and reconnects.
+	b.markSubscriptionAlive()
+
 	if !b.ChainConfig.DisableMempoolSync {
 		// new mempool transaction subscription - re-created on every (re)connect
 		if err := b.subscribe("newPendingTransactions", func() (bchain.EVMClientSubscription, error) {
@@ -1089,10 +1097,11 @@ func (b *EthereumRPC) tipWatchdog() {
 // tipWatchdogTick is one watchdog evaluation, split out from the ticker loop so
 // it is unit-testable with an injected threshold and a fake client (no 30s wait).
 func (b *EthereumRPC) tipWatchdogTick(threshold time.Duration) {
-	// lastSubNotifyNs is set only once the subscription has delivered at least one
-	// notification, which cannot happen before InitializeMempool wires it up, so
-	// this atomic read alone gates the watchdog race-free (no need to also read the
-	// plain mempoolInitialized flag).
+	// lastSubNotifyNs is armed when subscribeEvents establishes the newHeads
+	// subscription and refreshed on every tip advance, so a non-zero value means
+	// "subscription is wired up". The zero guard only skips the brief window before
+	// the first subscribe (i.e. before InitializeMempool runs); it must not be the
+	// sole arming signal, or a feed that never advances would keep the watchdog off.
 	lastNs := b.lastSubNotifyNs.Load()
 	if lastNs == 0 {
 		return
