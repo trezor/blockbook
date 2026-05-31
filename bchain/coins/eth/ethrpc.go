@@ -170,7 +170,6 @@ type EthereumRPC struct {
 	mempoolInitialized bool
 	bestHeaderLock     sync.Mutex
 	bestHeader         bchain.EVMHeader
-	bestHeaderTime     time.Time
 	// newBlockNotifyCh coalesces bursts of newHeads events into a single wake-up.
 	// This keeps the subscription reader unblocked while we refresh the canonical tip.
 	newBlockNotifyCh chan struct{}
@@ -962,7 +961,6 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 			b.bestHeader = nil
 			return nil, err
 		}
-		b.bestHeaderTime = time.Now()
 	}
 	return b.bestHeader, nil
 }
@@ -1194,7 +1192,6 @@ func (b *EthereumRPC) setBestHeader(h bchain.EVMHeader, monotonic bool) bool {
 		}
 	}
 	b.bestHeader = h
-	b.bestHeaderTime = time.Now()
 	return true
 }
 
