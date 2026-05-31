@@ -1114,11 +1114,23 @@ func (b *EthereumRPC) tipWatchdogTick(threshold time.Duration) {
 	glog.Warningf("rpc: newHeads subscription silent for %s (threshold %s); polling tip and reconnecting", age.Truncate(time.Second), threshold)
 	b.ObserveSubscriptionEvent("newHeads", "watchdog_stall")
 	// Keep sync alive immediately: poll the canonical tip directly so a dead push
-	// channel can no longer freeze the cached tip into a false "synced".
-	if updated, err := b.refreshBestHeaderFromChain(); err != nil {
+	// channel can no longer freeze the cached tip into a false "synced". The poll is
+	// allowed to regress the tip here (unlike the hot path): after a sustained stall
+	// a lower backend height is a real rollback, not the transient load-balancer lag
+	// the monotonic guard filters (that lag resolves well within the stall window).
+	// Without this, a genuine rollback would leave the cached tip pinned above the
+	// backend and equal to the local DB tip, so resyncIndex keeps early-exiting as
+	// "synced" and never reaches its fork path (db/sync.go GetBlockHash check).
+	prevHeight := b.cachedTipHeight()
+	if updated, err := b.refreshBestHeaderFromChain(true); err != nil {
 		glog.Error("rpc: tip watchdog tip poll error ", err)
 	} else if updated {
-		b.ObserveSubscriptionEvent("newHeads", "watchdog_tip_advanced")
+		if newHeight := b.cachedTipHeight(); newHeight < prevHeight {
+			glog.Warningf("rpc: tip watchdog observed backend rollback, cached tip %d -> %d; letting sync reconcile the fork", prevHeight, newHeight)
+			b.ObserveSubscriptionEvent("newHeads", "watchdog_tip_rollback")
+		} else {
+			b.ObserveSubscriptionEvent("newHeads", "watchdog_tip_advanced")
+		}
 		b.PushHandler(bchain.NotificationNewBlock)
 	}
 	// Restore push delivery by reconnecting the RPC and re-subscribing.
@@ -1134,9 +1146,15 @@ func (b *EthereumRPC) tipWatchdogTick(threshold time.Duration) {
 }
 
 // refreshBestHeaderFromChain polls the tip over HTTP. It is the watchdog's
-// fallback when the push feed is silent (no longer on the hot path). Monotonic so
-// a lagging load-balancer node cannot regress the tip.
-func (b *EthereumRPC) refreshBestHeaderFromChain() (bool, error) {
+// fallback when the push feed is silent (no longer on the hot path).
+//
+// allowRegress controls the monotonic guard. Callers on the hot path pass false so
+// a lagging load-balancer node cannot regress the tip and trip a spurious fork. The
+// watchdog passes true: it only polls after a sustained stall (TipStaleThreshold),
+// by which point transient routing lag has resolved, so a still-lower backend tip
+// is a genuine rollback the cached tip must follow down — otherwise the guard pins
+// the tip above the backend and resyncIndex keeps reporting a false "synced".
+func (b *EthereumRPC) refreshBestHeaderFromChain(allowRegress bool) (bool, error) {
 	if b.Client == nil {
 		return false, errors.New("rpc client not initialized")
 	}
@@ -1149,13 +1167,16 @@ func (b *EthereumRPC) refreshBestHeaderFromChain() (bool, error) {
 	if h == nil || h.Number() == nil {
 		return false, errors.New("best header is nil")
 	}
-	return b.setBestHeader(h, true), nil
+	return b.setBestHeader(h, !allowRegress), nil
 }
 
 // setBestHeader stores h as the cached tip and reports whether it changed (new
 // height, or same-height hash change i.e. a tip reorg). When monotonic, a lower
 // height is rejected so a lagging load-balancer node cannot regress the tip and
-// trip a spurious fork; a deeper real rollback is handled via the retry budget.
+// trip a spurious fork. A sustained real rollback (the backend genuinely below the
+// cached tip past TipStaleThreshold) is instead recovered by tipWatchdog, which
+// re-polls with the guard lifted so the tip follows the backend down and resyncIndex
+// reaches its fork path; see refreshBestHeaderFromChain.
 func (b *EthereumRPC) setBestHeader(h bchain.EVMHeader, monotonic bool) bool {
 	if h == nil || h.Number() == nil {
 		return false
@@ -1175,6 +1196,17 @@ func (b *EthereumRPC) setBestHeader(h bchain.EVMHeader, monotonic bool) bool {
 	b.bestHeader = h
 	b.bestHeaderTime = time.Now()
 	return true
+}
+
+// cachedTipHeight returns the height of the cached tip, or 0 if it is unset. The
+// watchdog uses it to tell a forward advance from a rollback for logging/metrics.
+func (b *EthereumRPC) cachedTipHeight() uint64 {
+	b.bestHeaderLock.Lock()
+	defer b.bestHeaderLock.Unlock()
+	if b.bestHeader == nil || b.bestHeader.Number() == nil {
+		return 0
+	}
+	return b.bestHeader.Number().Uint64()
 }
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain

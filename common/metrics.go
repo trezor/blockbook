@@ -463,7 +463,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 	metrics.BackendSubscriptionEvents = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name:        "blockbook_backend_subscription_events",
-			Help:        "Backend tip-feed lifecycle events by subscription (newHeads, newPendingTransactions, rpc, or zeromq for Tron) and event (error, resubscribed, resubscribe_failed, watchdog_stall, watchdog_reconnect, watchdog_reconnect_failed, watchdog_tip_advanced)",
+			Help:        "Backend tip-feed lifecycle events by subscription (newHeads, newPendingTransactions, rpc, or zeromq for Tron) and event (error, resubscribed, resubscribe_failed, watchdog_stall, watchdog_reconnect, watchdog_reconnect_failed, watchdog_tip_advanced, watchdog_tip_rollback)",
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"subscription", "event"},

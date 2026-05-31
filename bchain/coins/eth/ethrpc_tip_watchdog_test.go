@@ -110,6 +110,53 @@ func TestEthereumTipWatchdogTickOnStaleFeed(t *testing.T) {
 	}
 }
 
+// On a sustained stall the watchdog must let a genuinely lower backend tip regress
+// the cached tip. The hot-path monotonic guard rejects a lower height to ride out
+// transient load-balancer lag, but that lag resolves well within TipStaleThreshold;
+// a tip still below ours after the stall window is a real rollback. If the cached
+// tip stayed frozen above the backend it would equal the local DB tip, so
+// resyncIndex would keep early-exiting as "synced" (localBestHash == cached
+// remoteBestHash) and never reach its GetBlockHash fork path.
+func TestEthereumTipWatchdogRegressesTipOnRollback(t *testing.T) {
+	pushes := make(chan bchain.NotificationType, 4)
+	reconnectAttempted := false
+	b := &EthereumRPC{
+		ChainConfig: &Configuration{AverageBlockTimeMs: 2000},
+		Timeout:     time.Second,
+		PushHandler: func(nt bchain.NotificationType) { pushes <- nt },
+	}
+	// Cached tip is ahead at 200 (where the feed froze before the backend rolled back).
+	if !b.setBestHeader(stubHeader{n: 200}, true) {
+		t.Fatal("precondition: setting initial tip 200 failed")
+	}
+	// The backend now reports a lower tip (a real rollback to height 150).
+	b.Client = &stubHeaderClient{height: 150}
+	b.OpenRPC = func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
+		reconnectAttempted = true
+		return nil, nil, errors.New("reconnect disabled in test")
+	}
+	b.lastSubNotifyNs.Store(time.Now().Add(-time.Hour).UnixNano())
+
+	b.tipWatchdogTick(time.Millisecond)
+
+	if h, err := b.getBestHeader(); err != nil {
+		t.Fatal(err)
+	} else if got := h.Number().Int64(); got != 150 {
+		t.Fatalf("cached tip = %d, want 150 (regressed to the rolled-back backend tip so resyncIndex can detect the fork)", got)
+	}
+	select {
+	case nt := <-pushes:
+		if nt != bchain.NotificationNewBlock {
+			t.Fatalf("pushed %v, want NotificationNewBlock", nt)
+		}
+	default:
+		t.Fatal("watchdog did not push NotificationNewBlock after a rollback")
+	}
+	if !reconnectAttempted {
+		t.Fatal("watchdog did not attempt reconnect after a rollback")
+	}
+}
+
 // A fresh feed (recent notification) must not poll or reconnect.
 func TestEthereumTipWatchdogTickFreshFeedNoop(t *testing.T) {
 	pushes := make(chan bchain.NotificationType, 1)
