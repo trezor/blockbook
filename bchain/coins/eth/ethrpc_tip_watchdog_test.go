@@ -213,3 +213,51 @@ func TestEthereumIdenticalFeedHeaderDoesNotRefreshLiveness(t *testing.T) {
 	default:
 	}
 }
+
+// fakeSilentSub models a newHeads subscription that is established successfully but
+// never delivers a header and never errors — the silent stall behind a load
+// balancer that drops the upstream without closing the socket.
+type fakeSilentSub struct{ errCh chan error }
+
+func (s *fakeSilentSub) Err() <-chan error { return s.errCh }
+func (s *fakeSilentSub) Unsubscribe()      {}
+
+// fakeRPCClient hands out a fakeSilentSub for every EthSubscribe.
+type fakeRPCClient struct{}
+
+func (c *fakeRPCClient) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
+	return &fakeSilentSub{errCh: make(chan error)}, nil
+}
+func (c *fakeRPCClient) CallContext(context.Context, interface{}, string, ...interface{}) error {
+	return nil
+}
+func (c *fakeRPCClient) Close() {}
+
+// A newHeads subscription that is established but never delivers a header (a feed
+// born silent behind a load balancer) must still arm the watchdog's staleness
+// clock. Liveness used to be stamped only on a tip advance, so such a feed left
+// lastSubNotifyNs at 0 and the watchdog's `if lastNs == 0 { return }` gate disabled
+// it forever: the cached tip froze and resyncIndex reported a silent false
+// "synced" with no error or metric. subscribeEvents must seed liveness at
+// subscribe time so the feed ages past the threshold and the watchdog can recover.
+func TestSubscribeEventsArmsLivenessOnSilentFeed(t *testing.T) {
+	b := &EthereumRPC{
+		// 12s average -> 5min threshold / 60s sample, so the watchdog goroutine
+		// started by subscribeEvents cannot fire (and reconnect) during the test.
+		ChainConfig: &Configuration{AverageBlockTimeMs: 12000, DisableMempoolSync: true},
+		Timeout:     time.Second,
+	}
+	b.NewBlock = NewEthereumNewBlock()
+	b.newBlockNotifyCh = make(chan struct{}, 1)
+	b.RPC = &fakeRPCClient{}
+
+	if got := b.lastSubNotifyNs.Load(); got != 0 {
+		t.Fatalf("precondition: lastSubNotifyNs = %d, want 0 before subscribe", got)
+	}
+	if err := b.subscribeEvents(); err != nil {
+		t.Fatal(err)
+	}
+	if b.lastSubNotifyNs.Load() == 0 {
+		t.Fatal("subscribeEvents left liveness at 0 for a silent feed; tipWatchdog would stay disabled forever")
+	}
+}

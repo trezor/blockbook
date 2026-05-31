@@ -568,6 +568,12 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 		b.mq = mq
 	}
 
+	// Arm the watchdog's staleness clock once the ZeroMQ feed is established, not on
+	// the first notification that advances the tip. Otherwise a feed that never
+	// advances would leave lastNotifyNs at 0 and the watchdog's (lastNs == 0) gate
+	// disabled (see EthereumRPC.subscribeEvents for the same fix on the EVM path).
+	b.markNotifyAlive()
+
 	return nil
 }
 
