@@ -325,7 +325,15 @@ func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, on
 			break
 		}
 		remote, err := w.chain.GetBlockHash(height)
-		// for some coins (eth) remote can be at lower best height after rollback
+		// A tolerated ErrBlockNotFound leaves remote == "", which (local is non-empty
+		// here) counts this height as forked and disconnects it. That is intended: for
+		// EVM the backend can sit at a lower height after a rollback, and those blocks
+		// must be disconnected to realign with the chain. The tradeoff is that on a
+		// load-balanced backend a transient lagging node can answer NotFound for a block
+		// that is still canonical, over-disconnecting — bounded and self-healing, since
+		// the resyncIndex below re-connects them. Treating NotFound as a stop instead
+		// would be worse: genuinely orphaned blocks would stay connected after a real
+		// rollback, leaving the index wedged ahead of the backend.
 		if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
 			return err
 		}
