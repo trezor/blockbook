@@ -6,10 +6,144 @@ import (
 	"encoding/json"
 	"math/big"
 	"testing"
+	"time"
 
+	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/fiat"
 )
+
+func TestSystemInfoInSync(t *testing.T) {
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	oldStart := now.Add(-time.Minute)
+
+	tests := []struct {
+		name          string
+		inSync        bool
+		initialSync   bool
+		chainType     bchain.ChainType
+		bestHeight    uint32
+		backendBlocks int
+		lastBlockTime time.Time
+		startSync     time.Time
+		blockPeriod   time.Duration
+		want          bool
+	}{
+		{
+			name:          "reports evm synced when active sync loop is already at backend tip",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+			want:          true,
+		},
+		{
+			name:          "does not hide stale evm tip when heights match",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-25 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+		},
+		{
+			name:          "does not report synced while local height is behind",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    90,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+		},
+		{
+			name:          "reports evm synced within one block of a fresh tip",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    99,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+			want:          true,
+		},
+		{
+			name:          "reports evm synced on a sub-second chain at the tip",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+			want:          true,
+		},
+		{
+			name:          "does not report synced more than one block behind tip",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    98,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+		},
+		{
+			name:          "does not report synced during initial sync",
+			initialSync:   true,
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+		},
+		{
+			name:          "keeps startup grace for fresh regular sync",
+			chainType:     bchain.ChainBitcoinType,
+			backendBlocks: 100,
+			startSync:     now.Add(-2 * time.Second),
+			want:          true,
+		},
+		{
+			name:          "marks already synced evm stale",
+			inSync:        true,
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-25 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+		},
+		{
+			name:          "keeps already synced evm fresh",
+			inSync:        true,
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+			want:          true,
+		},
+		{
+			name:          "does not extend tip equality rescue to bitcoin",
+			chainType:     bchain.ChainBitcoinType,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := systemInfoInSync(tt.inSync, tt.initialSync, tt.chainType, tt.bestHeight, tt.backendBlocks, tt.lastBlockTime, tt.startSync, now, tt.blockPeriod)
+			if got != tt.want {
+				t.Fatalf("systemInfoInSync() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestGetSecondaryTicker_SkipsLookupWithoutSecondaryCurrency(t *testing.T) {
 	w := &Worker{

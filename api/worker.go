@@ -2538,16 +2538,66 @@ func nonZeroTime(t time.Time) *time.Time {
 	return &t
 }
 
+const (
+	systemInfoSyncStartGrace      = 5 * time.Second
+	systemInfoEthereumStaleBlocks = 12
+	// systemInfoEthereumSyncedGap is how far the indexed height may trail the
+	// backend tip and still count as synchronized. It covers the one-block window
+	// between the feed tip advancing and that block being connected, which would
+	// otherwise flap the status on a fast/archive EVM chain.
+	systemInfoEthereumSyncedGap = 1
+)
+
+func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType, bestHeight uint32, backendBlocks int, lastBlockTime, startSync, now time.Time, blockPeriod time.Duration) bool {
+	if !inSync && !initialSync {
+		// If less than 5 seconds into syncing, return inSync=true to avoid short
+		// out-of-sync reports that confuse monitoring.
+		if startSync.Add(systemInfoSyncStartGrace).After(now) {
+			inSync = true
+		}
+	}
+
+	if chainType != bchain.ChainEthereumType || blockPeriod <= 0 {
+		return inSync
+	}
+
+	threshold := systemInfoEthereumStaleBlocks * blockPeriod
+	isFresh := !lastBlockTime.Add(threshold).Before(now)
+
+	// Long EVM archive syncs can stay inside ResyncIndex while new blocks keep
+	// arriving. If the indexed height is at (or within one block of) the backend
+	// tip and the index was updated recently, report the externally observable
+	// state as synchronized. int64 avoids underflow if the backend momentarily
+	// reports a lower tip; gap >= 0 keeps an "ahead of tip" read from qualifying.
+	gap := int64(backendBlocks) - int64(bestHeight)
+	if !inSync && !initialSync && gap >= 0 && gap <= systemInfoEthereumSyncedGap && isFresh {
+		return true
+	}
+
+	if inSync && !isFresh {
+		return false
+	}
+
+	return inSync
+}
+
 // GetSystemInfo returns information about system
 func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	start := time.Now().UTC()
 	vi := common.GetVersionInfo()
 	inSync, bestHeight, lastBlockTime, startSync := w.is.GetSyncState()
-	blockPeriod := w.is.GetAvgBlockPeriod()
-	if !inSync && !w.is.InitialSync {
-		// if less than 5 seconds into syncing, return inSync=true to avoid short time not in sync reports that confuse monitoring
-		if startSync.Add(5 * time.Second).After(start) {
-			inSync = true
+	blockPeriod := time.Duration(w.is.GetAvgBlockPeriod()) * time.Second
+	// Prefer the configured per-coin cadence (averageBlockTimeMs): it is stable,
+	// available before enough blocks are observed for GetAvgBlockPeriod to be
+	// computed (which otherwise returns 0 and disables the EVM sync checks below),
+	// and is the same value the tip watchdog uses. Using the duration directly also
+	// covers sub-second chains (e.g. Arbitrum at 250ms) that round to 0 seconds.
+	// Fall back to the runtime-observed average when the coin does not configure one.
+	if p, ok := w.chain.(interface {
+		AverageBlockTimeDuration() (time.Duration, error)
+	}); ok {
+		if d, err := p.AverageBlockTimeDuration(); err == nil && d > 0 {
+			blockPeriod = d
 		}
 	}
 	inSyncMempool, lastMempoolTime, mempoolSize := w.is.GetMempoolSyncState()
@@ -2560,13 +2610,8 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		// set not in sync in case of backend error
 		inSync = false
 		inSyncMempool = false
-	}
-	// for networks with stable block period, set not in sync if last sync more than 12 block periods ago
-	if inSync && blockPeriod > 0 && w.chainType == bchain.ChainEthereumType {
-		threshold := 12 * time.Duration(blockPeriod) * time.Second
-		if lastBlockTime.Add(threshold).Before(time.Now().UTC()) {
-			inSync = false
-		}
+	} else {
+		inSync = systemInfoInSync(inSync, w.is.InitialSync, w.chainType, bestHeight, ci.Blocks, lastBlockTime, startSync, time.Now().UTC(), blockPeriod)
 	}
 	var columnStats []common.InternalStateColumn
 	var internalDBSize int64
