@@ -150,7 +150,9 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 		return nil, errors.Annotate(err, "resolve Tron solidity node HTTP URL")
 	}
 
-	timeout := time.Duration(cfg.RPCTimeout) * time.Second
+	// ethChainConfig.RPCTimeout has already been clamped to a positive value by
+	// NewEthereumRPC, so the HTTP node clients inherit the same finite timeout.
+	timeout := time.Duration(ethChainConfig.RPCTimeout) * time.Second
 	tronRpc.fullNodeHTTP = NewTronHTTPClient(fullNodeURL, timeout)
 	tronRpc.solidityNodeHTTP = NewTronHTTPClient(solidityURL, timeout)
 
@@ -600,6 +602,10 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 }
 
 func (b *TronRPC) Shutdown(ctx context.Context) error {
+	// Abort in-flight RPC-client calls (GetBlockHash, raw block fetch, tip re-query)
+	// so a sync call cannot block shutdown up to the RPC timeout. Mirrors
+	// EthereumRPC.Shutdown; the HTTP node clients are bounded by their own timeout.
+	b.EthereumRPC.CloseRPC()
 	if b.mq != nil {
 		if err := b.mq.Shutdown(ctx); err != nil {
 			return err

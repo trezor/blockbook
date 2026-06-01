@@ -47,6 +47,13 @@ const (
 const (
 	defaultErc20BatchSize = 100
 
+	// defaultRPCTimeoutSeconds is used when rpc_timeout is unset or non-positive.
+	// A zero b.Timeout makes context.WithTimeout expire immediately (breaking every
+	// call), so a finite floor is enforced rather than trusting the config. Kept
+	// above the 10s trace_timeout default so the fallback still lets a block's
+	// internal-data trace finish.
+	defaultRPCTimeoutSeconds = 15
+
 	// Alternative/private relays expire pending txs quickly, so local pending state
 	// must not inherit the legacy hour-scale public mempool timeout.
 	defaultMempoolTxTimeoutWithAlternativeProvider = 10 * time.Minute
@@ -276,6 +283,10 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
 	parser.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
 	s.Parser = parser
+	if c.RPCTimeout <= 0 {
+		glog.Warningf("rpc_timeout=%d is invalid, using default %d seconds", c.RPCTimeout, defaultRPCTimeoutSeconds)
+		c.RPCTimeout = defaultRPCTimeoutSeconds
+	}
 	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
 	s.PushHandler = pushHandler
 
@@ -878,6 +889,13 @@ func (b *EthereumRPC) closeRPC() {
 	if b.RPC != nil {
 		b.RPC.Close()
 	}
+}
+
+// CloseRPC closes the underlying RPC client, aborting any in-flight calls.
+// Exported so embedders (e.g. Tron) can abort sync RPCs on shutdown without
+// running the EVM-specific subscription/monitor teardown done by Shutdown.
+func (b *EthereumRPC) CloseRPC() {
+	b.closeRPC()
 }
 
 func (b *EthereumRPC) reconnectRPC() error {
