@@ -107,6 +107,11 @@ func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
 	return time.Duration(c.AverageBlockTimeMs) * time.Millisecond, nil
 }
 
+// defaultRPCTimeoutSeconds is used when rpc_timeout is unset or non-positive.
+// A zero http.Client.Timeout means no timeout at all, so a blocked backend could
+// hang a sync RPC (and thus shutdown) forever; a finite floor is enforced instead.
+const defaultRPCTimeoutSeconds = 15
+
 // NewBitcoinRPC returns new BitcoinRPC instance.
 func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	var err error
@@ -137,6 +142,11 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	// btc supports both calls, other coins overriding BitcoinRPC can change this
 	c.SupportsEstimateFee = true
 	c.SupportsEstimateSmartFee = true
+
+	if c.RPCTimeout <= 0 {
+		glog.Warningf("rpc_timeout=%d is invalid, using default %d seconds", c.RPCTimeout, defaultRPCTimeoutSeconds)
+		c.RPCTimeout = defaultRPCTimeoutSeconds
+	}
 
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
