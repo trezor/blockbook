@@ -20,7 +20,12 @@ import (
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
 	*bchain.BaseChain
-	client                 http.Client
+	client http.Client
+	// callCtx is the base context for all RPC HTTP requests; Shutdown cancels it
+	// so an in-flight sync call aborts promptly instead of running to the client
+	// timeout (which would otherwise delay process shutdown by up to that timeout).
+	callCtx                context.Context
+	cancelCall             context.CancelFunc
 	rpcURL                 string
 	user                   string
 	password               string
@@ -149,7 +154,9 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	}
 
 	transport := &http.Transport{
-		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
+		// DialContext (not Dial) so a request context cancelled by Shutdown also
+		// interrupts a blocked TCP connect, not just an established request.
+		DialContext:         (&net.Dialer{KeepAlive: 600 * time.Second}).DialContext,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100, // necessary to not to deplete ports
 	}
@@ -168,8 +175,19 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 		mempoolFilterScripts: c.MempoolFilterScripts,
 		mempoolUseZeroedKey:  c.MempoolFilterUseZeroedKey,
 	}
+	s.callCtx, s.cancelCall = context.WithCancel(context.Background())
 
 	return s, nil
+}
+
+// requestContext returns the base context for RPC HTTP requests. Shutdown cancels
+// it so in-flight calls abort promptly. Falls back to context.Background() when
+// unset (e.g. a directly-constructed test instance).
+func (b *BitcoinRPC) requestContext() context.Context {
+	if b.callCtx != nil {
+		return b.callCtx
+	}
+	return context.Background()
 }
 
 // Initialize initializes BitcoinRPC instance.
@@ -271,6 +289,12 @@ func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOut
 
 // Shutdown ZeroMQ and other resources
 func (b *BitcoinRPC) Shutdown(ctx context.Context) error {
+	// Cancel in-flight RPC HTTP requests so a sync call cannot delay shutdown up to
+	// the client timeout. Covers every coin that reaches the backend through Call
+	// (all BitcoinRPC-embedding coins that do not run their own HTTP client).
+	if b.cancelCall != nil {
+		b.cancelCall()
+	}
 	if b.mq != nil {
 		if err := b.mq.Shutdown(ctx); err != nil {
 			glog.Error("MQ.Shutdown error: ", err)
@@ -1116,7 +1140,7 @@ func (b *BitcoinRPC) callBatch(req []rpcBatchRequest, res *[]rpcBatchResponse) e
 	if err != nil {
 		return err
 	}
-	httpReq, err := http.NewRequest("POST", b.rpcURL, bytes.NewBuffer(httpData))
+	httpReq, err := http.NewRequestWithContext(b.requestContext(), "POST", b.rpcURL, bytes.NewBuffer(httpData))
 	if err != nil {
 		return err
 	}
@@ -1148,7 +1172,7 @@ func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 	if err != nil {
 		return err
 	}
-	httpReq, err := http.NewRequest("POST", b.rpcURL, bytes.NewBuffer(httpData))
+	httpReq, err := http.NewRequestWithContext(b.requestContext(), "POST", b.rpcURL, bytes.NewBuffer(httpData))
 	if err != nil {
 		return err
 	}

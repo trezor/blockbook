@@ -88,9 +88,15 @@ type tronGetTransactionByIDResponse struct {
 
 type TronRPC struct {
 	*eth.EthereumRPC
-	Parser               *TronParser
-	ChainConfig          *TronConfiguration
-	mq                   *bchain.MQ
+	Parser      *TronParser
+	ChainConfig *TronConfiguration
+	mq          *bchain.MQ
+	// callCtx is the base context for RPC calls (the embedded RPC client and the
+	// HTTP node clients); Shutdown cancels it so an in-flight sync call aborts
+	// promptly. The rpc-client side is also covered by CloseRPC; this additionally
+	// reaches the HTTP node fetches, which CloseRPC cannot.
+	callCtx              context.Context
+	cancelCall           context.CancelFunc
 	fullNodeHTTP         TronHTTP
 	solidityNodeHTTP     TronHTTP
 	internalDataProvider *TronInternalDataProvider
@@ -164,7 +170,19 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.internalDataProvider = internalProvider
 	tronRpc.EthereumRPC.InternalDataProvider = internalProvider
 
+	tronRpc.callCtx, tronRpc.cancelCall = context.WithCancel(context.Background())
+
 	return tronRpc, nil
+}
+
+// requestContext returns the base context for RPC calls. Shutdown cancels it so
+// in-flight calls abort promptly. Falls back to context.Background() when unset
+// (e.g. a directly-constructed test instance).
+func (b *TronRPC) requestContext() context.Context {
+	if b.callCtx != nil {
+		return b.callCtx
+	}
+	return context.Background()
 }
 
 func resolveTronHTTPURL(explicitURL, rpcURL, defaultPort string) (string, error) {
@@ -227,7 +245,7 @@ func (b *TronRPC) Initialize() error {
 	b.RPC = rc
 	b.MainNetChainID = MainNet
 
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	id, err := b.Client.NetworkID(ctx)
@@ -428,7 +446,7 @@ func (b *TronRPC) refreshBestHeaderFromChain() (bool, error) {
 	if b.Client == nil {
 		return false, errors.New("rpc client not initialized")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 	h, err := b.Client.HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -603,9 +621,13 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 
 func (b *TronRPC) Shutdown(ctx context.Context) error {
 	// Abort in-flight RPC-client calls (GetBlockHash, raw block fetch, tip re-query)
-	// so a sync call cannot block shutdown up to the RPC timeout. Mirrors
-	// EthereumRPC.Shutdown; the HTTP node clients are bounded by their own timeout.
+	// so a sync call cannot block shutdown up to the RPC timeout. CloseRPC mirrors
+	// EthereumRPC.Shutdown; cancelCall additionally aborts the HTTP node fetches
+	// (tx details) that CloseRPC cannot reach.
 	b.EthereumRPC.CloseRPC()
+	if b.cancelCall != nil {
+		b.cancelCall()
+	}
 	if b.mq != nil {
 		if err := b.mq.Shutdown(ctx); err != nil {
 			return err
@@ -802,7 +824,7 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var internalErr error
 
 	if len(block.Transactions) > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+		ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 		defer cancel()
 
 		type txInfosResult struct {
@@ -1014,7 +1036,7 @@ func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 // GetTransactionForMempool returns a transaction by the transaction ID using
 // the full node HTTP API
 func (b *TronRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	txByID, err := b.requestTransactionFromPending(ctx, txid)
@@ -1062,7 +1084,7 @@ func (b *TronRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error)
 }
 
 func (b *TronRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*big.Int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	return b.Client.BalanceAt(ctx, addrDesc, nil)
@@ -1090,7 +1112,7 @@ func (b *TronRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64
 		req["data"] = data
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	var result string
@@ -1123,7 +1145,7 @@ func (b *TronRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
 
 // EthereumTypeGetNonce returns current balance of an address
 func (b *TronRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 	return b.Client.NonceAt(ctx, addrDesc, nil)
 }

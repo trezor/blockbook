@@ -79,21 +79,21 @@ func (b *TronRPC) getLookupHTTPClient(isSolidified bool) TronHTTP {
 }
 
 func (b *TronRPC) getTransactionByID(txid string, isSolidified bool) (*tronGetTransactionByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	return b.requestTransactionByID(ctx, txid, isSolidified)
 }
 
 func (b *TronRPC) getTransactionInfoByID(txid string, isSolidified bool) (*tronGetTransactionInfoByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	return b.requestTransactionInfoByID(ctx, txid, isSolidified)
 }
 
 func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	txs, err := b.requestMempoolTransactions(ctx)
@@ -106,7 +106,7 @@ func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
 
 // GetAddressChainExtraData returns normalized Tron-specific account/address data.
 func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	address := ToTronAddressFromDesc(addrDesc)
@@ -264,7 +264,7 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 }
 
 func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 
 	resp, err := b.requestBroadcastHex(ctx, strip0xPrefix(tx))
