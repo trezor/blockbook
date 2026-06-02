@@ -65,6 +65,8 @@ Inputs:
 In `mode=build`, selected coins are grouped by runner so one build job can build multiple
 `deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.
 Deploy and test-related workflow steps use `BB_BUILD_ENV=dev`.
+Generated dev Blockbook services start with pprof enabled on `:<blockbook_internal + 20000>`, for example Ethereum
+uses `:29036`. Generated prod services do not include `-prof`.
 
 Env vars :
 
