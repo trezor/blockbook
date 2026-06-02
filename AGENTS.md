@@ -38,6 +38,19 @@ scripts to check health of particular blockbook/backend instance
   variables (the URLs/credentials your tests dial) change between runs, so a previously
   cached PASS can mask a real failure.
 
+## Profiling
+
+Profiling is enabled only on Dev blockbooks. When troubleshooting performance, slow sync,
+large mempool handling, stuck goroutines, or suspected deadlocks, use:
+```
+contrib/scripts/blockbook_profile.sh <coin> [--profile cpu|heap|goroutine|allocs|threadcreate]
+```
+
+The script loads Dev Blockbook URLs via `contrib/gh-vars.sh`, derives the pprof port from
+the coin config, prints a compact sync/metrics snapshot, downloads the selected pprof
+profile, and runs `go tool pprof -top`. Start with CPU for throughput issues and
+`--profile goroutine` for deadlock/stall investigations.
+
 ## Facts to keep in mind to avoid regressions and waste
 
 - Blockbook instance should be able to : 
