@@ -83,6 +83,9 @@ fi
 dpkg_install_cmd+=("$package_path")
 "${dpkg_install_cmd[@]}"
 
+log "reloading systemd manager configuration"
+sudo systemctl daemon-reload
+
 log "restarting ${service_name}"
 if ! sudo systemctl restart "$service_name"; then
   show_service_diagnostics
