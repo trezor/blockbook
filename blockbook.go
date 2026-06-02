@@ -546,6 +546,11 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 	metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
 	metrics.BackendTipAgeSeconds.Set(time.Since(is.GetBackendTipLastAdvance()).Seconds())
 	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
+	synchronized := 0.0
+	if si.Blockbook.InSync {
+		synchronized = 1
+	}
+	metrics.Synchronized.Set(synchronized)
 	return nil
 }
 

@@ -177,6 +177,11 @@ func (w *SyncWorker) updateBackendInfo() {
 		ConsensusVersion: ci.ConsensusVersion,
 		Consensus:        ci.Consensus,
 	})
+	// Refresh tip-age on every resync outcome (nil/syncNotNeeded/error), not only on a
+	// successful connect: during a silent stall resyncIndex returns syncNotNeeded each
+	// run, so without this the gauge would only be refreshed by the ~15-minute app-info
+	// loop. A climbing blockbook_tip_age_seconds is the primary stall signal.
+	w.metrics.BackendTipAgeSeconds.Set(time.Since(w.is.GetBackendTipLastAdvance()).Seconds())
 }
 
 // ResyncIndex synchronizes index to the top of the blockchain
@@ -201,7 +206,6 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			w.is.FinishedSync(bh)
 		}
 		w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
-		w.metrics.BackendTipAgeSeconds.Set(time.Since(w.is.GetBackendTipLastAdvance()).Seconds())
 		w.metrics.BlockbookBestHeight.Set(float64(bh))
 		return err
 	case syncNotNeeded:

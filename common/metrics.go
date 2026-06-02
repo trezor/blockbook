@@ -59,6 +59,7 @@ type Metrics struct {
 	BackendSubscriptionEvents         *prometheus.CounterVec
 	AverageBlockTimeSeconds           prometheus.Gauge
 	BlockbookBestHeight               prometheus.Gauge
+	Synchronized                      prometheus.Gauge
 	ExplorerPendingRequests           *prometheus.GaugeVec
 	WebsocketPendingRequests          *prometheus.GaugeVec
 	XPubCacheSize                     prometheus.Gauge
@@ -439,6 +440,13 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
+	metrics.Synchronized = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_synchronized",
+			Help:        "Whether Blockbook reports itself synchronized with the backend (1) or not (0); mirrors /api/status inSync. A sustained 0 outside initial sync means the index is not keeping up with the tip — e.g. a silently stalled tip feed.",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
 	metrics.BackendBestHeight = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name:        "blockbook_backend_best_height",
@@ -463,7 +471,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 	metrics.BackendSubscriptionEvents = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name:        "blockbook_backend_subscription_events",
-			Help:        "Backend tip-feed lifecycle events by subscription (newHeads, newPendingTransactions, rpc, or zeromq for Tron) and event (error, resubscribed, resubscribe_failed, watchdog_stall, watchdog_reconnect, watchdog_reconnect_failed, watchdog_tip_advanced, watchdog_tip_rollback)",
+			Help:        "Backend tip-feed lifecycle events by subscription (newHeads, newPendingTransactions, rpc, or zeromq for Tron) and event (error, resubscribed, resubscribe_failed, watchdog_tick, watchdog_stall, watchdog_reconnect, watchdog_reconnect_failed, watchdog_tip_advanced, watchdog_tip_rollback). watchdog_tick increments once per watchdog evaluation, so rate==0 means the watchdog goroutine stopped ticking.",
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"subscription", "event"},

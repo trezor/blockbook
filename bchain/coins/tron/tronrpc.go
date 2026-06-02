@@ -527,6 +527,9 @@ func (b *TronRPC) tipWatchdog() {
 // tipWatchdogTick is one watchdog evaluation, split out from the ticker loop so
 // it is unit-testable with an injected threshold and a fake client (no wait).
 func (b *TronRPC) tipWatchdogTick(threshold time.Duration) {
+	// Heartbeat: prove the watchdog goroutine is still ticking (see eth tipWatchdogTick).
+	// rate(blockbook_backend_subscription_events{event="watchdog_tick"})==0 means it died.
+	b.ObserveSubscriptionEvent("zeromq", "watchdog_tick")
 	lastNs := b.lastNotifyNs.Load()
 	if lastNs == 0 {
 		return
