@@ -461,6 +461,16 @@ func rpcURLHost(rawURL string) (string, error) {
 	return host, nil
 }
 
+// dialTimeout bounds the initial RPC/WS handshake. A websocket backend behind a
+// load balancer can accept the TCP socket but never complete the upgrade — the
+// exact silent stall tipWatchdog exists to heal. Dialing with context.Background()
+// then blocks forever, and because reconnectRPC runs on the lone tipWatchdog
+// goroutine that single healer parks indefinitely: the cached tip stays frozen,
+// resyncIndex keeps reporting a false syncNotNeeded, and sync silently stalls until
+// a restart. go-ethereum uses this context only for the first handshake, so the
+// established connection's lifetime is unaffected. A var so tests can shorten it.
+var dialTimeout = 30 * time.Second
+
 func dialRPC(rawURL string) (*rpc.Client, error) {
 	if rawURL == "" {
 		return nil, errors.New("empty rpc url")
@@ -469,7 +479,9 @@ func dialRPC(rawURL string) (*rpc.Client, error) {
 	if strings.HasPrefix(rawURL, "ws://") || strings.HasPrefix(rawURL, "wss://") {
 		opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
 	}
-	return rpc.DialOptions(context.Background(), rawURL, opts...)
+	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
+	defer cancel()
+	return rpc.DialOptions(ctx, rawURL, opts...)
 }
 
 // OpenRPC opens RPC connection to ETH backend.

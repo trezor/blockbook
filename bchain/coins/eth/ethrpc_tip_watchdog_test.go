@@ -3,7 +3,9 @@ package eth
 import (
 	"context"
 	"errors"
+	"io"
 	"math/big"
+	"net"
 	"testing"
 	"time"
 
@@ -258,6 +260,53 @@ func TestEthereumIdenticalFeedHeaderDoesNotRefreshLiveness(t *testing.T) {
 	case <-b.newBlockNotifyCh:
 		t.Fatal("an identical feed header must not wake the sync loop")
 	default:
+	}
+}
+
+// A websocket backend behind a load balancer can accept the TCP socket but never
+// complete the upgrade handshake — the silent stall tipWatchdog exists to heal.
+// dialRPC must honor dialTimeout instead of blocking on context.Background()
+// forever; otherwise reconnectRPC, and with it the lone tipWatchdog goroutine that
+// is the sole feed-liveness healer, parks indefinitely, the cached tip stays frozen,
+// and resyncIndex silently reports a false syncNotNeeded until a restart.
+func TestDialRPCBoundsHungHandshake(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	// Accept the dial but swallow the upgrade request and never answer it, so the
+	// client is left waiting on the handshake response — the load-balancer blackhole.
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		io.Copy(io.Discard, c)
+	}()
+
+	prev := dialTimeout
+	dialTimeout = 250 * time.Millisecond
+	defer func() { dialTimeout = prev }()
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		_, err := dialRPC("ws://" + ln.Addr().String())
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("dialRPC returned a client though the backend never completed the WS handshake")
+		}
+		if elapsed := time.Since(start); elapsed > 5*time.Second {
+			t.Fatalf("dialRPC took %s; expected it bounded near dialTimeout=%s, not effectively unbounded", elapsed, dialTimeout)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("dialRPC did not return: a hung handshake parks reconnectRPC and the lone tipWatchdog goroutine forever")
 	}
 }
 
