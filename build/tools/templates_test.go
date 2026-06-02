@@ -243,6 +243,72 @@ func TestLoadConfigUsesUnderscoreMQOverrideForHyphenAlias(t *testing.T) {
 	}
 }
 
+func TestLoadConfigSetsBlockbookPprofBindingForDevBuilds(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	tests := []struct {
+		name     string
+		buildEnv string
+	}{
+		{name: "default-dev"},
+		{name: "explicit-dev", buildEnv: buildEnvDev},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withTemporarilyUnsetEnv(t, buildEnvVar)
+			if tt.buildEnv != "" {
+				t.Setenv(buildEnvVar, tt.buildEnv)
+			}
+
+			config, err := LoadConfig(configsDir, "ethereum")
+			if err != nil {
+				t.Fatalf("LoadConfig() error = %v", err)
+			}
+			if config.Env.BlockbookPprofBinding != ":29036" {
+				t.Fatalf("BlockbookPprofBinding = %q, want %q", config.Env.BlockbookPprofBinding, ":29036")
+			}
+
+			templ := config.ParseTemplate()
+			templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "debian", "service")))
+
+			var service bytes.Buffer
+			if err := templ.ExecuteTemplate(&service, "main", config); err != nil {
+				t.Fatalf("ExecuteTemplate(blockbook service) error = %v", err)
+			}
+			if rendered := service.String(); !strings.Contains(rendered, " -prof=:29036 ") {
+				t.Fatalf("expected pprof flag in rendered service:\n%s", rendered)
+			}
+		})
+	}
+}
+
+func TestLoadConfigOmitsBlockbookPprofBindingForProdBuild(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t, buildEnvVar)
+	t.Setenv(buildEnvVar, buildEnvProd)
+
+	config, err := LoadConfig(configsDir, "ethereum")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if config.Env.BlockbookPprofBinding != "" {
+		t.Fatalf("BlockbookPprofBinding = %q, want empty", config.Env.BlockbookPprofBinding)
+	}
+
+	templ := config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "debian", "service")))
+
+	var service bytes.Buffer
+	if err := templ.ExecuteTemplate(&service, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(blockbook service) error = %v", err)
+	}
+	if rendered := service.String(); strings.Contains(rendered, "-prof=") {
+		t.Fatalf("did not expect pprof flag in rendered service:\n%s", rendered)
+	}
+}
+
 func TestBlockbookServiceTemplateGatesWantsLine(t *testing.T) {
 	config := &Config{}
 	config.Coin.Name = "Bitcoin"

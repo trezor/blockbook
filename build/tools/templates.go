@@ -101,28 +101,30 @@ type Config struct {
 		PackageMaintainerEmail string `json:"package_maintainer_email"`
 	} `json:"meta"`
 	Env struct {
-		Version              string `json:"version"`
-		BackendInstallPath   string `json:"backend_install_path"`
-		BackendDataPath      string `json:"backend_data_path"`
-		BlockbookInstallPath string `json:"blockbook_install_path"`
-		BlockbookDataPath    string `json:"blockbook_data_path"`
-		Architecture         string `json:"architecture"`
-		RPCBindHost          string `json:"-"` // Derived from BB_RPC_BIND_HOST_* to keep default RPC exposure local.
-		RPCAllowIP           string `json:"-"` // Derived to align rpcallowip with RPC bind host intent.
-		WantsBackendService  bool   `json:"-"` // Derived from the effective RPC URL so systemd only wants a local backend.
+		Version               string `json:"version"`
+		BackendInstallPath    string `json:"backend_install_path"`
+		BackendDataPath       string `json:"backend_data_path"`
+		BlockbookInstallPath  string `json:"blockbook_install_path"`
+		BlockbookDataPath     string `json:"blockbook_data_path"`
+		Architecture          string `json:"architecture"`
+		RPCBindHost           string `json:"-"` // Derived from BB_RPC_BIND_HOST_* to keep default RPC exposure local.
+		RPCAllowIP            string `json:"-"` // Derived to align rpcallowip with RPC bind host intent.
+		BlockbookPprofBinding string `json:"-"` // Derived for dev builds so deployed Blockbooks expose pprof on a per-coin port.
+		WantsBackendService   bool   `json:"-"` // Derived from the effective RPC URL so systemd only wants a local backend.
 	} `json:"-"`
 }
 
 const (
-	buildEnvVar          = "BB_BUILD_ENV"
-	buildEnvDev          = "dev"
-	buildEnvProd         = "prod"
-	devRPCURLHTTPPrefix  = "BB_DEV_RPC_URL_HTTP_"
-	devRPCURLWSPrefix    = "BB_DEV_RPC_URL_WS_"
-	devMQURLPrefix       = "BB_DEV_MQ_URL_"
-	prodRPCURLHTTPPrefix = "BB_PROD_RPC_URL_HTTP_"
-	prodRPCURLWSPrefix   = "BB_PROD_RPC_URL_WS_"
-	prodMQURLPrefix      = "BB_PROD_MQ_URL_"
+	buildEnvVar                 = "BB_BUILD_ENV"
+	buildEnvDev                 = "dev"
+	buildEnvProd                = "prod"
+	devRPCURLHTTPPrefix         = "BB_DEV_RPC_URL_HTTP_"
+	devRPCURLWSPrefix           = "BB_DEV_RPC_URL_WS_"
+	devMQURLPrefix              = "BB_DEV_MQ_URL_"
+	prodRPCURLHTTPPrefix        = "BB_PROD_RPC_URL_HTTP_"
+	prodRPCURLWSPrefix          = "BB_PROD_RPC_URL_WS_"
+	prodMQURLPrefix             = "BB_PROD_MQ_URL_"
+	devBlockbookPprofPortOffset = 20000
 )
 
 func jsonToString(msg json.RawMessage) (string, error) {
@@ -278,6 +280,13 @@ func mqURLPrefixForBuildEnv(buildEnv string) string {
 	}
 }
 
+func blockbookPprofBindingForBuildEnv(config *Config, buildEnv string) string {
+	if buildEnv != buildEnvDev || isEmpty(config, "blockbook") || config.Ports.BlockbookInternal <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(":%d", config.Ports.BlockbookInternal+devBlockbookPprofPortOffset)
+}
+
 func renderConfigTemplate(config *Config, name string) (string, error) {
 	templ := config.ParseTemplate()
 	var out bytes.Buffer
@@ -386,6 +395,7 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 
 	config.Meta.BuildDatetime = time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700")
 	config.Env.Architecture = runtime.GOARCH
+	config.Env.BlockbookPprofBinding = blockbookPprofBindingForBuildEnv(config, buildEnv)
 
 	rpcBindKey := "BB_RPC_BIND_HOST_" + config.Coin.Alias // Bind host is per coin alias to match deployment naming.
 	config.Env.RPCBindHost = "127.0.0.1"                  // Default to localhost to avoid unintended remote exposure.
