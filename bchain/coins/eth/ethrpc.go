@@ -1125,6 +1125,12 @@ func (b *EthereumRPC) tipWatchdog() {
 // tipWatchdogTick is one watchdog evaluation, split out from the ticker loop so
 // it is unit-testable with an injected threshold and a fake client (no 30s wait).
 func (b *EthereumRPC) tipWatchdogTick(threshold time.Duration) {
+	// Heartbeat first: this Inc proves the lone watchdog goroutine is still ticking.
+	// If it ever parks (e.g. a hung reconnect), the counter stops and
+	// rate(blockbook_backend_subscription_events{event="watchdog_tick"}) drops to 0 —
+	// the only positive liveness signal for the sole feed-liveness healer, distinct
+	// from watchdog_stall/watchdog_reconnect which fire only on an already-seen stall.
+	b.ObserveSubscriptionEvent("newHeads", "watchdog_tick")
 	// lastSubNotifyNs is armed when subscribeEvents establishes the newHeads
 	// subscription and refreshed on every tip advance, so a non-zero value means
 	// "subscription is wired up". The zero guard only skips the brief window before
