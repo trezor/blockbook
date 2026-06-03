@@ -77,6 +77,7 @@ def render():
     missing = set()      # unknown metric keys referenced by a placeholder
     problems = []        # structural mismatches
     used_keys = set()
+    seen_panel_keys = set()
 
     for panel in iter_panels(dash["panels"]):
         pid = panel.get("id")
@@ -93,6 +94,10 @@ def render():
         if pkey is None:
             problems.append("template panel id %s has no x-panel-key" % pid)
             continue
+        if pkey in seen_panel_keys:
+            problems.append("template panel key %r is duplicated" % pkey)
+            continue
+        seen_panel_keys.add(pkey)
         entry = panels.get(pkey)
         if entry is None:
             problems.append("template panel %r (id %s) has no entry in panels.yaml" % (pkey, pid))
@@ -110,6 +115,9 @@ def render():
             qkey = t.get("x-query-key")
             if qkey is None:
                 problems.append("panel %r target refId %r has no x-query-key" % (pkey, t.get("refId")))
+                continue
+            if qkey in tmpl_qkeys:
+                problems.append("panel %r query key %r is duplicated in template targets" % (pkey, qkey))
                 continue
             tmpl_qkeys.add(qkey)
             qc = queries.get(qkey)

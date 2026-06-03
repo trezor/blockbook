@@ -33,6 +33,11 @@ template; the x-keys are stripped from the rendered `grafana.json`). Inside `pro
 `{{name:<key>}}` / `{{help:<key>}}` expand from `../metrics.yaml`, so a metric's name lives in one
 place and a rename propagates to the Go binary and every panel.
 
+Use stable, descriptive keys: `x-panel-key` should look like `<section>.<subject>[_stat]`
+(for example `rpc.request_duration_p95`), and `x-query-key` should name the plotted series
+(`requests`, `errors`, `p95`, `total`, `threshold`). Rename titles freely, but keep these keys
+stable once other files refer to them.
+
 ## Render
 
 ```bash
