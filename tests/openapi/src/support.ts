@@ -332,6 +332,25 @@ export function assertUTXOListNonNegativeConfirmations(utxos: UtxoResponse[], co
   });
 }
 
+// assertGolombParams validates the shared P/M/zeroedKey header returned by the Golomb block-filter
+// surfaces — the HTTP /api/v2/block-filters endpoint and the ws getBlockFilter/getBlockFiltersBatch/
+// getMempoolFilters methods. P is cross-checked against the coin's configured block_golomb_filter_p
+// when known (golombP > 0).
+export function assertGolombParams(res: { P?: number; M?: number; zeroedKey?: boolean }, golombP: number, context: string) {
+  if (!Number.isInteger(res.P) || (res.P ?? 0) <= 0) {
+    throw new Error(`${context} invalid P: ${String(res.P)}`);
+  }
+  if (golombP > 0 && res.P !== golombP) {
+    throw new Error(`${context} P mismatch: got ${res.P}, want ${golombP}`);
+  }
+  if (!Number.isInteger(res.M) || (res.M ?? 0) <= 0) {
+    throw new Error(`${context} invalid M: ${String(res.M)}`);
+  }
+  if (typeof res.zeroedKey !== "boolean") {
+    throw new Error(`${context} invalid zeroedKey: ${String(res.zeroedKey)}`);
+  }
+}
+
 export function txIDsFromTransactions(txs: TxResponse[], context: string) {
   return txs.map((tx, index) => {
     assertNonEmptyString(tx.txid, `${context}.transactions[${index}].txid`);

@@ -199,6 +199,50 @@ async function testGetAddressTxsScientificNotation(ctx: TestContext) {
   assertAddressTxsPayload(addr, found.address, found.txid, "GetAddressTxsScientificNotation", 1000);
 }
 
+// HTTP twin of the ws getBalanceHistory test: GET /api/v2/balancehistory/{descriptor}. Bounds the
+// window to the sample tx's block time (± a day) so the server scans only a small range instead of
+// the address's entire history (which can exceed timeouts on busy chains).
+async function testGetBalanceHistory(ctx: TestContext) {
+  const address = await ctx.sampleAddressOrSkip();
+  const txid = await ctx.sampleTxIDOrSkip();
+  const tx = await ctx.getTransactionByID(txid, false);
+
+  const blockTime = tx?.blockTime;
+  if (!positiveNumber(blockTime)) {
+    throw new SkipTest(`sample tx ${txid} has no block time to bound balance history`);
+  }
+  const from = blockTime - 1;
+  const to = blockTime + 24 * 3600; // clamps to best height; window is bounded by recent blocks
+
+  const result = await ctx.client.getMaybe(
+    "/api/v2/balancehistory/{descriptor}",
+    `/api/v2/balancehistory/${encodePathSegment(address)}?from=${from}&to=${to}`,
+  );
+  if (result.status !== 200 || result.data === undefined) {
+    // EVM rejects balance history for contract addresses ("...for a contract not allowed"); skip
+    // those, mirroring the ws getBalanceHistory test.
+    if (result.body.toLowerCase().includes("not allowed")) {
+      throw new SkipTest(`balance history not allowed for ${address} (contract)`);
+    }
+    throw new Error(`GET /api/v2/balancehistory returned HTTP ${result.status}: ${preview(result.body)}`);
+  }
+
+  const history = result.data;
+  if (!Array.isArray(history)) {
+    throw new Error("GetBalanceHistory response is not an array");
+  }
+  // An empty history is valid (address with no activity in range); the 200 body is already
+  // schema-validated against BalanceHistory[] by the client, so just assert the entry invariants.
+  history.forEach((entry, i) => {
+    if (!positiveNumber(entry.time)) {
+      throw new Error(`GetBalanceHistory[${i}] invalid time: ${String(entry.time)}`);
+    }
+    if (!Number.isInteger(entry.txs) || entry.txs < 0) {
+      throw new Error(`GetBalanceHistory[${i}] invalid txs: ${String(entry.txs)}`);
+    }
+  });
+}
+
 export async function getFiatJSONOrSkip<P extends GetOperationPath>(
   ctx: TestContext,
   operationPath: P,
@@ -225,6 +269,7 @@ export const commonTests: Record<string, TestFunction> = {
   GetAddressTxids: testGetAddressTxids,
   GetAddressTxs: testGetAddressTxs,
   GetAddressTxsScientificNotation: testGetAddressTxsScientificNotation,
+  GetBalanceHistory: testGetBalanceHistory,
   GetCurrentFiatRates: testGetCurrentFiatRates,
   GetTickersList: testGetTickersList,
   GetMultiTickers: testGetMultiTickers,

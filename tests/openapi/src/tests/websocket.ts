@@ -14,6 +14,7 @@ import {
   assertFiatTickerEquals,
   assertFiatTickerFresh,
   assertFiatTickerPayload,
+  assertGolombParams,
   assertNonEmptyString,
   assertPageMetaAllowUnknownTotal,
   assertStringSlicesEqual,
@@ -399,22 +400,8 @@ async function testWsLongTermFeeRate(ctx: TestContext) {
 
 // The Golomb-filter responses (getBlockFilter/getBlockFiltersBatch/getMempoolFilters) are
 // anonymous server structs with no openapi schema, so validate the shared P/M/zeroedKey header
-// structurally. P is cross-checked against the coin's configured block_golomb_filter_p.
-function assertGolombParams(res: { P?: number; M?: number; zeroedKey?: boolean }, golombP: number, context: string) {
-  if (!Number.isInteger(res.P) || (res.P ?? 0) <= 0) {
-    throw new Error(`${context} invalid P: ${String(res.P)}`);
-  }
-  if (golombP > 0 && res.P !== golombP) {
-    throw new Error(`${context} P mismatch: got ${res.P}, want ${golombP}`);
-  }
-  if (!Number.isInteger(res.M) || (res.M ?? 0) <= 0) {
-    throw new Error(`${context} invalid M: ${String(res.M)}`);
-  }
-  if (typeof res.zeroedKey !== "boolean") {
-    throw new Error(`${context} invalid zeroedKey: ${String(res.zeroedKey)}`);
-  }
-}
-
+// structurally via the shared assertGolombParams helper (support.ts), which is also used by the
+// HTTP /api/v2/block-filters twin in utxo.ts.
 type WsBlockFilterRes = { P?: number; M?: number; zeroedKey?: boolean; blockFilter?: string };
 type WsBlockFiltersBatchRes = { P?: number; M?: number; zeroedKey?: boolean; blockFiltersBatch?: string[] };
 type WsMempoolFiltersRes = { P?: number; M?: number; zeroedKey?: boolean; entries?: Record<string, string> };

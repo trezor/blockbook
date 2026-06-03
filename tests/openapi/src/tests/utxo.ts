@@ -1,5 +1,6 @@
+import { blockFilterConfig } from "../config.js";
 import { SkipTest } from "../errors.js";
-import { assertUTXOList, encodePathSegment, stringValue } from "../support.js";
+import { assertGolombParams, assertUTXOList, encodePathSegment, stringValue } from "../support.js";
 
 import type { TestContext } from "../context.js";
 import type { UtxoResponse } from "../types.js";
@@ -113,7 +114,62 @@ function isUnconfirmedUtxo(utxo: UtxoResponse) {
   return (utxo.confirmations ?? 0) <= 0 || (utxo.height ?? 0) <= 0;
 }
 
+// HTTP twin of the ws getBlockFilter* tests: /api/v2/block-filters returns the same Golomb
+// P/M/zeroedKey header plus a {height: {blockHash, filter}} map. Gated on the coin's configured
+// block_filter_scripts (skips when filters are not enabled) and on the utxo capability.
+async function testGetBlockFilters(ctx: TestContext) {
+  const { scriptType, golombP } = blockFilterConfig(ctx.coin);
+  if (!scriptType) {
+    throw new SkipTest(`${ctx.coin} has no block_filter_scripts configured`);
+  }
+
+  // lastN=5 anchors the window to the last 5 blocks from the tip, so the server scans only a
+  // handful of blocks and the result is guaranteed non-empty.
+  const lastN = 5;
+  const res = await ctx.client.getJson(
+    "/api/v2/block-filters/",
+    `/api/v2/block-filters/?scriptType=${encodeURIComponent(scriptType)}&lastN=${lastN}`,
+  );
+  assertGolombParams(res, golombP, "GetBlockFilters");
+
+  const filters = res.blockFilters ?? {};
+  const heights = Object.keys(filters);
+  if (heights.length === 0 || heights.length > lastN) {
+    throw new Error(`GetBlockFilters expected 1..${lastN} entries, got ${heights.length}`);
+  }
+  for (const [height, entry] of Object.entries(filters)) {
+    if (!/^[0-9]+$/.test(height)) {
+      throw new Error(`GetBlockFilters invalid height key: ${height}`);
+    }
+    if (typeof entry.blockHash !== "string" || !/^[0-9a-f]+$/i.test(entry.blockHash)) {
+      throw new Error(`GetBlockFilters[${height}] invalid blockHash: ${String(entry.blockHash)}`);
+    }
+    // filter hex can be empty for a block with no matching scripts; require hex chars when present.
+    if (typeof entry.filter !== "string" || !/^[0-9a-f]*$/i.test(entry.filter)) {
+      throw new Error(`GetBlockFilters[${height}] invalid filter hex: ${String(entry.filter)}`);
+    }
+  }
+}
+
+// Negative twin: an unknown scriptType must be rejected (public.go apiBlockFilters returns a 400
+// API error "Invalid scriptType ..."), never silently served.
+async function testGetBlockFiltersInvalidScriptType(ctx: TestContext) {
+  const { scriptType } = blockFilterConfig(ctx.coin);
+  if (!scriptType) {
+    throw new SkipTest(`${ctx.coin} has no block_filter_scripts configured`);
+  }
+  const result = await ctx.client.getMaybe(
+    "/api/v2/block-filters/",
+    `/api/v2/block-filters/?scriptType=bogus_${scriptType}&lastN=1`,
+  );
+  if (result.status === 200) {
+    throw new Error("GetBlockFiltersInvalidScriptType: server accepted an invalid scriptType (expected non-200)");
+  }
+}
+
 export const utxoOnlyTests: Record<string, TestFunction> = {
   GetUtxo: testGetUtxo,
   GetUtxoConfirmedFilter: testGetUtxoConfirmedFilter,
+  GetBlockFilters: testGetBlockFilters,
+  GetBlockFiltersInvalidScriptType: testGetBlockFiltersInvalidScriptType,
 };
