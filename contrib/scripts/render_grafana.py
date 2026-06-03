@@ -43,13 +43,15 @@ def fail(msg):
 
 
 def load_registry():
-    cfg = yaml.safe_load(open(METRICS))
+    with open(METRICS) as f:
+        cfg = yaml.safe_load(f)
     return {key: {"name": d["name"], "help": d.get("help", "")} for key, d in cfg["metrics"].items()}
 
 
 def load_panels():
     # keyed by the semantic x-panel-key in template.json
-    return yaml.safe_load(open(PANELS))["panels"]
+    with open(PANELS) as f:
+        return yaml.safe_load(f)["panels"]
 
 
 def expand(value, reg, missing):
@@ -72,7 +74,8 @@ def iter_panels(panels):
 def render():
     reg = load_registry()
     panels = load_panels()
-    dash = json.load(open(TEMPLATE))
+    with open(TEMPLATE) as f:
+        dash = json.load(f)
 
     missing = set()      # unknown metric keys referenced by a placeholder
     problems = []        # structural mismatches
