@@ -125,6 +125,9 @@ func GetMetrics(coin string) (*Metrics, error) {
 		if !ok {
 			return nil, fmt.Errorf("metrics: no definition for key %q (field %s)", key, field.Name)
 		}
+		if used[key] {
+			return nil, fmt.Errorf("metrics: duplicate `metric:%q` tag (field %s); each definition must bind to exactly one struct field", key, field.Name)
+		}
 		used[key] = true
 
 		collector, err := buildCollector(field.Type, def, constLabels)
