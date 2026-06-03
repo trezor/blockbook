@@ -2,11 +2,11 @@
 #
 # Consumers:
 #   - common/metrics.go        : embedded via go:embed, reflection-populated into the Metrics struct at startup
-#   - contrib/scripts/render_grafana.py : renders configs/grafana_template.json -> configs/grafana.json
+#   - contrib/scripts/render_grafana.py : with configs/grafana/{template.json,panels.yaml} -> configs/grafana/grafana.json
 #
-# Each entry is keyed by a STABLE logical id. The dashboard template references metrics
-# by this key, so renaming the prometheus `name` propagates to Go and Grafana without
-# touching the template. Never rename a key; rename its `name:` instead.
+# Each entry is keyed by a STABLE logical id. configs/grafana/panels.yaml references
+# metrics by this key, so renaming the prometheus `name` propagates to Go and Grafana
+# without editing panels.yaml. Never rename a key; rename its `name:` instead.
 #
 # type: counter | counter_vec | gauge | gauge_vec | histogram | histogram_vec
 # labels:  required for *_vec types, forbidden otherwise

@@ -81,8 +81,8 @@
       },
       "id": 312,
       "panels": [],
-      "title": "System",
-      "type": "row"
+      "type": "row",
+      "x-panel-key": "row.system"
     },
     {
       "datasource": {
@@ -150,14 +150,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "process_resident_memory_bytes{job=\"blockbook\"}",
-          "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "resident"
         }
       ],
-      "title": "Resident memory bytes",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "system.resident_memory"
     },
     {
       "datasource": {
@@ -225,14 +224,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "process_virtual_memory_bytes{job=\"blockbook\"}",
-          "legendFormat": "vm-{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "virtual"
         }
       ],
-      "title": "Virtual memory",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "system.virtual_memory"
     },
     {
       "datasource": {
@@ -300,14 +298,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "go_memstats_alloc_bytes{job=\"blockbook\"}",
-          "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "allocated"
         }
       ],
-      "title": "GO Memory allocated",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "system.go_alloc"
     },
     {
       "datasource": {
@@ -375,14 +372,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "process_open_fds{job=\"blockbook\"}",
-          "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "fds"
         }
       ],
-      "title": "Open file descriptors",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "system.open_fds"
     },
     {
       "datasource": {
@@ -450,14 +446,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "node_load1",
-          "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "load"
         }
       ],
-      "title": "Node Load 1 minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "system.node_load1"
     },
     {
       "datasource": {
@@ -525,14 +520,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "node_memory_MemAvailable_bytes",
-          "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "available"
         }
       ],
-      "title": "Node memory available",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "system.node_mem_available"
     },
     {
       "collapsed": false,
@@ -544,8 +538,8 @@
       },
       "id": 313,
       "panels": [],
-      "title": "RPC",
-      "type": "row"
+      "type": "row",
+      "x-panel-key": "row.rpc"
     },
     {
       "datasource": {
@@ -614,14 +608,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_rpc_latency_count{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, method) * 60",
-          "legendFormat": "{{coin}} - {{method}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "requests"
         }
       ],
-      "title": "RPC request rate (per minute)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.request_rate"
     },
     {
       "datasource": {
@@ -689,21 +682,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_rpc_latency_bucket{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, method, le))",
-          "legendFormat": "{{coin}} - {{method}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of RPC request duration",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.request_duration_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Chain data fallback path uses, by component and reason (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -765,21 +756,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_rpc_fallback_calls_total{job=\"blockbook\", coin=\"$coin\"}[$__rate_interval])) by (component, reason) * 60",
-          "legendFormat": "{{component}} - {{reason}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "fallbacks"
         }
       ],
-      "title": "RPC fallback calls per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.fallback_calls"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "eth_call requests by mode (per second).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -842,21 +831,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_requests{job=\"blockbook\", coin=\"$coin\"}[5m])",
-          "legendFormat": "{{instance}} {{mode}}/s",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "requests"
         }
       ],
-      "title": "eth_call requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.eth_call_requests"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "eth_call errors by mode and type (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -919,21 +906,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_errors{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} {{mode}} {{type}}/min",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "errors"
         }
       ],
-      "title": "eth_call errors",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.eth_call_errors"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Average number of eth_call items per batch request.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -996,21 +981,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_batch_size_sum{job=\"blockbook\", coin=\"$coin\"}[5m]) / rate(blockbook_eth_call_batch_size_count{job=\"blockbook\", coin=\"$coin\"}[5m])",
-          "legendFormat": "{{instance}} avg",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "avg"
         }
       ],
-      "title": "eth_call batch size (avg)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.eth_call_batch_size"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "eth_call requests for token URI lookups (per second).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1073,21 +1056,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_token_uri_requests{job=\"blockbook\", coin=\"$coin\"}[5m])",
-          "legendFormat": "{{instance}} {{method}}/s",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "requests"
         }
       ],
-      "title": "eth_call token URI requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.eth_call_token_uri"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "eth_call requests for staking pool lookups (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1150,21 +1131,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_staking_pool_requests{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} {{field}}/min",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "requests"
         }
       ],
-      "title": "eth_call staking pool requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.eth_call_staking_pool"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "eth_call requests for contract info fields (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1227,21 +1206,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_contract_info_requests{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} {{field}}/min",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "requests"
         }
       ],
-      "title": "eth_call contract info requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.eth_call_contract_info"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Failed Ethereum sync RPC calls by method and status (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1303,14 +1280,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_eth_sync_rpc_errors{job=\"blockbook\", coin=\"$coin\"}[$__rate_interval])) by (method, status) * 60",
-          "legendFormat": "{{method}} - {{status}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "errors"
         }
       ],
-      "title": "Ethereum sync RPC errors per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "rpc.eth_sync_errors"
     },
     {
       "collapsed": false,
@@ -1322,15 +1298,14 @@
       },
       "id": 314,
       "panels": [],
-      "title": "Sync",
-      "type": "row"
+      "type": "row",
+      "x-panel-key": "row.sync"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Duration of index resync operation (95th percentile).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1392,21 +1367,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_index_resync_duration_bucket{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, le))",
-          "legendFormat": "{{coin}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of index resync duration",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.index_resync_duration_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Errors of index resync operation, by error (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1468,21 +1441,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_index_resync_errors{job=\"blockbook\", coin=\"$coin\"}[$__rate_interval])) by (error) * 60",
-          "legendFormat": "{{error}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "errors"
         }
       ],
-      "title": "Index resync errors per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.index_resync_errors"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Transient ErrBlockNotFound responses from the backend during sync (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1544,21 +1515,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_index_block_not_found_retries{job=\"blockbook\", coin=\"$coin\"}[$__rate_interval])) by (instance) * 60",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "retries"
         }
       ],
-      "title": "Index block-not-found retries per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.index_block_not_found_retries"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Chain reorganization events detected during sync, by detection path.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1620,21 +1589,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(blockbook_index_reorg_events{job=\"blockbook\", coin=\"$coin\"}[$__interval])) by (type)",
-          "legendFormat": "{{type}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "events"
         }
       ],
-      "title": "Index reorg events",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.index_reorg_events"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Times sync yielded to the outer resync machinery for non-reorg reasons.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1696,21 +1663,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(blockbook_index_sync_yields{job=\"blockbook\", coin=\"$coin\"}[$__interval])) by (reason)",
-          "legendFormat": "{{reason}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "yields"
         }
       ],
-      "title": "Index sync yields",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.index_sync_yields"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Per-block stats at the chain tip (blocks/txs and, for UTXO, vin/vout), averaged over 5m.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1772,21 +1737,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(blockbook_sync_block_stats{job=\"blockbook\", coin=\"$coin\", scope=\"tip\"}[5m])",
-          "legendFormat": "{{instance}} {{kind}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "stats"
         }
       ],
-      "title": "Sync block stats (tip)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.block_stats_tip"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Per-interval block stats during bulk sync (blocks/txs and, for UTXO, vin/vout).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1848,21 +1811,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_sync_block_stats{job=\"blockbook\", coin=\"$coin\", scope=\"bulk\"}",
-          "legendFormat": "{{instance}} {{kind}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "stats"
         }
       ],
-      "title": "Sync block stats (bulk interval)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.block_stats_bulk"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Mempool size (number of transactions).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1924,21 +1885,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_mempool_size{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "size"
         }
       ],
-      "title": "Mempool size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.mempool_size"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Effective mempool resync throughput in transactions per second (95th percentile).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2000,21 +1959,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_mempool_resync_throughput_txs_per_second_bucket{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, chain, status, le))",
-          "legendFormat": "{{coin}} - {{chain}} - {{status}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of mempool resync throughput",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.mempool_resync_throughput_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Duration of mempool resync operation (95th percentile).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2076,21 +2033,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_mempool_resync_duration_bucket{job=\"blockbook\", coin=\"$coin\"}[5m])) by (coin, le))",
-          "legendFormat": "{{coin}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of mempool resync duration",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.mempool_resync_duration_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Hot address stats for per-block chain tip processing (Ethereum-type only).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2152,21 +2107,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_sync_hotness_stats{job=\"blockbook\", coin=\"$coin\", scope=\"tip\"}",
-          "legendFormat": "{{instance}} {{kind}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "stats"
         }
       ],
-      "title": "Hotness stats (tip)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.hotness_stats_tip"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Hot address stats for bulk sync intervals (Ethereum-type only).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2228,21 +2181,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_sync_hotness_stats{job=\"blockbook\", coin=\"$coin\", scope=\"bulk\"}",
-          "legendFormat": "{{instance}} {{kind}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "stats"
         }
       ],
-      "title": "Hotness stats (bulk interval)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.hotness_stats_bulk"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Number of cached addressContracts entries.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2304,21 +2255,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_addr_contracts_cache_entries{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "entries"
         }
       ],
-      "title": "AddrContracts cache entries",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.addr_contracts_cache_entries"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Estimated bytes in the addressContracts cache.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2380,21 +2329,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_addr_contracts_cache_bytes{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "bytes"
         }
       ],
-      "title": "AddrContracts cache bytes",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.addr_contracts_cache_bytes"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "addressContracts cache hits, misses and flushes (per minute).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2457,10 +2404,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_addr_contracts_cache_hits_total{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} hits/min",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "hits"
         },
         {
           "datasource": {
@@ -2468,10 +2414,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_addr_contracts_cache_misses_total{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} misses/min",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "misses"
         },
         {
           "datasource": {
@@ -2479,21 +2424,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_addr_contracts_cache_flush_total{job=\"blockbook\", coin=\"$coin\"}[1h]) * 60",
-          "legendFormat": "{{instance}} flushes {{reason}}/min",
           "range": true,
-          "refId": "C"
+          "refId": "C",
+          "x-query-key": "flushes"
         }
       ],
-      "title": "AddrContracts cache activity",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.addr_contracts_cache_activity"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Seconds since the backend tip feed (EVM newHeads / Tron ZeroMQ) last delivered a notification. Healthy = low & flat; a sawtooth at/near the stall threshold means the feed is dead and the watchdog is carrying sync.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2581,10 +2524,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_backend_subscription_age_seconds{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "age"
         },
         {
           "datasource": {
@@ -2592,21 +2534,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "clamp(30 * blockbook_average_block_time_seconds{job=\"blockbook\", coin=\"$coin\"}, 30, 300)",
-          "legendFormat": "{{coin}} stall threshold",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "threshold"
         }
       ],
-      "title": "Backend tip feed age",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.tip_feed_age"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "watchdog_stall = feed went silent past the threshold; watchdog_tip_advanced = the fallback poll found blocks the feed missed (strongest signal the push feed is broken).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2668,10 +2608,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (coin) (rate(blockbook_backend_subscription_events{job=\"blockbook\", coin=\"$coin\", event=\"watchdog_stall\"}[5m]))",
-          "legendFormat": "{{coin}} watchdog_stall",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "stall"
         },
         {
           "datasource": {
@@ -2679,21 +2618,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (coin) (rate(blockbook_backend_subscription_events{job=\"blockbook\", coin=\"$coin\", event=\"watchdog_tip_advanced\"}[5m]))",
-          "legendFormat": "{{coin}} watchdog_tip_advanced",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "tip_advanced"
         }
       ],
-      "title": "Tip feed watchdog interventions /s",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.tip_feed_watchdog"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Reconnect / resubscribe failures — non-zero sustained means the backend is unreachable (page).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2755,21 +2692,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (coin) (rate(blockbook_backend_subscription_events{job=\"blockbook\", coin=\"$coin\", event=~\"watchdog_reconnect_failed|resubscribe_failed\"}[5m]))",
-          "legendFormat": "{{coin}} failures",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "failures"
         }
       ],
-      "title": "Tip feed reconnect / resubscribe failures /s",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.tip_feed_reconnect_failures"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "All tip-feed lifecycle events by subscription and event. watchdog_tick is the heartbeat: rate==0 while up means the watchdog goroutine stopped ticking (a parked healer).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2831,552 +2766,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (subscription, event) (rate(blockbook_backend_subscription_events{job=\"blockbook\", coin=\"$coin\"}[5m]))",
-          "legendFormat": "{{subscription}} - {{event}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "events"
         }
       ],
-      "title": "Tip feed events /s (by subscription / event)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "eth_call requests by mode (per second).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "calls / sec",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 99
-      },
-      "id": 120,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_requests{job=\"blockbook\", coin=\"$coin\"}[5m])",
-          "legendFormat": "{{instance}} {{mode}}/s",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "eth_call requests",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "eth_call errors by mode and type (per minute).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "errors / min",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 99
-      },
-      "id": 121,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_errors{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} {{mode}} {{type}}/min",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "eth_call errors",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Average number of eth_call items per batch request.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "contracts / batch",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 107
-      },
-      "id": 122,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_batch_size_sum{job=\"blockbook\", coin=\"$coin\"}[5m]) / rate(blockbook_eth_call_batch_size_count{job=\"blockbook\", coin=\"$coin\"}[5m])",
-          "legendFormat": "{{instance}} avg",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "eth_call batch size (avg)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "eth_call requests for token URI lookups (per second).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "calls / sec",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 107
-      },
-      "id": 123,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_token_uri_requests{job=\"blockbook\", coin=\"$coin\"}[5m])",
-          "legendFormat": "{{instance}} {{method}}/s",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "eth_call token URI requests",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "eth_call requests for staking pool lookups (per minute).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "calls / min",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 107
-      },
-      "id": 124,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_staking_pool_requests{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} {{field}}/min",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "eth_call staking pool requests",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "eth_call requests for contract info fields (per minute).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "calls / min",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 115
-      },
-      "id": 125,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "rate(blockbook_eth_call_contract_info_requests{job=\"blockbook\", coin=\"$coin\"}[5m]) * 60",
-          "legendFormat": "{{instance}} {{field}}/min",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "eth_call contract info requests",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Failed Ethereum sync RPC calls by method and status (per minute).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 115
-      },
-      "id": 126,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(blockbook_eth_sync_rpc_errors{job=\"blockbook\", coin=\"$coin\"}[$__rate_interval])) by (method, status) * 60",
-          "legendFormat": "{{method}} - {{status}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Ethereum sync RPC errors per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "sync.tip_feed_events"
     },
     {
       "collapsed": false,
@@ -3388,15 +2784,14 @@
       },
       "id": 315,
       "panels": [],
-      "title": "Websocket",
-      "type": "row"
+      "type": "row",
+      "x-panel-key": "row.websocket"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Number of currently connected websocket clients.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3458,21 +2853,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_websocket_clients{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "clients"
         }
       ],
-      "title": "Websocket connected clients",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.clients"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Websocket requests per minute, by method and status.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3535,21 +2928,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_websocket_requests{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, method, status) * 60",
-          "legendFormat": "{{coin}} - {{method}} - {{status}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "requests"
         }
       ],
-      "title": "Websocket request per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.request_rate"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Websocket subscriptions by method, plus newBlockTxs-enabled address subscriptions.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3611,10 +3002,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_websocket_subscribes{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "Websocket {{method}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "subscribes"
         },
         {
           "datasource": {
@@ -3622,21 +3012,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_websocket_new_block_txs_subscriptions{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "newBlockTxs subscriptions - {{instance}}",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "new_block_txs"
         }
       ],
-      "title": "Websocket subscriptions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.subscriptions"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Websocket request duration by method (95th percentile, in microseconds).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3698,21 +3086,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_websocket_req_duration_bucket{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, method, le))",
-          "legendFormat": "{{coin}} - {{method}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of websocket request duration",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.request_duration_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Websocket newBlockTxs events per minute, by stage and status.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3775,21 +3161,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_websocket_new_block_txs{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, stage, status) * 60",
-          "legendFormat": "{{coin}} - {{stage}} - {{status}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "events"
         }
       ],
-      "title": "Websocket newBlockTxs events per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.new_block_txs_rate"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Duration of websocket newBlockTxs processing stages (95th percentile, seconds).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3851,21 +3235,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_websocket_new_block_txs_duration_seconds_bucket{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, stage, le))",
-          "legendFormat": "{{coin}} - {{stage}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of websocket newBlockTxs stage duration",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.new_block_txs_duration_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Per-address websocket tx notifications per minute, by source.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3928,21 +3310,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_websocket_addr_notifications{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, source) * 60",
-          "legendFormat": "{{coin}} - {{source}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "notifications"
         }
       ],
-      "title": "Websocket address notifications per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.addr_notifications"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Websocket channel closes (by reason) and unknown-method requests (by method), per minute.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4005,10 +3385,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_websocket_channel_closes{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, reason) * 60",
-          "legendFormat": "closes {{reason}} - {{coin}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "closes"
         },
         {
           "datasource": {
@@ -4016,21 +3395,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_websocket_unknown_methods{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, method) * 60",
-          "legendFormat": "unknown {{method}} - {{coin}}",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "unknown"
         }
       ],
-      "title": "Websocket channel closes / unknown methods per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.channel_closes_unknown"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Websocket Ethereum receipt enrichment outcomes per minute, by status.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4093,14 +3470,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_websocket_eth_receipt{job=\"blockbook\", coin=\"$coin\"}[5m])) by (coin, status) * 60",
-          "legendFormat": "{{coin}} {{status}}/min",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "outcomes"
         }
       ],
-      "title": "Websocket eth receipt outcomes",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "websocket.eth_receipt"
     },
     {
       "collapsed": false,
@@ -4112,15 +3488,14 @@
       },
       "id": 316,
       "panels": [],
-      "title": "General",
-      "type": "row"
+      "type": "row",
+      "x-panel-key": "row.general"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "1 = Blockbook reports itself in sync with the backend, 0 = not in sync (mirrors /api/status inSync). Shown across all coins.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4187,22 +3562,20 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_synchronized{job=\"blockbook\"}",
           "instant": true,
-          "legendFormat": "{{coin}}",
           "range": false,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "synchronized"
         }
       ],
-      "title": "Synchronized (all coins)",
-      "type": "stat"
+      "type": "stat",
+      "x-panel-key": "general.synchronized"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Best block height in Blockbook vs in the backend. A persistent gap means the index is falling behind the chain tip.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4263,10 +3636,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_best_height{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "Blockbook {{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "blockbook"
         },
         {
           "datasource": {
@@ -4274,21 +3646,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_backend_best_height{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "Backend {{coin}} - {{instance}}",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "backend"
         }
       ],
-      "title": "Block height (Blockbook vs backend)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.block_height"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Seconds since the backend best height was last observed to advance.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4350,21 +3720,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_tip_age_seconds{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "age"
         }
       ],
-      "title": "Backend tip age",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.tip_age"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Average period of mining of the last 100 blocks, in seconds.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4426,21 +3794,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_avg_block_period{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "period"
         }
       ],
-      "title": "Moving average of the last 100 blocks mining period (seconds)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.avg_block_period"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Configured average block time for the chain in seconds (0 if unavailable).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4486,15 +3852,13 @@
           },
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "blockbook_average_block_time_seconds{job=\"blockbook\"}",
           "format": "table",
           "instant": true,
-          "legendFormat": "__auto",
           "range": false,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "block_time"
         }
       ],
-      "title": "Configured average block time",
       "transformations": [
         {
           "id": "organize",
@@ -4511,14 +3875,14 @@
           }
         }
       ],
-      "type": "table"
+      "type": "table",
+      "x-panel-key": "general.avg_block_time"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Blockbook and backend application versions (from the app_info metric labels).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4563,15 +3927,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_app_info{job=\"blockbook\", coin=\"$coin\"}",
           "format": "table",
           "instant": true,
-          "legendFormat": "__auto",
           "range": false,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "info"
         }
       ],
-      "title": "Blockbook & backend versions",
       "transformations": [
         {
           "id": "organize",
@@ -4589,14 +3951,14 @@
           }
         }
       ],
-      "type": "table"
+      "type": "table",
+      "x-panel-key": "general.versions"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Size of index database (in bytes).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4661,21 +4023,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_index_db_size{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "size"
         }
       ],
-      "title": "Index DB size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.index_db_size"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Size of each db column (in bytes).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4736,21 +4096,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_dbcolumn_size{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{column}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "size"
         }
       ],
-      "title": "DB column size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.dbcolumn_size"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Number of rows in the transactions db column (cached transactions).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4812,21 +4170,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_dbcolumn_rows{job=\"blockbook\", column=\"transactions\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "rows"
         }
       ],
-      "title": "Number of cached transactions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.cached_transactions"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "txCache hit ratio (percentage of hits over total lookups).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4888,21 +4244,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "100 * sum(blockbook_txcache_efficiency{job=\"blockbook\", status=\"hit\", coin=\"$coin\"}) by (coin, instance) / sum(blockbook_txcache_efficiency{job=\"blockbook\", coin=\"$coin\"}) by (coin, instance)",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "ratio"
         }
       ],
-      "title": "txCache hit ratio %",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.txcache_hit_ratio"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Number of cached xpubs (UTXO coins only).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4964,21 +4318,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_xpub_cache_size{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "size"
         }
       ],
-      "title": "Xpub cache size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.xpub_cache_size"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Explorer views per minute, by action.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5040,21 +4392,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_explorer_views{job=\"blockbook\", coin=\"$coin\"}[1m])) by (action) * 60",
-          "legendFormat": "{{action}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "views"
         }
       ],
-      "title": "Explorer views in 1 minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.explorer_views"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Number of unfinished requests in the explorer interface, by method.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5116,21 +4466,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(blockbook_explorer_pending_requests{job=\"blockbook\", coin=\"$coin\"}) by (coin, method)",
-          "legendFormat": "Explorer {{method}} - {{coin}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "pending"
         }
       ],
-      "title": "Explorer pending requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.explorer_pending_requests"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Unfinished requests in the websocket and explorer interfaces, by method.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5192,10 +4540,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(blockbook_websocket_pending_requests{job=\"blockbook\", coin=\"$coin\"}) by (coin, method)",
-          "legendFormat": "Websocket {{method}} - {{coin}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "websocket"
         },
         {
           "datasource": {
@@ -5203,21 +4550,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(blockbook_explorer_pending_requests{job=\"blockbook\", coin=\"$coin\"}) by (coin, method)",
-          "legendFormat": "Explorer {{method}} - {{coin}}",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "explorer"
         }
       ],
-      "title": "Pending requests - by method",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.pending_requests"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Estimated fee per byte (sats/byte) for 1/3/5/8 block targets.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5279,10 +4624,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(blockbook_estimated_fee{job=\"blockbook\", coin=\"$coin\", blocks=\"1\"}/1000)",
-          "legendFormat": "{{coin}} - {{instance}} - {{blocks}} blocks",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "blocks_1"
         },
         {
           "datasource": {
@@ -5290,10 +4634,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(blockbook_estimated_fee{job=\"blockbook\", coin=\"$coin\", blocks=\"3\"}/1000)",
-          "legendFormat": "{{coin}} - {{instance}} - {{blocks}} blocks",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "blocks_3"
         },
         {
           "datasource": {
@@ -5301,10 +4644,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(blockbook_estimated_fee{job=\"blockbook\", coin=\"$coin\", blocks=\"5\"}/1000)",
-          "legendFormat": "{{coin}} - {{instance}} - {{blocks}} blocks",
           "range": true,
-          "refId": "C"
+          "refId": "C",
+          "x-query-key": "blocks_5"
         },
         {
           "datasource": {
@@ -5312,21 +4654,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(blockbook_estimated_fee{job=\"blockbook\", coin=\"$coin\", blocks=\"8\"}/1000)",
-          "legendFormat": "{{coin}} - {{instance}} - {{blocks}} blocks",
           "range": true,
-          "refId": "D"
+          "refId": "D",
+          "x-query-key": "blocks_8"
         }
       ],
-      "title": "Estimated Fee sats/byte",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.estimated_fee"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Total requests to coingecko, by endpoint and status.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5388,10 +4728,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_coingecko_requests{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}} - {{status}} - {{endpoint}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "per_server"
         },
         {
           "datasource": {
@@ -5399,21 +4738,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(blockbook_coingecko_requests{job=\"blockbook\", coin=\"$coin\"})",
-          "legendFormat": "{{coin}} total across servers",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "total"
         }
       ],
-      "title": "Coingecko requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.coingecko_requests"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Total coingecko range queries by range kind.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5475,10 +4812,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "blockbook_coingecko_range_requests{job=\"blockbook\", coin=\"$coin\"}",
-          "legendFormat": "{{coin}} - {{instance}} - {{range}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "per_server"
         },
         {
           "datasource": {
@@ -5486,21 +4822,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(blockbook_coingecko_range_requests{job=\"blockbook\", coin=\"$coin\"})",
-          "legendFormat": "{{coin}} total across servers",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "x-query-key": "total"
         }
       ],
-      "title": "Coingecko range requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.coingecko_range_requests"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Requests to alternative fee providers by provider and status.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5562,21 +4896,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(blockbook_alternative_fee_provider_requests{job=\"blockbook\", coin=\"$coin\"}[$__rate_interval])",
-          "legendFormat": "{{instance}} - {{provider}} - {{status}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "requests"
         }
       ],
-      "title": "Alternative fee provider requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.alt_fee_provider_requests"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Balance history fiat lookup stage duration by request path and mode (95th percentile, seconds).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5638,21 +4970,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_balance_history_fiat_duration_seconds_bucket{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, path, mode, status, le))",
-          "legendFormat": "{{coin}} - {{path}} - {{mode}} - {{status}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of balance history fiat stage duration",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.balance_history_fiat_duration_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Balance history fiat lookup fallbacks per minute, by path and reason.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5714,21 +5044,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(blockbook_balance_history_fiat_fallback_total{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, path, reason) * 60",
-          "legendFormat": "{{coin}} - {{path}} - {{reason}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "fallbacks"
         }
       ],
-      "title": "Balance history fiat fallbacks per minute",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.balance_history_fiat_fallbacks"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Number of output points in balance history responses by request path (95th percentile).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5790,21 +5118,19 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(blockbook_balance_history_points_bucket{job=\"blockbook\", coin=\"$coin\"}[1m])) by (coin, path, le))",
-          "legendFormat": "{{coin}} - {{path}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of balance history output points",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.balance_history_points_p95"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Duration of fiat rates downloader update stages (95th percentile, seconds).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5866,14 +5192,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(increase(blockbook_fiat_rates_update_duration_seconds_bucket{job=\"blockbook\", coin=\"$coin\"}[1h])) by (coin, stage, status, le))",
-          "legendFormat": "{{coin}} - {{stage}} - {{status}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "x-query-key": "p95"
         }
       ],
-      "title": "95% quantile of fiat update stage duration",
-      "type": "timeseries"
+      "type": "timeseries",
+      "x-panel-key": "general.fiat_update_duration_p95"
     }
   ],
   "preload": false,
