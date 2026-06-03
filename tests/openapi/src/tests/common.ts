@@ -199,7 +199,7 @@ async function testGetAddressTxsScientificNotation(ctx: TestContext) {
   assertAddressTxsPayload(addr, found.address, found.txid, "GetAddressTxsScientificNotation", 1000);
 }
 
-async function getFiatJSONOrSkip<P extends GetOperationPath>(
+export async function getFiatJSONOrSkip<P extends GetOperationPath>(
   ctx: TestContext,
   operationPath: P,
   actualPath: string,

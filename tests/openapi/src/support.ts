@@ -223,6 +223,23 @@ export function assertFiatTickerFresh(payload: FiatTickerResponse, context: stri
   }
 }
 
+// assertFiatTickerEquals asserts two tickers are identical (same timestamp and rate map).
+// Use only for immutable historical data (e.g. HTTP↔WS parity at a fixed timestamp), never
+// for current rates which can change between calls.
+export function assertFiatTickerEquals(got: FiatTickerResponse, want: FiatTickerResponse, context: string) {
+  if (got.ts !== want.ts) {
+    throw new Error(`${context} ts mismatch: got ${got.ts ?? 0}, want ${want.ts ?? 0}`);
+  }
+  const gotRates = got.rates ?? {};
+  const wantRates = want.rates ?? {};
+  assertStringSlicesEqual(Object.keys(gotRates).sort(), Object.keys(wantRates).sort(), `${context}.rates keys`);
+  for (const [currency, rate] of Object.entries(wantRates)) {
+    if (gotRates[currency] !== rate) {
+      throw new Error(`${context} rate mismatch for ${currency}: got ${gotRates[currency]}, want ${rate}`);
+    }
+  }
+}
+
 export function assertPageMeta(page: unknown, itemsOnPage: unknown, totalPages: unknown, totalItems: unknown, context: string) {
   const p = numberValue(page);
   const items = numberValue(itemsOnPage);

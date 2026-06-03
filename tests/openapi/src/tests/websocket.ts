@@ -1,4 +1,6 @@
 import { addressPage, addressPageSize, evmHistoryPage, evmHistoryPageSize } from "../constants.js";
+import { fiatMaxAgeSeconds } from "../config.js";
+import { SkipTest } from "../errors.js";
 import {
   assertAddressTxidsPayload,
   assertBasicAccountInfoPayload,
@@ -8,6 +10,9 @@ import {
   assertEVMBasicAddressPayload,
   assertEVMTokenBalancesPayload,
   assertEVMTokenListContractsMatch,
+  assertFiatTickerEquals,
+  assertFiatTickerFresh,
+  assertFiatTickerPayload,
   assertNonEmptyString,
   assertPageMetaAllowUnknownTotal,
   assertStringSlicesEqual,
@@ -18,9 +23,10 @@ import {
   txIDsFromTransactions,
 } from "../support.js";
 import { assertContractInfoFixturesFetched, assertErc4626FixturesInAccountInfo } from "./evm.js";
+import { getFiatJSONOrSkip } from "./common.js";
 
 import type { TestContext } from "../context.js";
-import type { AddressResponse, ContractInfoResponse, TxResponse, UtxoResponse, WsBlockHashResponse } from "../types.js";
+import type { AddressResponse, AvailableVsCurrenciesResponse, ContractInfoResponse, FiatTickerResponse, FiatTickersResponse, TxResponse, UtxoResponse, WsBlockHashResponse } from "../types.js";
 
 type TestFunction = (ctx: TestContext) => Promise<void>;
 
@@ -200,6 +206,95 @@ async function testWsGetContractInfoEVM(ctx: TestContext) {
   });
 }
 
+async function testWsGetCurrentFiatRates(ctx: TestContext) {
+  // ws getCurrentFiatRates mirrors HTTP /api/v2/tickers/ (current, unfiltered).
+  const ws = await ctx.wsCall<FiatTickerResponse>(
+    "getCurrentFiatRates",
+    {},
+    "#/components/schemas/FiatTicker",
+  );
+  assertFiatTickerPayload(ws, "WsGetCurrentFiatRates");
+  assertFiatTickerFresh(ws, "WsGetCurrentFiatRates", fiatMaxAgeSeconds());
+
+  // HTTP-WS parity: both call GetCurrentFiatRates on the same instance, so they expose the
+  // same currency set. Values/ts can differ if a refresh lands between the two calls, so
+  // compare the stable currency keys rather than the time-sensitive values.
+  const http = await ctx.sampleFiatTickerOrSkip();
+  assertStringSlicesEqual(
+    Object.keys(ws.rates ?? {}).sort(),
+    Object.keys(http.rates ?? {}).sort(),
+    "WsGetCurrentFiatRates parity currencies",
+  );
+}
+
+async function testWsGetFiatRatesForTimestamps(ctx: TestContext) {
+  const ticker = await ctx.sampleFiatTickerOrSkip();
+  const ts = ticker.ts;
+  if (!positiveNumber(ts)) {
+    throw new SkipTest("fiat sample timestamp unavailable");
+  }
+
+  // Pick a currency that exists at ts (currencies available now may not exist historically).
+  const list = await getFiatJSONOrSkip(ctx, "/api/v2/tickers-list/", `/api/v2/tickers-list/?timestamp=${ts}`);
+  const currency = list.available_currencies?.[0]?.trim().toLowerCase();
+  if (!currency) {
+    throw new SkipTest(`no available fiat currencies for timestamp ${ts}`);
+  }
+
+  const ws = await ctx.wsCall<FiatTickersResponse>(
+    "getFiatRatesForTimestamps",
+    { timestamps: [ts], currencies: [currency] },
+    "#/components/schemas/FiatTickers",
+  );
+  if (!Array.isArray(ws.tickers) || ws.tickers.length !== 1) {
+    throw new Error(`WsGetFiatRatesForTimestamps expected 1 ticker, got ${ws.tickers?.length ?? 0}`);
+  }
+  assertFiatTickerPayload(ws.tickers[0], "WsGetFiatRatesForTimestamps");
+
+  // HTTP-WS parity vs /api/v2/multi-tickers/ (immutable historical data → exact match).
+  const http = await getFiatJSONOrSkip(
+    ctx,
+    "/api/v2/multi-tickers/",
+    `/api/v2/multi-tickers/?timestamp=${ts}&currency=${encodeURIComponent(currency)}`,
+  );
+  if (http.length !== 1) {
+    throw new Error(`WsGetFiatRatesForTimestamps HTTP expected 1 ticker, got ${http.length}`);
+  }
+  assertFiatTickerEquals(ws.tickers[0], http[0], "WsGetFiatRatesForTimestamps parity");
+}
+
+async function testWsGetFiatRatesTickersList(ctx: TestContext) {
+  const ticker = await ctx.sampleFiatTickerOrSkip();
+  const ts = ticker.ts;
+  if (!positiveNumber(ts)) {
+    throw new SkipTest("fiat sample timestamp unavailable");
+  }
+
+  const ws = await ctx.wsCall<AvailableVsCurrenciesResponse>(
+    "getFiatRatesTickersList",
+    { timestamp: ts },
+    "#/components/schemas/AvailableVsCurrencies",
+  );
+  if (!positiveNumber(ws.ts)) {
+    throw new Error(`WsGetFiatRatesTickersList invalid timestamp: ${String(ws.ts)}`);
+  }
+  if (!Array.isArray(ws.available_currencies) || ws.available_currencies.length === 0) {
+    throw new Error("WsGetFiatRatesTickersList returned no currencies");
+  }
+  ws.available_currencies.forEach((currency) => assertNonEmptyString(currency, "WsGetFiatRatesTickersList.available_currencies"));
+
+  // HTTP-WS parity vs /api/v2/tickers-list/.
+  const http = await getFiatJSONOrSkip(ctx, "/api/v2/tickers-list/", `/api/v2/tickers-list/?timestamp=${ts}`);
+  if (ws.ts !== http.ts) {
+    throw new Error(`WsGetFiatRatesTickersList ts mismatch: ws=${ws.ts ?? 0} http=${http.ts ?? 0}`);
+  }
+  assertStringSlicesEqual(
+    [...ws.available_currencies].sort(),
+    [...(http.available_currencies ?? [])].sort(),
+    "WsGetFiatRatesTickersList parity currencies",
+  );
+}
+
 export const wsOnlyTests: Record<string, TestFunction> = {
   WsGetInfo: testWsGetInfo,
   WsGetBlockHash: testWsGetBlockHash,
@@ -207,6 +302,9 @@ export const wsOnlyTests: Record<string, TestFunction> = {
   WsGetAccountInfo: testWsGetAccountInfo,
   WsGetAccountInfoBasic: testWsGetAccountInfoBasic,
   WsPing: testWsPing,
+  WsGetCurrentFiatRates: testWsGetCurrentFiatRates,
+  WsGetFiatRatesForTimestamps: testWsGetFiatRatesForTimestamps,
+  WsGetFiatRatesTickersList: testWsGetFiatRatesTickersList,
 };
 
 export const wsUTXOTests: Record<string, TestFunction> = {

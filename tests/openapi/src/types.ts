@@ -8,6 +8,7 @@ export type TxResponse = GetResponse<"/api/v2/tx/{txid}">;
 export type AddressResponse = components["schemas"]["Address"];
 export type UtxoResponse = components["schemas"]["Utxo"];
 export type FiatTickerResponse = components["schemas"]["FiatTicker"];
+export type FiatTickersResponse = components["schemas"]["FiatTickers"];
 export type AvailableVsCurrenciesResponse = components["schemas"]["AvailableVsCurrencies"];
 export type ContractInfoResponse = components["schemas"]["ContractInfoResult"];
 export type TokenResponse = components["schemas"]["Token"];
