@@ -217,8 +217,9 @@ export function assertFiatTickerFresh(payload: FiatTickerResponse, context: stri
   if (ageSeconds > maxAgeSeconds) {
     throw new Error(`${context} ticker is stale: ts=${payload.ts} is ${ageSeconds}s old (max ${maxAgeSeconds}s)`);
   }
-  // tolerate small clock skew; flag only an egregiously future timestamp
-  if (ageSeconds < -maxAgeSeconds) {
+  // tolerate small clock skew (5 minutes); flag only an egregiously future timestamp
+  const maxFutureSkewSeconds = Math.min(maxAgeSeconds, 300);
+  if (ageSeconds < -maxFutureSkewSeconds) {
     throw new Error(`${context} ticker timestamp is in the future: ts=${payload.ts} (now=${nowSeconds})`);
   }
 }
