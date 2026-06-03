@@ -128,6 +128,17 @@ export function loadCoinConfig(coin: string) {
   return JSON.parse(raw) as CoinConfig;
 }
 
+// Golomb block-filter settings for a coin, read from its config (the source of truth for the
+// instance's BlockFilterScripts/BlockGolombFilterP). scriptType is "" when block filters are
+// not configured, which callers use to skip the ws filter tests.
+export function blockFilterConfig(coin: string) {
+  const params = loadCoinConfig(coin).blockbook?.block_chain?.additional_params ?? {};
+  return {
+    scriptType: (params.block_filter_scripts ?? "").trim(),
+    golombP: params.block_golomb_filter_p ?? 0,
+  };
+}
+
 function firstNonEmptyEnv(keys: string[]) {
   for (const key of keys) {
     const value = process.env[key]?.trim();

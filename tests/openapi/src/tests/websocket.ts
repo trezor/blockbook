@@ -1,9 +1,10 @@
-import { addressPage, addressPageSize, evmHistoryPage, evmHistoryPageSize } from "../constants.js";
-import { fiatMaxAgeSeconds } from "../config.js";
+import { addressPage, addressPageSize, blockPageSize, evmHistoryPage, evmHistoryPageSize } from "../constants.js";
+import { blockFilterConfig, fiatMaxAgeSeconds } from "../config.js";
 import { SkipTest } from "../errors.js";
 import {
   assertAddressTxidsPayload,
   assertBasicAccountInfoPayload,
+  assertBigIntString,
   assertComparableAccountPages,
   assertEqualString,
   assertEVMTokenBalancesHaveHoldingsFields,
@@ -26,7 +27,7 @@ import { assertContractInfoFixturesFetched, assertErc4626FixturesInAccountInfo }
 import { getFiatJSONOrSkip } from "./common.js";
 
 import type { TestContext } from "../context.js";
-import type { AddressResponse, AvailableVsCurrenciesResponse, ContractInfoResponse, FiatTickerResponse, FiatTickersResponse, TxResponse, UtxoResponse, WsBlockHashResponse } from "../types.js";
+import type { AddressResponse, AvailableVsCurrenciesResponse, BalanceHistoryResponse, BlockResponse, ContractInfoResponse, FiatTickerResponse, FiatTickersResponse, TxResponse, UtxoResponse, WsBlockHashResponse } from "../types.js";
 
 type TestFunction = (ctx: TestContext) => Promise<void>;
 
@@ -295,6 +296,227 @@ async function testWsGetFiatRatesTickersList(ctx: TestContext) {
   );
 }
 
+// Re-raise a ws error as a SkipTest when its message matches a known "unsupported on this
+// chain/config" condition (e.g. ExtendedIndex off, balance history for a contract); otherwise
+// rethrow so genuine failures still surface. Returns `never` so callers can rely on it throwing.
+function skipWsUnsupportedOrRethrow(error: unknown, needles: string[], reason: string): never {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (needles.some((needle) => message.includes(needle))) {
+    throw new SkipTest(reason);
+  }
+  throw error;
+}
+
+async function testWsGetBlock(ctx: TestContext) {
+  const sample = await ctx.getSampleIndexedBlock();
+  if (!sample) {
+    const status = await ctx.getStatus();
+    throw new Error(`missing indexed block hash in recent height window near ${status.bestHeight ?? 0}`);
+  }
+
+  let block: BlockResponse;
+  try {
+    block = await ctx.wsCall<BlockResponse>(
+      "getBlock",
+      { id: sample.hash, page: 1, pageSize: blockPageSize },
+      "#/components/schemas/Block",
+    );
+  } catch (error) {
+    // ws getBlock is gated on ExtendedIndex flag; skip on instances where it is not enabled.
+    skipWsUnsupportedOrRethrow(error, ["not supported"], "ws getBlock requires ExtendedIndex (not enabled)");
+  }
+
+  assertEqualString(block.hash, sample.hash, "WsGetBlock hash");
+  if (block.height !== sample.height) {
+    throw new Error(`WsGetBlock height mismatch: got ${block.height}, want ${sample.height}`);
+  }
+  if (!Array.isArray(block.txs)) {
+    throw new Error("WsGetBlock response missing txs field");
+  }
+}
+
+async function testWsGetBalanceHistory(ctx: TestContext) {
+  const address = await ctx.sampleAddressOrSkip();
+  const txid = await ctx.sampleTxIDOrSkip();
+  const tx = await ctx.getTransactionByID(txid, false);
+
+  // An unbounded query (from=0,to=0) aggregates the address's ENTIRE history, which can exceed
+  // the ws timeout on busy chains (e.g. tron). The sample address comes from this recent tx
+  // (within txSearchWindow=12 blocks of the tip), so bound the window to that block onward:
+  // the server scans only ~a dozen blocks and the result still contains the sampled tx.
+  const blockTime = tx?.blockTime;
+  if (!positiveNumber(blockTime)) {
+    throw new SkipTest(`sample tx ${txid} has no block time to bound balance history`);
+  }
+  const from = blockTime - 1;
+  const to = blockTime + 24 * 3600; // clamps to best height; window is bounded by recent blocks
+
+  let history: BalanceHistoryResponse[];
+  try {
+    history = await ctx.wsCall<BalanceHistoryResponse[]>("getBalanceHistory", { descriptor: address, from, to });
+  } catch (error) {
+    // EVM rejects balance history for contract addresses; skip when the sample is a contract.
+    skipWsUnsupportedOrRethrow(error, ["not allowed"], `ws getBalanceHistory not allowed for ${address} (contract)`);
+  }
+
+  if (!Array.isArray(history)) {
+    throw new Error("WsGetBalanceHistory response is not an array");
+  }
+  // An empty history is valid (address with no activity in range); validate any entries present.
+  history.forEach((entry, i) => {
+    ctx.contract.validateSchemaRef("#/components/schemas/BalanceHistory", `WsGetBalanceHistory[${i}]`, entry);
+    if (!positiveNumber(entry.time)) {
+      throw new Error(`WsGetBalanceHistory[${i}] invalid time: ${String(entry.time)}`);
+    }
+    if (!Number.isInteger(entry.txs) || entry.txs < 0) {
+      throw new Error(`WsGetBalanceHistory[${i}] invalid txs: ${String(entry.txs)}`);
+    }
+  });
+}
+
+async function testWsGetTransactionSpecific(ctx: TestContext) {
+  const txid = await ctx.sampleTxIDOrSkip();
+  // Response is chain-specific free-form JSON (no schema ref to validate against).
+  const specific = await ctx.wsCall<Record<string, unknown>>("getTransactionSpecific", { txid });
+  if (!isObject(specific) || Object.keys(specific).length === 0) {
+    throw new Error(`WsGetTransactionSpecific empty response for ${txid}`);
+  }
+  const rawTxid = specific.txid;
+  if (typeof rawTxid === "string" && rawTxid.trim() !== "" && rawTxid.toLowerCase() !== txid.toLowerCase()) {
+    throw new Error(`WsGetTransactionSpecific txid mismatch: got ${rawTxid}, want ${txid}`);
+  }
+}
+
+async function testWsLongTermFeeRate(ctx: TestContext) {
+  // UTXO-only method; gated to UTXO coins via the ws-utxo capability group.
+  // No response schema exists in openapi.yaml, so validate structurally.
+  const res = await ctx.wsCall<{ feePerUnit?: string; blocks?: number }>("longTermFeeRate", {});
+  assertBigIntString(res.feePerUnit, "WsLongTermFeeRate.feePerUnit");
+  if (!Number.isInteger(res.blocks) || (res.blocks ?? -1) < 0) {
+    throw new Error(`WsLongTermFeeRate invalid blocks: ${String(res.blocks)}`);
+  }
+}
+
+// The Golomb-filter responses (getBlockFilter/getBlockFiltersBatch/getMempoolFilters) are
+// anonymous server structs with no openapi schema, so validate the shared P/M/zeroedKey header
+// structurally. P is cross-checked against the coin's configured block_golomb_filter_p.
+function assertGolombParams(res: { P?: number; M?: number; zeroedKey?: boolean }, golombP: number, context: string) {
+  if (!Number.isInteger(res.P) || (res.P ?? 0) <= 0) {
+    throw new Error(`${context} invalid P: ${String(res.P)}`);
+  }
+  if (golombP > 0 && res.P !== golombP) {
+    throw new Error(`${context} P mismatch: got ${res.P}, want ${golombP}`);
+  }
+  if (!Number.isInteger(res.M) || (res.M ?? 0) <= 0) {
+    throw new Error(`${context} invalid M: ${String(res.M)}`);
+  }
+  if (typeof res.zeroedKey !== "boolean") {
+    throw new Error(`${context} invalid zeroedKey: ${String(res.zeroedKey)}`);
+  }
+}
+
+type WsBlockFilterRes = { P?: number; M?: number; zeroedKey?: boolean; blockFilter?: string };
+type WsBlockFiltersBatchRes = { P?: number; M?: number; zeroedKey?: boolean; blockFiltersBatch?: string[] };
+type WsMempoolFiltersRes = { P?: number; M?: number; zeroedKey?: boolean; entries?: Record<string, string> };
+
+async function testWsGetBlockFilter(ctx: TestContext) {
+  const { scriptType, golombP } = blockFilterConfig(ctx.coin);
+  if (!scriptType) {
+    throw new SkipTest(`${ctx.coin} has no block_filter_scripts configured`);
+  }
+  const sample = await ctx.getSampleIndexedBlock();
+  if (!sample) {
+    const status = await ctx.getStatus();
+    throw new Error(`missing indexed block near ${status.bestHeight ?? 0}`);
+  }
+
+  let res: WsBlockFilterRes;
+  try {
+    res = await ctx.wsCall<WsBlockFilterRes>("getBlockFilter", { scriptType, blockHash: sample.hash });
+  } catch (error) {
+    skipWsUnsupportedOrRethrow(error, ["not supported", "unsupported script"], `ws getBlockFilter unsupported on ${ctx.coin}`);
+  }
+  assertGolombParams(res, golombP, "WsGetBlockFilter");
+  if (typeof res.blockFilter !== "string" || res.blockFilter.trim() === "" || !/^[0-9a-f]+$/i.test(res.blockFilter)) {
+    throw new Error(`WsGetBlockFilter blockFilter is not a non-empty hex string: ${String(res.blockFilter)}`);
+  }
+}
+
+async function testWsGetBlockFiltersBatch(ctx: TestContext) {
+  const { scriptType, golombP } = blockFilterConfig(ctx.coin);
+  if (!scriptType) {
+    throw new SkipTest(`${ctx.coin} has no block_filter_scripts configured`);
+  }
+  const status = await ctx.getStatus();
+  const best = status.bestHeight ?? 0;
+  const pageSize = 5;
+  // The batch returns filters forward from the anchor, so anchor a few blocks behind the tip
+  // to guarantee a non-empty result.
+  const anchorHeight = Math.max(1, best - (pageSize + 2));
+  const anchorHash = await ctx.getBlockHashForHeight(anchorHeight, false);
+  if (!anchorHash) {
+    throw new SkipTest(`no block hash for height ${anchorHeight}`);
+  }
+
+  let res: WsBlockFiltersBatchRes;
+  try {
+    res = await ctx.wsCall<WsBlockFiltersBatchRes>(
+      "getBlockFiltersBatch",
+      { scriptType, bestKnownBlockHash: anchorHash, pageSize },
+    );
+  } catch (error) {
+    skipWsUnsupportedOrRethrow(error, ["not supported", "unsupported script"], `ws getBlockFiltersBatch unsupported on ${ctx.coin}`);
+  }
+  assertGolombParams(res, golombP, "WsGetBlockFiltersBatch");
+  const batch = res.blockFiltersBatch;
+  if (!Array.isArray(batch) || batch.length === 0 || batch.length > pageSize) {
+    throw new Error(`WsGetBlockFiltersBatch expected 1..${pageSize} entries, got ${Array.isArray(batch) ? batch.length : "non-array"}`);
+  }
+  batch.forEach((entry, i) => {
+    // entry format: "<height>:<blockHash>:<filterHex>"
+    const parts = entry.split(":");
+    if (parts.length !== 3) {
+      throw new Error(`WsGetBlockFiltersBatch[${i}] malformed entry: ${entry}`);
+    }
+    const [heightStr, blockHash, filter] = parts;
+    if (!/^[0-9]+$/.test(heightStr)) {
+      throw new Error(`WsGetBlockFiltersBatch[${i}] invalid height: ${heightStr}`);
+    }
+    if (!/^[0-9a-f]+$/i.test(blockHash)) {
+      throw new Error(`WsGetBlockFiltersBatch[${i}] invalid blockHash: ${blockHash}`);
+    }
+    if (!/^[0-9a-f]*$/i.test(filter)) {
+      throw new Error(`WsGetBlockFiltersBatch[${i}] invalid filter hex: ${filter}`);
+    }
+  });
+}
+
+async function testWsGetMempoolFilters(ctx: TestContext) {
+  const { scriptType, golombP } = blockFilterConfig(ctx.coin);
+  if (!scriptType) {
+    throw new SkipTest(`${ctx.coin} has no block_filter_scripts configured`);
+  }
+
+  let res: WsMempoolFiltersRes;
+  try {
+    res = await ctx.wsCall<WsMempoolFiltersRes>("getMempoolFilters", { scriptType, fromTimestamp: 0 });
+  } catch (error) {
+    skipWsUnsupportedOrRethrow(error, ["not supported", "unsupported script"], `ws getMempoolFilters unsupported on ${ctx.coin}`);
+  }
+  assertGolombParams(res, golombP, "WsGetMempoolFilters");
+  const entries = res.entries;
+  if (entries === null || typeof entries !== "object" || Array.isArray(entries)) {
+    throw new Error(`WsGetMempoolFilters entries is not an object: ${String(entries)}`);
+  }
+  // entries may be empty (no matching mempool txs at call time); validate any present.
+  for (const [txid, filter] of Object.entries(entries)) {
+    assertNonEmptyString(txid, "WsGetMempoolFilters.entries.txid");
+    if (typeof filter !== "string" || !/^[0-9a-f]+$/i.test(filter)) {
+      throw new Error(`WsGetMempoolFilters entry ${txid} is not a hex filter: ${String(filter)}`);
+    }
+  }
+}
+
 export const wsOnlyTests: Record<string, TestFunction> = {
   WsGetInfo: testWsGetInfo,
   WsGetBlockHash: testWsGetBlockHash,
@@ -305,10 +527,17 @@ export const wsOnlyTests: Record<string, TestFunction> = {
   WsGetCurrentFiatRates: testWsGetCurrentFiatRates,
   WsGetFiatRatesForTimestamps: testWsGetFiatRatesForTimestamps,
   WsGetFiatRatesTickersList: testWsGetFiatRatesTickersList,
+  WsGetBlock: testWsGetBlock,
+  WsGetBalanceHistory: testWsGetBalanceHistory,
+  WsGetTransactionSpecific: testWsGetTransactionSpecific,
 };
 
 export const wsUTXOTests: Record<string, TestFunction> = {
   WsGetAccountUtxo: testWsGetAccountUtxo,
+  WsLongTermFeeRate: testWsLongTermFeeRate,
+  WsGetBlockFilter: testWsGetBlockFilter,
+  WsGetBlockFiltersBatch: testWsGetBlockFiltersBatch,
+  WsGetMempoolFilters: testWsGetMempoolFilters,
 };
 
 export const wsEVMTests: Record<string, TestFunction> = {
