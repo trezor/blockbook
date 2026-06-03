@@ -5357,8 +5357,8 @@
     ]
   },
   "timezone": "",
-  "title": "Blockbook (new)",
-  "uid": "blockbook-new",
+  "title": "Blockbook v2",
+  "uid": "blockbook-v2",
   "version": 1,
   "weekStart": ""
 }

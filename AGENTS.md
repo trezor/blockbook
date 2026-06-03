@@ -61,6 +61,8 @@ Prometheus metrics and the Grafana dashboard share one source of truth, `configs
   `x-query-key` per target) to `configs/grafana/template.json`, then its `title`/`description`/`queries`
   under that `x-panel-key` in `configs/grafana/panels.yaml` (queries keyed by `x-query-key`, each with
   `promql`/`legend`; write metric names as `{{name:<key>}}`).
+- Prefer stable panel keys like `<section>.<subject>[_stat]` (for example `rpc.request_duration_p95`)
+  and query keys that name the plotted series (`requests`, `errors`, `p95`, `total`, `threshold`).
 - After any of these, run `python3 contrib/scripts/render_grafana.py` (CI gates with `--check`).
 
 ## Facts to keep in mind to avoid regressions and waste
