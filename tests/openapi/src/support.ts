@@ -199,9 +199,27 @@ export function assertFiatTickerPayload(payload: FiatTickerResponse, context: st
   }
   for (const [currency, rate] of Object.entries(payload.rates)) {
     assertNonEmptyString(currency, `${context}.rates.currency`);
-    if (rate === 0) {
-      throw new Error(`${context} returned zero rate for currency ${currency}`);
+    if (!(rate > 0)) {
+      throw new Error(`${context} returned non-positive rate ${rate} for currency ${currency}`);
     }
+  }
+}
+
+// assertFiatTickerFresh fails when the current ticker's timestamp is older than maxAgeSeconds,
+// flagging a stalled fiat-rates feed. Only meaningful for the live current ticker (no timestamp
+// query param) — do not apply to historical/multi-tickers queries.
+export function assertFiatTickerFresh(payload: FiatTickerResponse, context: string, maxAgeSeconds: number) {
+  if (!positiveNumber(payload.ts)) {
+    throw new Error(`${context} invalid timestamp: ${String(payload.ts)}`);
+  }
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const ageSeconds = nowSeconds - payload.ts; // ts is Unix seconds (api/types.go FiatTicker.ts)
+  if (ageSeconds > maxAgeSeconds) {
+    throw new Error(`${context} ticker is stale: ts=${payload.ts} is ${ageSeconds}s old (max ${maxAgeSeconds}s)`);
+  }
+  // tolerate small clock skew; flag only an egregiously future timestamp
+  if (ageSeconds < -maxAgeSeconds) {
+    throw new Error(`${context} ticker timestamp is in the future: ts=${payload.ts} (now=${nowSeconds})`);
   }
 }
 

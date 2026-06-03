@@ -305,7 +305,7 @@ export class TestContext {
     }
 
     this.sampleFiatResolved = true;
-    const path = "/api/v2/tickers/?currency=usd";
+    const path = "/api/v2/tickers/";
     const result = await this.client.getMaybe("/api/v2/tickers/", path);
     if (isFiatDataUnavailable(result.status, result.body)) {
       throw new SkipTest("fiat ticker data currently unavailable");

@@ -12,6 +12,22 @@ export function loadTestsConfig() {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, "tests", "tests.json"), "utf8")) as TestConfig;
 }
 
+// Maximum age (seconds) a current fiat ticker may have before it is considered stale.
+// Coins refresh rates every 60s (BTC) … 900s (ETH); 2h gives margin against a transient
+// CoinGecko skip while still flagging a feed stalled for hours.
+export const DEFAULT_FIAT_MAX_AGE_SECONDS = 7200; // 2h
+
+export function fiatMaxAgeSeconds() {
+  const raw = process.env.BB_FIAT_MAX_AGE_SECONDS?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_FIAT_MAX_AGE_SECONDS;
+}
+
 export function resolveSelectedCoins(config: TestConfig) {
   const raw = process.env.OPENAPI_COINS?.trim();
   const requested = raw

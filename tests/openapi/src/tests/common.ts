@@ -7,6 +7,7 @@ import {
   assertAddressTxsPayload,
   assertBasicAccountInfoPayload,
   assertEqualString,
+  assertFiatTickerFresh,
   assertFiatTickerPayload,
   assertNonEmptyString,
   buildAddressDetailsPath,
@@ -16,6 +17,7 @@ import {
   isObject,
   positiveNumber,
 } from "../support.js";
+import { fiatMaxAgeSeconds } from "../config.js";
 
 import type { TestContext } from "../context.js";
 
@@ -109,15 +111,11 @@ async function testGetAddress(ctx: TestContext) {
 }
 
 async function testGetCurrentFiatRates(ctx: TestContext) {
+  // sampleFiatTickerOrSkip fetches the unfiltered /api/v2/tickers/, so this verifies the
+  // full currency map (e.g. cny, eur, usd): non-empty, every rate > 0, and timestamp fresh.
   const ticker = await ctx.sampleFiatTickerOrSkip();
   assertFiatTickerPayload(ticker, "GetCurrentFiatRates");
-  const usd = ticker.rates?.usd;
-  if (usd === undefined) {
-    throw new Error("GetCurrentFiatRates missing requested usd rate");
-  }
-  if (usd === 0) {
-    throw new Error("GetCurrentFiatRates usd rate must not be zero");
-  }
+  assertFiatTickerFresh(ticker, "GetCurrentFiatRates", fiatMaxAgeSeconds());
 }
 
 async function testGetTickersList(ctx: TestContext) {
