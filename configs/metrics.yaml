@@ -1,0 +1,306 @@
+# Single source of truth for Blockbook prometheus metrics.
+#
+# Consumers:
+#   - common/metrics.go        : embedded via go:embed, reflection-populated into the Metrics struct at startup
+#   - contrib/scripts/render_grafana.py : renders configs/grafana_template.json -> configs/grafana.json
+#
+# Each entry is keyed by a STABLE logical id. The dashboard template references metrics
+# by this key, so renaming the prometheus `name` propagates to Go and Grafana without
+# touching the template. Never rename a key; rename its `name:` instead.
+#
+# type: counter | counter_vec | gauge | gauge_vec | histogram | histogram_vec
+# labels:  required for *_vec types, forbidden otherwise
+# buckets: required for histogram/histogram_vec, forbidden otherwise
+
+prefix: blockbook_
+metrics:
+  websocket_requests:
+    name: blockbook_websocket_requests
+    type: counter_vec
+    help: Total number of websocket requests by method and status
+    labels: [method, status]
+  websocket_subscribes:
+    name: blockbook_websocket_subscribes
+    type: gauge_vec
+    help: Number of websocket subscriptions by method
+    labels: [method]
+  websocket_clients:
+    name: blockbook_websocket_clients
+    type: gauge
+    help: Number of currently connected websocket clients
+  websocket_req_duration:
+    name: blockbook_websocket_req_duration
+    type: histogram_vec
+    help: Websocket request duration by method (in microseconds)
+    labels: [method]
+    buckets: [10, 100, 1000, 10000, 100000, 1000000, 100000000]
+  websocket_channel_closes:
+    name: blockbook_websocket_channel_closes
+    type: counter_vec
+    help: Total number of websocket channel closes by reason
+    labels: [reason]
+  websocket_unknown_methods:
+    name: blockbook_websocket_unknown_methods
+    type: counter_vec
+    help: Total number of websocket requests with unknown method
+    labels: [method]
+  websocket_addr_notifications:
+    name: blockbook_websocket_addr_notifications
+    type: counter_vec
+    help: Total number of per-address websocket tx notifications by source
+    labels: [source]
+  websocket_new_block_txs:
+    name: blockbook_websocket_new_block_txs
+    type: counter_vec
+    help: Total number of websocket newBlockTxs events by stage and status
+    labels: [stage, status]
+  websocket_new_block_txs_duration_seconds:
+    name: blockbook_websocket_new_block_txs_duration_seconds
+    type: histogram_vec
+    help: Duration of websocket newBlockTxs processing stages in seconds
+    labels: [stage]
+    buckets: [0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10]
+  balance_history_fiat_duration_seconds:
+    name: blockbook_balance_history_fiat_duration_seconds
+    type: histogram_vec
+    help: Duration of balance history fiat lookup stage by request path and mode
+    labels: [path, mode, status]
+    buckets: [0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20]
+  balance_history_fiat_fallback_total:
+    name: blockbook_balance_history_fiat_fallback_total
+    type: counter_vec
+    help: Number of balance history fiat lookup fallbacks by path and reason
+    labels: [path, reason]
+  balance_history_points:
+    name: blockbook_balance_history_points
+    type: histogram_vec
+    help: Number of output points in balance history responses by request path
+    labels: [path]
+    buckets: [1, 2, 5, 10, 20, 40, 80, 160, 320, 640, 1280]
+  websocket_eth_receipt:
+    name: blockbook_websocket_eth_receipt
+    type: counter_vec
+    help: Total number of websocket Ethereum receipt enrichment outcomes
+    labels: [status]
+  websocket_new_block_txs_subscriptions:
+    name: blockbook_websocket_new_block_txs_subscriptions
+    type: gauge
+    help: Number of websocket address subscriptions with newBlockTxs enabled
+  index_resync_duration:
+    name: blockbook_index_resync_duration
+    type: histogram
+    help: Duration of index resync operation (in milliseconds)
+    buckets: [10, 100, 500, 1000, 2000, 5000, 10000]
+  mempool_resync_duration:
+    name: blockbook_mempool_resync_duration
+    type: histogram
+    help: Duration of mempool resync operation (in milliseconds)
+    buckets: [10, 100, 500, 1000, 2000, 5000, 10000]
+  mempool_resync_throughput_txs_per_second:
+    name: blockbook_mempool_resync_throughput_txs_per_second
+    type: histogram_vec
+    help: Effective mempool resync throughput in transactions per second
+    labels: [chain, status]
+    buckets: [0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000]
+  txcache_efficiency:
+    name: blockbook_txcache_efficiency
+    type: counter_vec
+    help: Efficiency of txCache
+    labels: [status]
+  rpc_latency:
+    name: blockbook_rpc_latency
+    type: histogram_vec
+    help: Latency of blockchain RPC by method (in milliseconds)
+    labels: [method, error]
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000]
+  rpc_fallback_calls_total:
+    name: blockbook_rpc_fallback_calls_total
+    type: counter_vec
+    help: Total number of chain data fallback path uses by component and reason
+    labels: [component, reason]
+  eth_call_requests:
+    name: blockbook_eth_call_requests
+    type: counter_vec
+    help: Total number of eth_call requests by mode
+    labels: [mode]
+  eth_call_errors:
+    name: blockbook_eth_call_errors
+    type: counter_vec
+    help: Total number of eth_call errors by mode and type
+    labels: [mode, type]
+  eth_call_batch_size:
+    name: blockbook_eth_call_batch_size
+    type: histogram
+    help: Number of eth_call items per batch request
+    buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+  eth_call_contract_info_requests:
+    name: blockbook_eth_call_contract_info_requests
+    type: counter_vec
+    help: Total number of eth_call requests for contract info fields
+    labels: [field]
+  eth_call_token_uri_requests:
+    name: blockbook_eth_call_token_uri_requests
+    type: counter_vec
+    help: Total number of eth_call requests for token URI lookups
+    labels: [method]
+  eth_call_staking_pool_requests:
+    name: blockbook_eth_call_staking_pool_requests
+    type: counter_vec
+    help: Total number of eth_call requests for staking pool lookups
+    labels: [field]
+  index_resync_errors:
+    name: blockbook_index_resync_errors
+    type: counter_vec
+    help: Number of errors of index resync operation
+    labels: [error]
+  index_block_not_found_retries:
+    name: blockbook_index_block_not_found_retries
+    type: counter
+    help: Number of transient ErrBlockNotFound responses from the backend during sync (load-balanced RPC routing skew, indexer ahead of backend, etc.)
+  index_reorg_events:
+    name: blockbook_index_reorg_events
+    type: counter_vec
+    help: 'Chain reorganization events detected during sync, by detection path (fork: in-stream prevHash mismatch; resync: missing block hash triggered sync restart; disconnect: local-best fork triggered DB rollback)'
+    labels: [type]
+  index_sync_yields:
+    name: blockbook_index_sync_yields
+    type: counter_vec
+    help: 'Number of times sync yielded to the outer resync machinery for non-reorg reasons (reason=deadline: MaxStallDuration elapsed in retry loop; reason=probe_failed: chain-state probe failed for the configured streak)'
+    labels: [reason]
+  index_db_size:
+    name: blockbook_index_db_size
+    type: gauge
+    help: Size of index database (in bytes)
+  explorer_views:
+    name: blockbook_explorer_views
+    type: counter_vec
+    help: Number of explorer views
+    labels: [action]
+  mempool_size:
+    name: blockbook_mempool_size
+    type: gauge
+    help: Mempool size (number of transactions)
+  estimated_fee:
+    name: blockbook_estimated_fee
+    type: gauge_vec
+    help: Estimated fee per byte (gas) for number of blocks
+    labels: [blocks, conservative]
+  avg_block_period:
+    name: blockbook_avg_block_period
+    type: gauge
+    help: Average period of mining of last 100 blocks in seconds
+  sync_block_stats:
+    name: blockbook_sync_block_stats
+    type: gauge_vec
+    help: Per-interval block stats for bulk sync and per-block stats at chain tip
+    labels: [scope, kind]
+  sync_hotness_stats:
+    name: blockbook_sync_hotness_stats
+    type: gauge_vec
+    help: Hot address stats for bulk sync intervals and per-block chain tip processing (Ethereum-type only)
+    labels: [scope, kind]
+  addr_contracts_cache_entries:
+    name: blockbook_addr_contracts_cache_entries
+    type: gauge
+    help: Number of cached addressContracts entries
+  addr_contracts_cache_bytes:
+    name: blockbook_addr_contracts_cache_bytes
+    type: gauge
+    help: Estimated bytes in the addressContracts cache
+  addr_contracts_cache_hits_total:
+    name: blockbook_addr_contracts_cache_hits_total
+    type: counter
+    help: Total number of addressContracts cache hits
+  addr_contracts_cache_misses_total:
+    name: blockbook_addr_contracts_cache_misses_total
+    type: counter
+    help: Total number of addressContracts cache misses
+  addr_contracts_cache_flush_total:
+    name: blockbook_addr_contracts_cache_flush_total
+    type: counter_vec
+    help: Total number of addressContracts cache flushes by reason
+    labels: [reason]
+  dbcolumn_rows:
+    name: blockbook_dbcolumn_rows
+    type: gauge_vec
+    help: Number of rows in db column
+    labels: [column]
+  dbcolumn_size:
+    name: blockbook_dbcolumn_size
+    type: gauge_vec
+    help: Size of db column (in bytes)
+    labels: [column]
+  app_info:
+    name: blockbook_app_info
+    type: gauge_vec
+    help: Information about blockbook and backend application versions
+    labels: [blockbook_version, blockbook_commit, blockbook_buildtime, backend_version, backend_subversion, backend_protocol_version]
+  best_height:
+    name: blockbook_best_height
+    type: gauge
+    help: Block height in Blockbook
+  synchronized:
+    name: blockbook_synchronized
+    type: gauge
+    help: Whether Blockbook reports itself synchronized with the backend (1) or not (0); mirrors /api/status inSync. A sustained 0 outside initial sync means the index is not keeping up with the tip — e.g. a silently stalled tip feed.
+  backend_best_height:
+    name: blockbook_backend_best_height
+    type: gauge
+    help: Block height in backend
+  tip_age_seconds:
+    name: blockbook_tip_age_seconds
+    type: gauge
+    help: Seconds since the backend's best height was last observed to advance
+  backend_subscription_age_seconds:
+    name: blockbook_backend_subscription_age_seconds
+    type: gauge
+    help: Seconds since the backend newHeads push-subscription last delivered a notification (high or growing values indicate a silently stalled subscription, e.g. a load balancer that dropped the upstream without erroring)
+  backend_subscription_events:
+    name: blockbook_backend_subscription_events
+    type: counter_vec
+    help: Backend tip-feed lifecycle events by subscription (newHeads, newPendingTransactions, rpc, or zeromq for Tron) and event (error, resubscribed, resubscribe_failed, watchdog_tick, watchdog_stall, watchdog_reconnect, watchdog_reconnect_failed, watchdog_tip_advanced, watchdog_tip_rollback). watchdog_tick increments once per watchdog evaluation, so rate==0 means the watchdog goroutine stopped ticking.
+    labels: [subscription, event]
+  average_block_time_seconds:
+    name: blockbook_average_block_time_seconds
+    type: gauge
+    help: Configured average block time for the chain in seconds (0 if unavailable)
+  explorer_pending_requests:
+    name: blockbook_explorer_pending_requests
+    type: gauge_vec
+    help: Number of unfinished requests in explorer interface
+    labels: [method]
+  websocket_pending_requests:
+    name: blockbook_websocket_pending_requests
+    type: gauge_vec
+    help: Number of unfinished requests in websocket interface
+    labels: [method]
+  xpub_cache_size:
+    name: blockbook_xpub_cache_size
+    type: gauge
+    help: Number of cached xpubs
+  coingecko_requests:
+    name: blockbook_coingecko_requests
+    type: counter_vec
+    help: Total number of requests to coingecko
+    labels: [endpoint, status]
+  coingecko_range_requests:
+    name: blockbook_coingecko_range_requests
+    type: counter_vec
+    help: Total number of coingecko range queries by range kind
+    labels: [range]
+  fiat_rates_update_duration_seconds:
+    name: blockbook_fiat_rates_update_duration_seconds
+    type: histogram_vec
+    help: Duration of fiat rates downloader update stages in seconds
+    labels: [stage, status]
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300]
+  alternative_fee_provider_requests:
+    name: blockbook_alternative_fee_provider_requests
+    type: counter_vec
+    help: Total number of requests to alternative fee providers by provider and status (ok, http_<code>, network_error, decode_error)
+    labels: [provider, status]
+  eth_sync_rpc_errors:
+    name: blockbook_eth_sync_rpc_errors
+    type: counter_vec
+    help: Total number of failed Ethereum sync RPC calls by method and status (timeout, http_4xx, http_5xx, http_other, rpc, error)
+    labels: [method, status]
