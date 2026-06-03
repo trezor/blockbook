@@ -51,6 +51,18 @@ the coin config, prints a compact sync/metrics snapshot, downloads the selected 
 profile, and runs `go tool pprof -top`. Start with CPU for throughput issues and
 `--profile goroutine` for deadlock/stall investigations.
 
+## Metrics
+
+Prometheus metrics and the Grafana dashboard share one source of truth, `configs/metrics.yaml`.
+
+- **Add a metric:** add an entry to `configs/metrics.yaml` (stable key + `name`/`type`/`help`;
+  `labels` for `*_vec`, `buckets` for histograms), then a `Metrics` field in `common/metrics.go` tagged `metric:"<key>"`.
+- **Add a panel:** add the skeleton (layout/viz, new `id` + a semantic `x-panel-key`, and an
+  `x-query-key` per target) to `configs/grafana/template.json`, then its `title`/`description`/`queries`
+  under that `x-panel-key` in `configs/grafana/panels.yaml` (queries keyed by `x-query-key`, each with
+  `promql`/`legend`; write metric names as `{{name:<key>}}`).
+- After any of these, run `python3 contrib/scripts/render_grafana.py` (CI gates with `--check`).
+
 ## Facts to keep in mind to avoid regressions and waste
 
 - Blockbook instance should be able to : 

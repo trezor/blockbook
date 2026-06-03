@@ -5,16 +5,39 @@ package common
 import (
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/configs"
 	yaml "gopkg.in/yaml.v3"
 )
+
+var prometheusRegistryMu sync.Mutex
+
+func useTestPrometheusRegistry(t *testing.T) {
+	t.Helper()
+
+	prometheusRegistryMu.Lock()
+	oldRegisterer := prometheus.DefaultRegisterer
+	oldGatherer := prometheus.DefaultGatherer
+	registry := prometheus.NewRegistry()
+	prometheus.DefaultRegisterer = registry
+	prometheus.DefaultGatherer = registry
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = oldRegisterer
+		prometheus.DefaultGatherer = oldGatherer
+		prometheusRegistryMu.Unlock()
+	})
+}
 
 // TestGetMetrics verifies that every field of the Metrics struct is bound to a
 // definition in configs/metrics.yaml, of a matching type, and that the resulting
 // collectors are all constructed (non-nil) after loading.
 func TestGetMetrics(t *testing.T) {
+	useTestPrometheusRegistry(t)
+
 	m, err := GetMetrics("metrics_unittest")
 	if err != nil {
 		t.Fatalf("GetMetrics: %v", err)
