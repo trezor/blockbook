@@ -28,6 +28,14 @@ export function fiatMaxAgeSeconds() {
   return DEFAULT_FIAT_MAX_AGE_SECONDS;
 }
 
+// allowOutOfSync lets dev runs proceed against a node still catching up to its backend. Off by
+// default so CI fails loudly on a stale tip (which makes every recent-block sample unreliable).
+// Set OPENAPI_ALLOW_OUT_OF_SYNC=1 to downgrade the inSync assertion in TestContext.getStatus.
+export function allowOutOfSync() {
+  const raw = process.env.OPENAPI_ALLOW_OUT_OF_SYNC?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
 export function resolveSelectedCoins(config: TestConfig) {
   const raw = process.env.OPENAPI_COINS?.trim();
   const requested = raw
