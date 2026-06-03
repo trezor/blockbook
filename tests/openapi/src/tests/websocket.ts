@@ -424,8 +424,9 @@ async function testWsGetBlockFilter(ctx: TestContext) {
     skipWsUnsupportedOrRethrow(error, ["not supported", "unsupported script"], `ws getBlockFilter unsupported on ${ctx.coin}`);
   }
   assertGolombParams(res, golombP, "WsGetBlockFilter");
-  if (typeof res.blockFilter !== "string" || res.blockFilter.trim() === "" || !/^[0-9a-f]+$/i.test(res.blockFilter)) {
-    throw new Error(`WsGetBlockFilter blockFilter is not a non-empty hex string: ${String(res.blockFilter)}`);
+  // filter hex can be empty for a block with no matching scripts; require hex chars when present.
+  if (typeof res.blockFilter !== "string" || !/^[0-9a-f]*$/i.test(res.blockFilter)) {
+    throw new Error(`WsGetBlockFilter invalid filter hex: ${String(res.blockFilter)}`);
   }
 }
 
