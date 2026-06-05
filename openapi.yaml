@@ -771,11 +771,13 @@ paths:
       operationId: getFiatTicker
       summary: Get current or historical fiat rates.
       description: |-
-        Returns currency rates for the requested currency and date. If a rate
-        is unavailable for the exact timestamp, the closest available rate can
-        be returned. Responses include the actual rate timestamp. Without a
-        currency parameter, all available currencies can be returned. A rate of
-        -1 marks an unavailable or invalid currency for that timestamp.
+        Returns currency rates for the requested currency and date. Rates are
+        resolved forward to the nearest stored rate at or after the requested
+        timestamp within the same UTC day; responses include the actual rate
+        timestamp. A rate of -1 marks an invalid currency or a day with no
+        stored rate. Timestamps newer than the stored history return the
+        current rate. Without a currency parameter, all available currencies
+        can be returned.
 
         Load estimate: Low to medium; specific currency lookups are cheap,
         while omitted currency and token lookups increase response size.
