@@ -56,6 +56,7 @@ var (
 
 type websocketChannel struct {
 	id                           uint64
+	requests                     uint64 // total requests received on this connection, accessed atomically
 	conn                         *websocket.Conn
 	out                          chan *WsRes
 	pendingRequests              chan struct{}
@@ -458,6 +459,9 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.websocketLimiter != nil {
 		ok, reason := s.websocketLimiter.accept(ip, time.Now())
 		if !ok {
+			if s.metrics != nil {
+				s.metrics.WebsocketConnectionRejections.With(common.Labels{"reason": reason}).Inc()
+			}
 			glog.Warning("Websocket connection rejected, ", ip, ", ", reason)
 			http.Error(w, "Too many websocket connections", http.StatusTooManyRequests)
 			return
@@ -671,6 +675,7 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 				s.closeChannel(c, "protocol_error")
 				return
 			}
+			atomic.AddUint64(&c.requests, 1)
 			if !c.acquireRequestSlot() {
 				glog.Warning("Client ", c.id, " exceeded pending websocket request limit, ", c.ip)
 				s.closeChannel(c, "pending_requests_limit")
@@ -743,6 +748,7 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	}
 	s.unregisterChannel(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
+	s.metrics.WebsocketConnectionRequests.Observe(float64(atomic.LoadUint64(&c.requests)))
 	s.metrics.WebsocketClients.Dec()
 }
 

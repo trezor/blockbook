@@ -72,6 +72,16 @@ metrics:
     name: blockbook_websocket_new_block_txs_subscriptions
     type: gauge
     help: Address subscriptions that opted into confirmed-block newBlockTxs notifications
+  websocket_connection_requests:
+    name: blockbook_websocket_connection_requests
+    type: histogram
+    help: Requests handled per websocket connection over its lifetime, recorded when the connection closes
+    buckets: [1, 10, 100, 1000, 10000, 100000, 1000000]
+  websocket_connection_rejections:
+    name: blockbook_websocket_connection_rejections
+    type: counter_vec
+    help: Websocket connection attempts rejected by the per-IP limiter before upgrade, split by reason
+    labels: [reason]
   index_resync_duration:
     name: blockbook_index_resync_duration
     type: histogram

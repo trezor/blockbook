@@ -32,6 +32,8 @@ type Metrics struct {
 	BalanceHistoryPoints              *prometheus.HistogramVec `metric:"balance_history_points"`
 	WebsocketEthReceipt               *prometheus.CounterVec   `metric:"websocket_eth_receipt"`
 	WebsocketNewBlockTxsSubscriptions prometheus.Gauge         `metric:"websocket_new_block_txs_subscriptions"`
+	WebsocketConnectionRequests       prometheus.Histogram     `metric:"websocket_connection_requests"`
+	WebsocketConnectionRejections     *prometheus.CounterVec   `metric:"websocket_connection_rejections"`
 	IndexResyncDuration               prometheus.Histogram     `metric:"index_resync_duration"`
 	MempoolResyncDuration             prometheus.Histogram     `metric:"mempool_resync_duration"`
 	MempoolResyncThroughput           *prometheus.HistogramVec `metric:"mempool_resync_throughput_txs_per_second"`
