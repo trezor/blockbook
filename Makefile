@@ -27,8 +27,23 @@ test: .bin-image
 test-integration: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
 
+# `make test-e2e [coin] [url]` — e.g. `make test-e2e bitcoin https://btc.trezor.io`.
+# Extra goals after test-e2e are consumed as positional args (coin, base URL)
+# and turned into OPENAPI_COINS / BB_DEV_API_URL_HTTP_<coin> for the test runner.
+ifeq (test-e2e,$(firstword $(MAKECMDGOALS)))
+  E2E_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  ifneq ($(E2E_ARGS),)
+    # no-op catch-all so make does not try to build the positional args as targets
+%:
+	@:
+  endif
+endif
+
 test-e2e:
 	@if [ ! -x tests/openapi/node_modules/.bin/redocly ]; then npm ci --prefix tests/openapi --prefer-offline --no-audit --no-fund; fi
+	@coin="$(word 1,$(E2E_ARGS))"; url="$(word 2,$(E2E_ARGS))"; \
+	if [ -n "$$coin" ]; then export OPENAPI_COINS="$$coin"; fi; \
+	if [ -n "$$url" ]; then export "BB_DEV_API_URL_HTTP_$$(printf %s "$$coin" | tr - _)=$$url"; fi; \
 	contrib/tests/run-openapi-tests.sh
 
 test-connectivity: .bin-image
