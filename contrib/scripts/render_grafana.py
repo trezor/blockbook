@@ -9,12 +9,15 @@
     configs/grafana/grafana.json    the artifact you import into Grafana (NOT committed)
 
 template.json carries a semantic `x-panel-key` on each panel and a semantic `x-query-key`
-on each target (alongside Grafana's own `id`/`refId`). panels.yaml is keyed by `x-panel-key`,
-and its `queries:` are keyed by `x-query-key`. For each panel this overlays its title/description
-and, per query, its `promql`/`legend` (-> the target's expr/legendFormat). Inside those strings,
-{{name:<key>}} and {{help:<key>}} are expanded from configs/metrics.yaml, so a metric's prometheus
-name or help is single-sourced and a rename propagates everywhere. The x-keys are stripped from the
-rendered grafana.json, which stays pure Grafana.
+on each target (alongside Grafana's own `id`/`refId`). It holds no `gridPos` and no
+`datasource`: panel x/y are packed from panel order, w/h come from panels.yaml (optional
+`width`/`height`, defaulting to a full-width row or an 8x8 cell), and the single Prometheus
+datasource is injected at render time. panels.yaml is keyed by `x-panel-key`, and its
+`queries:` are keyed by `x-query-key`. For each panel this overlays its title/description
+and, per query, its `promql`/`legend` (-> the target's expr/legendFormat). Inside those
+strings, {{name:<key>}} and {{help:<key>}} are expanded from configs/metrics.yaml, so a
+metric's prometheus name or help is single-sourced and a rename propagates everywhere. The
+x-keys are stripped from the rendered grafana.json, which stays pure Grafana.
 
     python3 contrib/scripts/render_grafana.py [--check]
 
@@ -36,6 +39,12 @@ PANELS = os.path.join(REPO, "configs", "grafana", "panels.yaml")
 OUTPUT = os.path.join(REPO, "configs", "grafana", "grafana.json")
 
 PLACEHOLDER = re.compile(r"\{\{\s*(name|help):([a-z0-9_]+)\s*\}\}")
+GRID_COLUMNS = 24
+DEFAULT_PANEL_WIDTH = 8
+DEFAULT_PANEL_HEIGHT = 8
+# Single datasource for the whole dashboard -- injected at render time so the template
+# carries no per-panel/per-target datasource boilerplate.
+DATASOURCE = {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}
 
 
 def fail(msg):
@@ -71,6 +80,108 @@ def iter_panels(panels):
         yield from iter_panels(p.get("panels", []))
 
 
+def panel_label(panel):
+    return panel.get("x-panel-key") or panel.get("id") or "<unknown>"
+
+
+def is_positive_int(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def layout_items_from_panels(panels, content, columns=GRID_COLUMNS):
+    """Return side-effect-free layout hints for a Grafana panel list.
+
+    Per-panel `width`/`height` come from the matching panels.yaml entry (looked up by
+    x-panel-key); panels omit them and fall back to a full-width row or a DEFAULT_PANEL
+    cell. template.json carries no gridPos at all -- x/y are packed during rendering.
+    """
+    items = []
+    problems = []
+    for panel in panels:
+        label = panel_label(panel)
+        ptype = panel.get("type")
+        is_row = ptype == "row"
+
+        if "gridPos" in panel:
+            problems.append("template panel %s must not carry gridPos; set width/height in panels.yaml "
+                            "(x/y are computed by render_grafana.py)" % label)
+
+        entry = content.get(panel.get("x-panel-key")) or {}
+        width = entry.get("width", columns if is_row else DEFAULT_PANEL_WIDTH)
+        height = entry.get("height", 1 if is_row else DEFAULT_PANEL_HEIGHT)
+        if not is_positive_int(width):
+            problems.append("panel %s 'width' must be a positive integer in panels.yaml" % label)
+        if not is_positive_int(height):
+            problems.append("panel %s 'height' must be a positive integer in panels.yaml" % label)
+        if is_positive_int(width) and width > columns:
+            problems.append("panel %s width=%d exceeds Grafana's %d-column grid" % (label, width, columns))
+
+        items.append({"key": label, "type": ptype, "w": width, "h": height})
+    return items, problems
+
+
+def compute_grid_positions(items, columns=GRID_COLUMNS):
+    """Pack layout items left-to-right into Grafana gridPos dictionaries."""
+    positions = []
+    problems = []
+    x = 0
+    y = 0
+    row_height = 0
+
+    for item in items:
+        key = item["key"]
+        width = item["w"]
+        height = item["h"]
+        if not is_positive_int(width) or not is_positive_int(height):
+            problems.append("panel %s has invalid layout dimensions" % key)
+            continue
+        if width > columns:
+            problems.append("panel %s width %d exceeds Grafana's %d-column grid" % (key, width, columns))
+            continue
+
+        if item["type"] == "row":
+            if x:
+                y += row_height
+                x = 0
+                row_height = 0
+            positions.append({"h": height, "w": width, "x": 0, "y": y})
+            y += height
+            continue
+
+        if x and x + width > columns:
+            y += row_height
+            x = 0
+            row_height = 0
+
+        positions.append({"h": height, "w": width, "x": x, "y": y})
+        x += width
+        row_height = max(row_height, height)
+        if x == columns:
+            y += row_height
+            x = 0
+            row_height = 0
+
+    return positions, problems
+
+
+def apply_computed_grid_positions(panels, content, columns=GRID_COLUMNS):
+    """Apply computed gridPos to a panel list after pure validation/packing."""
+    items, problems = layout_items_from_panels(panels, content, columns)
+    if problems:
+        return problems
+
+    positions, problems = compute_grid_positions(items, columns)
+    if problems:
+        return problems
+    if len(positions) != len(panels):
+        return ["computed %d grid positions for %d template panels" % (len(positions), len(panels))]
+
+    for panel, grid_pos in zip(panels, positions):
+        panel["gridPos"] = grid_pos
+        problems.extend(apply_computed_grid_positions(panel.get("panels", []), content, columns))
+    return problems
+
+
 def render():
     reg = load_registry()
     panels = load_panels()
@@ -82,6 +193,8 @@ def render():
     used_keys = set()
     seen_panel_keys = set()
 
+    problems.extend(apply_computed_grid_positions(dash["panels"], panels))
+
     for panel in iter_panels(dash["panels"]):
         pid = panel.get("id")
         pkey = panel.get("x-panel-key")
@@ -89,10 +202,13 @@ def render():
         for f in ("title", "description"):
             if f in panel:
                 problems.append("template panel %s must not contain %r (it belongs in panels.yaml)" % (pkey or pid, f))
+        # datasource is injected at render time -- it must not be pinned in the template
+        if "datasource" in panel:
+            problems.append("template panel %s must not contain 'datasource' (it is injected at render time)" % (pkey or pid))
         for t in panel.get("targets", []):
-            for f in ("expr", "legendFormat"):
+            for f in ("expr", "legendFormat", "datasource"):
                 if f in t:
-                    problems.append("template panel %s target %s must not contain %r (it belongs in panels.yaml)"
+                    problems.append("template panel %s target %s must not contain %r (it belongs in panels.yaml or is injected)"
                                     % (pkey or pid, t.get("x-query-key") or t.get("refId"), f))
         if pkey is None:
             problems.append("template panel id %s has no x-panel-key" % pid)
@@ -148,9 +264,13 @@ def render():
 
     # x-panel-key / x-query-key are render-time join keys, not Grafana fields -- strip them so
     # grafana.json is pure Grafana. (After validation, which needs them; before serialization.)
+    # The single datasource is injected here onto every non-row panel and every target.
     for panel in iter_panels(dash["panels"]):
         panel.pop("x-panel-key", None)
+        if panel.get("type") != "row":
+            panel["datasource"] = dict(DATASOURCE)
         for t in panel.get("targets", []):
+            t["datasource"] = dict(DATASOURCE)
             t.pop("x-query-key", None)
 
     # belt-and-suspenders: nothing in our namespace should survive
