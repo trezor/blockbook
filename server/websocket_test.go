@@ -442,6 +442,46 @@ func TestWebsocketConnectionLimiterSweepEvictsIdleEntries(t *testing.T) {
 	}
 }
 
+func TestWebsocketConnectionLimiterStats(t *testing.T) {
+	limiter := newWebsocketConnectionLimiter()
+	now := time.Unix(1700000000, 0)
+	a := "192.0.2.50"
+	b := "192.0.2.51"
+
+	if unique, max := limiter.stats(); unique != 0 || max != 0 {
+		t.Fatalf("stats() on empty limiter = %d, %d, want 0, 0", unique, max)
+	}
+
+	for i := 0; i < 3; i++ {
+		if ok, reason := limiter.accept(a, now); !ok {
+			t.Fatalf("accept(a, %d) rejected with %q", i, reason)
+		}
+	}
+	if ok, reason := limiter.accept(b, now); !ok {
+		t.Fatalf("accept(b) rejected with %q", reason)
+	}
+
+	// two distinct IPs hold connections; the busiest holds three
+	if unique, max := limiter.stats(); unique != 2 || max != 3 {
+		t.Fatalf("stats() = %d, %d, want 2, 3", unique, max)
+	}
+
+	// releasing every connection from a leaves an idle (active==0) entry that
+	// is still tracked for the TTL window; stats must not count it as a cluster
+	for i := 0; i < 3; i++ {
+		limiter.release(a, now)
+	}
+	limiter.mux.Lock()
+	_, aStillTracked := limiter.clients[a]
+	limiter.mux.Unlock()
+	if !aStillTracked {
+		t.Fatal("released entry should remain tracked within the TTL window")
+	}
+	if unique, max := limiter.stats(); unique != 1 || max != 1 {
+		t.Fatalf("stats() after releasing idle IP = %d, %d, want 1, 1", unique, max)
+	}
+}
+
 func TestWebsocketConnectionLimiterCleanup(t *testing.T) {
 	limiter := newWebsocketConnectionLimiter()
 	now := time.Unix(1700000000, 0)

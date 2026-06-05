@@ -82,6 +82,14 @@ metrics:
     type: counter_vec
     help: Websocket connection attempts rejected by the per-IP limiter before upgrade, split by reason
     labels: [reason]
+  websocket_unique_ips:
+    name: blockbook_websocket_unique_ips
+    type: gauge
+    help: Distinct client IP addresses currently holding at least one websocket connection; websocket_clients divided by this is the average connections per IP
+  websocket_max_connections_per_ip:
+    name: blockbook_websocket_max_connections_per_ip
+    type: gauge
+    help: Largest number of concurrent websocket connections held by any single client IP, the size of the biggest connection cluster
   index_resync_duration:
     name: blockbook_index_resync_duration
     type: histogram

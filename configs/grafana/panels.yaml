@@ -350,6 +350,26 @@ panels:
       rejections:
         promql: sum(rate({{name:websocket_connection_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
         legend: '{{coin}} - {{reason}}/min'
+  websocket.unique_ips:
+    title: Websocket connections vs unique client IPs
+    description: Open connections plotted against the number of distinct client IPs holding them; the gap between the two lines is connection clustering. Across the many Suite users a healthy deployment serves, the lines should track closely at roughly one connection per IP. A connections line pulling well above unique IPs means connections are concentrated on few sources.
+    queries:
+      connections:
+        promql: sum({{name:websocket_clients}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - connections'
+      unique_ips:
+        promql: sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - unique IPs'
+  websocket.connections_per_ip:
+    title: Websocket connections per client IP
+    description: 'Average connections per IP (connections / unique IPs) and the busiest single IP. An average near 1 is a healthy spread across users; a rising average, or a max approaching the per-IP cap of 128, points to one source clustering many connections, the abuse pattern the per-IP limiter guards against.'
+    queries:
+      avg:
+        promql: sum({{name:websocket_clients}}{job="blockbook", coin="$coin"}) by (coin) / sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - avg per IP'
+      max:
+        promql: max({{name:websocket_max_connections_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - max per IP'
   row.general:
     title: General
   general.synchronized:
