@@ -420,6 +420,86 @@ func TestGetTickersForTimestamps_UsesGranularityAndFallback(t *testing.T) {
 	}
 }
 
+func TestGetTickersForTimestamps_GapInHistoryReturnsNil(t *testing.T) {
+	const day = int64(secondsInDay)
+	day1 := &common.CurrencyRatesTicker{Timestamp: time.Unix(day, 0).UTC(), Rates: map[string]float32{"usd": 1, "czk": 10}}
+	day2 := &common.CurrencyRatesTicker{Timestamp: time.Unix(2*day, 0).UTC(), Rates: map[string]float32{"usd": 2, "czk": 20}}
+	// czk is missing since day3, the same shape as a partially failing historical update
+	day3 := &common.CurrencyRatesTicker{Timestamp: time.Unix(3*day, 0).UTC(), Rates: map[string]float32{"usd": 3}}
+	day4 := &common.CurrencyRatesTicker{Timestamp: time.Unix(4*day, 0).UTC(), Rates: map[string]float32{"usd": 4}}
+	currentTicker := &common.CurrencyRatesTicker{Timestamp: time.Unix(5*day, 0).UTC(), Rates: map[string]float32{"usd": 5, "czk": 50}}
+	fr := &FiatRates{
+		Enabled:       true,
+		currentTicker: currentTicker,
+		dailyTickers: map[int64]*common.CurrencyRatesTicker{
+			day:     day1,
+			2 * day: day2,
+			3 * day: day3,
+			4 * day: day4,
+		},
+		dailyTickersFrom: day,
+		dailyTickersTo:   4 * day,
+	}
+
+	tickers, err := fr.GetTickersForTimestamps([]int64{0, 50000, 100000, 200000, 350000}, "czk", "")
+	if err != nil {
+		t.Fatalf("GetTickersForTimestamps returned error: %v", err)
+	}
+	want := []*common.CurrencyRatesTicker{
+		nil,           // before the stored history, there is no rate for the requested day, the API returns -1
+		day1,          // resolved to the first stored day
+		day2,          // within the stored history, the ticker of the requested day is returned
+		nil,           // czk missing on the requested day, nil makes the API return -1
+		currentTicker, // beyond the stored history, the current ticker is the closest available rate
+	}
+	if tickers == nil || !reflect.DeepEqual(*tickers, want) {
+		t.Fatalf("unexpected tickers: got %+v, want %+v", tickers, want)
+	}
+
+	// a currency never present in the stored history resolves to nil within the historical range
+	tickers, err = fr.GetTickersForTimestamps([]int64{100000}, "xyz", "")
+	if err != nil {
+		t.Fatalf("GetTickersForTimestamps returned error: %v", err)
+	}
+	if tickers == nil || len(*tickers) != 1 || (*tickers)[0] != nil {
+		t.Fatalf("unexpected tickers for unknown currency: got %+v, want [nil]", tickers)
+	}
+
+	// other currencies within the gap days are not affected
+	tickers, err = fr.GetTickersForTimestamps([]int64{200000}, "usd", "")
+	if err != nil {
+		t.Fatalf("GetTickersForTimestamps returned error: %v", err)
+	}
+	if tickers == nil || len(*tickers) != 1 || (*tickers)[0] != day3 {
+		t.Fatalf("unexpected tickers for usd: got %+v, want day3 ticker", tickers)
+	}
+
+	// a day missing in the DB is filled with the next day ticker by loadDailyTickers;
+	// such day must be reported as unavailable even though the filling ticker contains
+	// the requested currency
+	fr.dailyTickers = map[int64]*common.CurrencyRatesTicker{
+		day:     day1,
+		2 * day: day3, // forward-fill of the missing day2
+		3 * day: day3,
+		4 * day: day4,
+	}
+	tickers, err = fr.GetTickersForTimestamps([]int64{100000}, "usd", "")
+	if err != nil {
+		t.Fatalf("GetTickersForTimestamps returned error: %v", err)
+	}
+	if tickers == nil || len(*tickers) != 1 || (*tickers)[0] != nil {
+		t.Fatalf("unexpected tickers for a missing day: got %+v, want [nil]", tickers)
+	}
+	// the next day with a stored ticker is still served normally
+	tickers, err = fr.GetTickersForTimestamps([]int64{200000}, "usd", "")
+	if err != nil {
+		t.Fatalf("GetTickersForTimestamps returned error: %v", err)
+	}
+	if tickers == nil || len(*tickers) != 1 || (*tickers)[0] != day3 {
+		t.Fatalf("unexpected tickers for the day after a missing day: got %+v, want day3 ticker", tickers)
+	}
+}
+
 func TestGetTickersForTimestamps_ConcurrentReadersAndWriters(t *testing.T) {
 	fr := &FiatRates{Enabled: true}
 
