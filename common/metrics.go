@@ -34,6 +34,8 @@ type Metrics struct {
 	WebsocketNewBlockTxsSubscriptions prometheus.Gauge         `metric:"websocket_new_block_txs_subscriptions"`
 	WebsocketConnectionRequests       prometheus.Histogram     `metric:"websocket_connection_requests"`
 	WebsocketConnectionRejections     *prometheus.CounterVec   `metric:"websocket_connection_rejections"`
+	WebsocketUniqueIPs                prometheus.Gauge         `metric:"websocket_unique_ips"`
+	WebsocketMaxConnectionsPerIP      prometheus.Gauge         `metric:"websocket_max_connections_per_ip"`
 	IndexResyncDuration               prometheus.Histogram     `metric:"index_resync_duration"`
 	MempoolResyncDuration             prometheus.Histogram     `metric:"mempool_resync_duration"`
 	MempoolResyncThroughput           *prometheus.HistogramVec `metric:"mempool_resync_throughput_txs_per_second"`
