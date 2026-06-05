@@ -73,22 +73,12 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
       "id": 312,
       "panels": [],
       "type": "row",
       "x-panel-key": "row.system"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -118,12 +108,6 @@
           "unit": "bytes"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 1
       },
       "id": 34,
       "options": {
@@ -145,10 +129,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -159,10 +139,6 @@
       "x-panel-key": "system.resident_memory"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -192,12 +168,6 @@
           "unit": "bytes"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 1
       },
       "id": 24,
       "options": {
@@ -219,10 +189,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -233,10 +199,6 @@
       "x-panel-key": "system.virtual_memory"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -266,12 +228,6 @@
           "unit": "bytes"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 1
       },
       "id": 43,
       "options": {
@@ -293,10 +249,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -307,10 +259,6 @@
       "x-panel-key": "system.go_alloc"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -340,12 +288,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 9
       },
       "id": 22,
       "options": {
@@ -367,10 +309,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -381,10 +319,6 @@
       "x-panel-key": "system.open_fds"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -415,12 +349,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 9
-      },
       "id": 32,
       "options": {
         "legend": {
@@ -441,10 +369,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -455,10 +379,6 @@
       "x-panel-key": "system.node_load1"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -489,12 +409,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 9
-      },
       "id": 36,
       "options": {
         "legend": {
@@ -515,10 +429,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -530,22 +440,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 17
-      },
       "id": 313,
       "panels": [],
       "type": "row",
       "x-panel-key": "row.rpc"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -577,12 +477,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 18
-      },
       "id": 18,
       "options": {
         "legend": {
@@ -603,10 +497,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -617,10 +507,6 @@
       "x-panel-key": "rpc.request_rate"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -651,12 +537,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 18
-      },
       "id": 20,
       "options": {
         "legend": {
@@ -677,10 +557,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -691,10 +567,6 @@
       "x-panel-key": "rpc.request_duration_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -725,12 +597,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 18
-      },
       "id": 302,
       "options": {
         "legend": {
@@ -751,10 +617,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -765,10 +627,6 @@
       "x-panel-key": "rpc.fallback_calls"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -800,12 +658,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 26
-      },
       "id": 105,
       "options": {
         "legend": {
@@ -826,10 +678,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -840,10 +688,6 @@
       "x-panel-key": "rpc.eth_call_requests"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -875,12 +719,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 26
-      },
       "id": 106,
       "options": {
         "legend": {
@@ -901,10 +739,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -915,10 +749,6 @@
       "x-panel-key": "rpc.eth_call_errors"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -950,12 +780,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 26
-      },
       "id": 107,
       "options": {
         "legend": {
@@ -976,10 +800,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -990,10 +810,6 @@
       "x-panel-key": "rpc.eth_call_batch_size"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1025,12 +841,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 34
-      },
       "id": 108,
       "options": {
         "legend": {
@@ -1051,10 +861,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1065,10 +871,6 @@
       "x-panel-key": "rpc.eth_call_token_uri"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1099,12 +901,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 34
       },
       "id": 109,
       "options": {
@@ -1126,10 +922,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1140,10 +932,6 @@
       "x-panel-key": "rpc.eth_call_staking_pool"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1175,12 +963,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 34
-      },
       "id": 110,
       "options": {
         "legend": {
@@ -1201,10 +983,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1215,10 +993,6 @@
       "x-panel-key": "rpc.eth_call_contract_info"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1248,12 +1022,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 42
       },
       "id": 111,
       "options": {
@@ -1275,10 +1043,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1290,22 +1054,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 50
-      },
       "id": 314,
       "panels": [],
       "type": "row",
       "x-panel-key": "row.sync"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1335,12 +1089,6 @@
           "unit": "ms"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 51
       },
       "id": 14,
       "options": {
@@ -1362,10 +1110,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1376,10 +1120,6 @@
       "x-panel-key": "sync.index_resync_duration_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1409,12 +1149,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 51
       },
       "id": 303,
       "options": {
@@ -1436,10 +1170,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1450,10 +1180,6 @@
       "x-panel-key": "sync.index_resync_errors"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1483,12 +1209,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 51
       },
       "id": 58,
       "options": {
@@ -1510,10 +1230,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1524,10 +1240,6 @@
       "x-panel-key": "sync.index_block_not_found_retries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1557,12 +1269,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 59
       },
       "id": 59,
       "options": {
@@ -1584,10 +1290,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1598,10 +1300,6 @@
       "x-panel-key": "sync.index_reorg_events"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1632,12 +1330,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 59
-      },
       "id": 60,
       "options": {
         "legend": {
@@ -1658,10 +1350,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1672,10 +1360,6 @@
       "x-panel-key": "sync.index_sync_yields"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1705,12 +1389,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 59
       },
       "id": 70,
       "options": {
@@ -1732,10 +1410,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1746,10 +1420,6 @@
       "x-panel-key": "sync.block_stats_tip"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1779,12 +1449,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 67
       },
       "id": 71,
       "options": {
@@ -1806,10 +1470,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1820,10 +1480,6 @@
       "x-panel-key": "sync.block_stats_bulk"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1854,12 +1510,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 67
-      },
       "id": 28,
       "options": {
         "legend": {
@@ -1880,10 +1530,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1894,10 +1540,6 @@
       "x-panel-key": "sync.mempool_size"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1928,12 +1570,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 67
-      },
       "id": 54,
       "options": {
         "legend": {
@@ -1954,10 +1590,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -1968,10 +1600,6 @@
       "x-panel-key": "sync.mempool_resync_throughput_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2002,12 +1630,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 75
-      },
       "id": 304,
       "options": {
         "legend": {
@@ -2028,10 +1650,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2042,10 +1660,6 @@
       "x-panel-key": "sync.mempool_resync_duration_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2075,12 +1689,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 75
       },
       "id": 100,
       "options": {
@@ -2102,10 +1710,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2116,10 +1720,6 @@
       "x-panel-key": "sync.hotness_stats_tip"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2149,12 +1749,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 75
       },
       "id": 101,
       "options": {
@@ -2176,10 +1770,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2190,10 +1780,6 @@
       "x-panel-key": "sync.hotness_stats_bulk"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2224,12 +1810,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 83
-      },
       "id": 102,
       "options": {
         "legend": {
@@ -2250,10 +1830,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2264,10 +1840,6 @@
       "x-panel-key": "sync.addr_contracts_cache_entries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2298,12 +1870,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 83
-      },
       "id": 103,
       "options": {
         "legend": {
@@ -2324,10 +1890,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2338,10 +1900,6 @@
       "x-panel-key": "sync.addr_contracts_cache_bytes"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2373,12 +1931,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 83
-      },
       "id": 104,
       "options": {
         "legend": {
@@ -2399,30 +1951,18 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "hits"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
           "x-query-key": "misses"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "C",
@@ -2433,10 +1973,6 @@
       "x-panel-key": "sync.addr_contracts_cache_activity"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2493,12 +2029,6 @@
           }
         ]
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 91
-      },
       "id": 308,
       "options": {
         "legend": {
@@ -2519,20 +2049,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "age"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -2543,10 +2065,6 @@
       "x-panel-key": "sync.tip_feed_age"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2576,12 +2094,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 91
       },
       "id": 309,
       "options": {
@@ -2603,20 +2115,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "stall"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -2627,10 +2131,6 @@
       "x-panel-key": "sync.tip_feed_watchdog"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2660,12 +2160,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 91
       },
       "id": 310,
       "options": {
@@ -2687,10 +2181,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2701,10 +2191,6 @@
       "x-panel-key": "sync.tip_feed_reconnect_failures"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2735,12 +2221,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 99
-      },
       "id": 311,
       "options": {
         "legend": {
@@ -2761,10 +2241,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2776,22 +2252,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 123
-      },
       "id": 315,
       "panels": [],
       "type": "row",
       "x-panel-key": "row.websocket"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2822,12 +2288,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 124
-      },
       "id": 37,
       "options": {
         "legend": {
@@ -2848,10 +2308,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2862,10 +2318,6 @@
       "x-panel-key": "websocket.clients"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2897,12 +2349,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 124
-      },
       "id": 38,
       "options": {
         "legend": {
@@ -2923,10 +2369,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -2937,10 +2379,6 @@
       "x-panel-key": "websocket.request_rate"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2971,12 +2409,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 124
-      },
       "id": 42,
       "options": {
         "legend": {
@@ -2997,20 +2429,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "subscribes"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -3021,10 +2445,6 @@
       "x-panel-key": "websocket.subscriptions"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3055,12 +2475,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 132
-      },
       "id": 46,
       "options": {
         "legend": {
@@ -3081,10 +2495,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -3095,10 +2505,6 @@
       "x-panel-key": "websocket.request_duration_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3130,12 +2536,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 132
-      },
       "id": 47,
       "options": {
         "legend": {
@@ -3156,10 +2556,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -3170,10 +2566,6 @@
       "x-panel-key": "websocket.new_block_txs_rate"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3204,12 +2596,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 132
-      },
       "id": 48,
       "options": {
         "legend": {
@@ -3230,10 +2616,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -3244,10 +2626,6 @@
       "x-panel-key": "websocket.new_block_txs_duration_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3279,12 +2657,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 140
-      },
       "id": 49,
       "options": {
         "legend": {
@@ -3305,10 +2677,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -3319,10 +2687,6 @@
       "x-panel-key": "websocket.addr_notifications"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3353,12 +2717,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 140
       },
       "id": 50,
       "options": {
@@ -3380,20 +2738,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "closes"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -3404,10 +2754,6 @@
       "x-panel-key": "websocket.channel_closes_unknown"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3438,12 +2784,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 140
       },
       "id": 112,
       "options": {
@@ -3465,10 +2805,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -3479,10 +2815,6 @@
       "x-panel-key": "websocket.eth_receipt"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3513,12 +2845,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 148
-      },
       "id": 317,
       "options": {
         "legend": {
@@ -3539,20 +2865,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "p50"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -3563,10 +2881,6 @@
       "x-panel-key": "websocket.connection_requests"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3598,12 +2912,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 148
-      },
       "id": 318,
       "options": {
         "legend": {
@@ -3624,10 +2932,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -3638,10 +2942,6 @@
       "x-panel-key": "websocket.connection_rejections"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3671,12 +2971,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 156
       },
       "id": 319,
       "options": {
@@ -3698,20 +2992,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "connections"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -3722,10 +3008,6 @@
       "x-panel-key": "websocket.unique_ips"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3756,12 +3038,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 156
-      },
       "id": 320,
       "options": {
         "legend": {
@@ -3782,20 +3058,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "avg"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -3807,22 +3075,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 164
-      },
       "id": 316,
       "panels": [],
       "type": "row",
       "x-panel-key": "row.general"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3860,12 +3118,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 165
-      },
       "id": 300,
       "options": {
         "colorMode": "background",
@@ -3884,10 +3136,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "instant": true,
           "range": false,
@@ -3899,10 +3147,6 @@
       "x-panel-key": "general.synchronized"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3933,12 +3177,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 165
-      },
       "id": 301,
       "options": {
         "legend": {
@@ -3958,20 +3196,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "blockbook"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -3982,10 +3212,6 @@
       "x-panel-key": "general.block_height"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4016,12 +3242,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 165
-      },
       "id": 63,
       "options": {
         "legend": {
@@ -4042,10 +3262,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4056,10 +3272,6 @@
       "x-panel-key": "general.tip_age"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4090,12 +3302,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 173
-      },
       "id": 44,
       "options": {
         "legend": {
@@ -4116,10 +3322,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4130,10 +3332,6 @@
       "x-panel-key": "general.avg_block_period"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4159,12 +3357,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 173
-      },
       "id": 64,
       "options": {
         "cellHeight": "sm",
@@ -4173,10 +3365,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "builder",
           "exemplar": false,
           "format": "table",
@@ -4206,10 +3394,6 @@
       "x-panel-key": "general.avg_block_time"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4235,12 +3419,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 173
-      },
       "id": 307,
       "options": {
         "cellHeight": "sm",
@@ -4249,10 +3427,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "format": "table",
           "instant": true,
@@ -4282,10 +3456,6 @@
       "x-panel-key": "general.versions"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4320,12 +3490,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 181
-      },
       "id": 10,
       "options": {
         "legend": {
@@ -4345,10 +3509,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4359,10 +3519,6 @@
       "x-panel-key": "general.index_db_size"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4393,12 +3549,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 181
-      },
       "id": 305,
       "options": {
         "legend": {
@@ -4418,10 +3568,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4432,10 +3578,6 @@
       "x-panel-key": "general.dbcolumn_size"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4466,12 +3608,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 181
-      },
       "id": 30,
       "options": {
         "legend": {
@@ -4492,10 +3628,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4506,10 +3638,6 @@
       "x-panel-key": "general.cached_transactions"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4540,12 +3668,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 189
-      },
       "id": 16,
       "options": {
         "legend": {
@@ -4566,10 +3688,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4580,10 +3698,6 @@
       "x-panel-key": "general.txcache_hit_ratio"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4613,12 +3727,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 189
       },
       "id": 41,
       "options": {
@@ -4640,10 +3748,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4654,10 +3758,6 @@
       "x-panel-key": "general.xpub_cache_size"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4687,12 +3787,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 189
       },
       "id": 26,
       "options": {
@@ -4714,10 +3808,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4728,10 +3818,6 @@
       "x-panel-key": "general.explorer_views"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4761,12 +3847,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 197
       },
       "id": 306,
       "options": {
@@ -4788,10 +3868,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -4802,10 +3878,6 @@
       "x-panel-key": "general.explorer_pending_requests"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4835,12 +3907,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 197
       },
       "id": 40,
       "options": {
@@ -4862,20 +3928,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "websocket"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -4886,10 +3944,6 @@
       "x-panel-key": "general.pending_requests"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4919,12 +3973,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 197
       },
       "id": 45,
       "options": {
@@ -4946,40 +3994,24 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "blocks_1"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
           "x-query-key": "blocks_3"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "C",
           "x-query-key": "blocks_5"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "D",
@@ -4990,10 +4022,6 @@
       "x-panel-key": "general.estimated_fee"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5023,12 +4051,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 205
       },
       "id": 39,
       "options": {
@@ -5050,20 +4072,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "per_server"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -5074,10 +4088,6 @@
       "x-panel-key": "general.coingecko_requests"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5108,12 +4118,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 205
-      },
       "id": 56,
       "options": {
         "legend": {
@@ -5134,20 +4138,12 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
           "x-query-key": "per_server"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "B",
@@ -5158,10 +4154,6 @@
       "x-panel-key": "general.coingecko_range_requests"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5191,12 +4183,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 205
       },
       "id": 57,
       "options": {
@@ -5218,10 +4204,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -5232,10 +4214,6 @@
       "x-panel-key": "general.alt_fee_provider_requests"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5265,12 +4243,6 @@
           "unit": "s"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 213
       },
       "id": 51,
       "options": {
@@ -5292,10 +4264,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -5306,10 +4274,6 @@
       "x-panel-key": "general.balance_history_fiat_duration_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5339,12 +4303,6 @@
           "unit": "short"
         },
         "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 213
       },
       "id": 52,
       "options": {
@@ -5366,10 +4324,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -5380,10 +4334,6 @@
       "x-panel-key": "general.balance_history_fiat_fallbacks"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5414,12 +4364,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 213
-      },
       "id": 53,
       "options": {
         "legend": {
@@ -5440,10 +4384,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
@@ -5454,10 +4394,6 @@
       "x-panel-key": "general.balance_history_points_p95"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -5488,12 +4424,6 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 221
-      },
       "id": 55,
       "options": {
         "legend": {
@@ -5514,10 +4444,6 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "editorMode": "code",
           "range": true,
           "refId": "A",
