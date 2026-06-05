@@ -365,7 +365,10 @@ panels:
     description: 'Average connections per IP (connections / unique IPs) and the busiest single IP. An average near 1 is a healthy spread across users; a rising average, or a max approaching the per-IP cap of 128, points to one source clustering many connections, the abuse pattern the per-IP limiter guards against.'
     queries:
       avg:
-        promql: sum({{name:websocket_clients}}{job="blockbook", coin="$coin"}) by (coin) / sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        # clamp the denominator to 1: websocket_unique_ips is 0 at idle and only
+        # refreshes once a minute, so an unclamped divide yields NaN (0/0) at idle
+        # or +Inf (n/0) in the first minute after traffic resumes
+        promql: sum({{name:websocket_clients}}{job="blockbook", coin="$coin"}) by (coin) / clamp_min(sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin), 1)
         legend: '{{coin}} - avg per IP'
       max:
         promql: max({{name:websocket_max_connections_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
