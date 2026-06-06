@@ -2038,7 +2038,8 @@ func Test_HTTPBalanceHistory_GroupByAndInvalidCurrency_BitcoinType(t *testing.T)
 			Received:   "18876",
 			Sent:       "9876",
 			SentToSelf: "9000",
-			Rates:      map[string]float32{"eur": 1300},
+			// the grouped bucket time resolves to a day before the first stored ticker, no rates are returned
+			Rates: nil,
 		},
 	}
 	if !reflect.DeepEqual(grouped, wantGrouped) {
