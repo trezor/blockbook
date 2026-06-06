@@ -63,5 +63,9 @@ type TronAccountExtraData struct {
 	TotalFreeBandwidth       int64            `json:"totalFreeBandwidth"`
 	AvailableEnergy          int64            `json:"availableEnergy"`
 	TotalEnergy              int64            `json:"totalEnergy"`
+	TotalEnergyLimit         int64            `json:"totalEnergyLimit"`
+	TotalEnergyWeight        int64            `json:"totalEnergyWeight"`
+	TotalBandwidthLimit      int64            `json:"totalBandwidthLimit"`
+	TotalBandwidthWeight     int64            `json:"totalBandwidthWeight"`
 	StakingInfo              *TronStakingInfo `json:"stakingInfo,omitempty"`
 }

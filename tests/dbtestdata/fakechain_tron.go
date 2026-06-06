@@ -162,6 +162,10 @@ func (c *fakeBlockChainTronType) GetAddressChainExtraData(addrDesc bchain.Addres
 		TotalFreeBandwidth:       seed + 1500,
 		AvailableEnergy:          seed * 100,
 		TotalEnergy:              seed*100 + 10000,
+		TotalEnergyLimit:         seed*100 + 20000,
+		TotalEnergyWeight:        seed + 2000,
+		TotalBandwidthLimit:      seed + 2500,
+		TotalBandwidthWeight:     seed + 3000,
 	}
 	extra.StakingInfo = &bchain.TronStakingInfo{
 		StakedBalance:          "7000000",
