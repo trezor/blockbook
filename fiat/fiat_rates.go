@@ -323,6 +323,8 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 					tickers[i] = ticker
 					prevTicker = ticker
 					prevTs = t
+				} else if fr.metrics != nil {
+					fr.metrics.FiatRatesMissingDayLookups.Inc()
 				}
 				continue
 			}

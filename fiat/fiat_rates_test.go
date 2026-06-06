@@ -16,6 +16,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/linxGnu/grocksdb"
 	"github.com/martinboehm/btcutil/chaincfg"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
@@ -428,8 +429,13 @@ func TestGetTickersForTimestamps_GapInHistoryReturnsNil(t *testing.T) {
 	day3 := &common.CurrencyRatesTicker{Timestamp: time.Unix(3*day, 0).UTC(), Rates: map[string]float32{"usd": 3}}
 	day4 := &common.CurrencyRatesTicker{Timestamp: time.Unix(4*day, 0).UTC(), Rates: map[string]float32{"usd": 4}}
 	currentTicker := &common.CurrencyRatesTicker{Timestamp: time.Unix(5*day, 0).UTC(), Rates: map[string]float32{"usd": 5, "czk": 50}}
+	metrics, err := common.GetMetrics("fakecoin")
+	if err != nil {
+		t.Fatalf("GetMetrics failed: %v", err)
+	}
 	fr := &FiatRates{
 		Enabled:       true,
+		metrics:       metrics,
 		currentTicker: currentTicker,
 		dailyTickers: map[int64]*common.CurrencyRatesTicker{
 			day:     day1,
@@ -497,6 +503,15 @@ func TestGetTickersForTimestamps_GapInHistoryReturnsNil(t *testing.T) {
 	}
 	if tickers == nil || len(*tickers) != 1 || (*tickers)[0] != day3 {
 		t.Fatalf("unexpected tickers for the day after a missing day: got %+v, want day3 ticker", tickers)
+	}
+
+	// every nil result above must be counted by the missing day lookups metric
+	var m dto.Metric
+	if err := metrics.FiatRatesMissingDayLookups.Write(&m); err != nil {
+		t.Fatalf("counter Write failed: %v", err)
+	}
+	if got := m.GetCounter().GetValue(); got != 4 {
+		t.Fatalf("unexpected missing day lookups count: got %v, want 4", got)
 	}
 }
 
