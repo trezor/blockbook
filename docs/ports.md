@@ -67,7 +67,7 @@
 | Bitcoin Testnet4                 | 19129            | 19029              | 18029       | 48329                                               |
 | Bitcoin Testnet                  | 19130            | 19030              | 18030       | 48330                                               |
 | Bitcoin Cash Testnet             | 19131            | 19031              | 18031       | 48331                                               |
-| Zcash Testnet                    | 19132            | 19032              | 18032       | 48332                                               |
+| Zcash Testnet                    | 19132            | 19032              | 18032       |                                                     |
 | Dash Testnet                     | 19133            | 19033              | 18033       | 48333                                               |
 | Litecoin Testnet                 | 19134            | 19034              | 18034       | 48334                                               |
 | Bitcoin Gold Testnet             | 19135            | 19035              | 18035       | 48335                                               |
