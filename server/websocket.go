@@ -1798,53 +1798,36 @@ func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *ap
 
 func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts []bchain.Vout, tokenTransfers bchain.TokenTransfers, internalTransfers []bchain.EthereumInternalTransfer, newBlockTxsOnly bool) map[string]struct{} {
 	// check if there is any subscription in inputs, outputs and transfers
-	s.addressSubscriptionsLock.Lock()
-	defer s.addressSubscriptionsLock.Unlock()
-	subscribed := make(map[string]struct{})
-	hasSubscription := func(sad string) bool {
-		as, ok := s.addressSubscriptions[sad]
-		if !ok || len(as) == 0 {
-			return false
+	candidates := make(map[string]struct{})
+	addAddrDesc := func(addrDesc bchain.AddressDescriptor) {
+		if len(addrDesc) > 0 {
+			candidates[string(addrDesc)] = struct{}{}
 		}
-		if !newBlockTxsOnly {
-			return true
-		}
-		for _, details := range as {
-			if details.publishNewBlockTxs {
-				return true
-			}
-		}
-		return false
 	}
 	processAddress := func(address string) {
 		if addrDesc, err := s.chainParser.GetAddrDescFromAddress(address); err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			if hasSubscription(sad) {
-				subscribed[sad] = struct{}{}
-			}
+			addAddrDesc(addrDesc)
 		}
 	}
 	processVout := func(vout bchain.Vout) {
 		if addrDesc, err := s.chainParser.GetAddrDescFromVout(&vout); err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			if hasSubscription(sad) {
-				subscribed[sad] = struct{}{}
-			}
+			addAddrDesc(addrDesc)
 		}
 	}
 	for i := range vins {
 		if sad := string(vins[i].AddrDesc); len(sad) > 0 {
-			if hasSubscription(sad) {
-				subscribed[sad] = struct{}{}
-			}
-		} else if s.chainParser.GetChainType() == bchain.ChainBitcoinType {
-			vout := int(vins[i].Vout)
-			if vout >= 0 && vout < len(vouts) {
-				processVout(vouts[vins[i].Vout])
-			}
-		} else if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-			if len(vins[i].Addresses) > 0 {
-				processAddress(vins[i].Addresses[0])
+			candidates[sad] = struct{}{}
+		} else {
+			switch s.chainParser.GetChainType() {
+			case bchain.ChainBitcoinType:
+				vout := int(vins[i].Vout)
+				if vout >= 0 && vout < len(vouts) {
+					processVout(vouts[vout])
+				}
+			case bchain.ChainEthereumType:
+				if len(vins[i].Addresses) > 0 {
+					processAddress(vins[i].Addresses[0])
+				}
 			}
 		}
 	}
@@ -1858,6 +1841,26 @@ func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts 
 	for i := range internalTransfers {
 		processAddress(internalTransfers[i].From)
 		processAddress(internalTransfers[i].To)
+	}
+
+	subscribed := make(map[string]struct{})
+	s.addressSubscriptionsLock.Lock()
+	defer s.addressSubscriptionsLock.Unlock()
+	for sad := range candidates {
+		as, ok := s.addressSubscriptions[sad]
+		if !ok || len(as) == 0 {
+			continue
+		}
+		if !newBlockTxsOnly {
+			subscribed[sad] = struct{}{}
+			continue
+		}
+		for _, details := range as {
+			if details.publishNewBlockTxs {
+				subscribed[sad] = struct{}{}
+				break
+			}
+		}
 	}
 	return subscribed
 }
