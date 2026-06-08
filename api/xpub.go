@@ -69,6 +69,7 @@ type xpubData struct {
 	txCountEstimate uint32
 	sentSat         big.Int
 	balanceSat      big.Int
+	mergedTxids     xpubTxids
 	addresses       [][]xpubAddress
 }
 
@@ -197,10 +198,32 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 	return txs, complete, nil
 }
 
-func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, maxHeight uint32, maxResults int) error {
+func isUnfilteredXpubTxidFilter(filter *AddressFilter) bool {
+	return filter == nil || filter.FromHeight == 0 && filter.ToHeight == 0 && filter.Vout == AddressFilterVoutOff
+}
+
+func mergeXpubTxids(data *xpubData) xpubTxids {
+	txcMap := make(map[string]struct{}, data.txCountEstimate)
+	txc := make(xpubTxids, 0, data.txCountEstimate)
+	for _, da := range data.addresses {
+		for i := range da {
+			for _, txid := range da[i].txids {
+				if _, foundTx := txcMap[txid.txid]; foundTx {
+					continue
+				}
+				txcMap[txid.txid] = struct{}{}
+				txc = append(txc, txid)
+			}
+		}
+	}
+	sort.Stable(txc)
+	return txc
+}
+
+func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, maxHeight uint32, maxResults int) (bool, error) {
 	// skip if not used
 	if ad.balance == nil {
-		return nil
+		return false, nil
 	}
 	// if completely loaded, check if there are not some new txs and load if necessary
 	if ad.complete {
@@ -214,14 +237,14 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 					glog.Warning("xpubCheckAndLoadTxids inconsistency ", ad.addrDesc, ", ad.txs=", ad.txs, ", ad.balance.Txs=", ad.balance.Txs)
 				}
 			}
-			return err
+			return err == nil, err
 		}
-		return nil
+		return false, nil
 	}
 	// load all txids to get paging correctly
 	newTxids, complete, err := w.xpubGetAddressTxids(ad.addrDesc, false, 0, maxHeight, maxInt)
 	if err != nil {
-		return err
+		return false, err
 	}
 	ad.txids = newTxids
 	ad.complete = complete
@@ -232,7 +255,7 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 			glog.Warning("xpubCheckAndLoadTxids inconsistency ", ad.addrDesc, ", ad.txs=", ad.txs, ", ad.balance.Txs=", ad.balance.Txs)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (bool, error) {
@@ -420,6 +443,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			data.balanceSat = *new(big.Int)
 			data.sentSat = *new(big.Int)
 			data.txCountEstimate = 0
+			data.mergedTxids = nil
 			var minDerivedIndex int
 			totalDerived := 0
 			for i, change := range xd.ChangeIndexes {
@@ -431,12 +455,21 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			}
 		}
 		if option >= AccountDetailsTxidHistory {
+			txidsChanged := false
 			for _, da := range data.addresses {
 				for i := range da {
-					if err = w.xpubCheckAndLoadTxids(&da[i], filter, bestheight, (page+1)*txsOnPage); err != nil {
+					changed := false
+					if changed, err = w.xpubCheckAndLoadTxids(&da[i], bestheight, (page+1)*txsOnPage); err != nil {
 						return nil, 0, inCache, err
 					}
+					txidsChanged = txidsChanged || changed
 				}
+			}
+			if txidsChanged {
+				data.mergedTxids = nil
+			}
+			if isUnfilteredXpubTxidFilter(filter) && data.mergedTxids == nil {
+				data.mergedTxids = mergeXpubTxids(&data)
 			}
 		}
 	}
@@ -564,30 +597,38 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		}
 	}
 	if option >= AccountDetailsTxidHistory {
-		txcMap := make(map[string]bool)
-		txc = make(xpubTxids, 0, 32)
-		for _, da := range data.addresses {
-			for i := range da {
-				ad := &da[i]
-				for _, txid := range ad.txids {
-					added, foundTx := txcMap[txid.txid]
-					// count txs regardless of filter but only once
-					if !foundTx {
-						txCount++
-					}
-					// add tx only once
-					if !added {
-						add := txidFilter == nil || txidFilter(&txid, ad)
-						txcMap[txid.txid] = add
-						if add {
-							txc = append(txc, txid)
+		if txidFilter == nil {
+			txc = data.mergedTxids
+			if txc == nil {
+				txc = mergeXpubTxids(data)
+			}
+			txCount = len(txc)
+		} else {
+			txcMap := make(map[string]bool)
+			txc = make(xpubTxids, 0, 32)
+			for _, da := range data.addresses {
+				for i := range da {
+					ad := &da[i]
+					for _, txid := range ad.txids {
+						added, foundTx := txcMap[txid.txid]
+						// count txs regardless of filter but only once
+						if !foundTx {
+							txCount++
+						}
+						// add tx only once
+						if !added {
+							add := txidFilter(&txid, ad)
+							txcMap[txid.txid] = add
+							if add {
+								txc = append(txc, txid)
+							}
 						}
 					}
 				}
 			}
+			sort.Stable(txc)
+			txCount = len(txcMap)
 		}
-		sort.Stable(txc)
-		txCount = len(txcMap)
 		totalResults := txCount
 		if filtered {
 			totalResults = -1
