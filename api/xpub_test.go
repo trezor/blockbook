@@ -52,3 +52,48 @@ func TestTrimXpubCacheItemsLocked(t *testing.T) {
 		t.Fatal("second oldest cache entry was not evicted")
 	}
 }
+
+func TestMergeXpubTxidsDeduplicatesAndSorts(t *testing.T) {
+	data := &xpubData{
+		txCountEstimate: 4,
+		addresses: [][]xpubAddress{
+			{
+				{txids: xpubTxids{
+					{txid: "duplicate", height: 5, inputOutput: txOutput},
+					{txid: "newest", height: 7, inputOutput: txOutput},
+				}},
+			},
+			{
+				{txids: xpubTxids{
+					{txid: "duplicate", height: 5, inputOutput: txInput},
+					{txid: "same-height-input", height: 5, inputOutput: txInput},
+				}},
+			},
+		},
+	}
+
+	txids := mergeXpubTxids(data)
+	got := make([]string, len(txids))
+	for i := range txids {
+		got[i] = txids[i].txid
+	}
+	want := []string{"newest", "same-height-input", "duplicate"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("mergeXpubTxids order = %v, want %v", got, want)
+	}
+	if txids[2].inputOutput != txOutput {
+		t.Fatal("mergeXpubTxids did not preserve the first duplicate occurrence")
+	}
+}
+
+func TestIsUnfilteredXpubTxidFilter(t *testing.T) {
+	if !isUnfilteredXpubTxidFilter(&AddressFilter{Vout: AddressFilterVoutOff}) {
+		t.Fatal("default xpub txid filter should be unfiltered")
+	}
+	if isUnfilteredXpubTxidFilter(&AddressFilter{Vout: AddressFilterVoutInputs}) {
+		t.Fatal("input filter should not be treated as unfiltered")
+	}
+	if isUnfilteredXpubTxidFilter(&AddressFilter{Vout: AddressFilterVoutOff, FromHeight: 1}) {
+		t.Fatal("height filter should not be treated as unfiltered")
+	}
+}
