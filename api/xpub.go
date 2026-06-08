@@ -598,6 +598,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	}
 	if option >= AccountDetailsTxidHistory {
 		if txidFilter == nil {
+			// Shared with xpubData cache; do not mutate in this request path.
 			txc = data.mergedTxids
 			if txc == nil {
 				txc = mergeXpubTxids(data)
@@ -610,11 +611,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 				for i := range da {
 					ad := &da[i]
 					for _, txid := range ad.txids {
-						added, foundTx := txcMap[txid.txid]
-						// count txs regardless of filter but only once
-						if !foundTx {
-							txCount++
-						}
+						added := txcMap[txid.txid]
 						// add tx only once
 						if !added {
 							add := txidFilter(&txid, ad)
