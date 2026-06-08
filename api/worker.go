@@ -2045,7 +2045,7 @@ func (w *Worker) waitForBackendSync() {
 	}
 }
 
-func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool) (Utxos, error) {
+func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool, knownBestHeight *uint32) (Utxos, error) {
 	w.waitForBackendSync()
 	var err error
 	utxos := make(Utxos, 0, 8)
@@ -2115,11 +2115,16 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 		}
 		// ba can be nil if the address is only in mempool!
 		if ba != nil && len(ba.Utxos) > 0 {
-			b, _, err := w.db.GetBestBlock()
-			if err != nil {
-				return nil, err
+			var bestheight int
+			if knownBestHeight != nil {
+				bestheight = int(*knownBestHeight)
+			} else {
+				b, _, err := w.db.GetBestBlock()
+				if err != nil {
+					return nil, err
+				}
+				bestheight = int(b)
 			}
-			bestheight := int(b)
 			var checksum big.Int
 			checksum.Set(&ba.BalanceSat)
 			// go backwards to get the newest first
@@ -2175,7 +2180,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
-	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
+	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false, nil)
 	if err != nil {
 		return nil, err
 	}
