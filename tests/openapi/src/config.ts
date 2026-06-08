@@ -12,6 +12,30 @@ export function loadTestsConfig() {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, "tests", "tests.json"), "utf8")) as TestConfig;
 }
 
+// Maximum age (seconds) a current fiat ticker may have before it is considered stale.
+// Coins refresh rates every 60s (BTC) … 900s (ETH); 2h gives margin against a transient
+// CoinGecko skip while still flagging a feed stalled for hours.
+export const DEFAULT_FIAT_MAX_AGE_SECONDS = 7200; // 2h
+
+export function fiatMaxAgeSeconds() {
+  const raw = process.env.BB_FIAT_MAX_AGE_SECONDS?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_FIAT_MAX_AGE_SECONDS;
+}
+
+// allowOutOfSync lets dev runs proceed against a node still catching up to its backend. Off by
+// default so CI fails loudly on a stale tip (which makes every recent-block sample unreliable).
+// Set OPENAPI_ALLOW_OUT_OF_SYNC=1 to downgrade the inSync assertion in TestContext.getStatus.
+export function allowOutOfSync() {
+  const raw = process.env.OPENAPI_ALLOW_OUT_OF_SYNC?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
 export function resolveSelectedCoins(config: TestConfig) {
   const raw = process.env.OPENAPI_COINS?.trim();
   const requested = raw
@@ -110,6 +134,17 @@ export function resolveWSURL(coin: string, httpBase: string) {
 export function loadCoinConfig(coin: string) {
   const raw = fs.readFileSync(path.join(repoRoot, "configs", "coins", `${coin}.json`), "utf8");
   return JSON.parse(raw) as CoinConfig;
+}
+
+// Golomb block-filter settings for a coin, read from its config (the source of truth for the
+// instance's BlockFilterScripts/BlockGolombFilterP). scriptType is "" when block filters are
+// not configured, which callers use to skip the ws filter tests.
+export function blockFilterConfig(coin: string) {
+  const params = loadCoinConfig(coin).blockbook?.block_chain?.additional_params ?? {};
+  return {
+    scriptType: (params.block_filter_scripts ?? "").trim(),
+    golombP: params.block_golomb_filter_p ?? 0,
+  };
 }
 
 function firstNonEmptyEnv(keys: string[]) {

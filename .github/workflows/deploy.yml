@@ -231,4 +231,15 @@ jobs:
         env:
           BB_BUILD_ENV: dev
           OPENAPI_COINS: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
+          OPENAPI_JUNIT_PATH: ${{ github.workspace }}/tests/openapi/reports/junit.xml
         run: contrib/tests/run-openapi-tests.sh
+
+      # Upload even on failure: the runner writes the report before exiting non-zero, and a failed
+      # run is exactly when the per-test breakdown (which coin/test failed or skipped) is most useful.
+      - name: Upload OpenAPI e2e report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-e2e-report
+          path: tests/openapi/reports/
+          if-no-files-found: warn

@@ -7,7 +7,9 @@ export type BlockResponse = GetResponse<"/api/v2/block/{blockId}">;
 export type TxResponse = GetResponse<"/api/v2/tx/{txid}">;
 export type AddressResponse = components["schemas"]["Address"];
 export type UtxoResponse = components["schemas"]["Utxo"];
+export type BalanceHistoryResponse = components["schemas"]["BalanceHistory"];
 export type FiatTickerResponse = components["schemas"]["FiatTicker"];
+export type FiatTickersResponse = components["schemas"]["FiatTickers"];
 export type AvailableVsCurrenciesResponse = components["schemas"]["AvailableVsCurrencies"];
 export type ContractInfoResponse = components["schemas"]["ContractInfoResult"];
 export type TokenResponse = components["schemas"]["Token"];
@@ -33,6 +35,14 @@ export type CoinConfig = {
   };
   ports?: {
     blockbook_public?: number;
+  };
+  blockbook?: {
+    block_chain?: {
+      additional_params?: {
+        block_filter_scripts?: string;
+        block_golomb_filter_p?: number;
+      };
+    };
   };
 };
 

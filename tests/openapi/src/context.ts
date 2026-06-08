@@ -2,7 +2,7 @@ import WebSocket from "ws";
 
 import { OpenApiFetchClient } from "./client.js";
 import { OpenApiContract, preview } from "./openapi.js";
-import { resolveHTTPBase, resolveWSURL } from "./config.js";
+import { allowOutOfSync, resolveHTTPBase, resolveWSURL } from "./config.js";
 import { SkipTest } from "./errors.js";
 import { addressPage, addressPageSize, blockPageSize, sampleBlockPageSize, sampleBlockProbeMax, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
 import {
@@ -85,6 +85,14 @@ export class TestContext {
     }
     if (!positiveNumber(envelope.blockbook.bestHeight)) {
       throw new Error(`invalid status bestHeight: ${String(envelope.blockbook.bestHeight)}`);
+    }
+    // A node that has not caught up to its backend serves a stale tip, so every recent-block sample
+    // (tx/address/block) the suite derives would be unreliable. Fail loudly unless a dev run opts out.
+    if (!envelope.blockbook.inSync && !allowOutOfSync()) {
+      throw new Error(
+        `blockbook is not in sync (inSync=${String(envelope.blockbook.inSync)}, bestHeight=${envelope.blockbook.bestHeight}); ` +
+          `set OPENAPI_ALLOW_OUT_OF_SYNC=1 to run anyway`,
+      );
     }
 
     this.status = envelope.blockbook;
@@ -305,7 +313,7 @@ export class TestContext {
     }
 
     this.sampleFiatResolved = true;
-    const path = "/api/v2/tickers/?currency=usd";
+    const path = "/api/v2/tickers/";
     const result = await this.client.getMaybe("/api/v2/tickers/", path);
     if (isFiatDataUnavailable(result.status, result.body)) {
       throw new SkipTest("fiat ticker data currently unavailable");
