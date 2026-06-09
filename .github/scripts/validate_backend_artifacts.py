@@ -70,6 +70,107 @@ def has_integrity(backend: dict) -> bool:
     return vtype in VALID_VERIFICATION_TYPES and vtype != "" and vsource != ""
 
 
+def _is_go_zero_value(value: object) -> bool:
+    """Return whether a JSON value maps to a zero Go struct field value."""
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, (int, float)):
+        return value == 0
+    if isinstance(value, str):
+        return value == ""
+    return False
+
+
+def merge_backend_platform(base: dict, override: dict) -> dict:
+    """Match build/tools LoadConfig platform override behavior.
+
+    The Go loader copies non-zero fields from backend.platforms.<GOARCH> onto
+    the top-level backend. Empty strings, false, zero, and null do not override
+    top-level defaults.
+    """
+    merged = dict(base)
+    for key, value in override.items():
+        if not _is_go_zero_value(value):
+            merged[key] = value
+    return merged
+
+
+def effective_backends(backend: dict) -> list[tuple[str, dict]]:
+    backends = [("backend", backend)]
+    platforms = backend.get("platforms")
+    if not isinstance(platforms, dict):
+        return backends
+
+    for platform, override in sorted(platforms.items()):
+        if isinstance(override, dict):
+            backends.append(
+                (f"backend.platforms.{platform}", merge_backend_platform(backend, override))
+            )
+
+    return backends
+
+
+def _with_context(context: str, message: str) -> str:
+    if context == "backend":
+        return message
+    return f"{context}: {message}"
+
+
+def lint_backend(context: str, backend: dict) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    binary_url = (backend.get("binary_url") or "").strip()
+    extract_command = backend.get("extract_command") or ""
+
+    # A build-time fetch of a config/asset from a mutable branch is just as
+    # dangerous as a mutable binary_url.
+    if is_mutable(binary_url):
+        errors.append(
+            _with_context(context, f"binary_url uses a mutable branch ref: {binary_url}")
+        )
+    if is_mutable(extract_command):
+        errors.append(
+            _with_context(
+                context,
+                "extract_command fetches from a mutable branch ref (pin to a commit SHA)",
+            )
+        )
+
+    if not binary_url:
+        return errors, warnings
+
+    integrity = has_integrity(backend)
+    if not integrity:
+        errors.append(
+            _with_context(
+                context,
+                "binary_url has no integrity check "
+                "(set verification_type + verification_source)",
+            )
+        )
+
+    if binary_url.lower().startswith("http://"):
+        if integrity:
+            warnings.append(
+                _with_context(
+                    context,
+                    f"binary_url uses plaintext HTTP (checksum-verified): {binary_url}",
+                )
+            )
+        else:
+            errors.append(
+                _with_context(
+                    context,
+                    f"binary_url uses plaintext HTTP with no integrity check: {binary_url}",
+                )
+            )
+
+    return errors, warnings
+
+
 def lint_file(path: Path) -> tuple[list[str], list[str]]:
     """Return (errors, warnings) for a single coin config."""
     errors: list[str] = []
@@ -83,31 +184,10 @@ def lint_file(path: Path) -> tuple[list[str], list[str]]:
     if not isinstance(backend, dict):
         return errors, warnings
 
-    binary_url = (backend.get("binary_url") or "").strip()
-    extract_command = backend.get("extract_command") or ""
-
-    # A build-time fetch of a config/asset from a mutable branch is just as
-    # dangerous as a mutable binary_url.
-    if is_mutable(binary_url):
-        errors.append(f"binary_url uses a mutable branch ref: {binary_url}")
-    if is_mutable(extract_command):
-        errors.append("extract_command fetches from a mutable branch ref (pin to a commit SHA)")
-
-    if not binary_url:
-        return errors, warnings
-
-    integrity = has_integrity(backend)
-    if not integrity:
-        errors.append(
-            "binary_url has no integrity check "
-            "(set verification_type + verification_source)"
-        )
-
-    if binary_url.lower().startswith("http://"):
-        if integrity:
-            warnings.append(f"binary_url uses plaintext HTTP (checksum-verified): {binary_url}")
-        else:
-            errors.append(f"binary_url uses plaintext HTTP with no integrity check: {binary_url}")
+    for context, effective_backend in effective_backends(backend):
+        backend_errors, backend_warnings = lint_backend(context, effective_backend)
+        errors.extend(backend_errors)
+        warnings.extend(backend_warnings)
 
     return errors, warnings
 
