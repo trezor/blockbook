@@ -922,8 +922,9 @@ func tokenCount(tokens []api.Token, t bchain.TokenStandardName) int {
 	return count
 }
 
-func jsStr(s string) template.JSStr {
-	return template.JSStr(s)
+func jsStr(s string) template.JS {
+	b, _ := json.Marshal(s)
+	return template.JS(b)
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {

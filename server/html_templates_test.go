@@ -442,3 +442,22 @@ func Test_tokenDetailTemplateEscapesScriptEndTagInJSContext(t *testing.T) {
 		t.Fatalf("escaped script-end-tag payload not found in output: %s", body)
 	}
 }
+
+func Test_jsStrEscapesQRCodeTextInJSContext(t *testing.T) {
+	tmpl := template.Must(template.New("qrcode").Funcs(template.FuncMap{
+		"jsStr": jsStr,
+	}).Parse(`<script>new QRCode(document.getElementById("qrcode"), { text: {{jsStr .}}, width: 120, height: 120 });</script>`))
+
+	var rendered bytes.Buffer
+	if err := tmpl.Execute(&rendered, `wpkh(xpub)"});alert(1);//`); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	body := rendered.String()
+
+	if strings.Contains(body, `text: "wpkh(xpub)"});alert(1);//"`) {
+		t.Fatalf("found unescaped QR code text breakout payload in output: %s", body)
+	}
+	if !strings.Contains(body, `text: "wpkh(xpub)\"});alert(1);//"`) {
+		t.Fatalf("escaped QR code text literal not found in output: %s", body)
+	}
+}

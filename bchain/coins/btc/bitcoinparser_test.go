@@ -1001,6 +1001,12 @@ func TestParseXpubDescriptors(t *testing.T) {
 			},
 		},
 		{
+			name:    "wpkh(xpub) error - trailing JS suffix",
+			xpub:    `wpkh(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)"});alert(1);//`,
+			parser:  btcMainParser,
+			wantErr: true,
+		},
+		{
 			name:    "xxx(xpub) error - unknown output script",
 			xpub:    "xxx(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)",
 			parser:  btcMainParser,

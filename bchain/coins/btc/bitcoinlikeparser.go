@@ -442,7 +442,7 @@ var (
 
 func init() {
 	var err error
-	xpubDesriptorRegex, err = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+`)
+	xpubDesriptorRegex, err = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+(#[a-z0-9]{8})?$`)
 	if err != nil {
 		panic(errors.Annotate(err, "Invalid bitcoinparser xpubDesriptorRegex"))
 	}
