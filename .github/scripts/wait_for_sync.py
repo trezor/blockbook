@@ -91,9 +91,31 @@ def preview_body(body: bytes, limit: int = 200) -> str:
     return text[: limit - 3] + "..."
 
 
-def fetch_status(base_url: str, request_timeout: int) -> tuple[int, bytes]:
+def build_ssl_context() -> tuple[ssl.SSLContext, str]:
+    # Dev Blockbook instances are reached over HTTPS, usually with an
+    # internally-issued (often self-signed) certificate, so chain verification
+    # is opt-in (see security_report_final.md L1):
+    #   * SYNC_CA_FILE=<path>  verify the chain against that internal CA bundle
+    #                          (preferred for internal hosts);
+    #   * SYNC_TLS_INSECURE=0  verify against the system trust store;
+    #   * otherwise            verification is disabled (default; preserves the
+    #                          prior behavior for self-signed dev certs).
+    ca_file = os.environ.get("SYNC_CA_FILE", "").strip()
+    if ca_file:
+        return ssl.create_default_context(cafile=ca_file), f"verified against {ca_file}"
+    insecure = os.environ.get("SYNC_TLS_INSECURE", "1").strip().lower()
+    if insecure not in ("1", "true", "yes", "on"):
+        return ssl.create_default_context(), "verified against the system trust store"
+    return (
+        ssl._create_unverified_context(),
+        "DISABLED (set SYNC_CA_FILE to pin an internal CA)",
+    )
+
+
+def fetch_status(
+    base_url: str, request_timeout: int, context: ssl.SSLContext
+) -> tuple[int, bytes]:
     request = urllib.request.Request(base_url + "/api/status")
-    context = ssl._create_unverified_context()
     with urllib.request.urlopen(request, timeout=request_timeout, context=context) as resp:
         return resp.getcode(), resp.read()
 
@@ -146,6 +168,9 @@ def main() -> None:
     poll_seconds = int(os.environ.get("SYNC_POLL_SECONDS", "10"))
     request_timeout = int(os.environ.get("SYNC_REQUEST_TIMEOUT_SECONDS", "20"))
 
+    ssl_context, tls_mode = build_ssl_context()
+    log(f"TLS certificate verification: {tls_mode}")
+
     pending = {}
     last_seen = {}
     for coin in coins:
@@ -164,7 +189,7 @@ def main() -> None:
         for coin in sorted(list(pending)):
             base_url = pending[coin]
             try:
-                status, body = fetch_status(base_url, request_timeout)
+                status, body = fetch_status(base_url, request_timeout, ssl_context)
             except urllib.error.HTTPError as exc:
                 status = exc.code
                 body = exc.read()
@@ -176,7 +201,7 @@ def main() -> None:
                 base_url = upgrade_http_base_to_https(base_url)
                 pending[coin] = base_url
                 try:
-                    status, body = fetch_status(base_url, request_timeout)
+                    status, body = fetch_status(base_url, request_timeout, ssl_context)
                 except urllib.error.HTTPError as exc:
                     status = exc.code
                     body = exc.read()
