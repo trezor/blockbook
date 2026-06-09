@@ -54,7 +54,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate branch or tag
-        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+        env:
+          REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
         uses: actions/checkout@v4
@@ -85,7 +87,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate branch or tag
-        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+        env:
+          REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
         uses: actions/checkout@v4
@@ -126,7 +130,10 @@ jobs:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_PACKAGE_ROOT: /opt/blockbook-builds
           BB_BUILD_ENV: ${{ inputs.env }}
-        run: python3 ./.github/scripts/build_packages.py --backend-mode ${{ inputs.backend_mode }} ${{ join(matrix.coins, ' ') }}
+          BACKEND_MODE: ${{ inputs.backend_mode }}
+          # Space-separated, allowlisted coin aliases; intentionally word-split below.
+          COINS: ${{ join(matrix.coins, ' ') }}
+        run: python3 ./.github/scripts/build_packages.py --backend-mode "$BACKEND_MODE" $COINS
 
   deploy:
     name: Deploy (${{ matrix.coin }})
