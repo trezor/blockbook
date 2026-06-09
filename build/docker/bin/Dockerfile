@@ -29,16 +29,21 @@ fi
 
 # install and configure go
 ARG TARGETPLATFORM
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then ARCHITECTURE=amd64; elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=arm64; elif [ "$TARGETPLATFORM" = "linux/aarch64" ]; then ARCHITECTURE=arm64; else ARCHITECTURE=amd64; fi \
-    && cd /opt && wget https://dl.google.com/go/$GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz && \
-    tar xf $GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then ARCHITECTURE=amd64; GO_SHA256=9fa5ffeda4170de60f67f3aa0f824e426421ba724c21e133c1e35d6159ca1bec; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=arm64; GO_SHA256=a68e86d4b72c2c2fecf7dfed667680b6c2a071221bbdb6913cf83ce3f80d9ff0; \
+    elif [ "$TARGETPLATFORM" = "linux/aarch64" ]; then ARCHITECTURE=arm64; GO_SHA256=a68e86d4b72c2c2fecf7dfed667680b6c2a071221bbdb6913cf83ce3f80d9ff0; \
+    else ARCHITECTURE=amd64; GO_SHA256=9fa5ffeda4170de60f67f3aa0f824e426421ba724c21e133c1e35d6159ca1bec; fi \
+    && cd /opt && wget https://dl.google.com/go/$GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz \
+    && echo "$GO_SHA256  $GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz" | sha256sum -c - \
+    && tar xf $GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz
 RUN ln -s /opt/go/bin/go /usr/bin/go
 RUN mkdir -p $GOPATH
 RUN echo -n "GO version: " && go version
 RUN echo -n "GOPATH: " && echo $GOPATH
 
 # install rocksdb
-RUN cd /opt && git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git
+RUN cd /opt && git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git \
+    && test "$(git -C /opt/rocksdb rev-parse HEAD)" = "ae8fb3e5000e46d8d4c9dbf3a36019c0aaceebff"
 RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB DISABLE_WARNING_AS_ERROR=1 make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
