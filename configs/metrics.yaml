@@ -298,6 +298,10 @@ metrics:
     help: Time spent in fiat-rate downloader stages such as current, hourly, historical and token ticker updates
     labels: [stage, status]
     buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300]
+  fiat_rates_missing_day_lookups:
+    name: blockbook_fiat_rates_missing_day_lookups
+    type: counter
+    help: Fiat rate lookups that found no stored historical ticker for the resolved day and returned an unavailable rate
   alternative_fee_provider_requests:
     name: blockbook_alternative_fee_provider_requests
     type: counter_vec

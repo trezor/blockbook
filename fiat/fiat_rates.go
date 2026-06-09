@@ -255,7 +255,6 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 	hourlyTickersFrom := fr.hourlyTickersFrom
 	hourlyTickersTo := fr.hourlyTickersTo
 	dailyTickers := fr.dailyTickers
-	dailyTickersFrom := fr.dailyTickersFrom
 	dailyTickersTo := fr.dailyTickersTo
 	fr.mux.RUnlock()
 
@@ -287,28 +286,24 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 			tickers[i] = prevTicker
 			continue
 		} else {
-			var found bool
-			if dailyTs < dailyTickersFrom {
-				dailyTs = dailyTickersFrom
-			}
-			var ticker *common.CurrencyRatesTicker
-			for ; dailyTs <= dailyTickersTo; dailyTs += secondsInDay {
-				if ticker, found = dailyTickers[dailyTs]; found && ticker != nil {
-					if common.IsSuitableTicker(ticker, vsCurrency, token) {
-						tickers[i] = ticker
-						prevTicker = ticker
-						prevTs = t
-						break
-					} else {
-						found = false
-					}
+			if dailyTs <= dailyTickersTo {
+				// serve only a ticker stored for the resolved day, otherwise keep nil
+				// so that the API returns -1
+				if ticker, found := dailyTickers[dailyTs]; found && ticker != nil &&
+					roundTimeUnix(ticker.Timestamp, secondsInDay) == dailyTs &&
+					common.IsSuitableTicker(ticker, vsCurrency, token) {
+					tickers[i] = ticker
+					prevTicker = ticker
+					prevTs = t
+				} else if fr.metrics != nil {
+					fr.metrics.FiatRatesMissingDayLookups.Inc()
 				}
+				continue
 			}
-			if !found {
-				tickers[i] = currentTicker
-				prevTicker = currentTicker
-				prevTs = t
-			}
+			// timestamps after the stored history are served with the current ticker
+			tickers[i] = currentTicker
+			prevTicker = currentTicker
+			prevTs = t
 		}
 	}
 	return &tickers, nil
