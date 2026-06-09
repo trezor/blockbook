@@ -5,7 +5,7 @@
 | Ethereum Archive                 | 9116             | 9016               | 8016        | 38316 p2p, 8116 http, 8516 authrpc                  |
 | Bitcoin                          | 9130             | 9030               | 8030        | 38330                                               |
 | Bitcoin Cash                     | 9131             | 9031               | 8031        | 38331                                               |
-| Zcash                            | 9132             | 9032               | 8032        | 38332                                               |
+| Zcash                            | 9132             | 9032               | 8032        |                                                     |
 | Dash                             | 9133             | 9033               | 8033        | 38333                                               |
 | Litecoin                         | 9134             | 9034               | 8034        | 38334                                               |
 | Bitcoin Gold                     | 9135             | 9035               | 8035        | 38335                                               |
@@ -67,7 +67,7 @@
 | Bitcoin Testnet4                 | 19129            | 19029              | 18029       | 48329                                               |
 | Bitcoin Testnet                  | 19130            | 19030              | 18030       | 48330                                               |
 | Bitcoin Cash Testnet             | 19131            | 19031              | 18031       | 48331                                               |
-| Zcash Testnet                    | 19132            | 19032              | 18032       | 48332                                               |
+| Zcash Testnet                    | 19132            | 19032              | 18032       |                                                     |
 | Dash Testnet                     | 19133            | 19033              | 18033       | 48333                                               |
 | Litecoin Testnet                 | 19134            | 19034              | 18034       | 48334                                               |
 | Bitcoin Gold Testnet             | 19135            | 19035              | 18035       | 48335                                               |
