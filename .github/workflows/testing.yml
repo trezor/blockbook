@@ -83,3 +83,18 @@ jobs:
         env:
           BB_BUILD_ENV: dev
         run: make test-integration ARGS="-v"
+
+  backend-artifact-lint:
+    name: Backend Artifact Lint
+    # Pure static analysis of configs/coins/*.json: no secrets, no backend
+    # access, safe to run for fork PRs on an ephemeral GitHub-hosted runner.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Validate backend artifact sources
+        run: python3 ./.github/scripts/validate_backend_artifacts.py
