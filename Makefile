@@ -1,7 +1,8 @@
 BIN_IMAGE = blockbook-build
 DEB_IMAGE = blockbook-build-deb
 PACKAGER = $(shell id -u):$(shell id -g)
-DOCKER_VERSION = $(shell docker version --format '{{.Client.Version}}')
+DOCKER_VERSION = 29.4.3
+DOCKER_SHA256 = bc9734a89d3edd15eeca8620961f6499ba69948814c85d7ac3488e34b3e16d01
 BASE_IMAGE = $$(awk -F= '$$1=="ID" { print $$2 ;}' /etc/os-release):$$(awk -F= '$$1=="VERSION_ID" { print $$2 ;}' /etc/os-release | tr -d '"')
 NO_CACHE = false
 TCMALLOC =
@@ -81,7 +82,7 @@ build-images: clean-images
 .deb-image: .bin-image
 	@if [ $$(build/tools/image_status.sh $(DEB_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(DEB_IMAGE)..."; \
-		docker build --no-cache=$(NO_CACHE) --build-arg DOCKER_VERSION=$(DOCKER_VERSION) -t $(DEB_IMAGE) build/docker/deb; \
+		docker build --no-cache=$(NO_CACHE) --build-arg DOCKER_VERSION=$(DOCKER_VERSION) --build-arg DOCKER_SHA256=$(DOCKER_SHA256) -t $(DEB_IMAGE) build/docker/deb; \
 	else \
 		echo "Image $(DEB_IMAGE) is up to date"; \
 	fi
