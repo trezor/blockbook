@@ -181,6 +181,11 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 	p.mempoolTxsMux.Unlock()
 
 	for _, tx := range txs {
+		// a freshly submitted tx may transiently be unknown to a load-balanced provider node,
+		// give it one check period before reconciling
+		if time.Since(time.Unix(int64(tx.tx.time), 0)) < alternativeMempoolTxCheckPeriod {
+			continue
+		}
 		known, mined, err := p.providerKnowsTransaction(tx.txid)
 		if err != nil {
 			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
@@ -218,7 +223,10 @@ func (p *AlternativeSendTxProvider) getTransactionFromProviders(txid string) (*b
 
 		var tx bchain.RpcTransaction
 		if err := json.Unmarshal(raw, &tx); err != nil {
-			return nil, false, err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		if tx == (bchain.RpcTransaction{}) {
 			continue
