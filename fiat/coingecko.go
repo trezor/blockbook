@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,27 +21,27 @@ import (
 )
 
 const (
-	DefaultHTTPTimeout                 = 15 * time.Second
-	DefaultThrottleDelayMs             = 100
-	coingeckoHistoryDaysLimit          = 365
-	coingeckoFreePlanRequestsPerMinute = 25
-	coingeckoRangeHistorical           = "historical"
-	coingeckoRangeTip                  = "tip"
-	coingeckoRangeCapped               = "capped"
-	coingeckoBootstrapURL              = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
-	coingeckoProURL                    = "https://pro-api.coingecko.com/api/v3"
-	coingeckoFreeURL                   = "https://api.coingecko.com/api/v3"
-	coingeckoPlanFree                  = "free"
-	coingeckoPlanPro                   = "pro"
-	coingeckoAPIKeyEnv                 = "COINGECKO_API_KEY"
-	coingeckoAPIKeyEnvSuffix           = "_" + coingeckoAPIKeyEnv
+	DefaultHTTPTimeout                = 15 * time.Second
+	DefaultThrottleDelayMs            = 100
+	coingeckoHistoryDaysLimit         = 365
+	coingeckoKeylessRequestsPerMinute = 10
+	coingeckoRangeHistorical          = "historical"
+	coingeckoRangeTip                 = "tip"
+	coingeckoRangeCapped              = "capped"
+	coingeckoBootstrapURL             = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
+	coingeckoProURL                   = "https://pro-api.coingecko.com/api/v3"
+	coingeckoFreeURL                  = "https://api.coingecko.com/api/v3"
+	coingeckoPlanFree                 = "free"
+	coingeckoPlanPro                  = "pro"
+	coingeckoAPIKeyEnv                = "COINGECKO_API_KEY"
+	coingeckoAPIKeyEnvSuffix          = "_" + coingeckoAPIKeyEnv
 )
 
 var coingeckoThrottleRetryBackoff = []time.Duration{
 	1 * time.Minute,
 	2 * time.Minute,
-	3 * time.Minute,
 	4 * time.Minute,
+	8 * time.Minute,
 }
 
 var errCoingeckoHistoricalTokenUpdateInProgress = errors.New("coingecko historical token update already in progress")
@@ -171,7 +172,7 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string,
 	minRequestInterval := time.Duration(0)
 	if throttleDown {
 		if normalizedPlan == coingeckoPlanFree {
-			minRequestInterval = time.Minute / coingeckoFreePlanRequestsPerMinute
+			minRequestInterval = time.Minute / coingeckoKeylessRequestsPerMinute
 		} else {
 			minRequestInterval = DefaultThrottleDelayMs * time.Millisecond
 		}
@@ -216,14 +217,44 @@ func getAllowedVsCurrenciesMap(currenciesString string) map[string]struct{} {
 
 // coingeckoHTTPError carries the HTTP status from a non-200 response so throttling can be
 // detected by status code. Error() returns the raw body so existing body-based detection
-// (e.g. the Cloudflare "error code: 1015" page) keeps working.
+// (e.g. the Cloudflare "error code: 1015" page) keeps working. retryAfter holds the parsed
+// Retry-After header (CoinGecko sends it on 429); zero when absent or unparseable.
 type coingeckoHTTPError struct {
-	status int
-	body   string
+	status     int
+	body       string
+	retryAfter time.Duration
 }
 
 func (e *coingeckoHTTPError) Error() string {
 	return e.body
+}
+
+func parseRetryAfter(value string) time.Duration {
+	secs, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || secs <= 0 {
+		return 0
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// retryAfterFromError extracts the server's Retry-After hint from a coingeckoHTTPError, if any.
+func retryAfterFromError(err error) time.Duration {
+	var httpErr *coingeckoHTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.retryAfter
+	}
+	return 0
+}
+
+func throttleBackoffDelay(attempt int, err error) time.Duration {
+	delay := coingeckoThrottleRetryBackoff[attempt]
+	if ra := retryAfterFromError(err); ra > delay {
+		delay = ra
+	}
+	if delay <= 0 {
+		return 0
+	}
+	return delay + time.Duration(rand.Int63n(int64(delay/5)+1))
 }
 
 // doReq HTTP client
@@ -239,8 +270,9 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 	}
 	if resp.StatusCode != 200 {
 		return nil, &coingeckoHTTPError{
-			status: resp.StatusCode,
-			body:   string(body),
+			status:     resp.StatusCode,
+			body:       string(body),
+			retryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
 		}
 	}
 	return body, nil
@@ -333,7 +365,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, 
 				retries: len(coingeckoThrottleRetryBackoff),
 			}
 		}
-		time.Sleep(coingeckoThrottleRetryBackoff[attempt])
+		time.Sleep(throttleBackoffDelay(attempt, err))
 	}
 }
 

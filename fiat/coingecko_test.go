@@ -357,6 +357,96 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 	}
 }
 
+func TestParseRetryAfter(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{"seconds", "5", 5 * time.Second},
+		{"trimmed seconds", "  10 ", 10 * time.Second},
+		{"zero", "0", 0},
+		{"negative", "-3", 0},
+		{"empty", "", 0},
+		{"garbage", "soon", 0},
+		{"http-date unsupported", "Wed, 10 Jun 2026 11:34:33 GMT", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseRetryAfter(tt.value); got != tt.want {
+				t.Fatalf("parseRetryAfter(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRetryAfterFromError(t *testing.T) {
+	if got := retryAfterFromError(&coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 7 * time.Second}); got != 7*time.Second {
+		t.Fatalf("retryAfterFromError direct = %v, want 7s", got)
+	}
+	// errors.As must unwrap the throttle-exhausted wrapper to reach the underlying Retry-After.
+	wrapped := &coingeckoThrottleRetriesExhaustedError{cause: &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 7 * time.Second}, retries: 4}
+	if got := retryAfterFromError(wrapped); got != 7*time.Second {
+		t.Fatalf("retryAfterFromError wrapped = %v, want 7s", got)
+	}
+	if got := retryAfterFromError(errors.New("boom")); got != 0 {
+		t.Fatalf("retryAfterFromError non-http = %v, want 0", got)
+	}
+}
+
+func TestThrottleBackoffDelay(t *testing.T) {
+	originalBackoff := coingeckoThrottleRetryBackoff
+	coingeckoThrottleRetryBackoff = []time.Duration{10 * time.Second, 20 * time.Second}
+	defer func() { coingeckoThrottleRetryBackoff = originalBackoff }()
+
+	within := func(t *testing.T, got, base time.Duration) {
+		t.Helper()
+		upper := base + base/5 // base + up to ~20% jitter
+		if got < base || got > upper {
+			t.Fatalf("delay %v out of expected [%v, %v]", got, base, upper)
+		}
+	}
+
+	noRetryAfter := &coingeckoHTTPError{status: http.StatusTooManyRequests}
+	// Exponential base is used when there is no Retry-After hint.
+	within(t, throttleBackoffDelay(0, noRetryAfter), 10*time.Second)
+	within(t, throttleBackoffDelay(1, noRetryAfter), 20*time.Second)
+	// A Retry-After longer than the base raises the floor to Retry-After.
+	within(t, throttleBackoffDelay(0, &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 30 * time.Second}), 30*time.Second)
+	// A Retry-After shorter than the base is ignored (base wins).
+	within(t, throttleBackoffDelay(1, &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 5 * time.Second}), 20*time.Second)
+
+	// A zeroed backoff with no Retry-After stays instant (keeps the throttle tests fast).
+	coingeckoThrottleRetryBackoff = []time.Duration{0}
+	if got := throttleBackoffDelay(0, noRetryAfter); got != 0 {
+		t.Fatalf("zeroed backoff delay = %v, want 0", got)
+	}
+}
+
+func TestDoReq_ParsesRetryAfter(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header()["retry-after"] = []string{"5"}
+		http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+	}))
+	defer mockServer.Close()
+
+	req, err := http.NewRequest("GET", mockServer.URL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest failed: %v", err)
+	}
+	_, err = doReq(req, mockServer.Client())
+	var httpErr *coingeckoHTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("expected coingeckoHTTPError, got %v", err)
+	}
+	if httpErr.status != http.StatusTooManyRequests {
+		t.Fatalf("unexpected status: %d", httpErr.status)
+	}
+	if httpErr.retryAfter != 5*time.Second {
+		t.Fatalf("unexpected retryAfter: %v, want 5s", httpErr.retryAfter)
+	}
+}
+
 func TestIsCoingeckoThrottleError_StatusCode(t *testing.T) {
 	// A 429 must be detected even when the body has none of the legacy throttle keywords.
 	if !isCoingeckoThrottleError(&coingeckoHTTPError{status: http.StatusTooManyRequests, body: `{"msg":"slow down"}`}) {
