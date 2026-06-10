@@ -16,8 +16,9 @@ func newAlternativeTxProviderTestServer(t *testing.T, response string) *httptest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		// the handler runs in a different goroutine, t.Fatalf must not be called from here
 		if _, err := w.Write([]byte(response)); err != nil {
-			t.Fatalf("Write() error = %v", err)
+			t.Errorf("Write() error = %v", err)
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -38,7 +39,8 @@ func newTestAlternativeSendTxProvider(url string, removed *string) *AlternativeS
 					From:         "0x2222222222222222222222222222222222222222",
 					AccountNonce: "0x1",
 				},
-				time: uint32(time.Now().Unix()),
+				// older than the reconcile grace period so reconcileMempoolTxs checks it
+				time: uint32(time.Now().Add(-2 * alternativeMempoolTxCheckPeriod).Unix()),
 			},
 		},
 	}
@@ -61,6 +63,24 @@ func TestAlternativeSendTxProviderReconcileRemovesDroppedTransaction(t *testing.
 	}
 	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
 		t.Fatal("dropped transaction remained in alternative mempool cache")
+	}
+}
+
+func TestAlternativeSendTxProviderReconcileSkipsFreshTransaction(t *testing.T) {
+	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`)
+	var removed string
+	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+	tx := provider.mempoolTxs[testAlternativeTxID]
+	tx.time = uint32(time.Now().Unix())
+	provider.mempoolTxs[testAlternativeTxID] = tx
+
+	provider.reconcileMempoolTxs()
+
+	if removed != "" {
+		t.Fatalf("removed txid = %q, want none", removed)
+	}
+	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
+		t.Fatal("freshly submitted transaction was removed from alternative mempool cache")
 	}
 }
 

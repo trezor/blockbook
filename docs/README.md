@@ -11,3 +11,4 @@
 * [API (Tron specifics)](/docs/api-tron.md) – Tron-specific behavior and data extensions for API V2
 * [Sync](/docs/sync.md) – Sync-loop architecture and the `missingBlockRetry` troubleshooting knobs
 * [Testing](/docs/testing.md) – Description of tests used during Blockbook development
+* [Tx Removal Decision](/docs/tx-removal-decision.md) – Why stale alternative-provider mempool txs are reconciled by timeout and provider checks instead of a removal-by-txid API
