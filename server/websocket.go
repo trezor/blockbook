@@ -176,7 +176,13 @@ type WebsocketServer struct {
 	messageRateLimit  int
 	messageRateWindow time.Duration
 	ipBlockDuration   time.Duration
-	websocketLimiter  *websocketConnectionLimiter
+	// ipBlockEnabled is the single switch for the IP blocklist: true only when
+	// the message rate limit can produce breaches (messageRateLimit > 0) and
+	// blocking is configured (ipBlockDuration > 0). When false the per-connection
+	// block check, blockability computation, and maintenance sweep are all
+	// skipped, so disabling the feature costs nothing on the hot paths.
+	ipBlockEnabled   bool
+	websocketLimiter *websocketConnectionLimiter
 	// Shutdown coordination: protects shuttingDown + activeChannels and gates
 	// trackWork so RocksDB cannot be closed while a WS goroutine is mid-read.
 	shutdownMu     sync.Mutex
@@ -314,6 +320,7 @@ func (s *WebsocketServer) configureMessageRateLimit(network string) error {
 		}
 		s.ipBlockDuration = d
 	}
+	s.ipBlockEnabled = s.messageRateLimit > 0 && s.ipBlockDuration > 0
 	if s.messageRateLimit > 0 {
 		glog.Infof("Websocket per-connection message rate limit: %d messages / %s; offending IP block: %s",
 			s.messageRateLimit, s.messageRateWindow, s.ipBlockDuration)
@@ -558,7 +565,10 @@ func (s *WebsocketServer) runWebsocketLimiterMaintenance(interval time.Duration)
 	defer ticker.Stop()
 	for now := range ticker.C {
 		s.websocketLimiter.sweep(now)
-		blockedIPs := s.is.SweepWsBlockedIPs(now)
+		blockedIPs := 0
+		if s.ipBlockEnabled {
+			blockedIPs = s.is.SweepWsBlockedIPs(now)
+		}
 		if s.metrics != nil {
 			uniqueIPs, maxConnectionsPerIP := s.websocketLimiter.stats()
 			s.metrics.WebsocketUniqueIPs.Set(float64(uniqueIPs))
@@ -580,23 +590,21 @@ func (client *websocketClientLimit) trimAttempts(now time.Time) {
 	}
 }
 
-// ipSource records how the client IP returned by resolveClientIP was derived,
-// so the caller can decide whether the attribution is trustworthy enough to add
-// to the IP blocklist.
-type ipSource int
-
-const (
-	ipSourceRemote     ipSource = iota // the bare TCP peer (r.RemoteAddr)
-	ipSourceCloudflare                 // CF-Connecting-IPv6 / CF-Connecting-IP
-	ipSourceXRealIP                    // X-Real-Ip from a trusted proxy
-)
-
-// resolveClientIP returns the per-IP rate-limit address for the request and how
-// it was derived. trustedProxies governs X-Real-Ip; cloudflareProxies governs
+// resolveClientIP returns the per-IP rate-limit address for the request and
+// whether that attribution is trustworthy enough to add to the IP blocklist
+// (blockSafe). trustedProxies governs X-Real-Ip; cloudflareProxies governs
 // CF-Connecting-* (empty disables verification and trusts those headers from any
 // peer, the legacy behavior). When neither header is trusted for this peer it
 // falls back to the bare TCP peer address.
-func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix) (string, ipSource) {
+//
+// blockSafe centralizes the spoof-protection decision so callers never have to
+// re-inspect headers: a CF-Connecting-* value is block-safe only when peer
+// verification is enabled (otherwise it is forgeable); X-Real-Ip is block-safe
+// because it is only honored from a verified trusted proxy; the bare TCP peer is
+// block-safe unless the request also carried a CF-Connecting-* header we did not
+// trust (a spoof attempt, or a real but unrecognized Cloudflare edge — blocking
+// the peer would be wrong in both cases).
+func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix) (string, bool) {
 	host := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		host = h
@@ -612,11 +620,12 @@ func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.
 	if len(trustedProxies) == 0 {
 		cfTrusted := len(cloudflareProxies) == 0 || (remoteOK && isTrustedProxy(remote, cloudflareProxies))
 		if cfTrusted {
+			cfBlockSafe := len(cloudflareProxies) > 0
 			if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
-				return ip, ipSourceCloudflare
+				return ip, cfBlockSafe
 			}
 			if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
-				return ip, ipSourceCloudflare
+				return ip, cfBlockSafe
 			}
 		}
 	}
@@ -627,14 +636,15 @@ func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.
 	// would let any client spoof their IP past the per-IP rate limiter.
 	if remoteOK && isTrustedProxy(remote, trustedProxies) {
 		if ip, ok := parseIP(r.Header.Get("X-Real-Ip")); ok {
-			return ip, ipSourceXRealIP
+			return ip, true
 		}
 	}
 
+	hadCFHeader := r.Header.Get("CF-Connecting-IP") != "" || r.Header.Get("CF-Connecting-IPv6") != ""
 	if remoteOK {
-		return remote.String(), ipSourceRemote
+		return remote.String(), !hadCFHeader
 	}
-	return strings.TrimSpace(r.RemoteAddr), ipSourceRemote
+	return strings.TrimSpace(r.RemoteAddr), !hadCFHeader
 }
 
 // rateLimitKey returns the key used for per-IP connection limiting and for the
@@ -777,33 +787,6 @@ func getWebsocketPayloadPreview(d []byte) string {
 	return string(d[:websocketLogPreviewBytes]) + "...(truncated)"
 }
 
-// attributionBlockable reports whether the resolved client IP is trustworthy
-// enough to add to the IP blocklist. A rate breach always closes the offending
-// connection; only the per-IP block is gated here, because an attacker could
-// otherwise forge a forwarding header to aim a 12h block at an innocent victim.
-func (s *WebsocketServer) attributionBlockable(r *http.Request, ip string, source ipSource) bool {
-	switch source {
-	case ipSourceCloudflare:
-		// Trust the CF-Connecting-* value for blocking only when the TCP peer was
-		// verified as Cloudflare (or a local proxy). With verification disabled
-		// the value is attacker-spoofable.
-		if len(s.cloudflarePrefixes) == 0 {
-			return false
-		}
-	case ipSourceRemote:
-		// The bare TCP peer is safe to block, unless the request also carried a
-		// CF-Connecting-* header we did not trust: that is either a spoof attempt
-		// or a real but unrecognized Cloudflare edge, and blocking the peer would
-		// be wrong in both cases.
-		if r.Header.Get("CF-Connecting-IP") != "" || r.Header.Get("CF-Connecting-IPv6") != "" {
-			return false
-		}
-	case ipSourceXRealIP:
-		// Only ever trusted from a verified trusted proxy; safe to block.
-	}
-	return isBlockableKey(ip, s.trustedProxyPrefixes, s.cloudflarePrefixes)
-}
-
 // ServeHTTP sets up handler of websocket channel
 func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -817,14 +800,19 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server shutting down", http.StatusServiceUnavailable)
 		return
 	}
-	ip, source := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes)
+	ip, blockSafe := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes)
 	ipKey := rateLimitKey(ip)
-	blockable := s.attributionBlockable(r, ip, source)
+	// blockable is only meaningful (and only computed) when the IP blocklist is
+	// enabled, so the O(prefixes) isBlockableKey scan is skipped when disabled.
+	blockable := false
+	if s.ipBlockEnabled {
+		blockable = blockSafe && isBlockableKey(ip, s.trustedProxyPrefixes, s.cloudflarePrefixes)
+	}
 
 	// Reject keys that are on the temporary IP blocklist before doing any
 	// upgrade work. Checked ahead of the connection limiter so a blocked client
 	// cannot keep consuming attempt slots.
-	if s.ipBlockDuration > 0 && s.is.IsWsIPBlocked(ipKey, time.Now()) {
+	if s.ipBlockEnabled && s.is.IsWsIPBlocked(ipKey, time.Now()) {
 		if s.metrics != nil {
 			s.metrics.WebsocketBlockedConnections.Inc()
 		}
@@ -1060,7 +1048,10 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 			}
 			atomic.AddUint64(&c.requests, 1)
 			if c.messageRate != nil {
-				if count := c.messageRate.observe(time.Now()); count >= s.messageRateLimit {
+				// Breach on the message that pushes the trailing-window count past
+				// the limit, so exactly messageRateLimit messages are allowed per
+				// window (matches the "sends more than" contract).
+				if count := c.messageRate.observe(time.Now()); count > s.messageRateLimit {
 					s.onMessageRateBreach(c, count)
 					return
 				}
@@ -1134,7 +1125,7 @@ func (s *WebsocketServer) onConnect(c *websocketChannel) {
 func (s *WebsocketServer) onMessageRateBreach(c *websocketChannel, count int) {
 	now := time.Now()
 	blocked := false
-	if s.ipBlockDuration > 0 && c.blockable {
+	if s.ipBlockEnabled && c.blockable {
 		s.is.BlockWsIP(c.ipKey, now.Add(s.ipBlockDuration), now)
 		blocked = true
 	}

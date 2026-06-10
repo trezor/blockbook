@@ -374,53 +374,55 @@ func mustParsePrefixes(t *testing.T, cidrs ...string) []netip.Prefix {
 
 func TestResolveClientIPCloudflareVerification(t *testing.T) {
 	cf := mustParsePrefixes(t, "203.0.113.0/24", "2400:cb00::/32")
+	trusted := mustParsePrefixes(t, "198.51.100.0/24")
 	tests := []struct {
-		name       string
-		headers    map[string]string
-		remoteAddr string
-		cloudflare []netip.Prefix
-		want       string
-		wantSource ipSource
+		name          string
+		headers       map[string]string
+		remoteAddr    string
+		trusted       []netip.Prefix
+		cloudflare    []netip.Prefix
+		want          string
+		wantBlockSafe bool
 	}{
 		{
-			name:       "verified cloudflare peer: CF header trusted",
-			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.10"},
-			remoteAddr: "203.0.113.5:443", // inside configured CF range
-			cloudflare: cf,
-			want:       "192.0.2.10",
-			wantSource: ipSourceCloudflare,
+			name:          "verified cloudflare peer: CF header trusted and block-safe",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:    "203.0.113.5:443", // inside configured CF range
+			cloudflare:    cf,
+			want:          "192.0.2.10",
+			wantBlockSafe: true,
 		},
 		{
-			name:       "unverified public peer: CF header ignored, falls back to peer",
-			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.10"},
-			remoteAddr: "198.51.100.7:443", // NOT a CF range
-			cloudflare: cf,
-			want:       "198.51.100.7",
-			wantSource: ipSourceRemote,
+			name:          "unverified public peer: CF header ignored, peer not block-safe (spoof guard)",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:    "198.51.100.7:443", // NOT a CF range
+			cloudflare:    cf,
+			want:          "198.51.100.7",
+			wantBlockSafe: false, // an untrusted CF header was present: do not block the peer
 		},
 		{
-			name:       "loopback proxy fronting cloudflare: CF header trusted",
-			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.20"},
-			remoteAddr: "127.0.0.1:5000",
-			cloudflare: cf,
-			want:       "192.0.2.20",
-			wantSource: ipSourceCloudflare,
+			name:          "loopback proxy fronting cloudflare: CF header trusted and block-safe",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.20"},
+			remoteAddr:    "127.0.0.1:5000",
+			cloudflare:    cf,
+			want:          "192.0.2.20",
+			wantBlockSafe: true,
 		},
 		{
-			name:       "verification disabled: CF header trusted from any peer",
-			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.30"},
-			remoteAddr: "198.51.100.7:443",
-			cloudflare: nil,
-			want:       "192.0.2.30",
-			wantSource: ipSourceCloudflare,
+			name:          "verification disabled: CF header trusted for rate limit but NOT block-safe",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.30"},
+			remoteAddr:    "198.51.100.7:443",
+			cloudflare:    nil,
+			want:          "192.0.2.30",
+			wantBlockSafe: false, // spoofable without peer verification
 		},
 		{
-			name:       "native IPv6 in CF-Connecting-IP without IPv6 header",
-			headers:    map[string]string{"CF-Connecting-IP": "2001:db8::99"},
-			remoteAddr: "203.0.113.5:443",
-			cloudflare: cf,
-			want:       "2001:db8::99",
-			wantSource: ipSourceCloudflare,
+			name:          "native IPv6 in CF-Connecting-IP without IPv6 header",
+			headers:       map[string]string{"CF-Connecting-IP": "2001:db8::99"},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "2001:db8::99",
+			wantBlockSafe: true,
 		},
 		{
 			name: "malformed CF-Connecting-IPv6 falls through to CF-Connecting-IP",
@@ -428,10 +430,25 @@ func TestResolveClientIPCloudflareVerification(t *testing.T) {
 				"CF-Connecting-IPv6": "not-an-ip",
 				"CF-Connecting-IP":   "192.0.2.40",
 			},
-			remoteAddr: "203.0.113.5:443",
-			cloudflare: cf,
-			want:       "192.0.2.40",
-			wantSource: ipSourceCloudflare,
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "192.0.2.40",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "X-Real-Ip from trusted proxy is block-safe",
+			headers:       map[string]string{"X-Real-Ip": "192.0.2.50"},
+			remoteAddr:    "198.51.100.7:443", // inside configured trusted-proxy range
+			trusted:       trusted,
+			want:          "192.0.2.50",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "direct public peer with no forwarding header is block-safe",
+			remoteAddr:    "192.0.2.60:443",
+			cloudflare:    cf,
+			want:          "192.0.2.60",
+			wantBlockSafe: true,
 		},
 	}
 	for _, tt := range tests {
@@ -440,9 +457,9 @@ func TestResolveClientIPCloudflareVerification(t *testing.T) {
 			for k, v := range tt.headers {
 				r.Header.Set(k, v)
 			}
-			got, source := resolveClientIP(r, nil, tt.cloudflare)
-			if got != tt.want || source != tt.wantSource {
-				t.Fatalf("resolveClientIP() = %q, %d, want %q, %d", got, source, tt.want, tt.wantSource)
+			got, blockSafe := resolveClientIP(r, tt.trusted, tt.cloudflare)
+			if got != tt.want || blockSafe != tt.wantBlockSafe {
+				t.Fatalf("resolveClientIP() = %q, %v, want %q, %v", got, blockSafe, tt.want, tt.wantBlockSafe)
 			}
 		})
 	}
