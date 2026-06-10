@@ -408,13 +408,13 @@ func TestThrottleBackoffDelay(t *testing.T) {
 	}
 
 	noRetryAfter := &coingeckoHTTPError{status: http.StatusTooManyRequests}
-	// Exponential base is used when there is no Retry-After hint.
+	// The exponential base for the attempt is used only when there is no Retry-After hint.
 	within(t, throttleBackoffDelay(0, noRetryAfter), 10*time.Second)
 	within(t, throttleBackoffDelay(1, noRetryAfter), 20*time.Second)
-	// A Retry-After longer than the base raises the floor to Retry-After.
+	// A Retry-After hint takes priority over the ladder, whether it is longer than the base...
 	within(t, throttleBackoffDelay(0, &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 30 * time.Second}), 30*time.Second)
-	// A Retry-After shorter than the base is ignored (base wins).
-	within(t, throttleBackoffDelay(1, &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 5 * time.Second}), 20*time.Second)
+	// ...or shorter than the base for this attempt.
+	within(t, throttleBackoffDelay(1, &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 5 * time.Second}), 5*time.Second)
 
 	// A zeroed backoff with no Retry-After stays instant (keeps the throttle tests fast).
 	coingeckoThrottleRetryBackoff = []time.Duration{0}

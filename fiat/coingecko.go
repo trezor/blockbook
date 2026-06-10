@@ -243,13 +243,14 @@ func retryAfterFromError(err error) time.Duration {
 	if errors.As(err, &httpErr) {
 		return httpErr.retryAfter
 	}
+	glog.Errorf("No retryAfter header found in the headers: %s", err.Error())
 	return 0
 }
 
 func throttleBackoffDelay(attempt int, err error) time.Duration {
-	delay := coingeckoThrottleRetryBackoff[attempt]
-	if ra := retryAfterFromError(err); ra > delay {
-		delay = ra
+	delay := retryAfterFromError(err)
+	if delay <= 0 {
+		delay = coingeckoThrottleRetryBackoff[attempt]
 	}
 	if delay <= 0 {
 		return 0
