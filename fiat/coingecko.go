@@ -706,11 +706,9 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 			hadFailures = true
 			if isCoingeckoThrottleRetriesExhaustedError(err) {
 				throttleErr = err
-				if bootstrapInProgress {
-					break
-				}
-				glog.Warningf("getHistoricalTicker %s-%s throttled, continuing with remaining currencies: %v", cg.coin, currency, err)
-				continue
+				// Stop, store and retry on the next cycle
+				glog.Warningf("getHistoricalTicker %s-%s throttled, stopping run with partial currencies: %v", cg.coin, currency, err)
+				break
 			}
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
@@ -765,11 +763,9 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 			if _, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
 				if isCoingeckoThrottleRetriesExhaustedError(err) {
 					throttleErr = err
-					if bootstrapInProgress {
-						break
-					}
-					glog.Warningf("getHistoricalTicker %s-%s throttled, continuing with remaining tokens: %v", tokenId, cg.platformVsCurrency, err)
-					continue
+					// Stop, store and retry on the next cycle
+					glog.Warningf("getHistoricalTicker %s-%s throttled, stopping run with partial tokens: %v", tokenId, cg.platformVsCurrency, err)
+					break
 				}
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
