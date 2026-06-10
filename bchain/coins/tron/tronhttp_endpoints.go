@@ -24,14 +24,18 @@ type tronGetTransactionListFromPendingResponse struct {
 }
 
 type tronGetAccountResourceResponse struct {
-	FreeNetLimit   int64 `json:"freeNetLimit"`
-	FreeNetUsed    int64 `json:"freeNetUsed"`
-	NetLimit       int64 `json:"NetLimit"`
-	NetUsed        int64 `json:"NetUsed"`
-	EnergyLimit    int64 `json:"EnergyLimit"`
-	EnergyUsed     int64 `json:"EnergyUsed"`
-	TronPowerUsed  int64 `json:"tronPowerUsed"`
-	TronPowerLimit int64 `json:"tronPowerLimit"`
+	FreeNetLimit      int64 `json:"freeNetLimit"`
+	FreeNetUsed       int64 `json:"freeNetUsed"`
+	NetLimit          int64 `json:"NetLimit"`
+	NetUsed           int64 `json:"NetUsed"`
+	TotalNetLimit     int64 `json:"TotalNetLimit"`
+	TotalNetWeight    int64 `json:"TotalNetWeight"`
+	EnergyLimit       int64 `json:"EnergyLimit"`
+	EnergyUsed        int64 `json:"EnergyUsed"`
+	TotalEnergyLimit  int64 `json:"TotalEnergyLimit"`
+	TotalEnergyWeight int64 `json:"TotalEnergyWeight"`
+	TronPowerUsed     int64 `json:"tronPowerUsed"`
+	TronPowerLimit    int64 `json:"tronPowerLimit"`
 }
 
 type tronFrozenV2Entry struct {
@@ -172,6 +176,10 @@ func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (j
 		TotalFreeBandwidth:       resourceRes.resp.FreeNetLimit,
 		AvailableEnergy:          tronAvailableResource(resourceRes.resp.EnergyLimit, resourceRes.resp.EnergyUsed),
 		TotalEnergy:              resourceRes.resp.EnergyLimit,
+		TotalEnergyLimit:         resourceRes.resp.TotalEnergyLimit,
+		TotalEnergyWeight:        resourceRes.resp.TotalEnergyWeight,
+		TotalBandwidthLimit:      resourceRes.resp.TotalNetLimit,
+		TotalBandwidthWeight:     resourceRes.resp.TotalNetWeight,
 		StakingInfo:              stakingInfo,
 	})
 	if err != nil {

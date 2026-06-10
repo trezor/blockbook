@@ -89,7 +89,7 @@ func TestAccountChainExtra(t *testing.T) {
 		addr := &api.Address{
 			ChainExtraData: &api.AccountChainExtraData{
 				PayloadType: "tron",
-				Payload:     json.RawMessage(`{"availableStakedBandwidth":400,"totalStakedBandwidth":700,"availableFreeBandwidth":200,"totalFreeBandwidth":300,"availableEnergy":1234,"totalEnergy":9000,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TA","voteCount":"2"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000"}}`),
+				Payload:     json.RawMessage(`{"availableStakedBandwidth":400,"totalStakedBandwidth":700,"availableFreeBandwidth":200,"totalFreeBandwidth":300,"availableEnergy":1234,"totalEnergy":9000,"totalEnergyLimit":180000000000,"totalEnergyWeight":2363311832,"totalBandwidthLimit":43200000000,"totalBandwidthWeight":68292467803,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TA","voteCount":"2"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000"}}`),
 			},
 		}
 		got := accountChainExtra(addr)
@@ -101,6 +101,9 @@ func TestAccountChainExtra(t *testing.T) {
 		}
 		if got.AvailableEnergy != 1234 || got.TotalEnergy != 9000 {
 			t.Fatalf("unexpected energy values %+v", got)
+		}
+		if got.TotalEnergyLimit != 180000000000 || got.TotalEnergyWeight != 2363311832 || got.TotalBandwidthLimit != 43200000000 || got.TotalBandwidthWeight != 68292467803 {
+			t.Fatalf("unexpected total resource values %+v", got)
 		}
 		if got.StakingInfoData == nil {
 			t.Fatal("expected staking info data")
