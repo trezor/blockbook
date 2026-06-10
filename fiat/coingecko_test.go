@@ -106,17 +106,17 @@ func TestValidateCoinGeckoAPIKeyEnv(t *testing.T) {
 func TestCanUseBootstrapMax(t *testing.T) {
 	tests := []struct {
 		name        string
-		cg          Coingecko
+		cg          *Coingecko
 		expectAllow bool
 	}{
 		{
 			name:        "bootstrap url allows max",
-			cg:          Coingecko{bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3"},
+			cg:          &Coingecko{bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3"},
 			expectAllow: true,
 		},
 		{
 			name:        "missing bootstrap url does not allow max",
-			cg:          Coingecko{},
+			cg:          &Coingecko{},
 			expectAllow: false,
 		},
 	}
@@ -357,7 +357,87 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 	}
 }
 
-func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
+func TestIsCoingeckoThrottleError_StatusCode(t *testing.T) {
+	// A 429 must be detected even when the body has none of the legacy throttle keywords.
+	if !isCoingeckoThrottleError(&coingeckoHTTPError{status: http.StatusTooManyRequests, body: `{"msg":"slow down"}`}) {
+		t.Fatal("expected 429 to be detected as throttle")
+	}
+	if isCoingeckoThrottleError(&coingeckoHTTPError{status: http.StatusInternalServerError, body: "boom"}) {
+		t.Fatal("did not expect 500 to be detected as throttle")
+	}
+	// Legacy keyless-endpoint signal still matches via body text.
+	if !isCoingeckoThrottleError(errors.New("error code: 1015")) {
+		t.Fatal("expected Cloudflare 1015 to be detected as throttle")
+	}
+	if isCoingeckoThrottleError(nil) {
+		t.Fatal("nil error must not be a throttle error")
+	}
+}
+
+func TestMakeReq_Detects429ByStatus(t *testing.T) {
+	originalBackoff := coingeckoThrottleRetryBackoff
+	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	defer func() {
+		coingeckoThrottleRetryBackoff = originalBackoff
+	}()
+
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 429 with a body that contains none of the legacy keywords; detection must rely on status.
+		if requests.Add(1) <= 2 {
+			http.Error(w, `{"error":"please slow down"}`, http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{httpClient: mockServer.Client()}
+	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
+	if err != nil {
+		t.Fatalf("makeReq unexpectedly failed: %v", err)
+	}
+	if string(resp) != `{"ok":true}` {
+		t.Fatalf("unexpected response body: %s", string(resp))
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+func TestMakeReq_PacesRequests(t *testing.T) {
+	interval := 60 * time.Millisecond
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient:             mockServer.Client(),
+		minHttpRequestInterval: interval,
+	}
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree); err != nil {
+			t.Fatalf("makeReq failed on call %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+	// 3 requests => 2 enforced gaps of at least `interval` each.
+	if minElapsed := 2 * interval; elapsed < minElapsed {
+		t.Fatalf("expected pacing to take at least %v across 3 requests, took %v", minElapsed, elapsed)
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+// In steady state (bootstrap complete) a throttled currency must not abort the whole pass:
+// the loop continues with the remaining currencies, and the throttle error is still returned so
+// the cycle retries the unfinished ones next run.
+func TestUpdateHistoricalTickers_ContinuesPastThrottleInSteadyState(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -429,12 +509,103 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
 	if got := int(usdRequests.Load()); got != wantUSDRequests {
 		t.Fatalf("unexpected usd request count: got %d, want %d", got, wantUSDRequests)
 	}
-	if got := int(eurRequests.Load()); got != 0 {
-		t.Fatalf("expected eur request count 0 after throttle exhaustion, got %d", got)
+	// eur must still be attempted after usd was throttled (continue, not break).
+	if got := int(eurRequests.Load()); got != 1 {
+		t.Fatalf("expected eur to be requested once after usd throttle, got %d", got)
+	}
+	// the eur ticker that succeeded must be persisted despite the usd throttle.
+	eurTicker, err := d.FiatRatesFindLastTicker("eur", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker eur failed: %v", err)
+	}
+	if eurTicker == nil {
+		t.Fatal("expected eur ticker to be stored after continuing past usd throttle")
 	}
 }
 
-func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
+// During bootstrap the pass is strict: a throttled currency stops the pass early (break) so the
+// failed attempt is counted and bootstrap retries terminate.
+func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionDuringBootstrap(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(false); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	originalVsCurrencies := vsCurrencies
+	originalPlatformIds := platformIds
+	originalPlatformIdsToTokens := platformIdsToTokens
+	defer func() {
+		vsCurrencies = originalVsCurrencies
+		platformIds = originalPlatformIds
+		platformIdsToTokens = originalPlatformIdsToTokens
+	}()
+
+	originalBackoff := coingeckoThrottleRetryBackoff
+	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	defer func() {
+		coingeckoThrottleRetryBackoff = originalBackoff
+	}()
+
+	var usdRequests atomic.Int32
+	var eurRequests atomic.Int32
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd","eur"]`))
+		case "/coins/ethereum/market_chart":
+			switch r.URL.Query().Get("vs_currency") {
+			case "usd":
+				usdRequests.Add(1)
+				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			case "eur":
+				eurRequests.Add(1)
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
+			default:
+				http.Error(w, "unexpected vs_currency", http.StatusBadRequest)
+			}
+		default:
+			http.Error(w, fmt.Sprintf("unexpected path %s", r.URL.Path), http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	err := cg.UpdateHistoricalTickers()
+	if err == nil {
+		t.Fatal("expected throttle exhaustion error")
+	}
+	if !isCoingeckoThrottleRetriesExhaustedError(err) {
+		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	}
+
+	wantUSDRequests := 1 + len(coingeckoThrottleRetryBackoff)
+	if got := int(usdRequests.Load()); got != wantUSDRequests {
+		t.Fatalf("unexpected usd request count: got %d, want %d", got, wantUSDRequests)
+	}
+	if got := int(eurRequests.Load()); got != 0 {
+		t.Fatalf("expected eur request count 0 after bootstrap throttle exhaustion (break), got %d", got)
+	}
+}
+
+// In steady state a throttled token must not abort the whole token pass: the loop continues with
+// the remaining tokens (each gets its own bounded retries) and the throttle error is still
+// returned so the unfinished tokens are retried next run.
+func TestUpdateHistoricalTokenTickers_ContinuesPastThrottleInSteadyState(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -498,7 +669,8 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
 		t.Fatalf("expected throttle exhaustion error, got %v", err)
 	}
 
-	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
+	// Both tokens are throttled; continuing means each one is attempted with its own bounded retries.
+	wantRequests := 2 * (1 + len(coingeckoThrottleRetryBackoff))
 	if got := int(marketChartRequests.Load()); got != wantRequests {
 		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, wantRequests)
 	}

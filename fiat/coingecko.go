@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -19,19 +20,20 @@ import (
 )
 
 const (
-	DefaultHTTPTimeout        = 15 * time.Second
-	DefaultThrottleDelayMs    = 100 // 100 ms delay between requests
-	coingeckoHistoryDaysLimit = 365
-	coingeckoRangeHistorical  = "historical"
-	coingeckoRangeTip         = "tip"
-	coingeckoRangeCapped      = "capped"
-	coingeckoBootstrapURL     = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
-	coingeckoProURL           = "https://pro-api.coingecko.com/api/v3"
-	coingeckoFreeURL          = "https://api.coingecko.com/api/v3"
-	coingeckoPlanFree         = "free"
-	coingeckoPlanPro          = "pro"
-	coingeckoAPIKeyEnv        = "COINGECKO_API_KEY"
-	coingeckoAPIKeyEnvSuffix  = "_" + coingeckoAPIKeyEnv
+	DefaultHTTPTimeout                 = 15 * time.Second
+	DefaultThrottleDelayMs             = 100
+	coingeckoHistoryDaysLimit          = 365
+	coingeckoFreePlanRequestsPerMinute = 25
+	coingeckoRangeHistorical           = "historical"
+	coingeckoRangeTip                  = "tip"
+	coingeckoRangeCapped               = "capped"
+	coingeckoBootstrapURL              = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
+	coingeckoProURL                    = "https://pro-api.coingecko.com/api/v3"
+	coingeckoFreeURL                   = "https://api.coingecko.com/api/v3"
+	coingeckoPlanFree                  = "free"
+	coingeckoPlanPro                   = "pro"
+	coingeckoAPIKeyEnv                 = "COINGECKO_API_KEY"
+	coingeckoAPIKeyEnvSuffix           = "_" + coingeckoAPIKeyEnv
 )
 
 var coingeckoThrottleRetryBackoff = []time.Duration{
@@ -58,22 +60,23 @@ func (e *coingeckoThrottleRetriesExhaustedError) Unwrap() error {
 
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
-	tipURL              string
-	bootstrapURL        string
-	apiKey              string
-	coin                string
-	platformIdentifier  string
-	platformVsCurrency  string
-	allowedVsCurrencies map[string]struct{}
-	httpTimeout         time.Duration
-	throttlingDelay     time.Duration
-	timeFormat          string
-	httpClient          *http.Client
-	db                  *db.RocksDB
-	updatingCurrent     bool
-	updatingTokens      bool
-	metrics             *common.Metrics
-	plan                string
+	tipURL                 string
+	bootstrapURL           string
+	apiKey                 string
+	coin                   string
+	platformIdentifier     string
+	platformVsCurrency     string
+	allowedVsCurrencies    map[string]struct{}
+	httpTimeout            time.Duration
+	timeFormat             string
+	httpClient             *http.Client
+	db                     *db.RocksDB
+	updatingTokens         bool
+	metrics                *common.Metrics
+	plan                   string
+	minHttpRequestInterval time.Duration
+	reqMu                  sync.Mutex
+	lastRequestAt          time.Time
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -160,15 +163,19 @@ func resolveCoinGeckoBootstrapURL(bootstrapURL string) string {
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
 func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string, bootstrapURL string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, plan string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
-	throttlingDelayMs := 0 // No delay by default
-	if throttleDown {
-		throttlingDelayMs = DefaultThrottleDelayMs
-	}
-
 	allowedVsCurrenciesMap := getAllowedVsCurrenciesMap(allowedVsCurrencies)
 
 	apiKey := resolveCoinGeckoAPIKey(network, coinShortcut)
 	normalizedPlan := normalizeCoinGeckoPlan(plan)
+
+	minRequestInterval := time.Duration(0)
+	if throttleDown {
+		if normalizedPlan == coingeckoPlanFree {
+			minRequestInterval = time.Minute / coingeckoFreePlanRequestsPerMinute
+		} else {
+			minRequestInterval = DefaultThrottleDelayMs * time.Millisecond
+		}
+	}
 	resolvedBootstrapURL := resolveCoinGeckoBootstrapURL(bootstrapURL)
 	tipURL := coingeckoFreeURL
 	if normalizedPlan == coingeckoPlanPro {
@@ -189,10 +196,10 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string,
 		httpClient: &http.Client{
 			Timeout: DefaultHTTPTimeout,
 		},
-		db:              db,
-		throttlingDelay: time.Duration(throttlingDelayMs) * time.Millisecond,
-		metrics:         metrics,
-		plan:            normalizedPlan,
+		db:                     db,
+		minHttpRequestInterval: minRequestInterval,
+		metrics:                metrics,
+		plan:                   normalizedPlan,
 	}
 }
 
@@ -207,6 +214,18 @@ func getAllowedVsCurrenciesMap(currenciesString string) map[string]struct{} {
 	return allowedVsCurrenciesMap
 }
 
+// coingeckoHTTPError carries the HTTP status from a non-200 response so throttling can be
+// detected by status code. Error() returns the raw body so existing body-based detection
+// (e.g. the Cloudflare "error code: 1015" page) keeps working.
+type coingeckoHTTPError struct {
+	status int
+	body   string
+}
+
+func (e *coingeckoHTTPError) Error() string {
+	return e.body
+}
+
 // doReq HTTP client
 func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 	resp, err := client.Do(req)
@@ -219,7 +238,10 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("%s", body)
+		return nil, &coingeckoHTTPError{
+			status: resp.StatusCode,
+			body:   string(body),
+		}
 	}
 	return body, nil
 }
@@ -227,6 +249,10 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 func isCoingeckoThrottleError(err error) bool {
 	if err == nil {
 		return false
+	}
+	var httpErr *coingeckoHTTPError
+	if errors.As(err, &httpErr) && httpErr.status == http.StatusTooManyRequests {
+		return true
 	}
 	lowerError := strings.ToLower(err.Error())
 	return err.Error() == "error code: 1015" ||
@@ -243,10 +269,30 @@ func isCoingeckoHistoricalTokenUpdateInProgressError(err error) bool {
 	return errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress)
 }
 
+// waitForRateLimit enforces minHttpRequestInterval spacing between requests
+func (cg *Coingecko) waitForRateLimit() {
+	if cg.minHttpRequestInterval <= 0 {
+		return
+	}
+	cg.reqMu.Lock()
+	slot := time.Now()
+	if !cg.lastRequestAt.IsZero() {
+		if next := cg.lastRequestAt.Add(cg.minHttpRequestInterval); next.After(slot) {
+			slot = next
+		}
+	}
+	cg.lastRequestAt = slot
+	cg.reqMu.Unlock()
+	if d := time.Until(slot); d > 0 {
+		time.Sleep(d)
+	}
+}
+
 // makeReq HTTP request helper with bounded retries for throttling errors.
 func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, error) {
 	for attempt := 0; ; attempt++ {
 		// glog.Infof("Coingecko makeReq %v", url)
+		cg.waitForRateLimit()
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return nil, err
@@ -417,9 +463,6 @@ func (cg *Coingecko) platformIdsAt(baseURL string) error {
 
 // CurrentTickers returns the latest exchange rates
 func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
-	cg.updatingCurrent = true
-	defer func() { cg.updatingCurrent = false }()
-
 	var newTickers = common.CurrencyRatesTicker{}
 
 	if vsCurrencies == nil {
@@ -631,15 +674,6 @@ func (cg *Coingecko) storeTickers(tickersToUpdate map[uint]*common.CurrencyRates
 	return nil
 }
 
-func (cg *Coingecko) throttleHistoricalDownload() {
-	// long delay next request to avoid throttling if downloading current tickers at the same time
-	delay := 1
-	if cg.updatingCurrent {
-		delay = 600
-	}
-	time.Sleep(cg.throttlingDelay * time.Duration(delay))
-}
-
 // UpdateHistoricalTickers gets historical tickers for the main crypto currency
 func (cg *Coingecko) UpdateHistoricalTickers() error {
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
@@ -668,19 +702,19 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	for _, currency := range vsCurrencies {
 		// get historical rates for each currency
 		var err error
-		var req bool
-		if req, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
+		if _, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
 			hadFailures = true
 			if isCoingeckoThrottleRetriesExhaustedError(err) {
 				throttleErr = err
-				break
+				if bootstrapInProgress {
+					break
+				}
+				glog.Warningf("getHistoricalTicker %s-%s throttled, continuing with remaining currencies: %v", cg.coin, currency, err)
+				continue
 			}
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
 			glog.Errorf("getHistoricalTicker %s-%s %v", cg.coin, currency, err)
-		}
-		if req {
-			cg.throttleHistoricalDownload()
 		}
 	}
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
@@ -728,11 +762,14 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		// get token historical rates
 		for tokenId, token := range platformIdsToTokens {
 			var err error
-			var req bool
-			if req, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
+			if _, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
 				if isCoingeckoThrottleRetriesExhaustedError(err) {
 					throttleErr = err
-					break
+					if bootstrapInProgress {
+						break
+					}
+					glog.Warningf("getHistoricalTicker %s-%s throttled, continuing with remaining tokens: %v", tokenId, cg.platformVsCurrency, err)
+					continue
 				}
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
@@ -746,9 +783,6 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 				}
 				tickersToUpdate = make(map[uint]*common.CurrencyRatesTicker)
 				glog.Infof("Coingecko updated %d of %d token tickers", count, len(platformIds))
-			}
-			if req {
-				cg.throttleHistoricalDownload()
 			}
 		}
 	}
