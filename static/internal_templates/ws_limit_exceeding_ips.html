@@ -4,8 +4,9 @@
     <div class="col-md-11">Distinct ip addresses that exceeded limit of {{.WsGetAccountInfoLimit}} requests since last reset: {{len .WsLimitExceedingIPs}}</div>
     <div class="col-md-1 justify-content-right">
         <form method="POST" action="/admin/ws-limit-exceeding-ips">
+            <input type="hidden" name="reset" value="exceeding">
             <button type="submit" class="btn btn-outline-secondary">Reset</button>
-        </form>    
+        </form>
     </div>
 </row>
 <div>
@@ -21,6 +22,43 @@
             <tr>
                 <td>{{$d.IP}}</a></td>
                 <td>{{$d.Count}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+<h3>IP addresses blocked for exceeding the websocket message rate limit</h3>
+<div class="row g-0">
+    <div class="col-md-11">Distinct client keys (IPv4 address or IPv6 /64 prefix) currently blocked from opening new websocket connections: {{len .WsBlockedIPs}}</div>
+    <div class="col-md-1 justify-content-right">
+        <form method="POST" action="/admin/ws-limit-exceeding-ips">
+            <input type="hidden" name="reset" value="blocked">
+            <button type="submit" class="btn btn-outline-secondary">Reset</button>
+        </form>
+    </div>
+</row>
+<div>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Key</th>
+                <th>Blocked at</th>
+                <th>Expires</th>
+                <th>Remaining</th>
+                <th>Breaches</th>
+                <th>Rejected connections</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $d := .WsBlockedIPs}}
+            <tr>
+                <td>{{$d.Key}}</td>
+                <td>{{$d.BlockedAt}}</td>
+                <td>{{$d.Until}}</td>
+                <td>{{$d.Remaining}}</td>
+                <td>{{$d.Breaches}}</td>
+                <td>{{$d.Rejected}}</td>
             </tr>
             {{end}}
         </tbody>

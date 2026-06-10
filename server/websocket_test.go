@@ -215,12 +215,13 @@ func TestParseTrustedProxies(t *testing.T) {
 	}
 }
 
-func TestGetIP(t *testing.T) {
+func TestResolveClientIPLegacyAndTrustedProxy(t *testing.T) {
 	tests := []struct {
 		name       string
 		headers    map[string]string
 		remoteAddr string
 		trusted    []netip.Prefix
+		cloudflare []netip.Prefix
 		want       string
 	}{
 		{
@@ -353,11 +354,194 @@ func TestGetIP(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			got := getIP(r, tt.trusted)
+			got, _ := resolveClientIP(r, tt.trusted, tt.cloudflare)
 			if got != tt.want {
-				t.Fatalf("getIP() = %q, want %q", got, tt.want)
+				t.Fatalf("resolveClientIP() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// mustParsePrefixes is a test helper that parses CIDR strings into prefixes.
+func mustParsePrefixes(t *testing.T, cidrs ...string) []netip.Prefix {
+	t.Helper()
+	out := make([]netip.Prefix, 0, len(cidrs))
+	for _, c := range cidrs {
+		out = append(out, netip.MustParsePrefix(c))
+	}
+	return out
+}
+
+func TestResolveClientIPCloudflareVerification(t *testing.T) {
+	cf := mustParsePrefixes(t, "203.0.113.0/24", "2400:cb00::/32")
+	tests := []struct {
+		name       string
+		headers    map[string]string
+		remoteAddr string
+		cloudflare []netip.Prefix
+		want       string
+		wantSource ipSource
+	}{
+		{
+			name:       "verified cloudflare peer: CF header trusted",
+			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr: "203.0.113.5:443", // inside configured CF range
+			cloudflare: cf,
+			want:       "192.0.2.10",
+			wantSource: ipSourceCloudflare,
+		},
+		{
+			name:       "unverified public peer: CF header ignored, falls back to peer",
+			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr: "198.51.100.7:443", // NOT a CF range
+			cloudflare: cf,
+			want:       "198.51.100.7",
+			wantSource: ipSourceRemote,
+		},
+		{
+			name:       "loopback proxy fronting cloudflare: CF header trusted",
+			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.20"},
+			remoteAddr: "127.0.0.1:5000",
+			cloudflare: cf,
+			want:       "192.0.2.20",
+			wantSource: ipSourceCloudflare,
+		},
+		{
+			name:       "verification disabled: CF header trusted from any peer",
+			headers:    map[string]string{"CF-Connecting-IP": "192.0.2.30"},
+			remoteAddr: "198.51.100.7:443",
+			cloudflare: nil,
+			want:       "192.0.2.30",
+			wantSource: ipSourceCloudflare,
+		},
+		{
+			name:       "native IPv6 in CF-Connecting-IP without IPv6 header",
+			headers:    map[string]string{"CF-Connecting-IP": "2001:db8::99"},
+			remoteAddr: "203.0.113.5:443",
+			cloudflare: cf,
+			want:       "2001:db8::99",
+			wantSource: ipSourceCloudflare,
+		},
+		{
+			name: "malformed CF-Connecting-IPv6 falls through to CF-Connecting-IP",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "not-an-ip",
+				"CF-Connecting-IP":   "192.0.2.40",
+			},
+			remoteAddr: "203.0.113.5:443",
+			cloudflare: cf,
+			want:       "192.0.2.40",
+			wantSource: ipSourceCloudflare,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &http.Request{Header: make(http.Header), RemoteAddr: tt.remoteAddr}
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
+			}
+			got, source := resolveClientIP(r, nil, tt.cloudflare)
+			if got != tt.want || source != tt.wantSource {
+				t.Fatalf("resolveClientIP() = %q, %d, want %q, %d", got, source, tt.want, tt.wantSource)
+			}
+		})
+	}
+}
+
+func TestRateLimitKey(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"192.0.2.10", "192.0.2.10"},
+		{"2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64"},
+		{"2001:db8:1:2::ffff", "2001:db8:1:2::/64"},
+		{"2001:db8:1:3::1", "2001:db8:1:3::/64"},
+		{"not-an-ip", "not-an-ip"},
+	}
+	for _, tt := range tests {
+		if got := rateLimitKey(tt.in); got != tt.want {
+			t.Fatalf("rateLimitKey(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	// addresses within the same /64 must share a key, distinct /64s must not
+	if rateLimitKey("2001:db8:1:2::1") != rateLimitKey("2001:db8:1:2::2") {
+		t.Fatal("addresses in the same /64 should share a rate-limit key")
+	}
+	if rateLimitKey("2001:db8:1:2::1") == rateLimitKey("2001:db8:1:3::1") {
+		t.Fatal("addresses in different /64s should not share a rate-limit key")
+	}
+}
+
+func TestIsBlockableKey(t *testing.T) {
+	cf := mustParsePrefixes(t, "203.0.113.0/24")
+	trusted := mustParsePrefixes(t, "198.51.100.0/24")
+	tests := []struct {
+		ip   string
+		want bool
+	}{
+		{"192.0.2.10", true},      // ordinary public address
+		{"2001:db8:1:2::5", true}, // ordinary public IPv6 address
+		{"127.0.0.1", false},      // loopback
+		{"10.1.2.3", false},       // RFC1918
+		{"192.168.1.1", false},    // RFC1918
+		{"169.254.0.1", false},    // link-local
+		{"203.0.113.9", false},    // inside Cloudflare range
+		{"198.51.100.9", false},   // inside trusted-proxy range
+		{"not-an-ip", false},      // unparseable
+	}
+	for _, tt := range tests {
+		if got := isBlockableKey(tt.ip, trusted, cf); got != tt.want {
+			t.Fatalf("isBlockableKey(%q) = %v, want %v", tt.ip, got, tt.want)
+		}
+	}
+}
+
+func TestConnMessageRate(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	m := newConnMessageRate(10 * time.Minute)
+
+	// 100 messages in the same instant accumulate.
+	var last int
+	for i := 0; i < 100; i++ {
+		last = m.observe(base)
+	}
+	if last != 100 {
+		t.Fatalf("after 100 messages at one instant, count = %d, want 100", last)
+	}
+
+	// Messages spread across the window keep accumulating (sliding, not reset).
+	m2 := newConnMessageRate(10 * time.Minute)
+	count := 0
+	for i := 0; i < 60; i++ {
+		count = m2.observe(base.Add(time.Duration(i) * 5 * time.Second)) // 0..295s
+	}
+	if count != 60 {
+		t.Fatalf("60 messages within the window, count = %d, want 60", count)
+	}
+
+	// Once the full window has elapsed since the first message, old buckets drop
+	// out of the trailing window.
+	after := m2.observe(base.Add(10*time.Minute + time.Second))
+	if after >= 60 {
+		t.Fatalf("after the window elapsed the count should drop, got %d", after)
+	}
+
+	// A gap longer than the whole window resets the counter.
+	reset := m2.observe(base.Add(time.Hour))
+	if reset != 1 {
+		t.Fatalf("after a gap longer than the window, count = %d, want 1", reset)
+	}
+}
+
+func TestConnMessageRateClockSkew(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	m := newConnMessageRate(10 * time.Minute)
+	m.observe(base.Add(time.Minute))
+	// A backwards clock jump must not panic or rewrite history; it folds into the
+	// current bucket.
+	if got := m.observe(base); got != 2 {
+		t.Fatalf("backwards clock observe = %d, want 2", got)
 	}
 }
 

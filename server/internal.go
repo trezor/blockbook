@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -136,6 +137,17 @@ type WsLimitExceedingIP struct {
 	Count int
 }
 
+// WsBlockedIPView is a single row of the websocket IP blocklist rendered on the
+// admin page (times pre-formatted so the template needs no time helpers).
+type WsBlockedIPView struct {
+	Key       string
+	Breaches  int
+	Rejected  int
+	BlockedAt string
+	Until     string
+	Remaining string
+}
+
 // InternalTemplateData is used to transfer data to the templates
 type InternalTemplateData struct {
 	CoinName               string
@@ -147,6 +159,7 @@ type InternalTemplateData struct {
 	RefetchingInternalData bool
 	WsGetAccountInfoLimit  int
 	WsLimitExceedingIPs    []WsLimitExceedingIP
+	WsBlockedIPs           []WsBlockedIPView
 }
 
 func (s *InternalServer) newTemplateData(r *http.Request) *InternalTemplateData {
@@ -209,7 +222,14 @@ func (s *InternalServer) internalDataErrors(w http.ResponseWriter, r *http.Reque
 
 func (s *InternalServer) wsLimitExceedingIPs(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {
 	if r.Method == http.MethodPost {
-		s.is.ResetWsLimitExceedingIPs()
+		// The page has two reset buttons; reset=blocked clears the temporary IP
+		// blocklist, anything else (including the legacy button with no field)
+		// clears the getAccountInfo limit-exceeding counters.
+		if r.FormValue("reset") == "blocked" {
+			s.is.ResetWsBlockedIPs()
+		} else {
+			s.is.ResetWsLimitExceedingIPs()
+		}
 	}
 	data := s.newTemplateData(r)
 	ips := make([]WsLimitExceedingIP, 0, len(s.is.WsLimitExceedingIPs))
@@ -221,6 +241,18 @@ func (s *InternalServer) wsLimitExceedingIPs(w http.ResponseWriter, r *http.Requ
 	})
 	data.WsLimitExceedingIPs = ips
 	data.WsGetAccountInfoLimit = s.is.WsGetAccountInfoLimit
+
+	now := time.Now()
+	for _, b := range s.is.WsBlockedIPsSnapshot(now) {
+		data.WsBlockedIPs = append(data.WsBlockedIPs, WsBlockedIPView{
+			Key:       b.Key,
+			Breaches:  b.Breaches,
+			Rejected:  b.Rejected,
+			BlockedAt: b.BlockedAt.UTC().Format(time.RFC3339),
+			Until:     b.Until.UTC().Format(time.RFC3339),
+			Remaining: b.Until.Sub(now).Round(time.Second).String(),
+		})
+	}
 	return adminLimitExceedingIPSTpl, data, nil
 }
 

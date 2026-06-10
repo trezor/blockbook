@@ -9,13 +9,26 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 -   `<network>_WS_TRUSTED_PROXIES` - Comma-separated list of trusted proxy CIDRs whose `X-Real-Ip` header should be used as the WebSocket client IP. This IP is used by per-IP WebSocket connection and connection-attempt limits.
     Blockbook always trusts `X-Real-Ip` from loopback, RFC1918/private, and link-local peers, so this variable is only needed for additional non-local proxies.
 
-    If this variable is unset, Blockbook keeps the default Cloudflare behavior and uses `CF-Connecting-IPv6` first, then `CF-Connecting-IP`, when either header contains a valid IP address. This is intended for deployments where the origin only accepts traffic from Cloudflare IP ranges, for example enforced by nginx or a firewall. Blockbook does not validate the TCP peer against Cloudflare ranges itself.
+    If this variable is unset, Blockbook keeps the default Cloudflare behavior and uses `CF-Connecting-IPv6` first, then `CF-Connecting-IP`, when either header contains a valid IP address. Whether those headers are trusted from any peer or only from verified Cloudflare peers is controlled by `<network>_WS_CLOUDFLARE_IPS` (see below).
 
     If this variable is set, Blockbook switches to generic trusted-proxy mode: `CF-Connecting-IP` and `CF-Connecting-IPv6` are ignored, and `X-Real-Ip` is used only when the TCP peer is a built-in trusted proxy or matches one of the configured CIDRs. In this mode the proxy must overwrite or strip any client-supplied `X-Real-Ip` header before forwarding requests to Blockbook.
 
     Do not set this variable for a normal Cloudflare-only deployment unless the proxy in front of Blockbook sets `X-Real-Ip` to the real visitor IP. Otherwise all clients may collapse to the proxy or Cloudflare address for rate limiting.
 
     To avoid unsafe configuration, Blockbook fails startup if a configured prefix is too broad (`/<8` for IPv4, `/<16` for IPv6), malformed, or uses IPv4-mapped IPv6 notation. Use regular IPv4 CIDR notation instead, for example `198.51.100.0/24` rather than `::ffff:198.51.100.0/120`.
+
+-   `<network>_WS_CLOUDFLARE_IPS` - Controls how the `CF-Connecting-IP` / `CF-Connecting-IPv6` headers are trusted in the default (no `<network>_WS_TRUSTED_PROXIES`) mode. Because those headers are client-settable, they are only meaningful if the origin can prove the connection actually came from Cloudflare.
+    - Unset or `builtin` (default): Blockbook trusts the `CF-Connecting-*` headers only when the TCP peer is inside Cloudflare's published edge ranges (a built-in list, as of 2026-06) or is a loopback/private proxy fronting Cloudflare. A direct public non-Cloudflare peer cannot spoof a client IP past the per-IP limiter or the IP blocklist.
+    - A comma-separated CIDR list: use these ranges instead of the built-in list (for example if Cloudflare's ranges drift, or for a custom front-end CDN). Loopback/RFC1918/link-local peers are always also accepted.
+    - `off` (or `none`/`false`/`0`): disable verification and trust `CF-Connecting-*` from any peer (the historical behavior). Only safe when the origin is firewalled to Cloudflare ranges out of band. With verification off, the IP auto-block never acts on a `CF-Connecting-*`-derived address (it would be spoofable), so it only blocks direct TCP peers.
+
+-   `<network>_WS_MESSAGE_RATE_LIMIT` - Maximum number of messages a single WebSocket connection may send within `<network>_WS_MESSAGE_RATE_WINDOW` before the connection is closed and (when blockable) its client key is added to the IP blocklist. Accepts a non-negative integer; default `2500`, `0` disables the per-connection message rate limit entirely. The default of 2500 messages / 10 minutes is above the maximum burst produced by a Trezor Suite client, so it only trips clearly abusive traffic.
+
+-   `<network>_WS_MESSAGE_RATE_WINDOW` - Trailing sliding window for `<network>_WS_MESSAGE_RATE_LIMIT`, as a Go duration string (e.g. `10m`, `600s`). Default `10m`.
+
+-   `<network>_WS_IP_BLOCK_DURATION` - How long a client key (an IPv4 address, or an IPv6 `/64` prefix) is blocked from opening new WebSocket connections after a connection trips the message rate limit, as a Go duration string (e.g. `12h`). Default `12h`; `0` disables IP blocking (an offending connection is still closed). The blocklist is visible at `/admin/ws-limit-exceeding-ips`, and the `blockbook_websocket_blocked_ips` / `blockbook_websocket_blocked_connections` metrics track it.
+
+    Blocking keys on the same client IP attribution as the per-IP limiter. Loopback/private/link-local addresses and any configured trusted-proxy or Cloudflare edge range are never blocked, so a misconfiguration that collapses many clients onto a shared address cannot block them all. Behind Cloudflare, keep `<network>_WS_CLOUDFLARE_IPS` at its default (or set it to your CDN ranges) so blocks key on the real visitor IP. The default Cloudflare peer verification plus a block-safety guard (a `CF-Connecting-*`-derived address is only blocked when the peer was verified as Cloudflare) prevent a forged `CF-Connecting-IP` from being used to block an innocent visitor.
 
 -   `<coin shortcut>_STAKING_POOL_CONTRACT` - The pool name and contract used for Ethereum staking. The format of the variable is `<pool name>/<pool contract>`. If missing, staking support is disabled.
 
