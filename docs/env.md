@@ -81,7 +81,7 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 -   `<network or coin shortcut>_ALTERNATIVE_SENDTX_ONLY` - Set to `TRUE` to use only the alternative send transaction provider and avoid fallback to the normal backend RPC if alternative submission fails.
 
--   `<network or coin shortcut>_ALTERNATIVE_FETCH_MEMPOOL_TX` - Set to `TRUE` to fetch and cache transactions submitted through the alternative provider, so Blockbook can expose them as pending even if they are not visible in the public backend mempool. When the alternative provider is enabled, the default alternative cache timeout is 5 minutes and the default Blockbook EVM mempool timeout is 10 minutes; both can be overridden in coin config with `alternativeMempoolTxTimeout` and `mempoolTxTimeout`.
+-   `<network or coin shortcut>_ALTERNATIVE_FETCH_MEMPOOL_TX` - Set to `TRUE` to fetch and cache transactions submitted through the alternative provider, so Blockbook can expose them as pending even if they are not visible in the public backend mempool. Cached transactions are periodically checked with the alternative provider's `eth_getTransactionByHash`; an empty response or mined transaction removes the local pending entry. When the alternative provider is enabled, the default alternative cache timeout is 5 minutes and the default Blockbook EVM mempool timeout is 10 minutes; both can be overridden in coin config with `alternativeMempoolTxTimeout` and `mempoolTxTimeout`.
 
     WebSocket `sendTransaction` can bypass the alternative provider for a single request by setting `disableAlternativeRPC` to `true`.
 

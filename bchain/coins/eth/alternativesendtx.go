@@ -20,6 +20,8 @@ type storedTx struct {
 	time uint32
 }
 
+const alternativeMempoolTxCheckPeriod = time.Minute
+
 // AlternativeSendTxProvider handles sending transactions to alternative providers
 type AlternativeSendTxProvider struct {
 	urls                         []string
@@ -31,6 +33,7 @@ type AlternativeSendTxProvider struct {
 	rpcTimeout                   time.Duration
 	mempool                      *bchain.MempoolEthereumType
 	removeTransactionFromMempool func(string)
+	watchMempoolTxsOnce          sync.Once
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
@@ -64,6 +67,11 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 func (p *AlternativeSendTxProvider) SetupMempool(mempool *bchain.MempoolEthereumType, removeTransactionFromMempool func(string)) {
 	p.mempool = mempool
 	p.removeTransactionFromMempool = removeTransactionFromMempool
+	if p.fetchMempoolTx {
+		p.watchMempoolTxsOnce.Do(func() {
+			go p.watchMempoolTxs()
+		})
+	}
 }
 
 // SendRawTransaction sends raw transaction to alternative providers
@@ -90,17 +98,13 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 
 // handleMempoolTransaction handles the transaction when using only alternative providers
 func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (string, error) {
-	hash := ethcommon.HexToHash(txid)
-	raw, err := p.callHttpRawResult(p.urls[0], "eth_getTransactionByHash", hash)
-	if err != nil || raw == nil {
-		glog.Errorf("eth_getTransactionByHash from %s returned error %v", p.urls[0], err)
+	tx, found, err := p.getTransactionFromProviders(txid)
+	if err != nil {
+		glog.Errorf("eth_getTransactionByHash from alternative providers returned error %v", err)
 		return txid, err
-	}
-
-	var tx bchain.RpcTransaction
-	if err := json.Unmarshal(raw, &tx); err != nil {
-		glog.Errorf("eth_getTransactionByHash from %s unmarshal returned error %v", p.urls[0], err)
-		return txid, err
+	} else if !found {
+		glog.Errorf("eth_getTransactionByHash from alternative providers did not find txid %s", txid)
+		return txid, bchain.ErrTxNotFound
 	}
 
 	p.mempoolTxsMux.Lock()
@@ -112,7 +116,7 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (strin
 			break
 		}
 	}
-	p.mempoolTxs[txid] = storedTx{tx: &tx, time: uint32(time.Now().Unix())}
+	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix())}
 	p.mempoolTxsMux.Unlock()
 
 	if rbfTxid != "" {
@@ -153,6 +157,86 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 	}
 
 	return nil, false
+}
+
+func (p *AlternativeSendTxProvider) watchMempoolTxs() {
+	ticker := time.NewTicker(alternativeMempoolTxCheckPeriod)
+	defer ticker.Stop()
+	for range ticker.C {
+		p.reconcileMempoolTxs()
+	}
+}
+
+func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
+	type cachedTx struct {
+		txid string
+		tx   storedTx
+	}
+
+	p.mempoolTxsMux.Lock()
+	txs := make([]cachedTx, 0, len(p.mempoolTxs))
+	for txid, tx := range p.mempoolTxs {
+		txs = append(txs, cachedTx{txid: txid, tx: tx})
+	}
+	p.mempoolTxsMux.Unlock()
+
+	for _, tx := range txs {
+		known, mined, err := p.providerKnowsTransaction(tx.txid)
+		if err != nil {
+			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
+		} else if !known || mined {
+			// Blink-style private providers return empty once a tx is no longer retained.
+			p.removeMempoolTx(tx.txid)
+			continue
+		}
+
+		if time.Unix(int64(tx.tx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
+			p.RemoveTransaction(tx.txid)
+		}
+	}
+}
+
+func (p *AlternativeSendTxProvider) providerKnowsTransaction(txid string) (bool, bool, error) {
+	tx, found, err := p.getTransactionFromProviders(txid)
+	if err != nil || !found {
+		return found, false, err
+	}
+	return true, tx.BlockNumber != "", nil
+}
+
+func (p *AlternativeSendTxProvider) getTransactionFromProviders(txid string) (*bchain.RpcTransaction, bool, error) {
+	hash := ethcommon.HexToHash(txid)
+	var firstErr error
+	for _, url := range p.urls {
+		raw, err := p.callHttpRawResult(url, "eth_getTransactionByHash", hash)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+
+		var tx bchain.RpcTransaction
+		if err := json.Unmarshal(raw, &tx); err != nil {
+			return nil, false, err
+		}
+		if tx == (bchain.RpcTransaction{}) {
+			continue
+		}
+		return &tx, true, nil
+	}
+	if firstErr != nil {
+		return nil, false, firstErr
+	}
+	return nil, false, nil
+}
+
+func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) {
+	if p.removeTransactionFromMempool != nil {
+		p.removeTransactionFromMempool(txid)
+		return
+	}
+	p.RemoveTransaction(txid)
 }
 
 // RemoveTransaction removes a transaction from alternative mempool cache
