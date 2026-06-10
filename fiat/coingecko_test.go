@@ -434,10 +434,11 @@ func TestMakeReq_PacesRequests(t *testing.T) {
 	}
 }
 
-// In steady state (bootstrap complete) a throttled currency must not abort the whole pass:
-// the loop continues with the remaining currencies, and the throttle error is still returned so
-// the cycle retries the unfinished ones next run.
-func TestUpdateHistoricalTickers_ContinuesPastThrottleInSteadyState(t *testing.T) {
+// A throttle-retries-exhausted error reflects sustained, provider-wide 429s: makeReq already
+// waited out the full backoff ladder and the provider kept returning 429. So even in steady state
+// the pass stops early rather than repeating the ladder for every remaining currency. The throttle
+// error is still returned so the unfinished currencies are retried next run.
+func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionInSteadyState(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -509,17 +510,18 @@ func TestUpdateHistoricalTickers_ContinuesPastThrottleInSteadyState(t *testing.T
 	if got := int(usdRequests.Load()); got != wantUSDRequests {
 		t.Fatalf("unexpected usd request count: got %d, want %d", got, wantUSDRequests)
 	}
-	// eur must still be attempted after usd was throttled (continue, not break).
-	if got := int(eurRequests.Load()); got != 1 {
-		t.Fatalf("expected eur to be requested once after usd throttle, got %d", got)
+	// eur must NOT be attempted after usd exhausted its throttle retries (break, not continue):
+	// the 429 is provider-wide, so hammering eur would only repeat the full ladder for nothing.
+	if got := int(eurRequests.Load()); got != 0 {
+		t.Fatalf("expected eur not to be requested after usd throttle exhaustion, got %d", got)
 	}
-	// the eur ticker that succeeded must be persisted despite the usd throttle.
+	// eur is never fetched, so nothing for it is stored; the next cycle retries from usd.
 	eurTicker, err := d.FiatRatesFindLastTicker("eur", "")
 	if err != nil {
 		t.Fatalf("FiatRatesFindLastTicker eur failed: %v", err)
 	}
-	if eurTicker == nil {
-		t.Fatal("expected eur ticker to be stored after continuing past usd throttle")
+	if eurTicker != nil {
+		t.Fatal("expected no eur ticker to be stored after stopping on usd throttle")
 	}
 }
 
@@ -602,10 +604,11 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionDuringBootstrap(t *tes
 	}
 }
 
-// In steady state a throttled token must not abort the whole token pass: the loop continues with
-// the remaining tokens (each gets its own bounded retries) and the throttle error is still
-// returned so the unfinished tokens are retried next run.
-func TestUpdateHistoricalTokenTickers_ContinuesPastThrottleInSteadyState(t *testing.T) {
+// A throttle-retries-exhausted error reflects sustained, provider-wide 429s, so even in steady
+// state the token pass stops after the first exhausted token instead of repeating the ~10-minute
+// ladder for every remaining token (which would also hold updatingTokens and block later cycles).
+// The throttle error is still returned so the unfinished tokens are retried next run.
+func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustionInSteadyState(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -669,8 +672,9 @@ func TestUpdateHistoricalTokenTickers_ContinuesPastThrottleInSteadyState(t *test
 		t.Fatalf("expected throttle exhaustion error, got %v", err)
 	}
 
-	// Both tokens are throttled; continuing means each one is attempted with its own bounded retries.
-	wantRequests := 2 * (1 + len(coingeckoThrottleRetryBackoff))
+	// Only the first token (random map order, but both behave identically) is attempted; the pass
+	// breaks on its throttle exhaustion instead of repeating the ladder for the remaining token.
+	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
 	if got := int(marketChartRequests.Load()); got != wantRequests {
 		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, wantRequests)
 	}
