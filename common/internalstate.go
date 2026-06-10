@@ -105,6 +105,24 @@ type InternalState struct {
 	// allowed number of fetched accounts over websocket
 	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
 	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
+
+	// websocket IP blocklist: keys (IPv4 address or IPv6 /64 prefix) that were
+	// flagged for flooding a single connection past the per-connection message
+	// rate limit and are blocked from opening new connections until Until. Guarded
+	// by its own mutex (wsBlockMux) rather than is.mux because IsWsIPBlocked is
+	// consulted on every websocket connection attempt, before the per-IP limiter.
+	wsBlockMux   sync.Mutex
+	wsBlockedIPs map[string]*WsBlockedIP
+}
+
+// WsBlockedIP records a websocket client key (IPv4 address or IPv6 /64 prefix)
+// that is temporarily blocked from opening new websocket connections.
+type WsBlockedIP struct {
+	Key       string    `ts_doc:"Blocked client key: an IPv4 address or an IPv6 /64 prefix."`
+	BlockedAt time.Time `ts_doc:"Time the key was first blocked in the current block."`
+	Until     time.Time `ts_doc:"Time the block expires."`
+	Breaches  int       `ts_doc:"How many times this key tripped the per-connection message rate limit."`
+	Rejected  int       `ts_doc:"How many new connections were rejected while the key was blocked."`
 }
 
 // StartedSync signals start of synchronization
@@ -399,4 +417,83 @@ func (is *InternalState) ResetWsLimitExceedingIPs() {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.WsLimitExceedingIPs = make(map[string]int)
+}
+
+// BlockWsIP flags a websocket client key (an IPv4 address or IPv6 /64 prefix) as
+// blocked until the given time. If the key is already blocked the block is
+// extended to the later of the two expirations and the breach counter is
+// incremented; otherwise a new entry is created. now is passed in so callers can
+// inject a clock in tests.
+func (is *InternalState) BlockWsIP(key string, until, now time.Time) {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	if is.wsBlockedIPs == nil {
+		is.wsBlockedIPs = make(map[string]*WsBlockedIP)
+	}
+	e := is.wsBlockedIPs[key]
+	if e == nil || !now.Before(e.Until) {
+		// new block, or the previous one had already expired: reset the window
+		e = &WsBlockedIP{Key: key, BlockedAt: now}
+		is.wsBlockedIPs[key] = e
+	}
+	e.Breaches++
+	if until.After(e.Until) {
+		e.Until = until
+	}
+}
+
+// IsWsIPBlocked reports whether the key is currently blocked. When blocked it
+// records a rejected connection so the admin page can show how much traffic the
+// block is shedding. Expired entries are treated as not blocked (the periodic
+// SweepWsBlockedIPs removes them).
+func (is *InternalState) IsWsIPBlocked(key string, now time.Time) bool {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	e := is.wsBlockedIPs[key]
+	if e == nil || now.Before(e.BlockedAt) {
+		return false
+	}
+	if !now.Before(e.Until) {
+		return false
+	}
+	e.Rejected++
+	return true
+}
+
+// SweepWsBlockedIPs removes expired entries and returns the number of keys that
+// remain blocked, for the websocket_blocked_ips gauge.
+func (is *InternalState) SweepWsBlockedIPs(now time.Time) int {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	for key, e := range is.wsBlockedIPs {
+		if !now.Before(e.Until) {
+			delete(is.wsBlockedIPs, key)
+		}
+	}
+	return len(is.wsBlockedIPs)
+}
+
+// WsBlockedIPsSnapshot returns a copy of the currently blocked entries, newest
+// expiry first, skipping any that have already expired.
+func (is *InternalState) WsBlockedIPsSnapshot(now time.Time) []WsBlockedIP {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	out := make([]WsBlockedIP, 0, len(is.wsBlockedIPs))
+	for _, e := range is.wsBlockedIPs {
+		if !now.Before(e.Until) {
+			continue
+		}
+		out = append(out, *e)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Until.After(out[j].Until)
+	})
+	return out
+}
+
+// ResetWsBlockedIPs clears the websocket IP blocklist.
+func (is *InternalState) ResetWsBlockedIPs() {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	is.wsBlockedIPs = make(map[string]*WsBlockedIP)
 }

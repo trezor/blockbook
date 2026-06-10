@@ -36,6 +36,8 @@ type Metrics struct {
 	WebsocketConnectionRejections     *prometheus.CounterVec   `metric:"websocket_connection_rejections"`
 	WebsocketUniqueIPs                prometheus.Gauge         `metric:"websocket_unique_ips"`
 	WebsocketMaxConnectionsPerIP      prometheus.Gauge         `metric:"websocket_max_connections_per_ip"`
+	WebsocketBlockedIPs               prometheus.Gauge         `metric:"websocket_blocked_ips"`
+	WebsocketBlockedConnections       prometheus.Counter       `metric:"websocket_blocked_connections"`
 	IndexResyncDuration               prometheus.Histogram     `metric:"index_resync_duration"`
 	MempoolResyncDuration             prometheus.Histogram     `metric:"mempool_resync_duration"`
 	MempoolResyncThroughput           *prometheus.HistogramVec `metric:"mempool_resync_throughput_txs_per_second"`

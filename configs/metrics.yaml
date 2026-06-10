@@ -90,6 +90,14 @@ metrics:
     name: blockbook_websocket_max_connections_per_ip
     type: gauge
     help: Largest number of concurrent websocket connections held by any single client IP, the size of the biggest connection cluster
+  websocket_blocked_ips:
+    name: blockbook_websocket_blocked_ips
+    type: gauge
+    help: Distinct client keys (IPv4 address or IPv6 /64 prefix) currently blocked from opening websocket connections after tripping the per-connection message rate limit
+  websocket_blocked_connections:
+    name: blockbook_websocket_blocked_connections
+    type: counter
+    help: Websocket connection attempts rejected before upgrade because the client key was on the temporary IP blocklist
   index_resync_duration:
     name: blockbook_index_resync_duration
     type: histogram
