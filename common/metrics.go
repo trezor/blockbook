@@ -55,6 +55,7 @@ type Metrics struct {
 	IndexDBSize                       prometheus.Gauge         `metric:"index_db_size"`
 	ExplorerViews                     *prometheus.CounterVec   `metric:"explorer_views"`
 	MempoolSize                       prometheus.Gauge         `metric:"mempool_size"`
+	EthAlternativeMempoolEvents       *prometheus.CounterVec   `metric:"eth_alternative_mempool_reconciliation_events_total"`
 	EstimatedFee                      *prometheus.GaugeVec     `metric:"estimated_fee"`
 	AvgBlockPeriod                    prometheus.Gauge         `metric:"avg_block_period"`
 	SyncBlockStats                    *prometheus.GaugeVec     `metric:"sync_block_stats"`
