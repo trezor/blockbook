@@ -419,6 +419,19 @@ func (is *InternalState) ResetWsLimitExceedingIPs() {
 	is.WsLimitExceedingIPs = make(map[string]int)
 }
 
+// WsLimitExceedingIPsSnapshot returns a copy of the limit-exceeding counters.
+// The map is mutated under is.mux by AddWsLimitExceedingIP, so readers (the
+// admin page) must not range over it directly.
+func (is *InternalState) WsLimitExceedingIPsSnapshot() map[string]int {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	out := make(map[string]int, len(is.WsLimitExceedingIPs))
+	for k, v := range is.WsLimitExceedingIPs {
+		out[k] = v
+	}
+	return out
+}
+
 // BlockWsIP flags a websocket client key (an IPv4 address or IPv6 /64 prefix) as
 // blocked until the given time. If the key is already blocked the block is
 // extended to the later of the two expirations and the breach counter is

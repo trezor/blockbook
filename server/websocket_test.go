@@ -9,6 +9,8 @@ import (
 	"errors"
 	"net/http"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -217,12 +219,37 @@ func TestParseTrustedProxies(t *testing.T) {
 
 func TestParseCloudflareProxies(t *testing.T) {
 	const envName = "TEST_WS_CLOUDFLARE_IPS"
-	// unset and the builtin spellings resolve to the built-in edge list
+	// unset and the builtin spellings resolve to the embedded edge list
 	for _, v := range []string{"", "builtin", "Default"} {
 		got, err := parseCloudflareProxies(envName, v)
-		if err != nil || len(got) != len(cloudflareEdgeCIDRs) {
-			t.Fatalf("parseCloudflareProxies(%q) = %d prefixes, err %v; want %d, nil", v, len(got), err, len(cloudflareEdgeCIDRs))
+		if err != nil || len(got) == 0 {
+			t.Fatalf("parseCloudflareProxies(%q) = %d prefixes, err %v; want the embedded list, nil", v, len(got), err)
 		}
+		// spot-check long-standing Cloudflare ranges from cloudflare_ips.txt
+		if !prefixesContain(got, "104.16.0.0/13") || !prefixesContain(got, "2606:4700::/32") {
+			t.Fatalf("parseCloudflareProxies(%q) is missing known Cloudflare ranges: %v", v, got)
+		}
+	}
+	// a value starting with @ loads the list from a file: one CIDR per line,
+	// commas also accepted, blank lines and #-comments ignored
+	cidrFile := filepath.Join(t.TempDir(), "cf.txt")
+	if err := os.WriteFile(cidrFile, []byte("# test ranges\n203.0.113.0/24\n\n2400:cb00::/32, 198.51.100.0/24 # trailing comment\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fromFile, err := parseCloudflareProxies(envName, "@"+cidrFile)
+	if err != nil || len(fromFile) != 3 || !prefixesContain(fromFile, "203.0.113.0/24") || !prefixesContain(fromFile, "198.51.100.0/24") {
+		t.Fatalf("file list = %v, err %v; want the three prefixes from the file", fromFile, err)
+	}
+	// a missing file and a file with no CIDRs must fail startup rather than
+	// silently disabling verification
+	if _, err := parseCloudflareProxies(envName, "@"+filepath.Join(t.TempDir(), "missing.txt")); err == nil {
+		t.Fatal("missing CIDR file: expected error, got nil")
+	}
+	if err := os.WriteFile(cidrFile, []byte("# only comments\n\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseCloudflareProxies(envName, "@"+cidrFile); err == nil {
+		t.Fatal("CIDR file without CIDRs: expected error, got nil")
 	}
 	// the off spellings disable verification
 	for _, v := range []string{"off", "none", "false", "0", "disabled", " OFF "} {
@@ -384,7 +411,7 @@ func TestResolveClientIPLegacyAndTrustedProxy(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			got, _ := resolveClientIP(r, tt.trusted, tt.cloudflare)
+			got, _, _ := resolveClientIP(r, tt.trusted, tt.cloudflare)
 			if got != tt.want {
 				t.Fatalf("resolveClientIP() = %q, want %q", got, tt.want)
 			}
@@ -487,9 +514,54 @@ func TestResolveClientIPCloudflareVerification(t *testing.T) {
 			for k, v := range tt.headers {
 				r.Header.Set(k, v)
 			}
-			got, blockSafe := resolveClientIP(r, tt.trusted, tt.cloudflare)
+			got, blockSafe, _ := resolveClientIP(r, tt.trusted, tt.cloudflare)
 			if got != tt.want || blockSafe != tt.wantBlockSafe {
 				t.Fatalf("resolveClientIP() = %q, %v, want %q, %v", got, blockSafe, tt.want, tt.wantBlockSafe)
+			}
+		})
+	}
+}
+
+func TestResolveClientIPFromHeader(t *testing.T) {
+	cf := mustParsePrefixes(t, "203.0.113.0/24")
+	tests := []struct {
+		name           string
+		headers        map[string]string
+		remoteAddr     string
+		wantFromHeader bool
+	}{
+		{
+			name:           "CF header honored from verified peer",
+			headers:        map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:     "203.0.113.5:443",
+			wantFromHeader: true,
+		},
+		{
+			name:           "X-Real-Ip honored from loopback proxy",
+			headers:        map[string]string{"X-Real-Ip": "192.0.2.11"},
+			remoteAddr:     "127.0.0.1:5000",
+			wantFromHeader: true,
+		},
+		{
+			name:           "untrusted CF header falls back to bare peer",
+			headers:        map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:     "198.51.100.7:443",
+			wantFromHeader: false,
+		},
+		{
+			name:           "bare loopback peer without headers",
+			remoteAddr:     "127.0.0.1:5000",
+			wantFromHeader: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &http.Request{Header: make(http.Header), RemoteAddr: tt.remoteAddr}
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
+			}
+			if _, _, fromHeader := resolveClientIP(r, nil, cf); fromHeader != tt.wantFromHeader {
+				t.Fatalf("resolveClientIP() fromHeader = %v, want %v", fromHeader, tt.wantFromHeader)
 			}
 		})
 	}

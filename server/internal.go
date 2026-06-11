@@ -232,8 +232,11 @@ func (s *InternalServer) wsLimitExceedingIPs(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	data := s.newTemplateData(r)
-	ips := make([]WsLimitExceedingIP, 0, len(s.is.WsLimitExceedingIPs))
-	for k, v := range s.is.WsLimitExceedingIPs {
+	// snapshot under the InternalState mutex; ranging over the live map races
+	// with AddWsLimitExceedingIP
+	exceeding := s.is.WsLimitExceedingIPsSnapshot()
+	ips := make([]WsLimitExceedingIP, 0, len(exceeding))
+	for k, v := range exceeding {
 		ips = append(ips, WsLimitExceedingIP{k, v})
 	}
 	sort.Slice(ips, func(i, j int) bool {

@@ -279,7 +279,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server shutting down", http.StatusServiceUnavailable)
 		return
 	}
-	ip, blockSafe := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes)
+	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes)
 	ipKey := rateLimitKey(ip)
 	// blockable is only meaningful (and only computed) when the IP blocklist is
 	// enabled, so the O(prefixes) isBlockableKey scan is skipped when disabled.
@@ -342,6 +342,10 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.messageRateLimit > 0 {
 		c.messageRate = newConnMessageRate(s.messageRateWindow)
+		// count ping/pong control frames too; gorilla handles them inside
+		// ReadMessage so they never reach inputLoop and would otherwise be a
+		// free flood channel
+		s.installControlFrameRateLimit(c)
 	}
 	if s.is.WsGetAccountInfoLimit > 0 {
 		c.getAddressInfoDescriptors = make(map[string]struct{})
@@ -570,14 +574,11 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 			glog.Error("Binary message received from ", c.id, ", ", c.ip)
 			s.closeChannel(c, "protocol_error")
 			return
-		case websocket.PingMessage:
-			c.conn.WriteControl(websocket.PongMessage, nil, time.Now().Add(defaultTimeout))
-		case websocket.CloseMessage:
-			s.closeChannel(c, "client_close")
-			return
-		case websocket.PongMessage:
-			// do nothing
 		}
+		// ReadMessage returns only data frames; ping/pong/close control frames
+		// are consumed inside gorilla and dispatched to the connection's
+		// handlers (see installControlFrameRateLimit), surfacing here only as a
+		// read error.
 	}
 }
 

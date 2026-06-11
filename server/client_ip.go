@@ -1,6 +1,7 @@
 package server
 
 import (
+	_ "embed"
 	"fmt"
 	"net"
 	"net/http"
@@ -9,36 +10,17 @@ import (
 	"strings"
 )
 
-// cloudflareEdgeCIDRs are Cloudflare's published edge ranges
-// (https://www.cloudflare.com/ips/, fetched 2026-06). When Cloudflare peer
-// verification is enabled the CF-Connecting-* headers are trusted only when the
-// TCP peer falls inside one of these ranges (or is a loopback/private proxy
-// fronting Cloudflare). Cloudflare changes these rarely; operators can override
-// the list via env if it drifts.
-var cloudflareEdgeCIDRs = []string{
-	"173.245.48.0/20",
-	"103.21.244.0/22",
-	"103.22.200.0/22",
-	"103.31.4.0/22",
-	"141.101.64.0/18",
-	"108.162.192.0/18",
-	"190.93.240.0/20",
-	"188.114.96.0/20",
-	"197.234.240.0/22",
-	"198.41.128.0/17",
-	"162.158.0.0/15",
-	"104.16.0.0/13",
-	"104.24.0.0/14",
-	"172.64.0.0/13",
-	"131.0.72.0/22",
-	"2400:cb00::/32",
-	"2606:4700::/32",
-	"2803:f800::/32",
-	"2405:b500::/32",
-	"2405:8100::/32",
-	"2a06:98c0::/29",
-	"2c0f:f248::/32",
-}
+// embeddedCloudflareIPs holds Cloudflare's published edge ranges, kept in a
+// plain text file (one CIDR per line, #-comments) so the list can be updated
+// without touching Go code, and compiled in so a deployment needs no extra
+// runtime file. When Cloudflare peer verification is enabled the
+// CF-Connecting-* headers are trusted only when the TCP peer falls inside one
+// of these ranges (or is a loopback/private proxy fronting Cloudflare).
+// Operators can override the list via <NET>_CLOUDFLARE_IPS (inline CIDRs or
+// @/path/to/file) if it drifts.
+//
+//go:embed cloudflare_ips.txt
+var embeddedCloudflareIPs string
 
 type clientIPConfig struct {
 	trustedProxies     []netip.Prefix
@@ -85,32 +67,20 @@ func lookupEnvWithFallback(primary, fallback string) (envName, value string) {
 // with an error so misconfiguration fails fast at startup rather than
 // silently turning X-Real-Ip into an IP-spoofing primitive.
 func parseTrustedProxies(envName, value string) ([]netip.Prefix, error) {
-	if strings.TrimSpace(value) == "" {
-		return nil, nil
-	}
 	const minIPv4Bits = 8
 	const minIPv6Bits = 16
-	var prefixes []netip.Prefix
-	for _, raw := range strings.Split(value, ",") {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		p, err := netip.ParsePrefix(raw)
-		if err != nil {
-			return nil, fmt.Errorf("%s: invalid CIDR %q: %w", envName, raw, err)
-		}
-		if p.Addr().Is4In6() {
-			return nil, fmt.Errorf("%s: refusing IPv4-mapped CIDR %q; use IPv4 CIDR notation", envName, raw)
-		}
+	prefixes, err := parseCIDRList(envName, strings.Split(value, ","))
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range prefixes {
 		bits := p.Bits()
 		if p.Addr().Is4() && bits < minIPv4Bits {
-			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv4)", envName, raw, bits, minIPv4Bits)
+			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv4)", envName, p, bits, minIPv4Bits)
 		}
-		if p.Addr().Is6() && !p.Addr().Is4In6() && bits < minIPv6Bits {
-			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv6)", envName, raw, bits, minIPv6Bits)
+		if p.Addr().Is6() && bits < minIPv6Bits {
+			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv6)", envName, p, bits, minIPv6Bits)
 		}
-		prefixes = append(prefixes, p.Masked())
 	}
 	return prefixes, nil
 }
@@ -124,35 +94,65 @@ func parseTrustedProxies(envName, value string) ([]netip.Prefix, error) {
 //	"off" / "none" / "0"   -> disabled; CF headers are trusted from any peer
 //	                          (legacy behavior, intended for an origin firewalled
 //	                          to Cloudflare ranges out of band)
+//	"@/path/to/file"       -> load CIDRs from the file (one per line, blank lines
+//	                          and #-comments ignored) instead of the built-in list
 //	"<cidr>,<cidr>,..."    -> use these CIDRs instead of the built-in list
 //
 // A non-empty result means verification is enabled and resolveClientIP trusts
 // the CF headers only when the TCP peer is inside one of the prefixes (or a
 // loopback/private proxy fronting Cloudflare). Returning nil disables it; only
-// the explicit "off" spellings do that -- a custom value that parses to no
-// CIDRs is rejected so a typo cannot silently disable verification.
+// the explicit "off" spellings do that -- a custom value or file that parses to
+// no CIDRs is rejected so a typo cannot silently disable verification.
 func parseCloudflareProxies(envName, value string) ([]netip.Prefix, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
+	trimmed := strings.TrimSpace(value)
+	switch strings.ToLower(trimmed) {
 	case "", "builtin", "default":
-		return parseCIDRList(envName, cloudflareEdgeCIDRs)
+		return parseCIDRSource(envName, "embedded cloudflare_ips.txt", embeddedCloudflareIPs)
 	case "off", "none", "false", "0", "disabled":
 		return nil, nil
-	default:
-		prefixes, err := parseCIDRList(envName, strings.Split(value, ","))
-		if err != nil {
-			return nil, err
-		}
-		if len(prefixes) == 0 {
-			return nil, fmt.Errorf("%s: no CIDRs in %q; use \"builtin\", \"off\", or a comma-separated CIDR list", envName, value)
-		}
-		return prefixes, nil
 	}
+	if path, ok := strings.CutPrefix(trimmed, "@"); ok {
+		content, err := os.ReadFile(strings.TrimSpace(path))
+		if err != nil {
+			return nil, fmt.Errorf("%s: cannot read CIDR file: %w", envName, err)
+		}
+		return parseCIDRSource(envName, fmt.Sprintf("file %q", path), string(content))
+	}
+	return parseCIDRSource(envName, fmt.Sprintf("%q", value), trimmed)
+}
+
+// parseCIDRSource parses CIDR-list content (inline env value or file contents)
+// and rejects an empty result so a typo cannot silently disable verification;
+// source names the origin of the content for the error message.
+func parseCIDRSource(envName, source, content string) ([]netip.Prefix, error) {
+	prefixes, err := parseCIDRList(envName, splitCIDRList(content))
+	if err != nil {
+		return nil, err
+	}
+	if len(prefixes) == 0 {
+		return nil, fmt.Errorf("%s: no CIDRs in %s; use \"builtin\", \"off\", \"@/path/to/file\", or a comma-separated CIDR list", envName, source)
+	}
+	return prefixes, nil
+}
+
+// splitCIDRList splits CIDR-list content into raw items: commas and newlines
+// both separate entries, and everything from # to the end of a line is a
+// comment. Blank items are skipped later by parseCIDRList.
+func splitCIDRList(content string) []string {
+	var raws []string
+	for _, line := range strings.Split(content, "\n") {
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = line[:i]
+		}
+		raws = append(raws, strings.Split(line, ",")...)
+	}
+	return raws
 }
 
 // parseCIDRList parses CIDRs into masked prefixes, skipping blanks and rejecting
-// IPv4-mapped notation, mirroring parseTrustedProxies' validation (minus the
-// minimum-width check, since Cloudflare's published ranges are intentionally
-// wide and the resulting set is only ever matched against the TCP peer).
+// IPv4-mapped notation. It applies no minimum-width check (Cloudflare's
+// published ranges are intentionally wide and only ever matched against the TCP
+// peer); parseTrustedProxies layers that check on top for trusted proxies.
 func parseCIDRList(envName string, raws []string) ([]netip.Prefix, error) {
 	var prefixes []netip.Prefix
 	for _, raw := range raws {
@@ -172,12 +172,13 @@ func parseCIDRList(envName string, raws []string) ([]netip.Prefix, error) {
 	return prefixes, nil
 }
 
-// resolveClientIP returns the per-IP rate-limit address for the request and
+// resolveClientIP returns the per-IP rate-limit address for the request,
 // whether that attribution is trustworthy enough to add to an IP blocklist
-// (blockSafe). trustedProxies governs X-Real-Ip; cloudflareProxies governs
-// CF-Connecting-* (empty disables verification and trusts those headers from any
-// peer, the legacy behavior). When neither header is trusted for this peer it
-// falls back to the bare TCP peer address.
+// (blockSafe), and whether it came from a forwarding header rather than the
+// bare TCP peer (fromHeader). trustedProxies governs X-Real-Ip;
+// cloudflareProxies governs CF-Connecting-* (empty disables verification and
+// trusts those headers from any peer, the legacy behavior). When neither
+// header is trusted for this peer it falls back to the bare TCP peer address.
 //
 // blockSafe centralizes the spoof-protection decision so callers never have to
 // re-inspect headers: a CF-Connecting-* value is block-safe only when peer
@@ -186,7 +187,12 @@ func parseCIDRList(envName string, raws []string) ([]netip.Prefix, error) {
 // block-safe unless the request also carried a CF-Connecting-* header we did not
 // trust (a spoof attempt, or a real but unrecognized Cloudflare edge -- blocking
 // the peer would be wrong in both cases).
-func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix) (string, bool) {
+//
+// fromHeader lets callers recognize degenerate attribution: when it is false
+// and the address is the operator's own loopback/LAN/trusted proxy, the key
+// identifies shared infrastructure (or the operator's own tooling), not a
+// client.
+func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix) (ip string, blockSafe, fromHeader bool) {
 	host := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		host = h
@@ -204,10 +210,10 @@ func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.
 		if cfTrusted {
 			cfBlockSafe := len(cloudflareProxies) > 0
 			if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
-				return ip, cfBlockSafe
+				return ip, cfBlockSafe, true
 			}
 			if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
-				return ip, cfBlockSafe
+				return ip, cfBlockSafe, true
 			}
 		}
 	}
@@ -218,15 +224,15 @@ func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.
 	// would let any client spoof their IP past the per-IP rate limiter.
 	if remoteOK && isTrustedProxy(remote, trustedProxies) {
 		if ip, ok := parseIP(r.Header.Get("X-Real-Ip")); ok {
-			return ip, true
+			return ip, true, true
 		}
 	}
 
 	hadCFHeader := r.Header.Get("CF-Connecting-IP") != "" || r.Header.Get("CF-Connecting-IPv6") != ""
 	if remoteOK {
-		return remote.String(), !hadCFHeader
+		return remote.String(), !hadCFHeader, false
 	}
-	return strings.TrimSpace(r.RemoteAddr), !hadCFHeader
+	return strings.TrimSpace(r.RemoteAddr), !hadCFHeader, false
 }
 
 // rateLimitKey returns the key used for per-IP limiting and blocklists. IPv6 is
@@ -273,6 +279,16 @@ func isBlockableKey(ip string, trustedProxies, cloudflareProxies []netip.Prefix)
 		}
 	}
 	return true
+}
+
+// isLocalOrTrustedProxyIP reports whether ip is a loopback/private/link-local
+// address or falls inside a configured trusted-proxy range -- i.e. it names the
+// operator's own infrastructure rather than a client. Used together with
+// resolveClientIP's fromHeader to recognize degenerate attribution (a proxy
+// that forwards no client IP, or the operator's own local tooling).
+func isLocalOrTrustedProxyIP(ip string, trustedProxies []netip.Prefix) bool {
+	addr, ok := parseAddr(ip)
+	return ok && isTrustedProxy(addr, trustedProxies)
 }
 
 func parseIP(value string) (string, bool) {
