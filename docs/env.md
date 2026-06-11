@@ -6,10 +6,10 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 -   `<coin shortcut>_WS_ALLOWED_ORIGINS` - Comma-separated list of allowed WebSocket origins (e.g. `https://example.com`, `http://localhost:3000`). If omitted, all origins are allowed and it is the operator's responsibility to enforce origin access (for example via proxy).
 
--   `<network>_WS_TRUSTED_PROXIES` - Comma-separated list of trusted proxy CIDRs whose `X-Real-Ip` header should be used as the WebSocket client IP. This IP is used by per-IP WebSocket connection and connection-attempt limits.
+-   `<network>_TRUSTED_PROXIES` - Comma-separated list of trusted proxy CIDRs whose `X-Real-Ip` header should be used as the client IP for public REST API and WebSocket rate limiting.
     Blockbook always trusts `X-Real-Ip` from loopback, RFC1918/private, and link-local peers, so this variable is only needed for additional non-local proxies.
 
-    If this variable is unset, Blockbook keeps the default Cloudflare behavior and uses `CF-Connecting-IPv6` first, then `CF-Connecting-IP`, when either header contains a valid IP address. Whether those headers are trusted from any peer or only from verified Cloudflare peers is controlled by `<network>_WS_CLOUDFLARE_IPS` (see below).
+    If this variable and its legacy alias are unset, Blockbook keeps the default Cloudflare behavior and uses `CF-Connecting-IPv6` first, then `CF-Connecting-IP`, when either header contains a valid IP address. Whether those headers are trusted from any peer or only from verified Cloudflare peers is controlled by `<network>_CLOUDFLARE_IPS` (see below).
 
     If this variable is set, Blockbook switches to generic trusted-proxy mode: `CF-Connecting-IP` and `CF-Connecting-IPv6` are ignored, and `X-Real-Ip` is used only when the TCP peer is a built-in trusted proxy or matches one of the configured CIDRs. In this mode the proxy must overwrite or strip any client-supplied `X-Real-Ip` header before forwarding requests to Blockbook.
 
@@ -17,10 +17,14 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
     To avoid unsafe configuration, Blockbook fails startup if a configured prefix is too broad (`/<8` for IPv4, `/<16` for IPv6), malformed, or uses IPv4-mapped IPv6 notation. Use regular IPv4 CIDR notation instead, for example `198.51.100.0/24` rather than `::ffff:198.51.100.0/120`.
 
--   `<network>_WS_CLOUDFLARE_IPS` - Controls how the `CF-Connecting-IP` / `CF-Connecting-IPv6` headers are trusted in the default (no `<network>_WS_TRUSTED_PROXIES`) mode. Because those headers are client-settable, they are only meaningful if the origin can prove the connection actually came from Cloudflare.
-    - Unset or `builtin` (default): Blockbook trusts the `CF-Connecting-*` headers only when the TCP peer is inside Cloudflare's published edge ranges (a built-in list, as of 2026-06) or is a loopback/private proxy fronting Cloudflare. A direct public non-Cloudflare peer cannot spoof a client IP past the per-IP limiter or the IP blocklist.
+    For backwards compatibility, `<network>_WS_TRUSTED_PROXIES` is accepted as a legacy alias when `<network>_TRUSTED_PROXIES` is unset. Prefer the shared variable because the same client attribution is used by REST and WebSocket limiters.
+
+-   `<network>_CLOUDFLARE_IPS` - Controls how the `CF-Connecting-IP` / `CF-Connecting-IPv6` headers are trusted in the default (no `<network>_TRUSTED_PROXIES`) mode. Because those headers are client-settable, they are only meaningful if the origin can prove the connection actually came from Cloudflare.
+    - Unset with no legacy alias, or `builtin` (default): Blockbook trusts the `CF-Connecting-*` headers only when the TCP peer is inside Cloudflare's published edge ranges (a built-in list, as of 2026-06) or is a loopback/private proxy fronting Cloudflare. A direct public non-Cloudflare peer cannot spoof a client IP past the per-IP limiter or the IP blocklist.
     - A comma-separated CIDR list: use these ranges instead of the built-in list (for example if Cloudflare's ranges drift, or for a custom front-end CDN). Loopback/RFC1918/link-local peers are always also accepted. A value that contains no valid CIDRs fails startup rather than silently disabling verification; only the explicit `off` spellings disable it.
     - `off` (or `none`/`false`/`0`): disable verification and trust `CF-Connecting-*` from any peer (the historical behavior). Only safe when the origin is firewalled to Cloudflare ranges out of band. With verification off, the IP auto-block never acts on a `CF-Connecting-*`-derived address (it would be spoofable), so it only blocks direct TCP peers.
+
+    For backwards compatibility, `<network>_WS_CLOUDFLARE_IPS` is accepted as a legacy alias when `<network>_CLOUDFLARE_IPS` is unset. An explicit shared value, including `off`, does not fall back.
 
 -   `<network>_WS_MESSAGE_RATE_LIMIT` - Maximum number of messages a single WebSocket connection may send within `<network>_WS_MESSAGE_RATE_WINDOW` before the connection is closed and (when blockable) its client key is added to the IP blocklist. Accepts a non-negative integer; default `2500`, `0` disables the per-connection message rate limit entirely. The default of 2500 messages / 10 minutes is above the maximum burst produced by a Trezor Suite client, so it only trips clearly abusive traffic.
 
@@ -28,7 +32,19 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 -   `<network>_WS_IP_BLOCK_DURATION` - How long a client key (an IPv4 address, or an IPv6 `/64` prefix) is blocked from opening new WebSocket connections after a connection trips the message rate limit, as a Go duration string (e.g. `12h`). Default `12h`; `0` disables IP blocking (an offending connection is still closed). The blocklist is visible at `/admin/ws-limit-exceeding-ips`, and the `blockbook_websocket_blocked_ips` / `blockbook_websocket_blocked_connections` metrics track it.
 
-    Blocking keys on the same client IP attribution as the per-IP limiter. Loopback/private/link-local addresses and any configured trusted-proxy or Cloudflare edge range are never blocked, so a misconfiguration that collapses many clients onto a shared address cannot block them all. Behind Cloudflare, keep `<network>_WS_CLOUDFLARE_IPS` at its default (or set it to your CDN ranges) so blocks key on the real visitor IP. The default Cloudflare peer verification plus a block-safety guard (a `CF-Connecting-*`-derived address is only blocked when the peer was verified as Cloudflare) prevent a forged `CF-Connecting-IP` from being used to block an innocent visitor.
+    Blocking keys on the same client IP attribution as the per-IP limiter. Loopback/private/link-local addresses and any configured trusted-proxy or Cloudflare edge range are never blocked, so a misconfiguration that collapses many clients onto a shared address cannot block them all. Behind Cloudflare, keep `<network>_CLOUDFLARE_IPS` at its default (or set it to your CDN ranges) so blocks key on the real visitor IP. The default Cloudflare peer verification plus a block-safety guard (a `CF-Connecting-*`-derived address is only blocked when the peer was verified as Cloudflare) prevent a forged `CF-Connecting-IP` from being used to block an innocent visitor.
+
+-   `<network>_REST_RATE_LIMIT` - Maximum number of public REST API requests a single client key may start within `<network>_REST_RATE_WINDOW`. Accepts a non-negative integer; default `600`, `0` disables request-rate limiting. The client key uses the shared REST/WebSocket attribution rules: an IPv4 address, or an IPv6 `/64` prefix.
+
+-   `<network>_REST_RATE_WINDOW` - Token-bucket refill window for `<network>_REST_RATE_LIMIT`, as a Go duration string (e.g. `1m`, `60s`). Default `1m`.
+
+-   `<network>_REST_BURST` - REST API token-bucket burst size for one client key. Default `120`; must be positive when request-rate limiting is enabled.
+
+-   `<network>_REST_MAX_CONCURRENT` - Maximum number of in-flight public REST API requests accepted from one client key. Default `24`; `0` disables the per-client concurrency limit. This protects slow or expensive API handlers held open concurrently from one source.
+
+-   `<network>_REST_STATE_TTL` - How long idle REST API limiter state is retained for one client key, as a Go duration string. Default `10m`.
+
+-   `<network>_REST_BLOCK_DURATION` - Optional temporary block duration for a client key after repeated REST API rate/concurrency breaches, as a Go duration string. Default `0`, which disables temporary blocking and only returns `429 Too Many Requests` while over the configured limits. When enabled, loopback/private/link-local addresses and configured trusted-proxy or Cloudflare edge ranges are never blocked, and a `CF-Connecting-*`-derived address is blockable only when the TCP peer was verified as Cloudflare. The `blockbook_rest_api_rate_limit_rejections`, `blockbook_rest_api_active_ips`, `blockbook_rest_api_max_active_requests_per_ip`, and `blockbook_rest_api_blocked_ips` metrics track the limiter.
 
 -   `<coin shortcut>_STAKING_POOL_CONTRACT` - The pool name and contract used for Ethereum staking. The format of the variable is `<pool name>/<pool contract>`. If missing, staking support is disabled.
 

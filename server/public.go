@@ -67,6 +67,8 @@ type PublicServer struct {
 	binding             string
 	certFiles           string
 	websocket           *WebsocketServer
+	serveMux            *http.ServeMux
+	restLimiter         *restAPIRateLimiter
 	https               *http.Server
 	db                  *db.RocksDB
 	txCache             *db.TxCache
@@ -98,9 +100,17 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
+	restLimiter, err := newRestAPIRateLimiter(is.GetNetwork(), metrics)
+	if err != nil {
+		return nil, err
+	}
+	handler := http.Handler(serveMux)
+	if restLimiter != nil {
+		handler = restLimiter.wrapAPI(handler, publicPath(path, "api"))
+	}
 	https := &http.Server{
 		Addr:    addr,
-		Handler: serveMux,
+		Handler: handler,
 	}
 
 	s := &PublicServer{
@@ -110,6 +120,8 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		},
 		binding:             binding,
 		certFiles:           certFiles,
+		serveMux:            serveMux,
+		restLimiter:         restLimiter,
 		https:               https,
 		api:                 api,
 		websocket:           websocket,
@@ -158,7 +170,7 @@ func (s *PublicServer) Run() error {
 
 // ConnectFullPublicInterface enables complete public functionality
 func (s *PublicServer) ConnectFullPublicInterface() {
-	serveMux := s.https.Handler.(*http.ServeMux)
+	serveMux := s.serveMux
 	_, path := splitBinding(s.binding)
 	// support for test pages
 	serveMux.Handle(publicPath(path, "test-websocket.html"), prefixedStaticFileServer(publicPath(path, "")))
