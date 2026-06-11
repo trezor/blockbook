@@ -173,6 +173,13 @@ panels:
       size:
         promql: '{{name:mempool_size}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
+  sync.eth_alternative_mempool_reconciliation:
+    title: Alternative mempool reconciliation
+    description: Decisions made while reconciling alternative-provider-only send-tx cache entries; provider_missing, mined and timeout remove entries, while provider_error keeps them for retry.
+    queries:
+      actions:
+        promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60
+        legend: '{{action}}/min'
   sync.mempool_resync_throughput_p95:
     title: 95% quantile of mempool resync throughput
     description: Transactions returned by a mempool reload divided by reload duration; low values mean the backend or parser is feeding the mempool slowly.

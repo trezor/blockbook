@@ -224,6 +224,11 @@ metrics:
     name: blockbook_mempool_size
     type: gauge
     help: Transactions retained from the last successful backend reload
+  eth_alternative_mempool_reconciliation_events_total:
+    name: blockbook_eth_alternative_mempool_reconciliation_events_total
+    type: counter_vec
+    help: Alternative send-transaction mempool cache reconciliation decisions, labeled by action such as skipped_fresh, kept, provider_error, provider_missing, mined or timeout
+    labels: [action]
   estimated_fee:
     name: blockbook_estimated_fee
     type: gauge_vec

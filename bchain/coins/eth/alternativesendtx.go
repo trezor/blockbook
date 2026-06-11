@@ -13,6 +13,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 type storedTx struct {
@@ -32,12 +33,13 @@ type AlternativeSendTxProvider struct {
 	mempoolTxsTimeout            time.Duration
 	rpcTimeout                   time.Duration
 	mempool                      *bchain.MempoolEthereumType
+	metrics                      *common.Metrics
 	removeTransactionFromMempool func(string)
 	watchMempoolTxsOnce          sync.Once
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
-func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTimeout time.Duration) *AlternativeSendTxProvider {
+func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTimeout time.Duration, metrics *common.Metrics) *AlternativeSendTxProvider {
 	urls := strings.Split(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_URLS"), ",")
 	onlyAlternative := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
 	fetchMempoolTx := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_FETCH_MEMPOOL_TX")) == "TRUE"
@@ -53,6 +55,7 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 		rpcTimeout:        time.Duration(rpcTimeout) * time.Second,
 		mempoolTxsTimeout: mempoolTxsTimeout,
 		mempoolTxs:        make(map[string]storedTx),
+		metrics:           metrics,
 	}
 
 	glog.Infof("Using alternative send transaction providers %v. Only alternative providers %v", urls, onlyAlternative)
@@ -184,21 +187,45 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		// a freshly submitted tx may transiently be unknown to a load-balanced provider node,
 		// give it one check period before reconciling
 		if time.Since(time.Unix(int64(tx.tx.time), 0)) < alternativeMempoolTxCheckPeriod {
+			p.observeMempoolReconciliation("skipped_fresh")
 			continue
 		}
+		timedOut := time.Unix(int64(tx.tx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout))
 		known, mined, err := p.providerKnowsTransaction(tx.txid)
 		if err != nil {
 			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
-		} else if !known || mined {
+			if timedOut {
+				p.observeMempoolReconciliation("timeout")
+				p.RemoveTransaction(tx.txid)
+				continue
+			}
+			p.observeMempoolReconciliation("provider_error")
+			continue
+		} else if !known {
+			p.observeMempoolReconciliation("provider_missing")
 			// Blink-style private providers return empty once a tx is no longer retained.
+			p.removeMempoolTx(tx.txid)
+			continue
+		} else if mined {
+			p.observeMempoolReconciliation("mined")
 			p.removeMempoolTx(tx.txid)
 			continue
 		}
 
-		if time.Unix(int64(tx.tx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
+		if timedOut {
+			p.observeMempoolReconciliation("timeout")
 			p.RemoveTransaction(tx.txid)
+			continue
 		}
+		p.observeMempoolReconciliation("kept")
 	}
+}
+
+func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) {
+	if p.metrics == nil || p.metrics.EthAlternativeMempoolEvents == nil {
+		return
+	}
+	p.metrics.EthAlternativeMempoolEvents.With(common.Labels{"action": action}).Inc()
 }
 
 func (p *AlternativeSendTxProvider) providerKnowsTransaction(txid string) (bool, bool, error) {
