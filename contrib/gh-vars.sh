@@ -7,10 +7,11 @@
 # locally running tests see the exact same environment as CI.
 #
 # Trezor-internal: this requires read access to the private trezor/blockbook
-# repository's Actions variables. Authenticate with `gh auth login` using a
-# token that has `repo` (or `actions:read`) scope, and make sure your GitHub
-# account is a member of the Trezor organisation with access to the repo.
-# Override the source repo with BB_GH_REPO if you fork under a different org.
+# repository's Actions variables. Authenticate with `gh auth login` or export
+# GH_TOKEN with `repo` (or `actions:read`) scope, and make sure your GitHub
+# account/token is authorised for the Trezor organisation SAML/SSO requirement
+# and has access to the repo. Override the source repo with BB_GH_REPO if you
+# fork under a different org.
 #
 # Cache: exports are persisted to ${XDG_CACHE_HOME:-$HOME/.cache}/blockbook/
 # with a 60-minute TTL (chmod 600 — values include QuickNode endpoint paths).
@@ -65,21 +66,6 @@ bb_export_gh_vars() {
         fi
     fi
 
-    if ! gh auth status >/dev/null 2>&1; then
-        cat >&2 <<EOF
-ERROR: gh CLI is not authenticated.
-
-These tests pull GitHub Actions repository variables from ${repo}, which is
-Trezor-internal. Authenticate first:
-
-    gh auth login
-
-Use a token with 'repo' or 'actions:read' scope, and make sure your GitHub
-account has read access to ${repo}.
-EOF
-        return 1
-    fi
-
     # Assumes variable values contain no literal tab/newline — @tsv would escape
     # them and the bash `read -r name value` below would split incorrectly.
     local raw
@@ -92,9 +78,10 @@ gh said:
 ${raw}
 
 Likely causes:
-  * Your GitHub account is not a member of the Trezor organisation, or it
-    lacks read access to ${repo} (ask in #blockbook to be added).
-  * Your gh token is missing required scopes — refresh with:
+  * gh is not authenticated; run 'gh auth login' or export GH_TOKEN.
+  * Your GitHub account/token is not authorised for the Trezor organisation
+    SAML/SSO requirement, or it lacks read access to ${repo}.
+  * Your token is missing required scopes. For gh-auth tokens, refresh with:
         gh auth refresh -s repo,read:org
 EOF
         return 1
