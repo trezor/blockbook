@@ -182,25 +182,19 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		}
 		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
 	}
-	trustedEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_TRUSTED_PROXIES"
-	prefixes, err := parseTrustedProxies(trustedEnvName, os.Getenv(trustedEnvName))
+	clientIPCfg, err := readClientIPConfig(is.GetNetwork())
 	if err != nil {
 		return nil, err
 	}
-	s.trustedProxyPrefixes = prefixes
-	if len(prefixes) > 0 {
-		glog.Info("Trusted proxy CIDRs: ", prefixes)
+	s.trustedProxyPrefixes = clientIPCfg.trustedProxies
+	if len(clientIPCfg.trustedProxies) > 0 {
+		glog.Info("Trusted proxy CIDRs (", clientIPCfg.trustedEnvName, "): ", clientIPCfg.trustedProxies)
 	}
-	cloudflareEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_CLOUDFLARE_IPS"
-	cfPrefixes, err := parseCloudflareProxies(cloudflareEnvName, os.Getenv(cloudflareEnvName))
-	if err != nil {
-		return nil, err
-	}
-	s.cloudflarePrefixes = cfPrefixes
-	if len(cfPrefixes) > 0 {
-		glog.Info("Cloudflare peer verification enabled for CF-Connecting-* headers (", len(cfPrefixes), " CIDRs)")
+	s.cloudflarePrefixes = clientIPCfg.cloudflarePrefixes
+	if len(clientIPCfg.cloudflarePrefixes) > 0 {
+		glog.Info("Cloudflare peer verification enabled for CF-Connecting-* headers (", clientIPCfg.cloudflareEnvName, "; ", len(clientIPCfg.cloudflarePrefixes), " CIDRs)")
 	} else {
-		glog.Warning("Cloudflare peer verification disabled (", cloudflareEnvName, "=off); CF-Connecting-* headers are trusted from any peer")
+		glog.Warning("Cloudflare peer verification disabled (", clientIPCfg.cloudflareEnvName, "=off); CF-Connecting-* headers are trusted from any peer")
 	}
 	if err := s.configureMessageRateLimit(is.GetNetwork()); err != nil {
 		return nil, err
