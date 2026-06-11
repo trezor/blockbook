@@ -12,18 +12,18 @@ func TestWsIPBlocklistBlockAndExpire(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	key := "192.0.2.10"
 
-	if is.IsWsIPBlocked(key, now) {
+	if blocked, _ := is.IsWsIPBlocked(key, now); blocked {
 		t.Fatal("key should not be blocked before any Block call")
 	}
 
 	is.BlockWsIP(key, now.Add(time.Hour), now)
-	if !is.IsWsIPBlocked(key, now) {
+	if blocked, _ := is.IsWsIPBlocked(key, now); !blocked {
 		t.Fatal("key should be blocked immediately after Block")
 	}
-	if !is.IsWsIPBlocked(key, now.Add(59*time.Minute)) {
+	if blocked, _ := is.IsWsIPBlocked(key, now.Add(59*time.Minute)); !blocked {
 		t.Fatal("key should still be blocked before expiry")
 	}
-	if is.IsWsIPBlocked(key, now.Add(time.Hour+time.Second)) {
+	if blocked, _ := is.IsWsIPBlocked(key, now.Add(time.Hour+time.Second)); blocked {
 		t.Fatal("key should not be blocked after expiry")
 	}
 }
@@ -82,8 +82,9 @@ func TestWsIPBlocklistRejectedCount(t *testing.T) {
 
 	is.BlockWsIP(key, now.Add(time.Hour), now)
 	for i := 0; i < 3; i++ {
-		if !is.IsWsIPBlocked(key, now) {
-			t.Fatal("expected blocked")
+		blocked, rejected := is.IsWsIPBlocked(key, now)
+		if !blocked || rejected != i+1 {
+			t.Fatalf("attempt %d: blocked=%v rejected=%d, want true, %d", i, blocked, rejected, i+1)
 		}
 	}
 	// A non-blocking probe of an unblocked key must not record a rejection.
