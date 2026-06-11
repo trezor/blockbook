@@ -295,6 +295,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 func (b *EthereumRPC) SetMetrics(metrics *common.Metrics) {
 	b.metrics = metrics
+	if b.alternativeSendTxProvider != nil {
+		b.alternativeSendTxProvider.metrics = metrics
+	}
 }
 
 // AverageBlockTimeDuration exposes the chain's nominal block cadence.
@@ -684,7 +687,7 @@ func (b *EthereumRPC) InitAlternativeProviders() error {
 	if err != nil {
 		return err
 	}
-	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, alternativeMempoolTxTimeout)
+	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, alternativeMempoolTxTimeout, b.metrics)
 	return nil
 }
 
