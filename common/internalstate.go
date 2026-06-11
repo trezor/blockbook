@@ -444,20 +444,21 @@ func (is *InternalState) BlockWsIP(key string, until, now time.Time) {
 
 // IsWsIPBlocked reports whether the key is currently blocked. When blocked it
 // records a rejected connection so the admin page can show how much traffic the
-// block is shedding. Expired entries are treated as not blocked (the periodic
+// block is shedding, and returns the updated count so the caller can throttle
+// per-attempt logging. Expired entries are treated as not blocked (the periodic
 // SweepWsBlockedIPs removes them).
-func (is *InternalState) IsWsIPBlocked(key string, now time.Time) bool {
+func (is *InternalState) IsWsIPBlocked(key string, now time.Time) (bool, int) {
 	is.wsBlockMux.Lock()
 	defer is.wsBlockMux.Unlock()
 	e := is.wsBlockedIPs[key]
 	if e == nil || now.Before(e.BlockedAt) {
-		return false
+		return false, 0
 	}
 	if !now.Before(e.Until) {
-		return false
+		return false, 0
 	}
 	e.Rejected++
-	return true
+	return true, e.Rejected
 }
 
 // SweepWsBlockedIPs removes expired entries and returns the number of keys that

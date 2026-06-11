@@ -407,7 +407,9 @@ func parseTrustedProxies(envName, value string) ([]netip.Prefix, error) {
 //
 // A non-empty result means verification is enabled and getIP trusts the CF
 // headers only when the TCP peer is inside one of the prefixes (or a
-// loopback/private proxy fronting Cloudflare). Returning nil disables it.
+// loopback/private proxy fronting Cloudflare). Returning nil disables it; only
+// the explicit "off" spellings do that — a custom value that parses to no CIDRs
+// is rejected so a typo cannot silently disable verification.
 func parseCloudflareProxies(envName, value string) ([]netip.Prefix, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "", "builtin", "default":
@@ -415,7 +417,14 @@ func parseCloudflareProxies(envName, value string) ([]netip.Prefix, error) {
 	case "off", "none", "false", "0", "disabled":
 		return nil, nil
 	default:
-		return parseCIDRList(envName, strings.Split(value, ","))
+		prefixes, err := parseCIDRList(envName, strings.Split(value, ","))
+		if err != nil {
+			return nil, err
+		}
+		if len(prefixes) == 0 {
+			return nil, fmt.Errorf("%s: no CIDRs in %q; use \"builtin\", \"off\", or a comma-separated CIDR list", envName, value)
+		}
+		return prefixes, nil
 	}
 }
 
@@ -651,14 +660,16 @@ func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.
 // IP blocklist. IPv6 is aggregated to its /64 because a single client is
 // routinely delegated a whole /64, so keying on the full /128 would let it
 // evade limits (and outlive a block) by rotating the low 64 bits across genuine
-// addresses. IPv4 and anything unparseable are keyed verbatim.
+// addresses. IPv4 is keyed verbatim (IPv4-mapped IPv6 is unmapped to its IPv4
+// form first, so both notations share a key); anything unparseable is keyed
+// verbatim.
 func rateLimitKey(ip string) string {
 	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
 	if err != nil {
 		return ip
 	}
-	addr = addr.WithZone("")
-	if addr.Is6() && !addr.Is4In6() {
+	addr = addr.Unmap().WithZone("")
+	if addr.Is6() {
 		if p, err := addr.Prefix(64); err == nil {
 			return p.String()
 		}
@@ -763,9 +774,12 @@ func parseAddr(value string) (netip.Addr, bool) {
 	if err != nil {
 		return netip.Addr{}, false
 	}
-	// Strip IPv6 zone identifier so that rate-limit keys are zone-free and
-	// netip.Prefix.Contains matches unzoned prefixes against link-local peers.
-	return addr.WithZone(""), true
+	// Unmap IPv4-mapped IPv6 (::ffff:a.b.c.d -> a.b.c.d) so both notations
+	// share one rate-limit key and IPv4 prefixes match in isTrustedProxy and
+	// isBlockableKey, and strip the IPv6 zone identifier so that rate-limit keys
+	// are zone-free and netip.Prefix.Contains matches unzoned prefixes against
+	// link-local peers.
+	return addr.Unmap().WithZone(""), true
 }
 
 func isTrustedProxy(addr netip.Addr, extras []netip.Prefix) bool {
@@ -812,13 +826,20 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Reject keys that are on the temporary IP blocklist before doing any
 	// upgrade work. Checked ahead of the connection limiter so a blocked client
 	// cannot keep consuming attempt slots.
-	if s.ipBlockEnabled && s.is.IsWsIPBlocked(ipKey, time.Now()) {
-		if s.metrics != nil {
-			s.metrics.WebsocketBlockedConnections.Inc()
+	if s.ipBlockEnabled {
+		if blocked, rejected := s.is.IsWsIPBlocked(ipKey, time.Now()); blocked {
+			if s.metrics != nil {
+				s.metrics.WebsocketBlockedConnections.Inc()
+			}
+			// A blocked client may hammer reconnects for the whole block
+			// duration; log the first rejection and then every 1000th instead of
+			// one line per attempt.
+			if rejected == 1 || rejected%1000 == 0 {
+				glog.Warning("Websocket connection rejected, ", ip, ", ip_blocked (attempt ", rejected, ")")
+			}
+			http.Error(w, "Too many websocket connections", http.StatusTooManyRequests)
+			return
 		}
-		glog.Warning("Websocket connection rejected, ", ip, ", ip_blocked")
-		http.Error(w, "Too many websocket connections", http.StatusTooManyRequests)
-		return
 	}
 
 	limited := false
@@ -1129,14 +1150,16 @@ func (s *WebsocketServer) onMessageRateBreach(c *websocketChannel, count int) {
 		s.is.BlockWsIP(c.ipKey, now.Add(s.ipBlockDuration), now)
 		blocked = true
 	}
-	if s.closeChannel(c, "message_rate_limit") {
-		if blocked {
-			glog.Warning("Client ", c.id, " exceeded websocket message rate limit (", count, "/", s.messageRateLimit,
-				"); blocking ", c.ipKey, " for ", s.ipBlockDuration)
-		} else {
-			glog.Warning("Client ", c.id, " exceeded websocket message rate limit (", count, "/", s.messageRateLimit,
-				"); closing connection (", c.ip, " not blockable)")
-		}
+	closed := s.closeChannel(c, "message_rate_limit")
+	// The block takes effect regardless of which goroutine wins the close race,
+	// so it is logged unconditionally; the close-only message is logged just by
+	// the winner to avoid duplicates.
+	if blocked {
+		glog.Warning("Client ", c.id, " exceeded websocket message rate limit (", count, "/", s.messageRateLimit,
+			"); blocking ", c.ipKey, " for ", s.ipBlockDuration)
+	} else if closed {
+		glog.Warning("Client ", c.id, " exceeded websocket message rate limit (", count, "/", s.messageRateLimit,
+			"); closing connection (", c.ip, " not blockable)")
 	}
 }
 

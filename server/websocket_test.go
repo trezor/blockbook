@@ -215,6 +215,36 @@ func TestParseTrustedProxies(t *testing.T) {
 	}
 }
 
+func TestParseCloudflareProxies(t *testing.T) {
+	const envName = "TEST_WS_CLOUDFLARE_IPS"
+	// unset and the builtin spellings resolve to the built-in edge list
+	for _, v := range []string{"", "builtin", "Default"} {
+		got, err := parseCloudflareProxies(envName, v)
+		if err != nil || len(got) != len(cloudflareEdgeCIDRs) {
+			t.Fatalf("parseCloudflareProxies(%q) = %d prefixes, err %v; want %d, nil", v, len(got), err, len(cloudflareEdgeCIDRs))
+		}
+	}
+	// the off spellings disable verification
+	for _, v := range []string{"off", "none", "false", "0", "disabled", " OFF "} {
+		got, err := parseCloudflareProxies(envName, v)
+		if err != nil || got != nil {
+			t.Fatalf("parseCloudflareProxies(%q) = %v, err %v; want nil, nil", v, got, err)
+		}
+	}
+	// a custom list replaces the built-in ranges
+	custom, err := parseCloudflareProxies(envName, "203.0.113.0/24, 2400:cb00::/32")
+	if err != nil || len(custom) != 2 || custom[0] != netip.MustParsePrefix("203.0.113.0/24") {
+		t.Fatalf("custom list = %v, err %v; want the two configured prefixes", custom, err)
+	}
+	// invalid CIDRs, IPv4-mapped notation, and a list with no CIDRs at all must
+	// fail rather than silently disabling verification
+	for _, v := range []string{"not-a-cidr", "::ffff:192.0.2.0/120", ", ,"} {
+		if _, err := parseCloudflareProxies(envName, v); err == nil {
+			t.Fatalf("parseCloudflareProxies(%q) expected error, got nil", v)
+		}
+	}
+}
+
 func TestResolveClientIPLegacyAndTrustedProxy(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -471,6 +501,7 @@ func TestRateLimitKey(t *testing.T) {
 		want string
 	}{
 		{"192.0.2.10", "192.0.2.10"},
+		{"::ffff:192.0.2.10", "192.0.2.10"}, // IPv4-mapped IPv6 unmaps to the IPv4 key
 		{"2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64"},
 		{"2001:db8:1:2::ffff", "2001:db8:1:2::/64"},
 		{"2001:db8:1:3::1", "2001:db8:1:3::/64"},
@@ -497,15 +528,17 @@ func TestIsBlockableKey(t *testing.T) {
 		ip   string
 		want bool
 	}{
-		{"192.0.2.10", true},      // ordinary public address
-		{"2001:db8:1:2::5", true}, // ordinary public IPv6 address
-		{"127.0.0.1", false},      // loopback
-		{"10.1.2.3", false},       // RFC1918
-		{"192.168.1.1", false},    // RFC1918
-		{"169.254.0.1", false},    // link-local
-		{"203.0.113.9", false},    // inside Cloudflare range
-		{"198.51.100.9", false},   // inside trusted-proxy range
-		{"not-an-ip", false},      // unparseable
+		{"192.0.2.10", true},          // ordinary public address
+		{"2001:db8:1:2::5", true},     // ordinary public IPv6 address
+		{"127.0.0.1", false},          // loopback
+		{"10.1.2.3", false},           // RFC1918
+		{"192.168.1.1", false},        // RFC1918
+		{"169.254.0.1", false},        // link-local
+		{"203.0.113.9", false},        // inside Cloudflare range
+		{"198.51.100.9", false},       // inside trusted-proxy range
+		{"::ffff:10.1.2.3", false},    // IPv4-mapped private unmaps before the checks
+		{"::ffff:203.0.113.9", false}, // IPv4-mapped form of a Cloudflare-range address
+		{"not-an-ip", false},          // unparseable
 	}
 	for _, tt := range tests {
 		if got := isBlockableKey(tt.ip, trusted, cf); got != tt.want {
