@@ -1,3 +1,5 @@
+//go:build unittest
+
 package server
 
 import (
@@ -5,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -273,15 +276,39 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 		t.Fatalf("first decision = %+v, want accepted", decision)
 	}
 	limiter.release("192.0.2.10", now)
+	// breaches must be separate episodes (>= restAPIBreachMinSpacing apart) to
+	// count toward the block threshold
+	var last time.Time
 	for i := 0; i < restAPIBreachBlockThreshold; i++ {
-		decision := limiter.accept("192.0.2.10", true, now)
+		last = now.Add(time.Duration(i) * restAPIBreachMinSpacing)
+		decision := limiter.accept("192.0.2.10", true, last)
 		if decision.accepted || decision.reason != restAPIRejectRequestRate {
 			t.Fatalf("breach %d decision = %+v, want request-rate rejection", i, decision)
 		}
 	}
-	decision := limiter.accept("192.0.2.10", true, now)
+	decision := limiter.accept("192.0.2.10", true, last.Add(time.Second))
 	if decision.accepted || decision.reason != restAPIRejectIPBlocked {
 		t.Fatalf("blocked decision = %+v, want ip_blocked", decision)
+	}
+
+	// a burst of same-instant rejections is one breach episode and must not
+	// trip the temporary block
+	limiter = newTestRestAPIRateLimiter()
+	limiter.rateLimit = 1
+	limiter.burst = 1
+	limiter.blockDuration = time.Minute
+	if decision := limiter.accept("192.0.2.11", true, now); !decision.accepted {
+		t.Fatalf("first burst decision = %+v, want accepted", decision)
+	}
+	limiter.release("192.0.2.11", now)
+	for i := 0; i < 3*restAPIBreachBlockThreshold; i++ {
+		decision := limiter.accept("192.0.2.11", true, now)
+		if decision.accepted || decision.reason != restAPIRejectRequestRate {
+			t.Fatalf("burst rejection %d decision = %+v, want request-rate rejection", i, decision)
+		}
+	}
+	if limiter.clients["192.0.2.11"].blockedUntil.After(now) {
+		t.Fatal("same-instant rejection burst tripped the temporary block")
 	}
 
 	limiter = newTestRestAPIRateLimiter()
@@ -293,7 +320,7 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 	}
 	limiter.release("127.0.0.1", now)
 	for i := 0; i < restAPIBreachBlockThreshold+1; i++ {
-		decision = limiter.accept("127.0.0.1", false, now)
+		decision = limiter.accept("127.0.0.1", false, now.Add(time.Duration(i)*restAPIBreachMinSpacing))
 		if decision.accepted || decision.reason != restAPIRejectRequestRate {
 			t.Fatalf("unblockable breach %d decision = %+v, want request-rate rejection", i, decision)
 		}
@@ -416,5 +443,73 @@ func TestRestAPIRateLimiterBypassDoesNotConsumeToken(t *testing.T) {
 	}
 	if calls.Load() != 6 {
 		t.Fatalf("handler calls = %d, want 6", calls.Load())
+	}
+}
+
+func TestRestAPIRateLimiterLocalPeerBypass(t *testing.T) {
+	limiter := newTestRestAPIRateLimiter()
+	limiter.rateLimit = 1
+	limiter.burst = 1
+	handler := limiter.wrapAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), "/api")
+
+	// A loopback/private peer without any attribution header is the operator's
+	// own tooling or a proxy that forwards no client IP; limiting that key would
+	// throttle a whole deployment as one client, so it is exempt.
+	for _, remote := range []string{"127.0.0.1:40000", "[::1]:40000", "10.1.2.3:40000"} {
+		for i := 0; i < 5; i++ {
+			req := httptest.NewRequest(http.MethodGet, "http://example.com/api/v2/status", nil)
+			req.RemoteAddr = remote
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("local request %d from %s status = %d, want %d", i, remote, rec.Code, http.StatusNoContent)
+			}
+		}
+	}
+	if len(limiter.clients) != 0 {
+		t.Fatalf("local bypass created limiter state for %d keys", len(limiter.clients))
+	}
+
+	// The same loopback peer forwarding a client IP via X-Real-Ip is limited on
+	// that client key.
+	for i, want := range []int{http.StatusNoContent, http.StatusTooManyRequests} {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/api/v2/status", nil)
+		req.RemoteAddr = "127.0.0.1:40000"
+		req.Header.Set("X-Real-Ip", "192.0.2.77")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("attributed request %d status = %d, want %d", i, rec.Code, want)
+		}
+	}
+}
+
+func TestRestAPIRateLimiterTrackingCap(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	limiter := newTestRestAPIRateLimiter()
+	limiter.rateLimit = 1
+	limiter.burst = 1
+	for i := 0; i < restAPIMaxTrackedClients; i++ {
+		limiter.clients[strconv.Itoa(i)] = &restAPIClientLimit{lastSeen: now}
+	}
+
+	decision := limiter.accept("192.0.2.99", true, now)
+	if !decision.accepted || !decision.untracked {
+		t.Fatalf("decision at cap = %+v, want accepted and untracked", decision)
+	}
+	if _, ok := limiter.clients["192.0.2.99"]; ok {
+		t.Fatal("untracked accept created limiter state")
+	}
+	// release of an untracked key is a no-op
+	limiter.release("192.0.2.99", now)
+
+	// already-tracked keys stay limited at the cap
+	if decision := limiter.accept("0", true, now); !decision.accepted {
+		t.Fatalf("tracked accept = %+v, want accepted", decision)
+	}
+	if decision := limiter.accept("0", true, now); decision.accepted {
+		t.Fatalf("tracked second accept = %+v, want rejected", decision)
 	}
 }

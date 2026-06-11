@@ -8,7 +8,7 @@
             <button type="submit" class="btn btn-outline-secondary">Reset</button>
         </form>
     </div>
-</row>
+</div>
 <div>
     <table class="table table-hover">
         <thead>
@@ -20,7 +20,7 @@
         <tbody>
             {{range $d := .WsLimitExceedingIPs}}
             <tr>
-                <td>{{$d.IP}}</a></td>
+                <td>{{$d.IP}}</td>
                 <td>{{$d.Count}}</td>
             </tr>
             {{end}}
@@ -37,7 +37,7 @@
             <button type="submit" class="btn btn-outline-secondary">Reset</button>
         </form>
     </div>
-</row>
+</div>
 <div>
     <table class="table table-hover">
         <thead>

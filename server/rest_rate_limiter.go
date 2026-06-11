@@ -26,6 +26,16 @@ const (
 	restAPILimiterCleanupInterval = time.Minute
 	restAPIBreachWindow           = 10 * time.Minute
 	restAPIBreachBlockThreshold   = 3
+	// restAPIBreachMinSpacing is the minimum quiet gap between counted breaches:
+	// one burst produces many rejections in the same instant (e.g. a page firing
+	// dozens of parallel fetches), and the block threshold should mean separate
+	// abuse episodes, not one spike.
+	restAPIBreachMinSpacing = 10 * time.Second
+	// restAPIMaxTrackedClients bounds the per-key state map so a flood rotating
+	// client keys cannot grow it (and the sweeps over it) without bound; past the
+	// cap, new keys are temporarily admitted untracked (fail open) while
+	// already-tracked keys stay limited.
+	restAPIMaxTrackedClients = 100_000
 )
 
 const (
@@ -49,6 +59,7 @@ type restAPIRateLimiter struct {
 	mux                sync.Mutex
 	clients            map[string]*restAPIClientLimit
 	lastCleanup        time.Time
+	capWarned          bool
 	metrics            *common.Metrics
 	rateLimit          int
 	rateWindow         time.Duration
@@ -58,6 +69,7 @@ type restAPIRateLimiter struct {
 	blockDuration      time.Duration
 	trustedProxies     []netip.Prefix
 	cloudflarePrefixes []netip.Prefix
+	localBypassWarn    sync.Once
 }
 
 type restAPIClientLimit struct {
@@ -77,9 +89,16 @@ type restAPITokenBucket struct {
 }
 
 type restAPILimitDecision struct {
-	accepted   bool
+	accepted bool
+	// untracked marks an accepted request for which no per-key state was
+	// created (tracking-cap fail-open); the caller must not release it.
+	untracked  bool
 	reason     string
 	retryAfter time.Duration
+	// shouldLog is the per-client log-throttling decision for a rejection,
+	// made inside accept while the client state is at hand so the caller can
+	// log outside the limiter lock.
+	shouldLog bool
 }
 
 func newRestAPIRateLimiter(network string, metrics *common.Metrics) (*restAPIRateLimiter, error) {
@@ -213,21 +232,40 @@ func (l *restAPIRateLimiter) wrapAPI(next http.Handler, apiRoot string) http.Han
 			next.ServeHTTP(w, r)
 			return
 		}
-		ip, blockSafe := resolveClientIP(r, l.trustedProxies, l.cloudflarePrefixes)
+		ip, blockSafe, fromHeader := resolveClientIP(r, l.trustedProxies, l.cloudflarePrefixes)
+		if !fromHeader && isLocalOrTrustedProxyIP(ip, l.trustedProxies) {
+			// The request came straight from the operator's own
+			// loopback/LAN/trusted proxy with no client-attribution header: the
+			// key would not identify a client but the shared infrastructure
+			// address (local tooling, or a proxy that does not set X-Real-Ip),
+			// so limiting it would throttle a whole deployment as one client.
+			// These were never limited before, keep them exempt.
+			l.localBypassWarn.Do(func() {
+				glog.Info("REST API request from local/trusted peer ", ip,
+					" without a client attribution header; such requests are not rate limited")
+			})
+			next.ServeHTTP(w, r)
+			return
+		}
 		ipKey := rateLimitKey(ip)
 		blockable := false
 		if l.blockDuration > 0 {
 			blockable = blockSafe && isBlockableKey(ip, l.trustedProxies, l.cloudflarePrefixes)
 		}
-		now := time.Now()
-		decision := l.accept(ipKey, blockable, now)
+		decision := l.accept(ipKey, blockable, time.Now())
 		if !decision.accepted {
 			l.observeRejection(decision.reason)
-			l.logRejection(ipKey, decision.reason, now)
+			if decision.shouldLog {
+				glog.Warning("REST API request rejected, ", ipKey, ", ", decision.reason)
+			}
 			writeRestAPIRateLimitResponse(w, decision.retryAfter)
 			return
 		}
-		defer l.release(ipKey, time.Now())
+		if !decision.untracked {
+			// Wrap the release so time.Now() is evaluated when the handler
+			// finishes, not when the defer is registered.
+			defer func() { l.release(ipKey, time.Now()) }()
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -243,6 +281,17 @@ func (l *restAPIRateLimiter) accept(ipKey string, blockable bool, now time.Time)
 	l.cleanupLocked(now)
 	client := l.clients[ipKey]
 	if client == nil {
+		if len(l.clients) >= restAPIMaxTrackedClients {
+			l.sweepLocked(now)
+		}
+		if len(l.clients) >= restAPIMaxTrackedClients {
+			if !l.capWarned {
+				l.capWarned = true
+				glog.Warning("REST API rate limiter is tracking ", restAPIMaxTrackedClients,
+					" client keys; admitting new keys unlimited until the map shrinks")
+			}
+			return restAPILimitDecision{accepted: true, untracked: true}
+		}
 		client = &restAPIClientLimit{}
 		l.clients[ipKey] = client
 	}
@@ -250,19 +299,30 @@ func (l *restAPIRateLimiter) accept(ipKey string, blockable bool, now time.Time)
 
 	if client.blockedUntil.After(now) {
 		client.blockRejected++
-		return restAPILimitDecision{reason: restAPIRejectIPBlocked, retryAfter: client.blockedUntil.Sub(now)}
+		return restAPILimitDecision{
+			reason:     restAPIRejectIPBlocked,
+			retryAfter: client.blockedUntil.Sub(now),
+			shouldLog:  client.shouldLogRejection(restAPIRejectIPBlocked, now),
+		}
 	}
 
 	if l.maxConcurrent > 0 && client.active >= l.maxConcurrent {
 		l.recordBreachLocked(client, blockable, now)
-		return restAPILimitDecision{reason: restAPIRejectConcurrentRequests}
+		return restAPILimitDecision{
+			reason:    restAPIRejectConcurrentRequests,
+			shouldLog: client.shouldLogRejection(restAPIRejectConcurrentRequests, now),
+		}
 	}
 
 	if l.rateLimit > 0 {
 		ok, retryAfter := client.bucket.allow(now, l.rateLimit, l.rateWindow, l.burst)
 		if !ok {
 			l.recordBreachLocked(client, blockable, now)
-			return restAPILimitDecision{reason: restAPIRejectRequestRate, retryAfter: retryAfter}
+			return restAPILimitDecision{
+				reason:     restAPIRejectRequestRate,
+				retryAfter: retryAfter,
+				shouldLog:  client.shouldLogRejection(restAPIRejectRequestRate, now),
+			}
 		}
 	}
 
@@ -291,6 +351,11 @@ func (l *restAPIRateLimiter) recordBreachLocked(client *restAPIClientLimit, bloc
 	}
 	cutoff := now.Add(-restAPIBreachWindow)
 	client.breaches = trimTimes(client.breaches, cutoff)
+	// every rejection of an over-limit client lands here; only count one breach
+	// per quiet gap so the block threshold means separate abuse episodes
+	if n := len(client.breaches); n > 0 && now.Sub(client.breaches[n-1]) < restAPIBreachMinSpacing {
+		return
+	}
 	client.breaches = append(client.breaches, now)
 	if len(client.breaches) >= restAPIBreachBlockThreshold {
 		client.blockedUntil = now.Add(l.blockDuration)
@@ -350,6 +415,9 @@ func (l *restAPIRateLimiter) sweepLocked(now time.Time) {
 			delete(l.clients, ipKey)
 		}
 	}
+	if l.capWarned && len(l.clients) < restAPIMaxTrackedClients/2 {
+		l.capWarned = false
+	}
 }
 
 func (l *restAPIRateLimiter) sweep(now time.Time) {
@@ -395,14 +463,11 @@ func (l *restAPIRateLimiter) observeRejection(reason string) {
 	}
 }
 
-func (l *restAPIRateLimiter) logRejection(ipKey string, reason string, now time.Time) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-
-	client := l.clients[ipKey]
-	if client == nil {
-		return
-	}
+// shouldLogRejection throttles per-client rejection logging: log when the
+// rejection kind changes or at most once a minute, plus the first and every
+// 1000th rejection of a blocked client. Called with the limiter mutex held (it
+// mutates client state); the caller emits the log line after unlocking.
+func (client *restAPIClientLimit) shouldLogRejection(reason string, now time.Time) bool {
 	shouldLog := reason != client.lastRejectKind || now.Sub(client.lastRejectLog) >= time.Minute
 	if reason == restAPIRejectIPBlocked && (client.blockRejected == 1 || client.blockRejected%1000 == 0) {
 		shouldLog = true
@@ -410,8 +475,8 @@ func (l *restAPIRateLimiter) logRejection(ipKey string, reason string, now time.
 	if shouldLog {
 		client.lastRejectKind = reason
 		client.lastRejectLog = now
-		glog.Warning("REST API request rejected, ", ipKey, ", ", reason)
 	}
+	return shouldLog
 }
 
 func writeRestAPIRateLimitResponse(w http.ResponseWriter, retryAfter time.Duration) {

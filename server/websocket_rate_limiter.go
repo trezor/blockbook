@@ -1,14 +1,14 @@
 package server
 
 import (
-	"fmt"
-	"os"
-	"strconv"
+	"errors"
+	"net"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
 )
 
 const maxWebsocketConnectionAttemptsPerIP = 64
@@ -60,29 +60,15 @@ type websocketConnectionLimiter struct {
 //	                              the connection without blocking the IP.
 func (s *WebsocketServer) configureMessageRateLimit(network string) error {
 	prefix := strings.ToUpper(network)
-	s.messageRateLimit = defaultWsMessageRateLimit
-	if v := os.Getenv(prefix + "_WS_MESSAGE_RATE_LIMIT"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			return fmt.Errorf("%s_WS_MESSAGE_RATE_LIMIT: invalid value %q (want a non-negative integer)", prefix, v)
-		}
-		s.messageRateLimit = n
+	var err error
+	if s.messageRateLimit, err = parseNonNegativeIntEnv(prefix+"_WS_MESSAGE_RATE_LIMIT", defaultWsMessageRateLimit); err != nil {
+		return err
 	}
-	s.messageRateWindow = defaultWsMessageRateWindow
-	if v := os.Getenv(prefix + "_WS_MESSAGE_RATE_WINDOW"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil || d <= 0 {
-			return fmt.Errorf("%s_WS_MESSAGE_RATE_WINDOW: invalid duration %q (e.g. \"10m\")", prefix, v)
-		}
-		s.messageRateWindow = d
+	if s.messageRateWindow, err = parsePositiveDurationEnv(prefix+"_WS_MESSAGE_RATE_WINDOW", defaultWsMessageRateWindow); err != nil {
+		return err
 	}
-	s.ipBlockDuration = defaultWsIPBlockDuration
-	if v := os.Getenv(prefix + "_WS_IP_BLOCK_DURATION"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil || d < 0 {
-			return fmt.Errorf("%s_WS_IP_BLOCK_DURATION: invalid duration %q (e.g. \"12h\", or \"0\" to disable blocking)", prefix, v)
-		}
-		s.ipBlockDuration = d
+	if s.ipBlockDuration, err = parseNonNegativeDurationEnv(prefix+"_WS_IP_BLOCK_DURATION", defaultWsIPBlockDuration); err != nil {
+		return err
 	}
 	s.ipBlockEnabled = s.messageRateLimit > 0 && s.ipBlockDuration > 0
 	if s.messageRateLimit > 0 {
@@ -210,15 +196,7 @@ func (s *WebsocketServer) runWebsocketLimiterMaintenance(interval time.Duration)
 }
 
 func (client *websocketClientLimit) trimAttempts(now time.Time) {
-	cutoff := now.Add(-websocketConnectionAttemptWindow)
-	i := 0
-	for i < len(client.attempts) && client.attempts[i].Before(cutoff) {
-		i++
-	}
-	if i > 0 {
-		copy(client.attempts, client.attempts[i:])
-		client.attempts = client.attempts[:len(client.attempts)-i]
-	}
+	client.attempts = trimTimes(client.attempts, now.Add(-websocketConnectionAttemptWindow))
 }
 
 // connMessageRate is a fixed-memory, bucketed sliding-window message counter
@@ -273,6 +251,44 @@ func (m *connMessageRate) observe(now time.Time) int {
 	m.counts[slot]++
 	m.total++
 	return int(m.total)
+}
+
+// errWsMessageRateExceeded aborts the read loop from a control-frame handler;
+// by the time it surfaces in inputLoop as a read error, onMessageRateBreach has
+// already closed the channel (and blocked the key when blockable).
+var errWsMessageRateExceeded = errors.New("websocket message rate limit exceeded")
+
+// installControlFrameRateLimit counts client ping/pong control frames toward
+// the per-connection message rate limit. gorilla consumes control frames inside
+// ReadMessage and dispatches them to these handlers, so they never reach
+// inputLoop's switch; without this a client could stream pings -- each costing
+// the server a read plus a pong write -- without the limiter ever seeing them.
+// The handlers run on the connection's read goroutine, the same one that
+// observes text messages, so the counter stays single-goroutine. The ping
+// handler otherwise mirrors gorilla's default: answer with a pong carrying the
+// ping payload, swallowing closed-connection and write-timeout errors.
+func (s *WebsocketServer) installControlFrameRateLimit(c *websocketChannel) {
+	c.conn.SetPingHandler(func(message string) error {
+		if count := c.messageRate.observe(time.Now()); count > s.messageRateLimit {
+			s.onMessageRateBreach(c, count)
+			return errWsMessageRateExceeded
+		}
+		err := c.conn.WriteControl(websocket.PongMessage, []byte(message), time.Now().Add(time.Second))
+		if err == websocket.ErrCloseSent {
+			return nil
+		}
+		if e, ok := err.(net.Error); ok && e.Timeout() {
+			return nil
+		}
+		return err
+	})
+	c.conn.SetPongHandler(func(string) error {
+		if count := c.messageRate.observe(time.Now()); count > s.messageRateLimit {
+			s.onMessageRateBreach(c, count)
+			return errWsMessageRateExceeded
+		}
+		return nil
+	})
 }
 
 // onMessageRateBreach handles a connection that exceeded the per-connection
