@@ -5,6 +5,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+"$repo_root/contrib/system-check.sh"
+
 mapfile -t pkgs < <(go list ./... | grep -vE '^github\.com/trezor/blockbook/(contrib|tests)')
 [[ ${#pkgs[@]} -gt 0 ]] || { echo "ERROR: 'go list' produced no packages." >&2; exit 1; }
 exec go test -tags 'unittest' "${pkgs[@]}" "$@"
