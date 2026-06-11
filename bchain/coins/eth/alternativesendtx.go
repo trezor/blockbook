@@ -228,7 +228,7 @@ func (p *AlternativeSendTxProvider) getTransactionFromProviders(txid string) (*b
 			}
 			continue
 		}
-		if tx == (bchain.RpcTransaction{}) {
+		if tx.Hash == "" {
 			continue
 		}
 		return &tx, true, nil
