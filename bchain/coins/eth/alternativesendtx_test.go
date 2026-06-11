@@ -175,3 +175,17 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsEmptyTransaction(
 		t.Fatal("empty transaction was stored in alternative mempool cache")
 	}
 }
+
+func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsTransactionWithoutHash(t *testing.T) {
+	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":{"from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
+	var removed string
+	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+	provider.mempoolTxs = make(map[string]storedTx)
+
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err == nil {
+		t.Fatal("handleMempoolTransaction() error = nil, want ErrTxNotFound")
+	}
+	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+		t.Fatal("transaction without hash was stored in alternative mempool cache")
+	}
+}
