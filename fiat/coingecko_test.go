@@ -298,38 +298,46 @@ func TestUpdateHistoricalTickers_BootstrapStoresSuccessfulCurrenciesEvenWhenSome
 	}
 }
 
-func TestMakeReq_ThrottleRetriesExhausted(t *testing.T) {
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+func TestMakeReq_ThrottleRetriesWithoutCap(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
+	// 429 more times than the old retry cap (4) to prove makeReq keeps retrying past it instead
+	// of giving up, then succeeds once the provider stops throttling.
+	throttleHits := 9
 	var requests atomic.Int32
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests.Add(1)
-		http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+		if int(requests.Add(1)) <= throttleHits {
+			http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer mockServer.Close()
 
 	cg := &Coingecko{
 		httpClient: mockServer.Client(),
 	}
-	_, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
-	if err == nil {
-		t.Fatal("expected makeReq to fail after retries are exhausted")
+	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
+	if err != nil {
+		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
-	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
-	if got := int(requests.Load()); got != wantRequests {
-		t.Fatalf("unexpected number of requests: got %d, want %d", got, wantRequests)
+	if string(resp) != `{"ok":true}` {
+		t.Fatalf("unexpected response body: %s", string(resp))
+	}
+	if got, want := int(requests.Load()), throttleHits+1; got != want {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, want)
 	}
 }
 
 func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
 	var requests atomic.Int32
@@ -345,7 +353,7 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 	cg := &Coingecko{
 		httpClient: mockServer.Client(),
 	}
-	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
+	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
 	if err != nil {
 		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
@@ -395,9 +403,9 @@ func TestRetryAfterFromError(t *testing.T) {
 }
 
 func TestThrottleBackoffDelay(t *testing.T) {
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{10 * time.Second, 20 * time.Second}
-	defer func() { coingeckoThrottleRetryBackoff = originalBackoff }()
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 10 * time.Second
+	defer func() { coingeckoThrottleBackoff = originalBackoff }()
 
 	within := func(t *testing.T, got, base time.Duration) {
 		t.Helper()
@@ -408,17 +416,16 @@ func TestThrottleBackoffDelay(t *testing.T) {
 	}
 
 	noRetryAfter := &coingeckoHTTPError{status: http.StatusTooManyRequests}
-	// The exponential base for the attempt is used only when there is no Retry-After hint.
-	within(t, throttleBackoffDelay(0, noRetryAfter), 10*time.Second)
-	within(t, throttleBackoffDelay(1, noRetryAfter), 20*time.Second)
-	// A Retry-After hint takes priority over the ladder, whether it is longer than the base...
-	within(t, throttleBackoffDelay(0, &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 30 * time.Second}), 30*time.Second)
-	// ...or shorter than the base for this attempt.
-	within(t, throttleBackoffDelay(1, &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 5 * time.Second}), 5*time.Second)
+	// The fixed backoff is used only when there is no Retry-After hint.
+	within(t, throttleBackoffDelay(noRetryAfter), 10*time.Second)
+	// A Retry-After hint takes priority over the fixed backoff, whether it is longer...
+	within(t, throttleBackoffDelay(&coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 30 * time.Second}), 30*time.Second)
+	// ...or shorter than the fixed backoff.
+	within(t, throttleBackoffDelay(&coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 5 * time.Second}), 5*time.Second)
 
 	// A zeroed backoff with no Retry-After stays instant (keeps the throttle tests fast).
-	coingeckoThrottleRetryBackoff = []time.Duration{0}
-	if got := throttleBackoffDelay(0, noRetryAfter); got != 0 {
+	coingeckoThrottleBackoff = 0
+	if got := throttleBackoffDelay(noRetryAfter); got != 0 {
 		t.Fatalf("zeroed backoff delay = %v, want 0", got)
 	}
 }
@@ -459,16 +466,22 @@ func TestIsCoingeckoThrottleError_StatusCode(t *testing.T) {
 	if !isCoingeckoThrottleError(errors.New("error code: 1015")) {
 		t.Fatal("expected Cloudflare 1015 to be detected as throttle")
 	}
+	// Cloudflare actually returns the 1015 code inside a full HTML page, so the
+	// substring must be detected even when it is not the entire error string.
+	cloudflareBody := "<!DOCTYPE html><html><body>The owner of this website has banned you temporarily. error code: 1015</body></html>"
+	if !isCoingeckoThrottleError(&coingeckoHTTPError{status: http.StatusForbidden, body: cloudflareBody}) {
+		t.Fatal("expected Cloudflare 1015 HTML page to be detected as throttle")
+	}
 	if isCoingeckoThrottleError(nil) {
 		t.Fatal("nil error must not be a throttle error")
 	}
 }
 
 func TestMakeReq_Detects429ByStatus(t *testing.T) {
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
 	var requests atomic.Int32
@@ -483,7 +496,7 @@ func TestMakeReq_Detects429ByStatus(t *testing.T) {
 	defer mockServer.Close()
 
 	cg := &Coingecko{httpClient: mockServer.Client()}
-	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
+	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
 	if err != nil {
 		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
@@ -510,7 +523,7 @@ func TestMakeReq_PacesRequests(t *testing.T) {
 	}
 	start := time.Now()
 	for i := 0; i < 3; i++ {
-		if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree); err != nil {
+		if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
 			t.Fatalf("makeReq failed on call %d: %v", i, err)
 		}
 	}
@@ -524,11 +537,236 @@ func TestMakeReq_PacesRequests(t *testing.T) {
 	}
 }
 
-// A throttle-retries-exhausted error reflects sustained, provider-wide 429s: makeReq already
-// waited out the full backoff ladder and the provider kept returning 429. So even in steady state
-// the pass stops early rather than repeating the ladder for every remaining currency. The throttle
-// error is still returned so the unfinished currencies are retried next run.
-func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionInSteadyState(t *testing.T) {
+func TestMarkThrottled_ExtendsNeverShortens(t *testing.T) {
+	cg := &Coingecko{}
+	cg.markThrottled(time.Minute)
+	first := cg.throttledUntil
+	if first.IsZero() {
+		t.Fatal("markThrottled did not open the throttle window")
+	}
+	// a shorter delay must not shorten the already open window
+	cg.markThrottled(time.Second)
+	if !cg.throttledUntil.Equal(first) {
+		t.Fatalf("shorter delay moved the window: %v -> %v", first, cg.throttledUntil)
+	}
+	// a longer delay extends it
+	cg.markThrottled(2 * time.Minute)
+	if !cg.throttledUntil.After(first) {
+		t.Fatalf("longer delay did not extend the window past %v: %v", first, cg.throttledUntil)
+	}
+}
+
+func TestWaitForRequestSlot_HighPriorityWaitsOutWindowButIsNotParked(t *testing.T) {
+	cg := &Coingecko{
+		throttledUntil:       time.Now().Add(100 * time.Millisecond),
+		highPriorityInFlight: 1, // a concurrent high-priority request must not park another one
+	}
+	until := cg.throttledUntil
+	done := make(chan time.Time, 1)
+	go func() {
+		cg.waitForRequestSlot(priorityHigh)
+		done <- time.Now()
+	}()
+	select {
+	case returnedAt := <-done:
+		if returnedAt.Before(until) {
+			t.Fatalf("high priority request fired at %v, before the throttle window cleared at %v", returnedAt, until)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("high priority request was parked; it must only wait out the throttle window")
+	}
+}
+
+func TestWaitForRequestSlot_LowPriorityParksUntilHighPriorityCompletes(t *testing.T) {
+	originalPoll := coingeckoLowPriorityPollInterval
+	coingeckoLowPriorityPollInterval = time.Millisecond
+	defer func() { coingeckoLowPriorityPollInterval = originalPoll }()
+
+	cg := &Coingecko{
+		throttledUntil:       time.Now().Add(10 * time.Second),
+		highPriorityInFlight: 1,
+	}
+	done := make(chan struct{})
+	go func() {
+		cg.waitForRequestSlot(priorityLow)
+		close(done)
+	}()
+	// while throttled with a high-priority request in flight, low priority must stay parked
+	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("low priority request fired while throttled with a high priority request in flight")
+	default:
+	}
+	// once the high-priority request completes and the window clears, low priority proceeds
+	cg.reqMu.Lock()
+	cg.highPriorityInFlight = 0
+	cg.throttledUntil = time.Now()
+	cg.reqMu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("low priority request stayed parked after the gate cleared")
+	}
+}
+
+func TestWaitForRequestSlot_RechecksWindowExtendedDuringSleep(t *testing.T) {
+	cg := &Coingecko{}
+	cg.markThrottled(200 * time.Millisecond)
+	done := make(chan time.Time, 1)
+	go func() {
+		cg.waitForRequestSlot(priorityHigh)
+		done <- time.Now()
+	}()
+	// wait until the goroutine reserved its slot inside the first window
+	for {
+		cg.reqMu.Lock()
+		reserved := !cg.lastRequestAt.IsZero()
+		cg.reqMu.Unlock()
+		if reserved {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// extend the window while the goroutine sleeps on its already-reserved slot
+	cg.markThrottled(500 * time.Millisecond)
+	cg.reqMu.Lock()
+	extendedUntil := cg.throttledUntil
+	cg.reqMu.Unlock()
+	returnedAt := <-done
+	if returnedAt.Before(extendedUntil) {
+		t.Fatalf("request fired at %v, inside the extended throttle window ending %v", returnedAt, extendedUntil)
+	}
+}
+
+// A 429 received by one request opens a throttle window that a second, unrelated request
+// waits out as well.
+func TestMakeReq_SharedThrottleWindow(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 100 * time.Millisecond
+	defer func() { coingeckoThrottleBackoff = originalBackoff }()
+
+	var requests atomic.Int32
+	var windowUntil atomic.Int64 // unix nanos of the shared window once opened
+	var violations atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if until := windowUntil.Load(); until != 0 && time.Now().UnixNano() < until {
+			violations.Add(1)
+		}
+		if requests.Add(1) == 1 {
+			http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{httpClient: mockServer.Client()}
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityLow)
+		firstDone <- err
+	}()
+	// wait until the first request's 429 opened the shared window
+	for {
+		cg.reqMu.Lock()
+		until := cg.throttledUntil
+		cg.reqMu.Unlock()
+		if !until.IsZero() {
+			windowUntil.Store(until.UnixNano())
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// a second request on another endpoint must wait out the shared window too
+	if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+		t.Fatalf("second makeReq failed: %v", err)
+	}
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first makeReq failed: %v", err)
+	}
+	if violations.Load() != 0 {
+		t.Fatal("a request reached the server inside the shared throttle window")
+	}
+}
+
+// While a high-priority request keeps retrying through a 429 storm, a concurrent
+// low-priority request stays parked and reaches the server only after the high-priority
+// request succeeded.
+func TestMakeReq_LowPriorityYieldsToHighDuringThrottle(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	originalPoll := coingeckoLowPriorityPollInterval
+	coingeckoThrottleBackoff = 60 * time.Millisecond
+	coingeckoLowPriorityPollInterval = time.Millisecond
+	defer func() {
+		coingeckoThrottleBackoff = originalBackoff
+		coingeckoLowPriorityPollInterval = originalPoll
+	}()
+
+	var highThrottleHits atomic.Int32
+	var highSucceededAt atomic.Int64
+	var lowArrivedAt atomic.Int64
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/high":
+			if highThrottleHits.Add(1) <= 2 {
+				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+				return
+			}
+			highSucceededAt.Store(time.Now().UnixNano())
+		case "/low":
+			lowArrivedAt.Store(time.Now().UnixNano())
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient: mockServer.Client(),
+		// spacing larger than the loopback round trip keeps an unparked low-priority
+		// request from firing in the instant between a window expiring and the retrying
+		// high-priority request extending it
+		minHttpRequestInterval: 20 * time.Millisecond,
+	}
+	highDone := make(chan error, 1)
+	go func() {
+		_, err := cg.makeReq(mockServer.URL+"/high", "market_chart", coingeckoPlanFree, priorityHigh)
+		highDone <- err
+	}()
+	// wait until the high-priority request opened the window (it stays in flight while retrying)
+	for {
+		cg.reqMu.Lock()
+		opened := !cg.throttledUntil.IsZero()
+		cg.reqMu.Unlock()
+		if opened {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	lowDone := make(chan error, 1)
+	go func() {
+		_, err := cg.makeReq(mockServer.URL+"/low", "simple/price", coingeckoPlanFree, priorityLow)
+		lowDone <- err
+	}()
+	if err := <-highDone; err != nil {
+		t.Fatalf("high priority makeReq failed: %v", err)
+	}
+	if err := <-lowDone; err != nil {
+		t.Fatalf("low priority makeReq failed: %v", err)
+	}
+	high, low := highSucceededAt.Load(), lowArrivedAt.Load()
+	if high == 0 || low == 0 {
+		t.Fatal("expected both endpoints to be hit")
+	}
+	if low < high {
+		t.Fatalf("low priority request reached the server %v before the high priority request succeeded", time.Duration(high-low))
+	}
+}
+
+// Throttled requests are retried without an attempt cap, so a provider-wide 429 no longer ends
+// the pass: makeReq keeps backing off until the request succeeds, then the pass proceeds through
+// the remaining currencies. Every currency is eventually fetched and stored.
+func TestUpdateHistoricalTickers_RetriesThrottleUntilSuccess(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -549,12 +787,14 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionInSteadyState(t *testi
 		platformIdsToTokens = originalPlatformIdsToTokens
 	}()
 
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
+	// Throttle usd more times than the old retry cap (4) to prove the attempt cap is gone.
+	throttleHits := 7
 	var usdRequests atomic.Int32
 	var eurRequests atomic.Int32
 
@@ -565,8 +805,11 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionInSteadyState(t *testi
 		case "/coins/ethereum/market_chart":
 			switch r.URL.Query().Get("vs_currency") {
 			case "usd":
-				usdRequests.Add(1)
-				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+				if int(usdRequests.Add(1)) <= throttleHits {
+					http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+					return
+				}
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1111.1]]}`))
 			case "eur":
 				eurRequests.Add(1)
 				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
@@ -588,36 +831,33 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionInSteadyState(t *testi
 		plan:         coingeckoPlanFree,
 	}
 
-	err := cg.UpdateHistoricalTickers()
-	if err == nil {
-		t.Fatal("expected throttle exhaustion error")
-	}
-	if !isCoingeckoThrottleRetriesExhaustedError(err) {
-		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	if err := cg.UpdateHistoricalTickers(); err != nil {
+		t.Fatalf("UpdateHistoricalTickers returned error: %v", err)
 	}
 
-	wantUSDRequests := 1 + len(coingeckoThrottleRetryBackoff)
-	if got := int(usdRequests.Load()); got != wantUSDRequests {
-		t.Fatalf("unexpected usd request count: got %d, want %d", got, wantUSDRequests)
+	// usd is retried past the old attempt cap until it finally succeeds.
+	if got, want := int(usdRequests.Load()), throttleHits+1; got != want {
+		t.Fatalf("unexpected usd request count: got %d, want %d", got, want)
 	}
-	// eur must NOT be attempted after usd exhausted its throttle retries (break, not continue):
-	// the 429 is provider-wide, so hammering eur would only repeat the full ladder for nothing.
-	if got := int(eurRequests.Load()); got != 0 {
-		t.Fatalf("expected eur not to be requested after usd throttle exhaustion, got %d", got)
+	// once usd succeeds the pass continues to eur (no break on throttle anymore).
+	if got := int(eurRequests.Load()); got != 1 {
+		t.Fatalf("unexpected eur request count: got %d, want 1", got)
 	}
-	// eur is never fetched, so nothing for it is stored; the next cycle retries from usd.
-	eurTicker, err := d.FiatRatesFindLastTicker("eur", "")
-	if err != nil {
-		t.Fatalf("FiatRatesFindLastTicker eur failed: %v", err)
-	}
-	if eurTicker != nil {
-		t.Fatal("expected no eur ticker to be stored after stopping on usd throttle")
+	for _, cur := range []string{"usd", "eur"} {
+		ticker, err := d.FiatRatesFindLastTicker(cur, "")
+		if err != nil {
+			t.Fatalf("FiatRatesFindLastTicker %s failed: %v", cur, err)
+		}
+		if ticker == nil {
+			t.Fatalf("expected %s ticker to be stored after retry-until-success", cur)
+		}
 	}
 }
 
-// During bootstrap the pass is strict: a throttled currency stops the pass early (break) so the
-// failed attempt is counted and bootstrap retries terminate.
-func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionDuringBootstrap(t *testing.T) {
+// Even during bootstrap, throttled requests are retried without an attempt cap: the pass waits
+// out the provider-wide 429 instead of failing the bootstrap cycle. Once the requests succeed,
+// every currency is fetched and the bootstrap pass completes without error.
+func TestUpdateHistoricalTickers_RetriesThrottleUntilSuccessDuringBootstrap(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -638,12 +878,14 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionDuringBootstrap(t *tes
 		platformIdsToTokens = originalPlatformIdsToTokens
 	}()
 
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
+	// Throttle usd more times than the old retry cap (4) to prove the attempt cap is gone.
+	throttleHits := 7
 	var usdRequests atomic.Int32
 	var eurRequests atomic.Int32
 
@@ -654,8 +896,11 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionDuringBootstrap(t *tes
 		case "/coins/ethereum/market_chart":
 			switch r.URL.Query().Get("vs_currency") {
 			case "usd":
-				usdRequests.Add(1)
-				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+				if int(usdRequests.Add(1)) <= throttleHits {
+					http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+					return
+				}
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1111.1]]}`))
 			case "eur":
 				eurRequests.Add(1)
 				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
@@ -677,28 +922,33 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustionDuringBootstrap(t *tes
 		plan:         coingeckoPlanFree,
 	}
 
-	err := cg.UpdateHistoricalTickers()
-	if err == nil {
-		t.Fatal("expected throttle exhaustion error")
-	}
-	if !isCoingeckoThrottleRetriesExhaustedError(err) {
-		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	if err := cg.UpdateHistoricalTickers(); err != nil {
+		t.Fatalf("UpdateHistoricalTickers returned error during bootstrap: %v", err)
 	}
 
-	wantUSDRequests := 1 + len(coingeckoThrottleRetryBackoff)
-	if got := int(usdRequests.Load()); got != wantUSDRequests {
-		t.Fatalf("unexpected usd request count: got %d, want %d", got, wantUSDRequests)
+	// usd is retried past the old attempt cap until it finally succeeds.
+	if got, want := int(usdRequests.Load()), throttleHits+1; got != want {
+		t.Fatalf("unexpected usd request count: got %d, want %d", got, want)
 	}
-	if got := int(eurRequests.Load()); got != 0 {
-		t.Fatalf("expected eur request count 0 after bootstrap throttle exhaustion (break), got %d", got)
+	// once usd succeeds the bootstrap pass continues to eur (no break on throttle anymore).
+	if got := int(eurRequests.Load()); got != 1 {
+		t.Fatalf("unexpected eur request count: got %d, want 1", got)
+	}
+	for _, cur := range []string{"usd", "eur"} {
+		ticker, err := d.FiatRatesFindLastTicker(cur, "")
+		if err != nil {
+			t.Fatalf("FiatRatesFindLastTicker %s failed: %v", cur, err)
+		}
+		if ticker == nil {
+			t.Fatalf("expected %s ticker to be stored after retry-until-success", cur)
+		}
 	}
 }
 
-// A throttle-retries-exhausted error reflects sustained, provider-wide 429s, so even in steady
-// state the token pass stops after the first exhausted token instead of repeating the ~10-minute
-// ladder for every remaining token (which would also hold updatingTokens and block later cycles).
-// The throttle error is still returned so the unfinished tokens are retried next run.
-func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustionInSteadyState(t *testing.T) {
+// Throttled requests are retried without an attempt cap, so a provider-wide 429 no longer stops
+// the token pass after the first throttled token: makeReq waits out the 429 until the request
+// succeeds, and the pass then continues through the remaining tokens.
+func TestUpdateHistoricalTokenTickers_RetriesThrottleUntilSuccess(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -719,12 +969,14 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustionInSteadyState(t *
 		platformIdsToTokens = originalPlatformIdsToTokens
 	}()
 
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
+	// Throttle the token requests more times than the old retry cap (4) to prove the cap is gone.
+	throttleHits := 7
 	var marketChartRequests atomic.Int32
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -735,8 +987,11 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustionInSteadyState(t *
 				{"id":"token-b","symbol":"b","name":"B","platforms":{"ethereum":"0xb"}}
 			]`))
 		case "/coins/token-a/market_chart", "/coins/token-b/market_chart":
-			marketChartRequests.Add(1)
-			http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			if int(marketChartRequests.Add(1)) <= throttleHits {
+				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+				return
+			}
+			_, _ = w.Write([]byte(`{"prices":[[1654732800000,1.5]]}`))
 		default:
 			http.Error(w, fmt.Sprintf("unexpected path %s", r.URL.Path), http.StatusNotFound)
 		}
@@ -754,19 +1009,14 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustionInSteadyState(t *
 		plan:               coingeckoPlanFree,
 	}
 
-	err := cg.UpdateHistoricalTokenTickers()
-	if err == nil {
-		t.Fatal("expected throttle exhaustion error")
-	}
-	if !isCoingeckoThrottleRetriesExhaustedError(err) {
-		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	if err := cg.UpdateHistoricalTokenTickers(); err != nil {
+		t.Fatalf("UpdateHistoricalTokenTickers returned error: %v", err)
 	}
 
-	// Only the first token (random map order, but both behave identically) is attempted; the pass
-	// breaks on its throttle exhaustion instead of repeating the ladder for the remaining token.
-	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
-	if got := int(marketChartRequests.Load()); got != wantRequests {
-		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, wantRequests)
+	// The first token absorbs all the throttles (retried past the old cap until it succeeds); the
+	// remaining token then succeeds on its first request. No token is dropped on a 429.
+	if got, want := int(marketChartRequests.Load()), throttleHits+2; got != want {
+		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, want)
 	}
 }
 
