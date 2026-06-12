@@ -279,15 +279,26 @@ func TestResolveClientIPLegacyAndTrustedProxy(t *testing.T) {
 		remoteAddr string
 		trusted    []netip.Prefix
 		cloudflare []netip.Prefix
+		pseudoIPv6 bool
 		want       string
 	}{
 		{
-			name: "cloudflare ipv6 is preferred",
+			name: "cloudflare ip is preferred over spoofable ipv6 header by default",
 			headers: map[string]string{
 				"CF-Connecting-IPv6": "2001:db8::1",
 				"CF-Connecting-IP":   "192.0.2.10",
 			},
 			remoteAddr: "198.51.100.1:12345",
+			want:       "192.0.2.10",
+		},
+		{
+			name: "cloudflare ipv6 preferred only with pseudo-ipv4 opt-in",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "2001:db8::1",
+				"CF-Connecting-IP":   "192.0.2.10",
+			},
+			remoteAddr: "198.51.100.1:12345",
+			pseudoIPv6: true,
 			want:       "2001:db8::1",
 		},
 		{
@@ -411,7 +422,7 @@ func TestResolveClientIPLegacyAndTrustedProxy(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			got, _, _ := resolveClientIP(r, tt.trusted, tt.cloudflare)
+			got, _, _ := resolveClientIP(r, tt.trusted, tt.cloudflare, tt.pseudoIPv6)
 			if got != tt.want {
 				t.Fatalf("resolveClientIP() = %q, want %q", got, tt.want)
 			}
@@ -438,6 +449,7 @@ func TestResolveClientIPCloudflareVerification(t *testing.T) {
 		remoteAddr    string
 		trusted       []netip.Prefix
 		cloudflare    []netip.Prefix
+		pseudoIPv6    bool
 		want          string
 		wantBlockSafe bool
 	}{
@@ -446,6 +458,48 @@ func TestResolveClientIPCloudflareVerification(t *testing.T) {
 			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.10"},
 			remoteAddr:    "203.0.113.5:443", // inside configured CF range
 			cloudflare:    cf,
+			want:          "192.0.2.10",
+			wantBlockSafe: true,
+		},
+		{
+			name: "spoofed CF-Connecting-IPv6 ignored by default; CF-Connecting-IP used",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "2001:db8:dead::1",
+				"CF-Connecting-IP":   "192.0.2.10",
+			},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "192.0.2.10",
+			wantBlockSafe: true,
+		},
+		{
+			name: "pseudo-ipv4 opt-in: CF-Connecting-IPv6 preferred over synthetic CF-Connecting-IP",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "2001:db8:beef::1",
+				"CF-Connecting-IP":   "192.0.2.10",
+			},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			pseudoIPv6:    true,
+			want:          "2001:db8:beef::1",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "verified peer, only spoofed CF-Connecting-IPv6, default: header ignored, peer not block-safe",
+			headers:       map[string]string{"CF-Connecting-IPv6": "2001:db8:dead::1"},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "203.0.113.5",
+			wantBlockSafe: false, // an untrusted CF header was present: do not block the peer
+		},
+		{
+			name: "pseudo-ipv4 opt-in falls back to CF-Connecting-IP when IPv6 header absent",
+			headers: map[string]string{
+				"CF-Connecting-IP": "192.0.2.10",
+			},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			pseudoIPv6:    true,
 			want:          "192.0.2.10",
 			wantBlockSafe: true,
 		},
@@ -514,7 +568,7 @@ func TestResolveClientIPCloudflareVerification(t *testing.T) {
 			for k, v := range tt.headers {
 				r.Header.Set(k, v)
 			}
-			got, blockSafe, _ := resolveClientIP(r, tt.trusted, tt.cloudflare)
+			got, blockSafe, _ := resolveClientIP(r, tt.trusted, tt.cloudflare, tt.pseudoIPv6)
 			if got != tt.want || blockSafe != tt.wantBlockSafe {
 				t.Fatalf("resolveClientIP() = %q, %v, want %q, %v", got, blockSafe, tt.want, tt.wantBlockSafe)
 			}
@@ -560,7 +614,7 @@ func TestResolveClientIPFromHeader(t *testing.T) {
 			for k, v := range tt.headers {
 				r.Header.Set(k, v)
 			}
-			if _, _, fromHeader := resolveClientIP(r, nil, cf); fromHeader != tt.wantFromHeader {
+			if _, _, fromHeader := resolveClientIP(r, nil, cf, false); fromHeader != tt.wantFromHeader {
 				t.Fatalf("resolveClientIP() fromHeader = %v, want %v", fromHeader, tt.wantFromHeader)
 			}
 		})

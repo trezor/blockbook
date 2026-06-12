@@ -263,6 +263,33 @@ func TestClientIPConfigEnvFallback(t *testing.T) {
 			t.Fatalf("Cloudflare CIDRs = %v, want none", cfg.cloudflarePrefixes)
 		}
 	})
+
+	t.Run("Pseudo-IPv4 defaults to off and parses true", func(t *testing.T) {
+		prefix := "CLIENTIPTESTG"
+		cfg, err := readClientIPConfig(prefix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.trustPseudoIPv6 {
+			t.Fatalf("trustPseudoIPv6 = true by default, want false")
+		}
+		t.Setenv(prefix+"_CLOUDFLARE_PSEUDO_IPV4", "true")
+		cfg, err = readClientIPConfig(prefix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.trustPseudoIPv6 {
+			t.Fatalf("trustPseudoIPv6 = false, want true")
+		}
+	})
+
+	t.Run("Pseudo-IPv4 rejects an unparseable value", func(t *testing.T) {
+		prefix := "CLIENTIPTESTH"
+		t.Setenv(prefix+"_CLOUDFLARE_PSEUDO_IPV4", "maybe")
+		if _, err := readClientIPConfig(prefix); err == nil {
+			t.Fatal("expected error for invalid CLOUDFLARE_PSEUDO_IPV4, got nil")
+		}
+	})
 }
 
 func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
