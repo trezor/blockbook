@@ -51,6 +51,9 @@ python3 contrib/scripts/render_grafana.py --check  # validate alignment only, no
 `--check` fails on an unknown metric key, an invalid `width`/`height`, a `gridPos` or `datasource`
 that leaked into `template.json`, a template ↔ `panels.yaml` `x-panel-key` or `x-query-key` mismatch,
 a leftover placeholder, or any per-panel title/description/expr/legend that leaked into `template.json`.
+It also re-checks the **rendered** dashboard for the invariants Grafana enforces only at import time
+(unique panel ids, every panel inside the 24-column grid, no overlaps, a datasource on every panel and
+target, every `${input}` declared) so a structural defect fails the render here, not silently in Grafana.
 
 > How to add or rename a metric or panel: see the **Metrics** section in `AGENTS.md`.
 > The Grafana UI is preview-only — `template.json` + `panels.yaml` are the source.
