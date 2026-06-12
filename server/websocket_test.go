@@ -398,11 +398,20 @@ func TestResolveClientIPLegacyAndTrustedProxy(t *testing.T) {
 			want:       "198.51.100.6",
 		},
 		{
-			name: "link-local IPv6 peer with zone is trusted and zone is stripped from key",
+			name: "link-local IPv6 peer is NOT implicitly trusted; X-Real-Ip ignored",
 			headers: map[string]string{
 				"X-Real-Ip": "203.0.113.60",
 			},
 			remoteAddr: "[fe80::1%eth0]:12345",
+			want:       "fe80::1", // header ignored, falls back to the (zone-stripped) peer
+		},
+		{
+			name: "link-local IPv6 peer trusted only when listed explicitly; zone stripped for matching",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.60",
+			},
+			remoteAddr: "[fe80::1%eth0]:12345",
+			trusted:    []netip.Prefix{netip.MustParsePrefix("fe80::1/128")},
 			want:       "203.0.113.60",
 		},
 		{

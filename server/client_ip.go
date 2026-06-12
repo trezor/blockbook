@@ -384,8 +384,19 @@ func parseAddr(value string) (netip.Addr, bool) {
 	return addr.Unmap().WithZone(""), true
 }
 
+// isTrustedProxy reports whether a forwarding header (X-Real-Ip, or
+// CF-Connecting-* in the default Cloudflare branch) may be trusted from this
+// TCP peer. Loopback and RFC1918/private peers are trusted implicitly as a
+// reverse proxy on the same host or LAN; this assumes the private segment in
+// front of Blockbook is not attacker-reachable. Link-local peers (fe80::/10)
+// are deliberately NOT implicitly trusted: a link-local address is reachable
+// and spoofable by any node on the same link and is never a deliberate
+// proxy-placement choice, so trusting it would let an on-link attacker forge
+// X-Real-Ip. An operator who genuinely fronts Blockbook with a link-local
+// proxy can still trust it by listing its prefix in <NET>_TRUSTED_PROXIES
+// (matched via extras).
 func isTrustedProxy(addr netip.Addr, extras []netip.Prefix) bool {
-	if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() {
+	if addr.IsLoopback() || addr.IsPrivate() {
 		return true
 	}
 	for _, p := range extras {
