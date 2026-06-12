@@ -537,6 +537,71 @@ func TestMakeReq_PacesRequests(t *testing.T) {
 	}
 }
 
+// The bootstrap CDN has no CoinGecko rate limit, so requests to it must use the light
+// bootstrap spacing instead of the (potentially multi-second) plan pacing. Otherwise the
+// free-plan 6s spacing would stretch the initial bootstrap from minutes to hours.
+func TestMakeReq_BootstrapCDNBypassesPlanPacing(t *testing.T) {
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient:               mockServer.Client(),
+		minHttpRequestInterval:   10 * time.Second, // plan pacing, must NOT apply to the CDN
+		bootstrapRequestInterval: 0,
+		bootstrapURL:             mockServer.URL,
+	}
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		if _, err := cg.makeReq(mockServer.URL+"/coins/list", "coins/list", coingeckoPlanFree, priorityLow); err != nil {
+			t.Fatalf("makeReq failed on call %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+	// With plan pacing applied this would take >= 20s; the CDN path must be far faster.
+	if elapsed > time.Second {
+		t.Fatalf("bootstrap CDN requests were paced at the plan interval: 3 requests took %v", elapsed)
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+// A configured bootstrap URL must not relax pacing for the rate-limited CoinGecko API
+// hosts: only requests whose URL actually targets the CDN get the light spacing.
+func TestMakeReq_NonBootstrapURLStillPacedWhenBootstrapConfigured(t *testing.T) {
+	interval := 60 * time.Millisecond
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient:               mockServer.Client(),
+		minHttpRequestInterval:   interval,
+		bootstrapRequestInterval: 0,
+		bootstrapURL:             "https://cdn.trezor.io/dynamic/coingecko/api/v3", // different host than mockServer
+	}
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+			t.Fatalf("makeReq failed on call %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+	if minElapsed := 2 * interval; elapsed < minElapsed {
+		t.Fatalf("expected pacing to take at least %v across 3 requests, took %v", minElapsed, elapsed)
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
 func TestMarkThrottled_ExtendsNeverShortens(t *testing.T) {
 	cg := &Coingecko{}
 	cg.markThrottled(time.Minute)
@@ -564,7 +629,7 @@ func TestWaitForRequestSlot_HighPriorityWaitsOutWindowButIsNotParked(t *testing.
 	until := cg.throttledUntil
 	done := make(chan time.Time, 1)
 	go func() {
-		cg.waitForRequestSlot(priorityHigh)
+		cg.waitForRequestSlot(priorityHigh, cg.minHttpRequestInterval)
 		done <- time.Now()
 	}()
 	select {
@@ -588,7 +653,7 @@ func TestWaitForRequestSlot_LowPriorityParksUntilHighPriorityCompletes(t *testin
 	}
 	done := make(chan struct{})
 	go func() {
-		cg.waitForRequestSlot(priorityLow)
+		cg.waitForRequestSlot(priorityLow, cg.minHttpRequestInterval)
 		close(done)
 	}()
 	// while throttled with a high-priority request in flight, low priority must stay parked
@@ -615,7 +680,7 @@ func TestWaitForRequestSlot_RechecksWindowExtendedDuringSleep(t *testing.T) {
 	cg.markThrottled(200 * time.Millisecond)
 	done := make(chan time.Time, 1)
 	go func() {
-		cg.waitForRequestSlot(priorityHigh)
+		cg.waitForRequestSlot(priorityHigh, cg.minHttpRequestInterval)
 		done <- time.Now()
 	}()
 	// wait until the goroutine reserved its slot inside the first window
