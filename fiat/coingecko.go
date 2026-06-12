@@ -37,12 +37,21 @@ const (
 	coingeckoAPIKeyEnvSuffix          = "_" + coingeckoAPIKeyEnv
 )
 
-var coingeckoThrottleRetryBackoff = []time.Duration{
-	1 * time.Minute,
-	2 * time.Minute,
-	4 * time.Minute,
-	8 * time.Minute,
-}
+// used when retry-after header is missing
+var coingeckoThrottleBackoff = time.Minute
+
+// how often a parked low-priority request re-checks the throttle gate
+// var (not const) so tests can shrink it to avoid real waits
+var coingeckoLowPriorityPollInterval = time.Second
+
+// reqPriority determines which requests reclaim request slots first while a
+// shared throttle window (429) is open.
+type reqPriority int
+
+const (
+	priorityHigh reqPriority = iota // current tickers + high-granularity fetches
+	priorityLow                     // historical (daily) ticker updates
+)
 
 var errCoingeckoHistoricalTokenUpdateInProgress = errors.New("coingecko historical token update already in progress")
 
@@ -78,6 +87,8 @@ type Coingecko struct {
 	minHttpRequestInterval time.Duration
 	reqMu                  sync.Mutex
 	lastRequestAt          time.Time
+	throttledUntil         time.Time // set on any 429; every request waits past it
+	highPriorityInFlight   int       // high-priority requests currently in flight, including their retries
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -247,10 +258,10 @@ func retryAfterFromError(err error) time.Duration {
 	return 0
 }
 
-func throttleBackoffDelay(attempt int, err error) time.Duration {
+func throttleBackoffDelay(err error) time.Duration {
 	delay := retryAfterFromError(err)
 	if delay <= 0 {
-		delay = coingeckoThrottleRetryBackoff[attempt]
+		delay = coingeckoThrottleBackoff
 	}
 	if delay <= 0 {
 		return 0
@@ -288,7 +299,9 @@ func isCoingeckoThrottleError(err error) bool {
 		return true
 	}
 	lowerError := strings.ToLower(err.Error())
-	return err.Error() == "error code: 1015" ||
+	// Cloudflare serves rate-limit blocks as a full HTML page that merely contains
+	// "error code: 1015", so match it as a substring rather than the whole body.
+	return strings.Contains(lowerError, "error code: 1015") ||
 		strings.Contains(lowerError, "exceeded the rate limit") ||
 		strings.Contains(lowerError, "throttled")
 }
@@ -302,30 +315,68 @@ func isCoingeckoHistoricalTokenUpdateInProgressError(err error) bool {
 	return errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress)
 }
 
-// waitForRateLimit enforces minHttpRequestInterval spacing between requests
-func (cg *Coingecko) waitForRateLimit() {
-	if cg.minHttpRequestInterval <= 0 {
-		return
-	}
-	cg.reqMu.Lock()
-	slot := time.Now()
-	if !cg.lastRequestAt.IsZero() {
-		if next := cg.lastRequestAt.Add(cg.minHttpRequestInterval); next.After(slot) {
-			slot = next
+// waitForRequestSlot enforces minHttpRequestInterval spacing between requests and makes
+// every request wait out the shared throttle window opened by any 429. While the window
+// is open, low-priority requests additionally yield to in-flight high-priority ones so
+// current/high-granularity fetches reclaim request slots first.
+func (cg *Coingecko) waitForRequestSlot(priority reqPriority) {
+	for {
+		cg.reqMu.Lock()
+		now := time.Now()
+		if priority == priorityLow && cg.throttledUntil.After(now) && cg.highPriorityInFlight > 0 {
+			cg.reqMu.Unlock()
+			time.Sleep(coingeckoLowPriorityPollInterval)
+			continue
 		}
-	}
-	cg.lastRequestAt = slot
-	cg.reqMu.Unlock()
-	if d := time.Until(slot); d > 0 {
-		time.Sleep(d)
+		slot := now
+		if !cg.lastRequestAt.IsZero() {
+			if next := cg.lastRequestAt.Add(cg.minHttpRequestInterval); next.After(slot) {
+				slot = next
+			}
+		}
+		if cg.throttledUntil.After(slot) {
+			slot = cg.throttledUntil
+		}
+		cg.lastRequestAt = slot
+		cg.reqMu.Unlock()
+		if d := time.Until(slot); d > 0 {
+			time.Sleep(d)
+		}
+		// Another goroutine's 429 may have extended throttledUntil while we slept on an
+		// already-reserved slot; firing now would be a guaranteed 429, so re-enter the gate.
+		cg.reqMu.Lock()
+		stillThrottled := cg.throttledUntil.After(time.Now())
+		cg.reqMu.Unlock()
+		if !stillThrottled {
+			return
+		}
 	}
 }
 
-// makeReq HTTP request helper with bounded retries for throttling errors.
-func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, error) {
+// markThrottled opens (or extends) the shared throttle window for all requests.
+func (cg *Coingecko) markThrottled(delay time.Duration) {
+	cg.reqMu.Lock()
+	if until := time.Now().Add(delay); until.After(cg.throttledUntil) {
+		cg.throttledUntil = until // extend only, never shorten
+	}
+	cg.reqMu.Unlock()
+}
+
+// makeReq HTTP request helper with unbounded retries for throttling errors.
+func (cg *Coingecko) makeReq(url string, endpoint string, plan string, priority reqPriority) ([]byte, error) {
+	if priority == priorityHigh {
+		cg.reqMu.Lock()
+		cg.highPriorityInFlight++
+		cg.reqMu.Unlock()
+		defer func() {
+			cg.reqMu.Lock()
+			cg.highPriorityInFlight--
+			cg.reqMu.Unlock()
+		}()
+	}
 	for attempt := 0; ; attempt++ {
 		// glog.Infof("Coingecko makeReq %v", url)
-		cg.waitForRateLimit()
+		cg.waitForRequestSlot(priority)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return nil, err
@@ -356,24 +407,21 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, 
 		if cg.metrics != nil {
 			cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "throttle"}).Inc()
 		}
-		if attempt >= len(coingeckoThrottleRetryBackoff) {
-			if cg.metrics != nil {
-				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "error"}).Inc()
-			}
-			glog.Warningf("Coingecko makeReq %v error %v, retries exhausted after %d retries", url, err, len(coingeckoThrottleRetryBackoff))
-			return nil, &coingeckoThrottleRetriesExhaustedError{
-				cause:   err,
-				retries: len(coingeckoThrottleRetryBackoff),
-			}
-		}
-		time.Sleep(throttleBackoffDelay(attempt, err))
+		// Retry throttled requests indefinitely (no attempt cap) so historical rate downloads
+		// always finish eventually, even when a provider-wide 429 persists for many hours.
+		// Retry-After is honored when present; otherwise a flat ~1-minute backoff (plus jitter).
+		// The delay opens a throttle window shared by all requests; the next
+		// waitForRequestSlot waits it out, so no local sleep is needed here.
+		delay := throttleBackoffDelay(err)
+		cg.markThrottled(delay)
+		glog.Warningf("Coingecko makeReq %v throttled on attempt %d, retrying in %v: %v", url, attempt+1, delay, err)
 	}
 }
 
 // SimpleSupportedVSCurrencies /simple/supported_vs_currencies
-func (cg *Coingecko) simpleSupportedVSCurrenciesAt(baseURL string) (simpleSupportedVSCurrencies, error) {
+func (cg *Coingecko) simpleSupportedVSCurrenciesAt(baseURL string, priority reqPriority) (simpleSupportedVSCurrencies, error) {
 	url := baseURL + "/simple/supported_vs_currencies"
-	resp, err := cg.makeReq(url, "supported_vs_currencies", cg.plan)
+	resp, err := cg.makeReq(url, "supported_vs_currencies", cg.plan, priority)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +452,8 @@ func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[stri
 	params.Add("vs_currencies", vsCurrenciesParam)
 
 	url := fmt.Sprintf("%s/simple/price?%s", cg.tipURL, params.Encode())
-	resp, err := cg.makeReq(url, "simple/price", cg.plan)
+	// only called from CurrentTickers, therefore always high priority
+	resp, err := cg.makeReq(url, "simple/price", cg.plan, priorityHigh)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +468,7 @@ func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[stri
 }
 
 // CoinsList /coins/list
-func (cg *Coingecko) coinsListAt(baseURL string) (coinList, error) {
+func (cg *Coingecko) coinsListAt(baseURL string, priority reqPriority) (coinList, error) {
 	params := url.Values{}
 	platform := "false"
 	if cg.platformIdentifier != "" {
@@ -427,7 +476,7 @@ func (cg *Coingecko) coinsListAt(baseURL string) (coinList, error) {
 	}
 	params.Add("include_platform", platform)
 	url := fmt.Sprintf("%s/coins/list?%s", baseURL, params.Encode())
-	resp, err := cg.makeReq(url, "coins/list", cg.plan)
+	resp, err := cg.makeReq(url, "coins/list", cg.plan, priority)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +490,7 @@ func (cg *Coingecko) coinsListAt(baseURL string) (coinList, error) {
 }
 
 // coinMarketChart /coins/{id}/market_chart?vs_currency={usd, eur, jpy, etc.}&days={1,14,30,max}
-func (cg *Coingecko) coinMarketChartAt(baseURL string, id string, vs_currency string, days string, daily bool) (*marketChartPrices, error) {
+func (cg *Coingecko) coinMarketChartAt(baseURL string, id string, vs_currency string, days string, daily bool, priority reqPriority) (*marketChartPrices, error) {
 	if len(id) == 0 || len(vs_currency) == 0 || len(days) == 0 {
 		return nil, fmt.Errorf("id, vs_currency, and days is required")
 	}
@@ -454,7 +503,7 @@ func (cg *Coingecko) coinMarketChartAt(baseURL string, id string, vs_currency st
 	params.Add("days", days)
 
 	url := fmt.Sprintf("%s/coins/%s/market_chart?%s", baseURL, id, params.Encode())
-	resp, err := cg.makeReq(url, "market_chart", cg.plan)
+	resp, err := cg.makeReq(url, "market_chart", cg.plan, priority)
 	if err != nil {
 		return nil, err
 	}
@@ -472,11 +521,11 @@ var vsCurrencies []string
 var platformIds []string
 var platformIdsToTokens map[string]string
 
-func (cg *Coingecko) platformIdsAt(baseURL string) error {
+func (cg *Coingecko) platformIdsAt(baseURL string, priority reqPriority) error {
 	if cg.platformIdentifier == "" {
 		return nil
 	}
-	cl, err := cg.coinsListAt(baseURL)
+	cl, err := cg.coinsListAt(baseURL, priority)
 	if err != nil {
 		return err
 	}
@@ -499,7 +548,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	var newTickers = common.CurrencyRatesTicker{}
 
 	if vsCurrencies == nil {
-		vs, err := cg.simpleSupportedVSCurrenciesAt(cg.tipURL)
+		vs, err := cg.simpleSupportedVSCurrenciesAt(cg.tipURL, priorityHigh)
 		if err != nil {
 			return nil, err
 		}
@@ -516,7 +565,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 
 	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
 		if platformIdsToTokens == nil {
-			err = cg.platformIdsAt(cg.tipURL)
+			err = cg.platformIdsAt(cg.tipURL, priorityHigh)
 			if err != nil {
 				return nil, err
 			}
@@ -548,7 +597,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 }
 
 func (cg *Coingecko) getHighGranularityTickers(days string) (*[]common.CurrencyRatesTicker, error) {
-	mc, err := cg.coinMarketChartAt(cg.tipURL, cg.coin, highGranularityVsCurrency, days, false)
+	mc, err := cg.coinMarketChartAt(cg.tipURL, cg.coin, highGranularityVsCurrency, days, false, priorityHigh)
 	if err != nil {
 		return nil, err
 	}
@@ -641,7 +690,8 @@ func (cg *Coingecko) getHistoricalTicker(baseURL string, tickersToUpdate map[uin
 	if cg.metrics != nil {
 		cg.metrics.CoingeckoRangeRequests.With(common.Labels{"range": rangeKind}).Inc()
 	}
-	mc, err := cg.coinMarketChartAt(baseURL, coinId, vsCurrency, days, true)
+	// both callers update historical (daily) tickers, therefore always low priority
+	mc, err := cg.coinMarketChartAt(baseURL, coinId, vsCurrency, days, true, priorityLow)
 	if err != nil {
 		return false, err
 	}
@@ -724,7 +774,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	}
 
 	// reload vs_currencies
-	vs, err := cg.simpleSupportedVSCurrenciesAt(historicalSyncURL)
+	vs, err := cg.simpleSupportedVSCurrenciesAt(historicalSyncURL, priorityLow)
 	if err != nil {
 		return err
 	}
@@ -762,11 +812,18 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 
 // UpdateHistoricalTokenTickers gets historical tickers for the tokens
 func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
+	cg.reqMu.Lock()
 	if cg.updatingTokens {
+		cg.reqMu.Unlock()
 		return errCoingeckoHistoricalTokenUpdateInProgress
 	}
 	cg.updatingTokens = true
-	defer func() { cg.updatingTokens = false }()
+	cg.reqMu.Unlock()
+	defer func() {
+		cg.reqMu.Lock()
+		cg.updatingTokens = false
+		cg.reqMu.Unlock()
+	}()
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
 	var throttleErr error
 
@@ -785,7 +842,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		}
 
 		//  reload platform ids
-		if err := cg.platformIdsAt(historicalSyncURL); err != nil {
+		if err := cg.platformIdsAt(historicalSyncURL, priorityLow); err != nil {
 			return err
 		}
 		glog.Infof("Coingecko returned %d %s tokens ", len(platformIds), cg.coin)
