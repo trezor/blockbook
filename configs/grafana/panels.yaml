@@ -334,7 +334,6 @@ panels:
         promql: sum(rate({{name:websocket_eth_receipt}}{job="blockbook", coin="$coin"}[5m])) by (coin, status) * 60
         legend: '{{coin}} {{status}}/min'
   websocket.connection_requests:
-    width: 12
     title: Websocket requests per connection
     description: Distribution of how many requests each connection handled before it closed; a p99 that towers over p50 flags a single connection flooding messages, the signal for whether per-connection message rate limiting is worth adding. Recorded when a connection closes, so long-lived sockets only show up at disconnect.
     queries:
@@ -345,7 +344,6 @@ panels:
         promql: histogram_quantile(0.99, sum(rate({{name:websocket_connection_requests}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, le))
         legend: '{{coin}} - p99'
   websocket.connection_rejections:
-    width: 12
     title: Websocket connection rejections per minute
     description: 'Connection attempts the per-IP limiter rejected before the websocket upgrade (HTTP 429): connection_limit is more than 128 concurrent connections from one IP, connection_attempt_limit is more than 64 attempts/minute. Sustained non-zero values mean connection-flood abuse is being actively blocked.'
     queries:
@@ -353,7 +351,6 @@ panels:
         promql: sum(rate({{name:websocket_connection_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
         legend: '{{coin}} - {{reason}}/min'
   websocket.unique_ips:
-    width: 12
     title: Websocket connections vs unique client IPs
     description: Open connections plotted against the number of distinct client IPs holding them; the gap between the two lines is connection clustering. Across the many Suite users a healthy deployment serves, the lines should track closely at roughly one connection per IP. A connections line pulling well above unique IPs means connections are concentrated on few sources.
     queries:
@@ -364,7 +361,6 @@ panels:
         promql: sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - unique IPs'
   websocket.connections_per_ip:
-    width: 12
     title: Websocket connections per client IP
     description: 'Average connections per IP (connections / unique IPs) and the busiest single IP. An average near 1 is a healthy spread across users; a rising average, or a max approaching the per-IP cap of 128, points to one source clustering many connections, the abuse pattern the per-IP limiter guards against.'
     queries:
