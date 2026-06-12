@@ -20,10 +20,12 @@ rebuild Docker images, it is possible by executing `make build-images`.
 
 ### Building binary
 
-Just run `make` and that is it. Output binary is stored in *build* directory. Note that although Blockbook is Go application
-it is dynamically linked with RocksDB dependencies and ZeroMQ. Therefore operating system where Blockbook will be
-executed still need that dependencies installed. See [Manual build](#manual-build) instructions below or install
-Blockbook via Debian packages.
+Just run `make` and that is it. Output binary is stored in *build* directory. The Docker build links Blockbook
+**statically** against RocksDB, ZeroMQ and the compression libraries (only glibc and a few base system libraries
+remain dynamic), so the resulting binary does **not** require a shared `librocksdb` / `libzmq` to be installed on the
+target host. This also means the RocksDB version is baked into the binary and can never mismatch a shared library at
+runtime. See [Manual build](#manual-build) instructions below if you build outside Docker, or install Blockbook via
+Debian packages.
 
 ### Building debug binary
 
@@ -236,30 +238,40 @@ make command to create a portable binary.
 
 ```
 sudo apt-get update && sudo apt-get install -y \
-    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev
+    build-essential git wget pkg-config libtool libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
-git checkout v9.10.0
-CFLAGS=-fPIC CXXFLAGS="-fPIC -Wno-error=array-bounds" make release
+git checkout v11.1.1
+CFLAGS=-fPIC CXXFLAGS="-fPIC -Wno-error=array-bounds" make release -j$(nproc)
 ```
 
-Setup variables for grocksdb
-
-```
-export CGO_CFLAGS="-I/path/to/rocksdb/include"
-export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -ldl -lbz2 -lsnappy -llz4 -lzstd"
-```
+`make release` produces both the shared library and the static archive `librocksdb.a`.
 
 Install ZeroMQ: https://github.com/zeromq/libzmq
 
 ```
-git clone https://github.com/zeromq/libzmq
+git clone -b v4.3.5 https://github.com/zeromq/libzmq
 cd libzmq
 ./autogen.sh
-./configure
-make
-sudo make install
+./configure --enable-static --disable-shared --without-libsodium CFLAGS=-fPIC CXXFLAGS=-fPIC
+make -j$(nproc)
 ```
+
+Setup variables for grocksdb. To match the Docker build, link RocksDB, ZeroMQ and the
+compression libraries **statically** (only glibc stays dynamic), so the resulting binary
+has no runtime dependency on a shared `librocksdb` / `libzmq`:
+
+```
+export CGO_CFLAGS="-I/path/to/rocksdb/include -I/path/to/libzmq/include -DZMQ_STATIC"
+export CGO_LDFLAGS="-L/path/to/rocksdb -L/path/to/libzmq/src/.libs \
+  -Wl,-Bstatic -lrocksdb -lzmq -llz4 -lzstd -lz -lsnappy -lbz2 -lstdc++ \
+  -Wl,-Bdynamic -lm -lpthread -ldl \
+  -static-libgcc -static-libstdc++"
+```
+
+> If you prefer a dynamically linked build instead (RocksDB/ZeroMQ installed as shared
+> libraries via `sudo make install`), use:
+> `export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -ldl -lbz2 -lsnappy -llz4 -lzstd"`
 
 Get blockbook sources, install dependencies, build:
 
@@ -267,8 +279,14 @@ Get blockbook sources, install dependencies, build:
 cd $GOPATH/src
 git clone https://github.com/trezor/blockbook.git
 cd blockbook
-go build
+# For the static link flags above, force the external linker so -static-libgcc /
+# -static-libstdc++ are honored:
+go build -ldflags='-linkmode external -extldflags "-static-libgcc -static-libstdc++"'
 ```
+
+You can confirm the binary no longer depends on a shared RocksDB / ZeroMQ with
+`ldd ./blockbook` — it should list only base system libraries (libc, libm, libpthread,
+libdl), with **no** `librocksdb.so` or `libzmq.so`.
 
 ### Example command
 

@@ -18,11 +18,11 @@ require (
 	github.com/golang/glog v1.2.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
-	github.com/linxGnu/grocksdb v1.9.8
+	github.com/linxGnu/grocksdb v1.10.8
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
 	github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809
 	github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819
-	github.com/pebbe/zmq4 v1.2.1
+	github.com/pebbe/zmq4 v1.2.11
 	github.com/pirk/ecashaddr-converter v0.0.0-20220121162910-c6cb45163b29
 	github.com/pirk/ecashutil v0.0.0-20220124103933-d37f548d249e
 	github.com/prometheus/client_golang v1.23.2
@@ -88,3 +88,8 @@ require (
 // replace github.com/martinboehm/btcutil => ../btcutil
 
 // replace github.com/martinboehm/btcd => ../btcd
+
+// Pin grocksdb to the quadcpu fork (built against RocksDB 11.1.1).
+// Commit e1a405b4c9450bdc5b3479ef332afa71dc7083f4 == tag v1.10.9; Go canonicalizes
+// the commit to its tag. Imports stay github.com/linxGnu/grocksdb (handled by replace).
+replace github.com/linxGnu/grocksdb => github.com/quadcpu/grocksdb v1.10.9

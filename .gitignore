@@ -22,3 +22,4 @@ __pycache__/
 .spec/
 static/api-docs/swagger-ui/
 configs/grafana/grafana.json
+*.exe

@@ -8,15 +8,28 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
                        libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
-                       libzstd-dev liblz4-dev graphviz && \
+                       libzstd-dev liblz4-dev graphviz \
+                       autoconf automake libtool && \
     apt-get clean
 ARG GOLANG_VERSION
 ENV GOLANG_VERSION=go1.25.4
-ENV ROCKSDB_VERSION=v9.10.0
+ENV ROCKSDB_VERSION=v11.1.1
+ENV ROCKSDB_COMMIT=6cdeb9d9d0630763327f512e6255cab33f6834e7
+ENV LIBZMQ_VERSION=v4.3.5
+ENV LIBZMQ_COMMIT=622fc6dde99ee172ebaa9c8628d85a7a1995a21d
 ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
-ENV CGO_CFLAGS="-I/opt/rocksdb/include"
-ENV CGO_LDFLAGS="-L/opt/rocksdb -ldl -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
+# Static linkage: blockbook is linked against librocksdb.a + a static libzmq.a +
+# the compression libs, then libstdc++/libgcc are pulled in statically. Only glibc
+# and a few system libs remain dynamic. This removes the runtime dependency on a
+# shared librocksdb / libzmq, so the RocksDB ABI/version can never mismatch at runtime.
+#   -Wl,-Bstatic ... -Wl,-Bdynamic brackets the libraries we want archived in;
+#   everything after -Bdynamic (pthread, dl, m, glibc) links dynamically as usual.
+ENV CGO_CFLAGS="-I/opt/rocksdb/include -I/opt/libzmq/include -DZMQ_STATIC"
+ENV CGO_LDFLAGS="-L/opt/rocksdb -L/opt/libzmq/src/.libs \
+-Wl,-Bstatic -lrocksdb -lzmq -llz4 -lzstd -lz -lsnappy -lbz2 -lstdc++ \
+-Wl,-Bdynamic -lm -lpthread -ldl \
+-static-libgcc -static-libstdc++"
 ARG TCMALLOC
 
 RUN mkdir /build
@@ -43,10 +56,21 @@ RUN echo -n "GOPATH: " && echo $GOPATH
 
 # install rocksdb
 RUN cd /opt && git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git \
-    && test "$(git -C /opt/rocksdb rev-parse HEAD)" = "ae8fb3e5000e46d8d4c9dbf3a36019c0aaceebff"
+    && test "$(git -C /opt/rocksdb rev-parse HEAD)" = $ROCKSDB_COMMIT
 RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB DISABLE_WARNING_AS_ERROR=1 make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
+
+# install libzmq (static)
+# The libzmq3-dev package only ships a shared library; to link zmq statically we build
+# libzmq from source and keep the static archive at /opt/libzmq/src/.libs/libzmq.a.
+# --without-libsodium keeps the dependency set minimal (blockbook uses plain tcp://).
+RUN cd /opt && git clone -b $LIBZMQ_VERSION --depth 1 https://github.com/zeromq/libzmq.git \
+    && test "$(git -C /opt/libzmq rev-parse HEAD)" = $LIBZMQ_COMMIT
+RUN cd /opt/libzmq && ./autogen.sh && \
+    ./configure --enable-static --disable-shared --without-libsodium \
+                --disable-Werror CFLAGS=-fPIC CXXFLAGS=-fPIC && \
+    make -j 4
 
 # pre-load depencencies
 RUN \

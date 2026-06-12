@@ -135,15 +135,50 @@ func jsonToString(msg json.RawMessage) (string, error) {
 	return string(d), nil
 }
 
+// generateRPCAuth produces the "rpcauth=" line for the config template. It is a
+// pure-Go port of build/scripts/rpcauth.py (see rpcauth.go), so blockbookgen no
+// longer needs a Python interpreter on PATH. The previous Python-invoking
+// implementation is preserved as generateRPCAuthOld for reference/fallback.
 func generateRPCAuth(user, pass string) (string, error) {
-	cmd := exec.Command("/usr/bin/env", "bash", "-c", "build/scripts/rpcauth.py \"$0\" \"$1\" | sed -n -e 2p", user, pass)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
+	line, _, err := RPCAuth(user, pass)
 	if err != nil {
 		return "", err
 	}
-	return out.String(), nil
+	return line + "\n", nil
+}
+
+func generateRPCAuthOld(user, pass string) (string, error) {
+	// Invoke rpcauth.py directly with the Python interpreter instead of relying on
+	// the script's "#!/usr/bin/env python3" shebang and a bash/sed pipeline. The
+	// shebang form does not work for a native Windows binary (it cannot resolve the
+	// MSYS2/Unix "/usr/bin/env" path), so we run python ourselves and extract the
+	// "rpcauth=" line in Go (the old pipeline used "sed -n -e 2p" for this).
+	script := filepath.Join("build", "scripts", "rpcauth.py")
+
+	var lastErr error
+	for _, py := range []string{"python3", "python"} {
+		exe, err := exec.LookPath(py)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		cmd := exec.Command(exe, script, user, pass)
+		var out, stderr bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			lastErr = fmt.Errorf("%s %s: %v: %s", py, script, err, stderr.String())
+			continue
+		}
+		for _, line := range strings.Split(out.String(), "\n") {
+			line = strings.TrimRight(line, "\r")
+			if strings.HasPrefix(line, "rpcauth=") {
+				return line + "\n", nil
+			}
+		}
+		return "", fmt.Errorf("no rpcauth= line in output of %s %s", py, script)
+	}
+	return "", fmt.Errorf("python interpreter not found (tried python3, python): %v", lastErr)
 }
 
 func validateRPCEnvVars(configsDir string) error {
