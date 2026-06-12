@@ -470,10 +470,6 @@ func logFiatRatesDownloaderError(message string, err error) {
 		glog.Errorf("%sno data from provider", message)
 		return
 	}
-	if isCoingeckoThrottleRetriesExhaustedError(err) {
-		glog.Warning(message, err)
-		return
-	}
 	glog.Error(message, err)
 }
 

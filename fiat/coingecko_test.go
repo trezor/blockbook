@@ -392,8 +392,8 @@ func TestRetryAfterFromError(t *testing.T) {
 	if got := retryAfterFromError(&coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 7 * time.Second}); got != 7*time.Second {
 		t.Fatalf("retryAfterFromError direct = %v, want 7s", got)
 	}
-	// errors.As must unwrap the throttle-exhausted wrapper to reach the underlying Retry-After.
-	wrapped := &coingeckoThrottleRetriesExhaustedError{cause: &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 7 * time.Second}, retries: 4}
+	// errors.As must unwrap wrapped errors to reach the underlying Retry-After.
+	wrapped := fmt.Errorf("wrapped: %w", &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 7 * time.Second})
 	if got := retryAfterFromError(wrapped); got != 7*time.Second {
 		t.Fatalf("retryAfterFromError wrapped = %v, want 7s", got)
 	}
@@ -778,15 +778,6 @@ func TestUpdateHistoricalTickers_RetriesThrottleUntilSuccess(t *testing.T) {
 	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
-	originalVsCurrencies := vsCurrencies
-	originalPlatformIds := platformIds
-	originalPlatformIdsToTokens := platformIdsToTokens
-	defer func() {
-		vsCurrencies = originalVsCurrencies
-		platformIds = originalPlatformIds
-		platformIdsToTokens = originalPlatformIdsToTokens
-	}()
-
 	originalBackoff := coingeckoThrottleBackoff
 	coingeckoThrottleBackoff = 0
 	defer func() {
@@ -869,15 +860,6 @@ func TestUpdateHistoricalTickers_RetriesThrottleUntilSuccessDuringBootstrap(t *t
 	if err := d.FiatRatesSetHistoricalBootstrapComplete(false); err != nil {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
-	originalVsCurrencies := vsCurrencies
-	originalPlatformIds := platformIds
-	originalPlatformIdsToTokens := platformIdsToTokens
-	defer func() {
-		vsCurrencies = originalVsCurrencies
-		platformIds = originalPlatformIds
-		platformIdsToTokens = originalPlatformIdsToTokens
-	}()
-
 	originalBackoff := coingeckoThrottleBackoff
 	coingeckoThrottleBackoff = 0
 	defer func() {
@@ -960,15 +942,6 @@ func TestUpdateHistoricalTokenTickers_RetriesThrottleUntilSuccess(t *testing.T) 
 	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
-	originalVsCurrencies := vsCurrencies
-	originalPlatformIds := platformIds
-	originalPlatformIdsToTokens := platformIdsToTokens
-	defer func() {
-		vsCurrencies = originalVsCurrencies
-		platformIds = originalPlatformIds
-		platformIdsToTokens = originalPlatformIdsToTokens
-	}()
-
 	originalBackoff := coingeckoThrottleBackoff
 	coingeckoThrottleBackoff = 0
 	defer func() {
