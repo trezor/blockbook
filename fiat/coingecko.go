@@ -55,19 +55,6 @@ const (
 
 var errCoingeckoHistoricalTokenUpdateInProgress = errors.New("coingecko historical token update already in progress")
 
-type coingeckoThrottleRetriesExhaustedError struct {
-	cause   error
-	retries int
-}
-
-func (e *coingeckoThrottleRetriesExhaustedError) Error() string {
-	return fmt.Sprintf("coingecko throttle retries exhausted after %d retries: %v", e.retries, e.cause)
-}
-
-func (e *coingeckoThrottleRetriesExhaustedError) Unwrap() error {
-	return e.cause
-}
-
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
 	tipURL                 string
@@ -89,6 +76,10 @@ type Coingecko struct {
 	lastRequestAt          time.Time
 	throttledUntil         time.Time // set on any 429; every request waits past it
 	highPriorityInFlight   int       // high-priority requests currently in flight, including their retries
+	cacheMu                sync.Mutex
+	vsCurrencies           []string          // guarded by cacheMu
+	platformIds            []string          // guarded by cacheMu
+	platformIdsToTokens    map[string]string // guarded by cacheMu
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -248,13 +239,13 @@ func parseRetryAfter(value string) time.Duration {
 	return time.Duration(secs) * time.Second
 }
 
-// retryAfterFromError extracts the server's Retry-After hint from a coingeckoHTTPError, if any.
+// retryAfterFromError extracts the server's Retry-After hint from a coingeckoHTTPError,
+// if any; zero means no hint and the caller falls back to the fixed backoff.
 func retryAfterFromError(err error) time.Duration {
 	var httpErr *coingeckoHTTPError
 	if errors.As(err, &httpErr) {
 		return httpErr.retryAfter
 	}
-	glog.Errorf("No retryAfter header found in the headers: %s", err.Error())
 	return 0
 }
 
@@ -306,11 +297,6 @@ func isCoingeckoThrottleError(err error) bool {
 		strings.Contains(lowerError, "throttled")
 }
 
-func isCoingeckoThrottleRetriesExhaustedError(err error) bool {
-	var exhaustedErr *coingeckoThrottleRetriesExhaustedError
-	return errors.As(err, &exhaustedErr)
-}
-
 func isCoingeckoHistoricalTokenUpdateInProgressError(err error) bool {
 	return errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress)
 }
@@ -319,6 +305,8 @@ func isCoingeckoHistoricalTokenUpdateInProgressError(err error) bool {
 // every request wait out the shared throttle window opened by any 429. While the window
 // is open, low-priority requests additionally yield to in-flight high-priority ones so
 // current/high-granularity fetches reclaim request slots first.
+// With minHttpRequestInterval == 0 (throttleDown disabled) all waiters fire as soon as
+// the window expires; acceptable, as at most a couple of goroutines share one instance.
 func (cg *Coingecko) waitForRequestSlot(priority reqPriority) {
 	for {
 		cg.reqMu.Lock()
@@ -517,10 +505,6 @@ func (cg *Coingecko) coinMarketChartAt(baseURL string, id string, vs_currency st
 	return &m, nil
 }
 
-var vsCurrencies []string
-var platformIds []string
-var platformIdsToTokens map[string]string
-
 func (cg *Coingecko) platformIdsAt(baseURL string, priority reqPriority) error {
 	if cg.platformIdentifier == "" {
 		return nil
@@ -538,8 +522,10 @@ func (cg *Coingecko) platformIdsAt(baseURL string, priority reqPriority) error {
 			ids = append(ids, cl[i].ID)
 		}
 	}
-	platformIds = ids
-	platformIdsToTokens = idsMap
+	cg.cacheMu.Lock()
+	cg.platformIds = ids
+	cg.platformIdsToTokens = idsMap
+	cg.cacheMu.Unlock()
 	return nil
 }
 
@@ -547,12 +533,18 @@ func (cg *Coingecko) platformIdsAt(baseURL string, priority reqPriority) error {
 func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	var newTickers = common.CurrencyRatesTicker{}
 
+	cg.cacheMu.Lock()
+	vsCurrencies := cg.vsCurrencies
+	cg.cacheMu.Unlock()
 	if vsCurrencies == nil {
 		vs, err := cg.simpleSupportedVSCurrenciesAt(cg.tipURL, priorityHigh)
 		if err != nil {
 			return nil, err
 		}
 		vsCurrencies = vs
+		cg.cacheMu.Lock()
+		cg.vsCurrencies = vs
+		cg.cacheMu.Unlock()
 	}
 	prices, err := cg.simplePrice([]string{cg.coin}, vsCurrencies)
 	if err != nil || prices == nil {
@@ -564,11 +556,17 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	}
 
 	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
+		cg.cacheMu.Lock()
+		platformIds, platformIdsToTokens := cg.platformIds, cg.platformIdsToTokens
+		cg.cacheMu.Unlock()
 		if platformIdsToTokens == nil {
 			err = cg.platformIdsAt(cg.tipURL, priorityHigh)
 			if err != nil {
 				return nil, err
 			}
+			cg.cacheMu.Lock()
+			platformIds, platformIdsToTokens = cg.platformIds, cg.platformIdsToTokens
+			cg.cacheMu.Unlock()
 		}
 		newTickers.TokenRates = make(map[string]float32)
 		from := 0
@@ -778,21 +776,16 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	if err != nil {
 		return err
 	}
-	vsCurrencies = vs
+	cg.cacheMu.Lock()
+	cg.vsCurrencies = vs
+	cg.cacheMu.Unlock()
 
 	hadFailures := false
-	var throttleErr error
-	for _, currency := range vsCurrencies {
+	for _, currency := range vs {
 		// get historical rates for each currency
 		var err error
 		if _, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
 			hadFailures = true
-			if isCoingeckoThrottleRetriesExhaustedError(err) {
-				throttleErr = err
-				// Stop, store and retry on the next cycle
-				glog.Warningf("getHistoricalTicker %s-%s throttled, stopping run with partial currencies: %v", cg.coin, currency, err)
-				break
-			}
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
 			glog.Errorf("getHistoricalTicker %s-%s %v", cg.coin, currency, err)
@@ -800,9 +793,6 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	}
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
 		return err
-	}
-	if throttleErr != nil {
-		return throttleErr
 	}
 	if bootstrapInProgress && hadFailures {
 		return fmt.Errorf("coingecko historical bootstrap incomplete: one or more currency updates failed")
@@ -825,7 +815,6 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		cg.reqMu.Unlock()
 	}()
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
-	var throttleErr error
 
 	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
 		allowMax := false
@@ -845,18 +834,15 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		if err := cg.platformIdsAt(historicalSyncURL, priorityLow); err != nil {
 			return err
 		}
+		cg.cacheMu.Lock()
+		platformIds, platformIdsToTokens := cg.platformIds, cg.platformIdsToTokens
+		cg.cacheMu.Unlock()
 		glog.Infof("Coingecko returned %d %s tokens ", len(platformIds), cg.coin)
 		count := 0
 		// get token historical rates
 		for tokenId, token := range platformIdsToTokens {
 			var err error
 			if _, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
-				if isCoingeckoThrottleRetriesExhaustedError(err) {
-					throttleErr = err
-					// Stop, store and retry on the next cycle
-					glog.Warningf("getHistoricalTicker %s-%s throttled, stopping run with partial tokens: %v", tokenId, cg.platformVsCurrency, err)
-					break
-				}
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
@@ -875,9 +861,6 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
 		return err
-	}
-	if throttleErr != nil {
-		return throttleErr
 	}
 	return nil
 }

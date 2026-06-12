@@ -89,16 +89,7 @@ func getFiatRatesMockData(name string) (string, error) {
 	return string(b), nil
 }
 
-func resetCoingeckoTestCaches() {
-	vsCurrencies = nil
-	platformIds = nil
-	platformIdsToTokens = nil
-}
-
 func TestFiatRates(t *testing.T) {
-	resetCoingeckoTestCaches()
-	t.Cleanup(resetCoingeckoTestCaches)
-
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		var mockData string
@@ -306,9 +297,6 @@ func TestFiatRates(t *testing.T) {
 }
 
 func TestFiatRatesTronCurrentTickers_PreserveBase58TokenAddress(t *testing.T) {
-	resetCoingeckoTestCaches()
-	t.Cleanup(resetCoingeckoTestCaches)
-
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		var mockData string
