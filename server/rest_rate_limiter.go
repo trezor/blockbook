@@ -252,11 +252,16 @@ func (l *restAPIRateLimiter) wrapAPI(next http.Handler, apiRoot string) http.Han
 			return
 		}
 		ipKey := rateLimitKey(ip)
+		// blockKey keeps IPv6 at the full /128 so a temporary block never takes
+		// out a whole shared /64 (rate limiting still aggregates to /64 via
+		// ipKey). For IPv4 the two keys are identical.
+		bKey := ""
 		blockable := false
 		if l.blockDuration > 0 {
+			bKey = blockKey(ip)
 			blockable = blockSafe && isBlockableKey(ip, l.trustedProxies, l.cloudflarePrefixes)
 		}
-		decision := l.accept(ipKey, blockable, time.Now())
+		decision := l.accept(ipKey, bKey, blockable, time.Now())
 		if !decision.accepted {
 			l.observeRejection(decision.reason)
 			if decision.shouldLog {
@@ -278,11 +283,26 @@ func isRestAPIRoute(path, apiRoot string) bool {
 	return path == apiRoot || strings.HasPrefix(path, apiRoot+"/")
 }
 
-func (l *restAPIRateLimiter) accept(ipKey string, blockable bool, now time.Time) restAPILimitDecision {
+func (l *restAPIRateLimiter) accept(ipKey, blockKey string, blockable bool, now time.Time) restAPILimitDecision {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
 	l.cleanupLocked(now)
+
+	// Block check first, keyed on the (narrower) block key so a per-/128 block is
+	// enforced without consulting the /64 rate-limit entry. The block entry is
+	// created only when a breach trips the block (recordBreachLocked), so for a
+	// client that is not blocked this is a plain lookup that never grows the map.
+	if bc := l.clients[blockKey]; bc != nil && bc.blockedUntil.After(now) {
+		bc.lastSeen = now
+		bc.blockRejected++
+		return restAPILimitDecision{
+			reason:     restAPIRejectIPBlocked,
+			retryAfter: bc.blockedUntil.Sub(now),
+			shouldLog:  bc.shouldLogRejection(restAPIRejectIPBlocked, now),
+		}
+	}
+
 	client := l.clients[ipKey]
 	if client == nil {
 		if len(l.clients) >= restAPIMaxTrackedClients {
@@ -301,17 +321,8 @@ func (l *restAPIRateLimiter) accept(ipKey string, blockable bool, now time.Time)
 	}
 	client.lastSeen = now
 
-	if client.blockedUntil.After(now) {
-		client.blockRejected++
-		return restAPILimitDecision{
-			reason:     restAPIRejectIPBlocked,
-			retryAfter: client.blockedUntil.Sub(now),
-			shouldLog:  client.shouldLogRejection(restAPIRejectIPBlocked, now),
-		}
-	}
-
 	if l.maxConcurrent > 0 && client.active >= l.maxConcurrent {
-		l.recordBreachLocked(client, blockable, now)
+		l.recordBreachLocked(blockKey, blockable, now)
 		return restAPILimitDecision{
 			reason:    restAPIRejectConcurrentRequests,
 			shouldLog: client.shouldLogRejection(restAPIRejectConcurrentRequests, now),
@@ -321,7 +332,7 @@ func (l *restAPIRateLimiter) accept(ipKey string, blockable bool, now time.Time)
 	if l.rateLimit > 0 {
 		ok, retryAfter := client.bucket.allow(now, l.rateLimit, l.rateWindow, l.burst)
 		if !ok {
-			l.recordBreachLocked(client, blockable, now)
+			l.recordBreachLocked(blockKey, blockable, now)
 			return restAPILimitDecision{
 				reason:     restAPIRejectRequestRate,
 				retryAfter: retryAfter,
@@ -349,10 +360,25 @@ func (l *restAPIRateLimiter) release(ipKey string, now time.Time) {
 	l.cleanupLocked(now)
 }
 
-func (l *restAPIRateLimiter) recordBreachLocked(client *restAPIClientLimit, blockable bool, now time.Time) {
+func (l *restAPIRateLimiter) recordBreachLocked(blockKey string, blockable bool, now time.Time) {
 	if l.blockDuration <= 0 || !blockable {
 		return
 	}
+	// Breaches and the block accrue on the block key (the full /128 for IPv6),
+	// not the /64 rate-limit key, so one abusive address cannot drive an entire
+	// shared /64 into a block. For IPv4 the two keys coincide. The block entry
+	// may not exist yet when it differs from the rate-limit entry; respect the
+	// tracking cap so a flood rotating block keys cannot grow the map unbounded
+	// (fail open -- the /64 rate limiter still throttles them).
+	client := l.clients[blockKey]
+	if client == nil {
+		if len(l.clients) >= restAPIMaxTrackedClients {
+			return
+		}
+		client = &restAPIClientLimit{}
+		l.clients[blockKey] = client
+	}
+	client.lastSeen = now
 	cutoff := now.Add(-restAPIBreachWindow)
 	client.breaches = trimTimes(client.breaches, cutoff)
 	// every rejection of an over-limit client lands here; only count one breach

@@ -299,7 +299,7 @@ func (s *WebsocketServer) onMessageRateBreach(c *websocketChannel, count int) {
 	now := time.Now()
 	blocked := false
 	if s.ipBlockEnabled && c.blockable {
-		s.is.BlockWsIP(c.ipKey, now.Add(s.ipBlockDuration), now)
+		s.is.BlockWsIP(c.blockKey, now.Add(s.ipBlockDuration), now)
 		blocked = true
 	}
 	closed := s.closeChannel(c, "message_rate_limit")
@@ -308,7 +308,7 @@ func (s *WebsocketServer) onMessageRateBreach(c *websocketChannel, count int) {
 	// the winner to avoid duplicates.
 	if blocked {
 		glog.Warning("Client ", c.id, " exceeded websocket message rate limit (", count, "/", s.messageRateLimit,
-			"); blocking ", c.ipKey, " for ", s.ipBlockDuration)
+			"); blocking ", c.blockKey, " for ", s.ipBlockDuration)
 	} else if closed {
 		glog.Warning("Client ", c.id, " exceeded websocket message rate limit (", count, "/", s.messageRateLimit,
 			"); closing connection (", c.ip, " not blockable)")

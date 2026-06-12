@@ -106,19 +106,21 @@ type InternalState struct {
 	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
 	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
 
-	// websocket IP blocklist: keys (IPv4 address or IPv6 /64 prefix) that were
+	// websocket IP blocklist: keys (IPv4 address or full IPv6 /128) that were
 	// flagged for flooding a single connection past the per-connection message
-	// rate limit and are blocked from opening new connections until Until. Guarded
+	// rate limit and are blocked from opening new connections until Until. The
+	// block key is the /128 (not the /64 the rate limiter aggregates to) so a
+	// block cannot take out an entire shared /64. Guarded
 	// by its own mutex (wsBlockMux) rather than is.mux because IsWsIPBlocked is
 	// consulted on every websocket connection attempt, before the per-IP limiter.
 	wsBlockMux   sync.Mutex
 	wsBlockedIPs map[string]*WsBlockedIP
 }
 
-// WsBlockedIP records a websocket client key (IPv4 address or IPv6 /64 prefix)
+// WsBlockedIP records a websocket client key (IPv4 address or full IPv6 /128)
 // that is temporarily blocked from opening new websocket connections.
 type WsBlockedIP struct {
-	Key       string    `ts_doc:"Blocked client key: an IPv4 address or an IPv6 /64 prefix."`
+	Key       string    `ts_doc:"Blocked client key: an IPv4 address or a full IPv6 /128 address."`
 	BlockedAt time.Time `ts_doc:"Time the key was first blocked in the current block."`
 	Until     time.Time `ts_doc:"Time the block expires."`
 	Breaches  int       `ts_doc:"How many times this key tripped the per-connection message rate limit."`
@@ -432,7 +434,7 @@ func (is *InternalState) WsLimitExceedingIPsSnapshot() map[string]int {
 	return out
 }
 
-// BlockWsIP flags a websocket client key (an IPv4 address or IPv6 /64 prefix) as
+// BlockWsIP flags a websocket client key (an IPv4 address or full IPv6 /128) as
 // blocked until the given time. If the key is already blocked the block is
 // extended to the later of the two expirations and the breach counter is
 // incremented; otherwise a new entry is created. now is passed in so callers can

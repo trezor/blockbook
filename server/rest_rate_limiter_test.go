@@ -299,7 +299,7 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 	limiter.burst = 1
 	limiter.blockDuration = time.Minute
 
-	if decision := limiter.accept("192.0.2.10", true, now); !decision.accepted {
+	if decision := limiter.accept("192.0.2.10", "192.0.2.10", true, now); !decision.accepted {
 		t.Fatalf("first decision = %+v, want accepted", decision)
 	}
 	limiter.release("192.0.2.10", now)
@@ -308,12 +308,12 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 	var last time.Time
 	for i := 0; i < restAPIBreachBlockThreshold; i++ {
 		last = now.Add(time.Duration(i) * restAPIBreachMinSpacing)
-		decision := limiter.accept("192.0.2.10", true, last)
+		decision := limiter.accept("192.0.2.10", "192.0.2.10", true, last)
 		if decision.accepted || decision.reason != restAPIRejectRequestRate {
 			t.Fatalf("breach %d decision = %+v, want request-rate rejection", i, decision)
 		}
 	}
-	decision := limiter.accept("192.0.2.10", true, last.Add(time.Second))
+	decision := limiter.accept("192.0.2.10", "192.0.2.10", true, last.Add(time.Second))
 	if decision.accepted || decision.reason != restAPIRejectIPBlocked {
 		t.Fatalf("blocked decision = %+v, want ip_blocked", decision)
 	}
@@ -324,12 +324,12 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	limiter.blockDuration = time.Minute
-	if decision := limiter.accept("192.0.2.11", true, now); !decision.accepted {
+	if decision := limiter.accept("192.0.2.11", "192.0.2.11", true, now); !decision.accepted {
 		t.Fatalf("first burst decision = %+v, want accepted", decision)
 	}
 	limiter.release("192.0.2.11", now)
 	for i := 0; i < 3*restAPIBreachBlockThreshold; i++ {
-		decision := limiter.accept("192.0.2.11", true, now)
+		decision := limiter.accept("192.0.2.11", "192.0.2.11", true, now)
 		if decision.accepted || decision.reason != restAPIRejectRequestRate {
 			t.Fatalf("burst rejection %d decision = %+v, want request-rate rejection", i, decision)
 		}
@@ -342,18 +342,62 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	limiter.blockDuration = time.Minute
-	if decision := limiter.accept("127.0.0.1", false, now); !decision.accepted {
+	if decision := limiter.accept("127.0.0.1", "127.0.0.1", false, now); !decision.accepted {
 		t.Fatalf("first unblockable decision = %+v, want accepted", decision)
 	}
 	limiter.release("127.0.0.1", now)
 	for i := 0; i < restAPIBreachBlockThreshold+1; i++ {
-		decision = limiter.accept("127.0.0.1", false, now.Add(time.Duration(i)*restAPIBreachMinSpacing))
+		decision = limiter.accept("127.0.0.1", "127.0.0.1", false, now.Add(time.Duration(i)*restAPIBreachMinSpacing))
 		if decision.accepted || decision.reason != restAPIRejectRequestRate {
 			t.Fatalf("unblockable breach %d decision = %+v, want request-rate rejection", i, decision)
 		}
 	}
 	if limiter.clients["127.0.0.1"].blockedUntil.After(now) {
 		t.Fatal("unblockable key was temporarily blocked")
+	}
+}
+
+func TestRestAPIRateLimiterIPv6BlockIsPer128(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	limiter := newTestRestAPIRateLimiter()
+	limiter.rateLimit = 1
+	limiter.burst = 1
+	limiter.blockDuration = time.Minute
+
+	// Two distinct /128s sharing one /64. The rate limiter aggregates to /64
+	// (key64); the block must accrue per /128 (b1, b2).
+	key64 := rateLimitKey("2001:db8:1:2::1")
+	b1 := blockKey("2001:db8:1:2::1")
+	b2 := blockKey("2001:db8:1:2::2")
+	if key64 != rateLimitKey("2001:db8:1:2::2") {
+		t.Fatalf("test setup: addresses are not in the same /64 (%q vs %q)", key64, rateLimitKey("2001:db8:1:2::2"))
+	}
+
+	// Consume the single shared token, then drive separate breach episodes that
+	// are all attributed to b1.
+	if d := limiter.accept(key64, b1, true, now); !d.accepted {
+		t.Fatalf("first decision = %+v, want accepted", d)
+	}
+	limiter.release(key64, now)
+	var last time.Time
+	for i := 0; i < restAPIBreachBlockThreshold; i++ {
+		last = now.Add(time.Duration(i) * restAPIBreachMinSpacing)
+		if d := limiter.accept(key64, b1, true, last); d.accepted || d.reason != restAPIRejectRequestRate {
+			t.Fatalf("breach %d decision = %+v, want request-rate rejection", i, d)
+		}
+	}
+	after := last.Add(time.Second)
+	if d := limiter.accept(key64, b1, true, after); d.accepted || d.reason != restAPIRejectIPBlocked {
+		t.Fatalf("b1 decision = %+v, want ip_blocked", d)
+	}
+
+	// A different /128 in the same /64 must NOT inherit the block: it is still
+	// subject to the shared /64 rate limit (request_rate) but never ip_blocked.
+	if d := limiter.accept(key64, b2, true, after); d.reason == restAPIRejectIPBlocked {
+		t.Fatalf("b2 (same /64) wrongly ip_blocked: %+v", d)
+	}
+	if c := limiter.clients[b2]; c != nil && c.blockedUntil.After(after) {
+		t.Fatal("b2 must not be blocked when only b1 breached")
 	}
 }
 
@@ -425,10 +469,10 @@ func TestRestAPIRateLimiterReleaseIsPerKey(t *testing.T) {
 	limiter := newTestRestAPIRateLimiter()
 	limiter.maxConcurrent = 2
 	now := time.Unix(1_700_000_000, 0)
-	if decision := limiter.accept("192.0.2.20", true, now); !decision.accepted {
+	if decision := limiter.accept("192.0.2.20", "192.0.2.20", true, now); !decision.accepted {
 		t.Fatalf("accept = %+v", decision)
 	}
-	if decision := limiter.accept("192.0.2.20", true, now); !decision.accepted {
+	if decision := limiter.accept("192.0.2.20", "192.0.2.20", true, now); !decision.accepted {
 		t.Fatalf("second accept = %+v", decision)
 	}
 	limiter.release("192.0.2.20", now)
@@ -522,7 +566,7 @@ func TestRestAPIRateLimiterTrackingCap(t *testing.T) {
 		limiter.clients[strconv.Itoa(i)] = &restAPIClientLimit{lastSeen: now}
 	}
 
-	decision := limiter.accept("192.0.2.99", true, now)
+	decision := limiter.accept("192.0.2.99", "192.0.2.99", true, now)
 	if !decision.accepted || !decision.untracked {
 		t.Fatalf("decision at cap = %+v, want accepted and untracked", decision)
 	}
@@ -533,10 +577,10 @@ func TestRestAPIRateLimiterTrackingCap(t *testing.T) {
 	limiter.release("192.0.2.99", now)
 
 	// already-tracked keys stay limited at the cap
-	if decision := limiter.accept("0", true, now); !decision.accepted {
+	if decision := limiter.accept("0", "0", true, now); !decision.accepted {
 		t.Fatalf("tracked accept = %+v, want accepted", decision)
 	}
-	if decision := limiter.accept("0", true, now); decision.accepted {
+	if decision := limiter.accept("0", "0", true, now); decision.accepted {
 		t.Fatalf("tracked second accept = %+v, want rejected", decision)
 	}
 }
