@@ -53,6 +53,7 @@ type restAPILimiterConfig struct {
 	blockDuration   time.Duration
 	trustedProxies  []netip.Prefix
 	cloudflareCIDRs []netip.Prefix
+	trustPseudoIPv6 bool
 }
 
 type restAPIRateLimiter struct {
@@ -69,6 +70,7 @@ type restAPIRateLimiter struct {
 	blockDuration      time.Duration
 	trustedProxies     []netip.Prefix
 	cloudflarePrefixes []netip.Prefix
+	trustPseudoIPv6    bool
 	localBypassWarn    sync.Once
 }
 
@@ -121,6 +123,7 @@ func newRestAPIRateLimiter(network string, metrics *common.Metrics) (*restAPIRat
 		blockDuration:      cfg.blockDuration,
 		trustedProxies:     cfg.trustedProxies,
 		cloudflarePrefixes: cfg.cloudflareCIDRs,
+		trustPseudoIPv6:    cfg.trustPseudoIPv6,
 	}
 	if metrics != nil {
 		metrics.RestAPIActiveIPs.Set(0)
@@ -187,6 +190,7 @@ func readRestAPILimiterConfig(network string) (restAPILimiterConfig, error) {
 	}
 	cfg.trustedProxies = clientIPCfg.trustedProxies
 	cfg.cloudflareCIDRs = clientIPCfg.cloudflarePrefixes
+	cfg.trustPseudoIPv6 = clientIPCfg.trustPseudoIPv6
 	return cfg, nil
 }
 
@@ -232,7 +236,7 @@ func (l *restAPIRateLimiter) wrapAPI(next http.Handler, apiRoot string) http.Han
 			next.ServeHTTP(w, r)
 			return
 		}
-		ip, blockSafe, fromHeader := resolveClientIP(r, l.trustedProxies, l.cloudflarePrefixes)
+		ip, blockSafe, fromHeader := resolveClientIP(r, l.trustedProxies, l.cloudflarePrefixes, l.trustPseudoIPv6)
 		if !fromHeader && isLocalOrTrustedProxyIP(ip, l.trustedProxies) {
 			// The request came straight from the operator's own
 			// loopback/LAN/trusted proxy with no client-attribution header: the

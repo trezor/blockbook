@@ -112,6 +112,9 @@ type WebsocketServer struct {
 	// of these ranges (or a loopback/private proxy). Empty disables verification
 	// and falls back to the legacy "trust CF headers from any peer" behavior.
 	cloudflarePrefixes []netip.Prefix
+	// trustPseudoIPv6 honors the (otherwise client-spoofable) CF-Connecting-IPv6
+	// header; only safe with Cloudflare "Pseudo IPv4: Overwrite Headers" on.
+	trustPseudoIPv6 bool
 	// messageRateLimit / messageRateWindow bound how many messages a single
 	// connection may send in a trailing window before it is closed; 0 disables.
 	// ipBlockDuration is how long an offending client key is blocked from
@@ -196,6 +199,10 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	} else {
 		glog.Warning("Cloudflare peer verification disabled (", clientIPCfg.cloudflareEnvName, "=off); CF-Connecting-* headers are trusted from any peer")
 	}
+	s.trustPseudoIPv6 = clientIPCfg.trustPseudoIPv6
+	if clientIPCfg.trustPseudoIPv6 {
+		glog.Info("Cloudflare Pseudo-IPv4 mode enabled (", clientIPCfg.pseudoIPv6EnvName, "); CF-Connecting-IPv6 is honored as the client IP (requires Cloudflare \"Pseudo IPv4: Overwrite Headers\")")
+	}
 	if err := s.configureMessageRateLimit(is.GetNetwork()); err != nil {
 		return nil, err
 	}
@@ -279,7 +286,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server shutting down", http.StatusServiceUnavailable)
 		return
 	}
-	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes)
+	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes, s.trustPseudoIPv6)
 	ipKey := rateLimitKey(ip)
 	// blockable is only meaningful (and only computed) when the IP blocklist is
 	// enabled, so the O(prefixes) isBlockableKey scan is skipped when disabled.

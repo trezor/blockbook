@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -25,8 +26,16 @@ var embeddedCloudflareIPs string
 type clientIPConfig struct {
 	trustedProxies     []netip.Prefix
 	cloudflarePrefixes []netip.Prefix
-	trustedEnvName     string
-	cloudflareEnvName  string
+	// trustPseudoIPv6 honors the CF-Connecting-IPv6 request header. It must be
+	// enabled ONLY when the Cloudflare zone runs "Pseudo IPv4: Overwrite
+	// Headers", because that is the only mode in which Cloudflare sets (and thus
+	// sanitizes) CF-Connecting-IPv6. In every other mode Cloudflare forwards a
+	// client-supplied CF-Connecting-IPv6 verbatim, so trusting it would let any
+	// client spoof its attributed IP. Default false.
+	trustPseudoIPv6   bool
+	trustedEnvName    string
+	cloudflareEnvName string
+	pseudoIPv6EnvName string
 }
 
 func readClientIPConfig(network string) (clientIPConfig, error) {
@@ -48,7 +57,29 @@ func readClientIPConfig(network string) (clientIPConfig, error) {
 		return cfg, err
 	}
 	cfg.cloudflarePrefixes = cloudflare
+
+	cfg.pseudoIPv6EnvName = prefix + "_CLOUDFLARE_PSEUDO_IPV4"
+	trustPseudo, err := parseBoolEnv(cfg.pseudoIPv6EnvName, os.Getenv(cfg.pseudoIPv6EnvName))
+	if err != nil {
+		return cfg, err
+	}
+	cfg.trustPseudoIPv6 = trustPseudo
 	return cfg, nil
+}
+
+// parseBoolEnv parses an optional boolean env value, defaulting to false when
+// unset/empty and failing fast on an unparseable value so a typo cannot be
+// silently ignored.
+func parseBoolEnv(envName, value string) (bool, error) {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return false, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("%s: invalid value %q (want a boolean, e.g. \"true\" or \"false\")", envName, value)
+	}
+	return b, nil
 }
 
 func lookupEnvWithFallback(primary, fallback string) (envName, value string) {
@@ -180,6 +211,15 @@ func parseCIDRList(envName string, raws []string) ([]netip.Prefix, error) {
 // trusts those headers from any peer, the legacy behavior). When neither
 // header is trusted for this peer it falls back to the bare TCP peer address.
 //
+// Only CF-Connecting-IP is trusted by default: it is the single CF-* request
+// header Cloudflare always overwrites with the verified visitor IP. Cloudflare
+// forwards a client-supplied CF-Connecting-IPv6 verbatim unless the zone runs
+// "Pseudo IPv4: Overwrite Headers", so CF-Connecting-IPv6 is honored only when
+// the operator opts in with trustPseudoIPv6 (which asserts that mode is on).
+// In Pseudo-IPv4 mode CF-Connecting-IP holds a synthetic pseudo-IPv4 and the
+// real client is in CF-Connecting-IPv6, so trustPseudoIPv6 also makes
+// CF-Connecting-IPv6 the preferred source.
+//
 // blockSafe centralizes the spoof-protection decision so callers never have to
 // re-inspect headers: a CF-Connecting-* value is block-safe only when peer
 // verification is enabled (otherwise it is forgeable); X-Real-Ip is block-safe
@@ -192,7 +232,7 @@ func parseCIDRList(envName string, raws []string) ([]netip.Prefix, error) {
 // and the address is the operator's own loopback/LAN/trusted proxy, the key
 // identifies shared infrastructure (or the operator's own tooling), not a
 // client.
-func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix) (ip string, blockSafe, fromHeader bool) {
+func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix, trustPseudoIPv6 bool) (ip string, blockSafe, fromHeader bool) {
 	host := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		host = h
@@ -209,9 +249,18 @@ func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.
 		cfTrusted := len(cloudflareProxies) == 0 || (remoteOK && isTrustedProxy(remote, cloudflareProxies))
 		if cfTrusted {
 			cfBlockSafe := len(cloudflareProxies) > 0
-			if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
-				return ip, cfBlockSafe, true
+			// Pseudo-IPv4 Overwrite mode (opt-in): the real client is the
+			// Cloudflare-set CF-Connecting-IPv6; CF-Connecting-IP is a synthetic
+			// pseudo-IPv4. Prefer the IPv6 header, falling back to CF-Connecting-IP.
+			if trustPseudoIPv6 {
+				if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
+					return ip, cfBlockSafe, true
+				}
 			}
+			// Default: CF-Connecting-IP is the only CF-* request header Cloudflare
+			// always overwrites with the verified client IP. CF-Connecting-IPv6 is
+			// not consulted here because Cloudflare forwards a client-supplied value
+			// verbatim outside Pseudo-IPv4 mode, making it spoofable.
 			if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
 				return ip, cfBlockSafe, true
 			}
