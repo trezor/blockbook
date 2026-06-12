@@ -795,6 +795,22 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 			selfAddrDesc[string(da[i].addrDesc)] = struct{}{}
 		}
 	}
+	// Bound the work: the loop below does one DB read per transaction across
+	// every derived address, so a heavy xpub is a cheap-to-send DoS. (The xpub
+	// txids are loaded full-history for the shared cache, so the requested
+	// from/to window does not shrink this count; the cap is what bounds it.)
+	// Reject past the cap rather than do the unbounded aggregation.
+	if maxTxs := w.is.BalanceHistoryMaxTxs; maxTxs > 0 {
+		total := 0
+		for _, da := range data.addresses {
+			for i := range da {
+				total += len(da[i].txids)
+			}
+		}
+		if total > maxTxs {
+			return nil, NewAPIError(fmt.Sprintf("balance history for xpub spans more than %d transactions; narrow the from/to range", maxTxs), true)
+		}
+	}
 	for _, da := range data.addresses {
 		for i := range da {
 			ad := &da[i]

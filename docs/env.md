@@ -4,6 +4,8 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 -   `<coin shortcut>_WS_GETACCOUNTINFO_LIMIT` - Limits the number of `getAccountInfo` requests per websocket connection to reduce server abuse. Accepts number as input.
 
+-   `<network>_BALANCE_HISTORY_MAX_TXS` - Maximum number of transactions a single balance-history request (REST `/api/v2/balancehistory/...` or the WebSocket `getBalanceHistory` method, for an address or an xpub) may aggregate. Each aggregated transaction costs a database read, so an unbounded request over an address or xpub with a very large history (e.g. an exchange address) is a cheap-to-send, expensive-to-serve request. Past the cap the request is rejected with `400` and a message asking to narrow the `from`/`to` range, rather than returning a truncated (and therefore wrong) history. Accepts a non-negative integer; default `250000`, `0` disables the cap. The default never affects a normal wallet; raise it only if you serve balance history for genuinely high-volume addresses.
+
 -   `<coin shortcut>_WS_ALLOWED_ORIGINS` - Comma-separated list of allowed WebSocket origins (e.g. `https://example.com`, `http://localhost:3000`). If omitted, all origins are allowed and it is the operator's responsibility to enforce origin access (for example via proxy).
 
 -   `<network>_TRUSTED_PROXIES` - Comma-separated list of trusted proxy CIDRs whose `X-Real-Ip` header should be used as the client IP for public REST API and WebSocket rate limiting.

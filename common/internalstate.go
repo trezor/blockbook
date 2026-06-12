@@ -106,6 +106,14 @@ type InternalState struct {
 	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
 	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
 
+	// BalanceHistoryMaxTxs caps how many transactions a single balance-history
+	// request (address or xpub, REST or WS) may aggregate. Each aggregated
+	// transaction costs a DB read, so an unbounded request over a heavy address
+	// or xpub is a cheap-to-send, expensive-to-serve DoS; this bounds the work
+	// and returns an error past the cap so the client narrows the range. 0
+	// disables the cap (unlimited).
+	BalanceHistoryMaxTxs int `json:"-" ts_doc:"Max transactions aggregated per balance-history request, 0 = unlimited (not exposed)."`
+
 	// websocket IP blocklist: keys (IPv4 address or full IPv6 /128) that were
 	// flagged for flooding a single connection past the per-connection message
 	// rate limit and are blocked from opening new connections until Until. The
