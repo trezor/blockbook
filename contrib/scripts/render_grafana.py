@@ -22,8 +22,9 @@ x-keys are stripped from the rendered grafana.json, which stays pure Grafana.
     python3 contrib/scripts/render_grafana.py [--check]
 
         --check  validate + render in memory and exit non-zero on any problem
-                 (unknown metric key, panel/query key mismatch, residual placeholder)
-                 WITHOUT writing the file -- for CI / pre-commit.
+                 (unknown metric key, panel/query key mismatch, residual placeholder, or a
+                 rendered dashboard that violates a Grafana import invariant -- see
+                 validate_rendered) WITHOUT writing the file -- for CI / pre-commit.
 """
 import json
 import os
@@ -182,6 +183,92 @@ def apply_computed_grid_positions(panels, content, columns=GRID_COLUMNS):
     return problems
 
 
+def is_nonneg_int(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def validate_rendered(dash, columns=GRID_COLUMNS):
+    """Assert the structural invariants Grafana enforces only at import time.
+
+    The render can be internally consistent (every panel keyed, every placeholder resolved)
+    yet still produce a dashboard Grafana silently refuses to import: a duplicate panel id, a
+    panel packed past the 24-column grid, two panels overlapping, a target with no datasource,
+    or a `${input}` that no `__inputs` entry declares. Grafana reports these only as an opaque
+    import failure, so check them here and fail the render with a precise message instead.
+    """
+    problems = []
+
+    sv = dash.get("schemaVersion")
+    if not isinstance(sv, int) or isinstance(sv, bool):
+        problems.append("dashboard schemaVersion must be an integer (got %r)" % (sv,))
+
+    # every ${VAR} in the serialized dashboard must resolve to an __inputs entry (an import-time
+    # datasource/constant) or a templating variable -- an undeclared one fails import.
+    declared = {i.get("name") for i in dash.get("__inputs", []) if isinstance(i, dict)}
+    tmpl_vars = {v.get("name") for v in dash.get("templating", {}).get("list", []) if isinstance(v, dict)}
+    referenced = set(re.findall(r"\$\{([A-Za-z0-9_]+)(?::[A-Za-z0-9_]+)?\}", json.dumps(dash)))
+    for var in sorted(referenced - declared - tmpl_vars):
+        problems.append("dashboard references ${%s} but no __inputs entry or templating variable declares it" % var)
+
+    seen_ids = {}
+
+    def check_level(panels, where):
+        rects = []
+        for panel in panels:
+            label = panel.get("title") or panel.get("id") or "<panel>"
+            pid = panel.get("id")
+            if not is_nonneg_int(pid):
+                problems.append("%s panel %r has a non-integer id (%r)" % (where, label, pid))
+            elif pid in seen_ids:
+                problems.append("panel id %d is shared by %r and %r" % (pid, seen_ids[pid], label))
+            else:
+                seen_ids[pid] = label
+
+            grid = panel.get("gridPos")
+            if not isinstance(grid, dict):
+                problems.append("%s panel %r has no gridPos" % (where, label))
+                grid = {}
+            w, h, x, y = grid.get("w"), grid.get("h"), grid.get("x"), grid.get("y")
+            if not (is_positive_int(w) and is_positive_int(h)):
+                problems.append("%s panel %r gridPos needs positive integer w/h (got %r)" % (where, label, grid))
+            if not (is_nonneg_int(x) and is_nonneg_int(y)):
+                problems.append("%s panel %r gridPos needs non-negative integer x/y (got %r)" % (where, label, grid))
+            if is_positive_int(w) and is_nonneg_int(x) and x + w > columns:
+                problems.append("%s panel %r spans past the %d-column grid (x=%d w=%d)" % (where, label, columns, x, w))
+            if all(is_nonneg_int(v) for v in (x, y)) and is_positive_int(w) and is_positive_int(h):
+                rects.append((x, y, w, h, label))
+
+            if panel.get("type") == "row":
+                if not isinstance(panel.get("collapsed"), bool):
+                    problems.append("%s row %r must carry a boolean 'collapsed'" % (where, label))
+                if not isinstance(panel.get("panels"), list):
+                    problems.append("%s row %r must carry a 'panels' list" % (where, label))
+            else:
+                ds = panel.get("datasource")
+                if not (isinstance(ds, dict) and ds.get("type") and ds.get("uid")):
+                    problems.append("%s panel %r must carry a datasource with type+uid" % (where, label))
+                for target in panel.get("targets", []):
+                    tds = target.get("datasource")
+                    if not (isinstance(tds, dict) and tds.get("type") and tds.get("uid")):
+                        problems.append("%s panel %r target %r must carry a datasource with type+uid"
+                                        % (where, label, target.get("refId")))
+
+        # panels in one container must not overlap -- Grafana would render them stacked
+        for i in range(len(rects)):
+            ax, ay, aw, ah, al = rects[i]
+            for j in range(i + 1, len(rects)):
+                bx, by, bw, bh, bl = rects[j]
+                if not (ax + aw <= bx or bx + bw <= ax or ay + ah <= by or by + bh <= ay):
+                    problems.append("%s panels %r and %r overlap" % (where, al, bl))
+
+        for panel in panels:
+            if panel.get("type") == "row" and panel.get("panels"):
+                check_level(panel["panels"], "row %r >" % (panel.get("title") or panel.get("id")))
+
+    check_level(dash.get("panels", []), "top-level")
+    return problems
+
+
 def render():
     reg = load_registry()
     panels = load_panels()
@@ -277,6 +364,9 @@ def render():
     residual = PLACEHOLDER.findall(json.dumps(dash))
     if residual:
         problems.append("unresolved {{name|help:...}} placeholder(s) remain: %s" % residual[:5])
+
+    # final gate: the rendered dashboard must satisfy the invariants Grafana checks at import
+    problems.extend(validate_rendered(dash))
 
     if problems:
         fail("dashboard render failed:\n       - " + "\n       - ".join(problems))
