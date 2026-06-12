@@ -1984,6 +1984,15 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
+// DefaultBalanceHistoryMaxTxs is the default cap on the number of transactions
+// a single balance-history request may aggregate. It bounds the per-request DB
+// work (one read per aggregated transaction) so that a query over an address or
+// xpub with a very large transaction history cannot exhaust server resources.
+// It is generous enough never to affect a normal wallet; operators indexing
+// exchange-scale addresses can raise it (or set 0 to disable) via
+// <NET>_BALANCE_HISTORY_MAX_TXS.
+const DefaultBalanceHistoryMaxTxs = 250000
+
 // GetBalanceHistory returns history of balance for given address
 func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32) (BalanceHistories, error) {
 	currencies = removeEmpty(currencies)
@@ -2008,9 +2017,21 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if fromHeight >= toHeight {
 		return bhs, nil
 	}
-	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}, maxInt)
+	// Bound the work: each transaction in the range costs a DB read below, so an
+	// unbounded scan over a heavy address is a cheap-to-send DoS. Fetch at most
+	// one more than the cap so the overflow is detectable, then reject rather
+	// than silently truncate (which would return a wrong balance history).
+	maxResults := maxInt
+	maxTxs := w.is.BalanceHistoryMaxTxs
+	if maxTxs > 0 {
+		maxResults = maxTxs + 1
+	}
+	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}, maxResults)
 	if err != nil {
 		return nil, err
+	}
+	if maxTxs > 0 && len(txs) > maxTxs {
+		return nil, NewAPIError(fmt.Sprintf("balance history spans more than %d transactions in the requested range; narrow the from/to range", maxTxs), true)
 	}
 	selfAddrDesc := map[string]struct{}{string(addrDesc): {}}
 	for txi := len(txs) - 1; txi >= 0; txi-- {

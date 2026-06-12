@@ -576,6 +576,20 @@ func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool)
 		glog.Info("WsGetAccountInfoLimit enabled with limit ", is.WsGetAccountInfoLimit)
 		is.WsLimitExceedingIPs = make(map[string]int)
 	}
+
+	is.BalanceHistoryMaxTxs = api.DefaultBalanceHistoryMaxTxs
+	if v, ok := os.LookupEnv(strings.ToUpper(is.GetNetwork()) + "_BALANCE_HISTORY_MAX_TXS"); ok {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n < 0 {
+			return nil, errors.Errorf("%s_BALANCE_HISTORY_MAX_TXS: invalid value %q (want a non-negative integer, 0 to disable)", strings.ToUpper(is.GetNetwork()), v)
+		}
+		is.BalanceHistoryMaxTxs = n
+	}
+	if is.BalanceHistoryMaxTxs > 0 {
+		glog.Info("BalanceHistoryMaxTxs limit ", is.BalanceHistoryMaxTxs, " transactions per request")
+	} else {
+		glog.Info("BalanceHistoryMaxTxs unlimited")
+	}
 	return is, nil
 }
 
