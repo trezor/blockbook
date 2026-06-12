@@ -48,11 +48,13 @@ var (
 )
 
 // websocketChannel is a single client connection. ipKey is the per-IP
-// rate-limit / blocklist key derived from ip (the IPv4 address, or an IPv6
-// address aggregated to its /64); blockable records whether ipKey is a
+// rate-limit key derived from ip (the IPv4 address, or an IPv6 address
+// aggregated to its /64); blockKey is the IP-blocklist key (the IPv4 address,
+// or the full IPv6 /128) — kept narrower than ipKey so a hard block does not
+// take out a whole shared /64; blockable records whether blockKey is a
 // trustworthy, non-infrastructure key that is safe to add to the IP blocklist;
 // messageRate is the per-connection sliding-window message counter (nil when the
-// rate limit is disabled). All three are touched only by ServeHTTP/inputLoop.
+// rate limit is disabled). All are touched only by ServeHTTP/inputLoop.
 type websocketChannel struct {
 	id                           uint64
 	requests                     uint64 // total requests received on this connection, accessed atomically
@@ -61,6 +63,7 @@ type websocketChannel struct {
 	pendingRequests              chan struct{}
 	ip                           string
 	ipKey                        string
+	blockKey                     string
 	blockable                    bool
 	messageRate                  *connMessageRate
 	requestHeader                http.Header
@@ -288,10 +291,15 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes, s.trustPseudoIPv6)
 	ipKey := rateLimitKey(ip)
-	// blockable is only meaningful (and only computed) when the IP blocklist is
-	// enabled, so the O(prefixes) isBlockableKey scan is skipped when disabled.
+	// blockKey/blockable are only meaningful (and only computed) when the IP
+	// blocklist is enabled, so the blockKey derivation and the O(prefixes)
+	// isBlockableKey scan are skipped when disabled. blockKey keeps IPv6 at the
+	// full /128 so a block never takes out a shared /64 (the connection limiter
+	// keyed on ipKey still aggregates to /64).
+	bKey := ""
 	blockable := false
 	if s.ipBlockEnabled {
+		bKey = blockKey(ip)
 		blockable = blockSafe && isBlockableKey(ip, s.trustedProxyPrefixes, s.cloudflarePrefixes)
 	}
 
@@ -299,7 +307,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// upgrade work. Checked ahead of the connection limiter so a blocked client
 	// cannot keep consuming attempt slots.
 	if s.ipBlockEnabled {
-		if blocked, rejected := s.is.IsWsIPBlocked(ipKey, time.Now()); blocked {
+		if blocked, rejected := s.is.IsWsIPBlocked(bKey, time.Now()); blocked {
 			if s.metrics != nil {
 				s.metrics.WebsocketBlockedConnections.Inc()
 			}
@@ -343,6 +351,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pendingRequests: make(chan struct{}, maxWebsocketPendingRequests),
 		ip:              ip,
 		ipKey:           ipKey,
+		blockKey:        bKey,
 		blockable:       blockable,
 		requestHeader:   r.Header,
 		alive:           true,

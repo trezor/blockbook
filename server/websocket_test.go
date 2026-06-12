@@ -647,6 +647,40 @@ func TestRateLimitKey(t *testing.T) {
 	}
 }
 
+func TestBlockKey(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"192.0.2.10", "192.0.2.10"},                     // IPv4 verbatim (== rateLimitKey)
+		{"::ffff:192.0.2.10", "192.0.2.10"},              // IPv4-mapped IPv6 unmaps to the IPv4 key
+		{"2001:db8:1:2:3:4:5:6", "2001:db8:1:2:3:4:5:6"}, // IPv6 kept at the full /128
+		{"2001:db8:1:2::ffff", "2001:db8:1:2::ffff"},
+		{"[2001:db8:1:2::1%eth0]", "[2001:db8:1:2::1%eth0]"}, // brackets/zone are not a bare addr; verbatim
+		{"2001:db8:1:2::1%eth0", "2001:db8:1:2::1"},          // zone stripped from a bare addr
+		{"not-an-ip", "not-an-ip"},
+	}
+	for _, tt := range tests {
+		if got := blockKey(tt.in); got != tt.want {
+			t.Fatalf("blockKey(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	// The whole point of decoupling: two addresses in one /64 share a rate-limit
+	// key (so the limiter aggregates) but get distinct block keys (so a block on
+	// one does not take out the other).
+	a, b := "2001:db8:1:2::1", "2001:db8:1:2::2"
+	if rateLimitKey(a) != rateLimitKey(b) {
+		t.Fatal("same /64 should share a rate-limit key")
+	}
+	if blockKey(a) == blockKey(b) {
+		t.Fatal("distinct /128s in the same /64 must get distinct block keys")
+	}
+	// IPv4 block key must equal its rate-limit key (IPv4 behavior unchanged).
+	if blockKey("192.0.2.10") != rateLimitKey("192.0.2.10") {
+		t.Fatal("IPv4 block key should equal its rate-limit key")
+	}
+}
+
 func TestIsBlockableKey(t *testing.T) {
 	cf := mustParsePrefixes(t, "203.0.113.0/24")
 	trusted := mustParsePrefixes(t, "198.51.100.0/24")

@@ -304,6 +304,25 @@ func rateLimitKey(ip string) string {
 	return addr.String()
 }
 
+// blockKey returns the key used for the temporary IP blocklists (WS and REST).
+// Unlike rateLimitKey it keeps IPv6 at the full /128. Rate limiting aggregates
+// to /64 (so a client cannot evade limits by rotating the low 64 bits of an
+// owned /64), but a long-lived hard block must not take out an entire shared
+// /64: mobile carriers, CGNAT-style IPv6, and VPN exits routinely place many
+// unrelated subscribers in one /64, and blocking all of them for hours because
+// one address misbehaved is collateral denial of service. The connection /
+// request rate limiter still aggregates to /64, so a /64-rotating abuser cannot
+// gain throughput by dodging the per-/128 block. IPv4 is keyed verbatim (so
+// blockKey == rateLimitKey for IPv4); IPv4-mapped IPv6 is unmapped first, and
+// anything unparseable is keyed verbatim.
+func blockKey(ip string) string {
+	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
+	if err != nil {
+		return ip
+	}
+	return addr.Unmap().WithZone("").String()
+}
+
 // isBlockableKey reports whether ip is safe to add to an IP blocklist. It
 // refuses loopback/private/link-local addresses and any configured trusted-proxy
 // or Cloudflare edge range, so a misconfiguration that collapses many clients
