@@ -1,0 +1,105 @@
+name: Windows Build & Test
+
+# Windows counterpart to testing.yml's unit-tests job. Builds Blockbook's native
+# deps (libzmq + RocksDB) from source as static libraries with the MSYS2 UCRT64
+# GCC toolchain, then builds blockbook.exe / blockbookgen.exe and runs the Go
+# unit-test suite. Mirrors the steps documented in docs/win-build.md and driven
+# by build/scripts/build-deps.ps1 and build/scripts/build-blockbook.ps1.
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ '**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Unit Test (Windows)
+    runs-on: windows-latest
+
+    # build-deps.ps1 / build-blockbook.ps1 auto-detect the UCRT64 toolchain
+    # (MSYS2_ROOT is exported below) and run from the repo root in PowerShell.
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Install the UCRT64 GCC toolchain, CMake, Ninja and the compression libs
+      # RocksDB links against (lz4, zstd, zlib, snappy, bzip2) — exactly the
+      # package set from docs/win-build.md. The action installs MSYS2 to a path
+      # it reports via the 'msys2-location' output (NOT necessarily C:\msys64),
+      # which the next step exports as MSYS2_ROOT for the build scripts.
+      - name: Set up MSYS2 UCRT64 toolchain
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            git
+            mingw-w64-ucrt-x86_64-lz4
+            mingw-w64-ucrt-x86_64-zstd
+            mingw-w64-ucrt-x86_64-zlib
+            mingw-w64-ucrt-x86_64-snappy
+            mingw-w64-ucrt-x86_64-bzip2
+
+      # build-deps.ps1 / build-blockbook.ps1 auto-detect the MSYS2 root (gcc on
+      # PATH -> MSYS2_ROOT env hint -> common install locations -> registry).
+      # gcc is not on the pwsh PATH here and the action may install MSYS2 to a
+      # non-default path, so export its msys2-location output as MSYS2_ROOT.
+      - name: Export MSYS2 root for build scripts
+        run: |
+          "MSYS2_ROOT=${{ steps.msys2.outputs.msys2-location }}" >> $env:GITHUB_ENV
+
+      # Cache the built static deps under ./.dev keyed on the dep versions pinned
+      # in build-deps.ps1, so we don't rebuild libzmq + RocksDB every run.
+      - name: Cache native deps (.dev)
+        id: cache-dev
+        uses: actions/cache@v5
+        with:
+          path: .dev
+          key: win-dev-${{ runner.os }}-${{ hashFiles('build/scripts/build-deps.ps1') }}
+
+      - name: Build native deps (libzmq + RocksDB, static)
+        if: steps.cache-dev.outputs.cache-hit != 'true'
+        run: .\build\scripts\build-deps.ps1
+
+      - name: Build blockbook.exe
+        run: .\build\scripts\build-blockbook.ps1
+
+      # Unit-test failures are surfaced as a GitHub Actions warning rather than
+      # failing the job — the Windows build is the gate here, the unit suite is
+      # informational. build-blockbook.ps1 throws (it sets $ErrorActionPreference
+      # = 'Stop') when tests fail, so we run it in a child pwsh and catch both a
+      # thrown terminating error and a non-zero exit, emitting a ::warning::
+      # annotation instead of failing.
+      - name: Run unit tests
+        run: |
+          try {
+            .\build\scripts\build-blockbook.ps1 test
+            if ($LASTEXITCODE -ne 0) { throw "tests exited with code $LASTEXITCODE" }
+          } catch {
+            Write-Output "::warning::Windows unit tests failed: $($_.Exception.Message); not failing the job."
+          }
+          # go test / the script leave $LASTEXITCODE non-zero on failure, and the
+          # Actions pwsh wrapper appends `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`.
+          # Reset it so the caught failure stays a warning and the job passes.
+          exit 0

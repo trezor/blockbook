@@ -2,7 +2,11 @@ SHELL = /bin/bash
 VERSION ?= devel
 GITCOMMIT ?= $(shell cd /src && git config --global --add safe.directory /src && git describe --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
-LDFLAGS := -X github.com/trezor/blockbook/common.version=$(VERSION) -X github.com/trezor/blockbook/common.gitcommit=$(GITCOMMIT) -X github.com/trezor/blockbook/common.buildtime=$(BUILDTIME)
+# Force the external (C) linker and pass the static C-runtime flags through to it, so
+# libgcc/libstdc++ are linked statically alongside the static librocksdb.a / libzmq.a
+# brought in by CGO_LDFLAGS (set in the Docker image). glibc stays dynamic.
+EXTLDFLAGS := -static-libgcc -static-libstdc++
+LDFLAGS := -X github.com/trezor/blockbook/common.version=$(VERSION) -X github.com/trezor/blockbook/common.gitcommit=$(GITCOMMIT) -X github.com/trezor/blockbook/common.buildtime=$(BUILDTIME) -linkmode external -extldflags "$(EXTLDFLAGS)"
 BLOCKBOOK_BASE := $(GOPATH)/src/github.com/trezor
 BLOCKBOOK_SRC := $(BLOCKBOOK_BASE)/blockbook
 ARGS ?=
@@ -10,12 +14,12 @@ ARGS ?=
 all: build tools
 
 build: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags='-s -w $(LDFLAGS)' $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
 build-debug: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags='$(LDFLAGS)' $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
