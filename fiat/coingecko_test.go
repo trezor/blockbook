@@ -5,6 +5,7 @@ package fiat
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,23 @@ import (
 
 	"github.com/trezor/blockbook/common"
 )
+
+// roundTripFunc serves canned HTTP responses without binding a loopback port
+// (httptest needs a local listener, which some sandboxes disallow) and lets a
+// test assert the exact number of attempts deterministically.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func stubHTTPResponse(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Header:     make(http.Header),
+	}
+}
+
+const cloudflareBanBody = "<!DOCTYPE html><html><body>The owner of this website has banned you temporarily. error code: 1015</body></html>"
 
 func testCoinGeckoScopedAPIKeyEnvName(prefix string) string {
 	return strings.ToUpper(strings.TrimSpace(prefix)) + coingeckoAPIKeyEnvSuffix
@@ -298,6 +316,71 @@ func TestUpdateHistoricalTickers_BootstrapStoresSuccessfulCurrenciesEvenWhenSome
 	}
 }
 
+func TestUpdateHistoricalTickers_CloudflareBanStopsPassAndStoresPartial(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	// steady state (bootstrap already complete) so the pass targets the tip URL
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	// usd succeeds, eur returns a Cloudflare 1015 ban (served as a 403 HTML page)
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			return stubHTTPResponse(http.StatusOK, `["usd","eur"]`), nil
+		case "/coins/ethereum/market_chart":
+			switch r.URL.Query().Get("vs_currency") {
+			case "usd":
+				return stubHTTPResponse(http.StatusOK, `{"prices":[[1654732800000,1234.5]]}`), nil
+			case "eur":
+				return stubHTTPResponse(http.StatusForbidden, cloudflareBanBody), nil
+			}
+			return stubHTTPResponse(http.StatusBadRequest, "unexpected vs_currency"), nil
+		}
+		return stubHTTPResponse(http.StatusNotFound, "unexpected path "+r.URL.Path), nil
+	})
+
+	cg := &Coingecko{
+		coin:       "ethereum",
+		tipURL:     "http://coingecko.test",
+		httpClient: &http.Client{Transport: transport},
+		db:         d,
+		plan:       coingeckoPlanFree,
+	}
+
+	err := cg.UpdateHistoricalTickers()
+	if err == nil {
+		t.Fatal("expected UpdateHistoricalTickers to return the Cloudflare ban error")
+	}
+	if !isCoingeckoCloudflareBanError(err) {
+		t.Fatalf("expected a Cloudflare ban error, got %v", err)
+	}
+
+	// currencies processed before the ban must be persisted (partial progress)
+	usdTicker, err := d.FiatRatesFindLastTicker("usd", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker usd failed: %v", err)
+	}
+	if usdTicker == nil {
+		t.Fatal("expected usd ticker to be stored before the ban")
+	}
+	// the banned currency (and anything after it) must be absent; resumed next cycle
+	eurTicker, err := d.FiatRatesFindLastTicker("eur", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker eur failed: %v", err)
+	}
+	if eurTicker != nil {
+		t.Fatalf("expected eur ticker to be missing after the ban, got %+v", eurTicker)
+	}
+}
+
 func TestMakeReq_ThrottleRetriesWithoutCap(t *testing.T) {
 	originalBackoff := coingeckoThrottleBackoff
 	coingeckoThrottleBackoff = 0
@@ -362,6 +445,68 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 	}
 	if got := int(requests.Load()); got != 3 {
 		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+func TestIsCoingeckoCloudflareBanError(t *testing.T) {
+	bans := []error{
+		errors.New("error code: 1015"),
+		errors.New("Error Code: 1015"), // case-insensitive
+		&coingeckoHTTPError{status: http.StatusForbidden, body: cloudflareBanBody},
+		&coingeckoHTTPError{status: http.StatusTooManyRequests, body: "error code: 1015"},
+		fmt.Errorf("wrapped: %w", &coingeckoHTTPError{status: http.StatusForbidden, body: cloudflareBanBody}),
+	}
+	for _, err := range bans {
+		if !isCoingeckoCloudflareBanError(err) {
+			t.Fatalf("expected Cloudflare ban detection for %v", err)
+		}
+	}
+
+	notBans := []error{
+		nil,
+		errors.New("exceeded the rate limit"), // application-level 429, must stay retryable
+		&coingeckoHTTPError{status: http.StatusTooManyRequests, body: `{"msg":"slow down"}`},
+		errors.New("could not find coin with the given id"),
+	}
+	for _, err := range notBans {
+		if isCoingeckoCloudflareBanError(err) {
+			t.Fatalf("did not expect Cloudflare ban detection for %v", err)
+		}
+	}
+}
+
+func TestMakeReq_CloudflareBanFastFails(t *testing.T) {
+	// A genuine 1015 ban must fast-fail immediately (no retry), unlike a plain 429.
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
+	defer func() { coingeckoThrottleBackoff = originalBackoff }()
+
+	var requests atomic.Int32
+	cg := &Coingecko{
+		httpClient: &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				requests.Add(1)
+				return &http.Response{
+					StatusCode: http.StatusForbidden,
+					Body:       io.NopCloser(strings.NewReader(cloudflareBanBody)),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		},
+	}
+
+	resp, err := cg.makeReq("http://coingecko.invalid/coins/x/market_chart", "market_chart", coingeckoPlanFree, priorityLow)
+	if err == nil {
+		t.Fatal("expected makeReq to fast-fail on a Cloudflare 1015 ban, got nil error")
+	}
+	if !isCoingeckoCloudflareBanError(err) {
+		t.Fatalf("expected a Cloudflare ban error, got %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response on ban, got %q", string(resp))
+	}
+	if got := int(requests.Load()); got != 1 {
+		t.Fatalf("expected exactly 1 request (no retry on a ban), got %d", got)
 	}
 }
 

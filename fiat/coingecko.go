@@ -295,6 +295,10 @@ func isCoingeckoThrottleError(err error) bool {
 		strings.Contains(lowerError, "throttled")
 }
 
+func isCoingeckoCloudflareBanError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "error code: 1015")
+}
+
 func isCoingeckoHistoricalTokenUpdateInProgressError(err error) bool {
 	return errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress)
 }
@@ -388,6 +392,14 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string, priority 
 				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "success"}).Inc()
 			}
 			return resp, err
+		}
+
+		if isCoingeckoCloudflareBanError(err) {
+			if cg.metrics != nil {
+				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "banned"}).Inc()
+			}
+			glog.Warningf("Coingecko makeReq %v Cloudflare rate-limit ban (1015), fast-failing: %v", url, err)
+			return nil, err
 		}
 		if !isCoingeckoThrottleError(err) {
 			if cg.metrics != nil {
@@ -781,6 +793,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	cg.cacheMu.Unlock()
 
 	hadFailures := false
+	var banErr error
 	for _, currency := range vs {
 		// get historical rates for each currency
 		var err error
@@ -789,10 +802,17 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
 			glog.Errorf("getHistoricalTicker %s-%s %v", cg.coin, currency, err)
+			if isCoingeckoCloudflareBanError(err) {
+				banErr = err
+				break
+			}
 		}
 	}
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
 		return err
+	}
+	if banErr != nil {
+		return banErr
 	}
 	if bootstrapInProgress && hadFailures {
 		return fmt.Errorf("coingecko historical bootstrap incomplete: one or more currency updates failed")
@@ -839,6 +859,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		cg.cacheMu.Unlock()
 		glog.Infof("Coingecko returned %d %s tokens ", len(platformIds), cg.coin)
 		count := 0
+		var banErr error
 		// get token historical rates
 		for tokenId, token := range platformIdsToTokens {
 			var err error
@@ -846,6 +867,10 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
+				if isCoingeckoCloudflareBanError(err) {
+					banErr = err
+					break
+				}
 			}
 			count++
 			if count%100 == 0 {
@@ -856,6 +881,12 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 				tickersToUpdate = make(map[uint]*common.CurrencyRatesTicker)
 				glog.Infof("Coingecko updated %d of %d token tickers", count, len(platformIds))
 			}
+		}
+		if banErr != nil {
+			if err := cg.storeTickers(tickersToUpdate); err != nil {
+				return err
+			}
+			return banErr
 		}
 	}
 
