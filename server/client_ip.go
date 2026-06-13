@@ -203,35 +203,18 @@ func parseCIDRList(envName string, raws []string) ([]netip.Prefix, error) {
 	return prefixes, nil
 }
 
-// resolveClientIP returns the per-IP rate-limit address for the request,
-// whether that attribution is trustworthy enough to add to an IP blocklist
-// (blockSafe), and whether it came from a forwarding header rather than the
-// bare TCP peer (fromHeader). trustedProxies governs X-Real-Ip;
-// cloudflareProxies governs CF-Connecting-* (empty disables verification and
-// trusts those headers from any peer, the legacy behavior). When neither
-// header is trusted for this peer it falls back to the bare TCP peer address.
-//
-// Only CF-Connecting-IP is trusted by default: it is the single CF-* request
-// header Cloudflare always overwrites with the verified visitor IP. Cloudflare
-// forwards a client-supplied CF-Connecting-IPv6 verbatim unless the zone runs
-// "Pseudo IPv4: Overwrite Headers", so CF-Connecting-IPv6 is honored only when
-// the operator opts in with trustPseudoIPv6 (which asserts that mode is on).
-// In Pseudo-IPv4 mode CF-Connecting-IP holds a synthetic pseudo-IPv4 and the
-// real client is in CF-Connecting-IPv6, so trustPseudoIPv6 also makes
-// CF-Connecting-IPv6 the preferred source.
-//
-// blockSafe centralizes the spoof-protection decision so callers never have to
-// re-inspect headers: a CF-Connecting-* value is block-safe only when peer
-// verification is enabled (otherwise it is forgeable); X-Real-Ip is block-safe
-// because it is only honored from a verified trusted proxy; the bare TCP peer is
-// block-safe unless the request also carried a CF-Connecting-* header we did not
-// trust (a spoof attempt, or a real but unrecognized Cloudflare edge -- blocking
-// the peer would be wrong in both cases).
-//
-// fromHeader lets callers recognize degenerate attribution: when it is false
-// and the address is the operator's own loopback/LAN/trusted proxy, the key
-// identifies shared infrastructure (or the operator's own tooling), not a
-// client.
+// resolveClientIP returns the per-IP rate-limit address for the request plus two
+// flags: blockSafe (the attribution is spoof-resistant enough to add to an IP
+// blocklist) and fromHeader (it came from a forwarding header rather than the
+// bare TCP peer, letting callers spot degenerate attribution onto the operator's
+// own infrastructure). trustedProxies governs X-Real-Ip; cloudflareProxies
+// governs the CF-Connecting-* headers (empty disables verification and trusts
+// them from any peer, the legacy behavior). By default only CF-Connecting-IP is
+// trusted -- the one CF-* header Cloudflare always overwrites with the verified
+// client IP; the otherwise-spoofable CF-Connecting-IPv6 is honored only with
+// trustPseudoIPv6 (see the field doc). When no header is trusted for this peer it
+// falls back to the bare TCP peer. The per-branch trust decisions are explained
+// inline below.
 func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix, trustPseudoIPv6 bool) (ip string, blockSafe, fromHeader bool) {
 	host := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
