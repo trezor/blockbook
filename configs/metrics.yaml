@@ -90,6 +90,31 @@ metrics:
     name: blockbook_websocket_max_connections_per_ip
     type: gauge
     help: Largest number of concurrent websocket connections held by any single client IP, the size of the biggest connection cluster
+  websocket_blocked_ips:
+    name: blockbook_websocket_blocked_ips
+    type: gauge
+    help: Distinct client keys (IPv4 address or IPv6 /64 prefix) currently blocked from opening websocket connections after tripping the per-connection message rate limit
+  websocket_blocked_connections:
+    name: blockbook_websocket_blocked_connections
+    type: counter
+    help: Websocket connection attempts rejected before upgrade because the client key was on the temporary IP blocklist
+  rest_api_rate_limit_rejections:
+    name: blockbook_rest_api_rate_limit_rejections
+    type: counter_vec
+    help: REST API requests rejected by the per-IP limiter before handler work
+    labels: [reason]
+  rest_api_active_ips:
+    name: blockbook_rest_api_active_ips
+    type: gauge
+    help: Distinct client keys with at least one in-flight REST API request
+  rest_api_max_active_requests_per_ip:
+    name: blockbook_rest_api_max_active_requests_per_ip
+    type: gauge
+    help: Largest number of in-flight REST API requests held by one client key
+  rest_api_blocked_ips:
+    name: blockbook_rest_api_blocked_ips
+    type: gauge
+    help: Distinct client keys currently blocked from REST API requests
   index_resync_duration:
     name: blockbook_index_resync_duration
     type: histogram

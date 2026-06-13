@@ -780,11 +780,15 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	if err != nil {
 		return nil, err
 	}
-	data, _, inCache, err := w.getXpubData(xd, 0, 1, AccountDetailsTxidHistory, &AddressFilter{
+	// Load only the derived addresses and their balances (cheap, shared cache).
+	// We deliberately do NOT request AccountDetailsTxidHistory: that loads every
+	// derived address's full txid history (unbounded, and ignoring the from/to
+	// window) into the cache before any cap could reject it. Instead query each
+	// address's txids within the requested height range, bounded to maxTxs+1, the
+	// same way GetBalanceHistory does for a single address.
+	data, _, inCache, err := w.getXpubData(xd, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
 		OnlyConfirmed: true,
-		FromHeight:    fromHeight,
-		ToHeight:      toHeight,
 	}, gap)
 	if err != nil {
 		return nil, err
@@ -795,18 +799,59 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 			selfAddrDesc[string(da[i].addrDesc)] = struct{}{}
 		}
 	}
+	// Bound the work: each transaction in the range costs a DB read below, so an
+	// unbounded scan over a heavy xpub is a cheap-to-send DoS. Load at most one
+	// more than the cap across all derived addresses so the overflow is
+	// detectable, then reject rather than silently truncate.
+	maxTxs := w.is.BalanceHistoryMaxTxs
+	remaining := maxInt
+	if maxTxs > 0 {
+		remaining = maxTxs + 1
+	}
+	type addrTxids struct {
+		addrDesc bchain.AddressDescriptor
+		txids    []string
+	}
+	var loaded []addrTxids
+	total := 0
+	rangeFilter := &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}
 	for _, da := range data.addresses {
 		for i := range da {
 			ad := &da[i]
-			txids := ad.txids
-			for txi := len(txids) - 1; txi >= 0; txi-- {
-				bh, err := w.balanceHistoryForTxid(ad.addrDesc, txids[txi].txid, fromUnix, toUnix, selfAddrDesc)
-				if err != nil {
-					return nil, err
+			if ad.balance == nil {
+				continue
+			}
+			txids, err := w.getAddressTxids(ad.addrDesc, false, rangeFilter, remaining)
+			if err != nil {
+				return nil, err
+			}
+			if len(txids) == 0 {
+				continue
+			}
+			loaded = append(loaded, addrTxids{addrDesc: ad.addrDesc, txids: txids})
+			total += len(txids)
+			if maxTxs > 0 {
+				if remaining -= len(txids); remaining <= 0 {
+					break
 				}
-				if bh != nil {
-					bhs = append(bhs, *bh)
-				}
+			}
+		}
+		if maxTxs > 0 && remaining <= 0 {
+			break
+		}
+	}
+	if maxTxs > 0 && total > maxTxs {
+		return nil, NewAPIError(fmt.Sprintf("balance history for xpub spans more than %d transactions in the requested range; narrow the from/to range", maxTxs), true)
+	}
+	for _, at := range loaded {
+		txids := at.txids
+		for txi := len(txids) - 1; txi >= 0; txi-- {
+			bh, err := w.balanceHistoryForTxid(at.addrDesc, txids[txi], fromUnix, toUnix, selfAddrDesc)
+			if err != nil {
+				return nil, err
+			}
+			if bh != nil {
+				bhs = append(bhs, *bh)
 			}
 		}
 	}

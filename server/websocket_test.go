@@ -9,6 +9,8 @@ import (
 	"errors"
 	"net/http"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -215,21 +217,88 @@ func TestParseTrustedProxies(t *testing.T) {
 	}
 }
 
-func TestGetIP(t *testing.T) {
+func TestParseCloudflareProxies(t *testing.T) {
+	const envName = "TEST_WS_CLOUDFLARE_IPS"
+	// unset and the builtin spellings resolve to the embedded edge list
+	for _, v := range []string{"", "builtin", "Default"} {
+		got, err := parseCloudflareProxies(envName, v)
+		if err != nil || len(got) == 0 {
+			t.Fatalf("parseCloudflareProxies(%q) = %d prefixes, err %v; want the embedded list, nil", v, len(got), err)
+		}
+		// spot-check long-standing Cloudflare ranges from cloudflare_ips.txt
+		if !prefixesContain(got, "104.16.0.0/13") || !prefixesContain(got, "2606:4700::/32") {
+			t.Fatalf("parseCloudflareProxies(%q) is missing known Cloudflare ranges: %v", v, got)
+		}
+	}
+	// a value starting with @ loads the list from a file: one CIDR per line,
+	// commas also accepted, blank lines and #-comments ignored
+	cidrFile := filepath.Join(t.TempDir(), "cf.txt")
+	if err := os.WriteFile(cidrFile, []byte("# test ranges\n203.0.113.0/24\n\n2400:cb00::/32, 198.51.100.0/24 # trailing comment\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fromFile, err := parseCloudflareProxies(envName, "@"+cidrFile)
+	if err != nil || len(fromFile) != 3 || !prefixesContain(fromFile, "203.0.113.0/24") || !prefixesContain(fromFile, "198.51.100.0/24") {
+		t.Fatalf("file list = %v, err %v; want the three prefixes from the file", fromFile, err)
+	}
+	// a missing file and a file with no CIDRs must fail startup rather than
+	// silently disabling verification
+	if _, err := parseCloudflareProxies(envName, "@"+filepath.Join(t.TempDir(), "missing.txt")); err == nil {
+		t.Fatal("missing CIDR file: expected error, got nil")
+	}
+	if err := os.WriteFile(cidrFile, []byte("# only comments\n\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseCloudflareProxies(envName, "@"+cidrFile); err == nil {
+		t.Fatal("CIDR file without CIDRs: expected error, got nil")
+	}
+	// the off spellings disable verification
+	for _, v := range []string{"off", "none", "false", "0", "disabled", " OFF "} {
+		got, err := parseCloudflareProxies(envName, v)
+		if err != nil || got != nil {
+			t.Fatalf("parseCloudflareProxies(%q) = %v, err %v; want nil, nil", v, got, err)
+		}
+	}
+	// a custom list replaces the built-in ranges
+	custom, err := parseCloudflareProxies(envName, "203.0.113.0/24, 2400:cb00::/32")
+	if err != nil || len(custom) != 2 || custom[0] != netip.MustParsePrefix("203.0.113.0/24") {
+		t.Fatalf("custom list = %v, err %v; want the two configured prefixes", custom, err)
+	}
+	// invalid CIDRs, IPv4-mapped notation, and a list with no CIDRs at all must
+	// fail rather than silently disabling verification
+	for _, v := range []string{"not-a-cidr", "::ffff:192.0.2.0/120", ", ,"} {
+		if _, err := parseCloudflareProxies(envName, v); err == nil {
+			t.Fatalf("parseCloudflareProxies(%q) expected error, got nil", v)
+		}
+	}
+}
+
+func TestResolveClientIPLegacyAndTrustedProxy(t *testing.T) {
 	tests := []struct {
 		name       string
 		headers    map[string]string
 		remoteAddr string
 		trusted    []netip.Prefix
+		cloudflare []netip.Prefix
+		pseudoIPv6 bool
 		want       string
 	}{
 		{
-			name: "cloudflare ipv6 is preferred",
+			name: "cloudflare ip is preferred over spoofable ipv6 header by default",
 			headers: map[string]string{
 				"CF-Connecting-IPv6": "2001:db8::1",
 				"CF-Connecting-IP":   "192.0.2.10",
 			},
 			remoteAddr: "198.51.100.1:12345",
+			want:       "192.0.2.10",
+		},
+		{
+			name: "cloudflare ipv6 preferred only with pseudo-ipv4 opt-in",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "2001:db8::1",
+				"CF-Connecting-IP":   "192.0.2.10",
+			},
+			remoteAddr: "198.51.100.1:12345",
+			pseudoIPv6: true,
 			want:       "2001:db8::1",
 		},
 		{
@@ -329,11 +398,20 @@ func TestGetIP(t *testing.T) {
 			want:       "198.51.100.6",
 		},
 		{
-			name: "link-local IPv6 peer with zone is trusted and zone is stripped from key",
+			name: "link-local IPv6 peer is NOT implicitly trusted; X-Real-Ip ignored",
 			headers: map[string]string{
 				"X-Real-Ip": "203.0.113.60",
 			},
 			remoteAddr: "[fe80::1%eth0]:12345",
+			want:       "fe80::1", // header ignored, falls back to the (zone-stripped) peer
+		},
+		{
+			name: "link-local IPv6 peer trusted only when listed explicitly; zone stripped for matching",
+			headers: map[string]string{
+				"X-Real-Ip": "203.0.113.60",
+			},
+			remoteAddr: "[fe80::1%eth0]:12345",
+			trusted:    []netip.Prefix{netip.MustParsePrefix("fe80::1/128")},
 			want:       "203.0.113.60",
 		},
 		{
@@ -353,11 +431,336 @@ func TestGetIP(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			got := getIP(r, tt.trusted)
+			got, _, _ := resolveClientIP(r, tt.trusted, tt.cloudflare, tt.pseudoIPv6)
 			if got != tt.want {
-				t.Fatalf("getIP() = %q, want %q", got, tt.want)
+				t.Fatalf("resolveClientIP() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// mustParsePrefixes is a test helper that parses CIDR strings into prefixes.
+func mustParsePrefixes(t *testing.T, cidrs ...string) []netip.Prefix {
+	t.Helper()
+	out := make([]netip.Prefix, 0, len(cidrs))
+	for _, c := range cidrs {
+		out = append(out, netip.MustParsePrefix(c))
+	}
+	return out
+}
+
+func TestResolveClientIPCloudflareVerification(t *testing.T) {
+	cf := mustParsePrefixes(t, "203.0.113.0/24", "2400:cb00::/32")
+	trusted := mustParsePrefixes(t, "198.51.100.0/24")
+	tests := []struct {
+		name          string
+		headers       map[string]string
+		remoteAddr    string
+		trusted       []netip.Prefix
+		cloudflare    []netip.Prefix
+		pseudoIPv6    bool
+		want          string
+		wantBlockSafe bool
+	}{
+		{
+			name:          "verified cloudflare peer: CF header trusted and block-safe",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:    "203.0.113.5:443", // inside configured CF range
+			cloudflare:    cf,
+			want:          "192.0.2.10",
+			wantBlockSafe: true,
+		},
+		{
+			name: "spoofed CF-Connecting-IPv6 ignored by default; CF-Connecting-IP used",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "2001:db8:dead::1",
+				"CF-Connecting-IP":   "192.0.2.10",
+			},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "192.0.2.10",
+			wantBlockSafe: true,
+		},
+		{
+			name: "pseudo-ipv4 opt-in: CF-Connecting-IPv6 preferred over synthetic CF-Connecting-IP",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "2001:db8:beef::1",
+				"CF-Connecting-IP":   "192.0.2.10",
+			},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			pseudoIPv6:    true,
+			want:          "2001:db8:beef::1",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "verified peer, only spoofed CF-Connecting-IPv6, default: header ignored, peer not block-safe",
+			headers:       map[string]string{"CF-Connecting-IPv6": "2001:db8:dead::1"},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "203.0.113.5",
+			wantBlockSafe: false, // an untrusted CF header was present: do not block the peer
+		},
+		{
+			name: "pseudo-ipv4 opt-in falls back to CF-Connecting-IP when IPv6 header absent",
+			headers: map[string]string{
+				"CF-Connecting-IP": "192.0.2.10",
+			},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			pseudoIPv6:    true,
+			want:          "192.0.2.10",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "unverified public peer: CF header ignored, peer not block-safe (spoof guard)",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:    "198.51.100.7:443", // NOT a CF range
+			cloudflare:    cf,
+			want:          "198.51.100.7",
+			wantBlockSafe: false, // an untrusted CF header was present: do not block the peer
+		},
+		{
+			name:          "loopback proxy fronting cloudflare: CF header trusted and block-safe",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.20"},
+			remoteAddr:    "127.0.0.1:5000",
+			cloudflare:    cf,
+			want:          "192.0.2.20",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "verification disabled: CF header trusted for rate limit but NOT block-safe",
+			headers:       map[string]string{"CF-Connecting-IP": "192.0.2.30"},
+			remoteAddr:    "198.51.100.7:443",
+			cloudflare:    nil,
+			want:          "192.0.2.30",
+			wantBlockSafe: false, // spoofable without peer verification
+		},
+		{
+			name:          "native IPv6 in CF-Connecting-IP without IPv6 header",
+			headers:       map[string]string{"CF-Connecting-IP": "2001:db8::99"},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "2001:db8::99",
+			wantBlockSafe: true,
+		},
+		{
+			name: "malformed CF-Connecting-IPv6 falls through to CF-Connecting-IP",
+			headers: map[string]string{
+				"CF-Connecting-IPv6": "not-an-ip",
+				"CF-Connecting-IP":   "192.0.2.40",
+			},
+			remoteAddr:    "203.0.113.5:443",
+			cloudflare:    cf,
+			want:          "192.0.2.40",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "X-Real-Ip from trusted proxy is block-safe",
+			headers:       map[string]string{"X-Real-Ip": "192.0.2.50"},
+			remoteAddr:    "198.51.100.7:443", // inside configured trusted-proxy range
+			trusted:       trusted,
+			want:          "192.0.2.50",
+			wantBlockSafe: true,
+		},
+		{
+			name:          "direct public peer with no forwarding header is block-safe",
+			remoteAddr:    "192.0.2.60:443",
+			cloudflare:    cf,
+			want:          "192.0.2.60",
+			wantBlockSafe: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &http.Request{Header: make(http.Header), RemoteAddr: tt.remoteAddr}
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
+			}
+			got, blockSafe, _ := resolveClientIP(r, tt.trusted, tt.cloudflare, tt.pseudoIPv6)
+			if got != tt.want || blockSafe != tt.wantBlockSafe {
+				t.Fatalf("resolveClientIP() = %q, %v, want %q, %v", got, blockSafe, tt.want, tt.wantBlockSafe)
+			}
+		})
+	}
+}
+
+func TestResolveClientIPFromHeader(t *testing.T) {
+	cf := mustParsePrefixes(t, "203.0.113.0/24")
+	tests := []struct {
+		name           string
+		headers        map[string]string
+		remoteAddr     string
+		wantFromHeader bool
+	}{
+		{
+			name:           "CF header honored from verified peer",
+			headers:        map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:     "203.0.113.5:443",
+			wantFromHeader: true,
+		},
+		{
+			name:           "X-Real-Ip honored from loopback proxy",
+			headers:        map[string]string{"X-Real-Ip": "192.0.2.11"},
+			remoteAddr:     "127.0.0.1:5000",
+			wantFromHeader: true,
+		},
+		{
+			name:           "untrusted CF header falls back to bare peer",
+			headers:        map[string]string{"CF-Connecting-IP": "192.0.2.10"},
+			remoteAddr:     "198.51.100.7:443",
+			wantFromHeader: false,
+		},
+		{
+			name:           "bare loopback peer without headers",
+			remoteAddr:     "127.0.0.1:5000",
+			wantFromHeader: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &http.Request{Header: make(http.Header), RemoteAddr: tt.remoteAddr}
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
+			}
+			if _, _, fromHeader := resolveClientIP(r, nil, cf, false); fromHeader != tt.wantFromHeader {
+				t.Fatalf("resolveClientIP() fromHeader = %v, want %v", fromHeader, tt.wantFromHeader)
+			}
+		})
+	}
+}
+
+func TestRateLimitKey(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"192.0.2.10", "192.0.2.10"},
+		{"::ffff:192.0.2.10", "192.0.2.10"}, // IPv4-mapped IPv6 unmaps to the IPv4 key
+		{"2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64"},
+		{"2001:db8:1:2::ffff", "2001:db8:1:2::/64"},
+		{"2001:db8:1:3::1", "2001:db8:1:3::/64"},
+		{"not-an-ip", "not-an-ip"},
+	}
+	for _, tt := range tests {
+		if got := rateLimitKey(tt.in); got != tt.want {
+			t.Fatalf("rateLimitKey(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	// addresses within the same /64 must share a key, distinct /64s must not
+	if rateLimitKey("2001:db8:1:2::1") != rateLimitKey("2001:db8:1:2::2") {
+		t.Fatal("addresses in the same /64 should share a rate-limit key")
+	}
+	if rateLimitKey("2001:db8:1:2::1") == rateLimitKey("2001:db8:1:3::1") {
+		t.Fatal("addresses in different /64s should not share a rate-limit key")
+	}
+}
+
+func TestBlockKey(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"192.0.2.10", "192.0.2.10"},                     // IPv4 verbatim (== rateLimitKey)
+		{"::ffff:192.0.2.10", "192.0.2.10"},              // IPv4-mapped IPv6 unmaps to the IPv4 key
+		{"2001:db8:1:2:3:4:5:6", "2001:db8:1:2:3:4:5:6"}, // IPv6 kept at the full /128
+		{"2001:db8:1:2::ffff", "2001:db8:1:2::ffff"},
+		{"[2001:db8:1:2::1%eth0]", "[2001:db8:1:2::1%eth0]"}, // brackets/zone are not a bare addr; verbatim
+		{"2001:db8:1:2::1%eth0", "2001:db8:1:2::1"},          // zone stripped from a bare addr
+		{"not-an-ip", "not-an-ip"},
+	}
+	for _, tt := range tests {
+		if got := blockKey(tt.in); got != tt.want {
+			t.Fatalf("blockKey(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	// The whole point of decoupling: two addresses in one /64 share a rate-limit
+	// key (so the limiter aggregates) but get distinct block keys (so a block on
+	// one does not take out the other).
+	a, b := "2001:db8:1:2::1", "2001:db8:1:2::2"
+	if rateLimitKey(a) != rateLimitKey(b) {
+		t.Fatal("same /64 should share a rate-limit key")
+	}
+	if blockKey(a) == blockKey(b) {
+		t.Fatal("distinct /128s in the same /64 must get distinct block keys")
+	}
+	// IPv4 block key must equal its rate-limit key (IPv4 behavior unchanged).
+	if blockKey("192.0.2.10") != rateLimitKey("192.0.2.10") {
+		t.Fatal("IPv4 block key should equal its rate-limit key")
+	}
+}
+
+func TestIsBlockableKey(t *testing.T) {
+	cf := mustParsePrefixes(t, "203.0.113.0/24")
+	trusted := mustParsePrefixes(t, "198.51.100.0/24")
+	tests := []struct {
+		ip   string
+		want bool
+	}{
+		{"192.0.2.10", true},          // ordinary public address
+		{"2001:db8:1:2::5", true},     // ordinary public IPv6 address
+		{"127.0.0.1", false},          // loopback
+		{"10.1.2.3", false},           // RFC1918
+		{"192.168.1.1", false},        // RFC1918
+		{"169.254.0.1", false},        // link-local
+		{"203.0.113.9", false},        // inside Cloudflare range
+		{"198.51.100.9", false},       // inside trusted-proxy range
+		{"::ffff:10.1.2.3", false},    // IPv4-mapped private unmaps before the checks
+		{"::ffff:203.0.113.9", false}, // IPv4-mapped form of a Cloudflare-range address
+		{"not-an-ip", false},          // unparseable
+	}
+	for _, tt := range tests {
+		if got := isBlockableKey(tt.ip, trusted, cf); got != tt.want {
+			t.Fatalf("isBlockableKey(%q) = %v, want %v", tt.ip, got, tt.want)
+		}
+	}
+}
+
+func TestConnMessageRate(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	m := newConnMessageRate(10 * time.Minute)
+
+	// 100 messages in the same instant accumulate.
+	var last int
+	for i := 0; i < 100; i++ {
+		last = m.observe(base)
+	}
+	if last != 100 {
+		t.Fatalf("after 100 messages at one instant, count = %d, want 100", last)
+	}
+
+	// Messages spread across the window keep accumulating (sliding, not reset).
+	m2 := newConnMessageRate(10 * time.Minute)
+	count := 0
+	for i := 0; i < 60; i++ {
+		count = m2.observe(base.Add(time.Duration(i) * 5 * time.Second)) // 0..295s
+	}
+	if count != 60 {
+		t.Fatalf("60 messages within the window, count = %d, want 60", count)
+	}
+
+	// Once the full window has elapsed since the first message, old buckets drop
+	// out of the trailing window.
+	after := m2.observe(base.Add(10*time.Minute + time.Second))
+	if after >= 60 {
+		t.Fatalf("after the window elapsed the count should drop, got %d", after)
+	}
+
+	// A gap longer than the whole window resets the counter.
+	reset := m2.observe(base.Add(time.Hour))
+	if reset != 1 {
+		t.Fatalf("after a gap longer than the window, count = %d, want 1", reset)
+	}
+}
+
+func TestConnMessageRateClockSkew(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	m := newConnMessageRate(10 * time.Minute)
+	m.observe(base.Add(time.Minute))
+	// A backwards clock jump must not panic or rewrite history; it folds into the
+	// current bucket.
+	if got := m.observe(base); got != 2 {
+		t.Fatalf("backwards clock observe = %d, want 2", got)
 	}
 }
 

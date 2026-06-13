@@ -2062,6 +2062,48 @@ func Test_HTTPBalanceHistory_GroupByAndInvalidCurrency_BitcoinType(t *testing.T)
 	}
 }
 
+func Test_HTTPBalanceHistory_MaxTxsCap_BitcoinType(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	// This address has 2 transactions in the fixture.
+	addr := "2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"
+
+	// With the cap disabled (0), the full history is returned.
+	s.is.BalanceHistoryMaxTxs = 0
+	var full []balanceHistoryResponse
+	mustGetJSON(t, ts.URL+"/api/v2/balancehistory/"+addr, http.StatusOK, &full)
+	if len(full) < 2 {
+		t.Fatalf("expected at least 2 history entries with the cap disabled, got %d", len(full))
+	}
+
+	// With a cap below the address's transaction count, the request is rejected
+	// with a public 400 error rather than doing the unbounded scan.
+	s.is.BalanceHistoryMaxTxs = 1
+	var apiErr struct {
+		Error string `json:"error"`
+	}
+	mustGetJSON(t, ts.URL+"/api/v2/balancehistory/"+addr, http.StatusBadRequest, &apiErr)
+	if !strings.Contains(apiErr.Error, "narrow the from/to range") {
+		t.Fatalf("unexpected address error message: %q", apiErr.Error)
+	}
+
+	// The xpub path is capped too, and its public cap error is surfaced
+	// directly (not masked by the address fallback).
+	var xpubErr struct {
+		Error string `json:"error"`
+	}
+	mustGetJSON(t, ts.URL+"/api/v2/balancehistory/"+dbtestdata.Xpub, http.StatusBadRequest, &xpubErr)
+	if !strings.Contains(xpubErr.Error, "xpub spans more than") {
+		t.Fatalf("unexpected xpub error message: %q", xpubErr.Error)
+	}
+}
+
 func Test_WebsocketFiatRates_SubscribeBroadcastAndUnsubscribe(t *testing.T) {
 	parser, chain := setupChain(t)
 

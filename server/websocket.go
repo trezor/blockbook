@@ -3,9 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -34,14 +32,9 @@ const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 const maxWebsocketPendingRequests = 48
 const maxWebsocketActiveRequests = 2048
-const maxWebsocketConnectionAttemptsPerIP = 64
-const maxWebsocketConnectionsPerIP = 128
 const maxWebsocketEstimateFeeBlocks = 32
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
-const websocketConnectionAttemptWindow = time.Minute
-const websocketConnectionLimiterTTL = 10 * time.Minute
-const websocketConnectionLimiterCleanupInterval = time.Minute
 const websocketLogPreviewBytes = 256
 
 // allRates is a special "currency" parameter that means all available currencies
@@ -54,6 +47,14 @@ var (
 	connectionCounter uint64
 )
 
+// websocketChannel is a single client connection. ipKey is the per-IP
+// rate-limit key derived from ip (the IPv4 address, or an IPv6 address
+// aggregated to its /64); blockKey is the IP-blocklist key (the IPv4 address,
+// or the full IPv6 /128) — kept narrower than ipKey so a hard block does not
+// take out a whole shared /64; blockable records whether blockKey is a
+// trustworthy, non-infrastructure key that is safe to add to the IP blocklist;
+// messageRate is the per-connection sliding-window message counter (nil when the
+// rate limit is disabled). All are touched only by ServeHTTP/inputLoop.
 type websocketChannel struct {
 	id                           uint64
 	requests                     uint64 // total requests received on this connection, accessed atomically
@@ -61,6 +62,10 @@ type websocketChannel struct {
 	out                          chan *WsRes
 	pendingRequests              chan struct{}
 	ip                           string
+	ipKey                        string
+	blockKey                     string
+	blockable                    bool
+	messageRate                  *connMessageRate
 	requestHeader                http.Header
 	alive                        bool
 	aliveLock                    sync.Mutex
@@ -105,7 +110,29 @@ type WebsocketServer struct {
 	allowedOrigins               map[string]struct{}
 	allowedRpcCallTo             map[string]struct{}
 	trustedProxyPrefixes         []netip.Prefix
-	websocketLimiter             *websocketConnectionLimiter
+	// cloudflarePrefixes gates trust of the CF-Connecting-* headers: when
+	// non-empty, those headers are honored only when the TCP peer is inside one
+	// of these ranges (or a loopback/private proxy). Empty disables verification
+	// and falls back to the legacy "trust CF headers from any peer" behavior.
+	cloudflarePrefixes []netip.Prefix
+	// trustPseudoIPv6 honors the (otherwise client-spoofable) CF-Connecting-IPv6
+	// header; only safe with Cloudflare "Pseudo IPv4: Overwrite Headers" on.
+	trustPseudoIPv6 bool
+	// messageRateLimit / messageRateWindow bound how many messages a single
+	// connection may send in a trailing window before it is closed; 0 disables.
+	// ipBlockDuration is how long an offending client key is blocked from
+	// opening new connections; 0 disables blocking (the connection is still
+	// closed on breach).
+	messageRateLimit  int
+	messageRateWindow time.Duration
+	ipBlockDuration   time.Duration
+	// ipBlockEnabled is the single switch for the IP blocklist: true only when
+	// the message rate limit can produce breaches (messageRateLimit > 0) and
+	// blocking is configured (ipBlockDuration > 0). When false the per-connection
+	// block check, blockability computation, and maintenance sweep are all
+	// skipped, so disabling the feature costs nothing on the hot paths.
+	ipBlockEnabled   bool
+	websocketLimiter *websocketConnectionLimiter
 	// Shutdown coordination: protects shuttingDown + activeChannels and gates
 	// trackWork so RocksDB cannot be closed while a WS goroutine is mid-read.
 	shutdownMu     sync.Mutex
@@ -113,18 +140,6 @@ type WebsocketServer struct {
 	activeChannels map[*websocketChannel]struct{}
 	activeRequests int
 	requestWg      sync.WaitGroup
-}
-
-type websocketClientLimit struct {
-	active   int
-	attempts []time.Time
-	lastSeen time.Time
-}
-
-type websocketConnectionLimiter struct {
-	mux         sync.Mutex
-	clients     map[string]*websocketClientLimit
-	lastCleanup time.Time
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -173,19 +188,32 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		}
 		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
 	}
-	trustedEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_TRUSTED_PROXIES"
-	prefixes, err := parseTrustedProxies(trustedEnvName, os.Getenv(trustedEnvName))
+	clientIPCfg, err := readClientIPConfig(is.GetNetwork())
 	if err != nil {
 		return nil, err
 	}
-	s.trustedProxyPrefixes = prefixes
-	if len(prefixes) > 0 {
-		glog.Info("Trusted proxy CIDRs: ", prefixes)
+	s.trustedProxyPrefixes = clientIPCfg.trustedProxies
+	if len(clientIPCfg.trustedProxies) > 0 {
+		glog.Info("Trusted proxy CIDRs (", clientIPCfg.trustedEnvName, "): ", clientIPCfg.trustedProxies)
+	}
+	s.cloudflarePrefixes = clientIPCfg.cloudflarePrefixes
+	if len(clientIPCfg.cloudflarePrefixes) > 0 {
+		glog.Info("Cloudflare peer verification enabled for CF-Connecting-* headers (", clientIPCfg.cloudflareEnvName, "; ", len(clientIPCfg.cloudflarePrefixes), " CIDRs)")
+	} else {
+		glog.Warning("Cloudflare peer verification disabled (", clientIPCfg.cloudflareEnvName, "=off); CF-Connecting-* headers are trusted from any peer")
+	}
+	s.trustPseudoIPv6 = clientIPCfg.trustPseudoIPv6
+	if clientIPCfg.trustPseudoIPv6 {
+		glog.Info("Cloudflare Pseudo-IPv4 mode enabled (", clientIPCfg.pseudoIPv6EnvName, "); CF-Connecting-IPv6 is honored as the client IP (requires Cloudflare \"Pseudo IPv4: Overwrite Headers\")")
+	}
+	if err := s.configureMessageRateLimit(is.GetNetwork()); err != nil {
+		return nil, err
 	}
 	if s.metrics != nil {
 		s.metrics.WebsocketNewBlockTxsSubscriptions.Set(0)
 		s.metrics.WebsocketUniqueIPs.Set(0)
 		s.metrics.WebsocketMaxConnectionsPerIP.Set(0)
+		s.metrics.WebsocketBlockedIPs.Set(0)
 	}
 	go s.runWebsocketLimiterMaintenance(websocketConnectionLimiterCleanupInterval)
 	return s, nil
@@ -217,42 +245,6 @@ func parseAllowedOrigins(originEnvName, envAllowedOrigins string) map[string]str
 	return allowedOrigins
 }
 
-// parseTrustedProxies parses a comma-separated list of CIDRs that augment the
-// loopback/RFC1918/link-local defaults for trusting X-Real-Ip. Any prefix
-// broad enough to cover meaningful chunks of the public internet is rejected
-// with an error so misconfiguration fails fast at startup rather than
-// silently turning X-Real-Ip into an IP-spoofing primitive.
-func parseTrustedProxies(envName, value string) ([]netip.Prefix, error) {
-	if strings.TrimSpace(value) == "" {
-		return nil, nil
-	}
-	const minIPv4Bits = 8
-	const minIPv6Bits = 16
-	var prefixes []netip.Prefix
-	for _, raw := range strings.Split(value, ",") {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		p, err := netip.ParsePrefix(raw)
-		if err != nil {
-			return nil, fmt.Errorf("%s: invalid CIDR %q: %w", envName, raw, err)
-		}
-		if p.Addr().Is4In6() {
-			return nil, fmt.Errorf("%s: refusing IPv4-mapped CIDR %q; use IPv4 CIDR notation", envName, raw)
-		}
-		bits := p.Bits()
-		if p.Addr().Is4() && bits < minIPv4Bits {
-			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv4)", envName, raw, bits, minIPv4Bits)
-		}
-		if p.Addr().Is6() && !p.Addr().Is4In6() && bits < minIPv6Bits {
-			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv6)", envName, raw, bits, minIPv6Bits)
-		}
-		prefixes = append(prefixes, p.Masked())
-	}
-	return prefixes, nil
-}
-
 func (s *WebsocketServer) checkOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -277,191 +269,6 @@ func normalizeOrigin(origin string) (string, bool) {
 	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host), true
 }
 
-func newWebsocketConnectionLimiter() *websocketConnectionLimiter {
-	return &websocketConnectionLimiter{
-		clients: make(map[string]*websocketClientLimit),
-	}
-}
-
-func (l *websocketConnectionLimiter) accept(ip string, now time.Time) (bool, string) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-
-	l.cleanupLocked(now)
-	client := l.clients[ip]
-	if client == nil {
-		client = &websocketClientLimit{}
-		l.clients[ip] = client
-	}
-	client.lastSeen = now
-	client.trimAttempts(now)
-
-	if client.active >= maxWebsocketConnectionsPerIP {
-		return false, "connection_limit"
-	}
-	if len(client.attempts) >= maxWebsocketConnectionAttemptsPerIP {
-		return false, "connection_attempt_limit"
-	}
-
-	client.attempts = append(client.attempts, now)
-	client.active++
-	return true, ""
-}
-
-func (l *websocketConnectionLimiter) release(ip string, now time.Time) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-
-	client := l.clients[ip]
-	if client == nil {
-		return
-	}
-	if client.active > 0 {
-		client.active--
-	}
-	client.lastSeen = now
-	l.cleanupLocked(now)
-}
-
-func (l *websocketConnectionLimiter) cleanupLocked(now time.Time) {
-	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < websocketConnectionLimiterCleanupInterval {
-		return
-	}
-	l.sweepLocked(now)
-}
-
-func (l *websocketConnectionLimiter) sweepLocked(now time.Time) {
-	l.lastCleanup = now
-	for ip, client := range l.clients {
-		client.trimAttempts(now)
-		if client.active == 0 && now.Sub(client.lastSeen) > websocketConnectionLimiterTTL {
-			delete(l.clients, ip)
-		}
-	}
-}
-
-// sweep evicts TTL-expired idle entries unconditionally. Used by the
-// background ticker so that idle servers don't retain stale entries.
-func (l *websocketConnectionLimiter) sweep(now time.Time) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-	l.sweepLocked(now)
-}
-
-// stats returns the number of distinct client IPs that currently hold at least
-// one active websocket connection and the largest per-IP connection count. The
-// snapshot is taken under the limiter lock; idle entries retained for the TTL
-// window are skipped so the numbers track live connections, not recent history.
-func (l *websocketConnectionLimiter) stats() (uniqueActiveIPs int, maxConnectionsPerIP int) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-	for _, client := range l.clients {
-		if client.active <= 0 {
-			continue
-		}
-		uniqueActiveIPs++
-		if client.active > maxConnectionsPerIP {
-			maxConnectionsPerIP = client.active
-		}
-	}
-	return uniqueActiveIPs, maxConnectionsPerIP
-}
-
-// runWebsocketLimiterMaintenance ticks every interval to sweep TTL-expired
-// entries from the connection limiter and to publish the per-IP clustering
-// gauges. It does not terminate; it is started once per WebsocketServer at
-// construction time and runs for the lifetime of the process.
-func (s *WebsocketServer) runWebsocketLimiterMaintenance(interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for now := range ticker.C {
-		s.websocketLimiter.sweep(now)
-		if s.metrics != nil {
-			uniqueIPs, maxConnectionsPerIP := s.websocketLimiter.stats()
-			s.metrics.WebsocketUniqueIPs.Set(float64(uniqueIPs))
-			s.metrics.WebsocketMaxConnectionsPerIP.Set(float64(maxConnectionsPerIP))
-		}
-	}
-}
-
-func (client *websocketClientLimit) trimAttempts(now time.Time) {
-	cutoff := now.Add(-websocketConnectionAttemptWindow)
-	i := 0
-	for i < len(client.attempts) && client.attempts[i].Before(cutoff) {
-		i++
-	}
-	if i > 0 {
-		copy(client.attempts, client.attempts[i:])
-		client.attempts = client.attempts[:len(client.attempts)-i]
-	}
-}
-
-func getIP(r *http.Request, trustedProxies []netip.Prefix) string {
-	if len(trustedProxies) == 0 {
-		if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
-			return ip
-		}
-		if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
-			return ip
-		}
-	}
-
-	host := r.RemoteAddr
-	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		host = h
-	}
-	remote, remoteOK := parseAddr(host)
-
-	// Trust X-Real-Ip only when the TCP peer is on a private/loopback network
-	// (an upstream proxy on the same host or LAN) or in a configured trusted
-	// CIDR. For direct internet peers the header is attacker-controlled and
-	// would let any client spoof their IP past the per-IP rate limiter.
-	if remoteOK && isTrustedProxy(remote, trustedProxies) {
-		if ip, ok := parseIP(r.Header.Get("X-Real-Ip")); ok {
-			return ip
-		}
-	}
-
-	if remoteOK {
-		return remote.String()
-	}
-	return strings.TrimSpace(r.RemoteAddr)
-}
-
-func parseIP(value string) (string, bool) {
-	addr, ok := parseAddr(value)
-	if !ok {
-		return "", false
-	}
-	return addr.String(), true
-}
-
-func parseAddr(value string) (netip.Addr, bool) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return netip.Addr{}, false
-	}
-	addr, err := netip.ParseAddr(value)
-	if err != nil {
-		return netip.Addr{}, false
-	}
-	// Strip IPv6 zone identifier so that rate-limit keys are zone-free and
-	// netip.Prefix.Contains matches unzoned prefixes against link-local peers.
-	return addr.WithZone(""), true
-}
-
-func isTrustedProxy(addr netip.Addr, extras []netip.Prefix) bool {
-	if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() {
-		return true
-	}
-	for _, p := range extras {
-		if p.Contains(addr) {
-			return true
-		}
-	}
-	return false
-}
-
 func getWebsocketPayloadPreview(d []byte) string {
 	if len(d) <= websocketLogPreviewBytes {
 		return string(d)
@@ -482,10 +289,42 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server shutting down", http.StatusServiceUnavailable)
 		return
 	}
-	ip := getIP(r, s.trustedProxyPrefixes)
+	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes, s.trustPseudoIPv6)
+	ipKey := rateLimitKey(ip)
+	// blockKey/blockable are only meaningful (and only computed) when the IP
+	// blocklist is enabled, so the blockKey derivation and the O(prefixes)
+	// isBlockableKey scan are skipped when disabled. blockKey keeps IPv6 at the
+	// full /128 so a block never takes out a shared /64 (the connection limiter
+	// keyed on ipKey still aggregates to /64).
+	bKey := ""
+	blockable := false
+	if s.ipBlockEnabled {
+		bKey = blockKey(ip)
+		blockable = blockSafe && isBlockableKey(ip, s.trustedProxyPrefixes, s.cloudflarePrefixes)
+	}
+
+	// Reject keys that are on the temporary IP blocklist before doing any
+	// upgrade work. Checked ahead of the connection limiter so a blocked client
+	// cannot keep consuming attempt slots.
+	if s.ipBlockEnabled {
+		if blocked, rejected := s.is.IsWsIPBlocked(bKey, time.Now()); blocked {
+			if s.metrics != nil {
+				s.metrics.WebsocketBlockedConnections.Inc()
+			}
+			// A blocked client may hammer reconnects for the whole block
+			// duration; log the first rejection and then every 1000th instead of
+			// one line per attempt.
+			if rejected == 1 || rejected%1000 == 0 {
+				glog.Warning("Websocket connection rejected, ", ip, ", ip_blocked (attempt ", rejected, ")")
+			}
+			http.Error(w, "Too many websocket connections", http.StatusTooManyRequests)
+			return
+		}
+	}
+
 	limited := false
 	if s.websocketLimiter != nil {
-		ok, reason := s.websocketLimiter.accept(ip, time.Now())
+		ok, reason := s.websocketLimiter.accept(ipKey, time.Now())
 		if !ok {
 			if s.metrics != nil {
 				s.metrics.WebsocketConnectionRejections.With(common.Labels{"reason": reason}).Inc()
@@ -499,7 +338,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		if limited {
-			s.websocketLimiter.release(ip, time.Now())
+			s.websocketLimiter.release(ipKey, time.Now())
 		}
 		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
@@ -511,8 +350,18 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		out:             make(chan *WsRes, outChannelSize),
 		pendingRequests: make(chan struct{}, maxWebsocketPendingRequests),
 		ip:              ip,
+		ipKey:           ipKey,
+		blockKey:        bKey,
+		blockable:       blockable,
 		requestHeader:   r.Header,
 		alive:           true,
+	}
+	if s.messageRateLimit > 0 {
+		c.messageRate = newConnMessageRate(s.messageRateWindow)
+		// count ping/pong control frames too; gorilla handles them inside
+		// ReadMessage so they never reach inputLoop and would otherwise be a
+		// free flood channel
+		s.installControlFrameRateLimit(c)
 	}
 	if s.is.WsGetAccountInfoLimit > 0 {
 		c.getAddressInfoDescriptors = make(map[string]struct{})
@@ -520,7 +369,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.registerChannel(c) {
 		conn.Close()
 		if limited {
-			s.websocketLimiter.release(ip, time.Now())
+			s.websocketLimiter.release(ipKey, time.Now())
 		}
 		return
 	}
@@ -704,6 +553,15 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 				return
 			}
 			atomic.AddUint64(&c.requests, 1)
+			if c.messageRate != nil {
+				// Breach on the message that pushes the trailing-window count past
+				// the limit, so exactly messageRateLimit messages are allowed per
+				// window (matches the "sends more than" contract).
+				if count := c.messageRate.observe(time.Now()); count > s.messageRateLimit {
+					s.onMessageRateBreach(c, count)
+					return
+				}
+			}
 			if !c.acquireRequestSlot() {
 				glog.Warning("Client ", c.id, " exceeded pending websocket request limit, ", c.ip)
 				s.closeChannel(c, "pending_requests_limit")
@@ -732,14 +590,11 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 			glog.Error("Binary message received from ", c.id, ", ", c.ip)
 			s.closeChannel(c, "protocol_error")
 			return
-		case websocket.PingMessage:
-			c.conn.WriteControl(websocket.PongMessage, nil, time.Now().Add(defaultTimeout))
-		case websocket.CloseMessage:
-			s.closeChannel(c, "client_close")
-			return
-		case websocket.PongMessage:
-			// do nothing
 		}
+		// ReadMessage returns only data frames; ping/pong/close control frames
+		// are consumed inside gorilla and dispatched to the connection's
+		// handlers (see installControlFrameRateLimit), surfacing here only as a
+		// read error.
 	}
 }
 
@@ -772,7 +627,7 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeAddresses(c)
 	s.unsubscribeFiatRates(c)
 	if s.websocketLimiter != nil {
-		s.websocketLimiter.release(c.ip, time.Now())
+		s.websocketLimiter.release(c.ipKey, time.Now())
 	}
 	s.unregisterChannel(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
