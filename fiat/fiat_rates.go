@@ -470,18 +470,21 @@ func logFiatRatesDownloaderError(message string, err error) {
 		glog.Errorf("%sno data from provider", message)
 		return
 	}
-	if isCoingeckoThrottleRetriesExhaustedError(err) {
-		glog.Warning(message, err)
-		return
-	}
 	glog.Error(message, err)
 }
 
-// RunDownloader periodically downloads current (every 15 minutes) and historical (once a day) tickers
+const historicalPollInterval = time.Minute
+
+const historicalBanBackoff = 30 * time.Minute
+
 func (fr *FiatRates) RunDownloader() error {
 	glog.Infof("Starting %v FiatRates downloader...", fr.provider)
-	var lastHistoricalTickers time.Time
-	is := fr.db.GetInternalState()
+	go fr.runHistoricalLoop()
+	fr.runCurrentLoop()
+	return nil
+}
+
+func (fr *FiatRates) runCurrentLoop() {
 	tickerFromIs := fr.GetCurrentTicker("", "")
 	firstRun := true
 	for {
@@ -496,177 +499,188 @@ func (fr *FiatRates) RunDownloader() error {
 		}
 		firstRun = false
 
-		// load current tickers
-		currentTickersStart := time.Now()
-		currentTicker, err := fr.downloader.CurrentTickers()
-		if err != nil || currentTicker == nil {
-			fr.observeUpdateDuration("current_tickers", "error", currentTickersStart)
-			logFiatRatesDownloaderError("FiatRatesDownloader: CurrentTickers error ", err)
-		} else {
-			fr.setCurrentTicker(currentTicker)
-			fr.observeUpdateDuration("current_tickers", "success", currentTickersStart)
-			glog.Info("FiatRatesDownloader: CurrentTickers updated")
-			if fr.callbackOnNewTicker != nil {
-				fr.callbackOnNewTicker(currentTicker)
-			}
-		}
+		fr.updateCurrentTickers()
+		fr.updateHourlyTickersIfDue()
+		fr.updateFiveMinutesTickersIfDue()
+	}
+}
 
-		// load hourly tickers, it is necessary to wait about 1 hour to prepare the tickers
-		if time.Now().UTC().Unix() >= fr.hourlyTickersTo+secondsInHour+secondsInHour {
-			hourlyTickersStart := time.Now()
-			hourlyTickers, err := fr.downloader.HourlyTickers()
-			if err != nil || hourlyTickers == nil {
-				fr.observeUpdateDuration("hourly_tickers", "error", hourlyTickersStart)
-				logFiatRatesDownloaderError("FiatRatesDownloader: HourlyTickers error ", err)
-			} else {
-				fr.setHourlyTickers(hourlyTickers)
-				fr.observeUpdateDuration("hourly_tickers", "success", hourlyTickersStart)
-				glog.Info("FiatRatesDownloader: HourlyTickers updated")
-			}
-		}
+func (fr *FiatRates) updateCurrentTickers() {
+	start := time.Now()
+	currentTicker, err := fr.downloader.CurrentTickers()
+	if err != nil || currentTicker == nil {
+		fr.observeUpdateDuration("current_tickers", "error", start)
+		logFiatRatesDownloaderError("FiatRatesDownloader: CurrentTickers error ", err)
+		return
+	}
+	fr.setCurrentTicker(currentTicker)
+	fr.observeUpdateDuration("current_tickers", "success", start)
+	glog.Info("FiatRatesDownloader: CurrentTickers updated")
+	if fr.callbackOnNewTicker != nil {
+		fr.callbackOnNewTicker(currentTicker)
+	}
+}
 
-		// load five minute tickers, it is necessary to wait about 10 minutes to prepare the tickers
-		if time.Now().UTC().Unix() >= fr.fiveMinutesTickersTo+3*secondsInFiveMinutes {
-			fiveMinutesTickersStart := time.Now()
-			fiveMinutesTickers, err := fr.downloader.FiveMinutesTickers()
-			if err != nil || fiveMinutesTickers == nil {
-				fr.observeUpdateDuration("five_minutes_tickers", "error", fiveMinutesTickersStart)
-				logFiatRatesDownloaderError("FiatRatesDownloader: FiveMinutesTickers error ", err)
-			} else {
-				fr.setFiveMinutesTickers(fiveMinutesTickers)
-				fr.observeUpdateDuration("five_minutes_tickers", "success", fiveMinutesTickersStart)
-				glog.Info("FiatRatesDownloader: FiveMinutesTickers updated")
-			}
-		}
+func (fr *FiatRates) updateHourlyTickersIfDue() {
+	// it is necessary to wait about 1 hour to prepare the tickers
+	if time.Now().UTC().Unix() < fr.hourlyTickersTo+secondsInHour+secondsInHour {
+		return
+	}
+	start := time.Now()
+	hourlyTickers, err := fr.downloader.HourlyTickers()
+	if err != nil || hourlyTickers == nil {
+		fr.observeUpdateDuration("hourly_tickers", "error", start)
+		logFiatRatesDownloaderError("FiatRatesDownloader: HourlyTickers error ", err)
+		return
+	}
+	fr.setHourlyTickers(hourlyTickers)
+	fr.observeUpdateDuration("hourly_tickers", "success", start)
+	glog.Info("FiatRatesDownloader: HourlyTickers updated")
+}
 
-		// once a day, 1 hour after UTC midnight (to let the provider prepare historical rates) update historical tickers
+func (fr *FiatRates) updateFiveMinutesTickersIfDue() {
+	// it is necessary to wait about 10 minutes to prepare the tickers
+	if time.Now().UTC().Unix() < fr.fiveMinutesTickersTo+3*secondsInFiveMinutes {
+		return
+	}
+	start := time.Now()
+	fiveMinutesTickers, err := fr.downloader.FiveMinutesTickers()
+	if err != nil || fiveMinutesTickers == nil {
+		fr.observeUpdateDuration("five_minutes_tickers", "error", start)
+		logFiatRatesDownloaderError("FiatRatesDownloader: FiveMinutesTickers error ", err)
+		return
+	}
+	fr.setFiveMinutesTickers(fiveMinutesTickers)
+	fr.observeUpdateDuration("five_minutes_tickers", "success", start)
+	glog.Info("FiatRatesDownloader: FiveMinutesTickers updated")
+}
+
+// runHistoricalLoop updates historical (daily) tickers once a day, 1 hour after
+// UTC midnight (to let the provider prepare historical rates).
+func (fr *FiatRates) runHistoricalLoop() {
+	is := fr.db.GetInternalState()
+	var lastHistoricalTickers time.Time
+	for {
 		now := time.Now().UTC()
 		if (now.YearDay() != lastHistoricalTickers.YearDay() || now.Year() != lastHistoricalTickers.Year()) && now.Hour() > 0 {
-			bootstrapInProgress, _, bootstrapErr := historicalBootstrapInProgress(fr.db)
-			if bootstrapErr != nil {
-				glog.Error("FiatRatesDownloader: bootstrap state check error ", bootstrapErr)
-				continue
-			}
-
-			historicalTickersStart := time.Now()
-			err = fr.downloader.UpdateHistoricalTickers()
-			if err != nil {
-				fr.observeUpdateDuration("historical_tickers", "error", historicalTickersStart)
-				logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTickers error ", err)
-				if bootstrapInProgress {
-					// Bootstrap policy: count failed cycles and stop bootstrap mode after the
-					// configured limit so we do not retry full-history downloads forever.
-					attempts, exhausted, attemptsErr := registerHistoricalBootstrapAttemptFailure(fr.db)
-					if attemptsErr != nil {
-						glog.Error("FiatRatesDownloader: recording bootstrap attempt failure failed ", attemptsErr)
-					} else if exhausted {
-						glog.Warningf("FiatRatesDownloader: bootstrap failed %d/%d times, stopping bootstrap retries", attempts, maxHistoricalBootstrapAttempts)
-						// Also advance the in-memory daily guard to avoid re-entering the
-						// historical block again in the same UTC day.
-						lastHistoricalTickers = time.Now().UTC()
-					} else {
-						glog.Warningf("FiatRatesDownloader: bootstrap attempt %d/%d failed", attempts, maxHistoricalBootstrapAttempts)
-					}
-				}
-				// Base historical pass failed; skip token/bootstrap-completion handling for this cycle.
-				continue
-			}
-
-			fr.observeUpdateDuration("historical_tickers", "success", historicalTickersStart)
-			loadDailyTickersStart := time.Now()
-			if err = fr.loadDailyTickers(); err != nil {
-				fr.observeUpdateDuration("load_daily_tickers", "error", loadDailyTickersStart)
-				// Cache refresh failure does not mean downloaded historical data is invalid;
-				// keep processing the cycle and rely on next runs to refresh in-memory cache.
-				glog.Error("FiatRatesDownloader: loadDailyTickers error ", err)
-			} else {
-				fr.observeUpdateDuration("load_daily_tickers", "success", loadDailyTickersStart)
-				ticker, found := fr.dailyTickers[fr.dailyTickersTo]
-				if !found || ticker == nil {
-					glog.Error("FiatRatesDownloader: dailyTickers not loaded")
-				} else {
-					glog.Infof("FiatRatesDownloader: UpdateHistoricalTickers finished, last ticker from %v", ticker.Timestamp)
-					fr.logTickersInfo()
-					if is != nil {
-						is.HistoricalFiatRatesTime = ticker.Timestamp
-					}
-				}
-			}
-
-			cycleSuccessful := true
-			if fr.downloadTokens {
-				if bootstrapInProgress {
-					// During bootstrap keep completion state incomplete until token bootstrap succeeds.
-					historicalTokenTickersStart := time.Now()
-					err = fr.downloader.UpdateHistoricalTokenTickers()
-					if err != nil {
-						cycleSuccessful = false
-						if isCoingeckoHistoricalTokenUpdateInProgressError(err) {
-							fr.observeUpdateDuration("historical_token_tickers", "skipped", historicalTokenTickersStart)
-							glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers skipped, update already in progress")
-						} else {
-							fr.observeUpdateDuration("historical_token_tickers", "error", historicalTokenTickersStart)
-							logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
-						}
-					} else {
-						fr.observeUpdateDuration("historical_token_tickers", "success", historicalTokenTickersStart)
-						glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
-						if is != nil {
-							is.HistoricalTokenFiatRatesTime = time.Now().UTC()
-						}
-					}
-				} else {
-					// UpdateHistoricalTokenTickers in a goroutine, it can take quite some time as there are many tokens
-					go func() {
-						historicalTokenTickersStart := time.Now()
-						err := fr.downloader.UpdateHistoricalTokenTickers()
-						if err != nil {
-							if isCoingeckoHistoricalTokenUpdateInProgressError(err) {
-								fr.observeUpdateDuration("historical_token_tickers", "skipped", historicalTokenTickersStart)
-								glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers skipped, update already in progress")
-								return
-							}
-							fr.observeUpdateDuration("historical_token_tickers", "error", historicalTokenTickersStart)
-							logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
-						} else {
-							fr.observeUpdateDuration("historical_token_tickers", "success", historicalTokenTickersStart)
-							glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
-							if is != nil {
-								is.HistoricalTokenFiatRatesTime = time.Now().UTC()
-							}
-						}
-					}()
-				}
-			}
-
-			if bootstrapInProgress && cycleSuccessful {
-				// Bootstrap can be marked complete only after both base and token historical
-				// updates finished successfully in this cycle.
-				if err := fr.db.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
-					cycleSuccessful = false
-					glog.Error("FiatRatesDownloader: setting bootstrap completion failed ", err)
-				} else if err := resetHistoricalBootstrapAttempts(fr.db); err != nil {
-					cycleSuccessful = false
-					glog.Error("FiatRatesDownloader: resetting bootstrap attempt counter failed ", err)
-				}
-			}
-
-			if bootstrapInProgress && !cycleSuccessful {
-				// Token/bootstrap-finalization failures count as a failed bootstrap cycle too.
-				attempts, exhausted, attemptsErr := registerHistoricalBootstrapAttemptFailure(fr.db)
-				if attemptsErr != nil {
-					glog.Error("FiatRatesDownloader: recording bootstrap attempt failure failed ", attemptsErr)
-				} else if exhausted {
-					cycleSuccessful = true
-					glog.Warningf("FiatRatesDownloader: bootstrap failed %d/%d times, stopping bootstrap retries", attempts, maxHistoricalBootstrapAttempts)
-				} else {
-					glog.Warningf("FiatRatesDownloader: bootstrap attempt %d/%d failed", attempts, maxHistoricalBootstrapAttempts)
-				}
-			}
-
-			if cycleSuccessful {
+			done, banned := fr.runHistoricalCycle(is)
+			if done {
 				lastHistoricalTickers = time.Now().UTC()
+			} else if banned {
+				// Cloudflare IP ban: do not re-probe the banned endpoint every poll
+				// interval. Back off; the next attempt resumes from the gap.
+				time.Sleep(historicalBanBackoff)
+				continue
+			}
+			// non-ban failure falls through to the poll-interval retry
+		}
+		time.Sleep(historicalPollInterval)
+	}
+}
+
+// runHistoricalCycle runs one daily historical update.
+func (fr *FiatRates) runHistoricalCycle(is *common.InternalState) (done bool, banned bool) {
+	bootstrapInProgress, _, bootstrapErr := historicalBootstrapInProgress(fr.db)
+	if bootstrapErr != nil {
+		glog.Error("FiatRatesDownloader: bootstrap state check error ", bootstrapErr)
+		return false, false
+	}
+
+	historicalTickersStart := time.Now()
+	err := fr.downloader.UpdateHistoricalTickers()
+	if err != nil {
+		fr.observeUpdateDuration("historical_tickers", "error", historicalTickersStart)
+		logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTickers error ", err)
+		ban := isCoingeckoCloudflareBanError(err)
+		if bootstrapInProgress {
+			// Bootstrap policy: count failed cycles and stop bootstrap mode after the
+			// configured limit so we do not retry full-history downloads forever.
+			attempts, exhausted, attemptsErr := registerHistoricalBootstrapAttemptFailure(fr.db)
+			if attemptsErr != nil {
+				glog.Error("FiatRatesDownloader: recording bootstrap attempt failure failed ", attemptsErr)
+			} else if exhausted {
+				glog.Warningf("FiatRatesDownloader: bootstrap failed %d/%d times, stopping bootstrap retries", attempts, maxHistoricalBootstrapAttempts)
+				// Advance the daily guard so we do not re-enter the historical block
+				// again in the same UTC day.
+				return true, ban
+			} else {
+				glog.Warningf("FiatRatesDownloader: bootstrap attempt %d/%d failed", attempts, maxHistoricalBootstrapAttempts)
+			}
+		}
+		// Base historical pass failed; skip token/bootstrap-completion handling for this cycle.
+		return false, ban
+	}
+
+	fr.observeUpdateDuration("historical_tickers", "success", historicalTickersStart)
+	loadDailyTickersStart := time.Now()
+	if err = fr.loadDailyTickers(); err != nil {
+		fr.observeUpdateDuration("load_daily_tickers", "error", loadDailyTickersStart)
+		// Cache refresh failure does not mean downloaded historical data is invalid;
+		// keep processing the cycle and rely on next runs to refresh in-memory cache.
+		glog.Error("FiatRatesDownloader: loadDailyTickers error ", err)
+	} else {
+		fr.observeUpdateDuration("load_daily_tickers", "success", loadDailyTickersStart)
+		ticker, found := fr.dailyTickers[fr.dailyTickersTo]
+		if !found || ticker == nil {
+			glog.Error("FiatRatesDownloader: dailyTickers not loaded")
+		} else {
+			glog.Infof("FiatRatesDownloader: UpdateHistoricalTickers finished, last ticker from %v", ticker.Timestamp)
+			fr.logTickersInfo()
+			if is != nil {
+				is.HistoricalFiatRatesTime = ticker.Timestamp
 			}
 		}
 	}
+
+	cycleSuccessful := true
+	if fr.downloadTokens {
+		historicalTokenTickersStart := time.Now()
+		tokErr := fr.downloader.UpdateHistoricalTokenTickers()
+		if tokErr != nil {
+			banned = banned || isCoingeckoCloudflareBanError(tokErr)
+			if bootstrapInProgress {
+				cycleSuccessful = false
+			}
+			if isCoingeckoHistoricalTokenUpdateInProgressError(tokErr) {
+				fr.observeUpdateDuration("historical_token_tickers", "skipped", historicalTokenTickersStart)
+				glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers skipped, update already in progress")
+			} else {
+				fr.observeUpdateDuration("historical_token_tickers", "error", historicalTokenTickersStart)
+				logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", tokErr)
+			}
+		} else {
+			fr.observeUpdateDuration("historical_token_tickers", "success", historicalTokenTickersStart)
+			glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
+			if is != nil {
+				is.HistoricalTokenFiatRatesTime = time.Now().UTC()
+			}
+		}
+	}
+
+	if bootstrapInProgress && cycleSuccessful {
+		// Bootstrap can be marked complete only after both base and token historical
+		// updates finished successfully in this cycle.
+		if err := fr.db.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+			cycleSuccessful = false
+			glog.Error("FiatRatesDownloader: setting bootstrap completion failed ", err)
+		} else if err := resetHistoricalBootstrapAttempts(fr.db); err != nil {
+			cycleSuccessful = false
+			glog.Error("FiatRatesDownloader: resetting bootstrap attempt counter failed ", err)
+		}
+	}
+
+	if bootstrapInProgress && !cycleSuccessful {
+		// Token/bootstrap-finalization failures count as a failed bootstrap cycle too.
+		attempts, exhausted, attemptsErr := registerHistoricalBootstrapAttemptFailure(fr.db)
+		if attemptsErr != nil {
+			glog.Error("FiatRatesDownloader: recording bootstrap attempt failure failed ", attemptsErr)
+		} else if exhausted {
+			cycleSuccessful = true
+			glog.Warningf("FiatRatesDownloader: bootstrap failed %d/%d times, stopping bootstrap retries", attempts, maxHistoricalBootstrapAttempts)
+		} else {
+			glog.Warningf("FiatRatesDownloader: bootstrap attempt %d/%d failed", attempts, maxHistoricalBootstrapAttempts)
+		}
+	}
+
+	return cycleSuccessful, banned
 }
