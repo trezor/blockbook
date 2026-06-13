@@ -40,8 +40,6 @@ const (
 // used when retry-after header is missing
 var coingeckoThrottleBackoff = time.Minute
 
-// how often a parked low-priority request re-checks the throttle gate
-// var (not const) so tests can shrink it to avoid real waits
 var coingeckoLowPriorityPollInterval = time.Second
 
 // reqPriority determines which requests reclaim request slots first while a
@@ -71,16 +69,16 @@ type Coingecko struct {
 	updatingTokens           bool
 	metrics                  *common.Metrics
 	plan                     string
-	minHttpRequestInterval   time.Duration // spacing between requests to the rate-limited CoinGecko API hosts (plan-based)
-	bootstrapRequestInterval time.Duration // spacing between requests to the bootstrap CDN, which has no CoinGecko rate limit
+	minHttpRequestInterval   time.Duration
+	bootstrapRequestInterval time.Duration
 	reqMu                    sync.Mutex
 	lastRequestAt            time.Time
-	throttledUntil           time.Time // set on any 429; every request waits past it
-	highPriorityInFlight     int       // high-priority requests currently in flight, including their retries
+	throttledUntil           time.Time
+	highPriorityInFlight     int
 	cacheMu                  sync.Mutex
-	vsCurrencies             []string          // guarded by cacheMu
-	platformIds              []string          // guarded by cacheMu
-	platformIdsToTokens      map[string]string // guarded by cacheMu
+	vsCurrencies             []string
+	platformIds              []string
+	platformIdsToTokens      map[string]string
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -180,12 +178,6 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string,
 		} else {
 			minRequestInterval = DefaultThrottleDelayMs * time.Millisecond
 		}
-		// The bootstrap CDN (cdn.trezor.io) serves cached CoinGecko data and is not
-		// subject to CoinGecko's per-minute rate limit, so it keeps the light default
-		// spacing regardless of plan. Without this, the free-plan 6s spacing would
-		// stretch the initial bootstrap (tens of currencies + thousands of tokens)
-		// from minutes to hours and, because the bootstrap token pass runs
-		// synchronously on the downloader goroutine, starve current-ticker refreshes.
 		bootstrapRequestInterval = DefaultThrottleDelayMs * time.Millisecond
 	}
 	resolvedBootstrapURL := resolveCoinGeckoBootstrapURL(bootstrapURL)
@@ -227,10 +219,6 @@ func getAllowedVsCurrenciesMap(currenciesString string) map[string]struct{} {
 	return allowedVsCurrenciesMap
 }
 
-// coingeckoHTTPError carries the HTTP status from a non-200 response so throttling can be
-// detected by status code. Error() returns the raw body so existing body-based detection
-// (e.g. the Cloudflare "error code: 1015" page) keeps working. retryAfter holds the parsed
-// Retry-After header (CoinGecko sends it on 429); zero when absent or unparseable.
 type coingeckoHTTPError struct {
 	status     int
 	body       string
@@ -311,15 +299,10 @@ func isCoingeckoHistoricalTokenUpdateInProgressError(err error) bool {
 	return errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress)
 }
 
-// targetsBootstrapCDN reports whether url points at the bootstrap CDN, which serves
-// cached CoinGecko data and has no CoinGecko per-minute rate limit. Requests to it must
-// not inherit the plan-based pacing meant for the rate-limited CoinGecko API hosts.
 func (cg *Coingecko) targetsBootstrapCDN(url string) bool {
 	return cg.bootstrapURL != "" && strings.HasPrefix(url, cg.bootstrapURL)
 }
 
-// requestIntervalFor returns the minimum spacing to enforce before a request to url:
-// the light CDN spacing for bootstrap requests, the plan-based spacing otherwise.
 func (cg *Coingecko) requestIntervalFor(url string) time.Duration {
 	if cg.targetsBootstrapCDN(url) {
 		return cg.bootstrapRequestInterval
@@ -327,13 +310,6 @@ func (cg *Coingecko) requestIntervalFor(url string) time.Duration {
 	return cg.minHttpRequestInterval
 }
 
-// waitForRequestSlot enforces minInterval spacing between requests and makes every
-// request wait out the shared throttle window opened by any 429. While the window
-// is open, low-priority requests additionally yield to in-flight high-priority ones so
-// current/high-granularity fetches reclaim request slots first.
-// With minInterval == 0 (throttleDown disabled, or a bootstrap request in tests) all
-// waiters fire as soon as the window expires; acceptable, as at most a couple of
-// goroutines share one instance.
 func (cg *Coingecko) waitForRequestSlot(priority reqPriority, minInterval time.Duration) {
 	for {
 		cg.reqMu.Lock()
@@ -423,11 +399,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string, priority 
 		if cg.metrics != nil {
 			cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "throttle"}).Inc()
 		}
-		// Retry throttled requests indefinitely (no attempt cap) so historical rate downloads
-		// always finish eventually, even when a provider-wide 429 persists for many hours.
-		// Retry-After is honored when present; otherwise a flat ~1-minute backoff (plus jitter).
-		// The delay opens a throttle window shared by all requests; the next
-		// waitForRequestSlot waits it out, so no local sleep is needed here.
+
 		delay := throttleBackoffDelay(err)
 		cg.markThrottled(delay)
 		glog.Warningf("Coingecko makeReq %v throttled on attempt %d, retrying in %v: %v", url, attempt+1, delay, err)
