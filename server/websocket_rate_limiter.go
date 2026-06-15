@@ -17,13 +17,10 @@ const websocketConnectionAttemptWindow = time.Minute
 const websocketConnectionLimiterTTL = 10 * time.Minute
 const websocketConnectionLimiterCleanupInterval = time.Minute
 
-// Per-connection message rate limit defaults. A single connection that sends
-// more than defaultWsMessageRateLimit text messages within a trailing
-// defaultWsMessageRateWindow is closed, and its client key is blocked from
-// opening new connections for defaultWsIPBlockDuration. The default of 2500
-// messages / 10 minutes is well above the maximum burst a Trezor Suite client
-// produces, so it only trips clearly abusive (non-Suite) traffic. All three are
-// overridable via env (see NewWebsocketServer).
+// Per-connection message rate limit defaults. A connection sending more than
+// defaultWsMessageRateLimit messages within a trailing defaultWsMessageRateWindow is
+// closed and its client key blocked for defaultWsIPBlockDuration. The 2500 / 10m
+// default sits well above any Trezor Suite burst, so it only trips abusive traffic.
 const defaultWsMessageRateLimit = 2500
 const defaultWsMessageRateWindow = 10 * time.Minute
 const defaultWsIPBlockDuration = 12 * time.Hour
@@ -47,17 +44,8 @@ type websocketConnectionLimiter struct {
 	lastCleanup time.Time
 }
 
-// configureMessageRateLimit reads the per-connection message rate limit and IP
-// block configuration from the environment, applying defaults. Env vars (with
-// <NET> = network or coin shortcut):
-//
-//	<NET>_WS_MESSAGE_RATE_LIMIT   max messages per window before a connection is
-//	                              closed; default 2500, 0 disables the feature.
-//	<NET>_WS_MESSAGE_RATE_WINDOW  trailing window as a Go duration (e.g. "10m");
-//	                              default 10m.
-//	<NET>_WS_IP_BLOCK_DURATION    how long an offending client key is blocked as a
-//	                              Go duration (e.g. "12h"); default 12h, 0 closes
-//	                              the connection without blocking the IP.
+// configureMessageRateLimit reads the per-connection message-rate and IP-block
+// config from the environment, applying defaults (see docs/env.md for the vars).
 func (s *WebsocketServer) configureMessageRateLimit(network string) error {
 	prefix := strings.ToUpper(network)
 	var err error

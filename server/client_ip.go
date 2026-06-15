@@ -11,14 +11,9 @@ import (
 	"strings"
 )
 
-// embeddedCloudflareIPs holds Cloudflare's published edge ranges, kept in a
-// plain text file (one CIDR per line, #-comments) so the list can be updated
-// without touching Go code, and compiled in so a deployment needs no extra
-// runtime file. When Cloudflare peer verification is enabled the
-// CF-Connecting-* headers are trusted only when the TCP peer falls inside one
-// of these ranges (or is a loopback/private proxy fronting Cloudflare).
-// Operators can override the list via <NET>_CLOUDFLARE_IPS (inline CIDRs or
-// @/path/to/file) if it drifts.
+// embeddedCloudflareIPs holds Cloudflare's published edge ranges (one CIDR per
+// line, #-comments), compiled in so a deployment needs no runtime file. Operators
+// can override via <NET>_CLOUDFLARE_IPS (inline CIDRs or @/path/to/file).
 //
 //go:embed cloudflare_ips.txt
 var embeddedCloudflareIPs string
@@ -26,12 +21,9 @@ var embeddedCloudflareIPs string
 type clientIPConfig struct {
 	trustedProxies     []netip.Prefix
 	cloudflarePrefixes []netip.Prefix
-	// trustPseudoIPv6 honors the CF-Connecting-IPv6 request header. It must be
-	// enabled ONLY when the Cloudflare zone runs "Pseudo IPv4: Overwrite
-	// Headers", because that is the only mode in which Cloudflare sets (and thus
-	// sanitizes) CF-Connecting-IPv6. In every other mode Cloudflare forwards a
-	// client-supplied CF-Connecting-IPv6 verbatim, so trusting it would let any
-	// client spoof its attributed IP. Default false.
+	// trustPseudoIPv6 honors CF-Connecting-IPv6. Enable ONLY when the Cloudflare
+	// zone runs "Pseudo IPv4: Overwrite Headers" -- the only mode where Cloudflare
+	// sanitizes that header; otherwise it is forwarded verbatim and thus spoofable.
 	trustPseudoIPv6   bool
 	trustedEnvName    string
 	cloudflareEnvName string
@@ -116,24 +108,12 @@ func parseTrustedProxies(envName, value string) ([]netip.Prefix, error) {
 	return prefixes, nil
 }
 
-// parseCloudflareProxies parses the <NET>_CLOUDFLARE_IPS env value (or the
-// legacy <NET>_WS_CLOUDFLARE_IPS fallback) used to gate trust of the
-// CF-Connecting-* headers. Recognized values:
-//
-//	""            (unset)  -> built-in Cloudflare edge ranges (verification on)
-//	"builtin"              -> built-in Cloudflare edge ranges (verification on)
-//	"off" / "none" / "0"   -> disabled; CF headers are trusted from any peer
-//	                          (legacy behavior, intended for an origin firewalled
-//	                          to Cloudflare ranges out of band)
-//	"@/path/to/file"       -> load CIDRs from the file (one per line, blank lines
-//	                          and #-comments ignored) instead of the built-in list
-//	"<cidr>,<cidr>,..."    -> use these CIDRs instead of the built-in list
-//
-// A non-empty result means verification is enabled and resolveClientIP trusts
-// the CF headers only when the TCP peer is inside one of the prefixes (or a
-// loopback/private proxy fronting Cloudflare). Returning nil disables it; only
-// the explicit "off" spellings do that -- a custom value or file that parses to
-// no CIDRs is rejected so a typo cannot silently disable verification.
+// parseCloudflareProxies parses <NET>_CLOUDFLARE_IPS (legacy <NET>_WS_CLOUDFLARE_IPS):
+// "" or "builtin" -> embedded edge ranges; "off"/"none"/"0" -> disabled (CF headers
+// trusted from any peer); "@/path/to/file" or a comma-separated CIDR list -> custom.
+// A non-empty result enables peer verification in resolveClientIP. Only the explicit
+// "off" spellings return nil; a value that parses to no CIDRs is rejected so a typo
+// cannot silently disable verification.
 func parseCloudflareProxies(envName, value string) ([]netip.Prefix, error) {
 	trimmed := strings.TrimSpace(value)
 	switch strings.ToLower(trimmed) {
@@ -203,18 +183,13 @@ func parseCIDRList(envName string, raws []string) ([]netip.Prefix, error) {
 	return prefixes, nil
 }
 
-// resolveClientIP returns the per-IP rate-limit address for the request plus two
-// flags: blockSafe (the attribution is spoof-resistant enough to add to an IP
-// blocklist) and fromHeader (it came from a forwarding header rather than the
-// bare TCP peer, letting callers spot degenerate attribution onto the operator's
-// own infrastructure). trustedProxies governs X-Real-Ip; cloudflareProxies
-// governs the CF-Connecting-* headers (empty disables verification and trusts
-// them from any peer, the legacy behavior). By default only CF-Connecting-IP is
-// trusted -- the one CF-* header Cloudflare always overwrites with the verified
-// client IP; the otherwise-spoofable CF-Connecting-IPv6 is honored only with
-// trustPseudoIPv6 (see the field doc). When no header is trusted for this peer it
-// falls back to the bare TCP peer. The per-branch trust decisions are explained
-// inline below.
+// resolveClientIP returns the per-IP rate-limit address plus two flags: blockSafe
+// (spoof-resistant enough for an IP blocklist) and fromHeader (came from a forwarding
+// header, not the bare TCP peer). trustedProxies governs X-Real-Ip; cloudflareProxies
+// governs the CF-Connecting-* headers (empty trusts them from any peer). Only
+// CF-Connecting-IP is trusted unless trustPseudoIPv6 is set (see the field doc); when
+// no header is trusted it falls back to the bare TCP peer. Per-branch trust decisions
+// are explained inline below.
 func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.Prefix, trustPseudoIPv6 bool) (ip string, blockSafe, fromHeader bool) {
 	host := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
@@ -267,12 +242,10 @@ func resolveClientIP(r *http.Request, trustedProxies, cloudflareProxies []netip.
 	return strings.TrimSpace(r.RemoteAddr), !hadCFHeader, false
 }
 
-// rateLimitKey returns the key used for per-IP limiting and blocklists. IPv6 is
-// aggregated to its /64 because a single client is routinely delegated a whole
-// /64, so keying on the full /128 would let it evade limits by rotating the low
-// 64 bits across genuine addresses. IPv4 is keyed verbatim (IPv4-mapped IPv6 is
-// unmapped to its IPv4 form first, so both notations share a key); anything
-// unparseable is keyed verbatim.
+// rateLimitKey returns the key used for per-IP limiting. IPv6 is aggregated to its
+// /64 (a client routinely owns a whole /64, so keying the full /128 would let it
+// evade limits by rotating the low 64 bits); IPv4 is keyed verbatim (IPv4-mapped
+// IPv6 is unmapped first). Unparseable input is keyed verbatim.
 func rateLimitKey(ip string) string {
 	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
 	if err != nil {
@@ -288,16 +261,12 @@ func rateLimitKey(ip string) string {
 }
 
 // blockKey returns the key used for the temporary IP blocklists (WS and REST).
-// Unlike rateLimitKey it keeps IPv6 at the full /128. Rate limiting aggregates
-// to /64 (so a client cannot evade limits by rotating the low 64 bits of an
-// owned /64), but a long-lived hard block must not take out an entire shared
-// /64: mobile carriers, CGNAT-style IPv6, and VPN exits routinely place many
-// unrelated subscribers in one /64, and blocking all of them for hours because
-// one address misbehaved is collateral denial of service. The connection /
-// request rate limiter still aggregates to /64, so a /64-rotating abuser cannot
-// gain throughput by dodging the per-/128 block. IPv4 is keyed verbatim (so
-// blockKey == rateLimitKey for IPv4); IPv4-mapped IPv6 is unmapped first, and
-// anything unparseable is keyed verbatim.
+// Unlike rateLimitKey it keeps IPv6 at the full /128: a long-lived block must not
+// take out an entire shared /64 (mobile carriers, CGNAT-style IPv6, and VPN exits
+// routinely place many unrelated subscribers in one /64). The rate limiter still
+// aggregates to /64, so a /64-rotating abuser gains no throughput by dodging the
+// per-/128 block. IPv4 is keyed verbatim (blockKey == rateLimitKey); IPv4-mapped
+// IPv6 is unmapped first, and anything unparseable is keyed verbatim.
 func blockKey(ip string) string {
 	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
 	if err != nil {
@@ -359,25 +328,18 @@ func parseAddr(value string) (netip.Addr, bool) {
 	if err != nil {
 		return netip.Addr{}, false
 	}
-	// Unmap IPv4-mapped IPv6 (::ffff:a.b.c.d -> a.b.c.d) so both notations
-	// share one rate-limit key and IPv4 prefixes match in isTrustedProxy and
-	// isBlockableKey, and strip the IPv6 zone identifier so that rate-limit keys
-	// are zone-free and netip.Prefix.Contains matches unzoned prefixes against
-	// link-local peers.
+	// Unmap IPv4-mapped IPv6 (::ffff:a.b.c.d -> a.b.c.d) so both notations share a
+	// key and IPv4 prefixes match, and strip the IPv6 zone so keys are zone-free and
+	// Prefix.Contains matches unzoned prefixes against link-local peers.
 	return addr.Unmap().WithZone(""), true
 }
 
-// isTrustedProxy reports whether a forwarding header (X-Real-Ip, or
-// CF-Connecting-* in the default Cloudflare branch) may be trusted from this
-// TCP peer. Loopback and RFC1918/private peers are trusted implicitly as a
-// reverse proxy on the same host or LAN; this assumes the private segment in
-// front of Blockbook is not attacker-reachable. Link-local peers (fe80::/10)
-// are deliberately NOT implicitly trusted: a link-local address is reachable
-// and spoofable by any node on the same link and is never a deliberate
-// proxy-placement choice, so trusting it would let an on-link attacker forge
-// X-Real-Ip. An operator who genuinely fronts Blockbook with a link-local
-// proxy can still trust it by listing its prefix in <NET>_TRUSTED_PROXIES
-// (matched via extras).
+// isTrustedProxy reports whether a forwarding header (X-Real-Ip, or CF-Connecting-*
+// in the default Cloudflare branch) may be trusted from this TCP peer. Loopback and
+// RFC1918/private peers are trusted implicitly (reverse proxy on the same host/LAN).
+// Link-local peers (fe80::/10) are deliberately NOT: they are spoofable by any node
+// on the link. An operator fronting Blockbook with a link-local proxy can still trust
+// it via <NET>_TRUSTED_PROXIES (matched as an extra).
 func isTrustedProxy(addr netip.Addr, extras []netip.Prefix) bool {
 	if addr.IsLoopback() || addr.IsPrivate() {
 		return true
