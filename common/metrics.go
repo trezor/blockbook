@@ -80,6 +80,9 @@ type Metrics struct {
 	CoingeckoRequests                 *prometheus.CounterVec   `metric:"coingecko_requests"`
 	CoingeckoRangeRequests            *prometheus.CounterVec   `metric:"coingecko_range_requests"`
 	FiatRatesUpdateDuration           *prometheus.HistogramVec `metric:"fiat_rates_update_duration_seconds"`
+	FiatRatesFetchedUnits             *prometheus.CounterVec   `metric:"fiat_rates_fetched_units_total"`
+	FiatRatesFetchedTokens            *prometheus.CounterVec   `metric:"fiat_rates_fetched_tokens_total"`
+	FiatRatesUnable                   *prometheus.CounterVec   `metric:"fiat_rates_unable_total"`
 	AlternativeFeeProviderRequests    *prometheus.CounterVec   `metric:"alternative_fee_provider_requests"`
 	EthSyncRpcErrors                  *prometheus.CounterVec   `metric:"eth_sync_rpc_errors"`
 }

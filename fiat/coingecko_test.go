@@ -237,18 +237,59 @@ func TestResolveHistoricalDays(t *testing.T) {
 		}
 	})
 
-	t.Run("recent ticker is tip query", func(t *testing.T) {
+	t.Run("one day gap is the tip", func(t *testing.T) {
 		cg := Coingecko{}
 		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
-			Timestamp: time.Now().AddDate(0, 0, -5),
+			Timestamp: time.Now().AddDate(0, 0, -1),
 		}, false)
-		if !shouldRequest || days != "5" {
+		if !shouldRequest || days != "1" {
 			t.Fatalf("unexpected tip result: days=%q shouldRequest=%v", days, shouldRequest)
 		}
 		if rangeKind != coingeckoRangeTip {
 			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeTip)
 		}
 	})
+
+	t.Run("multi-day gap is backfill", func(t *testing.T) {
+		cg := Coingecko{}
+		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
+			Timestamp: time.Now().AddDate(0, 0, -5),
+		}, false)
+		if !shouldRequest || days != "5" {
+			t.Fatalf("unexpected backfill result: days=%q shouldRequest=%v", days, shouldRequest)
+		}
+		if rangeKind != coingeckoRangeBackfill {
+			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeBackfill)
+		}
+	})
+}
+
+func TestSourceURLForRange(t *testing.T) {
+	cdn := "https://cdn.trezor.io/dynamic/coingecko/api/v3"
+	tip := "https://api.coingecko.com/api/v3"
+	withCDN := &Coingecko{tipURL: tip, bootstrapURL: cdn}
+	noCDN := &Coingecko{tipURL: tip}
+
+	tests := []struct {
+		name      string
+		cg        *Coingecko
+		rangeKind string
+		want      string
+	}{
+		{name: "tip stays on free tier", cg: withCDN, rangeKind: coingeckoRangeTip, want: tip},
+		{name: "backfill routes to CDN", cg: withCDN, rangeKind: coingeckoRangeBackfill, want: cdn},
+		{name: "capped routes to CDN", cg: withCDN, rangeKind: coingeckoRangeCapped, want: cdn},
+		{name: "historical routes to CDN", cg: withCDN, rangeKind: coingeckoRangeHistorical, want: cdn},
+		{name: "backfill falls back to tip without CDN", cg: noCDN, rangeKind: coingeckoRangeBackfill, want: tip},
+		{name: "tip without CDN stays on free tier", cg: noCDN, rangeKind: coingeckoRangeTip, want: tip},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cg.sourceURLForRange(tt.rangeKind); got != tt.want {
+				t.Fatalf("sourceURLForRange(%q) = %q, want %q", tt.rangeKind, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestUpdateHistoricalTickers_BootstrapStoresSuccessfulCurrenciesEvenWhenSomeFail(t *testing.T) {

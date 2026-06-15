@@ -298,6 +298,21 @@ metrics:
     help: Time spent in fiat-rate downloader stages such as current, hourly, historical and token ticker updates
     labels: [stage, status]
     buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300]
+  fiat_rates_fetched_units_total:
+    name: blockbook_fiat_rates_fetched_units_total
+    type: counter_vec
+    help: Daily fiat-rate time-units fetched and persisted, split by fetch phase (tip, backfill, bootstrap, reconcile)
+    labels: [phase]
+  fiat_rates_fetched_tokens_total:
+    name: blockbook_fiat_rates_fetched_tokens_total
+    type: counter_vec
+    help: Token fiat-rate series fetched and persisted, split by fetch phase (backfill, bootstrap, reconcile)
+    labels: [phase]
+  fiat_rates_unable_total:
+    name: blockbook_fiat_rates_unable_total
+    type: counter_vec
+    help: Fiat-rate series that could not be fetched, split by phase and reason (gap_too_large, fetch_failed, provider_banned, no_base_ticker)
+    labels: [phase, reason]
   alternative_fee_provider_requests:
     name: blockbook_alternative_fee_provider_requests
     type: counter_vec
