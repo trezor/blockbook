@@ -30,6 +30,8 @@ type Metrics struct {
 	BalanceHistoryFiatDuration        *prometheus.HistogramVec `metric:"balance_history_fiat_duration_seconds"`
 	BalanceHistoryFiatFallback        *prometheus.CounterVec   `metric:"balance_history_fiat_fallback_total"`
 	BalanceHistoryPoints              *prometheus.HistogramVec `metric:"balance_history_points"`
+	BalanceHistoryTxs                 *prometheus.HistogramVec `metric:"balance_history_txs"`
+	BalanceHistoryCapExceeded         *prometheus.CounterVec   `metric:"balance_history_cap_exceeded_total"`
 	WebsocketEthReceipt               *prometheus.CounterVec   `metric:"websocket_eth_receipt"`
 	WebsocketNewBlockTxsSubscriptions prometheus.Gauge         `metric:"websocket_new_block_txs_subscriptions"`
 	WebsocketConnectionRequests       prometheus.Histogram     `metric:"websocket_connection_requests"`

@@ -2075,7 +2075,7 @@ func Test_HTTPBalanceHistory_MaxTxsCap_BitcoinType(t *testing.T) {
 	addr := "2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"
 
 	// With the cap disabled (0), the full history is returned.
-	s.is.BalanceHistoryMaxTxs = 0
+	s.is.BalanceHistoryMaxTxsREST = 0
 	var full []balanceHistoryResponse
 	mustGetJSON(t, ts.URL+"/api/v2/balancehistory/"+addr, http.StatusOK, &full)
 	if len(full) < 2 {
@@ -2084,7 +2084,7 @@ func Test_HTTPBalanceHistory_MaxTxsCap_BitcoinType(t *testing.T) {
 
 	// With a cap below the address's transaction count, the request is rejected
 	// with a public 400 error rather than doing the unbounded scan.
-	s.is.BalanceHistoryMaxTxs = 1
+	s.is.BalanceHistoryMaxTxsREST = 1
 	var apiErr struct {
 		Error string `json:"error"`
 	}

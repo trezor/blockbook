@@ -768,8 +768,12 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 	return r, nil
 }
 
-// GetXpubBalanceHistory returns history of balance for given xpub
-func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, currencies []string, gap int, groupBy uint32) (BalanceHistories, error) {
+// GetXpubBalanceHistory returns history of balance for given xpub. maxTxs bounds
+// how many transactions in the requested range (summed across the derived
+// addresses) may be aggregated (0 = unlimited); the caller supplies the
+// transport-specific cap (WS vs REST). transport labels the emitted metrics with
+// the serving surface.
+func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, currencies []string, gap int, groupBy uint32, maxTxs int, transport string) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
@@ -803,7 +807,6 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	// unbounded scan over a heavy xpub is a cheap-to-send DoS. Load at most one
 	// more than the cap across all derived addresses so the overflow is
 	// detectable, then reject rather than silently truncate.
-	maxTxs := w.is.BalanceHistoryMaxTxs
 	remaining := maxInt
 	if maxTxs > 0 {
 		remaining = maxTxs + 1
@@ -840,7 +843,13 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 			break
 		}
 	}
+	if w.metrics != nil {
+		w.metrics.BalanceHistoryTxs.With(common.Labels{"transport": transport, "path": "xpub"}).Observe(float64(total))
+	}
 	if maxTxs > 0 && total > maxTxs {
+		if w.metrics != nil {
+			w.metrics.BalanceHistoryCapExceeded.With(common.Labels{"transport": transport, "path": "xpub"}).Inc()
+		}
 		return nil, NewAPIError(fmt.Sprintf("balance history for xpub spans more than %d transactions in the requested range; narrow the from/to range", maxTxs), true)
 	}
 	for _, at := range loaded {
