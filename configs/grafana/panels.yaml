@@ -554,3 +554,39 @@ panels:
       p95:
         promql: histogram_quantile(0.95, sum(increase({{name:fiat_rates_update_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[1h])) by (coin, stage, status, le))
         legend: '{{coin}} - {{stage}} - {{status}}'
+  row.fiat_rates:
+    title: Fiat Rates
+  fiatrates.tip_fetches:
+    title: Chain tip fetches (<=1 day, Free tier)
+    description: Daily fiat-rate points fetched for the chain tip (gap of one day), the only historical range still served from the rate-limited CoinGecko Free tier. Steady-state activity here is normal; sustained zero across a day means the tip update is failing.
+    queries:
+      units:
+        promql: sum(rate({{name:fiat_rates_fetched_units_total}}{job="blockbook", coin="$coin", phase="tip"}[$__rate_interval])) by (coin, instance) * 60
+        legend: '{{coin}} - {{instance}} tip points/min'
+  fiatrates.backfill_fetches:
+    title: Backfill fetches (>1 day, via CDN)
+    description: Higher-volume historical ranges routed to the Trezor CDN — multi-day downtime catch-up (backfill) and full-history population (bootstrap). units are daily points; tokens are token series. These should stay off the Free tier.
+    queries:
+      units:
+        promql: sum(rate({{name:fiat_rates_fetched_units_total}}{job="blockbook", coin="$coin", phase=~"backfill|bootstrap"}[$__rate_interval])) by (phase) * 60
+        legend: '{{coin}} - {{phase}} points/min'
+      tokens:
+        promql: sum(rate({{name:fiat_rates_fetched_tokens_total}}{job="blockbook", coin="$coin", phase=~"backfill|bootstrap"}[$__rate_interval])) by (phase) * 60
+        legend: '{{coin}} - {{phase}} tokens/min'
+  fiatrates.reconcile:
+    title: Startup reconciliation (self-healing)
+    description: Daily points and token series repaired by the blocking at-startup self-healing pass via the CDN. Bursts at process start are expected; recurring large bursts on every restart suggest persistent holes the provider cannot fill.
+    queries:
+      units:
+        promql: sum(increase({{name:fiat_rates_fetched_units_total}}{job="blockbook", coin="$coin", phase="reconcile"}[1h])) by (coin, instance)
+        legend: '{{coin}} - {{instance}} points repaired/h'
+      tokens:
+        promql: sum(increase({{name:fiat_rates_fetched_tokens_total}}{job="blockbook", coin="$coin", phase="reconcile"}[1h])) by (coin, instance)
+        legend: '{{coin}} - {{instance}} tokens repaired/h'
+  fiatrates.unable:
+    title: Unable to fetch (by reason)
+    description: Fiat-rate series that could not be fetched, split by phase and reason. gap_too_large flags series stale beyond the reconcile guard (probable bug); fetch_failed/provider_banned are transport failures; no_base_ticker is a token day lacking a base-currency ticker.
+    queries:
+      by_reason:
+        promql: sum(increase({{name:fiat_rates_unable_total}}{job="blockbook", coin="$coin"}[1h])) by (phase, reason)
+        legend: '{{coin}} - {{phase}} - {{reason}}'
