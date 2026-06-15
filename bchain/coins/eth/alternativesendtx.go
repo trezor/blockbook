@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -183,6 +184,10 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 	}
 	p.mempoolTxsMux.Unlock()
 
+	// memoize confirmed-nonce lookups per sender so each sender is queried at most once per cycle
+	confirmedNonces := make(map[string]uint64)
+	confirmedNonceFailed := make(map[string]bool)
+
 	for _, tx := range txs {
 		// a freshly submitted tx may transiently be unknown to a load-balanced provider node,
 		// give it one check period before reconciling
@@ -212,6 +217,17 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			continue
 		}
 
+		// The provider still reports the transaction as pending. If a different transaction has
+		// already consumed its nonce (e.g. a replacement submitted outside Blockbook), it can never
+		// be mined, so evict it deterministically instead of waiting for the timeout. Only nonces
+		// strictly below the confirmed account nonce are treated as superseded; equal or higher
+		// nonces are still mineable (the next tx, or a gap waiting to be filled) and are left intact.
+		if p.transactionSupersededByNonce(tx.tx.tx, confirmedNonces, confirmedNonceFailed) {
+			p.observeMempoolReconciliation("nonce_superseded")
+			p.removeMempoolTx(tx.txid)
+			continue
+		}
+
 		if timedOut {
 			p.observeMempoolReconciliation("timeout")
 			p.RemoveTransaction(tx.txid)
@@ -226,6 +242,75 @@ func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) 
 		return
 	}
 	p.metrics.EthAlternativeMempoolEvents.With(common.Labels{"action": action}).Inc()
+}
+
+// transactionSupersededByNonce reports whether a different transaction has already consumed the
+// cached transaction's nonce, making it permanently unmineable. Confirmed-nonce lookups are memoized
+// per sender via resolved/failed so each sender is queried at most once per reconcile cycle.
+func (p *AlternativeSendTxProvider) transactionSupersededByNonce(tx *bchain.RpcTransaction, resolved map[string]uint64, failed map[string]bool) bool {
+	if tx == nil || tx.From == "" || tx.AccountNonce == "" {
+		return false
+	}
+	txNonce, err := hexutil.DecodeUint64(tx.AccountNonce)
+	if err != nil {
+		glog.Warningf("alternative mempool: cannot parse nonce %q for tx %s: %v", tx.AccountNonce, tx.Hash, err)
+		return false
+	}
+	from := strings.ToLower(tx.From)
+	confirmed, ok := resolved[from]
+	if !ok {
+		if failed[from] {
+			return false
+		}
+		confirmed, ok, err = p.getConfirmedNonce(tx.From)
+		if err != nil || !ok {
+			// keep the transaction on lookup failure; the timeout path remains the safety net
+			failed[from] = true
+			return false
+		}
+		resolved[from] = confirmed
+	}
+	return txNonce < confirmed
+}
+
+// getConfirmedNonce returns the number of transactions mined from the address at the latest block,
+// i.e. the lowest nonce not yet consumed on-chain. It queries every configured provider and returns
+// the most conservative (lowest) value so a lagging or misbehaving provider cannot cause a still
+// mineable transaction to be evicted.
+//
+// The "latest" tag carries the usual chain-tip caveat: if the nonce was consumed only in the tip
+// block and that block is later reorged out, an eviction here may turn out premature. This is the
+// same exposure as the mined-tx removal above and is bounded - eviction only drops Blockbook's cache
+// entry, it cancels nothing on-chain, and a still-valid tx is re-indexed when it is actually mined.
+func (p *AlternativeSendTxProvider) getConfirmedNonce(from string) (uint64, bool, error) {
+	address := ethcommon.HexToAddress(from)
+	var lowest uint64
+	var found bool
+	var firstErr error
+	for _, url := range p.urls {
+		result, err := p.callHttpStringResult(url, "eth_getTransactionCount", address, "latest")
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		nonce, err := hexutil.DecodeUint64(result)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if !found || nonce < lowest {
+			lowest = nonce
+			found = true
+		}
+	}
+	if !found {
+		return 0, false, firstErr
+	}
+	return lowest, true, nil
 }
 
 func (p *AlternativeSendTxProvider) providerKnowsTransaction(txid string) (bool, bool, error) {
