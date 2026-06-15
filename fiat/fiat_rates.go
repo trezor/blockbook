@@ -35,7 +35,7 @@ type RatesDownloaderInterface interface {
 	FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error)
 	UpdateHistoricalTickers() error
 	UpdateHistoricalTokenTickers() error
-	ReconcileHistoricalRates(windowDays int, maxGapDays int) error
+	ReconcileHistoricalRates(windowDays int, maxGapDays int) (int, error)
 }
 
 const (
@@ -504,19 +504,28 @@ func (fr *FiatRates) ReconcileHistoricalRatesAtStartup() {
 		glog.Info("FiatRatesDownloader: startup historical reconciliation disabled by config")
 		return
 	}
+	// A fiat-rate bug must never brick startup; recover, log and let blockbook come up.
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Errorf("FiatRatesDownloader: reconciliation panic recovered, continuing startup: %v", r)
+		}
+	}()
 	start := time.Now()
 	glog.Info("FiatRatesDownloader: starting historical rates reconciliation (startup self-healing)")
-	if err := fr.downloader.ReconcileHistoricalRates(reconcileWindowDays, reconcileMaxGapDays); err != nil {
+	filled, err := fr.downloader.ReconcileHistoricalRates(reconcileWindowDays, reconcileMaxGapDays)
+	if err != nil {
 		fr.observeUpdateDuration("reconcile", "error", start)
 		logFiatRatesDownloaderError("FiatRatesDownloader: reconciliation error ", err)
 		return
 	}
 	fr.observeUpdateDuration("reconcile", "success", start)
-	// refresh the in-memory daily cache so repaired tickers are served immediately
-	if err := fr.loadDailyTickers(); err != nil {
-		glog.Error("FiatRatesDownloader: loadDailyTickers after reconciliation error ", err)
+	// only refresh the in-memory daily cache (a full-history scan) if anything was repaired
+	if filled > 0 {
+		if err := fr.loadDailyTickers(); err != nil {
+			glog.Error("FiatRatesDownloader: loadDailyTickers after reconciliation error ", err)
+		}
 	}
-	glog.Infof("FiatRatesDownloader: historical rates reconciliation finished in %v", time.Since(start))
+	glog.Infof("FiatRatesDownloader: historical rates reconciliation finished in %v (%d points filled)", time.Since(start), filled)
 }
 
 func (fr *FiatRates) RunDownloader() error {

@@ -745,9 +745,11 @@ func (cg *Coingecko) resolveHistoricalDays(lastTicker *common.CurrencyRatesTicke
 // fillFromMarketChart writes the whole-day points from a market_chart response into
 // tickersToUpdate. With fillMissingOnly set, an already-present rate for the series is left
 // intact (used by the startup reconciliation so it repairs holes without rewriting existing
-// data). Returns the number of daily points written and the number of token points skipped
-// because their day had no base-currency ticker yet.
-func (cg *Coingecko) fillFromMarketChart(tickersToUpdate map[uint]*common.CurrencyRatesTicker, mc *marketChartPrices, vsCurrency string, token string, fillMissingOnly bool) (written int, noBaseTicker int, err error) {
+// data). When targetDays is non-nil, only points whose day-bucket is in the set are
+// considered, so the reconciliation touches (and therefore persists) only the missing days.
+// Returns the number of daily points written and the number of token points skipped because
+// their day had no base-currency ticker yet.
+func (cg *Coingecko) fillFromMarketChart(tickersToUpdate map[uint]*common.CurrencyRatesTicker, mc *marketChartPrices, vsCurrency string, token string, fillMissingOnly bool, targetDays map[uint]struct{}) (written int, noBaseTicker int, err error) {
 	warningLogged := false
 	for _, p := range mc.Prices {
 		timestamp := uint(p[0])
@@ -759,6 +761,11 @@ func (cg *Coingecko) fillFromMarketChart(tickersToUpdate map[uint]*common.Curren
 		if timestamp%(24*3600) != 0 || timestamp == 0 || rate == 0 {
 			// process only tickers for the whole day with non 0 value
 			continue
+		}
+		if targetDays != nil {
+			if _, wanted := targetDays[timestamp]; !wanted {
+				continue
+			}
 		}
 		ticker, found := tickersToUpdate[timestamp]
 		if !found {
@@ -826,7 +833,7 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.Curren
 	if err != nil {
 		return false, err
 	}
-	written, noBaseTicker, err := cg.fillFromMarketChart(tickersToUpdate, mc, vsCurrency, token, false)
+	written, noBaseTicker, err := cg.fillFromMarketChart(tickersToUpdate, mc, vsCurrency, token, false, nil)
 	if err != nil {
 		return false, err
 	}
@@ -1009,94 +1016,176 @@ type reconcileTarget struct {
 	token      string
 }
 
-// ReconcileHistoricalRates is the blocking startup self-healing pass. Within the trailing
-// windowDays window it repairs daily fiat rates missing from the DB — both interior holes
-// and the trailing gap — for the base coin (every vsCurrency) and every token, filling only
-// the days a series lacks so existing data is never rewritten. All fetching goes to the CDN.
+// missingDayWindow scans the stored daily tickers and determines which whole days are missing
+// within the reconcile window. It returns the missing day-bucket timestamps (unix seconds),
+// the earliest missing day, and whether any history exists at all. "Missing" means no record
+// for that day between the oldest in-window record and the last reconcilable day (the tip and
+// the still-forming current day are excluded — they belong to the runtime downloader). When
+// the window holds no records but history exists, the whole window counts as missing (a
+// trailing gap larger than the window), which the caller treats as a probable bug.
+func (cg *Coingecko) missingDayWindow(windowDays int) (missing map[uint]struct{}, earliest int64, haveHistory bool, err error) {
+	now := time.Now().UTC().Unix()
+	today := now - now%secondsInDay
+	windowStart := today - int64(windowDays)*secondsInDay
+	// reconciliation owns days strictly older than the tip; the tip (gap <= 1 day) and the
+	// still-forming current day are the runtime downloader's responsibility.
+	lastReconcilable := today - int64(coingeckoTipWindowDays+1)*secondsInDay
+
+	timestamps, err := cg.db.FiatRatesGetTickerTimestamps(time.Unix(windowStart, 0).UTC())
+	if err != nil {
+		return nil, 0, false, err
+	}
+	present := make(map[int64]struct{}, len(timestamps))
+	firstPresent := int64(0)
+	for _, ts := range timestamps {
+		day := ts - ts%secondsInDay
+		if day > lastReconcilable {
+			continue
+		}
+		if _, ok := present[day]; !ok {
+			present[day] = struct{}{}
+			if firstPresent == 0 || day < firstPresent {
+				firstPresent = day
+			}
+		}
+	}
+
+	startDay := windowStart
+	if len(present) > 0 {
+		// don't expect data older than the oldest record we have (the series/coin may simply
+		// not go back that far); only fill gaps from there forward.
+		startDay = firstPresent
+	} else {
+		lastAny, err := cg.db.FiatRatesFindLastTicker("", "")
+		if err != nil {
+			return nil, 0, false, err
+		}
+		if lastAny == nil {
+			return nil, 0, false, nil // no history at all, nothing to reconcile
+		}
+		lastDay := lastAny.Timestamp.UTC().Unix()
+		lastDay -= lastDay % secondsInDay
+		if lastDay >= windowStart {
+			// recent data exists but nothing old enough to reconcile (young DB, or only
+			// tip/current-day records) -> not a gap, nothing to do.
+			return make(map[uint]struct{}), 0, true, nil
+		}
+		// history predates the window entirely -> a trailing gap larger than the window;
+		// startDay stays at windowStart so the whole window is counted missing (-> flagged).
+	}
+
+	missing = make(map[uint]struct{})
+	earliest = 0
+	for day := startDay; day <= lastReconcilable; day += secondsInDay {
+		if _, ok := present[day]; ok {
+			continue
+		}
+		if earliest == 0 {
+			earliest = day
+		}
+		missing[uint(day)] = struct{}{}
+	}
+	return missing, earliest, true, nil
+}
+
+// ReconcileHistoricalRates is the blocking startup self-healing pass. It repairs daily fiat
+// rates missing from the DB — both interior holes and trailing gaps — within the last
+// windowDays days, for the base coin (every vsCurrency) and every token, filling only the
+// missing days so existing data is never rewritten. All fetching goes to the CDN. It returns
+// the number of daily points filled (0 when the DB is already healthy).
 //
-// It runs in two stages, as a safety valve against runaway repair:
-//   - Stage 1 reads the DB and classifies every series. A series whose most recent ticker is
-//     at least maxGapDays old (a months-long gap) is reported as gap_too_large and skipped —
-//     such a gap signals a bug/misconfiguration, not routine catch-up. First-seen series
-//     (no ticker yet) are left to the runtime downloader's initial population.
-//   - Stage 2 fetches the window for each repair candidate, fills the holes and persists.
+// Two stages, with the gap guard acting as a safety valve against runaway repair:
+//   - Stage 1 reads the DB (keys only) and computes which whole days are missing. If 90+ days
+//     (maxGapDays) are missing it is reported as gap_too_large and nothing is fetched, since
+//     such a gap signals a bug/misconfiguration rather than routine catch-up. If zero days are
+//     missing it returns immediately — the common, healthy case makes no network requests.
+//   - Stage 2 fetches just the missing-day range from the CDN for each series and fills only
+//     those days.
 //
 // It is a no-op while bootstrap is still in progress (the bootstrap pass owns full-history
 // population) or when no CDN URL is configured.
-func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) error {
+func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) (int, error) {
 	bootstrapInProgress, _, err := historicalBootstrapInProgress(cg.db)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if bootstrapInProgress {
 		glog.Info("FiatRates reconcile: bootstrap still in progress, skipping startup reconciliation")
-		return nil
+		return 0, nil
 	}
 	if cg.bootstrapURL == "" {
 		glog.Info("FiatRates reconcile: no CDN bootstrap URL configured, skipping startup reconciliation")
-		return nil
+		return 0, nil
 	}
-	days := strconv.Itoa(windowDays)
-	cdnURL := cg.metadataURL()
 
-	// ---- Stage 1: read DB, classify what is missing, collect stats ----
-	vs, err := cg.simpleSupportedVSCurrenciesAt(cdnURL, priorityLow)
+	// ---- Stage 1: read DB (cheap key scan), find which whole days are missing ----
+	missingDays, earliestMissing, haveHistory, err := cg.missingDayWindow(windowDays)
 	if err != nil {
-		return fmt.Errorf("reconcile: supported_vs_currencies: %w", err)
+		return 0, fmt.Errorf("reconcile: scan missing days: %w", err)
+	}
+	if !haveHistory {
+		glog.Info("FiatRates reconcile: no historical rates present, nothing to reconcile")
+		return 0, nil
+	}
+	if len(missingDays) == 0 {
+		glog.Infof("FiatRates reconcile: no missing days within the last %d days, historical rates are healthy", windowDays)
+		return 0, nil
+	}
+	if len(missingDays) >= maxGapDays {
+		// a months-long gap is almost certainly a bug/misconfiguration; surface it instead of
+		// firing a multi-thousand-request backfill on every restart.
+		cg.observeUnable(fiatPhaseReconcile, fiatUnableGapTooLarge, len(missingDays))
+		glog.Warningf("FiatRates reconcile: %d missing days within the %d-day window (>= %d guard), probable bug/misconfiguration; not auto-backfilling", len(missingDays), windowDays, maxGapDays)
+		return 0, nil
+	}
+
+	// fetch a range that spans back to the earliest missing day (capped to the window)
+	nowDay := time.Now().UTC().Unix()
+	nowDay -= nowDay % secondsInDay
+	fetchDays := int((nowDay-earliestMissing)/secondsInDay) + 1
+	if fetchDays > windowDays {
+		fetchDays = windowDays
+	}
+	days := strconv.Itoa(fetchDays)
+	cdnURL := cg.sourceURLForRange(coingeckoRangeBackfill)
+	metaURL := cg.metadataURL()
+
+	// enumerate the series to repair: base coin x each vsCurrency, plus each token
+	vs, err := cg.simpleSupportedVSCurrenciesAt(metaURL, priorityLow)
+	if err != nil {
+		return 0, fmt.Errorf("reconcile: supported_vs_currencies: %w", err)
 	}
 	cg.cacheMu.Lock()
 	cg.vsCurrencies = vs
 	cg.cacheMu.Unlock()
 
-	candidates := make([]reconcileTarget, 0, len(vs))
+	targets := make([]reconcileTarget, 0, len(vs))
 	for _, currency := range vs {
-		candidates = append(candidates, reconcileTarget{coinId: cg.coin, vsCurrency: currency})
+		targets = append(targets, reconcileTarget{coinId: cg.coin, vsCurrency: currency})
 	}
 	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
-		if err := cg.platformIdsAt(cdnURL, priorityLow); err != nil {
-			return fmt.Errorf("reconcile: coins/list: %w", err)
+		if err := cg.platformIdsAt(metaURL, priorityLow); err != nil {
+			return 0, fmt.Errorf("reconcile: coins/list: %w", err)
 		}
 		cg.cacheMu.Lock()
 		platformIdsToTokens := cg.platformIdsToTokens
 		cg.cacheMu.Unlock()
 		for tokenId, token := range platformIdsToTokens {
-			candidates = append(candidates, reconcileTarget{coinId: tokenId, vsCurrency: cg.platformVsCurrency, token: token})
+			targets = append(targets, reconcileTarget{coinId: tokenId, vsCurrency: cg.platformVsCurrency, token: token})
 		}
 	}
 
-	toRepair := make([]reconcileTarget, 0, len(candidates))
-	flagged, firstSeen := 0, 0
-	for _, c := range candidates {
-		lastTicker, err := cg.db.FiatRatesFindLastTicker(c.vsCurrency, c.token)
-		if err != nil {
-			return fmt.Errorf("reconcile: find last ticker %s/%s: %w", c.vsCurrency, c.token, err)
-		}
-		if lastTicker == nil {
-			// first-seen series: initial population belongs to the runtime downloader
-			firstSeen++
-			continue
-		}
-		gapDays := int(time.Since(lastTicker.Timestamp) / (24 * time.Hour))
-		if gapDays >= maxGapDays {
-			cg.observeUnable(fiatPhaseReconcile, fiatUnableGapTooLarge, 1)
-			flagged++
-			continue
-		}
-		toRepair = append(toRepair, c)
-	}
-	glog.Infof("FiatRates reconcile stage 1: %d series to repair, %d flagged gap_too_large (>=%dd), %d first-seen skipped (of %d candidates, window %dd)",
-		len(toRepair), flagged, maxGapDays, firstSeen, len(candidates), windowDays)
+	glog.Infof("FiatRates reconcile stage 1: %d missing day(s) within %dd (earliest %s); fetching days=%d for %d series",
+		len(missingDays), windowDays, time.Unix(earliestMissing, 0).UTC().Format("2006-01-02"), fetchDays, len(targets))
 
-	if len(toRepair) == 0 {
-		return nil
-	}
-
-	// ---- Stage 2: fetch the window from the CDN, fill holes, persist ----
+	// ---- Stage 2: fetch the missing-day range from the CDN and fill only those days ----
+	// targetDays ensures only the (few) missing-day records are touched and persisted, so the
+	// shared map holds at most len(missingDays) records regardless of how many series we scan.
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
-	repaired, failed := 0, 0
+	filled, failed, repairedTokens := 0, 0, 0
 	var banErr error
-	for i, c := range toRepair {
-		mc, err := cg.coinMarketChartAt(cg.sourceURLForRange(coingeckoRangeBackfill), c.coinId, c.vsCurrency, days, true, priorityLow)
+	for _, c := range targets {
+		mc, err := cg.coinMarketChartAt(cdnURL, c.coinId, c.vsCurrency, days, true, priorityLow)
 		if err != nil {
 			failed++
 			if isCoingeckoCloudflareBanError(err) {
@@ -1109,34 +1198,27 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) er
 			glog.Errorf("FiatRates reconcile: fetch %s/%s failed: %v", c.coinId, c.vsCurrency, err)
 			continue
 		}
-		written, noBaseTicker, err := cg.fillFromMarketChart(tickersToUpdate, mc, c.vsCurrency, c.token, true)
+		written, noBaseTicker, err := cg.fillFromMarketChart(tickersToUpdate, mc, c.vsCurrency, c.token, true, missingDays)
 		if err != nil {
 			if storeErr := cg.storeTickers(tickersToUpdate); storeErr != nil {
-				return storeErr
+				return filled, storeErr
 			}
-			return fmt.Errorf("reconcile: fill %s/%s: %w", c.coinId, c.vsCurrency, err)
+			return filled, fmt.Errorf("reconcile: fill %s/%s: %w", c.coinId, c.vsCurrency, err)
 		}
+		filled += written
 		cg.observeFetchedUnits(fiatPhaseReconcile, written)
 		if c.token != "" && written > 0 {
+			repairedTokens++
 			cg.observeFetchedToken(fiatPhaseReconcile)
 		}
 		cg.observeUnable(fiatPhaseReconcile, fiatUnableNoBaseTicker, noBaseTicker)
-		repaired++
-		// flush periodically to bound memory (token-bearing day records are large)
-		if (i+1)%100 == 0 {
-			if err := cg.storeTickers(tickersToUpdate); err != nil {
-				return err
-			}
-			tickersToUpdate = make(map[uint]*common.CurrencyRatesTicker)
-			glog.Infof("FiatRates reconcile stage 2: processed %d of %d series", i+1, len(toRepair))
-		}
 	}
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
-		return err
+		return filled, err
 	}
-	glog.Infof("FiatRates reconcile stage 2: repaired %d series, %d fetch failures", repaired, failed)
+	glog.Infof("FiatRates reconcile stage 2: filled %d point(s) across %d series (%d token series), %d fetch failures", filled, len(targets), repairedTokens, failed)
 	if banErr != nil {
-		return banErr
+		return filled, banErr
 	}
-	return nil
+	return filled, nil
 }
