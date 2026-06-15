@@ -175,7 +175,7 @@ panels:
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_mempool_reconciliation:
     title: Alternative mempool reconciliation
-    description: Decisions made while reconciling alternative-provider-only send-tx cache entries; provider_missing, mined and timeout remove entries, while provider_error keeps them for retry.
+    description: Decisions made while reconciling alternative-provider-only send-tx cache entries; provider_missing, mined, nonce_superseded and timeout remove entries, while provider_error keeps them for retry.
     queries:
       actions:
         promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60
