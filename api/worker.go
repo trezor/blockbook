@@ -1192,6 +1192,7 @@ type ethereumTypeAddressData struct {
 	tokens               Tokens
 	contractInfo         *bchain.ContractInfo
 	nonce                string
+	confirmedNonce       string
 	nonContractTxs       int
 	internalTxs          int
 	totalResults         int
@@ -1211,7 +1212,7 @@ func (w *Worker) getSecondaryTicker(secondaryCoin string) *common.CurrencyRatesT
 
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
-	var n uint64
+	var nPending, nConfirmed uint64
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
 	// Load cached contract list and totals from the index; this drives token lookups.
@@ -1240,9 +1241,9 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if b != nil {
 			ba.BalanceSat = *b
 		}
-		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
+		nPending, nConfirmed, err = w.chain.EthereumTypeGetNonces(addrDesc)
 		if err != nil {
-			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
+			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonces %v", addrDesc)
 		}
 		ticker := w.getSecondaryTicker(secondaryCoin)
 		var erc20Balances map[string]*big.Int
@@ -1348,7 +1349,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		}
 	}
 	// returns 0 for unknown address
-	d.nonce = strconv.Itoa(int(n))
+	d.nonce = strconv.Itoa(int(nPending))
+	d.confirmedNonce = strconv.Itoa(int(nConfirmed))
 	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
 	if len(d.tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
 		// Query the backend directly to return contract metadata/balance for filtered views.
@@ -1710,6 +1712,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		TotalSecondaryValue:   totalSecondaryValue,
 		ContractInfo:          contractInfoResultFromBchain(ed.contractInfo, contractInfoBestHeight),
 		Nonce:                 ed.nonce,
+		ConfirmedNonce:        ed.confirmedNonce,
 		AddressAliases:        w.getAddressAliases(addresses),
 		StakingPools:          ed.stakingPools,
 		ChainExtraData:        accountChainExtraData,

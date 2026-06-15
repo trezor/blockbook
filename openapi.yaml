@@ -2323,6 +2323,8 @@ components:
             type: string
         nonce:
           type: string
+        confirmedNonce:
+          type: string
         usedTokens:
           type: integer
         tokens:

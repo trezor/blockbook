@@ -433,7 +433,8 @@ type Address struct {
 	InternalTxs           int                 `json:"internalTxs,omitempty" ts_doc:"Number of internal transactions (e.g., Ethereum calls)."`
 	Transactions          []*Tx               `json:"transactions,omitempty" ts_doc:"List of transaction details (if requested)."`
 	Txids                 []string            `json:"txids,omitempty" ts_doc:"List of transaction IDs (if detailed data is not requested)."`
-	Nonce                 string              `json:"nonce,omitempty" ts_doc:"Current transaction nonce for Ethereum-like addresses."`
+	Nonce                 string              `json:"nonce,omitempty" ts_doc:"Current (pending) transaction nonce for Ethereum-like addresses, including mempool transactions. This is the next nonce the account will use."`
+	ConfirmedNonce        string              `json:"confirmedNonce,omitempty" ts_doc:"Confirmed transaction nonce for Ethereum-like addresses, reflecting only mined transactions (eth_getTransactionCount at the latest block). Equals nonce when the account has no pending transactions."`
 	UsedTokens            int                 `json:"usedTokens,omitempty" ts_doc:"Number of tokens with any historical usage at this address."`
 	Tokens                Tokens              `json:"tokens,omitempty" ts_doc:"List of tokens associated with this address."`
 	SecondaryValue        float64             `json:"secondaryValue,omitempty" ts_doc:"Total value of the address in secondary currency (e.g. fiat)."`
