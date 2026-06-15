@@ -47,14 +47,11 @@ var (
 	connectionCounter uint64
 )
 
-// websocketChannel is a single client connection. ipKey is the per-IP
-// rate-limit key derived from ip (the IPv4 address, or an IPv6 address
-// aggregated to its /64); blockKey is the IP-blocklist key (the IPv4 address,
-// or the full IPv6 /128) — kept narrower than ipKey so a hard block does not
-// take out a whole shared /64; blockable records whether blockKey is a
-// trustworthy, non-infrastructure key that is safe to add to the IP blocklist;
-// messageRate is the per-connection sliding-window message counter (nil when the
-// rate limit is disabled). All are touched only by ServeHTTP/inputLoop.
+// websocketChannel is a single client connection. ipKey is the per-IP rate-limit
+// key (IPv6 aggregated to /64); blockKey is the IP-blocklist key (full /128) kept
+// narrower so a hard block does not take out a whole shared /64; blockable records
+// whether blockKey is safe to add to the blocklist; messageRate is the per-connection
+// message counter (nil when disabled). All are touched only by ServeHTTP/inputLoop.
 type websocketChannel struct {
 	id                           uint64
 	requests                     uint64 // total requests received on this connection, accessed atomically
@@ -126,11 +123,9 @@ type WebsocketServer struct {
 	messageRateLimit  int
 	messageRateWindow time.Duration
 	ipBlockDuration   time.Duration
-	// ipBlockEnabled is the single switch for the IP blocklist: true only when
-	// the message rate limit can produce breaches (messageRateLimit > 0) and
-	// blocking is configured (ipBlockDuration > 0). When false the per-connection
-	// block check, blockability computation, and maintenance sweep are all
-	// skipped, so disabling the feature costs nothing on the hot paths.
+	// ipBlockEnabled gates the whole IP blocklist: true only when the rate limit can
+	// produce breaches (messageRateLimit > 0) and blocking is configured
+	// (ipBlockDuration > 0). When false, all block checks/sweeps are skipped.
 	ipBlockEnabled   bool
 	websocketLimiter *websocketConnectionLimiter
 	// Shutdown coordination: protects shuttingDown + activeChannels and gates
@@ -291,11 +286,9 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes, s.trustPseudoIPv6)
 	ipKey := rateLimitKey(ip)
-	// blockKey/blockable are only meaningful (and only computed) when the IP
-	// blocklist is enabled, so the blockKey derivation and the O(prefixes)
-	// isBlockableKey scan are skipped when disabled. blockKey keeps IPv6 at the
-	// full /128 so a block never takes out a shared /64 (the connection limiter
-	// keyed on ipKey still aggregates to /64).
+	// blockKey/blockable are computed only when the IP blocklist is enabled (skips the
+	// O(prefixes) isBlockableKey scan otherwise). blockKey keeps IPv6 at the full /128
+	// so a block never takes out a shared /64 (ipKey still aggregates to /64).
 	bKey := ""
 	blockable := false
 	if s.ipBlockEnabled {

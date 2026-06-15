@@ -1984,21 +1984,13 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
-// DefaultBalanceHistoryMaxTxsREST / DefaultBalanceHistoryMaxTxsWS are the
-// default caps on the number of transactions a single balance-history request
-// may aggregate, split by transport. The cap bounds the per-request DB work
-// (one read per aggregated transaction) so that a query over an address or xpub
-// with a very large transaction history cannot exhaust server resources.
-//
-// The REST default is tighter because the REST API is an open, unauthenticated
-// surface. The WS default is far more generous: Trezor Suite talks to Blockbook
-// over WS exclusively, requests the full account history for its balance graph
-// (no from/to), and never derives the displayed balance from balance history —
-// so the WS cap must not break a normal (even heavy) wallet graph, while still
-// bounding a single expensive message. Both are generous enough never to affect
-// a normal wallet; operators can override (or set 0 to disable) via
-// <NET>_WS_BALANCE_HISTORY_MAX_TXS / <NET>_REST_BALANCE_HISTORY_MAX_TXS (with
-// <NET>_BALANCE_HISTORY_MAX_TXS as a shared fallback for both).
+// DefaultBalanceHistoryMaxTxsREST / DefaultBalanceHistoryMaxTxsWS cap how many
+// transactions a single balance-history request may aggregate, split by transport.
+// The cap bounds per-request DB work (one read per aggregated transaction). REST is
+// tighter (open, unauthenticated surface); WS is generous because Trezor Suite
+// requests full account history over WS for its balance graph. Override or disable
+// (0) via <NET>_{WS,REST}_BALANCE_HISTORY_MAX_TXS (<NET>_BALANCE_HISTORY_MAX_TXS
+// sets both).
 const (
 	DefaultBalanceHistoryMaxTxsREST = 250000
 	DefaultBalanceHistoryMaxTxsWS   = 1000000

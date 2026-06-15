@@ -238,12 +238,9 @@ func (l *restAPIRateLimiter) wrapAPI(next http.Handler, apiRoot string) http.Han
 		}
 		ip, blockSafe, fromHeader := resolveClientIP(r, l.trustedProxies, l.cloudflarePrefixes, l.trustPseudoIPv6)
 		if !fromHeader && isLocalOrTrustedProxyIP(ip, l.trustedProxies) {
-			// The request came straight from the operator's own
-			// loopback/LAN/trusted proxy with no client-attribution header: the
-			// key would not identify a client but the shared infrastructure
-			// address (local tooling, or a proxy that does not set X-Real-Ip),
-			// so limiting it would throttle a whole deployment as one client.
-			// These were never limited before, keep them exempt.
+			// Request came straight from the operator's own loopback/LAN/trusted proxy
+			// with no client-attribution header: the key would be a shared infrastructure
+			// address, so limiting it would throttle the whole deployment as one client.
 			l.localBypassWarn.Do(func() {
 				glog.Info("REST API request from local/trusted peer ", ip,
 					" without a client attribution header; such requests are not rate limited")
@@ -364,12 +361,10 @@ func (l *restAPIRateLimiter) recordBreachLocked(blockKey string, blockable bool,
 	if l.blockDuration <= 0 || !blockable {
 		return
 	}
-	// Breaches and the block accrue on the block key (the full /128 for IPv6),
-	// not the /64 rate-limit key, so one abusive address cannot drive an entire
-	// shared /64 into a block. For IPv4 the two keys coincide. The block entry
-	// may not exist yet when it differs from the rate-limit entry; respect the
-	// tracking cap so a flood rotating block keys cannot grow the map unbounded
-	// (fail open -- the /64 rate limiter still throttles them).
+	// Breaches and the block accrue on the block key (full /128 for IPv6, == the
+	// rate-limit key for IPv4) so one address cannot block a shared /64. Respect the
+	// tracking cap so a flood rotating block keys cannot grow the map (fail open --
+	// the /64 rate limiter still throttles them).
 	client := l.clients[blockKey]
 	if client == nil {
 		if len(l.clients) >= restAPIMaxTrackedClients {

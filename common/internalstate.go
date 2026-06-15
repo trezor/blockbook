@@ -106,25 +106,17 @@ type InternalState struct {
 	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
 	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
 
-	// BalanceHistoryMaxTxsWS / BalanceHistoryMaxTxsREST cap how many transactions
-	// a single balance-history request (address or xpub) may aggregate, split by
-	// transport. Each aggregated transaction costs a DB read, so an unbounded
-	// request over a heavy address or xpub is a cheap-to-send, expensive-to-serve
-	// DoS; this bounds the work and returns an error past the cap so the client
-	// narrows the range. 0 disables the cap (unlimited). The WS cap is generous
-	// (Trezor Suite uses WS exclusively and never derives balances from balance
-	// history); the REST cap is tighter because the REST API is an open,
-	// unauthenticated surface.
+	// BalanceHistoryMaxTxsWS / BalanceHistoryMaxTxsREST cap how many transactions a
+	// single balance-history request (address or xpub) may aggregate; each costs a DB
+	// read, so this bounds a cheap-to-send DoS and errors past the cap (0 = unlimited).
+	// WS is generous (Trezor Suite's full-history graph); REST is tighter (open surface).
 	BalanceHistoryMaxTxsWS   int `json:"-" ts_doc:"Max transactions aggregated per WS balance-history request, 0 = unlimited (not exposed)."`
 	BalanceHistoryMaxTxsREST int `json:"-" ts_doc:"Max transactions aggregated per REST balance-history request, 0 = unlimited (not exposed)."`
 
-	// websocket IP blocklist: keys (IPv4 address or full IPv6 /128) that were
-	// flagged for flooding a single connection past the per-connection message
-	// rate limit and are blocked from opening new connections until Until. The
-	// block key is the /128 (not the /64 the rate limiter aggregates to) so a
-	// block cannot take out an entire shared /64. Guarded
-	// by its own mutex (wsBlockMux) rather than is.mux because IsWsIPBlocked is
-	// consulted on every websocket connection attempt, before the per-IP limiter.
+	// websocket IP blocklist: keys (IPv4 address or full IPv6 /128) blocked from
+	// opening new connections after flooding a single connection past the message-rate
+	// limit. Keyed on the /128 (not the limiter's /64) so a block cannot take out a
+	// shared /64. Guarded by its own mutex (consulted on every connection attempt).
 	wsBlockMux   sync.Mutex
 	wsBlockedIPs map[string]*WsBlockedIP
 }

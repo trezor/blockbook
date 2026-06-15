@@ -784,12 +784,10 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	if err != nil {
 		return nil, err
 	}
-	// Load only the derived addresses and their balances (cheap, shared cache).
-	// We deliberately do NOT request AccountDetailsTxidHistory: that loads every
-	// derived address's full txid history (unbounded, and ignoring the from/to
-	// window) into the cache before any cap could reject it. Instead query each
-	// address's txids within the requested height range, bounded to maxTxs+1, the
-	// same way GetBalanceHistory does for a single address.
+	// Load only the derived addresses and their balances (cheap, shared cache), not
+	// AccountDetailsTxidHistory -- that loads every address's full txid history
+	// (unbounded, ignoring from/to) before any cap could reject it. Instead query each
+	// address's txids within the height range below, bounded to maxTxs+1.
 	data, _, inCache, err := w.getXpubData(xd, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
 		OnlyConfirmed: true,
@@ -803,10 +801,9 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 			selfAddrDesc[string(da[i].addrDesc)] = struct{}{}
 		}
 	}
-	// Bound the work: each transaction in the range costs a DB read below, so an
-	// unbounded scan over a heavy xpub is a cheap-to-send DoS. Load at most one
-	// more than the cap across all derived addresses so the overflow is
-	// detectable, then reject rather than silently truncate.
+	// Bound the work: each transaction costs a DB read below, so load at most one
+	// more than the cap across all derived addresses (overflow detectable), then
+	// reject rather than silently truncate.
 	remaining := maxInt
 	if maxTxs > 0 {
 		remaining = maxTxs + 1
