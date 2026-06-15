@@ -1307,8 +1307,8 @@ func TestGetHighGranularityTickers_NotEnoughPricePoints(t *testing.T) {
 	}
 }
 
-// Reconciliation repairs an interior hole in daily history within the window, fetching from
-// the CDN, and must not overwrite a day whose rate is already present (fill-missing only).
+// Reconciliation fills an interior missing day (no record at all) for both the base coin and
+// a token, fetching from the CDN, and must touch only the missing day (existing days intact).
 func TestReconcileHistoricalRates_RepairsInteriorHole(t *testing.T) {
 	config := common.Config{CoinName: "fakecoin"}
 	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
@@ -1318,23 +1318,25 @@ func TestReconcileHistoricalRates_RepairsInteriorHole(t *testing.T) {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
 
-	d0, d1, d2 := midnightDaysAgo(0), midnightDaysAgo(1), midnightDaysAgo(2)
-	// d0 (sentinel 111) and d2 present for usd; d1 is an interior hole.
-	seedDailyTicker(t, d, d0, map[string]float32{"usd": 111}, nil)
-	seedDailyTicker(t, d, d2, map[string]float32{"usd": 333}, nil)
+	// present: d2, d4, d5 (all older than the tip); d3 is an interior hole (no record).
+	d2, d3, d4, d5 := midnightDaysAgo(2), midnightDaysAgo(3), midnightDaysAgo(4), midnightDaysAgo(5)
+	seedDailyTicker(t, d, d2, map[string]float32{"usd": 222}, nil)
+	seedDailyTicker(t, d, d4, map[string]float32{"usd": 444}, nil)
+	seedDailyTicker(t, d, d5, map[string]float32{"usd": 555}, nil)
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/simple/supported_vs_currencies":
 			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/list":
+			_, _ = w.Write([]byte(`[{"id":"ethereum","symbol":"eth","name":"Ethereum","platforms":{}},{"id":"token-a","symbol":"ta","name":"Token A","platforms":{"ethereum":"0xabc"}}]`))
 		case "/coins/ethereum/market_chart":
-			if got := r.URL.Query().Get("days"); got != "365" {
-				http.Error(w, fmt.Sprintf("unexpected days %q", got), http.StatusBadRequest)
-				return
-			}
-			// d0 returns 999 to prove fill-missing does NOT overwrite the existing 111.
-			body := fmt.Sprintf(`{"prices":[[%d,333],[%d,222],[%d,999]]}`,
-				d2.Unix()*1000, d1.Unix()*1000, d0.Unix()*1000)
+			// d2 returns 999 to prove the present day is not touched (only d3 is wanted).
+			body := fmt.Sprintf(`{"prices":[[%d,999],[%d,333],[%d,888]]}`,
+				d2.Unix()*1000, d3.Unix()*1000, d4.Unix()*1000)
+			_, _ = w.Write([]byte(body))
+		case "/coins/token-a/market_chart":
+			body := fmt.Sprintf(`{"prices":[[%d,0.5]]}`, d3.Unix()*1000)
 			_, _ = w.Write([]byte(body))
 		default:
 			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
@@ -1343,36 +1345,118 @@ func TestReconcileHistoricalRates_RepairsInteriorHole(t *testing.T) {
 	defer mockServer.Close()
 
 	cg := &Coingecko{
+		coin:               "ethereum",
+		platformIdentifier: "ethereum",
+		platformVsCurrency: "eth",
+		bootstrapURL:       mockServer.URL,
+		tipURL:             mockServer.URL,
+		httpClient:         mockServer.Client(),
+		db:                 d,
+		plan:               coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 2 { // usd + token on d3
+		t.Fatalf("unexpected filled points: got %d, want 2", filled)
+	}
+
+	t3, err := d.FiatRatesGetTicker(&d3)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d3 failed: %v", err)
+	}
+	if t3 == nil || t3.Rates["usd"] != 333 {
+		t.Fatalf("interior hole base rate not repaired: got %+v, want usd=333", t3)
+	}
+	if t3.TokenRates["0xabc"] != 0.5 {
+		t.Fatalf("interior hole token rate not repaired: got %+v, want 0xabc=0.5", t3.TokenRates)
+	}
+	t2, err := d.FiatRatesGetTicker(&d2)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d2 failed: %v", err)
+	}
+	if t2 == nil || t2.Rates["usd"] != 222 {
+		t.Fatalf("present day was modified: got %+v, want usd=222", t2)
+	}
+}
+
+// A healthy DB (no missing days in the window) must make no network requests at all.
+func TestReconcileHistoricalRates_HealthyMakesNoRequests(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// continuous coverage from d5 to d2 (the last reconcilable day) -> no gaps
+	for _, n := range []int{2, 3, 4, 5} {
+		seedDailyTicker(t, d, midnightDaysAgo(n), map[string]float32{"usd": 100}, nil)
+	}
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("healthy DB must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
 		coin:         "ethereum",
-		bootstrapURL: mockServer.URL,
-		tipURL:       mockServer.URL,
-		httpClient:   mockServer.Client(),
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
 		db:           d,
 		plan:         coingeckoPlanFree,
 	}
 
-	if err := cg.ReconcileHistoricalRates(365, 90); err != nil {
+	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
-
-	t1, err := d.FiatRatesGetTicker(&d1)
-	if err != nil {
-		t.Fatalf("FiatRatesGetTicker d1 failed: %v", err)
-	}
-	if t1 == nil || t1.Rates["usd"] != 222 {
-		t.Fatalf("interior hole not repaired: got %+v, want usd=222", t1)
-	}
-	t0, err := d.FiatRatesGetTicker(&d0)
-	if err != nil {
-		t.Fatalf("FiatRatesGetTicker d0 failed: %v", err)
-	}
-	if t0 == nil || t0.Rates["usd"] != 111 {
-		t.Fatalf("fill-missing overwrote existing rate: got %+v, want usd=111", t0)
+	if filled != 0 {
+		t.Fatalf("healthy DB should fill nothing, got %d", filled)
 	}
 }
 
-// A series whose most recent ticker is older than the gap guard must be flagged and skipped,
-// not refetched.
+// A young DB whose only records are in the tip zone (today/yesterday) is not a gap and must
+// not be flagged or fetched.
+func TestReconcileHistoricalRates_YoungDBMakesNoRequests(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// only tip-zone records exist (today, yesterday) -> nothing older to reconcile
+	seedDailyTicker(t, d, midnightDaysAgo(0), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(1), map[string]float32{"usd": 100}, nil)
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("young DB must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("young DB should fill nothing, got %d", filled)
+	}
+}
+
+// When the number of missing days reaches the guard it is flagged as gap_too_large and
+// nothing is fetched (not even the series enumeration), avoiding a backfill storm on a
+// probably-broken DB.
 func TestReconcileHistoricalRates_GapTooLargeSkipsFetch(t *testing.T) {
 	config := common.Config{CoinName: "fakecoin"}
 	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
@@ -1381,37 +1465,29 @@ func TestReconcileHistoricalRates_GapTooLargeSkipsFetch(t *testing.T) {
 	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
-	// last usd ticker is 100 days old (>= 90-day guard)
-	seedDailyTicker(t, d, midnightDaysAgo(100), map[string]float32{"usd": 100}, nil)
+	// only two records far apart -> ~197 missing days between them, well over the 90 guard
+	seedDailyTicker(t, d, midnightDaysAgo(2), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(200), map[string]float32{"usd": 100}, nil)
 
-	var fetched int32
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/simple/supported_vs_currencies":
-			_, _ = w.Write([]byte(`["usd"]`))
-		case "/coins/ethereum/market_chart":
-			atomic.StoreInt32(&fetched, 1)
-			http.Error(w, "market_chart must not be called for a gap_too_large series", http.StatusInternalServerError)
-		default:
-			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
-		}
-	}))
-	defer mockServer.Close()
-
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("gap_too_large must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
 	cg := &Coingecko{
 		coin:         "ethereum",
-		bootstrapURL: mockServer.URL,
-		tipURL:       mockServer.URL,
-		httpClient:   mockServer.Client(),
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
 		db:           d,
 		plan:         coingeckoPlanFree,
 	}
 
-	if err := cg.ReconcileHistoricalRates(365, 90); err != nil {
+	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
-	if atomic.LoadInt32(&fetched) != 0 {
-		t.Fatal("expected no market_chart fetch for a gap_too_large series")
+	if filled != 0 {
+		t.Fatalf("gap_too_large should fill nothing, got %d", filled)
 	}
 }
 
@@ -1437,7 +1513,7 @@ func TestReconcileHistoricalRates_NoCDNIsNoOp(t *testing.T) {
 		plan:       coingeckoPlanFree,
 	}
 
-	if err := cg.ReconcileHistoricalRates(365, 90); err != nil {
+	if _, err := cg.ReconcileHistoricalRates(365, 90); err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
 }

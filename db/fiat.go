@@ -234,6 +234,27 @@ func (d *RocksDB) FiatRatesGetAllTickers(fn func(ticker *common.CurrencyRatesTic
 	return nil
 }
 
+// FiatRatesGetTickerTimestamps returns, in ascending order, the unix-second timestamps of all
+// stored fiat-rate tickers at or after `from`. It reads keys only (no value decoding), so it
+// stays cheap even over long history -- used by the startup reconciliation to detect which
+// whole days are missing without loading every (potentially large) record.
+func (d *RocksDB) FiatRatesGetTickerTimestamps(from time.Time) ([]int64, error) {
+	fromKey := []byte(from.UTC().Format(FiatRatesTimeFormat))
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	var timestamps []int64
+	for it.Seek(fromKey); it.Valid(); it.Next() {
+		t, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
+		if err != nil {
+			// defensively skip any key that is not a valid timestamp
+			continue
+		}
+		timestamps = append(timestamps, t.Unix())
+	}
+	return timestamps, nil
+}
+
 // FiatRatesFindLastTicker gets the last FiatRates record, of the base currency, vsCurrency or the token if specified
 func (d *RocksDB) FiatRatesFindLastTicker(vsCurrency string, token string) (*common.CurrencyRatesTicker, error) {
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
