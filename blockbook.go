@@ -801,8 +801,21 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
+// runStartupSelfHealing runs blocking, at-startup self-healing tasks once RocksDB is
+// initialized. It blocks until done so the rest of startup proceeds against a consistent DB.
+// Future self-healing tasks can be added here; today it reconciles missing historical fiat
+// rates before the periodic downloader loops start.
+func runStartupSelfHealing() {
+	if fiatRates != nil && fiatRates.Enabled {
+		fiatRates.ReconcileHistoricalRatesAtStartup()
+	}
+}
+
 func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, config *common.Config) {
 	if fiatRates.Enabled {
+		// Block on startup self-healing before the periodic loops begin, so historical gaps
+		// are repaired via the CDN without contending with the Free-tier tip loop.
+		runStartupSelfHealing()
 		go fiatRates.RunDownloader()
 	}
 

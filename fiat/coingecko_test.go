@@ -13,8 +13,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 )
+
+// midnightDaysAgo returns the UTC midnight (a whole-day bucket) n days before today.
+func midnightDaysAgo(n int) time.Time {
+	s := time.Now().UTC().Unix()
+	s -= s % secondsInDay
+	s -= int64(n) * secondsInDay
+	return time.Unix(s, 0).UTC()
+}
+
+// seedDailyTicker stores a single daily ticker directly into the DB for test setup.
+func seedDailyTicker(t *testing.T, d *db.RocksDB, ts time.Time, rates map[string]float32, tokenRates map[string]float32) {
+	t.Helper()
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	ticker := &common.CurrencyRatesTicker{Timestamp: ts, Rates: rates, TokenRates: tokenRates}
+	if err := d.FiatRatesStoreTicker(wb, ticker); err != nil {
+		t.Fatalf("FiatRatesStoreTicker failed: %v", err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatalf("WriteBatch failed: %v", err)
+	}
+}
 
 // roundTripFunc serves canned HTTP responses without binding a loopback port
 // (httptest needs a local listener, which some sandboxes disallow) and lets a
@@ -1280,5 +1304,140 @@ func TestGetHighGranularityTickers_NotEnoughPricePoints(t *testing.T) {
 	}
 	if tickers != nil {
 		t.Fatal("expected nil tickers")
+	}
+}
+
+// Reconciliation repairs an interior hole in daily history within the window, fetching from
+// the CDN, and must not overwrite a day whose rate is already present (fill-missing only).
+func TestReconcileHistoricalRates_RepairsInteriorHole(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	d0, d1, d2 := midnightDaysAgo(0), midnightDaysAgo(1), midnightDaysAgo(2)
+	// d0 (sentinel 111) and d2 present for usd; d1 is an interior hole.
+	seedDailyTicker(t, d, d0, map[string]float32{"usd": 111}, nil)
+	seedDailyTicker(t, d, d2, map[string]float32{"usd": 333}, nil)
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/ethereum/market_chart":
+			if got := r.URL.Query().Get("days"); got != "365" {
+				http.Error(w, fmt.Sprintf("unexpected days %q", got), http.StatusBadRequest)
+				return
+			}
+			// d0 returns 999 to prove fill-missing does NOT overwrite the existing 111.
+			body := fmt.Sprintf(`{"prices":[[%d,333],[%d,222],[%d,999]]}`,
+				d2.Unix()*1000, d1.Unix()*1000, d0.Unix()*1000)
+			_, _ = w.Write([]byte(body))
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	if err := cg.ReconcileHistoricalRates(365, 90); err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+
+	t1, err := d.FiatRatesGetTicker(&d1)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d1 failed: %v", err)
+	}
+	if t1 == nil || t1.Rates["usd"] != 222 {
+		t.Fatalf("interior hole not repaired: got %+v, want usd=222", t1)
+	}
+	t0, err := d.FiatRatesGetTicker(&d0)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d0 failed: %v", err)
+	}
+	if t0 == nil || t0.Rates["usd"] != 111 {
+		t.Fatalf("fill-missing overwrote existing rate: got %+v, want usd=111", t0)
+	}
+}
+
+// A series whose most recent ticker is older than the gap guard must be flagged and skipped,
+// not refetched.
+func TestReconcileHistoricalRates_GapTooLargeSkipsFetch(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// last usd ticker is 100 days old (>= 90-day guard)
+	seedDailyTicker(t, d, midnightDaysAgo(100), map[string]float32{"usd": 100}, nil)
+
+	var fetched int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/ethereum/market_chart":
+			atomic.StoreInt32(&fetched, 1)
+			http.Error(w, "market_chart must not be called for a gap_too_large series", http.StatusInternalServerError)
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	if err := cg.ReconcileHistoricalRates(365, 90); err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if atomic.LoadInt32(&fetched) != 0 {
+		t.Fatal("expected no market_chart fetch for a gap_too_large series")
+	}
+}
+
+// Reconciliation is a no-op when no CDN URL is configured (must not hit any endpoint).
+func TestReconcileHistoricalRates_NoCDNIsNoOp(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("no HTTP request expected without a CDN URL, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:       "ethereum",
+		tipURL:     "http://coingecko.test",
+		httpClient: &http.Client{Transport: called},
+		db:         d,
+		plan:       coingeckoPlanFree,
+	}
+
+	if err := cg.ReconcileHistoricalRates(365, 90); err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
 }
