@@ -1990,43 +1990,81 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 	return b.Client.BalanceAt(ctx, addrDesc, nil)
 }
 
-// EthereumTypeGetNonce returns current balance of an address
-func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
-	var result string
-	var err error
-	var usedAlternative bool
-
+// EthereumTypeGetNonces returns the pending and confirmed (latest) account nonces.
+//
+// The pending nonce (eth_getTransactionCount at the "pending" tag) counts transactions
+// still queued in the mempool and is the next nonce the account will use; the confirmed
+// nonce (the "latest" tag) reflects only mined transactions. Both are fetched in a single
+// JSON-RPC batch round-trip, so exposing the confirmed nonce adds no extra latency over
+// the previous pending-only behavior.
+func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor) (uint64, uint64, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
 
 	if b.alternativeSendTxProvider != nil {
-		result, err = b.alternativeSendTxProvider.callHttpStringResult(
-			b.alternativeSendTxProvider.urls[0],
-			"eth_getTransactionCount",
-			ethAddress,
-			"pending",
-		)
-		if err == nil && result != "" {
-			usedAlternative = true
-		} else {
-			glog.Errorf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
+		pending, confirmed, err := b.alternativeSendTxProvider.getNonces(ethAddress)
+		if err == nil {
+			return pending, confirmed, nil
 		}
+		glog.Errorf("Alternative provider failed for eth_getTransactionCount batch: %v, falling back to primary RPC", err)
 	}
 
-	if !usedAlternative {
-		result, err = b.callRpcStringResult("eth_getTransactionCount", ethAddress, "pending")
-		if err != nil {
-			glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
-			return 0, err
-		}
-	}
-
-	nonce, err := hexutil.DecodeUint64(result)
+	pending, confirmed, err := b.getNoncesRPC(ethAddress)
 	if err != nil {
-		glog.Errorf("Failed to parse nonce result '%s': %v", result, err)
-		return 0, err
+		glog.Errorf("Primary RPC failed for eth_getTransactionCount batch: %v", err)
+		return 0, 0, err
+	}
+	return pending, confirmed, nil
+}
+
+// getNoncesRPC fetches the pending and confirmed account nonces from the primary RPC.
+// When the client supports JSON-RPC batching both block tags are requested in a single
+// round-trip; otherwise it falls back to two sequential calls (e.g. a minimal RPC mock
+// in tests).
+func (b *EthereumRPC) getNoncesRPC(addr ethcommon.Address) (uint64, uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	if bc, ok := b.RPC.(interface {
+		BatchCallContext(context.Context, []rpc.BatchElem) error
+	}); ok {
+		var pendingHex, confirmedHex string
+		batch := []rpc.BatchElem{
+			{Method: "eth_getTransactionCount", Args: []interface{}{addr, "pending"}, Result: &pendingHex},
+			{Method: "eth_getTransactionCount", Args: []interface{}{addr, "latest"}, Result: &confirmedHex},
+		}
+		if err := bc.BatchCallContext(ctx, batch); err != nil {
+			return 0, 0, err
+		}
+		for i := range batch {
+			if batch[i].Error != nil {
+				return 0, 0, batch[i].Error
+			}
+		}
+		return decodeNoncePair(pendingHex, confirmedHex)
 	}
 
-	return nonce, nil
+	var pendingHex, confirmedHex string
+	if err := b.RPC.CallContext(ctx, &pendingHex, "eth_getTransactionCount", addr, "pending"); err != nil {
+		return 0, 0, err
+	}
+	if err := b.RPC.CallContext(ctx, &confirmedHex, "eth_getTransactionCount", addr, "latest"); err != nil {
+		return 0, 0, err
+	}
+	return decodeNoncePair(pendingHex, confirmedHex)
+}
+
+// decodeNoncePair decodes the hex-encoded pending and confirmed nonces returned by
+// eth_getTransactionCount.
+func decodeNoncePair(pendingHex, confirmedHex string) (uint64, uint64, error) {
+	pending, err := hexutil.DecodeUint64(pendingHex)
+	if err != nil {
+		return 0, 0, errors.Annotatef(err, "pending nonce %q", pendingHex)
+	}
+	confirmed, err := hexutil.DecodeUint64(confirmedHex)
+	if err != nil {
+		return 0, 0, errors.Annotatef(err, "confirmed nonce %q", confirmedHex)
+	}
+	return pending, confirmed, nil
 }
 
 // GetChainParser returns ethereum BlockChainParser

@@ -1146,11 +1146,16 @@ func (b *TronRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return b.EthereumRPC.EthereumTypeRpcCall(data, normalizedTo, normalizedFrom)
 }
 
-// EthereumTypeGetNonce returns current balance of an address
-func (b *TronRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
+// EthereumTypeGetNonces returns the account nonce. Tron exposes only the latest
+// (confirmed) nonce via NonceAt, so the pending and confirmed values are identical.
+func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor) (uint64, uint64, error) {
 	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
-	return b.Client.NonceAt(ctx, addrDesc, nil)
+	n, err := b.Client.NonceAt(ctx, addrDesc, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	return n, n, nil
 }
 
 // GetContractInfo returns information about a contract

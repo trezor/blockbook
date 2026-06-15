@@ -55,9 +55,9 @@ func (b *BaseChain) EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int
 	return nil, errors.New("not supported")
 }
 
-// EthereumTypeGetNonce is not supported
-func (b *BaseChain) EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error) {
-	return 0, errors.New("not supported")
+// EthereumTypeGetNonces is not supported
+func (b *BaseChain) EthereumTypeGetNonces(addrDesc AddressDescriptor) (uint64, uint64, error) {
+	return 0, 0, errors.New("not supported")
 }
 
 // EthereumTypeEstimateGas is not supported
