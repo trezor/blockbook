@@ -807,7 +807,9 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 // rates before the periodic downloader loops start.
 func runStartupSelfHealing() {
 	if fiatRates != nil && fiatRates.Enabled {
-		fiatRates.ReconcileHistoricalRatesAtStartup()
+		// chanOsSignal is closed on shutdown, so a SIGTERM during a long reconciliation
+		// aborts it promptly instead of blocking startup-shutdown until the backfill ends.
+		fiatRates.ReconcileHistoricalRatesAtStartup(chanOsSignal)
 	}
 }
 
