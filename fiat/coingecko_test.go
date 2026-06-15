@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1355,7 +1356,7 @@ func TestReconcileHistoricalRates_RepairsInteriorHole(t *testing.T) {
 		plan:               coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1409,7 +1410,7 @@ func TestReconcileHistoricalRates_HealthyMakesNoRequests(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1445,7 +1446,7 @@ func TestReconcileHistoricalRates_YoungDBMakesNoRequests(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1482,7 +1483,7 @@ func TestReconcileHistoricalRates_GapTooLargeSkipsFetch(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90)
+	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1513,7 +1514,49 @@ func TestReconcileHistoricalRates_NoCDNIsNoOp(t *testing.T) {
 		plan:       coingeckoPlanFree,
 	}
 
-	if _, err := cg.ReconcileHistoricalRates(365, 90); err != nil {
+	if _, err := cg.ReconcileHistoricalRates(365, 90, nil); err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+}
+
+// A shutdown signaled before backfill aborts the pass without issuing any request, even
+// when there is a genuine (sub-guard) gap to repair.
+func TestReconcileHistoricalRates_ShutdownAbortsBeforeFetch(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// a real interior hole at d3 (present d1,d2,d4,d5) -> work to do, but well under the guard
+	seedDailyTicker(t, d, midnightDaysAgo(5), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(4), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(2), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(1), map[string]float32{"usd": 100}, nil)
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("shutdown before backfill must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	// a closed channel reads as immediately signaled, simulating an in-flight shutdown
+	stop := make(chan os.Signal)
+	close(stop)
+
+	filled, err := cg.ReconcileHistoricalRates(365, 90, stop)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("aborted reconciliation should fill nothing, got %d", filled)
 	}
 }

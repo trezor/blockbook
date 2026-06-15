@@ -31,14 +31,14 @@ const (
 	coingeckoRangeBackfill            = "backfill"
 	// coingeckoTipWindowDays is the only gap still served from the rate-limited tip
 	// endpoint (the chain tip); anything larger is high-volume backfill routed to the CDN.
-	coingeckoTipWindowDays = 1
-	coingeckoBootstrapURL             = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
-	coingeckoProURL                   = "https://pro-api.coingecko.com/api/v3"
-	coingeckoFreeURL                  = "https://api.coingecko.com/api/v3"
-	coingeckoPlanFree                 = "free"
-	coingeckoPlanPro                  = "pro"
-	coingeckoAPIKeyEnv                = "COINGECKO_API_KEY"
-	coingeckoAPIKeyEnvSuffix          = "_" + coingeckoAPIKeyEnv
+	coingeckoTipWindowDays   = 1
+	coingeckoBootstrapURL    = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
+	coingeckoProURL          = "https://pro-api.coingecko.com/api/v3"
+	coingeckoFreeURL         = "https://api.coingecko.com/api/v3"
+	coingeckoPlanFree        = "free"
+	coingeckoPlanPro         = "pro"
+	coingeckoAPIKeyEnv       = "COINGECKO_API_KEY"
+	coingeckoAPIKeyEnvSuffix = "_" + coingeckoAPIKeyEnv
 )
 
 // Phase labels for the fiat-rate fetch metrics (fiat_rates_fetched_units_total,
@@ -52,10 +52,10 @@ const (
 
 // Reason labels for fiat_rates_unable_total.
 const (
-	fiatUnableGapTooLarge  = "gap_too_large"  // series stale >= reconcile guard, probable bug
-	fiatUnableFetchFailed  = "fetch_failed"   // HTTP/parse error fetching the range
+	fiatUnableGapTooLarge  = "gap_too_large"   // series stale >= reconcile guard, probable bug
+	fiatUnableFetchFailed  = "fetch_failed"    // HTTP/parse error fetching the range
 	fiatUnableProviderBan  = "provider_banned" // Cloudflare 1015 IP ban
-	fiatUnableNoBaseTicker = "no_base_ticker" // token day without an existing base-currency ticker
+	fiatUnableNoBaseTicker = "no_base_ticker"  // token day without an existing base-currency ticker
 )
 
 // used when retry-after header is missing
@@ -1104,7 +1104,11 @@ func (cg *Coingecko) missingDayWindow(windowDays int) (missing map[uint]struct{}
 //
 // It is a no-op while bootstrap is still in progress (the bootstrap pass owns full-history
 // population) or when no CDN URL is configured.
-func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) (int, error) {
+//
+// stop is blockbook's chanOsSignal (closed on shutdown). It is polled between series fetches
+// so a SIGTERM mid-repair aborts promptly; any days fetched before the abort are persisted so
+// the next startup resumes from the remaining gap.
+func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int, stop <-chan os.Signal) (int, error) {
 	bootstrapInProgress, _, err := historicalBootstrapInProgress(cg.db)
 	if err != nil {
 		return 0, err
@@ -1150,6 +1154,12 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) (i
 	cdnURL := cg.sourceURLForRange(coingeckoRangeBackfill)
 	metaURL := cg.metadataURL()
 
+	// Shutdown may arrive during the cheap stage-1 scan; bail before any network call.
+	if stopRequested(stop) {
+		glog.Warning("FiatRates reconcile: shutdown signaled before backfill, skipping; gap will be reconciled on next startup")
+		return 0, nil
+	}
+
 	// enumerate the series to repair: base coin x each vsCurrency, plus each token
 	vs, err := cg.simpleSupportedVSCurrenciesAt(metaURL, priorityLow)
 	if err != nil {
@@ -1184,7 +1194,15 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) (i
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
 	filled, failed, repairedTokens := 0, 0, 0
 	var banErr error
-	for _, c := range targets {
+	aborted := false
+	for i, c := range targets {
+		// Abort promptly on shutdown; persist what we already fetched (below) so the next
+		// startup resumes from the remaining gap rather than refetching from scratch.
+		if stopRequested(stop) {
+			aborted = true
+			glog.Warningf("FiatRates reconcile: shutdown signaled, aborting after %d/%d series (%d point(s) fetched so far)", i, len(targets), filled)
+			break
+		}
 		mc, err := cg.coinMarketChartAt(cdnURL, c.coinId, c.vsCurrency, days, true, priorityLow)
 		if err != nil {
 			failed++
@@ -1216,9 +1234,28 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) (i
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
 		return filled, err
 	}
+	if aborted {
+		glog.Infof("FiatRates reconcile stage 2: aborted on shutdown, persisted %d point(s) (%d token series), %d fetch failures; remaining gap will be reconciled on next startup", filled, repairedTokens, failed)
+		return filled, nil
+	}
 	glog.Infof("FiatRates reconcile stage 2: filled %d point(s) across %d series (%d token series), %d fetch failures", filled, len(targets), repairedTokens, failed)
 	if banErr != nil {
 		return filled, banErr
 	}
 	return filled, nil
+}
+
+// stopRequested reports whether shutdown has been signaled on stop. blockbook closes
+// chanOsSignal on shutdown, so a receive returns immediately once closed; a nil channel
+// (e.g. in tests) is never stopped.
+func stopRequested(stop <-chan os.Signal) bool {
+	if stop == nil {
+		return false
+	}
+	select {
+	case <-stop:
+		return true
+	default:
+		return false
+	}
 }

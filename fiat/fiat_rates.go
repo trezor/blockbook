@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -35,7 +36,7 @@ type RatesDownloaderInterface interface {
 	FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error)
 	UpdateHistoricalTickers() error
 	UpdateHistoricalTokenTickers() error
-	ReconcileHistoricalRates(windowDays int, maxGapDays int) (int, error)
+	ReconcileHistoricalRates(windowDays int, maxGapDays int, stop <-chan os.Signal) (int, error)
 }
 
 const (
@@ -495,8 +496,10 @@ const historicalBanBackoff = 30 * time.Minute
 // missing historical fiat rates (interior holes and trailing gaps) within the reconcile
 // window. It is meant to run once, before the periodic downloader loops start, so the DB is
 // consistent and there is no concurrent Free-tier throttling. Honors the per-coin config
-// toggle and is a no-op when fiat rates are disabled.
-func (fr *FiatRates) ReconcileHistoricalRatesAtStartup() {
+// toggle and is a no-op when fiat rates are disabled. The stop channel (blockbook's
+// chanOsSignal, closed on shutdown) lets a SIGTERM mid-repair abort the pass promptly so
+// shutdown is not delayed by a long backfill.
+func (fr *FiatRates) ReconcileHistoricalRatesAtStartup(stop <-chan os.Signal) {
 	if !fr.Enabled || fr.downloader == nil {
 		return
 	}
@@ -512,7 +515,7 @@ func (fr *FiatRates) ReconcileHistoricalRatesAtStartup() {
 	}()
 	start := time.Now()
 	glog.Info("FiatRatesDownloader: starting historical rates reconciliation (startup self-healing)")
-	filled, err := fr.downloader.ReconcileHistoricalRates(reconcileWindowDays, reconcileMaxGapDays)
+	filled, err := fr.downloader.ReconcileHistoricalRates(reconcileWindowDays, reconcileMaxGapDays, stop)
 	if err != nil {
 		fr.observeUpdateDuration("reconcile", "error", start)
 		logFiatRatesDownloaderError("FiatRatesDownloader: reconciliation error ", err)
