@@ -28,6 +28,10 @@ const (
 	coingeckoRangeHistorical          = "historical"
 	coingeckoRangeTip                 = "tip"
 	coingeckoRangeCapped              = "capped"
+	coingeckoRangeBackfill            = "backfill"
+	// coingeckoTipWindowDays is the only gap still served from the rate-limited tip
+	// endpoint (the chain tip); anything larger is high-volume backfill routed to the CDN.
+	coingeckoTipWindowDays = 1
 	coingeckoBootstrapURL             = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
 	coingeckoProURL                   = "https://pro-api.coingecko.com/api/v3"
 	coingeckoFreeURL                  = "https://api.coingecko.com/api/v3"
@@ -35,6 +39,23 @@ const (
 	coingeckoPlanPro                  = "pro"
 	coingeckoAPIKeyEnv                = "COINGECKO_API_KEY"
 	coingeckoAPIKeyEnvSuffix          = "_" + coingeckoAPIKeyEnv
+)
+
+// Phase labels for the fiat-rate fetch metrics (fiat_rates_fetched_units_total,
+// fiat_rates_fetched_tokens_total, fiat_rates_unable_total).
+const (
+	fiatPhaseTip       = "tip"       // chain tip, gap == 1 day, Free tier
+	fiatPhaseBackfill  = "backfill"  // gap > 1 day or first-seen series, via CDN
+	fiatPhaseBootstrap = "bootstrap" // full-history population, via CDN
+	fiatPhaseReconcile = "reconcile" // startup self-healing pass, via CDN
+)
+
+// Reason labels for fiat_rates_unable_total.
+const (
+	fiatUnableGapTooLarge  = "gap_too_large"  // series stale >= reconcile guard, probable bug
+	fiatUnableFetchFailed  = "fetch_failed"   // HTTP/parse error fetching the range
+	fiatUnableProviderBan  = "provider_banned" // Cloudflare 1015 IP ban
+	fiatUnableNoBaseTicker = "no_base_ticker" // token day without an existing base-currency ticker
 )
 
 // used when retry-after header is missing
@@ -657,11 +678,40 @@ func (cg *Coingecko) canUseBootstrapMax() bool {
 	return coingeckoBootstrapURLAllowed(cg.bootstrapURL)
 }
 
-func (cg *Coingecko) historicalSyncURL(bootstrapInProgress bool) string {
-	if bootstrapInProgress {
+// metadataURL returns the base URL for low-volume metadata calls
+// (supported_vs_currencies, coins/list). These are cheap and stable, so prefer the CDN
+// (no rate limit) whenever it is configured, keeping the Free tier reserved for the tip.
+func (cg *Coingecko) metadataURL() string {
+	if cg.bootstrapURL != "" {
 		return cg.bootstrapURL
 	}
 	return cg.tipURL
+}
+
+// sourceURLForRange routes each historical range to the right backend: the rate-limited
+// tip endpoint is used only for the chain tip (gap == 1 day); every higher-volume range
+// (backfill, capped, full-history) goes to the CDN when configured. When no CDN URL is
+// configured we fall back to the tip endpoint to preserve pre-CDN behavior.
+func (cg *Coingecko) sourceURLForRange(rangeKind string) string {
+	if rangeKind == coingeckoRangeTip {
+		return cg.tipURL
+	}
+	if cg.bootstrapURL != "" {
+		return cg.bootstrapURL
+	}
+	return cg.tipURL
+}
+
+// phaseForRange maps a resolved range kind to the metric phase label.
+func phaseForRange(rangeKind string) string {
+	switch rangeKind {
+	case coingeckoRangeTip:
+		return fiatPhaseTip
+	case coingeckoRangeHistorical:
+		return fiatPhaseBootstrap
+	default: // backfill + capped are both high-volume CDN ranges
+		return fiatPhaseBackfill
+	}
 }
 
 func (cg *Coingecko) resolveHistoricalDays(lastTicker *common.CurrencyRatesTicker, allowMax bool) (string, bool, string) {
@@ -678,17 +728,85 @@ func (cg *Coingecko) resolveHistoricalDays(lastTicker *common.CurrencyRatesTicke
 	if d == 0 { // nothing to do, the last ticker exist
 		return "", false, ""
 	}
+	if d <= coingeckoTipWindowDays {
+		// The chain tip: a single missing day, served from the rate-limited tip endpoint.
+		return strconv.Itoa(d), true, coingeckoRangeTip
+	}
 	if d > coingeckoHistoryDaysLimit {
 		// This happens when the latest stored ticker for a given series is older than 365 days
 		// (for example after downtime, stale/partial historical data, or a newly tracked series
-		// after bootstrap). Outside bootstrap we intentionally cap backfill to 365 days.
-		d = coingeckoHistoryDaysLimit
-		return strconv.Itoa(d), true, coingeckoRangeCapped
+		// after bootstrap). We intentionally cap backfill to 365 days.
+		return strconv.Itoa(coingeckoHistoryDaysLimit), true, coingeckoRangeCapped
 	}
-	return strconv.Itoa(d), true, coingeckoRangeTip
+	// A multi-day gap (downtime catch-up): high-volume, routed to the CDN.
+	return strconv.Itoa(d), true, coingeckoRangeBackfill
 }
 
-func (cg *Coingecko) getHistoricalTicker(baseURL string, tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string, allowMax bool) (bool, error) {
+// fillFromMarketChart writes the whole-day points from a market_chart response into
+// tickersToUpdate. With fillMissingOnly set, an already-present rate for the series is left
+// intact (used by the startup reconciliation so it repairs holes without rewriting existing
+// data). Returns the number of daily points written and the number of token points skipped
+// because their day had no base-currency ticker yet.
+func (cg *Coingecko) fillFromMarketChart(tickersToUpdate map[uint]*common.CurrencyRatesTicker, mc *marketChartPrices, vsCurrency string, token string, fillMissingOnly bool) (written int, noBaseTicker int, err error) {
+	warningLogged := false
+	for _, p := range mc.Prices {
+		timestamp := uint(p[0])
+		if timestamp > 100000000000 {
+			// convert timestamp from milliseconds to seconds
+			timestamp /= 1000
+		}
+		rate := float32(p[1])
+		if timestamp%(24*3600) != 0 || timestamp == 0 || rate == 0 {
+			// process only tickers for the whole day with non 0 value
+			continue
+		}
+		ticker, found := tickersToUpdate[timestamp]
+		if !found {
+			u := time.Unix(int64(timestamp), 0).UTC()
+			ticker, err = cg.db.FiatRatesGetTicker(&u)
+			if err != nil {
+				return written, noBaseTicker, err
+			}
+			if ticker == nil {
+				if token != "" { // if the base currency is not found in DB, do not create ticker for the token
+					noBaseTicker++
+					if !warningLogged {
+						glog.Warningf("No base currency ticker for date %v for token %s", u, token)
+						warningLogged = true
+					}
+					continue
+				}
+				ticker = &common.CurrencyRatesTicker{
+					Timestamp: u,
+					Rates:     make(map[string]float32),
+				}
+			}
+			tickersToUpdate[timestamp] = ticker
+		}
+		if token == "" {
+			if fillMissingOnly {
+				if _, ok := ticker.Rates[vsCurrency]; ok {
+					continue
+				}
+			}
+			ticker.Rates[vsCurrency] = rate
+		} else {
+			if ticker.TokenRates == nil {
+				ticker.TokenRates = make(map[string]float32)
+			}
+			if fillMissingOnly {
+				if _, ok := ticker.TokenRates[token]; ok {
+					continue
+				}
+			}
+			ticker.TokenRates[token] = rate
+		}
+		written++
+	}
+	return written, noBaseTicker, nil
+}
+
+func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string, allowMax bool) (bool, error) {
 	lastTicker, err := cg.db.FiatRatesFindLastTicker(vsCurrency, token)
 	if err != nil {
 		return false, err
@@ -700,55 +818,42 @@ func (cg *Coingecko) getHistoricalTicker(baseURL string, tickersToUpdate map[uin
 	if cg.metrics != nil {
 		cg.metrics.CoingeckoRangeRequests.With(common.Labels{"range": rangeKind}).Inc()
 	}
+	// the tip (gap == 1 day) stays on the rate-limited endpoint; everything larger uses the CDN
+	baseURL := cg.sourceURLForRange(rangeKind)
+	phase := phaseForRange(rangeKind)
 	// both callers update historical (daily) tickers, therefore always low priority
 	mc, err := cg.coinMarketChartAt(baseURL, coinId, vsCurrency, days, true, priorityLow)
 	if err != nil {
 		return false, err
 	}
-	warningLogged := false
-	for _, p := range mc.Prices {
-		var timestamp uint
-		timestamp = uint(p[0])
-		if timestamp > 100000000000 {
-			// convert timestamp from milliseconds to seconds
-			timestamp /= 1000
-		}
-		rate := float32(p[1])
-		if timestamp%(24*3600) == 0 && timestamp != 0 && rate != 0 { // process only tickers for the whole day with non 0 value
-			var found bool
-			var ticker *common.CurrencyRatesTicker
-			if ticker, found = tickersToUpdate[timestamp]; !found {
-				u := time.Unix(int64(timestamp), 0).UTC()
-				ticker, err = cg.db.FiatRatesGetTicker(&u)
-				if err != nil {
-					return false, err
-				}
-				if ticker == nil {
-					if token != "" { // if the base currency is not found in DB, do not create ticker for the token
-						if !warningLogged {
-							glog.Warningf("No base currency ticker for date %v for token %s", u, token)
-							warningLogged = true
-						}
-						continue
-					}
-					ticker = &common.CurrencyRatesTicker{
-						Timestamp: u,
-						Rates:     make(map[string]float32),
-					}
-				}
-				tickersToUpdate[timestamp] = ticker
-			}
-			if token == "" {
-				ticker.Rates[vsCurrency] = rate
-			} else {
-				if ticker.TokenRates == nil {
-					ticker.TokenRates = make(map[string]float32)
-				}
-				ticker.TokenRates[token] = rate
-			}
-		}
+	written, noBaseTicker, err := cg.fillFromMarketChart(tickersToUpdate, mc, vsCurrency, token, false)
+	if err != nil {
+		return false, err
 	}
+	cg.observeFetchedUnits(phase, written)
+	if token != "" && written > 0 {
+		cg.observeFetchedToken(phase)
+	}
+	cg.observeUnable(phase, fiatUnableNoBaseTicker, noBaseTicker)
 	return true, nil
+}
+
+func (cg *Coingecko) observeFetchedUnits(phase string, n int) {
+	if cg.metrics != nil && n > 0 {
+		cg.metrics.FiatRatesFetchedUnits.With(common.Labels{"phase": phase}).Add(float64(n))
+	}
+}
+
+func (cg *Coingecko) observeFetchedToken(phase string) {
+	if cg.metrics != nil {
+		cg.metrics.FiatRatesFetchedTokens.With(common.Labels{"phase": phase}).Inc()
+	}
+}
+
+func (cg *Coingecko) observeUnable(phase string, reason string, n int) {
+	if cg.metrics != nil && n > 0 {
+		cg.metrics.FiatRatesUnable.With(common.Labels{"phase": phase, "reason": reason}).Add(float64(n))
+	}
 }
 
 func (cg *Coingecko) storeTickers(tickersToUpdate map[uint]*common.CurrencyRatesTicker) error {
@@ -775,7 +880,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	if err != nil {
 		return err
 	}
-	historicalSyncURL := cg.historicalSyncURL(bootstrapInProgress)
+	metadataURL := cg.metadataURL()
 	if bootstrapInProgress {
 		if !cg.canUseBootstrapMax() {
 			return coingeckoBootstrapPreconditionError()
@@ -784,7 +889,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	}
 
 	// reload vs_currencies
-	vs, err := cg.simpleSupportedVSCurrenciesAt(historicalSyncURL, priorityLow)
+	vs, err := cg.simpleSupportedVSCurrenciesAt(metadataURL, priorityLow)
 	if err != nil {
 		return err
 	}
@@ -797,7 +902,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	for _, currency := range vs {
 		// get historical rates for each currency
 		var err error
-		if _, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
+		if _, err = cg.getHistoricalTicker(tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
 			hadFailures = true
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
@@ -842,7 +947,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		if err != nil {
 			return err
 		}
-		historicalSyncURL := cg.historicalSyncURL(bootstrapInProgress)
+		metadataURL := cg.metadataURL()
 		if bootstrapInProgress {
 			if !cg.canUseBootstrapMax() {
 				return coingeckoBootstrapPreconditionError()
@@ -851,7 +956,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		}
 
 		//  reload platform ids
-		if err := cg.platformIdsAt(historicalSyncURL, priorityLow); err != nil {
+		if err := cg.platformIdsAt(metadataURL, priorityLow); err != nil {
 			return err
 		}
 		cg.cacheMu.Lock()
@@ -863,7 +968,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		// get token historical rates
 		for tokenId, token := range platformIdsToTokens {
 			var err error
-			if _, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
+			if _, err = cg.getHistoricalTicker(tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
