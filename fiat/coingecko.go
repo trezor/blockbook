@@ -1000,3 +1000,143 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 	}
 	return nil
 }
+
+// reconcileTarget identifies one fiat-rate series to reconcile: a base-coin vsCurrency
+// (token == "") or a token priced in platformVsCurrency.
+type reconcileTarget struct {
+	coinId     string
+	vsCurrency string
+	token      string
+}
+
+// ReconcileHistoricalRates is the blocking startup self-healing pass. Within the trailing
+// windowDays window it repairs daily fiat rates missing from the DB — both interior holes
+// and the trailing gap — for the base coin (every vsCurrency) and every token, filling only
+// the days a series lacks so existing data is never rewritten. All fetching goes to the CDN.
+//
+// It runs in two stages, as a safety valve against runaway repair:
+//   - Stage 1 reads the DB and classifies every series. A series whose most recent ticker is
+//     at least maxGapDays old (a months-long gap) is reported as gap_too_large and skipped —
+//     such a gap signals a bug/misconfiguration, not routine catch-up. First-seen series
+//     (no ticker yet) are left to the runtime downloader's initial population.
+//   - Stage 2 fetches the window for each repair candidate, fills the holes and persists.
+//
+// It is a no-op while bootstrap is still in progress (the bootstrap pass owns full-history
+// population) or when no CDN URL is configured.
+func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int) error {
+	bootstrapInProgress, _, err := historicalBootstrapInProgress(cg.db)
+	if err != nil {
+		return err
+	}
+	if bootstrapInProgress {
+		glog.Info("FiatRates reconcile: bootstrap still in progress, skipping startup reconciliation")
+		return nil
+	}
+	if cg.bootstrapURL == "" {
+		glog.Info("FiatRates reconcile: no CDN bootstrap URL configured, skipping startup reconciliation")
+		return nil
+	}
+	days := strconv.Itoa(windowDays)
+	cdnURL := cg.metadataURL()
+
+	// ---- Stage 1: read DB, classify what is missing, collect stats ----
+	vs, err := cg.simpleSupportedVSCurrenciesAt(cdnURL, priorityLow)
+	if err != nil {
+		return fmt.Errorf("reconcile: supported_vs_currencies: %w", err)
+	}
+	cg.cacheMu.Lock()
+	cg.vsCurrencies = vs
+	cg.cacheMu.Unlock()
+
+	candidates := make([]reconcileTarget, 0, len(vs))
+	for _, currency := range vs {
+		candidates = append(candidates, reconcileTarget{coinId: cg.coin, vsCurrency: currency})
+	}
+	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
+		if err := cg.platformIdsAt(cdnURL, priorityLow); err != nil {
+			return fmt.Errorf("reconcile: coins/list: %w", err)
+		}
+		cg.cacheMu.Lock()
+		platformIdsToTokens := cg.platformIdsToTokens
+		cg.cacheMu.Unlock()
+		for tokenId, token := range platformIdsToTokens {
+			candidates = append(candidates, reconcileTarget{coinId: tokenId, vsCurrency: cg.platformVsCurrency, token: token})
+		}
+	}
+
+	toRepair := make([]reconcileTarget, 0, len(candidates))
+	flagged, firstSeen := 0, 0
+	for _, c := range candidates {
+		lastTicker, err := cg.db.FiatRatesFindLastTicker(c.vsCurrency, c.token)
+		if err != nil {
+			return fmt.Errorf("reconcile: find last ticker %s/%s: %w", c.vsCurrency, c.token, err)
+		}
+		if lastTicker == nil {
+			// first-seen series: initial population belongs to the runtime downloader
+			firstSeen++
+			continue
+		}
+		gapDays := int(time.Since(lastTicker.Timestamp) / (24 * time.Hour))
+		if gapDays >= maxGapDays {
+			cg.observeUnable(fiatPhaseReconcile, fiatUnableGapTooLarge, 1)
+			flagged++
+			continue
+		}
+		toRepair = append(toRepair, c)
+	}
+	glog.Infof("FiatRates reconcile stage 1: %d series to repair, %d flagged gap_too_large (>=%dd), %d first-seen skipped (of %d candidates, window %dd)",
+		len(toRepair), flagged, maxGapDays, firstSeen, len(candidates), windowDays)
+
+	if len(toRepair) == 0 {
+		return nil
+	}
+
+	// ---- Stage 2: fetch the window from the CDN, fill holes, persist ----
+	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
+	repaired, failed := 0, 0
+	var banErr error
+	for i, c := range toRepair {
+		mc, err := cg.coinMarketChartAt(cg.sourceURLForRange(coingeckoRangeBackfill), c.coinId, c.vsCurrency, days, true, priorityLow)
+		if err != nil {
+			failed++
+			if isCoingeckoCloudflareBanError(err) {
+				cg.observeUnable(fiatPhaseReconcile, fiatUnableProviderBan, 1)
+				banErr = err
+				glog.Errorf("FiatRates reconcile: Cloudflare ban fetching %s/%s, stopping: %v", c.coinId, c.vsCurrency, err)
+				break
+			}
+			cg.observeUnable(fiatPhaseReconcile, fiatUnableFetchFailed, 1)
+			glog.Errorf("FiatRates reconcile: fetch %s/%s failed: %v", c.coinId, c.vsCurrency, err)
+			continue
+		}
+		written, noBaseTicker, err := cg.fillFromMarketChart(tickersToUpdate, mc, c.vsCurrency, c.token, true)
+		if err != nil {
+			if storeErr := cg.storeTickers(tickersToUpdate); storeErr != nil {
+				return storeErr
+			}
+			return fmt.Errorf("reconcile: fill %s/%s: %w", c.coinId, c.vsCurrency, err)
+		}
+		cg.observeFetchedUnits(fiatPhaseReconcile, written)
+		if c.token != "" && written > 0 {
+			cg.observeFetchedToken(fiatPhaseReconcile)
+		}
+		cg.observeUnable(fiatPhaseReconcile, fiatUnableNoBaseTicker, noBaseTicker)
+		repaired++
+		// flush periodically to bound memory (token-bearing day records are large)
+		if (i+1)%100 == 0 {
+			if err := cg.storeTickers(tickersToUpdate); err != nil {
+				return err
+			}
+			tickersToUpdate = make(map[uint]*common.CurrencyRatesTicker)
+			glog.Infof("FiatRates reconcile stage 2: processed %d of %d series", i+1, len(toRepair))
+		}
+	}
+	if err := cg.storeTickers(tickersToUpdate); err != nil {
+		return err
+	}
+	glog.Infof("FiatRates reconcile stage 2: repaired %d series, %d fetch failures", repaired, failed)
+	if banErr != nil {
+		return banErr
+	}
+	return nil
+}
