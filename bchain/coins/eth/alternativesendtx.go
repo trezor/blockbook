@@ -262,8 +262,8 @@ func (p *AlternativeSendTxProvider) transactionSupersededByNonce(tx *bchain.RpcT
 		if failed[from] {
 			return false
 		}
-		confirmed, ok, err = p.getConfirmedNonce(tx.From)
-		if err != nil || !ok {
+		confirmed, err = p.getConfirmedNonce(tx.From)
+		if err != nil {
 			// keep the transaction on lookup failure; the timeout path remains the safety net
 			failed[from] = true
 			return false
@@ -282,7 +282,7 @@ func (p *AlternativeSendTxProvider) transactionSupersededByNonce(tx *bchain.RpcT
 // block and that block is later reorged out, an eviction here may turn out premature. This is the
 // same exposure as the mined-tx removal above and is bounded - eviction only drops Blockbook's cache
 // entry, it cancels nothing on-chain, and a still-valid tx is re-indexed when it is actually mined.
-func (p *AlternativeSendTxProvider) getConfirmedNonce(from string) (uint64, bool, error) {
+func (p *AlternativeSendTxProvider) getConfirmedNonce(from string) (uint64, error) {
 	address := ethcommon.HexToAddress(from)
 	var lowest uint64
 	var found bool
@@ -308,9 +308,12 @@ func (p *AlternativeSendTxProvider) getConfirmedNonce(from string) (uint64, bool
 		}
 	}
 	if !found {
-		return 0, false, firstErr
+		if firstErr == nil {
+			firstErr = errors.New("no alternative provider returned a confirmed nonce")
+		}
+		return 0, firstErr
 	}
-	return lowest, true, nil
+	return lowest, nil
 }
 
 func (p *AlternativeSendTxProvider) providerKnowsTransaction(txid string) (bool, bool, error) {

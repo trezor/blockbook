@@ -59,18 +59,50 @@ func newTestAlternativeSendTxProvider(url string, removed *string) *AlternativeS
 	return provider
 }
 
-func TestAlternativeSendTxProviderReconcileRemovesDroppedTransaction(t *testing.T) {
-	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`)
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != testAlternativeTxID {
-		t.Fatalf("removed txid = %q, want %q", removed, testAlternativeTxID)
+// assertReconcileOutcome checks whether the single cached test transaction was evicted (and reported
+// through the removeTransactionFromMempool callback) or kept after a reconcile cycle.
+func assertReconcileOutcome(t *testing.T, provider *AlternativeSendTxProvider, removed string, wantRemoved bool) {
+	t.Helper()
+	_, found := provider.mempoolTxs[testAlternativeTxID]
+	if wantRemoved {
+		if removed != testAlternativeTxID {
+			t.Fatalf("removed txid = %q, want %q", removed, testAlternativeTxID)
+		}
+		if found {
+			t.Fatal("transaction remained in alternative mempool cache, want removed")
+		}
+		return
 	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
-		t.Fatal("dropped transaction remained in alternative mempool cache")
+	if removed != "" {
+		t.Fatalf("removed txid = %q, want none", removed)
+	}
+	if !found {
+		t.Fatal("transaction was removed from alternative mempool cache, want kept")
+	}
+}
+
+func TestAlternativeSendTxProviderReconcileLivenessOutcomes(t *testing.T) {
+	const minedTxResponse = `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + testAlternativeTxID + `","from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","blockNumber":"0x1"}}`
+	tests := []struct {
+		name        string
+		response    string
+		wantRemoved bool
+	}{
+		{"dropped tx (provider returns empty) is removed", `{"jsonrpc":"2.0","id":1,"result":null}`, true},
+		{"mined tx is removed", minedTxResponse, true},
+		{"known pending tx is kept", testAlternativeKnownTxResponse, false},
+		{"tx is kept on provider error", `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newAlternativeTxProviderTestServer(t, tt.response)
+			var removed string
+			provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+
+			provider.reconcileMempoolTxs()
+
+			assertReconcileOutcome(t, provider, removed, tt.wantRemoved)
+		})
 	}
 }
 
@@ -92,24 +124,9 @@ func TestAlternativeSendTxProviderReconcileSkipsFreshTransaction(t *testing.T) {
 	}
 }
 
-func TestAlternativeSendTxProviderReconcileKeepsKnownTransaction(t *testing.T) {
-	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":{"hash":"`+testAlternativeTxID+`","from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != "" {
-		t.Fatalf("removed txid = %q, want none", removed)
-	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
-		t.Fatal("known transaction was removed from alternative mempool cache")
-	}
-}
-
 func TestAlternativeSendTxProviderReconcileKeepsTransactionKnownByAnyProvider(t *testing.T) {
 	droppedServer := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`)
-	knownServer := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":{"hash":"`+testAlternativeTxID+`","from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
+	knownServer := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
 	var removed string
 	provider := newTestAlternativeSendTxProvider(droppedServer.URL, &removed)
 	provider.urls = append(provider.urls, knownServer.URL)
@@ -124,39 +141,9 @@ func TestAlternativeSendTxProviderReconcileKeepsTransactionKnownByAnyProvider(t 
 	}
 }
 
-func TestAlternativeSendTxProviderReconcileRemovesMinedTransaction(t *testing.T) {
-	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":{"hash":"`+testAlternativeTxID+`","from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","blockNumber":"0x1"}}`)
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != testAlternativeTxID {
-		t.Fatalf("removed txid = %q, want %q", removed, testAlternativeTxID)
-	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
-		t.Fatal("mined transaction remained in alternative mempool cache")
-	}
-}
-
-func TestAlternativeSendTxProviderReconcileKeepsTransactionOnProviderError(t *testing.T) {
-	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`)
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != "" {
-		t.Fatalf("removed txid = %q, want none", removed)
-	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
-		t.Fatal("transaction was removed after provider error")
-	}
-}
-
 func TestAlternativeSendTxProviderHandleMempoolTransactionFetchesFromAnyProvider(t *testing.T) {
 	droppedServer := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`)
-	knownServer := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":{"hash":"`+testAlternativeTxID+`","from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
+	knownServer := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
 	var removed string
 	provider := newTestAlternativeSendTxProvider(droppedServer.URL, &removed)
 	provider.mempoolTxs = make(map[string]storedTx)
@@ -246,82 +233,33 @@ func nonceCountResponse(hexNonce string) string {
 	return `{"jsonrpc":"2.0","id":1,"result":"` + hexNonce + `"}`
 }
 
-func TestAlternativeSendTxProviderReconcileRemovesNonceSupersededTransaction(t *testing.T) {
-	// provider still reports the tx as pending, but its nonce (0x1) is below the confirmed account
-	// nonce (0x2): a different transaction already consumed it, so it can never be mined.
-	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
-		"eth_getTransactionCount":  nonceCountResponse("0x2"),
-	})
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != testAlternativeTxID {
-		t.Fatalf("removed txid = %q, want %q", removed, testAlternativeTxID)
+func TestAlternativeSendTxProviderReconcileNonceOutcomes(t *testing.T) {
+	// the cached tx has nonce 0x1 and the provider still reports it as pending; only the confirmed
+	// account nonce returned by eth_getTransactionCount("latest") decides the outcome.
+	tests := []struct {
+		name            string
+		txCountResponse string
+		wantRemoved     bool
+	}{
+		{"nonce below confirmed nonce is superseded and removed", nonceCountResponse("0x2"), true},
+		{"nonce equal to confirmed nonce is kept (next mineable)", nonceCountResponse("0x1"), false},
+		{"nonce above confirmed nonce is kept (gap, not evicted)", nonceCountResponse("0x0"), false},
+		{"unparsable confirmed nonce keeps the tx", nonceCountResponse("0xZZ"), false},
+		{"failed confirmed-nonce lookup keeps the tx", `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`, false},
 	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
-		t.Fatal("nonce-superseded transaction remained in alternative mempool cache")
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newMethodAwareTxProviderTestServer(t, map[string]string{
+				"eth_getTransactionByHash": testAlternativeKnownTxResponse,
+				"eth_getTransactionCount":  tt.txCountResponse,
+			})
+			var removed string
+			provider := newTestAlternativeSendTxProvider(server.URL, &removed)
 
-func TestAlternativeSendTxProviderReconcileKeepsTransactionWithCurrentNonce(t *testing.T) {
-	// cached tx nonce (0x1) equals the confirmed account nonce (0x1): it is the next mineable tx.
-	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
-		"eth_getTransactionCount":  nonceCountResponse("0x1"),
-	})
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+			provider.reconcileMempoolTxs()
 
-	provider.reconcileMempoolTxs()
-
-	if removed != "" {
-		t.Fatalf("removed txid = %q, want none", removed)
-	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
-		t.Fatal("transaction with the current account nonce was removed from alternative mempool cache")
-	}
-}
-
-func TestAlternativeSendTxProviderReconcileKeepsTransactionWithFutureNonce(t *testing.T) {
-	// cached tx nonce (0x1) is ahead of the confirmed account nonce (0x0): a gap that may still be
-	// filled. Gap eviction is intentionally not performed; the timeout remains the only safety net.
-	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
-		"eth_getTransactionCount":  nonceCountResponse("0x0"),
-	})
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != "" {
-		t.Fatalf("removed txid = %q, want none", removed)
-	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
-		t.Fatal("transaction ahead of the confirmed nonce (gap) was incorrectly evicted")
-	}
-}
-
-func TestAlternativeSendTxProviderReconcileKeepsTransactionOnNonceLookupFailure(t *testing.T) {
-	// eth_getTransactionCount fails: without a confirmed nonce we cannot prove the tx is superseded,
-	// so it must be kept and left to the timeout path.
-	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
-		"eth_getTransactionCount":  `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`,
-	})
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != "" {
-		t.Fatalf("removed txid = %q, want none", removed)
-	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
-		t.Fatal("transaction was evicted despite a failed confirmed-nonce lookup")
+			assertReconcileOutcome(t, provider, removed, tt.wantRemoved)
+		})
 	}
 }
 
@@ -369,25 +307,6 @@ func TestAlternativeSendTxProviderReconcileKeepsTransactionWithUnparsableNonce(t
 	}
 	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
 		t.Fatal("transaction with an unparsable nonce was incorrectly evicted")
-	}
-}
-
-func TestAlternativeSendTxProviderReconcileKeepsTransactionWhenConfirmedNonceUnparsable(t *testing.T) {
-	// the confirmed-nonce response is malformed: without a usable count we cannot prove supersession
-	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
-		"eth_getTransactionCount":  nonceCountResponse("0xZZ"),
-	})
-	var removed string
-	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-
-	provider.reconcileMempoolTxs()
-
-	if removed != "" {
-		t.Fatalf("removed txid = %q, want none", removed)
-	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
-		t.Fatal("transaction was evicted despite an unparsable confirmed-nonce response")
 	}
 }
 
