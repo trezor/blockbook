@@ -1675,7 +1675,7 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 		if fiat != "" {
 			fiatArray = []string{fiat}
 		}
-		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, gap, uint32(groupBy))
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, gap, uint32(groupBy), s.is.BalanceHistoryMaxTxsREST, api.BalanceHistoryTransportREST)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else if apiErr, ok := err.(*api.APIError); ok && apiErr.Public {
@@ -1684,7 +1684,7 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 			// address, which would mask it with an address-parse error.
 			return history, err
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, uint32(groupBy))
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, uint32(groupBy), s.is.BalanceHistoryMaxTxsREST, api.BalanceHistoryTransportREST)
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}

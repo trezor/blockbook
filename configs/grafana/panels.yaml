@@ -373,6 +373,26 @@ panels:
       max:
         promql: max({{name:websocket_max_connections_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - max per IP'
+  websocket.balance_history_txs:
+    title: WebSocket balance-history transactions per request (quantiles)
+    description: 'Distribution of how many transactions a single WebSocket getBalanceHistory call aggregates — the per-request DB work the cap bounds (one read per transaction). Trezor Suite is WebSocket-only and requests an account''s full history (no from/to) for its balance graph, so this is the signal for sizing the WS cap (default 1000000): if p99 sits far below the cap, the cap has ample headroom and never breaks a Suite graph; if it climbs toward the cap, heavy real accounts are getting close. Split by path (address vs xpub; xpub sums across derived addresses). Values are clamped at cap+1 when a request is rejected, so a flat line at the cap means requests are hitting it — read alongside the cap-rejections panel.'
+    queries:
+      p50:
+        promql: histogram_quantile(0.50, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p50'
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p95'
+      p99:
+        promql: histogram_quantile(0.99, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p99'
+  websocket.balance_history_cap_exceeded:
+    title: WebSocket balance-history cap rejections per minute
+    description: 'Rate of WebSocket getBalanceHistory requests rejected because the requested range spanned more transactions than the WS cap (default 1000000). For paying Suite customers this should stay at zero: a non-zero value means a real WS client (most likely a heavy Suite account asking for its full-history graph) is being turned away and that account''s graph is broken — the cue to raise <NET>_WS_BALANCE_HISTORY_MAX_TXS. Split by path (address vs xpub).'
+    queries:
+      by_path:
+        promql: sum(rate({{name:balance_history_cap_exceeded_total}}{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path) * 60
+        legend: '{{coin}} - {{path}}/min'
   row.rest_api:
     title: REST API
   rest_api.requests:
@@ -413,6 +433,26 @@ panels:
       max:
         promql: max({{name:rest_api_max_active_requests_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - max in-flight per IP'
+  rest_api.balance_history_txs:
+    title: REST API balance-history transactions per request (quantiles)
+    description: 'Distribution of how many transactions a single REST /api/v2/balancehistory call aggregates — the per-request DB work the cap bounds (one read per transaction). REST is the open, unauthenticated surface (non-Suite: explorer, integrations, bots), so this is where a cheap-to-send, expensive-to-serve request shows up; use it to judge whether the REST cap (default 250000) is sized right. Split by path (address vs xpub; xpub sums across derived addresses). Values are clamped at cap+1 when a request is rejected, so a flat line at the cap means requests are hitting it — read alongside the cap-rejections panel.'
+    queries:
+      p50:
+        promql: histogram_quantile(0.50, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p50'
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p95'
+      p99:
+        promql: histogram_quantile(0.99, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p99'
+  rest_api.balance_history_cap_exceeded:
+    title: REST API balance-history cap rejections per minute
+    description: 'Rate of REST balance-history requests rejected (HTTP 400) because the requested range spanned more transactions than the REST cap (default 250000). Unlike the WS side, non-zero here is expected and healthy — it is the open REST surface shedding the unbounded, high-volume-address scans the cap exists to block. A sustained climb, especially concentrated on the xpub path or one source, is the automated/DoS pattern; pair it with the REST rate-limit rejections and busiest-client panels. Split by path (address vs xpub).'
+    queries:
+      by_path:
+        promql: sum(rate({{name:balance_history_cap_exceeded_total}}{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path) * 60
+        legend: '{{coin}} - {{path}}/min'
   row.general:
     title: General
   general.synchronized:

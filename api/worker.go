@@ -1984,17 +1984,38 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
-// DefaultBalanceHistoryMaxTxs is the default cap on the number of transactions
-// a single balance-history request may aggregate. It bounds the per-request DB
-// work (one read per aggregated transaction) so that a query over an address or
-// xpub with a very large transaction history cannot exhaust server resources.
-// It is generous enough never to affect a normal wallet; operators indexing
-// exchange-scale addresses can raise it (or set 0 to disable) via
-// <NET>_BALANCE_HISTORY_MAX_TXS.
-const DefaultBalanceHistoryMaxTxs = 250000
+// DefaultBalanceHistoryMaxTxsREST / DefaultBalanceHistoryMaxTxsWS are the
+// default caps on the number of transactions a single balance-history request
+// may aggregate, split by transport. The cap bounds the per-request DB work
+// (one read per aggregated transaction) so that a query over an address or xpub
+// with a very large transaction history cannot exhaust server resources.
+//
+// The REST default is tighter because the REST API is an open, unauthenticated
+// surface. The WS default is far more generous: Trezor Suite talks to Blockbook
+// over WS exclusively, requests the full account history for its balance graph
+// (no from/to), and never derives the displayed balance from balance history —
+// so the WS cap must not break a normal (even heavy) wallet graph, while still
+// bounding a single expensive message. Both are generous enough never to affect
+// a normal wallet; operators can override (or set 0 to disable) via
+// <NET>_WS_BALANCE_HISTORY_MAX_TXS / <NET>_REST_BALANCE_HISTORY_MAX_TXS (with
+// <NET>_BALANCE_HISTORY_MAX_TXS as a shared fallback for both).
+const (
+	DefaultBalanceHistoryMaxTxsREST = 250000
+	DefaultBalanceHistoryMaxTxsWS   = 1000000
+)
 
-// GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32) (BalanceHistories, error) {
+// Transport labels for the balance-history metrics, identifying which surface
+// served a request. Passed by the caller (the worker is transport-agnostic).
+const (
+	BalanceHistoryTransportWS   = "ws"
+	BalanceHistoryTransportREST = "rest"
+)
+
+// GetBalanceHistory returns history of balance for given address. maxTxs bounds
+// how many transactions in the requested range may be aggregated (0 = unlimited);
+// the caller supplies the transport-specific cap (WS vs REST). transport labels
+// the emitted metrics with the serving surface.
+func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32, maxTxs int, transport string) (BalanceHistories, error) {
 	currencies = removeEmpty(currencies)
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
@@ -2022,7 +2043,6 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	// one more than the cap so the overflow is detectable, then reject rather
 	// than silently truncate (which would return a wrong balance history).
 	maxResults := maxInt
-	maxTxs := w.is.BalanceHistoryMaxTxs
 	if maxTxs > 0 {
 		maxResults = maxTxs + 1
 	}
@@ -2030,7 +2050,13 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if err != nil {
 		return nil, err
 	}
+	if w.metrics != nil {
+		w.metrics.BalanceHistoryTxs.With(common.Labels{"transport": transport, "path": "address"}).Observe(float64(len(txs)))
+	}
 	if maxTxs > 0 && len(txs) > maxTxs {
+		if w.metrics != nil {
+			w.metrics.BalanceHistoryCapExceeded.With(common.Labels{"transport": transport, "path": "address"}).Inc()
+		}
 		return nil, NewAPIError(fmt.Sprintf("balance history spans more than %d transactions in the requested range; narrow the from/to range", maxTxs), true)
 	}
 	selfAddrDesc := map[string]struct{}{string(addrDesc): {}}

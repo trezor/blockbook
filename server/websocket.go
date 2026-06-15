@@ -708,9 +708,13 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 			if r.GroupBy <= 0 {
 				r.GroupBy = 3600
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.Gap, r.GroupBy)
-			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.GroupBy)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.Gap, r.GroupBy, s.is.BalanceHistoryMaxTxsWS, api.BalanceHistoryTransportWS)
+			if apiErr, ok := err.(*api.APIError); ok && apiErr.Public {
+				// A public error from the xpub path (e.g. the range spans too many
+				// transactions) is definitive for a valid xpub; do not retry as an
+				// address, which would mask it with an address-parse error.
+			} else if err != nil {
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.GroupBy, s.is.BalanceHistoryMaxTxsWS, api.BalanceHistoryTransportWS)
 			}
 		}
 		return
