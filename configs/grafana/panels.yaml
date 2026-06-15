@@ -585,7 +585,7 @@ panels:
         legend: '{{coin}} - {{instance}} tokens repaired/h'
   fiatrates.unable:
     title: Unable to fetch (by reason)
-    description: Fiat-rate series that could not be fetched, split by phase and reason. gap_too_large flags series stale beyond the reconcile guard (probable bug); fetch_failed/provider_banned are transport failures; no_base_ticker is a token day lacking a base-currency ticker.
+    description: Fiat-rate series that could not be fetched, split by phase and reason. gap_too_large flags series stale beyond the reconcile guard (probable bug); fetch_failed/provider_banned are transport failures; no_base_ticker is a token day lacking a base-currency ticker; budget_exhausted means the startup reconcile wall-clock budget elapsed before completion (remaining series retried next startup).
     queries:
       by_reason:
         promql: sum(increase({{name:fiat_rates_unable_total}}{job="blockbook", coin="$coin"}[1h])) by (phase, reason)

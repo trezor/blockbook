@@ -1,6 +1,7 @@
 package fiat
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,7 @@ type RatesDownloaderInterface interface {
 	FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error)
 	UpdateHistoricalTickers() error
 	UpdateHistoricalTokenTickers() error
-	ReconcileHistoricalRates(windowDays int, maxGapDays int, stop <-chan os.Signal) (int, error)
+	ReconcileHistoricalRates(ctx context.Context, windowDays int, maxGapDays int) (int, error)
 }
 
 const (
@@ -45,6 +46,10 @@ const (
 	// treated as a probable bug and reported instead of refetched.
 	reconcileWindowDays = 365
 	reconcileMaxGapDays = 90
+	// defaultReconcileMaxDuration is the wall-clock budget for the blocking startup
+	// reconciliation; once it elapses the pass aborts (persisting what it fetched) so a slow or
+	// throttling CDN can never stall startup. Overridable via reconcileHistoricalMaxMinutes.
+	defaultReconcileMaxDuration = 5 * time.Minute
 )
 
 // FiatRates is used to fetch and refresh fiat rates
@@ -58,6 +63,7 @@ type FiatRates struct {
 	downloader             RatesDownloaderInterface
 	downloadTokens         bool
 	reconcileAtStartup     bool
+	reconcileMaxDuration   time.Duration
 	provider               string
 	allowedVsCurrencies    string
 	mux                    sync.RWMutex
@@ -101,6 +107,9 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 		// ReconcileHistoricalAtStartup toggles the blocking startup self-healing pass that
 		// repairs missing historical rates. Absent (nil) means enabled; set false to disable.
 		ReconcileHistoricalAtStartup *bool `json:"reconcileHistoricalAtStartup"`
+		// ReconcileHistoricalMaxMinutes caps the wall-clock time of that pass. Absent (nil) or
+		// <= 0 uses defaultReconcileMaxDuration.
+		ReconcileHistoricalMaxMinutes *int `json:"reconcileHistoricalMaxMinutes"`
 	}
 	rdParams := &fiatRatesParams{}
 	err := json.Unmarshal([]byte(config.FiatRatesParams), &rdParams)
@@ -120,6 +129,10 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 	fr.callbackOnNewTicker = callback
 	fr.downloadTokens = rdParams.PlatformIdentifier != "" && rdParams.PlatformVsCurrency != ""
 	fr.reconcileAtStartup = rdParams.ReconcileHistoricalAtStartup == nil || *rdParams.ReconcileHistoricalAtStartup
+	fr.reconcileMaxDuration = defaultReconcileMaxDuration
+	if rdParams.ReconcileHistoricalMaxMinutes != nil && *rdParams.ReconcileHistoricalMaxMinutes > 0 {
+		fr.reconcileMaxDuration = time.Duration(*rdParams.ReconcileHistoricalMaxMinutes) * time.Minute
+	}
 	if fr.downloadTokens {
 		common.TickerRecalculateTokenRate = strings.ToLower(db.GetInternalState().CoinShortcut) != rdParams.PlatformVsCurrency
 		common.TickerTokenVsCurrency = rdParams.PlatformVsCurrency
@@ -514,8 +527,21 @@ func (fr *FiatRates) ReconcileHistoricalRatesAtStartup(stop <-chan os.Signal) {
 		}
 	}()
 	start := time.Now()
-	glog.Info("FiatRatesDownloader: starting historical rates reconciliation (startup self-healing)")
-	filled, err := fr.downloader.ReconcileHistoricalRates(reconcileWindowDays, reconcileMaxGapDays, stop)
+	// Bound the pass by both a wall-clock budget and the shutdown signal so a slow/throttling
+	// CDN can never stall startup and a SIGTERM aborts the repair promptly.
+	ctx, cancel := context.WithTimeout(context.Background(), fr.reconcileMaxDuration)
+	defer cancel()
+	if stop != nil {
+		go func() {
+			select {
+			case <-stop:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+	glog.Infof("FiatRatesDownloader: starting historical rates reconciliation (startup self-healing), budget %v", fr.reconcileMaxDuration)
+	filled, err := fr.downloader.ReconcileHistoricalRates(ctx, reconcileWindowDays, reconcileMaxGapDays)
 	if err != nil {
 		fr.observeUpdateDuration("reconcile", "error", start)
 		logFiatRatesDownloaderError("FiatRatesDownloader: reconciliation error ", err)

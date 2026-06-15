@@ -3,12 +3,12 @@
 package fiat
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -470,7 +470,7 @@ func TestMakeReq_ThrottleRetriesWithoutCap(t *testing.T) {
 	cg := &Coingecko{
 		httpClient: mockServer.Client(),
 	}
-	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
+	resp, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
 	if err != nil {
 		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
@@ -502,7 +502,7 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 	cg := &Coingecko{
 		httpClient: mockServer.Client(),
 	}
-	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
+	resp, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
 	if err != nil {
 		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
@@ -561,7 +561,7 @@ func TestMakeReq_CloudflareBanFastFails(t *testing.T) {
 		},
 	}
 
-	resp, err := cg.makeReq("http://coingecko.invalid/coins/x/market_chart", "market_chart", coingeckoPlanFree, priorityLow)
+	resp, err := cg.makeReq(context.Background(), "http://coingecko.invalid/coins/x/market_chart", "market_chart", coingeckoPlanFree, priorityLow)
 	if err == nil {
 		t.Fatal("expected makeReq to fast-fail on a Cloudflare 1015 ban, got nil error")
 	}
@@ -707,7 +707,7 @@ func TestMakeReq_Detects429ByStatus(t *testing.T) {
 	defer mockServer.Close()
 
 	cg := &Coingecko{httpClient: mockServer.Client()}
-	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
+	resp, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
 	if err != nil {
 		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
@@ -734,7 +734,7 @@ func TestMakeReq_PacesRequests(t *testing.T) {
 	}
 	start := time.Now()
 	for i := 0; i < 3; i++ {
-		if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+		if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
 			t.Fatalf("makeReq failed on call %d: %v", i, err)
 		}
 	}
@@ -767,7 +767,7 @@ func TestMakeReq_BootstrapCDNBypassesPlanPacing(t *testing.T) {
 	}
 	start := time.Now()
 	for i := 0; i < 3; i++ {
-		if _, err := cg.makeReq(mockServer.URL+"/coins/list", "coins/list", coingeckoPlanFree, priorityLow); err != nil {
+		if _, err := cg.makeReq(context.Background(), mockServer.URL+"/coins/list", "coins/list", coingeckoPlanFree, priorityLow); err != nil {
 			t.Fatalf("makeReq failed on call %d: %v", i, err)
 		}
 	}
@@ -800,7 +800,7 @@ func TestMakeReq_NonBootstrapURLStillPacedWhenBootstrapConfigured(t *testing.T) 
 	}
 	start := time.Now()
 	for i := 0; i < 3; i++ {
-		if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+		if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
 			t.Fatalf("makeReq failed on call %d: %v", i, err)
 		}
 	}
@@ -840,7 +840,7 @@ func TestWaitForRequestSlot_HighPriorityWaitsOutWindowButIsNotParked(t *testing.
 	until := cg.throttledUntil
 	done := make(chan time.Time, 1)
 	go func() {
-		cg.waitForRequestSlot(priorityHigh, cg.minHttpRequestInterval)
+		cg.waitForRequestSlot(context.Background(), priorityHigh, cg.minHttpRequestInterval)
 		done <- time.Now()
 	}()
 	select {
@@ -864,7 +864,7 @@ func TestWaitForRequestSlot_LowPriorityParksUntilHighPriorityCompletes(t *testin
 	}
 	done := make(chan struct{})
 	go func() {
-		cg.waitForRequestSlot(priorityLow, cg.minHttpRequestInterval)
+		cg.waitForRequestSlot(context.Background(), priorityLow, cg.minHttpRequestInterval)
 		close(done)
 	}()
 	// while throttled with a high-priority request in flight, low priority must stay parked
@@ -891,7 +891,7 @@ func TestWaitForRequestSlot_RechecksWindowExtendedDuringSleep(t *testing.T) {
 	cg.markThrottled(200 * time.Millisecond)
 	done := make(chan time.Time, 1)
 	go func() {
-		cg.waitForRequestSlot(priorityHigh, cg.minHttpRequestInterval)
+		cg.waitForRequestSlot(context.Background(), priorityHigh, cg.minHttpRequestInterval)
 		done <- time.Now()
 	}()
 	// wait until the goroutine reserved its slot inside the first window
@@ -940,7 +940,7 @@ func TestMakeReq_SharedThrottleWindow(t *testing.T) {
 	cg := &Coingecko{httpClient: mockServer.Client()}
 	firstDone := make(chan error, 1)
 	go func() {
-		_, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree, priorityLow)
+		_, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityLow)
 		firstDone <- err
 	}()
 	// wait until the first request's 429 opened the shared window
@@ -955,7 +955,7 @@ func TestMakeReq_SharedThrottleWindow(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	// a second request on another endpoint must wait out the shared window too
-	if _, err := cg.makeReq(mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+	if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
 		t.Fatalf("second makeReq failed: %v", err)
 	}
 	if err := <-firstDone; err != nil {
@@ -1006,7 +1006,7 @@ func TestMakeReq_LowPriorityYieldsToHighDuringThrottle(t *testing.T) {
 	}
 	highDone := make(chan error, 1)
 	go func() {
-		_, err := cg.makeReq(mockServer.URL+"/high", "market_chart", coingeckoPlanFree, priorityHigh)
+		_, err := cg.makeReq(context.Background(), mockServer.URL+"/high", "market_chart", coingeckoPlanFree, priorityHigh)
 		highDone <- err
 	}()
 	// wait until the high-priority request opened the window (it stays in flight while retrying)
@@ -1021,7 +1021,7 @@ func TestMakeReq_LowPriorityYieldsToHighDuringThrottle(t *testing.T) {
 	}
 	lowDone := make(chan error, 1)
 	go func() {
-		_, err := cg.makeReq(mockServer.URL+"/low", "simple/price", coingeckoPlanFree, priorityLow)
+		_, err := cg.makeReq(context.Background(), mockServer.URL+"/low", "simple/price", coingeckoPlanFree, priorityLow)
 		lowDone <- err
 	}()
 	if err := <-highDone; err != nil {
@@ -1356,7 +1356,7 @@ func TestReconcileHistoricalRates_RepairsInteriorHole(t *testing.T) {
 		plan:               coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1410,7 +1410,7 @@ func TestReconcileHistoricalRates_HealthyMakesNoRequests(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1446,7 +1446,7 @@ func TestReconcileHistoricalRates_YoungDBMakesNoRequests(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1483,7 +1483,7 @@ func TestReconcileHistoricalRates_GapTooLargeSkipsFetch(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90, nil)
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
@@ -1514,14 +1514,14 @@ func TestReconcileHistoricalRates_NoCDNIsNoOp(t *testing.T) {
 		plan:       coingeckoPlanFree,
 	}
 
-	if _, err := cg.ReconcileHistoricalRates(365, 90, nil); err != nil {
+	if _, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90); err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
 }
 
-// A shutdown signaled before backfill aborts the pass without issuing any request, even
-// when there is a genuine (sub-guard) gap to repair.
-func TestReconcileHistoricalRates_ShutdownAbortsBeforeFetch(t *testing.T) {
+// An already-cancelled context (shutdown or budget timeout) aborts the pass without issuing
+// any request, even when there is a genuine (sub-guard) gap to repair.
+func TestReconcileHistoricalRates_CancelledContextAbortsBeforeFetch(t *testing.T) {
 	config := common.Config{CoinName: "fakecoin"}
 	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
 	defer closeAndDestroyRocksDB(t, d, tmp)
@@ -1548,15 +1548,69 @@ func TestReconcileHistoricalRates_ShutdownAbortsBeforeFetch(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	// a closed channel reads as immediately signaled, simulating an in-flight shutdown
-	stop := make(chan os.Signal)
-	close(stop)
+	// an already-cancelled context simulates an in-flight shutdown / elapsed budget
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
-	filled, err := cg.ReconcileHistoricalRates(365, 90, stop)
+	filled, err := cg.ReconcileHistoricalRates(ctx, 365, 90)
 	if err != nil {
 		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
 	}
 	if filled != 0 {
 		t.Fatalf("aborted reconciliation should fill nothing, got %d", filled)
+	}
+}
+
+// When the wall-clock budget elapses while a backfill fetch is in flight, the pass aborts
+// (without error) instead of stalling startup: metadata succeeds fast, the first chart fetch
+// blocks until the budget cancels the request context.
+func TestReconcileHistoricalRates_BudgetExhaustedAbortsMidBackfill(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// a real interior hole at d3 -> work to do, well under the gap guard
+	seedDailyTicker(t, d, midnightDaysAgo(2), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(4), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(5), map[string]float32{"usd": 100}, nil)
+
+	var chartReqs int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd","eur"]`)) // metadata returns immediately
+		case "/coins/ethereum/market_chart":
+			atomic.AddInt32(&chartReqs, 1)
+			<-r.Context().Done() // block until the reconcile budget cancels the request
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	filled, err := cg.ReconcileHistoricalRates(ctx, 365, 90)
+	if err != nil {
+		t.Fatalf("budget-exhausted reconciliation must not return an error, got: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("a fetch cut short by the budget should fill nothing, got %d", filled)
+	}
+	if atomic.LoadInt32(&chartReqs) == 0 {
+		t.Fatal("expected the backfill loop to attempt at least one market_chart fetch before the budget expired")
 	}
 }

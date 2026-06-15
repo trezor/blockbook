@@ -311,7 +311,7 @@ metrics:
   fiat_rates_unable_total:
     name: blockbook_fiat_rates_unable_total
     type: counter_vec
-    help: Fiat-rate series that could not be fetched, split by phase and reason (gap_too_large, fetch_failed, provider_banned, no_base_ticker)
+    help: Fiat-rate series that could not be fetched, split by phase and reason (gap_too_large, fetch_failed, provider_banned, no_base_ticker, budget_exhausted)
     labels: [phase, reason]
   alternative_fee_provider_requests:
     name: blockbook_alternative_fee_provider_requests

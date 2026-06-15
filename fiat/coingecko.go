@@ -1,6 +1,7 @@
 package fiat
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,10 +53,11 @@ const (
 
 // Reason labels for fiat_rates_unable_total.
 const (
-	fiatUnableGapTooLarge  = "gap_too_large"   // series stale >= reconcile guard, probable bug
-	fiatUnableFetchFailed  = "fetch_failed"    // HTTP/parse error fetching the range
-	fiatUnableProviderBan  = "provider_banned" // Cloudflare 1015 IP ban
-	fiatUnableNoBaseTicker = "no_base_ticker"  // token day without an existing base-currency ticker
+	fiatUnableGapTooLarge     = "gap_too_large"    // series stale >= reconcile guard, probable bug
+	fiatUnableFetchFailed     = "fetch_failed"     // HTTP/parse error fetching the range
+	fiatUnableProviderBan     = "provider_banned"  // Cloudflare 1015 IP ban
+	fiatUnableNoBaseTicker    = "no_base_ticker"   // token day without an existing base-currency ticker
+	fiatUnableBudgetExhausted = "budget_exhausted" // reconcile wall-clock budget elapsed before completion
 )
 
 // used when retry-after header is missing
@@ -335,13 +337,21 @@ func (cg *Coingecko) requestIntervalFor(url string) time.Duration {
 	return cg.minHttpRequestInterval
 }
 
-func (cg *Coingecko) waitForRequestSlot(priority reqPriority, minInterval time.Duration) {
+// waitForRequestSlot blocks until this request may fire, honoring the shared throttle window
+// and the per-request minimum interval. ctx lets the wait be cut short on shutdown or when the
+// reconcile budget expires; on cancellation it returns early and makeReq observes ctx.Err().
+func (cg *Coingecko) waitForRequestSlot(ctx context.Context, priority reqPriority, minInterval time.Duration) {
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		cg.reqMu.Lock()
 		now := time.Now()
 		if priority == priorityLow && cg.throttledUntil.After(now) && cg.highPriorityInFlight > 0 {
 			cg.reqMu.Unlock()
-			time.Sleep(coingeckoLowPriorityPollInterval)
+			if !sleepCtx(ctx, coingeckoLowPriorityPollInterval) {
+				return
+			}
 			continue
 		}
 		slot := now
@@ -356,7 +366,9 @@ func (cg *Coingecko) waitForRequestSlot(priority reqPriority, minInterval time.D
 		cg.lastRequestAt = slot
 		cg.reqMu.Unlock()
 		if d := time.Until(slot); d > 0 {
-			time.Sleep(d)
+			if !sleepCtx(ctx, d) {
+				return
+			}
 		}
 		// Another goroutine's 429 may have extended throttledUntil while we slept on an
 		// already-reserved slot; firing now would be a guaranteed 429, so re-enter the gate.
@@ -369,6 +381,19 @@ func (cg *Coingecko) waitForRequestSlot(priority reqPriority, minInterval time.D
 	}
 }
 
+// sleepCtx sleeps for d unless ctx is cancelled first. It returns true if the full duration
+// elapsed, false if ctx was cancelled (so the caller can bail).
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
 // markThrottled opens (or extends) the shared throttle window for all requests.
 func (cg *Coingecko) markThrottled(delay time.Duration) {
 	cg.reqMu.Lock()
@@ -378,8 +403,12 @@ func (cg *Coingecko) markThrottled(delay time.Duration) {
 	cg.reqMu.Unlock()
 }
 
-// makeReq HTTP request helper with unbounded retries for throttling errors.
-func (cg *Coingecko) makeReq(url string, endpoint string, plan string, priority reqPriority) ([]byte, error) {
+// makeReq HTTP request helper with unbounded retries for throttling errors. ctx bounds the
+// otherwise-unbounded retry loop: callers on the steady-state loops pass context.Background()
+// (retry forever, as before), while the startup reconcile pass passes a context carrying both
+// the shutdown signal and a wall-clock budget, so a persistently throttling endpoint can never
+// stall startup and a SIGTERM aborts mid-retry.
+func (cg *Coingecko) makeReq(ctx context.Context, url string, endpoint string, plan string, priority reqPriority) ([]byte, error) {
 	if priority == priorityHigh {
 		cg.reqMu.Lock()
 		cg.highPriorityInFlight++
@@ -393,8 +422,13 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string, priority 
 	minInterval := cg.requestIntervalFor(url)
 	for attempt := 0; ; attempt++ {
 		// glog.Infof("Coingecko makeReq %v", url)
-		cg.waitForRequestSlot(priority, minInterval)
-		req, err := http.NewRequest("GET", url, nil)
+		// waitForRequestSlot returns immediately if ctx is already done, so a single check after
+		// it covers both an already-cancelled context and one cancelled while waiting.
+		cg.waitForRequestSlot(ctx, priority, minInterval)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -413,6 +447,14 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string, priority 
 				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "success"}).Inc()
 			}
 			return resp, err
+		}
+
+		// A request cut short by our context (shutdown or the reconcile budget) is expected, not
+		// a provider failure: return quietly without an error log or the "error" status metric.
+		// A client-side HTTP timeout is a real failure and deliberately falls through below.
+		if ctx.Err() != nil {
+			glog.V(1).Infof("Coingecko makeReq %v aborted: %v", url, err)
+			return nil, err
 		}
 
 		if isCoingeckoCloudflareBanError(err) {
@@ -440,9 +482,9 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string, priority 
 }
 
 // SimpleSupportedVSCurrencies /simple/supported_vs_currencies
-func (cg *Coingecko) simpleSupportedVSCurrenciesAt(baseURL string, priority reqPriority) (simpleSupportedVSCurrencies, error) {
+func (cg *Coingecko) simpleSupportedVSCurrenciesAt(ctx context.Context, baseURL string, priority reqPriority) (simpleSupportedVSCurrencies, error) {
 	url := baseURL + "/simple/supported_vs_currencies"
-	resp, err := cg.makeReq(url, "supported_vs_currencies", cg.plan, priority)
+	resp, err := cg.makeReq(ctx, url, "supported_vs_currencies", cg.plan, priority)
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +506,7 @@ func (cg *Coingecko) simpleSupportedVSCurrenciesAt(baseURL string, priority reqP
 }
 
 // SimplePrice /simple/price Multiple ID and Currency (ids, vs_currencies)
-func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[string]map[string]float32, error) {
+func (cg *Coingecko) simplePrice(ctx context.Context, ids []string, vsCurrencies []string) (*map[string]map[string]float32, error) {
 	params := url.Values{}
 	idsParam := strings.Join(ids, ",")
 	vsCurrenciesParam := strings.Join(vsCurrencies, ",")
@@ -474,7 +516,7 @@ func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[stri
 
 	url := fmt.Sprintf("%s/simple/price?%s", cg.tipURL, params.Encode())
 	// only called from CurrentTickers, therefore always high priority
-	resp, err := cg.makeReq(url, "simple/price", cg.plan, priorityHigh)
+	resp, err := cg.makeReq(ctx, url, "simple/price", cg.plan, priorityHigh)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +531,7 @@ func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[stri
 }
 
 // CoinsList /coins/list
-func (cg *Coingecko) coinsListAt(baseURL string, priority reqPriority) (coinList, error) {
+func (cg *Coingecko) coinsListAt(ctx context.Context, baseURL string, priority reqPriority) (coinList, error) {
 	params := url.Values{}
 	platform := "false"
 	if cg.platformIdentifier != "" {
@@ -497,7 +539,7 @@ func (cg *Coingecko) coinsListAt(baseURL string, priority reqPriority) (coinList
 	}
 	params.Add("include_platform", platform)
 	url := fmt.Sprintf("%s/coins/list?%s", baseURL, params.Encode())
-	resp, err := cg.makeReq(url, "coins/list", cg.plan, priority)
+	resp, err := cg.makeReq(ctx, url, "coins/list", cg.plan, priority)
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +553,7 @@ func (cg *Coingecko) coinsListAt(baseURL string, priority reqPriority) (coinList
 }
 
 // coinMarketChart /coins/{id}/market_chart?vs_currency={usd, eur, jpy, etc.}&days={1,14,30,max}
-func (cg *Coingecko) coinMarketChartAt(baseURL string, id string, vs_currency string, days string, daily bool, priority reqPriority) (*marketChartPrices, error) {
+func (cg *Coingecko) coinMarketChartAt(ctx context.Context, baseURL string, id string, vs_currency string, days string, daily bool, priority reqPriority) (*marketChartPrices, error) {
 	if len(id) == 0 || len(vs_currency) == 0 || len(days) == 0 {
 		return nil, fmt.Errorf("id, vs_currency, and days is required")
 	}
@@ -524,7 +566,7 @@ func (cg *Coingecko) coinMarketChartAt(baseURL string, id string, vs_currency st
 	params.Add("days", days)
 
 	url := fmt.Sprintf("%s/coins/%s/market_chart?%s", baseURL, id, params.Encode())
-	resp, err := cg.makeReq(url, "market_chart", cg.plan, priority)
+	resp, err := cg.makeReq(ctx, url, "market_chart", cg.plan, priority)
 	if err != nil {
 		return nil, err
 	}
@@ -538,11 +580,11 @@ func (cg *Coingecko) coinMarketChartAt(baseURL string, id string, vs_currency st
 	return &m, nil
 }
 
-func (cg *Coingecko) platformIdsAt(baseURL string, priority reqPriority) error {
+func (cg *Coingecko) platformIdsAt(ctx context.Context, baseURL string, priority reqPriority) error {
 	if cg.platformIdentifier == "" {
 		return nil
 	}
-	cl, err := cg.coinsListAt(baseURL, priority)
+	cl, err := cg.coinsListAt(ctx, baseURL, priority)
 	if err != nil {
 		return err
 	}
@@ -570,7 +612,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	vsCurrencies := cg.vsCurrencies
 	cg.cacheMu.Unlock()
 	if vsCurrencies == nil {
-		vs, err := cg.simpleSupportedVSCurrenciesAt(cg.tipURL, priorityHigh)
+		vs, err := cg.simpleSupportedVSCurrenciesAt(context.Background(), cg.tipURL, priorityHigh)
 		if err != nil {
 			return nil, err
 		}
@@ -579,7 +621,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 		cg.vsCurrencies = vs
 		cg.cacheMu.Unlock()
 	}
-	prices, err := cg.simplePrice([]string{cg.coin}, vsCurrencies)
+	prices, err := cg.simplePrice(context.Background(), []string{cg.coin}, vsCurrencies)
 	if err != nil || prices == nil {
 		return nil, err
 	}
@@ -593,7 +635,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 		platformIds, platformIdsToTokens := cg.platformIds, cg.platformIdsToTokens
 		cg.cacheMu.Unlock()
 		if platformIdsToTokens == nil {
-			err = cg.platformIdsAt(cg.tipURL, priorityHigh)
+			err = cg.platformIdsAt(context.Background(), cg.tipURL, priorityHigh)
 			if err != nil {
 				return nil, err
 			}
@@ -608,7 +650,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 		for to := 0; to < len(platformIds); to++ {
 			requestLen += len(platformIds[to]) + 3 // 3 characters for the comma separator %2C
 			if requestLen > maxRequestLen || to+1 >= len(platformIds) {
-				tokenPrices, err := cg.simplePrice(platformIds[from:to+1], []string{cg.platformVsCurrency})
+				tokenPrices, err := cg.simplePrice(context.Background(), platformIds[from:to+1], []string{cg.platformVsCurrency})
 				if err != nil || tokenPrices == nil {
 					return nil, err
 				}
@@ -628,7 +670,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 }
 
 func (cg *Coingecko) getHighGranularityTickers(days string) (*[]common.CurrencyRatesTicker, error) {
-	mc, err := cg.coinMarketChartAt(cg.tipURL, cg.coin, highGranularityVsCurrency, days, false, priorityHigh)
+	mc, err := cg.coinMarketChartAt(context.Background(), cg.tipURL, cg.coin, highGranularityVsCurrency, days, false, priorityHigh)
 	if err != nil {
 		return nil, err
 	}
@@ -813,7 +855,7 @@ func (cg *Coingecko) fillFromMarketChart(tickersToUpdate map[uint]*common.Curren
 	return written, noBaseTicker, nil
 }
 
-func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string, allowMax bool) (bool, error) {
+func (cg *Coingecko) getHistoricalTicker(ctx context.Context, tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string, allowMax bool) (bool, error) {
 	lastTicker, err := cg.db.FiatRatesFindLastTicker(vsCurrency, token)
 	if err != nil {
 		return false, err
@@ -829,7 +871,7 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.Curren
 	baseURL := cg.sourceURLForRange(rangeKind)
 	phase := phaseForRange(rangeKind)
 	// both callers update historical (daily) tickers, therefore always low priority
-	mc, err := cg.coinMarketChartAt(baseURL, coinId, vsCurrency, days, true, priorityLow)
+	mc, err := cg.coinMarketChartAt(ctx, baseURL, coinId, vsCurrency, days, true, priorityLow)
 	if err != nil {
 		return false, err
 	}
@@ -896,7 +938,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	}
 
 	// reload vs_currencies
-	vs, err := cg.simpleSupportedVSCurrenciesAt(metadataURL, priorityLow)
+	vs, err := cg.simpleSupportedVSCurrenciesAt(context.Background(), metadataURL, priorityLow)
 	if err != nil {
 		return err
 	}
@@ -909,7 +951,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	for _, currency := range vs {
 		// get historical rates for each currency
 		var err error
-		if _, err = cg.getHistoricalTicker(tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
+		if _, err = cg.getHistoricalTicker(context.Background(), tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
 			hadFailures = true
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
@@ -963,7 +1005,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		}
 
 		//  reload platform ids
-		if err := cg.platformIdsAt(metadataURL, priorityLow); err != nil {
+		if err := cg.platformIdsAt(context.Background(), metadataURL, priorityLow); err != nil {
 			return err
 		}
 		cg.cacheMu.Lock()
@@ -975,7 +1017,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		// get token historical rates
 		for tokenId, token := range platformIdsToTokens {
 			var err error
-			if _, err = cg.getHistoricalTicker(tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
+			if _, err = cg.getHistoricalTicker(context.Background(), tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
@@ -1105,10 +1147,12 @@ func (cg *Coingecko) missingDayWindow(windowDays int) (missing map[uint]struct{}
 // It is a no-op while bootstrap is still in progress (the bootstrap pass owns full-history
 // population) or when no CDN URL is configured.
 //
-// stop is blockbook's chanOsSignal (closed on shutdown). It is polled between series fetches
-// so a SIGTERM mid-repair aborts promptly; any days fetched before the abort are persisted so
-// the next startup resumes from the remaining gap.
-func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int, stop <-chan os.Signal) (int, error) {
+// ctx bounds the whole pass: it carries both the shutdown signal and a wall-clock budget, so a
+// SIGTERM or a persistently throttling CDN aborts the pass promptly instead of stalling
+// startup. On abort, any days already fetched are persisted so the next startup resumes from
+// the remaining gap; a budget timeout is also recorded as fiat_rates_unable_total{reason=
+// "budget_exhausted"} so it is visible in monitoring.
+func (cg *Coingecko) ReconcileHistoricalRates(ctx context.Context, windowDays int, maxGapDays int) (int, error) {
 	bootstrapInProgress, _, err := historicalBootstrapInProgress(cg.db)
 	if err != nil {
 		return 0, err
@@ -1154,15 +1198,20 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int, st
 	cdnURL := cg.sourceURLForRange(coingeckoRangeBackfill)
 	metaURL := cg.metadataURL()
 
-	// Shutdown may arrive during the cheap stage-1 scan; bail before any network call.
-	if stopRequested(stop) {
-		glog.Warning("FiatRates reconcile: shutdown signaled before backfill, skipping; gap will be reconciled on next startup")
+	// Shutdown/budget may already be signaled during the cheap stage-1 scan; bail before any
+	// network call.
+	if err := ctx.Err(); err != nil {
+		glog.Warningf("FiatRates reconcile: aborted before backfill (%v), skipping; gap will be reconciled on next startup", err)
 		return 0, nil
 	}
 
 	// enumerate the series to repair: base coin x each vsCurrency, plus each token
-	vs, err := cg.simpleSupportedVSCurrenciesAt(metaURL, priorityLow)
+	vs, err := cg.simpleSupportedVSCurrenciesAt(ctx, metaURL, priorityLow)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			glog.Warningf("FiatRates reconcile: aborted fetching supported_vs_currencies (%v); gap will be reconciled on next startup", ctxErr)
+			return 0, nil
+		}
 		return 0, fmt.Errorf("reconcile: supported_vs_currencies: %w", err)
 	}
 	cg.cacheMu.Lock()
@@ -1174,7 +1223,11 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int, st
 		targets = append(targets, reconcileTarget{coinId: cg.coin, vsCurrency: currency})
 	}
 	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
-		if err := cg.platformIdsAt(metaURL, priorityLow); err != nil {
+		if err := cg.platformIdsAt(ctx, metaURL, priorityLow); err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				glog.Warningf("FiatRates reconcile: aborted fetching coins/list (%v); gap will be reconciled on next startup", ctxErr)
+				return 0, nil
+			}
 			return 0, fmt.Errorf("reconcile: coins/list: %w", err)
 		}
 		cg.cacheMu.Lock()
@@ -1193,18 +1246,23 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int, st
 	// shared map holds at most len(missingDays) records regardless of how many series we scan.
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
 	filled, failed, repairedTokens := 0, 0, 0
-	var banErr error
-	aborted := false
+	var banErr, abortErr error
+	abortAt := 0
 	for i, c := range targets {
-		// Abort promptly on shutdown; persist what we already fetched (below) so the next
-		// startup resumes from the remaining gap rather than refetching from scratch.
-		if stopRequested(stop) {
-			aborted = true
-			glog.Warningf("FiatRates reconcile: shutdown signaled, aborting after %d/%d series (%d point(s) fetched so far)", i, len(targets), filled)
+		// Abort promptly on shutdown or budget timeout; persist what we already fetched (below)
+		// so the next startup resumes from the remaining gap rather than refetching from scratch.
+		// The check before the fetch catches cancellation between iterations; the one after
+		// catches cancellation during the in-flight fetch.
+		if err := ctx.Err(); err != nil {
+			abortErr, abortAt = err, i
 			break
 		}
-		mc, err := cg.coinMarketChartAt(cdnURL, c.coinId, c.vsCurrency, days, true, priorityLow)
+		mc, err := cg.coinMarketChartAt(ctx, cdnURL, c.coinId, c.vsCurrency, days, true, priorityLow)
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				abortErr, abortAt = ctxErr, i
+				break
+			}
 			failed++
 			if isCoingeckoCloudflareBanError(err) {
 				cg.observeUnable(fiatPhaseReconcile, fiatUnableProviderBan, 1)
@@ -1234,8 +1292,14 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int, st
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
 		return filled, err
 	}
-	if aborted {
-		glog.Infof("FiatRates reconcile stage 2: aborted on shutdown, persisted %d point(s) (%d token series), %d fetch failures; remaining gap will be reconciled on next startup", filled, repairedTokens, failed)
+	if abortErr != nil {
+		remaining := len(targets) - abortAt
+		// a budget timeout (vs. a clean shutdown) is a problem worth surfacing in monitoring:
+		// the window was too small or the CDN too slow to finish.
+		if errors.Is(abortErr, context.DeadlineExceeded) {
+			cg.observeUnable(fiatPhaseReconcile, fiatUnableBudgetExhausted, remaining)
+		}
+		glog.Warningf("FiatRates reconcile stage 2: aborted (%v), persisted %d point(s) (%d token series), %d fetch failures, %d series unprocessed; remaining gap will be reconciled on next startup", abortErr, filled, repairedTokens, failed, remaining)
 		return filled, nil
 	}
 	glog.Infof("FiatRates reconcile stage 2: filled %d point(s) across %d series (%d token series), %d fetch failures", filled, len(targets), repairedTokens, failed)
@@ -1243,19 +1307,4 @@ func (cg *Coingecko) ReconcileHistoricalRates(windowDays int, maxGapDays int, st
 		return filled, banErr
 	}
 	return filled, nil
-}
-
-// stopRequested reports whether shutdown has been signaled on stop. blockbook closes
-// chanOsSignal on shutdown, so a receive returns immediately once closed; a nil channel
-// (e.g. in tests) is never stopped.
-func stopRequested(stop <-chan os.Signal) bool {
-	if stop == nil {
-		return false
-	}
-	select {
-	case <-stop:
-		return true
-	default:
-		return false
-	}
 }
