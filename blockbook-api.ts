@@ -703,6 +703,8 @@ export interface WsAccountInfoReq {
     secondaryCurrency?: string;
     /** Gap limit for XPUB scanning, if relevant. */
     gap?: number;
+    /** If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call). */
+    confirmedNonce?: boolean;
 }
 export interface WsContractInfoReq {
     /** Contract address to query. */

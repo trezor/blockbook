@@ -1071,13 +1071,15 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	// Validate gap: non-negative, reasonable max (gap limit typically small, maxGapValue)
 	gap := validateIntParam(r.URL.Query().Get("gap"), 0, 0, maxGapValue)
 	contract := r.URL.Query().Get("contract")
+	withConfirmedNonce, _ := strconv.ParseBool(r.URL.Query().Get("confirmedNonce"))
 	return page, pageSize, accountDetails, &api.AddressFilter{
-		Vout:           voutFilter,
-		TokensToReturn: tokensToReturn,
-		FromHeight:     uint32(from),
-		ToHeight:       uint32(to),
-		Contract:       contract,
-		Protocols:      parseProtocolsQuery(r.URL.Query()["protocols"]),
+		Vout:               voutFilter,
+		TokensToReturn:     tokensToReturn,
+		FromHeight:         uint32(from),
+		ToHeight:           uint32(to),
+		Contract:           contract,
+		Protocols:          parseProtocolsQuery(r.URL.Query()["protocols"]),
+		WithConfirmedNonce: withConfirmedNonce,
 	}, filterParam, gap
 }
 

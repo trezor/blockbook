@@ -401,6 +401,9 @@ type AddressFilter struct {
 	Protocols      []string       `ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool `ts_doc:"If true, ignores mempool (unconfirmed) transactions."`
+	// WithConfirmedNonce set to true makes the Ethereum-like address response include the confirmed nonce,
+	// which requires an extra eth_getTransactionCount("latest") backend call; off by default to avoid that cost.
+	WithConfirmedNonce bool `ts_doc:"If true, additionally fetch and return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
 }
 
 // StakingPool holds data about address participation in a staking pool contract

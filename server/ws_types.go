@@ -38,6 +38,7 @@ type WsAccountInfoReq struct {
 	ContractFilter    string   `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
 	SecondaryCurrency string   `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
 	Gap               int      `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+	ConfirmedNonce    bool     `json:"confirmedNonce,omitempty" ts_doc:"If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
 }
 
 // WsContractInfoReq carries parameters for the 'getContractInfo' method.
