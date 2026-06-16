@@ -1213,6 +1213,7 @@ func (w *Worker) getSecondaryTicker(secondaryCoin string) *common.CurrencyRatesT
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
 	var nPending, nConfirmed uint64
+	var confirmedNonceOK bool
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
 	// Load cached contract list and totals from the index; this drives token lookups.
@@ -1241,7 +1242,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if b != nil {
 			ba.BalanceSat = *b
 		}
-		nPending, nConfirmed, err = w.chain.EthereumTypeGetNonces(addrDesc, filter.WithConfirmedNonce)
+		nPending, nConfirmed, confirmedNonceOK, err = w.chain.EthereumTypeGetNonces(addrDesc, filter.WithConfirmedNonce)
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonces %v", addrDesc)
 		}
@@ -1350,9 +1351,9 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	}
 	// returns 0 for unknown address
 	d.nonce = strconv.Itoa(int(nPending))
-	// confirmed nonce is gated: only fetched and surfaced when the caller opts in,
-	// otherwise it is left empty and omitted from the response
-	if filter.WithConfirmedNonce {
+	// confirmed nonce is gated and best-effort: surfaced only when the caller opted in
+	// and the backend lookup succeeded; otherwise it is left empty and omitted
+	if confirmedNonceOK {
 		d.confirmedNonce = strconv.Itoa(int(nConfirmed))
 	}
 	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it

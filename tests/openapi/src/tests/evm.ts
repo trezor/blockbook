@@ -35,6 +35,39 @@ async function testGetAddressBasicEVM(ctx: TestContext) {
   assertEVMBasicAddressPayload(resp, address, "GetAddressBasicEVM");
 }
 
+async function testGetAddressConfirmedNonceEVM(ctx: TestContext) {
+  const address = await ctx.sampleEVMAddressOrSkip();
+  const base = buildAddressDetailsPath(address, "basic", addressPage, addressPageSize);
+
+  // Gate: confirmedNonce must never be returned without the opt-in flag. This holds on every
+  // backend version (absent because not requested, or absent because the feature predates it).
+  const off = await ctx.client.getJson("/api/v2/address/{address}", base);
+  assertEVMBasicAddressPayload(off, address, "GetAddressConfirmedNonceEVM.off");
+  if (off.confirmedNonce !== undefined) {
+    throw new Error(
+      `opt-in gate broken: confirmedNonce=${JSON.stringify(off.confirmedNonce)} returned without ?confirmedNonce=true`,
+    );
+  }
+
+  // Opt in. On a backend that has not deployed this feature yet the field stays absent, so skip
+  // rather than fail; once deployed, validate the value and its relation to the pending nonce.
+  const on = await ctx.client.getJson("/api/v2/address/{address}", `${base}&confirmedNonce=true`);
+  assertEVMBasicAddressPayload(on, address, "GetAddressConfirmedNonceEVM.on");
+  if (on.confirmedNonce === undefined) {
+    throw new SkipTest(`${ctx.coin} backend did not return confirmedNonce (feature may not be deployed yet)`);
+  }
+  assertNonEmptyString(on.confirmedNonce, "GetAddressConfirmedNonceEVM.confirmedNonce");
+  const confirmed = Number(on.confirmedNonce);
+  const pending = Number(on.nonce);
+  if (!Number.isInteger(confirmed) || confirmed < 0) {
+    throw new Error(`confirmedNonce is not a non-negative integer string: ${JSON.stringify(on.confirmedNonce)}`);
+  }
+  // pending counts mempool txs too, so it can never be below the confirmed (mined) nonce
+  if (Number.isInteger(pending) && confirmed > pending) {
+    throw new Error(`confirmedNonce (${confirmed}) must not exceed pending nonce (${pending})`);
+  }
+}
+
 async function addressPaginationEVM(ctx: TestContext, details: "txids" | "txs", testName: string) {
   const address = await ctx.sampleEVMAddressOrSkip();
   const itemsField = details === "txids" ? "txids" : "transactions";
@@ -306,6 +339,7 @@ export async function assertContractInfoFixturesFetched(
 
 export const evmOnlyTests: Record<string, TestFunction> = {
   GetAddressBasicEVM: testGetAddressBasicEVM,
+  GetAddressConfirmedNonceEVM: testGetAddressConfirmedNonceEVM,
   GetAddressTokensEVM: testGetAddressTokensEVM,
   GetAddressTokenBalances: testGetAddressTokenBalances,
   GetAddressProtocolsEVM: testGetAddressProtocolsEVM,
