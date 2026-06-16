@@ -134,6 +134,40 @@ async function testWsGetAccountInfoEVM(ctx: TestContext) {
   assertEVMTokenBalancesHaveHoldingsFields(info, address, "WsGetAccountInfoEVM");
 }
 
+async function testWsGetAccountInfoConfirmedNonceEVM(ctx: TestContext) {
+  const address = await ctx.sampleEVMAddressOrSkip();
+  const baseParams = { descriptor: address, details: "basic", page: addressPage, pageSize: addressPageSize };
+
+  // Gate: confirmedNonce must never be returned without the opt-in flag.
+  const off = await ctx.wsCall<AddressResponse>("getAccountInfo", baseParams, "#/components/schemas/Address");
+  assertEVMBasicAddressPayload(off, address, "WsGetAccountInfoConfirmedNonceEVM.off");
+  if (off.confirmedNonce !== undefined) {
+    throw new Error(
+      `opt-in gate broken: confirmedNonce=${JSON.stringify(off.confirmedNonce)} returned without confirmedNonce:true`,
+    );
+  }
+
+  // Opt in over WebSocket; skip if the backend has not deployed the feature yet.
+  const on = await ctx.wsCall<AddressResponse>(
+    "getAccountInfo",
+    { ...baseParams, confirmedNonce: true },
+    "#/components/schemas/Address",
+  );
+  assertEVMBasicAddressPayload(on, address, "WsGetAccountInfoConfirmedNonceEVM.on");
+  if (on.confirmedNonce === undefined) {
+    throw new SkipTest(`${ctx.coin} backend did not return confirmedNonce over WebSocket (feature may not be deployed yet)`);
+  }
+  assertNonEmptyString(on.confirmedNonce, "WsGetAccountInfoConfirmedNonceEVM.confirmedNonce");
+  const confirmed = Number(on.confirmedNonce);
+  const pending = Number(on.nonce);
+  if (!Number.isInteger(confirmed) || confirmed < 0) {
+    throw new Error(`confirmedNonce is not a non-negative integer string: ${JSON.stringify(on.confirmedNonce)}`);
+  }
+  if (Number.isInteger(pending) && confirmed > pending) {
+    throw new Error(`confirmedNonce (${confirmed}) must not exceed pending nonce (${pending})`);
+  }
+}
+
 async function accountInfoConsistencyEVM(ctx: TestContext, details: "txids" | "txs", testName: string) {
   const address = await ctx.sampleEVMAddressOrSkip();
   const status = await ctx.getStatus();
@@ -530,6 +564,7 @@ export const wsUTXOTests: Record<string, TestFunction> = {
 
 export const wsEVMTests: Record<string, TestFunction> = {
   WsGetAccountInfoBasicEVM: testWsGetAccountInfoBasicEVM,
+  WsGetAccountInfoConfirmedNonceEVM: testWsGetAccountInfoConfirmedNonceEVM,
   WsGetAccountInfoEVM: testWsGetAccountInfoEVM,
   WsGetAccountInfoTxidsConsistencyEVM: testWsGetAccountInfoTxidsConsistencyEVM,
   WsGetAccountInfoTxsConsistencyEVM: testWsGetAccountInfoTxsConsistencyEVM,
