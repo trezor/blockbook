@@ -1149,14 +1149,16 @@ func (b *TronRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
 // EthereumTypeGetNonces returns the account nonce. Tron exposes only the latest
 // (confirmed) nonce via NonceAt in a single call, so the pending and confirmed
 // values are identical and the withConfirmed flag carries no extra cost here.
-func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, error) {
+func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
 	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 	n, err := b.Client.NonceAt(ctx, addrDesc, nil)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
-	return n, n, nil
+	// the single NonceAt call already yields the latest nonce, so confirmed is
+	// available whenever it was requested
+	return n, n, withConfirmed, nil
 }
 
 // GetContractInfo returns information about a contract

@@ -2,7 +2,7 @@
     "avalanche": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader", "EthCallBatch"]
     },
@@ -78,7 +78,7 @@
     "bsc": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader", "EthCallBatch"]
     },
@@ -288,42 +288,42 @@
     "arbitrum": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader", "EthCallBatch"]
     },
     "base": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressProtocolsEVM", "GetAddressProtocolsOptInEVM", "GetContractInfoEVM", "GetContractInfoOptInEVM", "GetContractInfoNonVaultEVM", "Erc4626FeeInvariantEVM", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressProtocolsEVM", "GetAddressProtocolsOptInEVM", "GetContractInfoEVM", "GetContractInfoOptInEVM", "GetContractInfoNonVaultEVM", "Erc4626FeeInvariantEVM", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsGetAccountInfoProtocolsEVM", "WsGetContractInfoEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader", "EthCallBatch"]
     },
     "ethereum": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressProtocolsEVM", "GetAddressProtocolsOptInEVM", "GetContractInfoEVM", "GetContractInfoOptInEVM", "GetContractInfoNonVaultEVM", "Erc4626FeeInvariantEVM", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressProtocolsEVM", "GetAddressProtocolsOptInEVM", "GetContractInfoEVM", "GetContractInfoOptInEVM", "GetContractInfoNonVaultEVM", "Erc4626FeeInvariantEVM", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsGetAccountInfoProtocolsEVM", "WsGetContractInfoEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader"]
     },
     "ethereum-classic": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader"]
     },
     "optimism": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader", "EthCallBatch"]
     },
     "polygon": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader", "EthCallBatch"]
     },
@@ -331,7 +331,7 @@
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
                 "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs",
-                "GetAddressBasicEVM", "GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfo", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader"]
     }

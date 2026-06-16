@@ -416,27 +416,29 @@ func (p *AlternativeSendTxProvider) callHttpStringResult(url string, rpcMethod s
 // getNonces returns the pending account nonce from the first configured alternative
 // provider, plus the confirmed (latest) nonce when withConfirmed is set. When both are
 // requested they are fetched in a single JSON-RPC batch round-trip; otherwise only the
-// pending nonce is requested.
-func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address, withConfirmed bool) (uint64, uint64, error) {
+// pending nonce is requested. The confirmed nonce is best-effort: a failed latest lookup
+// yields confirmedOK=false (not an error) so the caller can omit it. An error is returned
+// only when the required pending nonce cannot be obtained.
+func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address, withConfirmed bool) (uint64, uint64, bool, error) {
 	if len(p.urls) == 0 {
-		return 0, 0, errors.New("no alternative provider url configured")
+		return 0, 0, false, errors.New("no alternative provider url configured")
 	}
 	if !withConfirmed {
 		pendingHex, err := p.callHttpStringResult(p.urls[0], "eth_getTransactionCount", addr, "pending")
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, false, err
 		}
 		pending, err := hexutil.DecodeUint64(pendingHex)
 		if err != nil {
-			return 0, 0, errors.Annotatef(err, "pending nonce %q", pendingHex)
+			return 0, 0, false, errors.Annotatef(err, "pending nonce %q", pendingHex)
 		}
-		return pending, 0, nil
+		return pending, 0, false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), p.rpcTimeout)
 	defer cancel()
 	client, err := rpc.DialContext(ctx, p.urls[0])
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
 	defer client.Close()
 	var pendingHex, confirmedHex string
@@ -445,12 +447,15 @@ func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address, withConfir
 		{Method: "eth_getTransactionCount", Args: []interface{}{addr, "latest"}, Result: &confirmedHex},
 	}
 	if err := client.BatchCallContext(ctx, batch); err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
-	for i := range batch {
-		if batch[i].Error != nil {
-			return 0, 0, batch[i].Error
-		}
+	if batch[0].Error != nil {
+		return 0, 0, false, batch[0].Error
 	}
-	return decodeNoncePair(pendingHex, confirmedHex)
+	pending, err := hexutil.DecodeUint64(pendingHex)
+	if err != nil {
+		return 0, 0, false, errors.Annotatef(err, "pending nonce %q", pendingHex)
+	}
+	confirmed, confirmedOK := decodeConfirmedNonce(addr, confirmedHex, batch[1].Error)
+	return pending, confirmed, confirmedOK, nil
 }

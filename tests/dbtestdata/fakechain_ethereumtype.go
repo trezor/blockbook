@@ -115,10 +115,10 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetBalance(addrDesc bchain.Addr
 	return big.NewInt(123450000 + int64(addrDesc[0])), nil
 }
 
-func (c *fakeBlockChainEthereumType) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, error) {
+func (c *fakeBlockChainEthereumType) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
 	// pending and confirmed are equal in the fake; production fetches them from
 	// distinct block tags ("pending" vs "latest"), and only fetches confirmed when requested.
-	return uint64(addrDesc[0]), uint64(addrDesc[0]), nil
+	return uint64(addrDesc[0]), uint64(addrDesc[0]), withConfirmed, nil
 }
 
 func (c *fakeBlockChainEthereumType) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {

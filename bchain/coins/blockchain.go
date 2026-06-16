@@ -338,7 +338,7 @@ func (c *blockChainWithMetrics) EthereumTypeGetBalance(addrDesc bchain.AddressDe
 	return c.b.EthereumTypeGetBalance(addrDesc)
 }
 
-func (c *blockChainWithMetrics) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, err error) {
+func (c *blockChainWithMetrics) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonces", s, err) }(time.Now())
 	return c.b.EthereumTypeGetNonces(addrDesc, withConfirmed)
 }
