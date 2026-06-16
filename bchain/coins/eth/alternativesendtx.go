@@ -413,11 +413,24 @@ func (p *AlternativeSendTxProvider) callHttpStringResult(url string, rpcMethod s
 	return result, nil
 }
 
-// getNonces returns the pending and confirmed (latest) account nonces from the first
-// configured alternative provider, fetched in a single JSON-RPC batch round-trip.
-func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address) (uint64, uint64, error) {
+// getNonces returns the pending account nonce from the first configured alternative
+// provider, plus the confirmed (latest) nonce when withConfirmed is set. When both are
+// requested they are fetched in a single JSON-RPC batch round-trip; otherwise only the
+// pending nonce is requested.
+func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address, withConfirmed bool) (uint64, uint64, error) {
 	if len(p.urls) == 0 {
 		return 0, 0, errors.New("no alternative provider url configured")
+	}
+	if !withConfirmed {
+		pendingHex, err := p.callHttpStringResult(p.urls[0], "eth_getTransactionCount", addr, "pending")
+		if err != nil {
+			return 0, 0, err
+		}
+		pending, err := hexutil.DecodeUint64(pendingHex)
+		if err != nil {
+			return 0, 0, errors.Annotatef(err, "pending nonce %q", pendingHex)
+		}
+		return pending, 0, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), p.rpcTimeout)
 	defer cancel()

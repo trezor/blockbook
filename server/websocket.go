@@ -929,12 +929,13 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		tokensToReturn = api.TokensToReturnDerived
 	}
 	filter := api.AddressFilter{
-		FromHeight:     uint32(req.FromHeight),
-		ToHeight:       uint32(req.ToHeight),
-		Contract:       req.ContractFilter,
-		Vout:           api.AddressFilterVoutOff,
-		TokensToReturn: tokensToReturn,
-		Protocols:      req.Protocols,
+		FromHeight:         uint32(req.FromHeight),
+		ToHeight:           uint32(req.ToHeight),
+		Contract:           req.ContractFilter,
+		Vout:               api.AddressFilterVoutOff,
+		TokensToReturn:     tokensToReturn,
+		Protocols:          req.Protocols,
+		WithConfirmedNonce: req.ConfirmedNonce,
 	}
 	req.Page, req.PageSize = sanitizeAccountPagingParams(req.Page, req.PageSize, txsOnPage, txsInAPI)
 	req.Gap = validateIntValue(req.Gap, 0, 0, maxGapValue)

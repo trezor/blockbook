@@ -466,6 +466,7 @@ paths:
         - $ref: "#/components/parameters/ContractFilter"
         - $ref: "#/components/parameters/Protocols"
         - $ref: "#/components/parameters/SecondaryCurrency"
+        - $ref: "#/components/parameters/ConfirmedNonce"
       responses:
         "200":
           description: Address/account details.
@@ -1270,6 +1271,15 @@ components:
         type: integer
         minimum: 0
         maximum: 10000
+    ConfirmedNonce:
+      name: confirmedNonce
+      in: query
+      description: |-
+        If true, additionally return the confirmed nonce for Ethereum-like
+        addresses (the confirmedNonce response field). This triggers an extra
+        eth_getTransactionCount("latest") backend call, so it is off by default.
+      schema:
+        type: boolean
 
   responses:
     Error:
@@ -2763,6 +2773,8 @@ components:
           type: string
         gap:
           type: integer
+        confirmedNonce:
+          type: boolean
 
     WsContractInfoReq:
       type: object

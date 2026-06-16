@@ -1241,7 +1241,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if b != nil {
 			ba.BalanceSat = *b
 		}
-		nPending, nConfirmed, err = w.chain.EthereumTypeGetNonces(addrDesc)
+		nPending, nConfirmed, err = w.chain.EthereumTypeGetNonces(addrDesc, filter.WithConfirmedNonce)
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonces %v", addrDesc)
 		}
@@ -1350,7 +1350,11 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	}
 	// returns 0 for unknown address
 	d.nonce = strconv.Itoa(int(nPending))
-	d.confirmedNonce = strconv.Itoa(int(nConfirmed))
+	// confirmed nonce is gated: only fetched and surfaced when the caller opts in,
+	// otherwise it is left empty and omitted from the response
+	if filter.WithConfirmedNonce {
+		d.confirmedNonce = strconv.Itoa(int(nConfirmed))
+	}
 	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
 	if len(d.tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
 		// Query the backend directly to return contract metadata/balance for filtered views.
