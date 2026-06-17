@@ -77,6 +77,28 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			// fresh address with no indexed data: gated-on returns confirmedNonce:"0" (synthesized
+			// locally, no backend call), mirroring the always-present pending nonce:"0".
+			name:        "apiAddress fresh address confirmedNonce=true",
+			r:           newGetRequest(ts.URL + "/api/v2/address/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee?confirmedNonce=true"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`"nonce":"0","confirmedNonce":"0"`,
+			},
+		},
+		{
+			// same fresh address, gated-off: confirmedNonce must be omitted entirely. The full-body
+			// match fails if confirmedNonce is spuriously inserted after nonce.
+			name:        "apiAddress fresh address gated-off omits confirmedNonce",
+			r:           newGetRequest(ts.URL + "/api/v2/address/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`"address":"0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE","balance":"123450238","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":0,"nonce":"0"}`,
+			},
+		},
+		{
 			name:        "apiAddress EthAddr7b details=txs",
 			r:           newGetRequest(ts.URL + "/api/v2/address/" + dbtestdata.EthAddr7b + "?details=txs&confirmedNonce=true"),
 			status:      http.StatusOK,
