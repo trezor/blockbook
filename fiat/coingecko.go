@@ -1019,11 +1019,13 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		cg.cacheMu.Unlock()
 		glog.Infof("Coingecko returned %d %s tokens ", len(platformIds), cg.coin)
 		count := 0
+		failed := 0
 		var banErr error
 		// get token historical rates
 		for tokenId, token := range platformIdsToTokens {
 			var err error
 			if _, err = cg.getHistoricalTicker(context.Background(), tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
+				failed++
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
@@ -1034,25 +1036,26 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 			}
 			count++
 			if count%100 == 0 {
-				err := cg.storeTickers(tickersToUpdate)
-				if err != nil {
+				if err := cg.storeTickers(tickersToUpdate); err != nil {
 					return err
 				}
 				tickersToUpdate = make(map[uint]*common.CurrencyRatesTicker)
 				glog.Infof("Coingecko updated %d of %d token tickers", count, len(platformIds))
 			}
 		}
+		// Persist the final (sub-100) batch, then log a clear completion line so the progress
+		// sequence ends on the full count instead of stopping at the last multiple of 100.
+		if err := cg.storeTickers(tickersToUpdate); err != nil {
+			return err
+		}
 		if banErr != nil {
-			if err := cg.storeTickers(tickersToUpdate); err != nil {
-				return err
-			}
+			glog.Warningf("Coingecko stopped updating token tickers after %d of %d (provider ban), %d failed", count, len(platformIds), failed)
 			return banErr
 		}
+		glog.Infof("Coingecko finished updating %d of %d token tickers (%d failed)", count, len(platformIds), failed)
+		return nil
 	}
 
-	if err := cg.storeTickers(tickersToUpdate); err != nil {
-		return err
-	}
 	return nil
 }
 
