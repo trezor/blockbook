@@ -1,14 +1,17 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/trezor/blockbook/bchain"
 )
 
@@ -390,4 +393,157 @@ func TestAlternativeSendTxProviderShutdownNilSafe(t *testing.T) {
 	// no alternative provider configured leaves a nil *AlternativeSendTxProvider; Shutdown must not panic
 	var provider *AlternativeSendTxProvider
 	provider.shutdown()
+}
+
+// jsonRPCReq is the subset of a JSON-RPC request the nonce test server inspects.
+type jsonRPCReq struct {
+	ID     json.RawMessage `json:"id"`
+	Params []interface{}   `json:"params"`
+}
+
+// nonceRPCServer is a JSON-RPC test server for eth_getTransactionCount. It serves a per-block-tag
+// hex result (or a per-tag JSON-RPC error) and supports both single and batched requests, so it can
+// drive AlternativeSendTxProvider.getNonces over a real rpc.Client round-trip (the batched path uses
+// BatchCallContext, which a plain method-keyed mock cannot exercise). It records how many times each
+// block tag was queried so a test can assert the "latest" call is skipped when not requested.
+type nonceRPCServer struct {
+	*httptest.Server
+	mu      sync.Mutex
+	results map[string]string // tag -> hex result
+	errs    map[string]bool   // tag -> return a JSON-RPC error instead of a result
+	calls   map[string]int    // tag -> query count
+}
+
+func (s *nonceRPCServer) callCount(tag string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls[tag]
+}
+
+func (s *nonceRPCServer) respond(req jsonRPCReq) string {
+	tag := ""
+	if len(req.Params) >= 2 {
+		tag, _ = req.Params[1].(string)
+	}
+	s.mu.Lock()
+	s.calls[tag]++
+	s.mu.Unlock()
+	id := string(req.ID)
+	if id == "" {
+		id = "null"
+	}
+	if s.errs[tag] {
+		return `{"jsonrpc":"2.0","id":` + id + `,"error":{"code":-32000,"message":"temporary failure"}}`
+	}
+	return `{"jsonrpc":"2.0","id":` + id + `,"result":"` + s.results[tag] + `"}`
+}
+
+func newNonceRPCServer(t *testing.T, results map[string]string, errs map[string]bool) *nonceRPCServer {
+	t.Helper()
+
+	s := &nonceRPCServer{results: results, errs: errs, calls: make(map[string]int)}
+	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		// the handler runs in a different goroutine, t.Fatalf must not be called from here
+		var out string
+		if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
+			var reqs []jsonRPCReq
+			if err := json.Unmarshal(body, &reqs); err != nil {
+				t.Errorf("Unmarshal batch request: %v", err)
+				return
+			}
+			parts := make([]string, 0, len(reqs))
+			for _, req := range reqs {
+				parts = append(parts, s.respond(req))
+			}
+			out = "[" + strings.Join(parts, ",") + "]"
+		} else {
+			var req jsonRPCReq
+			if err := json.Unmarshal(body, &req); err != nil {
+				t.Errorf("Unmarshal request: %v", err)
+				return
+			}
+			out = s.respond(req)
+		}
+		if _, err := w.Write([]byte(out)); err != nil {
+			t.Errorf("Write() error = %v", err)
+		}
+	}))
+	t.Cleanup(s.Server.Close)
+
+	return s
+}
+
+// TestAlternativeSendTxProviderGetNonces covers the alternative-provider nonce path that backs the
+// confirmedNonce field for private/Blink relay coins. It mirrors the primary-RPC getNoncesRPC tests
+// in nonce_test.go: pending-only when gated off, batched pending+confirmed when gated on, best-effort
+// confirmed failure, fatal pending failure, and fatal batch transport failure.
+func TestAlternativeSendTxProviderGetNonces(t *testing.T) {
+	addr := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+
+	t.Run("gated off fetches pending only", func(t *testing.T) {
+		server := newNonceRPCServer(t, map[string]string{"pending": "0x4", "latest": "0x2"}, nil)
+		provider := &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+
+		pending, confirmed, confirmedOK, err := provider.getNonces(addr, false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if pending != 4 || confirmed != 0 || confirmedOK {
+			t.Errorf("got (pending=%d confirmed=%d ok=%v), want (4 0 false)", pending, confirmed, confirmedOK)
+		}
+		if got := server.callCount("latest"); got != 0 {
+			t.Errorf("latest queried %d times, want 0 when confirmed nonce not requested", got)
+		}
+		if got := server.callCount("pending"); got != 1 {
+			t.Errorf("pending queried %d times, want 1", got)
+		}
+	})
+
+	t.Run("gated on batched success", func(t *testing.T) {
+		server := newNonceRPCServer(t, map[string]string{"pending": "0x4", "latest": "0x2"}, nil)
+		provider := &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+
+		pending, confirmed, confirmedOK, err := provider.getNonces(addr, true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if pending != 4 || confirmed != 2 || !confirmedOK {
+			t.Errorf("got (pending=%d confirmed=%d ok=%v), want (4 2 true)", pending, confirmed, confirmedOK)
+		}
+	})
+
+	t.Run("gated on confirmed failure is best-effort", func(t *testing.T) {
+		// the latest sub-call fails but pending succeeds: pending must still be returned with
+		// confirmedOK=false and NO error, so the whole address response survives
+		server := newNonceRPCServer(t, map[string]string{"pending": "0x4"}, map[string]bool{"latest": true})
+		provider := &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+
+		pending, confirmed, confirmedOK, err := provider.getNonces(addr, true)
+		if err != nil {
+			t.Fatalf("confirmed-nonce failure must not be fatal, got error: %v", err)
+		}
+		if pending != 4 || confirmed != 0 || confirmedOK {
+			t.Errorf("got (pending=%d confirmed=%d ok=%v), want (4 0 false) on best-effort failure", pending, confirmed, confirmedOK)
+		}
+	})
+
+	t.Run("gated on pending failure is fatal", func(t *testing.T) {
+		server := newNonceRPCServer(t, map[string]string{"latest": "0x2"}, map[string]bool{"pending": true})
+		provider := &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+
+		if _, _, _, err := provider.getNonces(addr, true); err == nil {
+			t.Fatal("expected fatal error when the required pending nonce cannot be obtained")
+		}
+	})
+
+	t.Run("batch transport failure is fatal", func(t *testing.T) {
+		// an unreachable provider makes the batch round-trip fail at transport level
+		provider := &AlternativeSendTxProvider{urls: []string{"http://127.0.0.1:1"}, rpcTimeout: time.Second}
+
+		if _, _, _, err := provider.getNonces(addr, true); err == nil {
+			t.Fatal("expected fatal error on batch transport failure")
+		}
+	})
 }
