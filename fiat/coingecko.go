@@ -30,8 +30,10 @@ const (
 	coingeckoRangeTip                 = "tip"
 	coingeckoRangeCapped              = "capped"
 	coingeckoRangeBackfill            = "backfill"
-	// coingeckoTipWindowDays is the only gap still served from the rate-limited tip
-	// endpoint (the chain tip); anything larger is high-volume backfill routed to the CDN.
+	// coingeckoTipWindowDays is the daily-series gap (in days) treated as the "tip" range --
+	// yesterday's just-closed daily candle. Like every other daily/historical range it is fetched
+	// from the CDN when one is configured (see sourceURLForRange); only the live current price and
+	// the high-granularity charts stay on the rate-limited Free/Pro tip endpoint.
 	coingeckoTipWindowDays   = 1
 	coingeckoBootstrapURL    = "https://cdn.trezor.io/dynamic/coingecko/api/v3"
 	coingeckoProURL          = "https://pro-api.coingecko.com/api/v3"
@@ -45,7 +47,7 @@ const (
 // Phase labels for the fiat-rate fetch metrics (fiat_rates_fetched_units_total,
 // fiat_rates_fetched_tokens_total, fiat_rates_unable_total).
 const (
-	fiatPhaseTip       = "tip"       // chain tip, gap == 1 day, Free tier
+	fiatPhaseTip       = "tip"       // daily-series tip, gap == 1 day (yesterday's close); CDN when configured
 	fiatPhaseBackfill  = "backfill"  // gap > 1 day or first-seen series, via CDN
 	fiatPhaseBootstrap = "bootstrap" // full-history population, via CDN
 	fiatPhaseReconcile = "reconcile" // startup self-healing pass, via CDN
@@ -730,14 +732,16 @@ func (cg *Coingecko) metadataURL() string {
 	return cg.tipURL
 }
 
-// sourceURLForRange routes each historical range to the right backend: the rate-limited
-// tip endpoint is used only for the chain tip (gap == 1 day); every higher-volume range
-// (backfill, capped, full-history) goes to the CDN when configured. When no CDN URL is
-// configured we fall back to the tip endpoint to preserve pre-CDN behavior.
+// sourceURLForRange routes daily/historical fetches to the right backend. Every daily range --
+// including the 1-day "tip" range (yesterday's just-closed daily candle) -- goes to the CDN when
+// a CDN/bootstrap URL is configured. This matters most for the per-token daily tip, which is
+// thousands of requests for platforms like Ethereum and must not run against the rate-limited
+// Free tier. Only genuinely live, low-volume calls stay on cg.tipURL -- the current price via
+// /simple/price and the high-granularity hourly/5-minute charts -- and those do not go through
+// here. When no CDN URL is configured we fall back to the tip endpoint to preserve pre-CDN
+// behavior. The rangeKind is retained for call-site clarity (and to keep per-range routing easy
+// to reintroduce); routing is currently uniform across all daily ranges.
 func (cg *Coingecko) sourceURLForRange(rangeKind string) string {
-	if rangeKind == coingeckoRangeTip {
-		return cg.tipURL
-	}
 	if cg.bootstrapURL != "" {
 		return cg.bootstrapURL
 	}
@@ -771,7 +775,8 @@ func (cg *Coingecko) resolveHistoricalDays(lastTicker *common.CurrencyRatesTicke
 		return "", false, ""
 	}
 	if d <= coingeckoTipWindowDays {
-		// The chain tip: a single missing day, served from the rate-limited tip endpoint.
+		// The daily-series tip: a single missing day (yesterday's close). Routed to the CDN like
+		// every other daily range when one is configured (see sourceURLForRange).
 		return strconv.Itoa(d), true, coingeckoRangeTip
 	}
 	if d > coingeckoHistoryDaysLimit {
@@ -867,7 +872,8 @@ func (cg *Coingecko) getHistoricalTicker(ctx context.Context, tickersToUpdate ma
 	if cg.metrics != nil {
 		cg.metrics.CoingeckoRangeRequests.With(common.Labels{"range": rangeKind}).Inc()
 	}
-	// the tip (gap == 1 day) stays on the rate-limited endpoint; everything larger uses the CDN
+	// all daily/historical ranges (including the 1-day tip) use the CDN when configured; only the
+	// live current price and high-granularity charts stay on the rate-limited tip endpoint
 	baseURL := cg.sourceURLForRange(rangeKind)
 	phase := phaseForRange(rangeKind)
 	// both callers update historical (daily) tickers, therefore always low priority
