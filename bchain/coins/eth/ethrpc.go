@@ -293,11 +293,12 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	return s, nil
 }
 
+// SetMetrics sets the metrics registry. The alternative send-tx provider receives the same metrics
+// at construction (NewAlternativeSendTxProvider, called from InitAlternativeProviders, which runs
+// after SetMetrics), so it is intentionally not assigned here - and must not be, since its reconcile
+// goroutine reads provider.metrics without synchronization, so that field stays write-once.
 func (b *EthereumRPC) SetMetrics(metrics *common.Metrics) {
 	b.metrics = metrics
-	if b.alternativeSendTxProvider != nil {
-		b.alternativeSendTxProvider.metrics = metrics
-	}
 }
 
 // AverageBlockTimeDuration exposes the chain's nominal block cadence.
