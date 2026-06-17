@@ -1614,3 +1614,139 @@ func TestReconcileHistoricalRates_BudgetExhaustedAbortsMidBackfill(t *testing.T)
 		t.Fatal("expected the backfill loop to attempt at least one market_chart fetch before the budget expired")
 	}
 }
+
+// A budget/shutdown abort during the token phase must NOT persist the base-only day records
+// already accumulated by the (finished) base phase. If it did, stage-1's whole-day key-only scan
+// would treat those days as "present" next startup and never reconcile their token rates again.
+// The aborted pass must discard everything so the gap is re-reconciled in full later. (The same
+// discard path covers a base-phase abort, which would persist partial base rates.)
+func TestReconcileHistoricalRates_TokenPhaseAbortDiscardsBaseOnly(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// present d2, d4, d5; d3 is the interior hole to repair.
+	d2, d3, d4, d5 := midnightDaysAgo(2), midnightDaysAgo(3), midnightDaysAgo(4), midnightDaysAgo(5)
+	seedDailyTicker(t, d, d2, map[string]float32{"usd": 222}, nil)
+	seedDailyTicker(t, d, d4, map[string]float32{"usd": 444}, nil)
+	seedDailyTicker(t, d, d5, map[string]float32{"usd": 555}, nil)
+
+	var baseFetched int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/list":
+			_, _ = w.Write([]byte(`[{"id":"ethereum","symbol":"eth","name":"Ethereum","platforms":{}},{"id":"token-a","symbol":"ta","name":"Token A","platforms":{"ethereum":"0xabc"}}]`))
+		case "/coins/ethereum/market_chart":
+			// base phase succeeds, filling d3's base rate into the shared map
+			atomic.AddInt32(&baseFetched, 1)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"prices":[[%d,333]]}`, d3.Unix()*1000)))
+		case "/coins/token-a/market_chart":
+			// token phase blocks until the budget cancels the request -> abort mid-token-phase
+			<-r.Context().Done()
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:               "ethereum",
+		platformIdentifier: "ethereum",
+		platformVsCurrency: "eth",
+		bootstrapURL:       mockServer.URL,
+		tipURL:             mockServer.URL,
+		httpClient:         mockServer.Client(),
+		db:                 d,
+		plan:               coingeckoPlanFree,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	filled, err := cg.ReconcileHistoricalRates(ctx, 365, 90)
+	if err != nil {
+		t.Fatalf("token-phase abort must not return an error, got: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("aborted reconciliation must persist nothing, got filled=%d", filled)
+	}
+	if atomic.LoadInt32(&baseFetched) == 0 {
+		t.Fatal("expected the base phase to run (and fill d3) before the abort")
+	}
+	// Key assertion: the base-only d3 record must NOT have been persisted, so d3 stays a hole and
+	// is re-reconciled later instead of being silently frozen without its token rate.
+	t3, err := d.FiatRatesGetTicker(&d3)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d3 failed: %v", err)
+	}
+	if t3 != nil {
+		t.Fatalf("base-only day was persisted on abort (token rates would be lost forever): %+v", t3)
+	}
+	// present days must remain untouched
+	t2, err := d.FiatRatesGetTicker(&d2)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d2 failed: %v", err)
+	}
+	if t2 == nil || t2.Rates["usd"] != 222 {
+		t.Fatalf("present day was modified: got %+v, want usd=222", t2)
+	}
+}
+
+// A coin without tokens reconciles base rates only; a clean pass must still persist them
+// (base-only is "complete" when no tokens are configured -- the discard-on-abort guard must not
+// over-prune the normal completion path).
+func TestReconcileHistoricalRates_NoTokensPersistsBaseOnly(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// present d2, d4, d5; d3 is the interior hole to repair.
+	d2, d3, d4, d5 := midnightDaysAgo(2), midnightDaysAgo(3), midnightDaysAgo(4), midnightDaysAgo(5)
+	seedDailyTicker(t, d, d2, map[string]float32{"usd": 222}, nil)
+	seedDailyTicker(t, d, d4, map[string]float32{"usd": 444}, nil)
+	seedDailyTicker(t, d, d5, map[string]float32{"usd": 555}, nil)
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/ethereum/market_chart":
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"prices":[[%d,333]]}`, d3.Unix()*1000)))
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 1 {
+		t.Fatalf("unexpected filled points: got %d, want 1", filled)
+	}
+	t3, err := d.FiatRatesGetTicker(&d3)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d3 failed: %v", err)
+	}
+	if t3 == nil || t3.Rates["usd"] != 333 {
+		t.Fatalf("interior hole base rate not repaired: got %+v, want usd=333", t3)
+	}
+}
