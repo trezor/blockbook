@@ -1348,6 +1348,12 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				BalanceSat: *b,
 			}
 		}
+		// A fresh address has no indexed data only because it has never sent a transaction (every
+		// sender is recorded in the index), so both its pending and confirmed nonce are 0 - the same
+		// value the indexed path would fetch, without a backend call. When the caller opted in,
+		// surface the confirmed nonce as "0" for symmetry with the indexed path; omitting it would be
+		// indistinguishable from the feature not being deployed. nPending/nConfirmed are already 0.
+		confirmedNonceOK = filter.WithConfirmedNonce
 	}
 	// returns 0 for unknown address
 	d.nonce = strconv.Itoa(int(nPending))
