@@ -83,6 +83,10 @@ metrics:
     name: blockbook_websocket_new_block_txs_subscriptions
     type: gauge
     help: Address subscriptions that opted into confirmed-block newBlockTxs notifications
+  websocket_new_block_notifications:
+    name: blockbook_websocket_new_block_notifications
+    type: counter
+    help: New block notifications delivered to subscribeNewBlock subscribers, incremented by the number of subscribed clients on every indexed block
   websocket_connection_requests:
     name: blockbook_websocket_connection_requests
     type: histogram

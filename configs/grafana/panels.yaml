@@ -288,6 +288,13 @@ panels:
       new_block_txs:
         promql: '{{name:websocket_new_block_txs_subscriptions}}{job="blockbook", coin="$coin"}'
         legend: newBlockTxs subscriptions - {{instance}}
+  websocket.new_block_notifications:
+    title: Websocket new block notifications per minute
+    description: Rate of new-block notifications delivered to subscribeNewBlock subscribers (each indexed block fans out to every subscribed client), replacing the former per-block "broadcasting new block" log line. This is block production times the subscriber count, so it stays at zero with no subscribers and scales with fan-out; a flatline while the chain advances and subscribers are connected means the broadcast path has stalled. Read alongside the subscriptions panel for the current subscriber count.
+    queries:
+      notifications:
+        promql: sum(rate({{name:websocket_new_block_notifications}}{job="blockbook", coin="$coin"}[1m])) by (coin) * 60
+        legend: '{{coin}} - notif/min'
   websocket.request_duration_p95:
     title: 95% quantile of websocket request duration
     description: Handler latency after a websocket request is accepted; large values can hold a pending-request slot longer.

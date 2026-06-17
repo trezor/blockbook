@@ -1426,7 +1426,8 @@ func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
 			Data: &data,
 		})
 	}
-	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
+	s.metrics.WebsocketNewBlockNotifications.Add(float64(len(s.newBlockSubscriptions)))
+	glog.V(2).Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
 }
 
 // setConfirmedBlockTxMetadata normalizes parsed block transactions.
