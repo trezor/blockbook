@@ -37,6 +37,8 @@ type AlternativeSendTxProvider struct {
 	metrics                      *common.Metrics
 	removeTransactionFromMempool func(string)
 	watchMempoolTxsOnce          sync.Once
+	stop                         chan struct{}
+	stopOnce                     sync.Once
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
@@ -57,6 +59,7 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 		mempoolTxsTimeout: mempoolTxsTimeout,
 		mempoolTxs:        make(map[string]storedTx),
 		metrics:           metrics,
+		stop:              make(chan struct{}),
 	}
 
 	glog.Infof("Using alternative send transaction providers %v. Only alternative providers %v", urls, onlyAlternative)
@@ -166,9 +169,23 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 func (p *AlternativeSendTxProvider) watchMempoolTxs() {
 	ticker := time.NewTicker(alternativeMempoolTxCheckPeriod)
 	defer ticker.Stop()
-	for range ticker.C {
-		p.reconcileMempoolTxs()
+	for {
+		select {
+		case <-p.stop:
+			return
+		case <-ticker.C:
+			p.reconcileMempoolTxs()
+		}
 	}
+}
+
+// shutdown stops the background mempool reconciliation goroutine. Safe to call on a
+// nil receiver and more than once.
+func (p *AlternativeSendTxProvider) shutdown() {
+	if p == nil || p.stop == nil {
+		return
+	}
+	p.stopOnce.Do(func() { close(p.stop) })
 }
 
 func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
