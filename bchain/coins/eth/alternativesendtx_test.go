@@ -109,6 +109,46 @@ func TestAlternativeSendTxProviderReconcileLivenessOutcomes(t *testing.T) {
 	}
 }
 
+func TestAlternativeSendTxProviderReconcileTimeoutEviction(t *testing.T) {
+	// A tx older than mempoolTxsTimeout must be evicted by the reconcile timeout "safety net", and -
+	// like every other eviction path - the eviction must go through removeMempoolTx (the
+	// removeTransactionFromMempool callback) so the tx is dropped from BOTH the main mempool and the
+	// alternative cache, not only the cache. assertReconcileOutcome checks the callback fired.
+	tests := []struct {
+		name      string
+		serverURL func(t *testing.T) string
+	}{
+		{
+			name: "provider error and timed out is removed",
+			serverURL: func(t *testing.T) string {
+				return newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`).URL
+			},
+		},
+		{
+			name: "still pending, nonce not superseded and timed out is removed",
+			serverURL: func(t *testing.T) string {
+				return newMethodAwareTxProviderTestServer(t, map[string]string{
+					"eth_getTransactionByHash": testAlternativeKnownTxResponse,
+					// confirmed nonce equals the tx nonce (0x1): not superseded, so only the timeout evicts it
+					"eth_getTransactionCount": nonceCountResponse("0x1"),
+				}).URL
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var removed string
+			provider := newTestAlternativeSendTxProvider(tt.serverURL(t), &removed)
+			// the cached tx is timestamped ~2 check periods ago; a tiny timeout makes it timed out
+			provider.mempoolTxsTimeout = time.Nanosecond
+
+			provider.reconcileMempoolTxs()
+
+			assertReconcileOutcome(t, provider, removed, true)
+		})
+	}
+}
+
 func TestAlternativeSendTxProviderReconcileSkipsFreshTransaction(t *testing.T) {
 	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`)
 	var removed string
