@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 import { OpenApiFetchClient } from "./client.js";
 import { OpenApiContract, preview } from "./openapi.js";
@@ -29,6 +30,24 @@ import {
 } from "./support.js";
 
 import type { Capability, AddressResponse, BlockHashResponse, BlockResponse, BlockSummary, FiatTickerResponse, StatusResponse, TxResponse, UtxoResponse, WsEnvelope, WsInfoResponse, WsMethod, WsResponse } from "./types.js";
+
+// proxyFromEnv returns the configured egress proxy URL (sandboxed/corporate networks that only allow
+// outbound traffic via HTTP(S)_PROXY), or "" when none is set. Shared by the fetch dispatcher setup
+// in runner.ts and the ws client below.
+export function proxyFromEnv(): string {
+  return process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || "";
+}
+
+// wsProxyAgent wires the ws client through the egress proxy when one is set, or returns undefined to
+// dial directly. The ws library uses node:http/net directly and ignores undici's global dispatcher,
+// so the proxy has to be passed in explicitly here (mirrors runner.ts's fetch dispatcher).
+function wsProxyAgent(): HttpsProxyAgent<string> | undefined {
+  const proxy = proxyFromEnv();
+  if (!proxy) {
+    return undefined;
+  }
+  return new HttpsProxyAgent(proxy, { rejectUnauthorized: process.env.OPENAPI_INSECURE_TLS === "0" });
+}
 
 export class TestContext {
   readonly client: OpenApiFetchClient;
@@ -646,6 +665,7 @@ export class TestContext {
       const ws = new WebSocket(wsURL, {
         handshakeTimeout: wsDialTimeoutMs,
         rejectUnauthorized: process.env.OPENAPI_INSECURE_TLS === "0",
+        agent: wsProxyAgent(),
       });
       const timeout = setTimeout(() => {
         ws.terminate();

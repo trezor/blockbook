@@ -1,16 +1,27 @@
 import path from "node:path";
 
-import { Agent, setGlobalDispatcher } from "undici";
+import { Agent, ProxyAgent, setGlobalDispatcher } from "undici";
 
 import { loadTestsConfig, repoRoot, resolveSelectedCoins } from "./config.js";
 import { errorMessage, SkipTest } from "./errors.js";
 import { OpenApiContract } from "./openapi.js";
 import { CoinSummary, summarize, TestResult, writeReports } from "./report.js";
 import { testRegistry } from "./registry.js";
-import { TestContext } from "./context.js";
+import { proxyFromEnv, TestContext } from "./context.js";
 
-if (process.env.OPENAPI_INSECURE_TLS !== "0") {
-  setGlobalDispatcher(new Agent({ connect: { rejectUnauthorized: false } }));
+// Configure the global fetch() dispatcher. When an egress proxy is set (e.g. a sandboxed or
+// corporate network that only allows outbound traffic via HTTP(S)_PROXY), route fetch() through it;
+// requestTls disables certificate verification for the proxied target when OPENAPI_INSECURE_TLS is
+// on (dev backends use self-signed certs). With no proxy this is a no-op and we keep the previous
+// plain insecure-TLS Agent. The ws client does not use undici's dispatcher, so its matching proxy
+// wiring lives in context.ts (wsProxyAgent).
+const insecureTLS = process.env.OPENAPI_INSECURE_TLS !== "0";
+const insecureConnect = insecureTLS ? { rejectUnauthorized: false } : undefined;
+const egressProxy = proxyFromEnv();
+if (egressProxy) {
+  setGlobalDispatcher(new ProxyAgent({ uri: egressProxy, ...(insecureConnect ? { requestTls: insecureConnect } : {}) }));
+} else if (insecureTLS) {
+  setGlobalDispatcher(new Agent({ connect: insecureConnect }));
 }
 
 export async function runOpenApiE2E() {
