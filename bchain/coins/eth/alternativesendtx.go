@@ -218,7 +218,7 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
 			if timedOut {
 				p.observeMempoolReconciliation("timeout")
-				p.RemoveTransaction(tx.txid)
+				p.removeMempoolTx(tx.txid)
 				continue
 			}
 			p.observeMempoolReconciliation("provider_error")
@@ -247,7 +247,7 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 
 		if timedOut {
 			p.observeMempoolReconciliation("timeout")
-			p.RemoveTransaction(tx.txid)
+			p.removeMempoolTx(tx.txid)
 			continue
 		}
 		p.observeMempoolReconciliation("kept")
