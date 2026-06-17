@@ -887,7 +887,7 @@ func (cg *Coingecko) getHistoricalTicker(ctx context.Context, tickersToUpdate ma
 	}
 	cg.observeFetchedUnits(phase, written)
 	if token != "" && written > 0 {
-		cg.observeFetchedToken(phase)
+		cg.observeFetchedToken(phase, 1)
 	}
 	cg.observeUnable(phase, fiatUnableNoBaseTicker, noBaseTicker)
 	return true, nil
@@ -899,9 +899,9 @@ func (cg *Coingecko) observeFetchedUnits(phase string, n int) {
 	}
 }
 
-func (cg *Coingecko) observeFetchedToken(phase string) {
-	if cg.metrics != nil {
-		cg.metrics.FiatRatesFetchedTokens.With(common.Labels{"phase": phase}).Inc()
+func (cg *Coingecko) observeFetchedToken(phase string, n int) {
+	if cg.metrics != nil && n > 0 {
+		cg.metrics.FiatRatesFetchedTokens.With(common.Labels{"phase": phase}).Add(float64(n))
 	}
 }
 
@@ -1154,10 +1154,19 @@ func (cg *Coingecko) missingDayWindow(windowDays int) (missing map[uint]struct{}
 // population) or when no CDN URL is configured.
 //
 // ctx bounds the whole pass: it carries both the shutdown signal and a wall-clock budget, so a
-// SIGTERM or a persistently throttling CDN aborts the pass promptly instead of stalling
-// startup. On abort, any days already fetched are persisted so the next startup resumes from
-// the remaining gap; a budget timeout is also recorded as fiat_rates_unable_total{reason=
-// "budget_exhausted"} so it is visible in monitoring.
+// SIGTERM or a persistently throttling CDN aborts the pass promptly instead of stalling startup.
+// Persistence is all-or-nothing per pass: results are written only after the loop has run to
+// completion over every target. On any early exit (abort, budget timeout, Cloudflare ban, or DB
+// error) the partially fetched days are discarded, not persisted, so a day is never marked
+// "present" while still missing the series the un-run targets would have filled (which the
+// whole-day key-only stage-1 scan could not later detect); the next startup re-reconciles the
+// gap. A budget timeout is recorded as fiat_rates_unable_total{reason="budget_exhausted"} so it
+// is visible in monitoring. (An isolated per-series fetch failure is skipped, not an early exit:
+// the pass still completes and persists, leaving that series' day a partial-day hole.)
+//
+// Scope: this repairs days that are wholly absent from the DB. A day that has a record but is
+// missing a particular vsCurrency or token (a partial-day hole) is treated as present and is not
+// repaired here; that is handled separately.
 func (cg *Coingecko) ReconcileHistoricalRates(ctx context.Context, windowDays int, maxGapDays int) (int, error) {
 	bootstrapInProgress, _, err := historicalBootstrapInProgress(cg.db)
 	if err != nil {
@@ -1248,17 +1257,27 @@ func (cg *Coingecko) ReconcileHistoricalRates(ctx context.Context, windowDays in
 		len(missingDays), windowDays, time.Unix(earliestMissing, 0).UTC().Format("2006-01-02"), fetchDays, len(targets))
 
 	// ---- Stage 2: fetch the missing-day range from the CDN and fill only those days ----
-	// targetDays ensures only the (few) missing-day records are touched and persisted, so the
-	// shared map holds at most len(missingDays) records regardless of how many series we scan.
+	// targetDays ensures only the (few) missing-day records are touched, so the shared map holds at
+	// most len(missingDays) records regardless of how many series we scan.
+	//
+	// All-or-nothing persistence: every target writes into the SAME per-day records (base coin x
+	// each vsCurrency first, then every token), so a day record is only as complete as it will ever
+	// be once ALL targets have run. We therefore persist the map only after a clean, complete pass.
+	// On any early exit -- a shutdown/budget abort, a Cloudflare ban, or a DB fill error -- the
+	// accumulated records are missing the series from the un-run targets (e.g. after a base-phase
+	// abort they hold base rates but no token rates). Because stage-1 detection is whole-day
+	// key-only, persisting such a record would mark the day "present" and it would never be
+	// reconciled again, silently dropping the un-run series for good. So on an early exit we discard
+	// the partial map and let the next startup re-reconcile the whole gap from scratch. (A future
+	// per-day completion checkpoint could let an aborted run resume without refetching.)
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
-	filled, failed, repairedTokens := 0, 0, 0
+	filled, failed, repairedTokens, noBaseTotal := 0, 0, 0, 0
 	var banErr, abortErr error
 	abortAt := 0
 	for i, c := range targets {
-		// Abort promptly on shutdown or budget timeout; persist what we already fetched (below)
-		// so the next startup resumes from the remaining gap rather than refetching from scratch.
-		// The check before the fetch catches cancellation between iterations; the one after
-		// catches cancellation during the in-flight fetch.
+		// Abort promptly on shutdown or budget timeout. The check before the fetch catches
+		// cancellation between iterations; the one after catches cancellation during the in-flight
+		// fetch. The accumulated map is discarded after the loop (see above).
 		if err := ctx.Err(); err != nil {
 			abortErr, abortAt = err, i
 			break
@@ -1272,7 +1291,7 @@ func (cg *Coingecko) ReconcileHistoricalRates(ctx context.Context, windowDays in
 			failed++
 			if isCoingeckoCloudflareBanError(err) {
 				cg.observeUnable(fiatPhaseReconcile, fiatUnableProviderBan, 1)
-				banErr = err
+				banErr, abortAt = err, i
 				glog.Errorf("FiatRates reconcile: Cloudflare ban fetching %s/%s, stopping: %v", c.coinId, c.vsCurrency, err)
 				break
 			}
@@ -1282,35 +1301,41 @@ func (cg *Coingecko) ReconcileHistoricalRates(ctx context.Context, windowDays in
 		}
 		written, noBaseTicker, err := cg.fillFromMarketChart(tickersToUpdate, mc, c.vsCurrency, c.token, true, missingDays)
 		if err != nil {
-			if storeErr := cg.storeTickers(tickersToUpdate); storeErr != nil {
-				return filled, storeErr
-			}
-			return filled, fmt.Errorf("reconcile: fill %s/%s: %w", c.coinId, c.vsCurrency, err)
+			// A DB fill error is an abnormal mid-pass exit: discard the partial map (do not persist)
+			// and surface the error so the next startup retries the whole gap.
+			return 0, fmt.Errorf("reconcile: fill %s/%s: %w", c.coinId, c.vsCurrency, err)
 		}
 		filled += written
-		cg.observeFetchedUnits(fiatPhaseReconcile, written)
+		noBaseTotal += noBaseTicker
 		if c.token != "" && written > 0 {
 			repairedTokens++
-			cg.observeFetchedToken(fiatPhaseReconcile)
 		}
-		cg.observeUnable(fiatPhaseReconcile, fiatUnableNoBaseTicker, noBaseTicker)
 	}
-	if err := cg.storeTickers(tickersToUpdate); err != nil {
-		return filled, err
-	}
+
+	// Early exit: discard the incomplete map (see the block comment above) so no day is wrongly
+	// marked present; nothing is persisted, so report 0 filled.
 	if abortErr != nil {
 		remaining := len(targets) - abortAt
-		// a budget timeout (vs. a clean shutdown) is a problem worth surfacing in monitoring:
-		// the window was too small or the CDN too slow to finish.
+		// A budget timeout (vs. a clean shutdown) is worth surfacing in monitoring: the window was
+		// too small or the CDN too slow to finish within the budget.
 		if errors.Is(abortErr, context.DeadlineExceeded) {
 			cg.observeUnable(fiatPhaseReconcile, fiatUnableBudgetExhausted, remaining)
 		}
-		glog.Warningf("FiatRates reconcile stage 2: aborted (%v), persisted %d point(s) (%d token series), %d fetch failures, %d series unprocessed; remaining gap will be reconciled on next startup", abortErr, filled, repairedTokens, failed, remaining)
-		return filled, nil
+		glog.Warningf("FiatRates reconcile stage 2: aborted (%v) after %d/%d series, %d fetch failures; discarding partial results, gap will be reconciled on next startup", abortErr, abortAt, len(targets), failed)
+		return 0, nil
 	}
-	glog.Infof("FiatRates reconcile stage 2: filled %d point(s) across %d series (%d token series), %d fetch failures", filled, len(targets), repairedTokens, failed)
 	if banErr != nil {
-		return filled, banErr
+		glog.Warningf("FiatRates reconcile stage 2: Cloudflare ban after %d/%d series, %d fetch failures; discarding partial results, gap will be reconciled on next startup", abortAt, len(targets), failed)
+		return 0, banErr
 	}
+
+	// Clean, complete pass: persist, then record what was actually fetched and persisted.
+	if err := cg.storeTickers(tickersToUpdate); err != nil {
+		return 0, err
+	}
+	cg.observeFetchedUnits(fiatPhaseReconcile, filled)
+	cg.observeFetchedToken(fiatPhaseReconcile, repairedTokens)
+	cg.observeUnable(fiatPhaseReconcile, fiatUnableNoBaseTicker, noBaseTotal)
+	glog.Infof("FiatRates reconcile stage 2: filled %d point(s) across %d series (%d token series), %d fetch failures", filled, len(targets), repairedTokens, failed)
 	return filled, nil
 }
