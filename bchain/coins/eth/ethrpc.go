@@ -931,6 +931,7 @@ func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	b.NewBlock.Close()
 	b.NewTx.Close()
 	b.consensusMonitor.shutdown()
+	b.alternativeSendTxProvider.shutdown()
 	glog.Info("rpc: shutdown")
 	return nil
 }

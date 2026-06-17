@@ -360,3 +360,34 @@ func TestAlternativeSendTxProviderReconcileMemoizesConfirmedNoncePerSender(t *te
 		t.Fatal("transaction ahead of the confirmed nonce was incorrectly evicted")
 	}
 }
+
+func TestAlternativeSendTxProviderShutdownStopsWatchLoop(t *testing.T) {
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx: true,
+		mempoolTxs:     make(map[string]storedTx),
+		stop:           make(chan struct{}),
+	}
+
+	done := make(chan struct{})
+	go func() {
+		provider.watchMempoolTxs()
+		close(done)
+	}()
+
+	provider.shutdown()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("watchMempoolTxs did not return after shutdown")
+	}
+
+	// shutdown must be idempotent and must not panic when called again
+	provider.shutdown()
+}
+
+func TestAlternativeSendTxProviderShutdownNilSafe(t *testing.T) {
+	// no alternative provider configured leaves a nil *AlternativeSendTxProvider; Shutdown must not panic
+	var provider *AlternativeSendTxProvider
+	provider.shutdown()
+}
