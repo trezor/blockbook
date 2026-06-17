@@ -34,6 +34,7 @@ type Metrics struct {
 	BalanceHistoryCapExceeded         *prometheus.CounterVec   `metric:"balance_history_cap_exceeded_total"`
 	WebsocketEthReceipt               *prometheus.CounterVec   `metric:"websocket_eth_receipt"`
 	WebsocketNewBlockTxsSubscriptions prometheus.Gauge         `metric:"websocket_new_block_txs_subscriptions"`
+	WebsocketNewBlockNotifications    prometheus.Counter       `metric:"websocket_new_block_notifications"`
 	WebsocketConnectionRequests       prometheus.Histogram     `metric:"websocket_connection_requests"`
 	WebsocketConnectionRejections     *prometheus.CounterVec   `metric:"websocket_connection_rejections"`
 	WebsocketUniqueIPs                prometheus.Gauge         `metric:"websocket_unique_ips"`
