@@ -301,7 +301,7 @@ func TestSourceURLForRange(t *testing.T) {
 		rangeKind string
 		want      string
 	}{
-		{name: "tip stays on free tier", cg: withCDN, rangeKind: coingeckoRangeTip, want: tip},
+		{name: "tip routes to CDN when configured", cg: withCDN, rangeKind: coingeckoRangeTip, want: cdn},
 		{name: "backfill routes to CDN", cg: withCDN, rangeKind: coingeckoRangeBackfill, want: cdn},
 		{name: "capped routes to CDN", cg: withCDN, rangeKind: coingeckoRangeCapped, want: cdn},
 		{name: "historical routes to CDN", cg: withCDN, rangeKind: coingeckoRangeHistorical, want: cdn},
