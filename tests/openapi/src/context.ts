@@ -4,11 +4,13 @@ import { OpenApiFetchClient } from "./client.js";
 import { OpenApiContract, preview } from "./openapi.js";
 import { allowOutOfSync, resolveHTTPBase, resolveWSURL } from "./config.js";
 import { SkipTest } from "./errors.js";
-import { addressPage, addressPageSize, blockPageSize, sampleBlockPageSize, sampleBlockProbeMax, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
+import { addressPage, addressPageSize, blockPageSize, sampleAddrTxProbeMax, sampleBlockPageSize, sampleBlockProbeMax, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
 import {
   assertAddressMatches,
   buildAddressDetailsPath,
+  candidateAddressesFromTx,
   encodePathSegment,
+  equalFold,
   extractTxIDs,
   firstAddressFromTx,
   firstAddressFromTxPreferVin,
@@ -41,6 +43,9 @@ export class TestContext {
   private sampleTxID = "";
   private sampleAddrResolved = false;
   private sampleAddress = "";
+  private sampleAddrTxResolved = false;
+  private sampleAddrTxAddress = "";
+  private sampleAddrTxID = "";
   private sampleIndexResolved = false;
   private sampleIndexHeight = 0;
   private sampleIndexHash = "";
@@ -232,6 +237,97 @@ export class TestContext {
       throw new SkipTest(`no address found from recent transaction window at height ${status.bestHeight ?? 0}`);
     }
     return address;
+  }
+
+  // getSampleAddressTx resolves an (address, txid) pair where txid is guaranteed to appear within the
+  // address's first page (addressPageSize). getSampleAddress() alone returns the first sender of a
+  // recent tx, which on busy account-based chains (e.g. a Tron USDT hot wallet) can have hundreds of
+  // newer txs, pushing the sampled tx off page 1 and breaking the address-listing assertions
+  // (GetAddressTxids / GetAddressTxs / WsGetAccountInfo). This resolver probes a tx's participants
+  // (token recipients, outputs, inputs) and picks the first one whose first page actually lists the
+  // tx, so the assertion runs against a structurally consistent pair.
+  async getSampleAddressTx(): Promise<{ address: string; txid: string } | undefined> {
+    if (this.sampleAddrTxResolved) {
+      return this.sampleAddrTxAddress
+        ? { address: this.sampleAddrTxAddress, txid: this.sampleAddrTxID }
+        : undefined;
+    }
+    this.sampleAddrTxResolved = true;
+
+    const remember = (address: string, txid: string) => {
+      this.sampleAddrTxAddress = address;
+      this.sampleAddrTxID = txid;
+      return { address, txid };
+    };
+
+    const addressForTx = async (txid: string) => {
+      const tx = await this.getTransactionByID(txid, false);
+      if (!tx) {
+        return undefined;
+      }
+      for (const address of candidateAddressesFromTx(tx)) {
+        if (await this.addressListsTxOnFirstPage(address, txid)) {
+          return address;
+        }
+      }
+      return undefined;
+    };
+
+    // Prefer the shared sample tx so the address tests stay consistent with the tx-detail tests.
+    const sampleTxID = await this.getSampleTxID();
+    if (sampleTxID) {
+      const address = await addressForTx(sampleTxID);
+      if (address) {
+        return remember(address, sampleTxID);
+      }
+    }
+
+    // Otherwise scan recent blocks for any tx with a participant that lists it on the first page.
+    const status = await this.getStatus();
+    const top = status.bestHeight ?? 0;
+    const lower = Math.max(1, top - txSearchWindow + 1);
+    let probed = 0;
+    for (let height = top; height >= lower && probed < sampleAddrTxProbeMax; height--) {
+      const hash = await this.getBlockHashForHeight(height, false);
+      if (!hash) {
+        continue;
+      }
+      const txids = await this.blockTxIDsForProbe(hash, sampleBlockPageSize);
+      for (const txid of txids) {
+        if (!txid || txid === sampleTxID) {
+          continue;
+        }
+        if (++probed > sampleAddrTxProbeMax) {
+          break;
+        }
+        const address = await addressForTx(txid);
+        if (address) {
+          return remember(address, txid);
+        }
+      }
+    }
+    return undefined;
+  }
+
+  async sampleAddressTxOrSkip() {
+    const pair = await this.getSampleAddressTx();
+    if (!pair) {
+      const status = await this.getStatus();
+      throw new SkipTest(`no address listing a recent tx on its first page found near height ${status.bestHeight ?? 0}`);
+    }
+    return pair;
+  }
+
+  private async addressListsTxOnFirstPage(address: string, txid: string): Promise<boolean> {
+    const result = await this.client.getMaybe(
+      "/api/v2/address/{address}",
+      buildAddressDetailsPath(address, "txids", addressPage, addressPageSize),
+    );
+    if (result.status !== 200 || result.data === undefined) {
+      return false;
+    }
+    const txids = Array.isArray(result.data.txids) ? result.data.txids : [];
+    return txids.some((value) => equalFold(stringValue(value).trim(), txid));
   }
 
   async getBlockHashForHeight(height: number, strict: boolean) {

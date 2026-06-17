@@ -57,6 +57,38 @@ export function firstAddressFromTxPreferVin(tx: TxResponse) {
   return "";
 }
 
+// candidateAddressesFromTx returns the distinct participant addresses of a transaction, ordered so
+// that a participant whose first page of history still contains this tx is found early. Recipients
+// come first: on account-based chains a token transfer's vin is the (often high-traffic) sender and
+// its vout is the token contract (huge history), while the token recipient - and the output of a
+// plain transfer - is usually low-traffic and reliably lists the tx on its first page.
+export function candidateAddressesFromTx(tx: TxResponse): string[] {
+  const ordered: string[] = [];
+  const add = (value?: string) => {
+    const trimmed = (value ?? "").trim();
+    if (trimmed && isAddressCandidate(trimmed)) {
+      ordered.push(trimmed);
+    }
+  };
+  for (const transfer of tx.tokenTransfers ?? []) {
+    add(transfer.to);
+  }
+  for (const output of tx.vout ?? []) {
+    for (const address of output.addresses ?? []) {
+      add(address);
+    }
+  }
+  for (const input of tx.vin ?? []) {
+    for (const address of input.addresses ?? []) {
+      add(address);
+    }
+  }
+  for (const transfer of tx.tokenTransfers ?? []) {
+    add(transfer.from);
+  }
+  return [...new Set(ordered)];
+}
+
 export function isAddressCandidate(address: string) {
   const trimmed = address.trim();
   if (!trimmed) {

@@ -171,8 +171,7 @@ async function testGetMultiTickers(ctx: TestContext) {
 }
 
 async function testGetAddressTxids(ctx: TestContext) {
-  const address = await ctx.sampleAddressOrSkip();
-  const txid = await ctx.sampleTxIDOrSkip();
+  const { address, txid } = await ctx.sampleAddressTxOrSkip();
   const addr = await ctx.client.getJson(
     "/api/v2/address/{address}",
     buildAddressDetailsPath(address, "txids", addressPage, addressPageSize),
@@ -181,8 +180,7 @@ async function testGetAddressTxids(ctx: TestContext) {
 }
 
 async function testGetAddressTxs(ctx: TestContext) {
-  const address = await ctx.sampleAddressOrSkip();
-  const txid = await ctx.sampleTxIDOrSkip();
+  const { address, txid } = await ctx.sampleAddressTxOrSkip();
   const addr = await ctx.client.getJson(
     "/api/v2/address/{address}",
     buildAddressDetailsPath(address, "txs", addressPage, addressPageSize),
