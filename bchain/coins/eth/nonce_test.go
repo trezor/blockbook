@@ -158,6 +158,26 @@ func TestEthereumTypeGetNonces_GatedOn_ConfirmedFailureIsBestEffort(t *testing.T
 	}
 }
 
+func TestEthereumTypeGetNonces_GatedOn_ConfirmedDecodeFailureIsBestEffort(t *testing.T) {
+	// the latest sub-call SUCCEEDS but returns an unparsable hex value (a backend answering 200
+	// with garbage). This is a distinct best-effort failure mode from a transport/lookup error and
+	// exercises the decode branch of decodeConfirmedNonce: pending must still be returned, confirmed
+	// omitted, and NO error surfaced.
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4", "latest": "0xZZ"}}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	pending, confirmed, confirmedOK, err := b.EthereumTypeGetNonces(nonceTestAddr, true)
+	if err != nil {
+		t.Fatalf("unparsable confirmed nonce must not be fatal, got error: %v", err)
+	}
+	if pending != 4 {
+		t.Errorf("pending = %d, want 4", pending)
+	}
+	if confirmedOK || confirmed != 0 {
+		t.Errorf("got (confirmed=%d ok=%v), want (0 false) on unparsable confirmed nonce", confirmed, confirmedOK)
+	}
+}
+
 func TestEthereumTypeGetNonces_GatedOn_PendingFailureIsFatal(t *testing.T) {
 	stub := &nonceBatchStub{
 		results: map[string]string{"latest": "0x2"},
@@ -206,6 +226,21 @@ func TestEthereumTypeGetNonces_SequentialFallback_ConfirmedFailureIsBestEffort(t
 	pending, _, confirmedOK, err := b.EthereumTypeGetNonces(nonceTestAddr, true)
 	if err != nil {
 		t.Fatalf("confirmed-nonce failure must not be fatal, got error: %v", err)
+	}
+	if pending != 4 || confirmedOK {
+		t.Errorf("got (pending=%d ok=%v), want (4 false)", pending, confirmedOK)
+	}
+}
+
+func TestEthereumTypeGetNonces_SequentialFallback_ConfirmedDecodeFailureIsBestEffort(t *testing.T) {
+	// sequential-fallback counterpart of the batched decode-failure case: an unparsable latest
+	// result must be best-effort (pending returned, confirmedOK=false, no error)
+	stub := &nonceSeqStub{results: map[string]string{"pending": "0x4", "latest": "0xZZ"}}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	pending, _, confirmedOK, err := b.EthereumTypeGetNonces(nonceTestAddr, true)
+	if err != nil {
+		t.Fatalf("unparsable confirmed nonce must not be fatal, got error: %v", err)
 	}
 	if pending != 4 || confirmedOK {
 		t.Errorf("got (pending=%d ok=%v), want (4 false)", pending, confirmedOK)
