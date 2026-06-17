@@ -70,8 +70,7 @@ async function testWsGetTransaction(ctx: TestContext) {
 }
 
 async function testWsGetAccountInfo(ctx: TestContext) {
-  const address = await ctx.sampleAddressOrSkip();
-  const txid = await ctx.sampleTxIDOrSkip();
+  const { address, txid } = await ctx.sampleAddressTxOrSkip();
   const info = await ctx.wsCall<AddressResponse>(
     "getAccountInfo",
     { descriptor: address, details: "txids", page: addressPage, pageSize: addressPageSize },
