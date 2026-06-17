@@ -92,6 +92,18 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			// gated-off: the same address without ?confirmedNonce=true must omit confirmedNonce
+			// entirely. The asserted substring spans the nonce->tokens boundary, which only matches
+			// when no confirmedNonce field is inserted after nonce (mirrors the EVM gated-off check).
+			name:        "apiAddress TronAddrTZ gated-off omits confirmedNonce",
+			r:           newGetRequest(ts.URL + "/api/v2/address/" + dbtestdata.TronAddrTZ),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`"nonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236"`,
+			},
+		},
+		{
 			name:        "apiAddress TronAddrTX",
 			r:           newGetRequest(ts.URL + "/api/v2/address/" + dbtestdata.TronAddrTD + "?details=txs&confirmedNonce=true"),
 			status:      http.StatusOK,
