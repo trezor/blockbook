@@ -569,6 +569,95 @@ func TestGetTickersForTimestamps_ConcurrentReadersAndWriters(t *testing.T) {
 	}
 }
 
+// TestLogTickersInfo_ConcurrentWithCacheWriters reproduces the data race between the historical
+// goroutine (which calls logTickersInfo after a daily cycle) and the current goroutine (which
+// replaces the hourly/5-minute ticker maps and their bounds under fr.mux). Before logTickersInfo
+// took the read lock this failed under -race. It mirrors the production split introduced by
+// RunDownloader starting runHistoricalLoop and runCurrentLoop concurrently.
+func TestLogTickersInfo_ConcurrentWithCacheWriters(t *testing.T) {
+	fr := &FiatRates{Enabled: true, provider: "coingecko"}
+
+	const (
+		writers      = 2
+		loggers      = 4
+		testDuration = 300 * time.Millisecond
+		waitTimeout  = 3 * time.Second
+	)
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// writeCacheState mimics the locked sections of setHourlyTickers/setFiveMinutesTickers/
+	// setCurrentTicker: it replaces the map headers and the int64 bounds under fr.mux.
+	writeCacheState := func(counter int64) {
+		fr.mux.Lock()
+		fr.hourlyTickers = map[int64]*common.CurrencyRatesTicker{
+			3600 + counter: {Timestamp: time.Unix(3600+counter, 0).UTC()},
+		}
+		fr.hourlyTickersFrom = 3600 + counter
+		fr.hourlyTickersTo = 7200 + counter
+		fr.fiveMinutesTickers = map[int64]*common.CurrencyRatesTicker{
+			600 + counter: {Timestamp: time.Unix(600+counter, 0).UTC()},
+		}
+		fr.fiveMinutesTickersFrom = 600 + counter
+		fr.fiveMinutesTickersTo = 900 + counter
+		fr.dailyTickers = map[int64]*common.CurrencyRatesTicker{
+			86400 + counter: {Timestamp: time.Unix(86400+counter, 0).UTC()},
+		}
+		fr.dailyTickersFrom = 86400 + counter
+		fr.dailyTickersTo = 172800 + counter
+		fr.mux.Unlock()
+	}
+
+	writeCacheState(0)
+
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(seed int) {
+			defer wg.Done()
+			counter := int64(seed)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				writeCacheState(counter)
+				counter++
+			}
+		}(w)
+	}
+
+	for l := 0; l < loggers; l++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				fr.logTickersInfo()
+			}
+		}()
+	}
+
+	time.Sleep(testDuration)
+	close(stop)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(waitTimeout):
+		t.Fatal("concurrent logTickersInfo/writers did not finish in time")
+	}
+}
+
 func TestGetTokenTickersForTimestamps_QueriesUniqueSortedTimestamps(t *testing.T) {
 	originalFindTickers := fiatRatesFindTickers
 	defer func() {

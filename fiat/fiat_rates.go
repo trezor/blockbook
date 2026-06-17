@@ -342,10 +342,18 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 	return &tickers, nil
 }
 func (fr *FiatRates) logTickersInfo() {
+	// Snapshot the cache fields under the lock: this runs on the historical goroutine while the
+	// current goroutine concurrently replaces the hourly/5-minute maps and their bounds under
+	// fr.mux. Read them all atomically, then format the log line outside the lock.
+	fr.mux.RLock()
+	dailyLen, dailyFrom, dailyTo := len(fr.dailyTickers), fr.dailyTickersFrom, fr.dailyTickersTo
+	hourlyLen, hourlyFrom, hourlyTo := len(fr.hourlyTickers), fr.hourlyTickersFrom, fr.hourlyTickersTo
+	fiveMinLen, fiveMinFrom, fiveMinTo := len(fr.fiveMinutesTickers), fr.fiveMinutesTickersFrom, fr.fiveMinutesTickersTo
+	fr.mux.RUnlock()
 	glog.Infof("fiat rates %s handler, %d (%s - %s) daily tickers, %d (%s - %s) hourly tickers, %d (%s - %s) 5 minute tickers", fr.provider,
-		len(fr.dailyTickers), time.Unix(fr.dailyTickersFrom, 0).Format("2006-01-02"), time.Unix(fr.dailyTickersTo, 0).Format("2006-01-02"),
-		len(fr.hourlyTickers), time.Unix(fr.hourlyTickersFrom, 0).Format("2006-01-02 15:04"), time.Unix(fr.hourlyTickersTo, 0).Format("2006-01-02 15:04"),
-		len(fr.fiveMinutesTickers), time.Unix(fr.fiveMinutesTickersFrom, 0).Format("2006-01-02 15:04"), time.Unix(fr.fiveMinutesTickersTo, 0).Format("2006-01-02 15:04"))
+		dailyLen, time.Unix(dailyFrom, 0).Format("2006-01-02"), time.Unix(dailyTo, 0).Format("2006-01-02"),
+		hourlyLen, time.Unix(hourlyFrom, 0).Format("2006-01-02 15:04"), time.Unix(hourlyTo, 0).Format("2006-01-02 15:04"),
+		fiveMinLen, time.Unix(fiveMinFrom, 0).Format("2006-01-02 15:04"), time.Unix(fiveMinTo, 0).Format("2006-01-02 15:04"))
 }
 
 func roundTimeUnix(t time.Time, granularity int64) int64 {
@@ -700,7 +708,9 @@ func (fr *FiatRates) runHistoricalCycle(is *common.InternalState) (done bool, ba
 		glog.Error("FiatRatesDownloader: loadDailyTickers error ", err)
 	} else {
 		fr.observeUpdateDuration("load_daily_tickers", "success", loadDailyTickersStart)
+		fr.mux.RLock()
 		ticker, found := fr.dailyTickers[fr.dailyTickersTo]
+		fr.mux.RUnlock()
 		if !found || ticker == nil {
 			glog.Error("FiatRatesDownloader: dailyTickers not loaded")
 		} else {
