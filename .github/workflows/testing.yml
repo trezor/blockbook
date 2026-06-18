@@ -25,16 +25,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Python dependencies
-        run: |
-          rm -rf .python-deps
-          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --disable-pip-version-check --quiet --target .python-deps -r .github/requirements.txt
-
-      - name: Validate Grafana dashboard sources
-        run: |
-          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana_test.py
-          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana.py --check
-
       - name: Run unit tests
         env:
           BB_BUILD_ENV: dev
@@ -84,10 +74,14 @@ jobs:
           BB_BUILD_ENV: dev
         run: make test-integration ARGS="-v"
 
-  backend-artifact-lint:
-    name: Backend Artifact Lint
-    # Pure static analysis of configs/coins/*.json: no secrets, no backend
-    # access, safe to run for fork PRs on an ephemeral GitHub-hosted runner.
+  lint:
+    name: Lint
+    # Pure static analysis of configs/ (Grafana dashboards + coin backend
+    # artifacts): no secrets, no backend access, safe to run for fork PRs on an
+    # ephemeral GitHub-hosted runner. Unlike unit-tests (self-hosted, skipped for
+    # fork PRs), this job runs for forks too, so dashboard/artifact regressions
+    # are caught on every PR. The only third-party dependency is the pinned
+    # PyYAML used by the Grafana renderer.
     runs-on: ubuntu-latest
 
     steps:
@@ -95,6 +89,16 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+
+      - name: Install Python dependencies
+        run: |
+          rm -rf .python-deps
+          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --disable-pip-version-check --quiet --target .python-deps -r .github/requirements.txt
+
+      - name: Validate Grafana dashboard sources
+        run: |
+          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana_test.py
+          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana.py --check
 
       - name: Validate backend artifact sources
         run: python3 ./.github/scripts/validate_backend_artifacts.py
