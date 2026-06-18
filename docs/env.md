@@ -2,6 +2,8 @@
 
 Some behavior of Blockbook can be modified by environment variables. The variables usually start with a coin shortcut to allow to run multiple Blockbooks on a single server.
 
+Blockbook reads these from its process environment. When installed from the Debian package, the systemd unit loads them from an optional `EnvironmentFile=-/etc/blockbook/blockbook.env` (one `KEY=value` per line). The file is optional: if it is absent the service starts normally and any variables provided by other means (e.g. systemd `DefaultEnvironment`) still apply. The file is read by the service manager at startup, so it only needs to be readable by root.
+
 -   `<coin shortcut>_WS_GETACCOUNTINFO_LIMIT` - Limits the number of `getAccountInfo` requests per websocket connection to reduce server abuse. Accepts number as input.
 
 -   `<network>_WS_BALANCE_HISTORY_MAX_TXS` / `<network>_REST_BALANCE_HISTORY_MAX_TXS` - Maximum number of transactions a single balance-history request (for an address or an xpub) may aggregate, set independently for the WebSocket `getBalanceHistory` method and the REST `/api/v2/balancehistory/...` endpoint. Each aggregated transaction costs a database read, so an unbounded request over an address or xpub with a very large history (e.g. an exchange address) is a cheap-to-send, expensive-to-serve request. Past the cap the request is rejected with `400` and a message asking to narrow the `from`/`to` range, rather than returning a truncated (and therefore wrong) history. Accepts a non-negative integer; `0` disables the cap.

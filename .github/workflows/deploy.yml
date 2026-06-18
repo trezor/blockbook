@@ -157,6 +157,19 @@ jobs:
         with:
           vars_json: ${{ toJSON(vars) }}
 
+      - name: Materialize blockbook runtime env
+        env:
+          BB_ENV: ${{ secrets.BB_BLOCKBOOK_ENV }}
+        run: |
+          if [ -z "$BB_ENV" ]; then
+            echo "BB_BLOCKBOOK_ENV secret not set; leaving any existing /etc/blockbook/blockbook.env untouched"
+            exit 0
+          fi
+          sudo install -d -m 0755 -o root -g root /etc/blockbook
+          printf '%s\n' "$BB_ENV" | sudo tee /etc/blockbook/blockbook.env >/dev/null
+          sudo chown root:root /etc/blockbook/blockbook.env
+          sudo chmod 0600 /etc/blockbook/blockbook.env
+
       - name: Deploy blockbook package
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
