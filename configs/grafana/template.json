@@ -1570,7 +1570,7 @@
         },
         "overrides": []
       },
-      "id": 321,
+      "id": 332,
       "options": {
         "legend": {
           "calcs": [
@@ -5160,7 +5160,7 @@
     },
     {
       "collapsed": false,
-      "id": 321,
+      "id": 333,
       "panels": [],
       "type": "row",
       "x-panel-key": "row.fiat_rates"
@@ -5196,7 +5196,7 @@
         },
         "overrides": []
       },
-      "id": 322,
+      "id": 334,
       "options": {
         "legend": {
           "calcs": [
@@ -5256,7 +5256,7 @@
         },
         "overrides": []
       },
-      "id": 323,
+      "id": 335,
       "options": {
         "legend": {
           "calcs": [
@@ -5322,7 +5322,7 @@
         },
         "overrides": []
       },
-      "id": 324,
+      "id": 336,
       "options": {
         "legend": {
           "calcs": [
@@ -5388,7 +5388,7 @@
         },
         "overrides": []
       },
-      "id": 325,
+      "id": 337,
       "options": {
         "legend": {
           "calcs": [
