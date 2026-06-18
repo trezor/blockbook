@@ -223,25 +223,40 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			}
 			p.observeMempoolReconciliation("provider_error")
 			continue
-		} else if !known {
-			p.observeMempoolReconciliation("provider_missing")
-			// Blink-style private providers return empty once a tx is no longer retained.
-			p.removeMempoolTx(tx.txid)
-			continue
-		} else if mined {
+		}
+		if mined {
 			p.observeMempoolReconciliation("mined")
 			p.removeMempoolTx(tx.txid)
 			continue
 		}
 
-		// The provider still reports the transaction as pending. If a different transaction has
-		// already consumed its nonce (e.g. a replacement submitted outside Blockbook), it can never
-		// be mined, so evict it deterministically instead of waiting for the timeout. Only nonces
-		// strictly below the confirmed account nonce are treated as superseded; equal or higher
-		// nonces are still mineable (the next tx, or a gap waiting to be filled) and are left intact.
+		// The provider answered without error and the tx is not mined: it is either still reported as
+		// pending (known) or no longer surfaced by eth_getTransactionByHash (!known). If a different
+		// transaction has already consumed its nonce (e.g. a replacement submitted outside Blockbook),
+		// it can never be mined, so evict it deterministically instead of waiting for the timeout -
+		// regardless of whether the provider still surfaces it, because a spent nonce is a positive,
+		// irreversible on-chain fact. Only nonces strictly below the confirmed account nonce are
+		// treated as superseded; equal or higher nonces are still mineable (the next tx, or a gap
+		// waiting to be filled) and are left intact.
 		if p.transactionSupersededByNonce(tx.tx.tx, confirmedNonces, confirmedNonceFailed) {
 			p.observeMempoolReconciliation("nonce_superseded")
 			p.removeMempoolTx(tx.txid)
+			continue
+		}
+
+		if !known {
+			// A null/empty eth_getTransactionByHash is NOT authoritative proof the tx is gone:
+			// Blink-style private/MEV relays stop surfacing a still-pending, still-mineable tx via
+			// eth_getTransactionByHash while it stays broadcast. Evicting on a single empty probe
+			// deleted the tx from both sender and recipient ~1-2 minutes after send, even though it
+			// could still be mined. Defer eviction to the absolute cache timeout instead; mined and
+			// nonce_superseded above remain the only deterministic early evictions.
+			if timedOut {
+				p.observeMempoolReconciliation("provider_missing")
+				p.removeMempoolTx(tx.txid)
+				continue
+			}
+			p.observeMempoolReconciliation("provider_missing_pending")
 			continue
 		}
 

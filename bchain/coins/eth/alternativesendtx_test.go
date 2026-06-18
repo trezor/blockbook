@@ -91,7 +91,10 @@ func TestAlternativeSendTxProviderReconcileLivenessOutcomes(t *testing.T) {
 		response    string
 		wantRemoved bool
 	}{
-		{"dropped tx (provider returns empty) is removed", `{"jsonrpc":"2.0","id":1,"result":null}`, true},
+		// A provider that returns empty is NOT authoritative proof the tx is gone (Blink-style
+		// private/MEV relays stop surfacing a still-pending tx via eth_getTransactionByHash). The tx
+		// is kept until the cache timeout - here mempoolTxsTimeout is time.Hour, so it stays.
+		{"empty provider result is kept until timeout", `{"jsonrpc":"2.0","id":1,"result":null}`, false},
 		{"mined tx is removed", minedTxResponse, true},
 		{"known pending tx is kept", testAlternativeKnownTxResponse, false},
 		{"tx is kept on provider error", `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`, false},
@@ -122,6 +125,14 @@ func TestAlternativeSendTxProviderReconcileTimeoutEviction(t *testing.T) {
 			name: "provider error and timed out is removed",
 			serverURL: func(t *testing.T) string {
 				return newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`).URL
+			},
+		},
+		{
+			// an empty provider result is kept while fresh (see ReconcileLivenessOutcomes) but the
+			// timeout safety net still evicts it once mempoolTxsTimeout has elapsed
+			name: "empty provider result and timed out is removed",
+			serverURL: func(t *testing.T) string {
+				return newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`).URL
 			},
 		},
 		{
@@ -304,6 +315,23 @@ func TestAlternativeSendTxProviderReconcileNonceOutcomes(t *testing.T) {
 			assertReconcileOutcome(t, provider, removed, tt.wantRemoved)
 		})
 	}
+}
+
+func TestAlternativeSendTxProviderReconcileEvictsSupersededMissingTx(t *testing.T) {
+	// The provider no longer surfaces the tx via eth_getTransactionByHash (returns empty), so it is
+	// not evicted on the "missing" path alone. But the confirmed account nonce (0x2) is strictly
+	// above the cached tx nonce (0x1): the nonce is spent on-chain, so the tx can never be mined and
+	// is evicted deterministically even though it is well within the (1h) cache timeout.
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
+		"eth_getTransactionCount":  nonceCountResponse("0x2"),
+	})
+	var removed string
+	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+
+	provider.reconcileMempoolTxs()
+
+	assertReconcileOutcome(t, provider, removed, true)
 }
 
 func TestAlternativeSendTxProviderReconcileUsesLowestConfirmedNonce(t *testing.T) {
