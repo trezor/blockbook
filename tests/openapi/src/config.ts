@@ -40,7 +40,7 @@ export function resolveSelectedCoins(config: TestConfig) {
   const raw = process.env.OPENAPI_COINS?.trim();
   const requested = raw
     ? raw.split(",").map((value) => value.trim()).filter(Boolean)
-    : Object.entries(config).filter(([, value]) => value.api && value.api.length > 0).map(([coin]) => coin);
+    : Object.entries(config).filter(([, value]) => value.api && value.api.length > 0 && !value.disabled).map(([coin]) => coin);
 
   const selected: string[] = [];
   const seen = new Set<string>();
@@ -50,6 +50,10 @@ export function resolveSelectedCoins(config: TestConfig) {
       continue;
     }
     seen.add(coin);
+    if (config[coin]?.disabled) {
+      console.log(`OpenAPI e2e: ${coinOrConfig} maps to ${coin}, which is disabled in tests/tests.json; skipping.`);
+      continue;
+    }
     if (!config[coin]?.api || config[coin].api.length === 0) {
       console.log(`OpenAPI e2e: ${coinOrConfig} maps to ${coin}, which has no api tests in tests/tests.json; skipping.`);
       continue;

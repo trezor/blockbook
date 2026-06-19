@@ -259,6 +259,15 @@ def deployability_error(
             "which has no connectivity tests in tests/tests.json"
         )
 
+    # Keep the test definitions but never deploy a coin flagged disabled (e.g. its
+    # backend/Blockbook is temporarily not deployed). Stays in sync with the
+    # disabled handling in tests/integration.go and tests/openapi/src/config.ts.
+    if test_cfg.get("disabled") is True:
+        return (
+            f"coin '{coin}' maps to test coin '{lookup_coin}' "
+            "which is disabled in tests/tests.json"
+        )
+
     return None
 
 

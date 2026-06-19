@@ -33,6 +33,11 @@ is preserved), the rest to `<key>=main` (`bitcoin_regtest` →
 injective (distinct keys never collide), so no `#01`/`#02` disambiguation is
 needed. Keep `getMatchableName()` in `tests/integration.go` and
 `matchable_name()` in `.github/scripts/deploy_plan.py` in sync.
+- To temporarily retire a coin whose backend/Blockbook is not deployed without
+deleting its test definitions, add `"disabled": true` to its `tests/tests.json`
+entry. It is then skipped by the Go integration suite (`tests/integration.go`),
+the OpenAPI e2e selection (`tests/openapi/src/config.ts`), and deploy planning
+(`.github/scripts/runner.py`). Remove the flag to re-enable.
 - in case of unexpected integration test failures, you can run `contrib/scripts/blockbook_status.sh` or `contrib/scripts/backend_status.sh`
 scripts to check health of particular blockbook/backend instance
 - `contrib/gh-vars.sh` has a `_BB_GH_CACHE_VERSION` variable that must be bumped when the cache file format changes (e.g. the schema header or the structure of the exported env file) to invalidate stale caches

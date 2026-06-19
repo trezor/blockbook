@@ -2,7 +2,10 @@
 
 package tests
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestGetMatchableName(t *testing.T) {
 	cases := map[string]string{
@@ -37,5 +40,40 @@ func TestGetMatchableNameInjective(t *testing.T) {
 			t.Errorf("%q and %q both map to %q", coin, other, name)
 		}
 		seen[name] = coin
+	}
+}
+
+func TestIsDisabled(t *testing.T) {
+	cases := map[string]bool{
+		`{"disabled": true}`:                    true,
+		`{"disabled": false}`:                   false,
+		`{"connectivity": ["http"]}`:            false,
+		`{"disabled": true, "api": ["Status"]}`: true,
+		`{"disabled": "yes"}`:                   false, // non-bool is ignored, not disabled
+	}
+	for raw, want := range cases {
+		var cfg map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+			t.Fatalf("unmarshal %q: %v", raw, err)
+		}
+		if got := isDisabled(cfg); got != want {
+			t.Errorf("isDisabled(%s) = %v, want %v", raw, got, want)
+		}
+	}
+}
+
+// TestDisabledCoinsSkippedInTestsJSON guards that a coin flagged disabled in the
+// real tests.json is not silently treated as a runnable coin.
+func TestDisabledCoinsSkippedInTestsJSON(t *testing.T) {
+	tests, err := loadTests("tests.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, ok := tests["tron_testnet_nile"]
+	if !ok {
+		t.Skip("tron_testnet_nile not present in tests.json")
+	}
+	if !isDisabled(cfg) {
+		t.Errorf("tron_testnet_nile expected to be disabled in tests.json")
 	}
 }

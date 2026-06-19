@@ -114,6 +114,23 @@ class RunnerSelectionTest(unittest.TestCase):
         ):
             resolve_deploy_selection(context, "polygon_archive")
 
+    def test_deploy_rejects_disabled_coin_with_reason(self) -> None:
+        write_text(
+            self.workspace / "tests" / "tests.json",
+            '{"dogecoin":{"connectivity":{},"disabled":true},"base":{"connectivity":{}},'
+            '"polygon":{"connectivity":{}},"ethereum_classic":{"connectivity":{}}}',
+        )
+        context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
+
+        self.assertNotIn("dogecoin", context.deployable_coins)
+        self.assertIn("disabled in tests/tests.json", context.deployability_errors["dogecoin"])
+
+        with self.assertRaisesRegex(
+            ValidationError,
+            "is disabled in tests/tests.json",
+        ):
+            resolve_deploy_selection(context, "dogecoin")
+
 
 if __name__ == "__main__":
     unittest.main()
