@@ -309,7 +309,7 @@
     "ethereum_testnet_sepolia": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "GetAddress", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetContractInfoNonVaultEVM", "GetTransactionEVMShape",
                 "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoConfirmedNonceEVM","WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"]
     },
     "ethereum_testnet_hoodi": {
