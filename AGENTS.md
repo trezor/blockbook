@@ -8,8 +8,12 @@ contrib/tests/run-unit-tests.sh [go args]
 ```
 Then connectivity tests :
 ```
-contrib/tests/run-integration-tests.sh -run 'TestIntegration/.*/connectivity' # make sure we can reach backends
+contrib/tests/run-integration-tests.sh -run 'TestIntegration/.*/connectivity' # make sure we can reach Blockbook
 ```
+Locally the connectivity tests only check Blockbook reachability; the raw
+backend/node RPC checks need direct node access (only routable from CI) and are
+skipped. Add `--backend-connectivity` (or export `BB_TEST_BACKEND_CONNECTIVITY=1`)
+to run them too — CI sets this automatically.
 Then continue with integration tests, but start narrow, broaden only when needed :
 ```
 contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc/GetBlock'

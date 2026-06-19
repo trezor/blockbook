@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +17,23 @@ import (
 )
 
 const connectivityTimeout = 10 * time.Second
+
+// backendConnectivityEnvVar gates the raw backend/node RPC reachability checks.
+const backendConnectivityEnvVar = "BB_TEST_BACKEND_CONNECTIVITY"
+
+// backendConnectivityEnabled reports whether the raw backend/node RPC reachability
+// checks should run in addition to the Blockbook API checks. Dialing the node RPC
+// endpoints directly only works from the CI/CD network, so these checks are gated
+// behind BB_TEST_BACKEND_CONNECTIVITY and skipped by default for local runs, which
+// still verify Blockbook reachability.
+func backendConnectivityEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(backendConnectivityEnvVar))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
 
 type connectivityCfg struct {
 	CoinName string `json:"coin_name"`
@@ -35,13 +54,23 @@ func IntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, _ bchain.Me
 		t.Fatalf("invalid connectivity config for %s: %v", coin, err)
 	}
 
+	backendEnabled := backendConnectivityEnabled()
+	if !backendEnabled {
+		t.Logf("%s: skipping backend/node RPC connectivity (set %s=1 to enable, e.g. in CI); checking Blockbook only",
+			coin, backendConnectivityEnvVar)
+	}
+
 	for _, mode := range modes {
 		switch mode {
 		case "http":
-			HTTPIntegrationTest(t, coin, nil, nil, nil)
+			if backendEnabled {
+				HTTPIntegrationTest(t, coin, nil, nil, nil)
+			}
 			BlockbookHTTPIntegrationTest(t, coin, nil, nil, nil)
 		case "ws":
-			WSIntegrationTest(t, coin, nil, nil, nil)
+			if backendEnabled {
+				WSIntegrationTest(t, coin, nil, nil, nil)
+			}
 			BlockbookWSIntegrationTest(t, coin, nil, nil, nil)
 		default:
 			t.Fatalf("unsupported connectivity mode %q for %s", mode, coin)
