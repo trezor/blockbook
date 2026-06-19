@@ -80,11 +80,16 @@ func loadTests(path string) (map[string]map[string]json.RawMessage, error) {
 }
 
 func getMatchableName(coin string) string {
-	if idx := strings.Index(coin, "_testnet"); idx != -1 {
-		return coin[:idx] + "=test"
-	} else {
-		return coin + "=main"
+	const marker = "_testnet"
+	if idx := strings.Index(coin, marker); idx != -1 {
+		// Preserve the network suffix (e.g. "_sepolia", "_nile", "4") so distinct
+		// testnets of the same coin get distinct names instead of all collapsing to
+		// "<coin>=test". Keeps the mapping injective, which lets the deploy
+		// connectivity regex target exactly one testnet. Must stay in sync with
+		// matchable_name() in .github/scripts/deploy_plan.py.
+		return coin[:idx] + "=test" + coin[idx+len(marker):]
 	}
+	return coin + "=main"
 }
 
 func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {

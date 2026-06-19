@@ -21,8 +21,20 @@ def matchable_name(coin: str) -> str:
     marker = "_testnet"
     idx = coin.find(marker)
     if idx != -1:
-        return coin[:idx] + "=test"
+        # Preserve the network suffix (e.g. "_sepolia", "_nile", "4") so distinct
+        # testnets of the same coin get distinct names instead of all collapsing to
+        # "<coin>=test". Keeps the mapping injective. Must stay in sync with
+        # getMatchableName() in tests/integration.go.
+        return coin[:idx] + "=test" + coin[idx + len(marker):]
     return coin + "=main"
+
+
+def build_connectivity_regex(names) -> str:
+    # Anchor each name so e.g. "bitcoin=test" cannot substring-match the
+    # "bitcoin=test4" subtest. Safe because matchable_name() is injective, so
+    # Go never appends a "#NN" disambiguator that an anchor would exclude.
+    escaped = ["^" + re.escape(name) + "$" for name in names]
+    return "TestIntegration/(" + "|".join(escaped) + ")/connectivity"
 
 
 def main() -> None:
@@ -58,8 +70,7 @@ def main() -> None:
     if not unique_names:
         fail("no coins selected after validation")
     unique_test_coins = sorted(set(test_coins))
-    escaped = [re.escape(name) for name in unique_names]
-    connectivity_regex = "TestIntegration/(" + "|".join(escaped) + ")/connectivity"
+    connectivity_regex = build_connectivity_regex(unique_names)
 
     output_file = os.environ.get("GITHUB_OUTPUT")
     if not output_file:

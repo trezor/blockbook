@@ -18,17 +18,21 @@ contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main'
 ```
 Test path convention :
 ```
-TestIntegration/<coin>=main|test[#NN]/<connectivity|rpc|sync|api>/<subtest>[/<sub>]
+TestIntegration/<coin>=main|test[<suffix>]/<connectivity|rpc|sync|api>/<subtest>[/<sub>]
 ```
 
 - Avoid bitcoin during iteration : `bitcoin=main`'s `MempoolSync` and `GetTransactionForMempool` walk mainnet's
 mempool and are slow, prefer `bcash`.
 - Prefer `ethereum`, `bsc`, `tron`, and `avalanche` from the EVM family.
 - The coin segment comes from a `tests/tests.json` key: keys containing
-`_testnet` map to `<prefix>=test`, the rest to `<key>=main`
-(`bitcoin_regtest` → `bitcoin_regtest=main`). Collisions are disambiguated
-with `#01`, `#02`, ... — today `bitcoin=test` is testnet, `bitcoin=test#01`
-is testnet4.
+`_testnet` map to `<prefix>=test<suffix>` (the network suffix after `_testnet`
+is preserved), the rest to `<key>=main` (`bitcoin_regtest` →
+`bitcoin_regtest=main`). So `bitcoin_testnet` → `bitcoin=test`,
+`bitcoin_testnet4` → `bitcoin=test4`, `ethereum_testnet_sepolia` →
+`ethereum=test_sepolia`, `tron_testnet_nile` → `tron=test_nile`. The mapping is
+injective (distinct keys never collide), so no `#01`/`#02` disambiguation is
+needed. Keep `getMatchableName()` in `tests/integration.go` and
+`matchable_name()` in `.github/scripts/deploy_plan.py` in sync.
 - in case of unexpected integration test failures, you can run `contrib/scripts/blockbook_status.sh` or `contrib/scripts/backend_status.sh`
 scripts to check health of particular blockbook/backend instance
 - `contrib/gh-vars.sh` has a `_BB_GH_CACHE_VERSION` variable that must be bumped when the cache file format changes (e.g. the schema header or the structure of the exported env file) to invalidate stale caches
