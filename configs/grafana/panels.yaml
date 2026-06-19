@@ -175,11 +175,28 @@ panels:
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_mempool_reconciliation:
     title: Alternative mempool reconciliation
-    description: Decisions made while reconciling alternative-provider-only send-tx cache entries; provider_missing, mined, nonce_superseded and timeout remove entries, while provider_error keeps them for retry.
+    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry) and rbf_replaced remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh and kept retain a still-young or still-pending entry.
     queries:
       actions:
         promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60
         legend: '{{action}}/min'
+  sync.eth_alternative_mempool_cache_size:
+    title: Alternative mempool cache depth
+    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. It should track the number of in-flight unconfirmed sends; a steady climb means entries are added faster than they are mined or evicted.
+    queries:
+      size:
+        promql: '{{name:eth_alternative_mempool_cache_size}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  sync.eth_alternative_mempool_tx_residence:
+    title: Alternative mempool tx lifetime by eviction reason
+    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing and timeout sitting near the cache timeout is healthy; provider_missing collapsing toward ~1-2 min would surface the premature-eviction regression from #1573, while mined shows how quickly relays actually confirm.
+    queries:
+      p50:
+        promql: histogram_quantile(0.5, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
+        legend: '{{action}} p50'
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
+        legend: '{{action}} p95'
   sync.mempool_resync_throughput_p95:
     title: 95% quantile of mempool resync throughput
     description: Transactions returned by a mempool reload divided by reload duration; low values mean the backend or parser is feeding the mempool slowly.

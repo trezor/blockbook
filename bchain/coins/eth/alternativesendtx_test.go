@@ -12,7 +12,9 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 const testAlternativeTxID = "0x1111111111111111111111111111111111111111111111111111111111111111"
@@ -429,6 +431,212 @@ func TestAlternativeSendTxProviderReconcileMemoizesConfirmedNoncePerSender(t *te
 	}
 	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; !found {
 		t.Fatal("transaction ahead of the confirmed nonce was incorrectly evicted")
+	}
+}
+
+// newReconcileTestMetrics builds a common.Metrics holding only the collectors reconcileMempoolTxs
+// touches, left unregistered so each test owns fresh collectors and testutil can read them directly.
+func newReconcileTestMetrics() *common.Metrics {
+	return &common.Metrics{
+		EthAlternativeMempoolEvents: prometheus.NewCounterVec(
+			prometheus.CounterOpts{Name: "test_alt_mempool_events_total"}, []string{"action"}),
+		EthAlternativeMempoolTxResidence: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{Name: "test_alt_mempool_tx_residence_seconds", Buckets: []float64{30, 60, 120, 300, 600}}, []string{"action"}),
+		EthAlternativeMempoolCacheSize: prometheus.NewGauge(
+			prometheus.GaugeOpts{Name: "test_alt_mempool_cache_size"}),
+	}
+}
+
+// The readers below register a collector in a throwaway registry and gather it, so a test can read
+// metric values without pulling in the prometheus/testutil dependency (and its transitive modules).
+
+// gaugeValue reads the current value of a single gauge.
+func gaugeValue(t *testing.T, g prometheus.Gauge) float64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := reg.Register(g); err != nil {
+		t.Fatalf("register gauge: %v", err)
+	}
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather gauge: %v", err)
+	}
+	for _, mf := range families {
+		for _, m := range mf.GetMetric() {
+			return m.GetGauge().GetValue()
+		}
+	}
+	return 0
+}
+
+// counterValue reads the value of the counter series carrying action=action.
+func counterValue(t *testing.T, cv *prometheus.CounterVec, action string) float64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := reg.Register(cv); err != nil {
+		t.Fatalf("register counter: %v", err)
+	}
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather counter: %v", err)
+	}
+	for _, mf := range families {
+		for _, m := range mf.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == "action" && lp.GetValue() == action {
+					return m.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// residenceSampleCount reports how many residence observations were recorded under action=action.
+func residenceSampleCount(t *testing.T, h *prometheus.HistogramVec, action string) uint64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := reg.Register(h); err != nil {
+		t.Fatalf("register residence histogram: %v", err)
+	}
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather residence histogram: %v", err)
+	}
+	for _, mf := range families {
+		for _, m := range mf.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == "action" && lp.GetValue() == action {
+					return m.GetHistogram().GetSampleCount()
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// TestAlternativeSendTxProviderReconcileObservesMetrics asserts the reconcile flow feeds the two
+// metrics added to make it transparent: the per-action tx-lifetime histogram (observed only on
+// eviction, under the same action label as the decision counter) and the cache-depth gauge.
+func TestAlternativeSendTxProviderReconcileObservesMetrics(t *testing.T) {
+	const minedTxResponse = `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + testAlternativeTxID + `","from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","blockNumber":"0x1"}}`
+
+	t.Run("eviction records residence and zeroes the cache-depth gauge", func(t *testing.T) {
+		server := newAlternativeTxProviderTestServer(t, minedTxResponse)
+		var removed string
+		provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+		provider.metrics = newReconcileTestMetrics()
+
+		provider.reconcileMempoolTxs()
+
+		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 1 {
+			t.Errorf("mined reconciliation events = %v, want 1", got)
+		}
+		// the lifetime histogram records exactly one sample, under the same action label as the counter
+		if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "mined"); got != 1 {
+			t.Errorf("mined residence sample count = %d, want 1", got)
+		}
+		// the only cached tx was evicted, so the depth gauge settles at 0
+		if got := gaugeValue(t, provider.metrics.EthAlternativeMempoolCacheSize); got != 0 {
+			t.Errorf("cache depth gauge = %v, want 0 after eviction", got)
+		}
+	})
+
+	t.Run("a kept tx records no residence and keeps the gauge at one", func(t *testing.T) {
+		server := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
+		var removed string
+		provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+		provider.metrics = newReconcileTestMetrics()
+
+		provider.reconcileMempoolTxs()
+
+		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "kept"); got != 1 {
+			t.Errorf("kept reconciliation events = %v, want 1", got)
+		}
+		// nothing was evicted, so no lifetime sample must be recorded for any terminal action
+		for _, action := range []string{"mined", "nonce_superseded", "provider_missing", "timeout"} {
+			if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, action); got != 0 {
+				t.Errorf("residence sample count for %q = %d, want 0 when nothing is evicted", action, got)
+			}
+		}
+		if got := gaugeValue(t, provider.metrics.EthAlternativeMempoolCacheSize); got != 1 {
+			t.Errorf("cache depth gauge = %v, want 1 with one tx retained", got)
+		}
+	})
+}
+
+func TestAlternativeSendTxProviderGetTransactionTimeoutObservesMetrics(t *testing.T) {
+	// a cached entry past mempoolTxsTimeout, read before the reconcile loop reaches it, is evicted on
+	// the read path - and that eviction must be counted and have its residence observed just like the
+	// reconcile-loop timeout, otherwise the timeout series is undercounted.
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Minute,
+		mempoolTxs: map[string]storedTx{
+			testAlternativeTxID: {
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID},
+				time: uint32(time.Now().Add(-2 * time.Minute).Unix()),
+			},
+		},
+		metrics: newReconcileTestMetrics(),
+	}
+
+	if tx, found := provider.GetTransaction(testAlternativeTxID); found || tx != nil {
+		t.Fatalf("timed-out tx: got (tx=%v found=%v), want (nil false)", tx, found)
+	}
+	if _, stillCached := provider.mempoolTxs[testAlternativeTxID]; stillCached {
+		t.Fatal("timed-out tx was not evicted from the cache")
+	}
+	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "timeout"); got != 1 {
+		t.Errorf("timeout reconciliation events = %v, want 1", got)
+	}
+	if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "timeout"); got != 1 {
+		t.Errorf("timeout residence sample count = %d, want 1", got)
+	}
+}
+
+func TestAlternativeSendTxProviderRBFReplacementObservesMetrics(t *testing.T) {
+	// handleMempoolTransaction replaces a cached entry sharing the incoming tx's sender+nonce. The
+	// replaced entry leaves the cache by fee-replacement, so that exit must be counted and its residence
+	// observed, not silently dropped.
+	server := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs: map[string]storedTx{
+			// the older tx that the incoming testAlternativeTxID (same sender 0x2222, nonce 0x1) replaces
+			testAlternativeSecondTxID: {
+				tx: &bchain.RpcTransaction{
+					Hash:         testAlternativeSecondTxID,
+					From:         "0x2222222222222222222222222222222222222222",
+					AccountNonce: "0x1",
+				},
+				time: uint32(time.Now().Add(-3 * time.Minute).Unix()),
+			},
+		},
+		metrics: newReconcileTestMetrics(),
+	}
+	var removed string
+	provider.removeTransactionFromMempool = func(txid string) {
+		removed = txid
+		provider.RemoveTransaction(txid)
+	}
+
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err != nil {
+		t.Fatalf("handleMempoolTransaction: %v", err)
+	}
+
+	if removed != testAlternativeSecondTxID {
+		t.Fatalf("replaced txid = %q, want %q", removed, testAlternativeSecondTxID)
+	}
+	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "rbf_replaced"); got != 1 {
+		t.Errorf("rbf_replaced events = %v, want 1", got)
+	}
+	if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "rbf_replaced"); got != 1 {
+		t.Errorf("rbf_replaced residence sample count = %d, want 1", got)
 	}
 }
 
