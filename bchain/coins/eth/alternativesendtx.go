@@ -117,9 +117,11 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (strin
 	p.mempoolTxsMux.Lock()
 	// remove potential RBF transactions - with equal from and nonce
 	var rbfTxid string
+	var rbfTime uint32
 	for rbf, storedTx := range p.mempoolTxs {
 		if storedTx.tx.From == tx.From && storedTx.tx.AccountNonce == tx.AccountNonce {
 			rbfTxid = rbf
+			rbfTime = storedTx.time
 			break
 		}
 	}
@@ -128,6 +130,10 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (strin
 
 	if rbfTxid != "" {
 		glog.Infof("eth_sendRawTransaction replacing txid %s by %s", rbfTxid, txid)
+		// the replaced entry leaves the cache by fee-replacement rather than reconciliation; record the
+		// exit reason and its residence so the lifecycle metrics account for every way an entry leaves.
+		p.observeMempoolReconciliation("rbf_replaced")
+		p.observeMempoolTxResidence("rbf_replaced", rbfTime)
 		if p.removeTransactionFromMempool != nil {
 			p.removeTransactionFromMempool(rbfTxid)
 		}
@@ -158,6 +164,11 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 			p.mempoolTxsMux.Lock()
 			delete(p.mempoolTxs, txid)
 			p.mempoolTxsMux.Unlock()
+			// the same staleness timeout the reconcile loop applies, just reached on the read path
+			// first; record it so the timeout counter and residence histogram do not undercount
+			// entries read after expiry but before the next reconcile cycle evicts them.
+			p.observeMempoolReconciliation("timeout")
+			p.observeMempoolTxResidence("timeout", storedTx.time)
 			return nil, false
 		}
 		return storedTx.tx, true
@@ -217,16 +228,14 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		if err != nil {
 			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
 			if timedOut {
-				p.observeMempoolReconciliation("timeout")
-				p.removeMempoolTx(tx.txid)
+				p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 				continue
 			}
 			p.observeMempoolReconciliation("provider_error")
 			continue
 		}
 		if mined {
-			p.observeMempoolReconciliation("mined")
-			p.removeMempoolTx(tx.txid)
+			p.evictMempoolTx("mined", tx.txid, tx.tx.time)
 			continue
 		}
 
@@ -239,8 +248,7 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		// treated as superseded; equal or higher nonces are still mineable (the next tx, or a gap
 		// waiting to be filled) and are left intact.
 		if p.transactionSupersededByNonce(tx.tx.tx, confirmedNonces, confirmedNonceFailed) {
-			p.observeMempoolReconciliation("nonce_superseded")
-			p.removeMempoolTx(tx.txid)
+			p.evictMempoolTx("nonce_superseded", tx.txid, tx.tx.time)
 			continue
 		}
 
@@ -252,8 +260,7 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			// could still be mined. Defer eviction to the absolute cache timeout instead; mined and
 			// nonce_superseded above remain the only deterministic early evictions.
 			if timedOut {
-				p.observeMempoolReconciliation("provider_missing")
-				p.removeMempoolTx(tx.txid)
+				p.evictMempoolTx("provider_missing", tx.txid, tx.tx.time)
 				continue
 			}
 			p.observeMempoolReconciliation("provider_missing_pending")
@@ -261,12 +268,16 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		}
 
 		if timedOut {
-			p.observeMempoolReconciliation("timeout")
-			p.removeMempoolTx(tx.txid)
+			p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 			continue
 		}
 		p.observeMempoolReconciliation("kept")
 	}
+
+	p.mempoolTxsMux.Lock()
+	size := len(p.mempoolTxs)
+	p.mempoolTxsMux.Unlock()
+	p.setMempoolCacheSize(size)
 }
 
 func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) {
@@ -274,6 +285,39 @@ func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) 
 		return
 	}
 	p.metrics.EthAlternativeMempoolEvents.With(common.Labels{"action": action}).Inc()
+}
+
+// evictMempoolTx records a terminal reconcile decision and removes the cache entry. It counts the
+// decision and observes the entry's residence (how long it lived before this eviction reason fired),
+// so the eviction rate and the per-reason lifetime distribution stay consistent. Decisions that keep
+// an entry for a later cycle use observeMempoolReconciliation directly instead.
+func (p *AlternativeSendTxProvider) evictMempoolTx(action, txid string, addedUnix uint32) {
+	p.observeMempoolReconciliation(action)
+	p.observeMempoolTxResidence(action, addedUnix)
+	p.removeMempoolTx(txid)
+}
+
+// observeMempoolTxResidence records the age of a cache entry (seconds since it was broadcast) at the
+// moment it is evicted, labeled by the deciding action. This makes the non-deterministic lifetime of
+// an unconfirmed tx visible per eviction reason - e.g. provider_missing clustering near the timeout
+// rather than at ~1-2 min would show a premature-eviction regression like the one #1573 describes.
+func (p *AlternativeSendTxProvider) observeMempoolTxResidence(action string, addedUnix uint32) {
+	if p.metrics == nil || p.metrics.EthAlternativeMempoolTxResidence == nil {
+		return
+	}
+	residence := time.Since(time.Unix(int64(addedUnix), 0)).Seconds()
+	if residence < 0 {
+		residence = 0
+	}
+	p.metrics.EthAlternativeMempoolTxResidence.With(common.Labels{"action": action}).Observe(residence)
+}
+
+// setMempoolCacheSize records the current depth of the alternative send-tx mempool cache.
+func (p *AlternativeSendTxProvider) setMempoolCacheSize(size int) {
+	if p.metrics == nil || p.metrics.EthAlternativeMempoolCacheSize == nil {
+		return
+	}
+	p.metrics.EthAlternativeMempoolCacheSize.Set(float64(size))
 }
 
 // transactionSupersededByNonce reports whether a different transaction has already consumed the
