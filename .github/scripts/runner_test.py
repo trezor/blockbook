@@ -131,6 +131,13 @@ class RunnerSelectionTest(unittest.TestCase):
         ):
             resolve_deploy_selection(context, "dogecoin")
 
+    def test_deploy_accepts_underscore_for_hyphenated_coin(self) -> None:
+        # Regression: deploy selection must resolve the "_" alias against the
+        # context's coins, not the process working directory.
+        context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
+
+        self.assertEqual(resolve_deploy_selection(context, "ethereum_classic"), ["ethereum-classic"])
+
 
 if __name__ == "__main__":
     unittest.main()
