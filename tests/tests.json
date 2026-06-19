@@ -309,14 +309,14 @@
     "ethereum_testnet_sepolia": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
-                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoConfirmedNonceEVM","WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"]
+                "GetAddress", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoConfirmedNonceEVM","WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"]
     },
     "ethereum_testnet_hoodi": {
         "connectivity": ["http", "ws"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
-                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoConfirmedNonceEVM","WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetCurrentFiatRates", "WsGetFiatRatesForTimestamps", "WsGetFiatRatesTickersList", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"]
+                "GetAddress", "GetBalanceHistory", "GetAddressBasicEVM", "GetAddressConfirmedNonceEVM","GetAddressTokensEVM", "GetAddressTokenBalances", "GetAddressTxidsPaginationEVM", "GetAddressTxsPaginationEVM", "GetAddressContractFilterEVM", "GetTransactionEVMShape",
+                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfoBasicEVM", "WsGetAccountInfoConfirmedNonceEVM","WsGetAccountInfoEVM", "WsGetAccountInfoTxidsConsistencyEVM", "WsGetAccountInfoTxsConsistencyEVM", "WsGetAccountInfoContractFilterEVM", "WsPing", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific"]
     },
     "ethereum-classic": {
         "connectivity": ["http", "ws"],
