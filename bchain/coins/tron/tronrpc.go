@@ -507,15 +507,15 @@ func (b *TronRPC) newBlockNotifier() {
 func (b *TronRPC) tipWatchdog() {
 	threshold := b.TipStaleThreshold()
 	var interval time.Duration
-    if b.mq == nil {
-        // Polling-only mode: poll at the chain's block cadence
-        interval = time.Duration(b.ChainConfig.AverageBlockTimeMs) * time.Millisecond
-        if interval < time.Second {
-            interval = time.Second
-        }
-    } else {
-        interval = threshold / 3
-    }
+	if b.mq == nil {
+		// Polling-only mode: poll at the chain's block cadence
+		interval = time.Duration(b.ChainConfig.AverageBlockTimeMs) * time.Millisecond
+		if interval < time.Second {
+			interval = time.Second
+		}
+	} else {
+		interval = threshold / 3
+	}
 	if interval < 5*time.Second {
 		interval = 5 * time.Second
 	}
@@ -541,21 +541,21 @@ func (b *TronRPC) tipWatchdogTick(threshold time.Duration) {
 	b.ObserveSubscriptionEvent("zeromq", "watchdog_tick")
 
 	// Polling-only mode (ZeroMQ disabled): always poll the tip directly.
-    // lastNotifyNs is never armed in this mode so the staleness gate below would never fire;
-    // bypass it entirely and drive sync from the ticker.
-    if b.mq == nil {
-        updated, err := b.refreshBestHeaderFromChain()
-        if err != nil {
-            glog.Error("TronRPC: tip watchdog tip poll error ", err)
-            return
-        }
-        if updated && b.PushHandler != nil {
-            b.ObserveSubscriptionEvent("zeromq", "watchdog_tip_advanced")
-            b.PushHandler(bchain.NotificationNewBlock)
-            b.PushHandler(bchain.NotificationNewTx)
-        }
-        return
-    }
+	// lastNotifyNs is never armed in this mode so the staleness gate below would never fire;
+	// bypass it entirely and drive sync from the ticker.
+	if b.mq == nil {
+		updated, err := b.refreshBestHeaderFromChain()
+		if err != nil {
+			glog.Error("TronRPC: tip watchdog tip poll error ", err)
+			return
+		}
+		if updated && b.PushHandler != nil {
+			b.ObserveSubscriptionEvent("zeromq", "watchdog_tip_advanced")
+			b.PushHandler(bchain.NotificationNewBlock)
+			b.PushHandler(bchain.NotificationNewTx)
+		}
+		return
+	}
 
 	lastNs := b.lastNotifyNs.Load()
 	if lastNs == 0 {
@@ -625,10 +625,10 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 		go b.tipWatchdog()
 	})
 
-    if b.ChainConfig.MessageQueueBinding == "" {
-        glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
-        return nil
-    }
+	if b.ChainConfig.MessageQueueBinding == "" {
+		glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
+		return nil
+	}
 
 	if b.mq == nil {
 		tronTopics := bchain.SubscriptionTopics{
