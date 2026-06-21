@@ -235,7 +235,7 @@ type Token struct {
 	Contract         string                   `json:"contract,omitempty" ts_doc:"Contract address on-chain."`
 	Transfers        int                      `json:"transfers" ts_doc:"Total number of token transfers for this address."`
 	Symbol           string                   `json:"symbol,omitempty" ts_doc:"Symbol for the token (e.g., 'ETH', 'USDT')."`
-	Decimals         int                      `json:"decimals,omitempty" ts_doc:"Number of decimals for this token."`
+	Decimals         int                      `json:"decimals" ts_doc:"Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable."`
 	BalanceSat       *Amount                  `json:"balance,omitempty" ts_doc:"Current token balance (in minimal base units)."`
 	BaseValue        float64                  `json:"baseValue,omitempty" ts_doc:"Value in the base currency (e.g. ETH for ERC20 tokens)."`
 	SecondaryValue   float64                  `json:"secondaryValue,omitempty" ts_doc:"Value in a secondary currency (e.g. fiat), if available."`
@@ -284,7 +284,7 @@ type TokenTransfer struct {
 	Contract         string                   `json:"contract" ts_doc:"Contract address of the token."`
 	Name             string                   `json:"name,omitempty" ts_doc:"Token name."`
 	Symbol           string                   `json:"symbol,omitempty" ts_doc:"Token symbol."`
-	Decimals         int                      `json:"decimals,omitempty" ts_doc:"Number of decimals for this token (if applicable)."`
+	Decimals         int                      `json:"decimals" ts_doc:"Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable."`
 	Value            *Amount                  `json:"value,omitempty" ts_doc:"Amount (in base units) of tokens transferred."`
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"List of multiple ID-value pairs for ERC1155 transfers."`
 }

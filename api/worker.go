@@ -743,6 +743,11 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 			}
 			if blockchainContractInfo != nil {
 				contractInfo.Decimals = blockchainContractInfo.Decimals
+			} else if contractInfo.Decimals == 0 && contractInfo.Standard == bchain.UnhandledTokenStandard {
+				// contract metadata could not be read on-chain; fall back to the coin's
+				// default decimals (18 for ERC-20) instead of persisting an ambiguous 0
+				// for a token whose true precision is simply unknown (trezor/blockbook#1577)
+				contractInfo.Decimals = w.chainParser.AmountDecimals()
 			}
 			if contractInfo.Standard == bchain.UnhandledTokenStandard {
 				glog.Infof("Contract %v %v [%s] handled", cd, standardFromContext, contractInfo.Name)
@@ -753,6 +758,13 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
 		}
+	}
+	// never surface an unresolved contract (still Unhandled because its metadata
+	// could not be fetched, e.g. a transient RPC error above) with a bare 0
+	// decimals; use the coin default instead. Genuinely 0-decimal tokens always
+	// carry a resolved (handled) standard, so they are unaffected (trezor/blockbook#1577)
+	if contractInfo.Decimals == 0 && contractInfo.Standard == bchain.UnhandledTokenStandard {
+		contractInfo.Decimals = w.chainParser.AmountDecimals()
 	}
 	return contractInfo, validContract, nil
 }

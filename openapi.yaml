@@ -1869,7 +1869,7 @@ components:
 
     TokenTransfer:
       type: object
-      required: [type, standard, from, to, contract]
+      required: [type, standard, from, to, contract, decimals]
       properties:
         type:
           deprecated: true
@@ -2223,7 +2223,7 @@ components:
 
     Token:
       type: object
-      required: [type, standard, name, transfers]
+      required: [type, standard, name, transfers, decimals]
       properties:
         type:
           deprecated: true
