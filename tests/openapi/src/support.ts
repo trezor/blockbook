@@ -189,6 +189,20 @@ export function assertEVMTokenListContractsMatch(tokens: TokenResponse[], contra
   });
 }
 
+// assertTokenDecimals enforces trezor/blockbook#1577: `decimals` must always be present on
+// Token and TokenTransfer payloads (it used to be dropped when 0, leaving clients unable to
+// tell a genuine 0-decimal token from missing metadata) and must be a non-negative integer.
+// This makes the expectation explicit on top of the schema's `required: decimals`, so it still
+// holds if the schema is ever relaxed, and adds the non-negativity check the schema does not.
+export function assertTokenDecimals(decimals: number | undefined, context: string) {
+  if (decimals === undefined) {
+    throw new Error(`${context}.decimals is missing; it must always be present (trezor/blockbook#1577)`);
+  }
+  if (!Number.isInteger(decimals) || decimals < 0) {
+    throw new Error(`${context}.decimals must be a non-negative integer, got ${String(decimals)}`);
+  }
+}
+
 export function assertErc4626Payload(context: string, shareContract: string, payload: NonNullable<ContractInfoResponse["protocols"]>["erc4626"]) {
   if (!payload) {
     throw new Error(`${context} missing payload`);
