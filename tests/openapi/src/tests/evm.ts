@@ -13,6 +13,7 @@ import {
   assertNonEmptyString,
   assertPageMeta,
   assertPageSizeUpperBound,
+  assertTokenDecimals,
   buildAddressDetailsPath,
   encodePathSegment,
   equalFold,
@@ -120,6 +121,7 @@ async function testGetAddressTokensEVM(ctx: TestContext) {
   resp.tokens?.forEach((token, index) => {
     assertNonEmptyString(token.type, `GetAddressTokensEVM.tokens[${index}].type`);
     assertNonEmptyString(token.contract, `GetAddressTokensEVM.tokens[${index}].contract`);
+    assertTokenDecimals(token.decimals, `GetAddressTokensEVM.tokens[${index}]`);
   });
 }
 
@@ -268,6 +270,10 @@ async function testGetTransactionEVMShape(ctx: TestContext) {
   if (!isObject(tx.ethereumSpecific) || Object.keys(tx.ethereumSpecific).length === 0) {
     throw new Error(`GetTransactionEVMShape missing ethereumSpecific object for ${txid}`);
   }
+  // when the sampled tx carries token transfers, each must report decimals (trezor/blockbook#1577)
+  tx.tokenTransfers?.forEach((transfer, index) =>
+    assertTokenDecimals(transfer.decimals, `GetTransactionEVMShape.tokenTransfers[${index}]`),
+  );
 }
 
 export async function assertErc4626FixturesInAccountInfo(
