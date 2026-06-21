@@ -598,6 +598,11 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 		go b.tipWatchdog()
 	})
 
+    if b.ChainConfig.MessageQueueBinding == "" {
+        glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
+        return nil
+    }
+
 	if b.mq == nil {
 		tronTopics := bchain.SubscriptionTopics{
 			BlockSubscribe: "block",
