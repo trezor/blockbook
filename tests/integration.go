@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -47,6 +48,8 @@ var typescriptOwnedIntegrationTests = map[string]string{
 var notConnectedError = errors.New("Not connected to backend server")
 
 func runIntegrationTests(t *testing.T) {
+	supplyPlaceholderFeeProviderKeys(t)
+
 	tests, err := loadTests("tests.json")
 	if err != nil {
 		t.Fatal(err)
@@ -66,6 +69,22 @@ func runIntegrationTests(t *testing.T) {
 		name := getMatchableName(coin)
 		t.Run(name, func(t *testing.T) { runTests(t, coin, cfg) })
 
+	}
+}
+
+// supplyPlaceholderFeeProviderKeys gives the integration run placeholder API keys for
+// the EVM alternative fee providers. These tests render production coin configs, some
+// of which select a key-gated provider (e.g. avalanche → infura); without its key
+// such a provider now aborts chain initialization instead of degrading silently
+// (see EthereumRPC.initAlternativeFeeProvider). The test environment has no
+// third-party fee-API keys and these tests assert RPC/sync behavior, not fees, so a
+// placeholder lets the chain start and fall back to default fee estimation while the
+// background fee fetch simply errors out. A real key in the environment is respected.
+func supplyPlaceholderFeeProviderKeys(t *testing.T) {
+	for _, key := range []string{"INFURA_API_KEY", "ONE_INCH_API_KEY"} {
+		if _, ok := os.LookupEnv(key); !ok {
+			t.Setenv(key, "integration-test-placeholder")
+		}
 	}
 }
 
