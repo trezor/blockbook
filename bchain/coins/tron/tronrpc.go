@@ -506,7 +506,13 @@ func (b *TronRPC) newBlockNotifier() {
 // resync tick. Started exactly once via newBlockNotifyOnce.
 func (b *TronRPC) tipWatchdog() {
 	threshold := b.TipStaleThreshold()
-	interval := threshold / 3
+	var interval time.Duration
+    if b.mq == nil {
+        // Polling-only mode: poll at the chain's block cadence
+        interval = time.Duration(b.ChainConfig.AverageBlockTimeMs) * time.Millisecond
+    } else {
+        interval = threshold / 3
+    }
 	if interval < 5*time.Second {
 		interval = 5 * time.Second
 	}
