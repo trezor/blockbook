@@ -152,8 +152,8 @@ export interface TokenTransfer {
     name?: string;
     /** Token symbol. */
     symbol?: string;
-    /** Number of decimals for this token (if applicable). */
-    decimals?: number;
+    /** Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable. */
+    decimals: number;
     /** Amount (in base units) of tokens transferred. */
     value?: string;
     /** List of multiple ID-value pairs for ERC1155 transfers. */
@@ -329,8 +329,8 @@ export interface Token {
     transfers: number;
     /** Symbol for the token (e.g., 'ETH', 'USDT'). */
     symbol?: string;
-    /** Number of decimals for this token. */
-    decimals?: number;
+    /** Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable. */
+    decimals: number;
     /** Current token balance (in minimal base units). */
     balance?: string;
     /** Value in the base currency (e.g. ETH for ERC20 tokens). */
