@@ -536,6 +536,24 @@ func (b *TronRPC) tipWatchdogTick(threshold time.Duration) {
 	// Heartbeat: prove the watchdog goroutine is still ticking (see eth tipWatchdogTick).
 	// rate(blockbook_backend_subscription_events{event="watchdog_tick"})==0 means it died.
 	b.ObserveSubscriptionEvent("zeromq", "watchdog_tick")
+
+	// Polling-only mode (ZeroMQ disabled): always poll the tip directly.
+    // lastNotifyNs is never armed in this mode so the staleness gate below would never fire;
+    // bypass it entirely and drive sync from the ticker.
+    if b.mq == nil {
+        updated, err := b.refreshBestHeaderFromChain()
+        if err != nil {
+            glog.Error("TronRPC: tip watchdog tip poll error ", err)
+            return
+        }
+        if updated && b.PushHandler != nil {
+            b.ObserveSubscriptionEvent("zeromq", "watchdog_tip_advanced")
+            b.PushHandler(bchain.NotificationNewBlock)
+            b.PushHandler(bchain.NotificationNewTx)
+        }
+        return
+    }
+
 	lastNs := b.lastNotifyNs.Load()
 	if lastNs == 0 {
 		return
