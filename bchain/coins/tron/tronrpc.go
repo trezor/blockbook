@@ -510,6 +510,9 @@ func (b *TronRPC) tipWatchdog() {
     if b.mq == nil {
         // Polling-only mode: poll at the chain's block cadence
         interval = time.Duration(b.ChainConfig.AverageBlockTimeMs) * time.Millisecond
+        if interval < time.Second {
+            interval = time.Second
+        }
     } else {
         interval = threshold / 3
     }
