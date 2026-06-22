@@ -697,11 +697,11 @@ func (b *TronRPC) computeBlockConfirmations(blockNumber uint64) (uint32, error) 
 	return uint32(bestHeight - blockNumber + 1), nil
 }
 
-func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData, isSolidified bool) (*bchain.Tx, error) {
+func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData, keepReceipt bool) (*bchain.Tx, error) {
 	csd := tronBuildEthereumSpecificData(txByID, txInfo)
 	csd.InternalData = internalData
 
-	if !isSolidified {
+	if !keepReceipt {
 		csd.Receipt = nil // set to nil so it can be considered as pending
 	}
 
@@ -948,7 +948,9 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 			txInternalData = &internalData[i]
 		}
 
-		rebuiltTx, err := b.buildTxFromHTTPData(txByID, txInfo, bbh.Time, confirmations, txInternalData, isSolidified)
+		// Keep receipts for block indexing even before solidity. If logs are dropped
+		// here, token-transfer participants never reach the address/contract indexes.
+		rebuiltTx, err := b.buildTxFromHTTPData(txByID, txInfo, bbh.Time, confirmations, txInternalData, true)
 		if err != nil {
 			return nil, err
 		}
