@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -35,6 +38,13 @@ type InternalServer struct {
 	mempool     bchain.Mempool
 	is          *common.InternalState
 	api         *api.Worker
+	// Admin HTTP Basic-auth credentials for the /admin endpoints, derived from
+	// BB_ADMIN_USER/BB_ADMIN_PASSWORD. adminAuthEnabled is false when either is unset,
+	// keeping the admin surface fail-closed (see requireAdminAuth). Only SHA-256
+	// digests are retained, for constant-time comparison.
+	adminAuthEnabled bool
+	adminUserHash    [32]byte
+	adminPassHash    [32]byte
 }
 
 // NewInternalServer creates new internal http interface to blockbook and returns its handle
@@ -69,18 +79,85 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	s.htmlTemplates.parseTemplates = s.parseTemplates
 	s.templates = s.parseTemplates()
 
+	// The internal server binds all interfaces by default (configs/coins/*:
+	// internal_binding_template is ":<port>"), so the /admin endpoints are gated by
+	// HTTP Basic auth. Basic auth (rather than a bearer token) lets the admin HTML
+	// pages and forms be used directly from a browser via its native login prompt.
+	// Credentials come from the process environment like the other runtime secrets
+	// (see docs/env.md, blockbook.env).
+	s.configureAdminAuth(os.Getenv("BB_ADMIN_USER"), os.Getenv("BB_ADMIN_PASSWORD"))
+	if s.adminAuthEnabled {
+		glog.Info("internal server: /admin authentication enabled (HTTP Basic auth)")
+	} else {
+		glog.Warning("internal server: BB_ADMIN_USER/BB_ADMIN_PASSWORD not both set; /admin endpoints are disabled (HTTP 503). Set them in blockbook.env to enable them.")
+	}
+
 	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
 	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	serveMux.HandleFunc(path+"metrics", promhttp.Handler().ServeHTTP)
 	serveMux.HandleFunc(path, s.index)
-	serveMux.HandleFunc(path+"admin", s.htmlTemplateHandler(s.adminIndex))
-	serveMux.HandleFunc(path+"admin/ws-limit-exceeding-ips", s.htmlTemplateHandler(s.wsLimitExceedingIPs))
+	// Gate the whole /admin surface. The trailing-slash catch-all ensures that
+	// unregistered or trailing-slash variants (e.g. /admin/, /admin/foo) require
+	// auth too, instead of falling through to the unauthenticated index handler.
+	serveMux.HandleFunc(path+"admin", s.requireAdminAuth(s.htmlTemplateHandler(s.adminIndex)))
+	serveMux.HandleFunc(path+"admin/", s.requireAdminAuth(http.NotFound))
+	serveMux.HandleFunc(path+"admin/ws-limit-exceeding-ips", s.requireAdminAuth(s.htmlTemplateHandler(s.wsLimitExceedingIPs)))
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		serveMux.HandleFunc(path+"admin/internal-data-errors", s.htmlTemplateHandler(s.internalDataErrors))
-		serveMux.HandleFunc(path+"admin/contract-info", s.htmlTemplateHandler(s.contractInfoPage))
-		serveMux.HandleFunc(path+"admin/contract-info/", s.jsonHandler(s.apiContractInfo, 0))
+		serveMux.HandleFunc(path+"admin/internal-data-errors", s.requireAdminAuth(s.htmlTemplateHandler(s.internalDataErrors)))
+		serveMux.HandleFunc(path+"admin/contract-info", s.requireAdminAuth(s.htmlTemplateHandler(s.contractInfoPage)))
+		serveMux.HandleFunc(path+"admin/contract-info/", s.requireAdminAuth(s.jsonHandler(s.apiContractInfo, 0)))
 	}
 	return s, nil
+}
+
+// configureAdminAuth derives the /admin Basic-auth credentials from the given raw
+// values (the BB_ADMIN_USER/BB_ADMIN_PASSWORD environment variables). Surrounding
+// whitespace is stripped so a stray space or newline in blockbook.env does not lock
+// the operator out. If either value is empty the admin surface stays disabled
+// (fail-closed). Only the SHA-256 digests are kept, for constant-time comparison.
+func (s *InternalServer) configureAdminAuth(rawUser, rawPass string) {
+	user := strings.TrimSpace(rawUser)
+	pass := strings.TrimSpace(rawPass)
+	s.adminAuthEnabled = user != "" && pass != ""
+	s.adminUserHash = sha256.Sum256([]byte(user))
+	s.adminPassHash = sha256.Sum256([]byte(pass))
+}
+
+// requireAdminAuth wraps an internal-server handler so it is reachable only with
+// valid HTTP Basic credentials. The admin surface is fail-closed: when the
+// credentials are not configured the endpoints return 503 rather than serving
+// unauthenticated, because the internal server binds all interfaces by default.
+func (s *InternalServer) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.adminAuthEnabled {
+			http.Error(w, "admin interface disabled", http.StatusServiceUnavailable)
+			return
+		}
+		if !s.validBasicAuth(r) {
+			// Prompt browsers for credentials; charset advertises UTF-8 passwords.
+			w.Header().Set("WWW-Authenticate", `Basic realm="blockbook-admin", charset="UTF-8"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// validBasicAuth reports whether the request carries the configured admin Basic
+// credentials. Both fields are compared via SHA-256 digests so the comparison is
+// constant-time and independent of the submitted lengths; both comparisons are
+// evaluated before being combined so a username mismatch is not distinguishable by
+// timing from a password mismatch.
+func (s *InternalServer) validBasicAuth(r *http.Request) bool {
+	user, pass, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	gotUser := sha256.Sum256([]byte(user))
+	gotPass := sha256.Sum256([]byte(pass))
+	userOK := subtle.ConstantTimeCompare(gotUser[:], s.adminUserHash[:]) == 1
+	passOK := subtle.ConstantTimeCompare(gotPass[:], s.adminPassHash[:]) == 1
+	return userOK && passOK
 }
 
 // Run starts the server
