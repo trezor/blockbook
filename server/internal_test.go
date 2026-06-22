@@ -77,20 +77,48 @@ func TestAdminSubtreeIsGated(t *testing.T) {
 		_, _ = w.Write([]byte("INDEX"))
 	})
 	mux.HandleFunc("/admin", s.requireAdminAuth(okHandler))
-	mux.HandleFunc("/admin/", s.requireAdminAuth(http.NotFound))
+	mux.HandleFunc("/admin/", s.requireAdminAuth(s.adminSubtreeHandler("/admin")))
 
-	// All of these must be gated by admin auth (401 without credentials), never
-	// served by the unauthenticated index handler.
-	for _, path := range []string{"/admin", "/admin/", "/admin/unknown", "/admin/contract-info"} {
-		t.Run(path, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, path, nil)
+	// Without credentials, every /admin path is gated (401) and never reaches the
+	// unauthenticated index handler.
+	for _, p := range []string{"/admin", "/admin/", "/admin/unknown", "/admin/contract-info"} {
+		t.Run("no-auth "+p, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, p, nil)
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, r)
 			if w.Code != http.StatusUnauthorized {
-				t.Errorf("%s: status = %d, want 401 (gated by admin auth)", path, w.Code)
+				t.Errorf("%s: status = %d, want 401 (gated by admin auth)", p, w.Code)
 			}
 			if w.Body.String() == "INDEX" {
-				t.Errorf("%s: leaked the unauthenticated index handler", path)
+				t.Errorf("%s: leaked the unauthenticated index handler", p)
+			}
+		})
+	}
+
+	// With valid credentials, a bare /admin/ canonicalizes to /admin and an unknown
+	// subpath is a gated 404 -- never the index.
+	authed := []struct {
+		path     string
+		wantCode int
+		wantLoc  string
+	}{
+		{"/admin/", http.StatusFound, "/admin"},
+		{"/admin/unknown", http.StatusNotFound, ""},
+	}
+	for _, tc := range authed {
+		t.Run("auth "+tc.path, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			r.SetBasicAuth("admin", "pass")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, r)
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: status = %d, want %d", tc.path, w.Code, tc.wantCode)
+			}
+			if tc.wantLoc != "" && w.Header().Get("Location") != tc.wantLoc {
+				t.Errorf("%s: Location = %q, want %q", tc.path, w.Header().Get("Location"), tc.wantLoc)
+			}
+			if w.Body.String() == "INDEX" {
+				t.Errorf("%s: leaked the unauthenticated index handler", tc.path)
 			}
 		})
 	}

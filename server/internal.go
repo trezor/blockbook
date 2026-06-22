@@ -96,16 +96,17 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	serveMux.HandleFunc(path+"metrics", promhttp.Handler().ServeHTTP)
 	serveMux.HandleFunc(path, s.index)
-	// Gate the whole /admin surface. The trailing-slash catch-all ensures that
-	// unregistered or trailing-slash variants (e.g. /admin/, /admin/foo) require
-	// auth too, instead of falling through to the unauthenticated index handler.
-	serveMux.HandleFunc(path+"admin", s.requireAdminAuth(s.htmlTemplateHandler(s.adminIndex)))
-	serveMux.HandleFunc(path+"admin/", s.requireAdminAuth(http.NotFound))
-	serveMux.HandleFunc(path+"admin/ws-limit-exceeding-ips", s.requireAdminAuth(s.htmlTemplateHandler(s.wsLimitExceedingIPs)))
+	// Gate the whole /admin surface behind auth. The trailing-slash catch-all keeps
+	// unregistered /admin/* subpaths authenticated (so they cannot fall through to the
+	// public index handler); a bare "/admin/" is redirected to the canonical "/admin".
+	adminPath := path + "admin"
+	serveMux.HandleFunc(adminPath, s.requireAdminAuth(s.htmlTemplateHandler(s.adminIndex)))
+	serveMux.HandleFunc(adminPath+"/", s.requireAdminAuth(s.adminSubtreeHandler(adminPath)))
+	serveMux.HandleFunc(adminPath+"/ws-limit-exceeding-ips", s.requireAdminAuth(s.htmlTemplateHandler(s.wsLimitExceedingIPs)))
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		serveMux.HandleFunc(path+"admin/internal-data-errors", s.requireAdminAuth(s.htmlTemplateHandler(s.internalDataErrors)))
-		serveMux.HandleFunc(path+"admin/contract-info", s.requireAdminAuth(s.htmlTemplateHandler(s.contractInfoPage)))
-		serveMux.HandleFunc(path+"admin/contract-info/", s.requireAdminAuth(s.jsonHandler(s.apiContractInfo, 0)))
+		serveMux.HandleFunc(adminPath+"/internal-data-errors", s.requireAdminAuth(s.htmlTemplateHandler(s.internalDataErrors)))
+		serveMux.HandleFunc(adminPath+"/contract-info", s.requireAdminAuth(s.htmlTemplateHandler(s.contractInfoPage)))
+		serveMux.HandleFunc(adminPath+"/contract-info/", s.requireAdminAuth(s.jsonHandler(s.apiContractInfo, 0)))
 	}
 	return s, nil
 }
@@ -121,6 +122,20 @@ func (s *InternalServer) configureAdminAuth(rawUser, rawPass string) {
 	s.adminAuthEnabled = user != "" && pass != ""
 	s.adminUserHash = sha256.Sum256([]byte(user))
 	s.adminPassHash = sha256.Sum256([]byte(pass))
+}
+
+// adminSubtreeHandler backs the /admin/ trailing-slash catch-all. A bare "/admin/"
+// (the trailing-slash form of the index) is redirected to the canonical adminPath
+// ("/admin"); any deeper unregistered /admin/* path is a 404. It is registered behind
+// requireAdminAuth, so unknown subpaths stay gated rather than reaching the index.
+func (s *InternalServer) adminSubtreeHandler(adminPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == adminPath+"/" {
+			http.Redirect(w, r, adminPath, http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	}
 }
 
 // requireAdminAuth wraps an internal-server handler so it is reachable only with
