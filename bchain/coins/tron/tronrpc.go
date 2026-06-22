@@ -90,7 +90,11 @@ type TronRPC struct {
 	*eth.EthereumRPC
 	Parser      *TronParser
 	ChainConfig *TronConfiguration
-	mq          *bchain.MQ
+	// mq is the ZeroMQ subscription; nil means ZeroMQ is disabled (polling-only mode).
+	// It is assigned once in InitializeMempool before the tipWatchdog goroutine is
+	// started, so the watchdog reads it without synchronization (the go statement that
+	// launches the watchdog happens-after the assignment).
+	mq *bchain.MQ
 	// callCtx is the base context for RPC calls (the embedded RPC client and the
 	// HTTP node clients); Shutdown cancels it so an in-flight sync call aborts
 	// promptly. The rpc-client side is also covered by CloseRPC; this additionally
@@ -618,36 +622,39 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 		return errors.New("Tron Mempool not created")
 	}
 	b.Mempool.OnNewTx = onNewTx
+
+	if b.ChainConfig.MessageQueueBinding == "" {
+		glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
+	} else {
+		if b.mq == nil {
+			tronTopics := bchain.SubscriptionTopics{
+				BlockSubscribe: "block",
+				BlockReceive:   "blockTrigger",
+				TxSubscribe:    "",
+				TxReceive:      "",
+			}
+
+			mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.handleMQNotification, tronTopics)
+			if err != nil {
+				return err
+			}
+			b.mq = mq
+		}
+
+		// Arm the watchdog's staleness clock once the ZeroMQ feed is established, not on
+		// the first notification that advances the tip. Otherwise a feed that never
+		// advances would leave lastNotifyNs at 0 and the watchdog's (lastNs == 0) gate
+		// disabled (see EthereumRPC.subscribeEvents for the same fix on the EVM path).
+		b.markNotifyAlive()
+	}
+
+	// Start the watchdog/notifier goroutines last, after b.mq is set: the watchdog
+	// reads b.mq to choose polling-only vs ZeroMQ mode, and launching it after the
+	// (write-once) assignment makes that value visible without synchronization.
 	b.newBlockNotifyOnce.Do(func() {
 		go b.newBlockNotifier()
 		go b.tipWatchdog()
 	})
-
-	if b.ChainConfig.MessageQueueBinding == "" {
-		glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
-		return nil
-	}
-
-	if b.mq == nil {
-		tronTopics := bchain.SubscriptionTopics{
-			BlockSubscribe: "block",
-			BlockReceive:   "blockTrigger",
-			TxSubscribe:    "",
-			TxReceive:      "",
-		}
-
-		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.handleMQNotification, tronTopics)
-		if err != nil {
-			return err
-		}
-		b.mq = mq
-	}
-
-	// Arm the watchdog's staleness clock once the ZeroMQ feed is established, not on
-	// the first notification that advances the tip. Otherwise a feed that never
-	// advances would leave lastNotifyNs at 0 and the watchdog's (lastNs == 0) gate
-	// disabled (see EthereumRPC.subscribeEvents for the same fix on the EVM path).
-	b.markNotifyAlive()
 
 	return nil
 }
