@@ -1344,6 +1344,45 @@ func TestWebsocketTrackWorkAppliesGlobalLimit(t *testing.T) {
 	}
 }
 
+func TestWebsocketMempoolFilterResponseSlots(t *testing.T) {
+	c := &websocketChannel{
+		mempoolFiltersSlots: make(chan struct{}, maxWebsocketMempoolFiltersResponses),
+	}
+	for i := 0; i < maxWebsocketMempoolFiltersResponses; i++ {
+		if !c.acquireMempoolFiltersSlot() {
+			t.Fatalf("acquireMempoolFiltersSlot() = false at slot %d", i)
+		}
+	}
+	if c.acquireMempoolFiltersSlot() {
+		t.Fatal("acquireMempoolFiltersSlot() = true at limit")
+	}
+	c.releaseMempoolFiltersSlot()
+	if !c.acquireMempoolFiltersSlot() {
+		t.Fatal("acquireMempoolFiltersSlot() = false after release")
+	}
+}
+
+func TestWebsocketCloseOutReleasesQueuedMempoolFilterResponses(t *testing.T) {
+	c := &websocketChannel{
+		out:                 make(chan *WsRes, outChannelSize),
+		mempoolFiltersSlots: make(chan struct{}, maxWebsocketMempoolFiltersResponses),
+		alive:               true,
+	}
+	if !c.acquireMempoolFiltersSlot() {
+		t.Fatal("acquireMempoolFiltersSlot() = false")
+	}
+	c.DataOut(&WsRes{ID: "mempool", Data: struct{}{}, release: c.releaseMempoolFiltersSlot})
+	if got := len(c.mempoolFiltersSlots); got != 1 {
+		t.Fatalf("held mempool filter slots = %d before CloseOut, want 1", got)
+	}
+	if closed, reason := c.CloseOut("test"); !closed || reason != "test" {
+		t.Fatalf("CloseOut() = %v, %q, want true, test", closed, reason)
+	}
+	if got := len(c.mempoolFiltersSlots); got != 0 {
+		t.Fatalf("held mempool filter slots = %d after CloseOut, want 0", got)
+	}
+}
+
 func TestWebsocketShutdownIsIdempotent(t *testing.T) {
 	s := newShutdownTestServer()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
