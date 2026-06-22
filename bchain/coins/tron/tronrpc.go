@@ -508,11 +508,9 @@ func (b *TronRPC) tipWatchdog() {
 	threshold := b.TipStaleThreshold()
 	var interval time.Duration
 	if b.mq == nil {
-		// Polling-only mode: poll at the chain's block cadence
+		// Polling-only mode: sample at the chain's block cadence, subject to the
+		// shared 5-60s clamp below (so sub-5s chains poll at the 5s floor).
 		interval = time.Duration(b.ChainConfig.AverageBlockTimeMs) * time.Millisecond
-		if interval < time.Second {
-			interval = time.Second
-		}
 	} else {
 		interval = threshold / 3
 	}
