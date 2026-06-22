@@ -91,9 +91,6 @@ type TronRPC struct {
 	Parser      *TronParser
 	ChainConfig *TronConfiguration
 	// mq is the ZeroMQ subscription; nil means ZeroMQ is disabled (polling-only mode).
-	// It is assigned once in InitializeMempool before the tipWatchdog goroutine is
-	// started, so the watchdog reads it without synchronization (the go statement that
-	// launches the watchdog happens-after the assignment).
 	mq *bchain.MQ
 	// callCtx is the base context for RPC calls (the embedded RPC client and the
 	// HTTP node clients); Shutdown cancels it so an in-flight sync call aborts
