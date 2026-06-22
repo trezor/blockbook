@@ -2022,7 +2022,11 @@ const (
 // the caller supplies the transport-specific cap (WS vs REST). transport labels
 // the emitted metrics with the serving surface.
 func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32, maxTxs int, transport string) (BalanceHistories, error) {
-	currencies = removeEmpty(currencies)
+	var err error
+	currencies, err = normalizeFiatCurrencies(currencies)
+	if err != nil {
+		return nil, err
+	}
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
