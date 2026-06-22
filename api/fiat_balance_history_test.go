@@ -3,6 +3,7 @@
 package api
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -202,6 +203,38 @@ func TestSetFiatRateToBalanceHistories_SkipsLookupWhenFiatRatesDisabled(t *testi
 	}
 	if calls != 0 {
 		t.Fatalf("expected 0 ticker lookup calls when fiat rates are disabled, got %d", calls)
+	}
+}
+
+func TestSetFiatRateToBalanceHistories_RejectsTooManyCurrenciesBeforeLookup(t *testing.T) {
+	histories := BalanceHistories{{Time: 100}}
+	w := &Worker{
+		fiatRates: &fiat.FiatRates{Enabled: true},
+	}
+	originalGetter := getTickersForTimestamps
+	defer func() {
+		getTickersForTimestamps = originalGetter
+	}()
+
+	calls := 0
+	getTickersForTimestamps = func(_ *fiat.FiatRates, _ []int64, _, _ string) (*[]*common.CurrencyRatesTicker, error) {
+		calls++
+		tickers := []*common.CurrencyRatesTicker{}
+		return &tickers, nil
+	}
+
+	currencies := make([]string, MaxFiatRatesCurrencies+1)
+	for i := range currencies {
+		currencies[i] = fmt.Sprintf("c%03d", i)
+	}
+	err := w.setFiatRateToBalanceHistories(histories, currencies, "address")
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
+	}
+	if calls != 0 {
+		t.Fatalf("expected ticker lookup not to be called, got %d calls", calls)
 	}
 }
 

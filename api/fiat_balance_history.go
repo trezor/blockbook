@@ -1,7 +1,6 @@
 package api
 
 import (
-	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -13,14 +12,6 @@ func normalizeBalanceHistoryPathLabel(pathLabel string) string {
 		return "unknown"
 	}
 	return pathLabel
-}
-
-func normalizeCurrenciesToLowercase(currencies []string) []string {
-	currenciesLowercase := make([]string, len(currencies))
-	for i := range currencies {
-		currenciesLowercase[i] = strings.ToLower(currencies[i])
-	}
-	return currenciesLowercase
 }
 
 func buildBalanceHistoryTimestamps(histories BalanceHistories) []int64 {
@@ -180,7 +171,10 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, curre
 		return nil
 	}
 	pathLabel = normalizeBalanceHistoryPathLabel(pathLabel)
-	currenciesLowercase := normalizeCurrenciesToLowercase(currencies)
+	currenciesLowercase, err := normalizeFiatCurrencies(currencies)
+	if err != nil {
+		return err
+	}
 	timestamps := buildBalanceHistoryTimestamps(histories)
 	tickers, batchFetchValid, reason, returnedTickers, err := w.lookupBalanceHistoryBatchTickers(timestamps, pathLabel, len(histories))
 	if batchFetchValid {
