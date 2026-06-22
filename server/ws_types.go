@@ -17,6 +17,8 @@ type WsReq struct {
 type WsRes struct {
 	ID   string      `json:"id" ts_doc:"Corresponding request identifier."`
 	Data interface{} `json:"data" ts_doc:"Payload of the response, structure depends on the request."`
+	// release, if non-nil, is invoked exactly once when this response leaves the out pipeline
+	release func()
 }
 
 type resultError struct {
