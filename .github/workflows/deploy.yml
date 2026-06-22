@@ -159,10 +159,10 @@ jobs:
 
       - name: Materialize blockbook runtime env
         env:
-          BB_ENV: ${{ secrets.BB_BLOCKBOOK_ENV }}
+          BB_ENV: ${{ secrets.BB_RUNTIME_ENV }}
         run: |
           if [ -z "$BB_ENV" ]; then
-            echo "BB_BLOCKBOOK_ENV secret not set; leaving any existing /etc/blockbook/blockbook.env untouched"
+            echo "BB_RUNTIME_ENV secret not set; leaving any existing /etc/blockbook/blockbook.env untouched"
             exit 0
           fi
           sudo install -d -m 0755 -o root -g root /etc/blockbook
