@@ -1411,15 +1411,14 @@ func (s *WebsocketServer) unsubscribeFiatRates(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
-func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
-	s.newBlockSubscriptionsLock.Lock()
-	defer s.newBlockSubscriptionsLock.Unlock()
+// newBlockNotification builds the subscribeNewBlock payload for a connected block. For EVM chains it
+// attaches block-level gas data so subscribers can project the next EIP-1559 base fee; EVMData stays
+// nil (evmData: null) for non-EVM chains and pre-London blocks (BaseFeePerGas absent).
+func newBlockNotification(block *bchain.Block) *WsNewBlock {
 	data := &WsNewBlock{
 		Height: block.Height,
 		Hash:   block.Hash,
 	}
-	// for EVM chains attach block-level gas data so subscribers can project the next EIP-1559 base fee;
-	// stays nil (evmData: null) for non-EVM chains and pre-London blocks
 	if bsd, ok := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData); ok && bsd != nil && bsd.BaseFeePerGas != nil {
 		data.EVMData = &EthereumGasData{
 			BaseFeePerGas: (*api.Amount)(bsd.BaseFeePerGas),
@@ -1427,6 +1426,13 @@ func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
 			BlockGasLimit: (*api.Amount)(bsd.GasLimit),
 		}
 	}
+	return data
+}
+
+func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
+	s.newBlockSubscriptionsLock.Lock()
+	defer s.newBlockSubscriptionsLock.Unlock()
+	data := newBlockNotification(block)
 	for c, id := range s.newBlockSubscriptions {
 		c.DataOut(&WsRes{
 			ID:   id,
