@@ -164,6 +164,23 @@ def normalize_coin_name(workspace: Path, coin: str) -> str:
     return coin
 
 
+def canonical_coin_name(coin: str, known_coins) -> str:
+    """Resolve a requested coin to its canonical key, accepting '_' where the
+    canonical (configs/coins) name uses '-'.
+
+    Unlike normalize_coin_name this matches against the already-resolved coin
+    set instead of the filesystem, so build/deploy selection does not depend on
+    the process working directory (the context was built from the workspace).
+    """
+    if coin in known_coins:
+        return coin
+    if "_" in coin:
+        candidate = coin.replace("_", "-")
+        if candidate in known_coins:
+            return candidate
+    return coin
+
+
 def validate_runner_map_configs(workspace: Path, runner_map: dict[str, str]) -> None:
     missing = []
     for coin in sorted(runner_map):
@@ -259,6 +276,15 @@ def deployability_error(
             "which has no connectivity tests in tests/tests.json"
         )
 
+    # Keep the test definitions but never deploy a coin flagged disabled (e.g. its
+    # backend/Blockbook is temporarily not deployed). Stays in sync with the
+    # disabled handling in tests/integration.go and tests/openapi/src/config.ts.
+    if test_cfg.get("disabled") is True:
+        return (
+            f"coin '{coin}' maps to test coin '{lookup_coin}' "
+            "which is disabled in tests/tests.json"
+        )
+
     return None
 
 
@@ -324,7 +350,7 @@ def resolve_build_selection(
 
     requested_all, requested = parse_coin_tokens(raw, allow_all=True)
     if not requested_all:
-        requested = [normalize_coin_name(Path.cwd(), coin) for coin in requested]
+        requested = [canonical_coin_name(coin, context.all_coins) for coin in requested]
     selected = context.all_coins if requested_all else requested
 
     unknown = [coin for coin in selected if coin not in context.all_coins]
@@ -380,7 +406,7 @@ def resolve_deploy_selection(context: CoinContext, raw: str) -> list[str]:
             "deploy does not support ALL; "
             f"deployable coins: {','.join(context.deployable_coins)}"
         )
-    requested = [normalize_coin_name(Path.cwd(), coin) for coin in requested]
+    requested = [canonical_coin_name(coin, context.all_coins) for coin in requested]
 
     unknown = [coin for coin in requested if coin not in context.all_coins]
     if unknown:

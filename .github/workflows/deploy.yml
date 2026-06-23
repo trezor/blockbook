@@ -226,6 +226,9 @@ jobs:
         env:
           BB_BUILD_ENV: dev
           CONNECTIVITY_REGEX: ${{ env.CONNECTIVITY_REGEX }}
+          # The freshly deployed nodes are reachable here, so verify backend RPC
+          # connectivity in addition to Blockbook (local runs skip the node checks).
+          BB_TEST_BACKEND_CONNECTIVITY: "1"
         run: make test-connectivity ARGS="-v"
 
       - name: Setup Node.js for OpenAPI tests

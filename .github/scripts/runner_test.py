@@ -4,6 +4,7 @@ from pathlib import Path
 
 from runner import (
     ValidationError,
+    canonical_coin_name,
     load_coin_context,
     resolve_build_selection,
     resolve_deploy_selection,
@@ -113,6 +114,44 @@ class RunnerSelectionTest(unittest.TestCase):
             "coin 'polygon_archive' is not deployable in dev",
         ):
             resolve_deploy_selection(context, "polygon_archive")
+
+    def test_deploy_rejects_disabled_coin_with_reason(self) -> None:
+        write_text(
+            self.workspace / "tests" / "tests.json",
+            '{"dogecoin":{"connectivity":{},"disabled":true},"base":{"connectivity":{}},'
+            '"polygon":{"connectivity":{}},"ethereum_classic":{"connectivity":{}}}',
+        )
+        context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
+
+        self.assertNotIn("dogecoin", context.deployable_coins)
+        self.assertIn("disabled in tests/tests.json", context.deployability_errors["dogecoin"])
+
+        with self.assertRaisesRegex(
+            ValidationError,
+            "is disabled in tests/tests.json",
+        ):
+            resolve_deploy_selection(context, "dogecoin")
+
+    def test_deploy_accepts_underscore_for_hyphenated_coin(self) -> None:
+        # Regression: deploy selection must resolve the "_" alias against the
+        # context's coins, not the process working directory.
+        context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
+
+        self.assertEqual(resolve_deploy_selection(context, "ethereum_classic"), ["ethereum-classic"])
+
+    def test_canonical_coin_name_preserves_underscore_native_coin(self) -> None:
+        # Pin the check ordering in canonical_coin_name: an underscore-native coin
+        # that exists as-is (e.g. base_archive, ethereum_testnet_sepolia) must be
+        # returned unchanged, NOT rewritten to a hyphen variant. Reordering the
+        # membership check after the "_"->"-" fallback would silently break
+        # selection of every such coin while leaving these tests green.
+        known = {"base_archive", "ethereum-classic"}
+        self.assertEqual(canonical_coin_name("base_archive", known), "base_archive")
+        # The "_"->"-" alias still resolves when the underscore form is not a coin.
+        self.assertEqual(canonical_coin_name("ethereum_classic", known), "ethereum-classic")
+        # An unknown coin with no hyphen alias is returned unchanged so the caller
+        # can reject it with a clear "unknown coin" error.
+        self.assertEqual(canonical_coin_name("nonexistent_coin", known), "nonexistent_coin")
 
 
 if __name__ == "__main__":

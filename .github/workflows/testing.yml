@@ -50,6 +50,9 @@ jobs:
       - name: Run connectivity tests
         env:
           BB_BUILD_ENV: dev
+          # CI can reach the node RPC backends directly, so check them too; local
+          # runs default to Blockbook-only connectivity.
+          BB_TEST_BACKEND_CONNECTIVITY: "1"
         run: make test-connectivity
 
   integration-tests:

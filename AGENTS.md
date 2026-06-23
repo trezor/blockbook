@@ -8,8 +8,12 @@ contrib/tests/run-unit-tests.sh [go args]
 ```
 Then connectivity tests :
 ```
-contrib/tests/run-integration-tests.sh -run 'TestIntegration/.*/connectivity' # make sure we can reach backends
+contrib/tests/run-integration-tests.sh -run 'TestIntegration/.*/connectivity' # make sure we can reach Blockbook
 ```
+Locally the connectivity tests only check Blockbook reachability; the raw
+backend/node RPC checks need direct node access (only routable from CI) and are
+skipped. Add `--backend-connectivity` (or export `BB_TEST_BACKEND_CONNECTIVITY=1`)
+to run them too — CI sets this automatically.
 Then continue with integration tests, but start narrow, broaden only when needed :
 ```
 contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main/rpc/GetBlock'
@@ -18,17 +22,26 @@ contrib/tests/run-integration-tests.sh -run 'TestIntegration/ethereum=main'
 ```
 Test path convention :
 ```
-TestIntegration/<coin>=main|test[#NN]/<connectivity|rpc|sync|api>/<subtest>[/<sub>]
+TestIntegration/<coin>=main|test[<suffix>]/<connectivity|rpc|sync|api>/<subtest>[/<sub>]
 ```
 
 - Avoid bitcoin during iteration : `bitcoin=main`'s `MempoolSync` and `GetTransactionForMempool` walk mainnet's
 mempool and are slow, prefer `bcash`.
 - Prefer `ethereum`, `bsc`, `tron`, and `avalanche` from the EVM family.
 - The coin segment comes from a `tests/tests.json` key: keys containing
-`_testnet` map to `<prefix>=test`, the rest to `<key>=main`
-(`bitcoin_regtest` → `bitcoin_regtest=main`). Collisions are disambiguated
-with `#01`, `#02`, ... — today `bitcoin=test` is testnet, `bitcoin=test#01`
-is testnet4.
+`_testnet` map to `<prefix>=test<suffix>` (the network suffix after `_testnet`
+is preserved), the rest to `<key>=main` (`bitcoin_regtest` →
+`bitcoin_regtest=main`). So `bitcoin_testnet` → `bitcoin=test`,
+`bitcoin_testnet4` → `bitcoin=test4`, `ethereum_testnet_sepolia` →
+`ethereum=test_sepolia`, `tron_testnet_nile` → `tron=test_nile`. The mapping is
+injective (distinct keys never collide), so no `#01`/`#02` disambiguation is
+needed. Keep `getMatchableName()` in `tests/integration.go` and
+`matchable_name()` in `.github/scripts/deploy_plan.py` in sync.
+- To temporarily retire a coin whose backend/Blockbook is not deployed without
+deleting its test definitions, add `"disabled": true` to its `tests/tests.json`
+entry. It is then skipped by the Go integration suite (`tests/integration.go`),
+the OpenAPI e2e selection (`tests/openapi/src/config.ts`), and deploy planning
+(`.github/scripts/runner.py`). Remove the flag to re-enable.
 - in case of unexpected integration test failures, you can run `contrib/scripts/blockbook_status.sh` or `contrib/scripts/backend_status.sh`
 scripts to check health of particular blockbook/backend instance
 - `contrib/gh-vars.sh` has a `_BB_GH_CACHE_VERSION` variable that must be bumped when the cache file format changes (e.g. the schema header or the structure of the exported env file) to invalidate stale caches

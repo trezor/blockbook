@@ -27,6 +27,10 @@ export type WsEnvelope = {
 export type TestConfig = Record<string, {
   api?: string[];
   connectivity?: string[];
+  // When true, the coin's test definitions are kept but skipped everywhere
+  // (e.g. backend/Blockbook temporarily not deployed). Kept in sync with the
+  // disabled handling in tests/integration.go and .github/scripts/runner.py.
+  disabled?: boolean;
 }>;
 
 export type CoinConfig = {

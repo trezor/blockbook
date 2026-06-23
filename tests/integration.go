@@ -67,9 +67,31 @@ func runIntegrationTests(t *testing.T) {
 	for _, coin := range keys {
 		cfg := tests[coin]
 		name := getMatchableName(coin)
+		if isDisabled(cfg) {
+			// Keep the test definitions in tests.json but skip execution, e.g. for
+			// a coin whose backend/Blockbook is temporarily not deployed. Surfaces
+			// as a visible SKIP instead of silently vanishing from the run.
+			t.Run(name, func(t *testing.T) { t.Skipf("%s is disabled in tests.json", coin) })
+			continue
+		}
 		t.Run(name, func(t *testing.T) { runTests(t, coin, cfg) })
 
 	}
+}
+
+// isDisabled reports whether a tests.json coin entry carries `"disabled": true`.
+// Must stay in sync with the disabled handling in .github/scripts/runner.py and
+// tests/openapi/src/config.ts.
+func isDisabled(cfg map[string]json.RawMessage) bool {
+	raw, ok := cfg["disabled"]
+	if !ok {
+		return false
+	}
+	var disabled bool
+	if err := json.Unmarshal(raw, &disabled); err != nil {
+		return false
+	}
+	return disabled
 }
 
 // supplyPlaceholderFeeProviderKeys gives the integration run placeholder API keys for
@@ -99,11 +121,16 @@ func loadTests(path string) (map[string]map[string]json.RawMessage, error) {
 }
 
 func getMatchableName(coin string) string {
-	if idx := strings.Index(coin, "_testnet"); idx != -1 {
-		return coin[:idx] + "=test"
-	} else {
-		return coin + "=main"
+	const marker = "_testnet"
+	if idx := strings.Index(coin, marker); idx != -1 {
+		// Preserve the network suffix (e.g. "_sepolia", "_nile", "4") so distinct
+		// testnets of the same coin get distinct names instead of all collapsing to
+		// "<coin>=test". Keeps the mapping injective, which lets the deploy
+		// connectivity regex target exactly one testnet. Must stay in sync with
+		// matchable_name() in .github/scripts/deploy_plan.py.
+		return coin[:idx] + "=test" + coin[idx+len(marker):]
 	}
+	return coin + "=main"
 }
 
 func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {
@@ -133,6 +160,10 @@ func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {
 	}
 
 	for test, c := range cfg {
+		if test == "disabled" {
+			// Reserved meta key handled in runIntegrationTests, not a test group.
+			continue
+		}
 		if reason, found := typescriptOwnedIntegrationTests[test]; found {
 			t.Run(test, func(t *testing.T) {
 				t.Skip(reason)
