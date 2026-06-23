@@ -1286,6 +1286,27 @@ func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 	return h.Hash(), nil
 }
 
+// returns early for pre-London blocks, populates EthereumBlockSpecificData
+func attachBlockGas(h *rpcHeader, existing *bchain.EthereumBlockSpecificData) *bchain.EthereumBlockSpecificData {
+	if h.BaseFeePerGas == "" {
+		return existing
+	}
+	bsd := existing
+	if bsd == nil {
+		bsd = &bchain.EthereumBlockSpecificData{}
+	}
+	if baseFee, err := hexutil.DecodeUint64(h.BaseFeePerGas); err == nil {
+		bsd.BaseFeePerGas = new(big.Int).SetUint64(baseFee)
+	}
+	if gasUsed, err := hexutil.DecodeUint64(h.GasUsed); err == nil {
+		bsd.GasUsed = new(big.Int).SetUint64(gasUsed)
+	}
+	if gasLimit, err := hexutil.DecodeUint64(h.GasLimit); err == nil {
+		bsd.GasLimit = new(big.Int).SetUint64(gasLimit)
+	}
+	return bsd
+}
+
 func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader, error) {
 	height, err := ethNumber(h.Number)
 	if err != nil {
@@ -1620,6 +1641,8 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		}
 	}
 
+	blockSpecificData = attachBlockGas(&head, blockSpecificData)
+
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
 		tx := &body.Transactions[i]
@@ -1847,6 +1870,47 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	return b.Client.EstimateGas(ctx, msg)
 }
 
+// getLatestBlockGas fetches the latest block's gasUsed and gasLimit, used by the frontend to
+// deterministically project the next block's EIP-1559 base fee. Returns nil values (without error)
+// for pre-London blocks where baseFeePerGas is absent, so the fields are omitted for non-EIP-1559 blocks.
+func (b *EthereumRPC) getLatestBlockGas() (gasUsed, gasLimit *big.Int, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	var blk struct {
+		GasUsed       string `json:"gasUsed"`
+		GasLimit      string `json:"gasLimit"`
+		BaseFeePerGas string `json:"baseFeePerGas"`
+	}
+	if err = b.RPC.CallContext(ctx, &blk, "eth_getBlockByNumber", "latest", false); err != nil {
+		return nil, nil, err
+	}
+	if blk.BaseFeePerGas == "" {
+		// pre-London block, no base fee projection possible
+		return nil, nil, nil
+	}
+	gu, err := hexutil.DecodeUint64(blk.GasUsed)
+	if err != nil {
+		return nil, nil, err
+	}
+	gl, err := hexutil.DecodeUint64(blk.GasLimit)
+	if err != nil {
+		return nil, nil, err
+	}
+	return new(big.Int).SetUint64(gu), new(big.Int).SetUint64(gl), nil
+}
+
+// setLatestBlockGas populates fees.BlockGasUsed/BlockGasLimit from the latest block.
+// A failure is logged but not fatal - the priority fees and baseFeePerGas remain usable.
+func (b *EthereumRPC) setLatestBlockGas(fees *bchain.Eip1559Fees) {
+	gasUsed, gasLimit, err := b.getLatestBlockGas()
+	if err != nil {
+		glog.Error("eth_getBlockByNumber latest for eip1559 block gas: ", err)
+		return
+	}
+	fees.BlockGasUsed = gasUsed
+	fees.BlockGasLimit = gasLimit
+}
+
 // EthereumTypeGetEip1559Fees retrieves Eip1559Fees, if supported
 func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) {
 	if !b.ChainConfig.Eip1559Fees {
@@ -1859,6 +1923,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			return nil, err
 		}
 		if fees != nil {
+			b.setLatestBlockGas(fees)
 			return fees, nil
 		}
 		// Fall back to on-chain estimation when the alternative provider is unsupported/stale/unready,
@@ -1929,6 +1994,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			fees.Instant = &f
 		}
 	}
+	b.setLatestBlockGas(&fees)
 	return &fees, err
 }
 
