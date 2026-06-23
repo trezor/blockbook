@@ -1067,6 +1067,8 @@ func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 		if eip1559 != nil {
 			eip1559Api = &api.Eip1559Fees{}
 			eip1559Api.BaseFeePerGas = (*api.Amount)(eip1559.BaseFeePerGas)
+			eip1559Api.BlockGasUsed = (*api.Amount)(eip1559.BlockGasUsed)
+			eip1559Api.BlockGasLimit = (*api.Amount)(eip1559.BlockGasLimit)
 			eip1559Api.Instant = eip1559FeesToApi(eip1559.Instant)
 			eip1559Api.High = eip1559FeesToApi(eip1559.High)
 			eip1559Api.Medium = eip1559FeesToApi(eip1559.Medium)
@@ -1411,24 +1413,30 @@ func (s *WebsocketServer) unsubscribeFiatRates(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
-func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
+func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
-	data := struct {
-		Height uint32 `json:"height"`
-		Hash   string `json:"hash"`
-	}{
-		Height: height,
-		Hash:   hash,
+	data := &WsNewBlock{
+		Height: block.Height,
+		Hash:   block.Hash,
+	}
+	// for EVM chains attach block-level gas data so subscribers can project the next EIP-1559 base fee;
+	// stays nil (evm_data: null) for non-EVM chains and pre-London blocks
+	if bsd, ok := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData); ok && bsd != nil && bsd.BaseFeePerGas != nil {
+		data.EVMData = &EthereumGasData{
+			BaseFeePerGas: (*api.Amount)(bsd.BaseFeePerGas),
+			BlockGasUsed:  (*api.Amount)(bsd.GasUsed),
+			BlockGasLimit: (*api.Amount)(bsd.GasLimit),
+		}
 	}
 	for c, id := range s.newBlockSubscriptions {
 		c.DataOut(&WsRes{
 			ID:   id,
-			Data: &data,
+			Data: data,
 		})
 	}
 	s.metrics.WebsocketNewBlockNotifications.Add(float64(len(s.newBlockSubscriptions)))
-	glog.V(2).Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
+	glog.V(2).Info("broadcasting new block ", block.Height, " ", block.Hash, " to ", len(s.newBlockSubscriptions), " channels")
 }
 
 // setConfirmedBlockTxMetadata normalizes parsed block transactions.
@@ -1584,7 +1592,7 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 func (s *WebsocketServer) OnNewBlock(block *bchain.Block) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
-	go s.onNewBlockAsync(block.Hash, block.Height)
+	go s.onNewBlockAsync(block)
 	if s.newBlockTxsSubscriptionCount > 0 {
 		// Skip per-tx address matching when nobody opted into newBlockTxs.
 		if ok, _ := s.trackWork(); ok {
