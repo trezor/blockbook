@@ -33,6 +33,11 @@ def build_connectivity_regex(names) -> str:
     # Anchor each name so e.g. "bitcoin=test" cannot substring-match the
     # "bitcoin=test4" subtest. Safe because matchable_name() is injective, so
     # Go never appends a "#NN" disambiguator that an anchor would exclude.
+    if not names:
+        # Fail closed: an empty alternation "()" matches the empty string, so
+        # `go test -run` would select EVERY connectivity subtest — the opposite
+        # of "no coins". Callers must filter to a non-empty set first.
+        raise ValueError("build_connectivity_regex requires at least one name")
     escaped = ["^" + re.escape(name) + "$" for name in names]
     return "TestIntegration/(" + "|".join(escaped) + ")/connectivity"
 

@@ -72,6 +72,12 @@ class ConnectivityRegexTest(unittest.TestCase):
         self.assertTrue(re.search(pattern, "ethereum=test_sepolia"))
         self.assertFalse(re.search(pattern, "ethereum=main"))
 
+    def test_empty_names_fails_closed(self) -> None:
+        # An empty alternation "()" would match every connectivity subtest, the
+        # opposite of selecting no coins; the function must refuse instead.
+        with self.assertRaises(ValueError):
+            build_connectivity_regex([])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from runner import (
     ValidationError,
+    canonical_coin_name,
     load_coin_context,
     resolve_build_selection,
     resolve_deploy_selection,
@@ -137,6 +138,20 @@ class RunnerSelectionTest(unittest.TestCase):
         context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
 
         self.assertEqual(resolve_deploy_selection(context, "ethereum_classic"), ["ethereum-classic"])
+
+    def test_canonical_coin_name_preserves_underscore_native_coin(self) -> None:
+        # Pin the check ordering in canonical_coin_name: an underscore-native coin
+        # that exists as-is (e.g. base_archive, ethereum_testnet_sepolia) must be
+        # returned unchanged, NOT rewritten to a hyphen variant. Reordering the
+        # membership check after the "_"->"-" fallback would silently break
+        # selection of every such coin while leaving these tests green.
+        known = {"base_archive", "ethereum-classic"}
+        self.assertEqual(canonical_coin_name("base_archive", known), "base_archive")
+        # The "_"->"-" alias still resolves when the underscore form is not a coin.
+        self.assertEqual(canonical_coin_name("ethereum_classic", known), "ethereum-classic")
+        # An unknown coin with no hyphen alias is returned unchanged so the caller
+        # can reject it with a clear "unknown coin" error.
+        self.assertEqual(canonical_coin_name("nonexistent_coin", known), "nonexistent_coin")
 
 
 if __name__ == "__main__":

@@ -50,6 +50,10 @@ export function resolveSelectedCoins(config: TestConfig) {
       continue;
     }
     seen.add(coin);
+    // Skip coins flagged "disabled" in tests.json. Kept in sync with the disabled
+    // handling in tests/integration.go and .github/scripts/runner.py. The default
+    // selection filter above already drops disabled coins; this guard additionally
+    // covers a coin requested explicitly via OPENAPI_COINS.
     if (config[coin]?.disabled) {
       console.log(`OpenAPI e2e: ${coinOrConfig} maps to ${coin}, which is disabled in tests/tests.json; skipping.`);
       continue;
