@@ -677,7 +677,9 @@ func (m *consensusVersionMonitor) shutdown() {
 
 // InitAlternativeProviders initializes alternative providers
 func (b *EthereumRPC) InitAlternativeProviders() error {
-	b.initAlternativeFeeProvider()
+	if err := b.initAlternativeFeeProvider(); err != nil {
+		return err
+	}
 
 	// Env prefix follows explicit network aliases such as OP/BASE, otherwise ETH.
 	network := b.ChainConfig.Network
@@ -874,25 +876,28 @@ func (b *EthereumRPC) subscribe(name string, f func() (bchain.EVMClientSubscript
 	return nil
 }
 
-func (b *EthereumRPC) initAlternativeFeeProvider() {
+// initAlternativeFeeProvider sets up the configured EVM alternative fee provider.
+// When a provider is explicitly selected in the coin config but cannot be
+// constructed (for example a required API-key env var such as INFURA_API_KEY is
+// missing), the error is returned so startup fails fast rather than silently
+// reverting to default fee estimation.
+func (b *EthereumRPC) initAlternativeFeeProvider() error {
 	var err error
 	if b.ChainConfig.AlternativeEstimateFee == "1inch" {
 		if b.alternativeFeeProvider, err = NewOneInchFeesProvider(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
-			glog.Error("New1InchFeesProvider error ", err, " Reverting to default estimateFee functionality")
-			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
+			return err
 		}
 	} else if b.ChainConfig.AlternativeEstimateFee == "infura" {
 		if b.alternativeFeeProvider, err = NewInfuraFeesProvider(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
-			glog.Error("NewInfuraFeesProvider error ", err, " Reverting to default estimateFee functionality")
-			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
+			return err
 		}
 	}
 	if b.alternativeFeeProvider != nil {
 		glog.Info("Using alternative fee provider ", b.ChainConfig.AlternativeEstimateFee)
 	}
-
+	return nil
 }
 
 func (b *EthereumRPC) closeRPC() {

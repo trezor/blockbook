@@ -90,7 +90,8 @@ type TronRPC struct {
 	*eth.EthereumRPC
 	Parser      *TronParser
 	ChainConfig *TronConfiguration
-	mq          *bchain.MQ
+	// mq is the ZeroMQ subscription; nil means ZeroMQ is disabled (polling-only mode).
+	mq *bchain.MQ
 	// callCtx is the base context for RPC calls (the embedded RPC client and the
 	// HTTP node clients); Shutdown cancels it so an in-flight sync call aborts
 	// promptly. The rpc-client side is also covered by CloseRPC; this additionally
@@ -506,7 +507,14 @@ func (b *TronRPC) newBlockNotifier() {
 // resync tick. Started exactly once via newBlockNotifyOnce.
 func (b *TronRPC) tipWatchdog() {
 	threshold := b.TipStaleThreshold()
-	interval := threshold / 3
+	var interval time.Duration
+	if b.mq == nil {
+		// Polling-only mode: sample at the chain's block cadence, subject to the
+		// shared 5-60s clamp below (so sub-5s chains poll at the 5s floor).
+		interval = time.Duration(b.ChainConfig.AverageBlockTimeMs) * time.Millisecond
+	} else {
+		interval = threshold / 3
+	}
 	if interval < 5*time.Second {
 		interval = 5 * time.Second
 	}
@@ -530,6 +538,24 @@ func (b *TronRPC) tipWatchdogTick(threshold time.Duration) {
 	// Heartbeat: prove the watchdog goroutine is still ticking (see eth tipWatchdogTick).
 	// rate(blockbook_backend_subscription_events{event="watchdog_tick"})==0 means it died.
 	b.ObserveSubscriptionEvent("zeromq", "watchdog_tick")
+
+	// Polling-only mode (ZeroMQ disabled): always poll the tip directly.
+	// lastNotifyNs is never armed in this mode so the staleness gate below would never fire;
+	// bypass it entirely and drive sync from the ticker.
+	if b.mq == nil {
+		updated, err := b.refreshBestHeaderFromChain()
+		if err != nil {
+			glog.Error("TronRPC: tip watchdog tip poll error ", err)
+			return
+		}
+		if updated && b.PushHandler != nil {
+			b.ObserveSubscriptionEvent("zeromq", "watchdog_tip_advanced")
+			b.PushHandler(bchain.NotificationNewBlock)
+			b.PushHandler(bchain.NotificationNewTx)
+		}
+		return
+	}
+
 	lastNs := b.lastNotifyNs.Load()
 	if lastNs == 0 {
 		return
@@ -593,31 +619,39 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 		return errors.New("Tron Mempool not created")
 	}
 	b.Mempool.OnNewTx = onNewTx
+
+	if b.ChainConfig.MessageQueueBinding == "" {
+		glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
+	} else {
+		if b.mq == nil {
+			tronTopics := bchain.SubscriptionTopics{
+				BlockSubscribe: "block",
+				BlockReceive:   "blockTrigger",
+				TxSubscribe:    "",
+				TxReceive:      "",
+			}
+
+			mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.handleMQNotification, tronTopics)
+			if err != nil {
+				return err
+			}
+			b.mq = mq
+		}
+
+		// Arm the watchdog's staleness clock once the ZeroMQ feed is established, not on
+		// the first notification that advances the tip. Otherwise a feed that never
+		// advances would leave lastNotifyNs at 0 and the watchdog's (lastNs == 0) gate
+		// disabled (see EthereumRPC.subscribeEvents for the same fix on the EVM path).
+		b.markNotifyAlive()
+	}
+
+	// Start the watchdog/notifier goroutines last, after b.mq is set: the watchdog
+	// reads b.mq to choose polling-only vs ZeroMQ mode, and launching it after the
+	// (write-once) assignment makes that value visible without synchronization.
 	b.newBlockNotifyOnce.Do(func() {
 		go b.newBlockNotifier()
 		go b.tipWatchdog()
 	})
-
-	if b.mq == nil {
-		tronTopics := bchain.SubscriptionTopics{
-			BlockSubscribe: "block",
-			BlockReceive:   "blockTrigger",
-			TxSubscribe:    "",
-			TxReceive:      "",
-		}
-
-		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.handleMQNotification, tronTopics)
-		if err != nil {
-			return err
-		}
-		b.mq = mq
-	}
-
-	// Arm the watchdog's staleness clock once the ZeroMQ feed is established, not on
-	// the first notification that advances the tip. Otherwise a feed that never
-	// advances would leave lastNotifyNs at 0 and the watchdog's (lastNs == 0) gate
-	// disabled (see EthereumRPC.subscribeEvents for the same fix on the EVM path).
-	b.markNotifyAlive()
 
 	return nil
 }

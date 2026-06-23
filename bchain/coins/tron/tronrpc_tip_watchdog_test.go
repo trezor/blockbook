@@ -102,3 +102,47 @@ func TestTronTipWatchdogPollDoesNotRefreshLiveness(t *testing.T) {
 		t.Fatalf("watchdog poll refreshed liveness (lastNotifyNs %d -> %d); a permanently dead feed would be masked", stale, got)
 	}
 }
+
+// TestTronTipWatchdogTickPollingOnlyDoesNotArmLiveness verifies that the
+// polling-only path does not set lastNotifyNs. That field is reserved for real
+// ZeroMQ deliveries; if the poll set it, a permanently dead ZeroMQ feed would
+// look alive and subscription_age_seconds would never climb past the threshold.
+func TestTronTipWatchdogTickPollingOnlyDoesNotArmLiveness(t *testing.T) {
+	ethRPC := &eth.EthereumRPC{ChainConfig: &eth.Configuration{AverageBlockTimeMs: 3000}, Timeout: time.Second}
+	ethRPC.Client = &stubHeaderClient{height: 200}
+	ethRPC.PushHandler = func(bchain.NotificationType) {}
+	b := &TronRPC{EthereumRPC: ethRPC, solidityNodeHTTP: stubTronHTTP{}}
+	// lastNotifyNs starts at 0 (never armed in polling-only mode).
+
+	b.tipWatchdogTick(time.Hour)
+
+	if got := b.lastNotifyNs.Load(); got != 0 {
+		t.Fatalf("polling-only mode armed liveness (lastNotifyNs = %d); a dead ZeroMQ feed would be masked", got)
+	}
+}
+
+// TestTronTipWatchdogTickPollingOnlyImmediate verifies that when ZeroMQ is
+// disabled (b.mq == nil), tipWatchdogTick polls the tip immediately without
+// requiring lastNotifyNs to be armed and without waiting for the stale threshold.
+// In ZeroMQ mode a lastNs==0 causes an early return; polling-only mode must
+// bypass that gate entirely.
+func TestTronTipWatchdogTickPollingOnlyImmediate(t *testing.T) {
+	pushes := make(chan bchain.NotificationType, 4)
+	ethRPC := &eth.EthereumRPC{ChainConfig: &eth.Configuration{AverageBlockTimeMs: 3000}, Timeout: time.Second}
+	ethRPC.Client = &stubHeaderClient{height: 200}
+	ethRPC.PushHandler = func(nt bchain.NotificationType) { pushes <- nt }
+	b := &TronRPC{EthereumRPC: ethRPC, solidityNodeHTTP: stubTronHTTP{}}
+
+	b.tipWatchdogTick(time.Hour)
+
+	for _, want := range []bchain.NotificationType{bchain.NotificationNewBlock, bchain.NotificationNewTx} {
+		select {
+		case nt := <-pushes:
+			if nt != want {
+				t.Fatalf("pushed %v, want %v", nt, want)
+			}
+		default:
+			t.Fatalf("polling-only mode did not push %v; tipWatchdogTick returned early on lastNs==0 gate", want)
+		}
+	}
+}
