@@ -1926,6 +1926,14 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	hs, _ := json.Marshal(h)
 	baseFee, _ := hexutil.DecodeUint64(h.BaseFeePerGas[blocks-1])
 	fees.BaseFeePerGas = big.NewInt(int64(baseFee))
+	// We expose only baseFeePerGas here and deliberately do NOT add a separate "next block" base-fee
+	// field. eth_feeHistory returns one extra projected element beyond the requested range, but its
+	// meaning is backend-dependent: nodes with no distinct pending block (e.g. Erigon, which ethereum
+	// mainnet uses) drop the extra element, so baseFeePerGas[blocks-1] is already the next block's
+	// projected fee; other backends (some L2s) keep it and shift the indices, making the extra element
+	// either N+1 or an N+2 estimate computed off an incomplete pending block. No single field can
+	// describe all of these. Clients that need an exact next-block base fee should use the
+	// subscribeNewBlock evmData push, which carries the real previous-block header.
 	maxBasePriorityFee := maxPriorityFeePerGas.ToInt().Int64()
 	glog.Info("eth_maxPriorityFeePerGas ", maxPriorityFeePerGas)
 	glog.Info("eth_feeHistory ", string(hs))
