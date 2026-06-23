@@ -1870,47 +1870,6 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	return b.Client.EstimateGas(ctx, msg)
 }
 
-// getLatestBlockGas fetches the latest block's gasUsed and gasLimit, used by the frontend to
-// deterministically project the next block's EIP-1559 base fee. Returns nil values (without error)
-// for pre-London blocks where baseFeePerGas is absent, so the fields are omitted for non-EIP-1559 blocks.
-func (b *EthereumRPC) getLatestBlockGas() (gasUsed, gasLimit *big.Int, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	var blk struct {
-		GasUsed       string `json:"gasUsed"`
-		GasLimit      string `json:"gasLimit"`
-		BaseFeePerGas string `json:"baseFeePerGas"`
-	}
-	if err = b.RPC.CallContext(ctx, &blk, "eth_getBlockByNumber", "latest", false); err != nil {
-		return nil, nil, err
-	}
-	if blk.BaseFeePerGas == "" {
-		// pre-London block, no base fee projection possible
-		return nil, nil, nil
-	}
-	gu, err := hexutil.DecodeUint64(blk.GasUsed)
-	if err != nil {
-		return nil, nil, err
-	}
-	gl, err := hexutil.DecodeUint64(blk.GasLimit)
-	if err != nil {
-		return nil, nil, err
-	}
-	return new(big.Int).SetUint64(gu), new(big.Int).SetUint64(gl), nil
-}
-
-// setLatestBlockGas populates fees.BlockGasUsed/BlockGasLimit from the latest block.
-// A failure is logged but not fatal - the priority fees and baseFeePerGas remain usable.
-func (b *EthereumRPC) setLatestBlockGas(fees *bchain.Eip1559Fees) {
-	gasUsed, gasLimit, err := b.getLatestBlockGas()
-	if err != nil {
-		glog.Error("eth_getBlockByNumber latest for eip1559 block gas: ", err)
-		return
-	}
-	fees.BlockGasUsed = gasUsed
-	fees.BlockGasLimit = gasLimit
-}
-
 // EthereumTypeGetEip1559Fees retrieves Eip1559Fees, if supported
 func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) {
 	if !b.ChainConfig.Eip1559Fees {
@@ -1923,7 +1882,6 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			return nil, err
 		}
 		if fees != nil {
-			b.setLatestBlockGas(fees)
 			return fees, nil
 		}
 		// Fall back to on-chain estimation when the alternative provider is unsupported/stale/unready,
@@ -1994,7 +1952,6 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			fees.Instant = &f
 		}
 	}
-	b.setLatestBlockGas(&fees)
 	return &fees, err
 }
 

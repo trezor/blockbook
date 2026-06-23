@@ -820,10 +820,6 @@ export interface Eip1559Fee {
 }
 export interface Eip1559Fees {
     baseFeePerGas?: string;
-    /** Total gas used by the latest block (decimal). */
-    blockGasUsed?: string;
-    /** Gas limit of the latest block (decimal). */
-    blockGasLimit?: string;
     low?: Eip1559Fee;
     medium?: Eip1559Fee;
     high?: Eip1559Fee;

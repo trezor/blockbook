@@ -1067,8 +1067,6 @@ func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 		if eip1559 != nil {
 			eip1559Api = &api.Eip1559Fees{}
 			eip1559Api.BaseFeePerGas = (*api.Amount)(eip1559.BaseFeePerGas)
-			eip1559Api.BlockGasUsed = (*api.Amount)(eip1559.BlockGasUsed)
-			eip1559Api.BlockGasLimit = (*api.Amount)(eip1559.BlockGasLimit)
 			eip1559Api.Instant = eip1559FeesToApi(eip1559.Instant)
 			eip1559Api.High = eip1559FeesToApi(eip1559.High)
 			eip1559Api.Medium = eip1559FeesToApi(eip1559.Medium)

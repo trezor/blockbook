@@ -669,8 +669,6 @@ type Eip1559Fee struct {
 // Eip1559Fees
 type Eip1559Fees struct {
 	BaseFeePerGas              *Amount     `json:"baseFeePerGas,omitempty"`
-	BlockGasUsed               *Amount     `json:"blockGasUsed,omitempty" ts_doc:"Total gas used by the latest block (decimal)."`
-	BlockGasLimit              *Amount     `json:"blockGasLimit,omitempty" ts_doc:"Gas limit of the latest block (decimal)."`
 	Low                        *Eip1559Fee `json:"low,omitempty"`
 	Medium                     *Eip1559Fee `json:"medium,omitempty"`
 	High                       *Eip1559Fee `json:"high,omitempty"`
