@@ -2965,6 +2965,34 @@ components:
           type: string
           enum: [up, down]
 
+    EthereumGasData:
+      type: object
+      description: >
+        EVM block-level gas figures pushed with subscribeNewBlock notifications, used by the
+        frontend to deterministically project the next block's EIP-1559 base fee. Decimal strings,
+        omitted for pre-London blocks.
+      properties:
+        baseFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        blockGasUsed:
+          $ref: "#/components/schemas/AmountString"
+        blockGasLimit:
+          $ref: "#/components/schemas/AmountString"
+
+    WsNewBlock:
+      type: object
+      description: Pushed to subscribeNewBlock subscribers when a new block is connected.
+      properties:
+        height:
+          type: number
+        hash:
+          type: string
+        evmData:
+          description: EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains.
+          oneOf:
+            - $ref: "#/components/schemas/EthereumGasData"
+            - type: "null"
+
     WsEstimateFeeRes:
       type: object
       properties:
