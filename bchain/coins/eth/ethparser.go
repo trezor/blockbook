@@ -90,13 +90,16 @@ func (p *EthereumParser) AddressContractsCacheConfig() AddressContractsCacheConf
 }
 
 type rpcHeader struct {
-	Hash       string `json:"hash"`
-	ParentHash string `json:"parentHash"`
-	Difficulty string `json:"difficulty"`
-	Number     string `json:"number"`
-	Time       string `json:"timestamp"`
-	Size       string `json:"size"`
-	Nonce      string `json:"nonce"`
+	Hash          string `json:"hash"`
+	ParentHash    string `json:"parentHash"`
+	Difficulty    string `json:"difficulty"`
+	Number        string `json:"number"`
+	Time          string `json:"timestamp"`
+	Size          string `json:"size"`
+	Nonce         string `json:"nonce"`
+	GasUsed       string `json:"gasUsed"`
+	GasLimit      string `json:"gasLimit"`
+	BaseFeePerGas string `json:"baseFeePerGas"`
 }
 
 type rpcLogWithTxHash struct {
