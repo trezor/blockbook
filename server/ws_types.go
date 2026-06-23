@@ -148,6 +148,21 @@ type WsEstimateFeeRes struct {
 	Eip1559    *api.Eip1559Fees `json:"eip1559,omitempty"`
 }
 
+// EthereumGasData carries EVM block-level gas figures used by the frontend to deterministically
+// project the next block's EIP-1559 base fee. Decimal strings, omitted for pre-London blocks.
+type EthereumGasData struct {
+	BaseFeePerGas *api.Amount `json:"baseFeePerGas,omitempty" ts_doc:"Base fee per gas of the new block (post-London)."`
+	BlockGasUsed  *api.Amount `json:"blockGasUsed,omitempty" ts_doc:"Total gas used by the new block (decimal)."`
+	BlockGasLimit *api.Amount `json:"blockGasLimit,omitempty" ts_doc:"Gas limit of the new block (decimal)."`
+}
+
+// WsNewBlock is pushed to subscribeNewBlock subscribers when a new block is connected.
+type WsNewBlock struct {
+	Height  uint32           `json:"height" ts_doc:"Height of the new block."`
+	Hash    string           `json:"hash" ts_doc:"Hash of the new block."`
+	EVMData *EthereumGasData `json:"evm_data" ts_doc:"EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains."`
+}
+
 // WsLongTermFeeRateRes is returned in response to a long term fee rate request.
 type WsLongTermFeeRateRes struct {
 	FeePerUnit string `json:"feePerUnit" ts_doc:"Long term fee rate (in sat/kByte)."`
