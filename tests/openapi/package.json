@@ -17,7 +17,7 @@
     "openapi-typescript": "7.10.1",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
-    "undici": "6.25.0",
+    "undici": "6.27.0",
     "ws": "8.18.3",
     "yaml": "2.6.1"
   }
