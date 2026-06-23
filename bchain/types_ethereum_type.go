@@ -262,8 +262,6 @@ type Eip1559Fee struct {
 // Eip1559Fees
 type Eip1559Fees struct {
 	BaseFeePerGas              *big.Int    `json:"baseFeePerGas,omitempty"`
-	BlockGasUsed               *big.Int    `json:"blockGasUsed,omitempty"`
-	BlockGasLimit              *big.Int    `json:"blockGasLimit,omitempty"`
 	Low                        *Eip1559Fee `json:"low,omitempty"`
 	Medium                     *Eip1559Fee `json:"medium,omitempty"`
 	High                       *Eip1559Fee `json:"high,omitempty"`

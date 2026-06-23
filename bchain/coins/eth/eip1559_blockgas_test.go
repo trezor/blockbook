@@ -3,132 +3,17 @@
 package eth
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/trezor/blockbook/bchain"
 )
-
-// blockGasRPCStub serves a single CallContext response (raw JSON) or a transport error,
-// recording the method and args so tests can assert the "latest" block tag is requested.
-type blockGasRPCStub struct {
-	raw     string
-	err     error
-	method  string
-	gotArgs []interface{}
-}
-
-func (s *blockGasRPCStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (s *blockGasRPCStub) Close() {}
-
-func (s *blockGasRPCStub) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	s.method = method
-	s.gotArgs = args
-	if s.err != nil {
-		return s.err
-	}
-	return json.Unmarshal([]byte(s.raw), result)
-}
 
 func equalBigInt(a, b *big.Int) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
 	return a.Cmp(b) == 0
-}
-
-func TestGetLatestBlockGas(t *testing.T) {
-	tests := []struct {
-		name      string
-		raw       string
-		err       error
-		wantUsed  *big.Int
-		wantLimit *big.Int
-		wantErr   bool
-	}{
-		{
-			name:      "post-London populates gas",
-			raw:       `{"gasUsed":"0x5208","gasLimit":"0x1c9c380","baseFeePerGas":"0x7"}`,
-			wantUsed:  big.NewInt(21000),
-			wantLimit: big.NewInt(30000000),
-		},
-		{
-			name: "pre-London (no baseFee) omits gas",
-			raw:  `{"gasUsed":"0x5208","gasLimit":"0x1c9c380"}`,
-		},
-		{
-			name:    "rpc error propagates",
-			err:     errors.New("boom"),
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stub := &blockGasRPCStub{raw: tt.raw, err: tt.err}
-			b := &EthereumRPC{RPC: stub, Timeout: time.Second}
-			gu, gl, err := b.getLatestBlockGas()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !equalBigInt(gu, tt.wantUsed) {
-				t.Errorf("gasUsed = %v, want %v", gu, tt.wantUsed)
-			}
-			if !equalBigInt(gl, tt.wantLimit) {
-				t.Errorf("gasLimit = %v, want %v", gl, tt.wantLimit)
-			}
-			if stub.method != "eth_getBlockByNumber" {
-				t.Errorf("method = %q, want eth_getBlockByNumber", stub.method)
-			}
-			if len(stub.gotArgs) < 1 || stub.gotArgs[0] != "latest" {
-				t.Errorf("args = %v, want first arg \"latest\"", stub.gotArgs)
-			}
-		})
-	}
-}
-
-func TestSetLatestBlockGas(t *testing.T) {
-	t.Run("success sets fields", func(t *testing.T) {
-		b := &EthereumRPC{RPC: &blockGasRPCStub{raw: `{"gasUsed":"0x5208","gasLimit":"0x3938700","baseFeePerGas":"0x7"}`}, Timeout: time.Second}
-		fees := &bchain.Eip1559Fees{}
-		b.setLatestBlockGas(fees)
-		if !equalBigInt(fees.BlockGasUsed, big.NewInt(21000)) {
-			t.Errorf("BlockGasUsed = %v, want 21000", fees.BlockGasUsed)
-		}
-		if !equalBigInt(fees.BlockGasLimit, big.NewInt(60000000)) {
-			t.Errorf("BlockGasLimit = %v, want 60000000", fees.BlockGasLimit)
-		}
-	})
-
-	t.Run("rpc error leaves fields nil (non-fatal)", func(t *testing.T) {
-		b := &EthereumRPC{RPC: &blockGasRPCStub{err: errors.New("boom")}, Timeout: time.Second}
-		fees := &bchain.Eip1559Fees{}
-		b.setLatestBlockGas(fees)
-		if fees.BlockGasUsed != nil || fees.BlockGasLimit != nil {
-			t.Errorf("expected nil gas fields on error, got used=%v limit=%v", fees.BlockGasUsed, fees.BlockGasLimit)
-		}
-	})
-
-	t.Run("pre-London leaves fields nil", func(t *testing.T) {
-		b := &EthereumRPC{RPC: &blockGasRPCStub{raw: `{"gasUsed":"0x5208","gasLimit":"0x1c9c380"}`}, Timeout: time.Second}
-		fees := &bchain.Eip1559Fees{}
-		b.setLatestBlockGas(fees)
-		if fees.BlockGasUsed != nil || fees.BlockGasLimit != nil {
-			t.Errorf("expected nil gas fields pre-London, got used=%v limit=%v", fees.BlockGasUsed, fees.BlockGasLimit)
-		}
-	})
 }
 
 func TestAttachBlockGas(t *testing.T) {
@@ -174,6 +59,12 @@ func TestAttachBlockGas(t *testing.T) {
 		}
 		if !equalBigInt(got.BaseFeePerGas, big.NewInt(7)) {
 			t.Errorf("BaseFeePerGas = %v, want 7", got.BaseFeePerGas)
+		}
+		if !equalBigInt(got.GasUsed, big.NewInt(1)) {
+			t.Errorf("GasUsed = %v, want 1", got.GasUsed)
+		}
+		if !equalBigInt(got.GasLimit, big.NewInt(2)) {
+			t.Errorf("GasLimit = %v, want 2", got.GasLimit)
 		}
 	})
 }
