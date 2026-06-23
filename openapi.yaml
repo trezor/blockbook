@@ -2981,6 +2981,7 @@ components:
 
     WsNewBlock:
       type: object
+      required: [height, hash, evmData]
       description: Pushed to subscribeNewBlock subscribers when a new block is connected.
       properties:
         height:
