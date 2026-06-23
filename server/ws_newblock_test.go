@@ -8,7 +8,57 @@ import (
 	"testing"
 
 	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
 )
+
+// TestNewBlockNotification covers the block -> subscribeNewBlock payload mapping: only EVM
+// post-London blocks (EthereumBlockSpecificData with BaseFeePerGas set) carry evmData; non-EVM,
+// pre-London, and missing coin-specific data leave it nil.
+func TestNewBlockNotification(t *testing.T) {
+	t.Run("non-EVM block has nil EVMData", func(t *testing.T) {
+		got := newBlockNotification(&bchain.Block{BlockHeader: bchain.BlockHeader{Height: 7, Hash: "0xh"}})
+		if got.Height != 7 || got.Hash != "0xh" {
+			t.Errorf("height/hash = %d/%q, want 7/0xh", got.Height, got.Hash)
+		}
+		if got.EVMData != nil {
+			t.Errorf("expected nil EVMData for non-EVM block, got %+v", got.EVMData)
+		}
+	})
+
+	t.Run("EVM post-London block carries gas data from the block header", func(t *testing.T) {
+		block := &bchain.Block{
+			BlockHeader: bchain.BlockHeader{Height: 7, Hash: "0xh"},
+			CoinSpecificData: &bchain.EthereumBlockSpecificData{
+				BaseFeePerGas: big.NewInt(7),
+				GasUsed:       big.NewInt(21000),
+				GasLimit:      big.NewInt(30000000),
+			},
+		}
+		got := newBlockNotification(block)
+		if got.EVMData == nil {
+			t.Fatal("expected EVMData, got nil")
+		}
+		if (*big.Int)(got.EVMData.BaseFeePerGas).Cmp(big.NewInt(7)) != 0 {
+			t.Errorf("BaseFeePerGas = %v, want 7", got.EVMData.BaseFeePerGas)
+		}
+		if (*big.Int)(got.EVMData.BlockGasUsed).Cmp(big.NewInt(21000)) != 0 {
+			t.Errorf("BlockGasUsed = %v, want 21000", got.EVMData.BlockGasUsed)
+		}
+		if (*big.Int)(got.EVMData.BlockGasLimit).Cmp(big.NewInt(30000000)) != 0 {
+			t.Errorf("BlockGasLimit = %v, want 30000000", got.EVMData.BlockGasLimit)
+		}
+	})
+
+	t.Run("EVM pre-London block (no base fee) has nil EVMData", func(t *testing.T) {
+		block := &bchain.Block{
+			BlockHeader:      bchain.BlockHeader{Height: 7, Hash: "0xh"},
+			CoinSpecificData: &bchain.EthereumBlockSpecificData{GasUsed: big.NewInt(21000), GasLimit: big.NewInt(30000000)},
+		}
+		if got := newBlockNotification(block); got.EVMData != nil {
+			t.Errorf("expected nil EVMData pre-London, got %+v", got.EVMData)
+		}
+	})
+}
 
 // TestWsNewBlockJSON pins the subscribeNewBlock wire shape: non-EVM chains serialize evmData as
 // null (height/hash unchanged), while EVM chains carry decimal-string gas figures for the EIP-1559 projection.
