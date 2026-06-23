@@ -10,7 +10,7 @@ import (
 	"github.com/trezor/blockbook/api"
 )
 
-// TestWsNewBlockJSON pins the subscribeNewBlock wire shape: non-EVM chains serialize evm_data as
+// TestWsNewBlockJSON pins the subscribeNewBlock wire shape: non-EVM chains serialize evmData as
 // null (height/hash unchanged), while EVM chains carry decimal-string gas figures for the EIP-1559 projection.
 func TestWsNewBlockJSON(t *testing.T) {
 	tests := []struct {
@@ -19,9 +19,9 @@ func TestWsNewBlockJSON(t *testing.T) {
 		want string
 	}{
 		{
-			name: "non-EVM emits evm_data null",
+			name: "non-EVM emits evmData null",
 			in:   WsNewBlock{Height: 5, Hash: "0xabc"},
-			want: `{"height":5,"hash":"0xabc","evm_data":null}`,
+			want: `{"height":5,"hash":"0xabc","evmData":null}`,
 		},
 		{
 			name: "EVM emits decimal gas figures",
@@ -34,7 +34,7 @@ func TestWsNewBlockJSON(t *testing.T) {
 					BlockGasLimit: (*api.Amount)(big.NewInt(30000000)),
 				},
 			},
-			want: `{"height":5,"hash":"0xabc","evm_data":{"baseFeePerGas":"7","blockGasUsed":"21000","blockGasLimit":"30000000"}}`,
+			want: `{"height":5,"hash":"0xabc","evmData":{"baseFeePerGas":"7","blockGasUsed":"21000","blockGasLimit":"30000000"}}`,
 		},
 	}
 	for _, tt := range tests {
