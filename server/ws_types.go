@@ -160,7 +160,7 @@ type EthereumGasData struct {
 type WsNewBlock struct {
 	Height  uint32           `json:"height" ts_doc:"Height of the new block."`
 	Hash    string           `json:"hash" ts_doc:"Hash of the new block."`
-	EVMData *EthereumGasData `json:"evm_data" ts_doc:"EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains."`
+	EVMData *EthereumGasData `json:"evmData" ts_doc:"EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains."`
 }
 
 // WsLongTermFeeRateRes is returned in response to a long term fee rate request.

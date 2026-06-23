@@ -860,7 +860,7 @@ export interface WsNewBlock {
     /** Hash of the new block. */
     hash: string;
     /** EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains. */
-    evm_data: EthereumGasData | null;
+    evmData: EthereumGasData | null;
 }
 export interface WsSendTransactionReq {
     /** Hex-encoded transaction data to broadcast (string format). */

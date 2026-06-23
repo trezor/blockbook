@@ -1419,7 +1419,7 @@ func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
 		Hash:   block.Hash,
 	}
 	// for EVM chains attach block-level gas data so subscribers can project the next EIP-1559 base fee;
-	// stays nil (evm_data: null) for non-EVM chains and pre-London blocks
+	// stays nil (evmData: null) for non-EVM chains and pre-London blocks
 	if bsd, ok := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData); ok && bsd != nil && bsd.BaseFeePerGas != nil {
 		data.EVMData = &EthereumGasData{
 			BaseFeePerGas: (*api.Amount)(bsd.BaseFeePerGas),
