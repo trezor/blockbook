@@ -117,7 +117,7 @@ func (p *oneInchFeeProvider) processData(data *oneInchFeeFeesResult) bool {
 	fees.Low = oneInchFeesFromResult(&data.Low)
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	p.lastSync = time.Now()
+	p.observeSync(time.Now())
 	p.eip1559Fees = &fees
 	return true
 }
