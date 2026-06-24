@@ -51,7 +51,7 @@ jobs:
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Validate branch or tag
         env:
@@ -59,7 +59,7 @@ jobs:
         run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -84,7 +84,7 @@ jobs:
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Validate branch or tag
         env:
@@ -92,7 +92,7 @@ jobs:
         run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -116,7 +116,7 @@ jobs:
     runs-on: ${{ fromJSON(matrix.labels_json) }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -148,7 +148,7 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -189,7 +189,7 @@ jobs:
       SYNC_TIMEOUT_SECONDS: "1800"
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -213,7 +213,7 @@ jobs:
       CONNECTIVITY_REGEX: ${{ needs.prepare_deploy.outputs.connectivity_regex }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
