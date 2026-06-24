@@ -145,6 +145,59 @@ func TestObserveEip1559Fees(t *testing.T) {
 	(&EthereumRPC{}).observeEip1559Fees(&bchain.Eip1559Fees{BaseFeePerGas: big.NewInt(1)})
 }
 
+// counterVecValue reads the counter series carrying label=value, via a throwaway registry.
+func counterVecValue(t *testing.T, cv *prometheus.CounterVec, label, value string) float64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := reg.Register(cv); err != nil {
+		t.Fatalf("register counter vec: %v", err)
+	}
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather counter vec: %v", err)
+	}
+	for _, mf := range families {
+		for _, mm := range mf.GetMetric() {
+			for _, lp := range mm.GetLabel() {
+				if lp.GetName() == label && lp.GetValue() == value {
+					return mm.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func TestEip1559FeeSourceMetric(t *testing.T) {
+	m := &common.Metrics{
+		EthEip1559FeeSource: prometheus.NewCounterVec(
+			prometheus.CounterOpts{Name: "test_eth_eip1559_fee_source_total"}, []string{"source"}),
+		EthEip1559Fee: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{Name: "test_eth_eip1559_fee_src"}, []string{"tier", "kind"}),
+		EthEip1559BaseFee: prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_eth_eip1559_base_fee_src"}),
+	}
+	raw := `{"oldestBlock":"0x1",` +
+		`"reward":[["0x1","0x2","0x3","0x4"]],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"gasUsedRatio":[0.5,0.5,0.5]}`
+	b := &EthereumRPC{
+		RPC:         &feeHistoryRPCStub{raw: raw},
+		Timeout:     time.Second,
+		ChainConfig: &Configuration{Eip1559Fees: true},
+	}
+	b.metrics = m
+	if _, err := b.EthereumTypeGetEip1559Fees(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// no alternative provider configured -> the on-chain estimate is source=onchain (not a fallback)
+	if got := counterVecValue(t, m.EthEip1559FeeSource, "source", "onchain"); got != 1 {
+		t.Errorf("source=onchain counter = %v, want 1", got)
+	}
+	if got := counterVecValue(t, m.EthEip1559FeeSource, "source", "onchain_fallback"); got != 0 {
+		t.Errorf("source=onchain_fallback counter = %v, want 0", got)
+	}
+}
+
 func equalBigInt(a, b *big.Int) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
