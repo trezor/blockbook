@@ -5184,144 +5184,6 @@
         },
         "overrides": []
       },
-      "id": 45,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "A",
-          "x-query-key": "blocks_1"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "B",
-          "x-query-key": "blocks_3"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "C",
-          "x-query-key": "blocks_5"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "D",
-          "x-query-key": "blocks_8"
-        }
-      ],
-      "type": "timeseries",
-      "x-panel-key": "fees.estimated_fee"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "id": 57,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "A",
-          "x-query-key": "requests"
-        }
-      ],
-      "type": "timeseries",
-      "x-panel-key": "fees.alt_fee_provider_requests"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
       "id": 341,
       "options": {
         "legend": {
@@ -5663,6 +5525,66 @@
           },
           "custom": {
             "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 57,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "requests"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.alt_fee_provider_requests"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
             "lineWidth": 1,
@@ -5831,6 +5753,84 @@
       ],
       "type": "timeseries",
       "x-panel-key": "fees.base_fee_push_vs_pull"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 45,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "blocks_1"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "blocks_3"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "C",
+          "x-query-key": "blocks_5"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "D",
+          "x-query-key": "blocks_8"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.estimated_fee"
     },
     {
       "collapsed": false,

@@ -376,7 +376,7 @@ metrics:
   alternative_fee_provider_last_sync_timestamp_seconds:
     name: blockbook_alternative_fee_provider_last_sync_timestamp_seconds
     type: gauge_vec
-    help: Unix time of the last successful refresh of the cached EVM alternative-provider fees, labeled by provider (infura or 1inch). Plot time() - this for cache age; the pull path falls back to on-chain once the cache is older than the stale window (30x the poll period, e.g. 30m at a 60s poll). Exported as a timestamp rather than a computed *_age_seconds gauge on purpose - it is only written on a successful refresh, so age keeps rising when a provider wedges and it is restart-safe
+    help: Unix time of the last successful refresh of the cached EVM alternative-provider fees, labeled by provider (infura or 1inch). Plot time() - this for cache age; the pull path falls back to on-chain once the cache is older than the provider's stale window (for infura, 30x the poll period, e.g. 30m at a 60s poll). Exported as a timestamp rather than a computed *_age_seconds gauge on purpose - it is only written on a successful refresh, so age keeps rising when a provider wedges and it is restart-safe
     labels: [provider]
   eth_eip1559_fee:
     name: blockbook_eth_eip1559_fee
@@ -386,7 +386,7 @@ metrics:
   eth_eip1559_base_fee:
     name: blockbook_eth_eip1559_base_fee
     type: gauge
-    help: Next-block base fee underlying the most recent pull-path EIP-1559 estimate, in wei - divide by 1e9 for Gwei. The alternative provider's estimatedBaseFee when served from the provider, otherwise eth_feeHistory's projected next-block base fee; pair with eth_block_base_fee to see projection vs realized
+    help: Base fee underlying the most recent pull-path EIP-1559 estimate, in wei - divide by 1e9 for Gwei. The alternative provider's reported base fee when served from a provider, otherwise eth_feeHistory's last requested-window base fee (baseFeePerGas[blocks-1]); on backends that drop the extra projected element (e.g. Erigon) that is already the next-block projection, on others it is the most recent included block. Pair with eth_block_base_fee to see projection vs realized
   eth_eip1559_fee_source_total:
     name: blockbook_eth_eip1559_fee_source_total
     type: counter_vec
