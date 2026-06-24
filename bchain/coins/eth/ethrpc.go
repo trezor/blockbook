@@ -1870,6 +1870,50 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	return b.Client.EstimateGas(ctx, msg)
 }
 
+// bigIntToFloat converts a wei amount to float64 for gauge export. float64 holds integers
+// exactly up to 2^53 (~9e15 wei), far above any realistic gas price, so no precision is lost;
+// keeping the metric in raw wei (base units) matches the repo convention and Grafana divides
+// by 1e9 to display Gwei.
+func bigIntToFloat(v *big.Int) float64 {
+	if v == nil {
+		return 0
+	}
+	f, _ := new(big.Float).SetInt(v).Float64()
+	return f
+}
+
+// observeEip1559Fees records the EIP-1559 fees the pull path just produced: per-tier
+// maxFeePerGas/maxPriorityFeePerGas and the underlying next-block base fee. Called only on the
+// two successful return paths (provider cache hit and on-chain estimate) so the gauges never
+// carry zeros from the error/disabled returns. Nil-guards mirror observeRequest.
+func (b *EthereumRPC) observeEip1559Fees(fees *bchain.Eip1559Fees) {
+	if b.metrics == nil || fees == nil {
+		return
+	}
+	if b.metrics.EthEip1559BaseFee != nil && fees.BaseFeePerGas != nil {
+		b.metrics.EthEip1559BaseFee.Set(bigIntToFloat(fees.BaseFeePerGas))
+	}
+	if b.metrics.EthEip1559Fee == nil {
+		return
+	}
+	for _, t := range []struct {
+		tier string
+		fee  *bchain.Eip1559Fee
+	}{
+		{"low", fees.Low}, {"medium", fees.Medium}, {"high", fees.High}, {"instant", fees.Instant},
+	} {
+		if t.fee == nil {
+			continue
+		}
+		if t.fee.MaxFeePerGas != nil {
+			b.metrics.EthEip1559Fee.With(common.Labels{"tier": t.tier, "kind": "max_fee"}).Set(bigIntToFloat(t.fee.MaxFeePerGas))
+		}
+		if t.fee.MaxPriorityFeePerGas != nil {
+			b.metrics.EthEip1559Fee.With(common.Labels{"tier": t.tier, "kind": "priority_fee"}).Set(bigIntToFloat(t.fee.MaxPriorityFeePerGas))
+		}
+	}
+}
+
 // eip1559BaseFeeMultiplier is the headroom applied to the projected base fee when deriving
 // maxFeePerGas for the on-chain EIP-1559 estimate (maxFeePerGas = multiplier*baseFee + tip).
 // 2x is the EIP-1559-standard buffer: it keeps a transaction mineable across ~6 consecutive full
@@ -1888,6 +1932,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			return nil, err
 		}
 		if fees != nil {
+			b.observeEip1559Fees(fees)
 			return fees, nil
 		}
 		// Fall back to on-chain estimation when the alternative provider is unsupported/stale/unready,
@@ -1968,6 +2013,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			fees.Instant = &f
 		}
 	}
+	b.observeEip1559Fees(&fees)
 	return &fees, err
 }
 
