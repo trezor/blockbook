@@ -3,11 +3,87 @@
 package eth
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/trezor/blockbook/bchain"
 )
+
+// feeHistoryRPCStub serves a canned eth_feeHistory response; any other method errors so the test
+// also asserts the on-chain path no longer issues eth_maxPriorityFeePerGas.
+type feeHistoryRPCStub struct {
+	raw string
+}
+
+func (s *feeHistoryRPCStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *feeHistoryRPCStub) Close() {}
+
+func (s *feeHistoryRPCStub) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	if method != "eth_feeHistory" {
+		return errors.New("unexpected RPC method: " + method)
+	}
+	return json.Unmarshal([]byte(s.raw), result)
+}
+
+func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
+	// baseFeePerGas[blocks-1]=[3]=0x64=100 is the projected next-block base fee (4-element array, as a
+	// no-distinct-pending-block backend returns). Per-tier reward percentiles over 2 blocks.
+	raw := `{"oldestBlock":"0x1",` +
+		`"reward":[["0x1","0x2","0x3","0x4"],["0x3","0x4","0x5","0x6"]],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"gasUsedRatio":[0.5,0.5,0.5]}`
+	b := &EthereumRPC{
+		RPC:         &feeHistoryRPCStub{raw: raw},
+		Timeout:     time.Second,
+		ChainConfig: &Configuration{Eip1559Fees: true},
+	}
+	fees, err := b.EthereumTypeGetEip1559Fees()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fees == nil || fees.BaseFeePerGas == nil {
+		t.Fatal("expected fees with baseFeePerGas")
+	}
+	if fees.BaseFeePerGas.Int64() != 100 {
+		t.Errorf("BaseFeePerGas = %v, want 100", fees.BaseFeePerGas)
+	}
+	// tip = average of the tier's reward percentile; maxFeePerGas = 2*baseFee + tip.
+	cases := []struct {
+		name    string
+		fee     *bchain.Eip1559Fee
+		wantTip int64
+	}{
+		{"low", fees.Low, 2},         // avg(1,3)
+		{"medium", fees.Medium, 3},   // avg(2,4)
+		{"high", fees.High, 4},       // avg(3,5)
+		{"instant", fees.Instant, 5}, // avg(4,6)
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.fee == nil {
+				t.Fatal("nil tier")
+			}
+			if c.fee.MaxPriorityFeePerGas.Int64() != c.wantTip {
+				t.Errorf("MaxPriorityFeePerGas = %v, want %d", c.fee.MaxPriorityFeePerGas, c.wantTip)
+			}
+			wantMax := int64(eip1559BaseFeeMultiplier)*100 + c.wantTip
+			if c.fee.MaxFeePerGas.Int64() != wantMax {
+				t.Errorf("MaxFeePerGas = %v, want %d", c.fee.MaxFeePerGas, wantMax)
+			}
+			// core invariant the previous code violated: maxFeePerGas must cover the base fee.
+			if c.fee.MaxFeePerGas.Cmp(fees.BaseFeePerGas) <= 0 {
+				t.Errorf("MaxFeePerGas %v must exceed baseFee %v", c.fee.MaxFeePerGas, fees.BaseFeePerGas)
+			}
+		})
+	}
+}
 
 func equalBigInt(a, b *big.Int) bool {
 	if a == nil || b == nil {

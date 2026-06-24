@@ -1870,6 +1870,12 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	return b.Client.EstimateGas(ctx, msg)
 }
 
+// eip1559BaseFeeMultiplier is the headroom applied to the projected base fee when deriving
+// maxFeePerGas for the on-chain EIP-1559 estimate (maxFeePerGas = multiplier*baseFee + tip).
+// 2x is the EIP-1559-standard buffer: it keeps a transaction mineable across ~6 consecutive full
+// blocks, since the base fee can rise at most 12.5% per block (1.125^6 ≈ 2). Tunable.
+const eip1559BaseFeeMultiplier = 2
+
 // EthereumTypeGetEip1559Fees retrieves Eip1559Fees, if supported
 func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) {
 	if !b.ChainConfig.Eip1559Fees {
@@ -1892,12 +1898,6 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	var maxPriorityFeePerGas hexutil.Big
-	err := b.RPC.CallContext(ctx, &maxPriorityFeePerGas, "eth_maxPriorityFeePerGas")
-	if err != nil {
-		return nil, err
-	}
-
 	var fees bchain.Eip1559Fees
 
 	type history struct {
@@ -1915,7 +1915,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	}
 	blocks := 4
 
-	err = b.RPC.CallContext(ctx, &h, "eth_feeHistory", blocks, "pending", percentiles)
+	err := b.RPC.CallContext(ctx, &h, "eth_feeHistory", blocks, "pending", percentiles)
 	if err != nil {
 		return nil, err
 	}
@@ -1934,21 +1934,29 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	// either N+1 or an N+2 estimate computed off an incomplete pending block. No single field can
 	// describe all of these. Clients that need an exact next-block base fee should use the
 	// subscribeNewBlock evmData push, which carries the real previous-block header.
-	maxBasePriorityFee := maxPriorityFeePerGas.ToInt().Int64()
-	glog.Info("eth_maxPriorityFeePerGas ", maxPriorityFeePerGas)
 	glog.Info("eth_feeHistory ", string(hs))
 
 	for i := 0; i < 4; i++ {
 		var f bchain.Eip1559Fee
+		// Per-tier tip: average of the requested reward percentile (low=20th .. instant=99th) over the window.
 		priorityFee := int64(0)
 		for j := 0; j < len(h.Reward); j++ {
 			p, _ := hexutil.DecodeUint64(h.Reward[j][i])
 			priorityFee += int64(p)
 		}
-		priorityFee = priorityFee / int64(len(h.Reward))
-		f.MaxFeePerGas = big.NewInt(priorityFee)
-		f.MaxPriorityFeePerGas = big.NewInt(maxBasePriorityFee)
-		maxBasePriorityFee *= 2
+		if len(h.Reward) > 0 {
+			priorityFee /= int64(len(h.Reward))
+		}
+		tip := big.NewInt(priorityFee)
+		f.MaxPriorityFeePerGas = tip
+		// maxFeePerGas must cover the next-block base fee plus the tip, with headroom for base-fee
+		// growth while the tx waits: maxFeePerGas = eip1559BaseFeeMultiplier*baseFee + tip. The previous
+		// code put only the tip here (omitting the base fee), which is below the base fee and therefore
+		// not mineable; clients such as Trezor Suite use maxFeePerGas directly.
+		f.MaxFeePerGas = new(big.Int).Add(
+			new(big.Int).Mul(fees.BaseFeePerGas, big.NewInt(eip1559BaseFeeMultiplier)),
+			tip,
+		)
 		switch i {
 		case 0:
 			fees.Low = &f
