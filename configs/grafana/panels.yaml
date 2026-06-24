@@ -590,22 +590,6 @@ panels:
       explorer:
         promql: sum({{name:explorer_pending_requests}}{job="blockbook", coin="$coin"}) by (coin, method)
         legend: Explorer {{method}} - {{coin}}
-  general.estimated_fee:
-    title: Estimated fee rate
-    description: Fee estimates for 1/3/5/8 block targets; units are chain-specific.
-    queries:
-      blocks_1:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="1"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
-      blocks_3:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="3"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
-      blocks_5:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="5"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
-      blocks_8:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="8"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
   general.coingecko_requests:
     title: CoinGecko requests
     description: Status separates successful calls, throttling and hard errors from the same endpoint.
@@ -626,13 +610,6 @@ panels:
       total:
         promql: sum({{name:coingecko_range_requests}}{job="blockbook", coin="$coin"})
         legend: '{{coin}} total across servers'
-  general.alt_fee_provider_requests:
-    title: Alternative fee provider requests
-    description: External fee-source health by provider; status distinguishes HTTP, network and decode failures.
-    queries:
-      requests:
-        promql: rate({{name:alternative_fee_provider_requests}}{job="blockbook", coin="$coin"}[$__rate_interval])
-        legend: '{{instance}} - {{provider}} - {{status}}'
   general.balance_history_fiat_duration_p95:
     title: 95% quantile of balance history fiat stage duration
     description: Separates batch lookup from per-point fallback, so slow fallback behavior is visible in address and xpub paths.
@@ -661,6 +638,31 @@ panels:
       p95:
         promql: histogram_quantile(0.95, sum(increase({{name:fiat_rates_update_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[1h])) by (coin, stage, status, le))
         legend: '{{coin}} - {{stage}} - {{status}}'
+  row.fees:
+    title: Fees
+  fees.estimated_fee:
+    title: Estimated fee rate
+    description: Fee estimates for 1/3/5/8 block targets; units are chain-specific.
+    queries:
+      blocks_1:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="1"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_3:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="3"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_5:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="5"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_8:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="8"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+  fees.alt_fee_provider_requests:
+    title: Alternative fee provider requests
+    description: External fee-source health by provider; status distinguishes HTTP, network and decode failures.
+    queries:
+      requests:
+        promql: rate({{name:alternative_fee_provider_requests}}{job="blockbook", coin="$coin"}[$__rate_interval])
+        legend: '{{instance}} - {{provider}} - {{status}}'
   row.fiat_rates:
     title: Fiat Rates
   fiatrates.tip_fetches:
