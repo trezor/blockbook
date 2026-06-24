@@ -663,6 +663,30 @@ panels:
       requests:
         promql: rate({{name:alternative_fee_provider_requests}}{job="blockbook", coin="$coin"}[$__rate_interval])
         legend: '{{instance}} - {{provider}} - {{status}}'
+  fees.eip1559_max_fee:
+    title: EIP-1559 maxFeePerGas by tier (Gwei)
+    description: The maxFeePerGas the pull path (estimateFee) serves per tier, in Gwei (raw wei / 1e9). This is what wallets such as Trezor Suite spend as the fee cap, so it is the headline panel for "fees too high". On Infura-backed coins these are the provider's padded suggestions; on on-chain coins they are 2x baseFee + tip. Compare with the base fee and the buffer-ratio panel to tell a busy chain (high but ~2x base) from an estimator regression.
+    queries:
+      by_tier:
+        promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="max_fee"} / 1e9)
+        legend: '{{coin}} - {{instance}} - {{tier}}'
+  fees.eip1559_priority_fee:
+    title: EIP-1559 priority tip by tier (Gwei)
+    description: The maxPriorityFeePerGas (miner tip) served per tier, in Gwei (raw wei / 1e9), on its own axis because tips are an order of magnitude smaller than maxFeePerGas. On the on-chain path tiers map to eth_feeHistory reward percentiles 20/70/90/99; a near-zero flat tip is normal on quiet or L2 chains. Read exact values from the legend table.
+    queries:
+      by_tier:
+        promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="priority_fee"} / 1e9)
+        legend: '{{coin}} - {{instance}} - {{tier}}'
+  fees.eip1559_buffer_ratio:
+    title: EIP-1559 buffer ratio (maxFeePerGas / baseFee)
+    description: 'Per-tier maxFeePerGas divided by the next-block base fee - the headroom over the base fee. The on-chain estimator targets 2x by design (eip1559BaseFeeMultiplier), shown as the dashed target line. How to read it: ratio flat near its target while absolute fees are high means the chain is congested (nothing to fix); ratio drifting far above target means the estimator (or the provider) is over-buffering - the "fees too high" signature.'
+    queries:
+      ratio:
+        promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="max_fee"} / on(job, coin, instance) group_left {{name:eth_eip1559_base_fee}}{job="blockbook", coin="$coin"})
+        legend: '{{coin}} - {{instance}} - {{tier}}'
+      threshold:
+        promql: vector(2)
+        legend: target buffer (2x base fee)
   row.fiat_rates:
     title: Fiat Rates
   fiatrates.tip_fetches:

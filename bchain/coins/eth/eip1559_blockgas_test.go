@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // feeHistoryRPCStub serves a canned eth_feeHistory response; any other method errors so the test
@@ -83,6 +85,64 @@ func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 			}
 		})
 	}
+}
+
+// gaugeVecSeriesCount reports how many label series a GaugeVec currently holds, using a throwaway
+// registry (same approach as gaugeValue, no prometheus/testutil dependency).
+func gaugeVecSeriesCount(t *testing.T, gv *prometheus.GaugeVec) int {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := reg.Register(gv); err != nil {
+		t.Fatalf("register gauge vec: %v", err)
+	}
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather gauge vec: %v", err)
+	}
+	n := 0
+	for _, mf := range families {
+		n += len(mf.GetMetric())
+	}
+	return n
+}
+
+func TestObserveEip1559Fees(t *testing.T) {
+	m := &common.Metrics{
+		EthEip1559Fee: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{Name: "test_eth_eip1559_fee"}, []string{"tier", "kind"}),
+		EthEip1559BaseFee: prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_eth_eip1559_base_fee"}),
+	}
+	b := &EthereumRPC{}
+	b.metrics = m
+	// only low and high tiers populated; medium/instant left nil
+	b.observeEip1559Fees(&bchain.Eip1559Fees{
+		BaseFeePerGas: big.NewInt(100),
+		Low:           &bchain.Eip1559Fee{MaxFeePerGas: big.NewInt(250), MaxPriorityFeePerGas: big.NewInt(2)},
+		High:          &bchain.Eip1559Fee{MaxFeePerGas: big.NewInt(260), MaxPriorityFeePerGas: big.NewInt(4)},
+	})
+
+	if got := gaugeValue(t, m.EthEip1559BaseFee); got != 100 {
+		t.Errorf("base fee gauge = %v, want 100", got)
+	}
+	for _, c := range []struct {
+		tier, kind string
+		want       float64
+	}{
+		{"low", "max_fee", 250}, {"low", "priority_fee", 2},
+		{"high", "max_fee", 260}, {"high", "priority_fee", 4},
+	} {
+		got := gaugeValue(t, m.EthEip1559Fee.With(common.Labels{"tier": c.tier, "kind": c.kind}))
+		if got != c.want {
+			t.Errorf("eip1559_fee{tier=%s,kind=%s} = %v, want %v", c.tier, c.kind, got, c.want)
+		}
+	}
+	// nil tiers (medium, instant) must not create series: exactly 4 (=2 tiers x 2 kinds) expected
+	if n := gaugeVecSeriesCount(t, m.EthEip1559Fee); n != 4 {
+		t.Errorf("expected 4 tier series, got %d (nil tiers must be skipped)", n)
+	}
+
+	// nil metrics must be a no-op (matches the unit-test path with no metrics wired)
+	(&EthereumRPC{}).observeEip1559Fees(&bchain.Eip1559Fees{BaseFeePerGas: big.NewInt(1)})
 }
 
 func equalBigInt(a, b *big.Int) bool {

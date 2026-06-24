@@ -373,6 +373,15 @@ metrics:
     type: counter_vec
     help: Requests to external fee providers, labeled by provider and outcome status
     labels: [provider, status]
+  eth_eip1559_fee:
+    name: blockbook_eth_eip1559_fee
+    type: gauge_vec
+    help: Most recent EIP-1559 fee tier served by the pull path (estimateFee / EthereumTypeGetEip1559Fees), in wei - divide by 1e9 for Gwei; labeled by tier (low/medium/high/instant) and kind (max_fee = maxFeePerGas, priority_fee = maxPriorityFeePerGas). EVM fees are otherwise invisible (estimated_fee is UTXO-only). Last-writer-wins per estimate, like estimated_fee
+    labels: [tier, kind]
+  eth_eip1559_base_fee:
+    name: blockbook_eth_eip1559_base_fee
+    type: gauge
+    help: Next-block base fee underlying the most recent pull-path EIP-1559 estimate, in wei - divide by 1e9 for Gwei. The alternative provider's estimatedBaseFee when served from the provider, otherwise eth_feeHistory's projected next-block base fee; pair with eth_block_base_fee to see projection vs realized
   eth_sync_rpc_errors:
     name: blockbook_eth_sync_rpc_errors
     type: counter_vec

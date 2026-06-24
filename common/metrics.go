@@ -96,6 +96,8 @@ type Metrics struct {
 	FiatRatesFetchedTokens            *prometheus.CounterVec   `metric:"fiat_rates_fetched_tokens_total"`
 	FiatRatesUnable                   *prometheus.CounterVec   `metric:"fiat_rates_unable_total"`
 	AlternativeFeeProviderRequests    *prometheus.CounterVec   `metric:"alternative_fee_provider_requests"`
+	EthEip1559Fee                     *prometheus.GaugeVec     `metric:"eth_eip1559_fee"`
+	EthEip1559BaseFee                 prometheus.Gauge         `metric:"eth_eip1559_base_fee"`
 	EthSyncRpcErrors                  *prometheus.CounterVec   `metric:"eth_sync_rpc_errors"`
 }
 
