@@ -1914,6 +1914,16 @@ func (b *EthereumRPC) observeEip1559Fees(fees *bchain.Eip1559Fees) {
 	}
 }
 
+// observeEip1559FeeSource records which source served a pull-path estimate, observed at the serve
+// boundary: the alternative provider cache (provider), the on-chain estimate after a stale/unready
+// provider (onchain_fallback), or the on-chain estimate with no provider configured (onchain).
+func (b *EthereumRPC) observeEip1559FeeSource(source string) {
+	if b.metrics == nil || b.metrics.EthEip1559FeeSource == nil {
+		return
+	}
+	b.metrics.EthEip1559FeeSource.With(common.Labels{"source": source}).Inc()
+}
+
 // eip1559BaseFeeMultiplier is the headroom applied to the projected base fee when deriving
 // maxFeePerGas for the on-chain EIP-1559 estimate (maxFeePerGas = multiplier*baseFee + tip).
 // 2x is the EIP-1559-standard buffer: it keeps a transaction mineable across ~6 consecutive full
@@ -1932,6 +1942,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			return nil, err
 		}
 		if fees != nil {
+			b.observeEip1559FeeSource("provider")
 			b.observeEip1559Fees(fees)
 			return fees, nil
 		}
@@ -2013,6 +2024,13 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			fees.Instant = &f
 		}
 	}
+	// Reaching here with a provider configured means its cache was stale/unready (a hit would have
+	// returned above), so this on-chain estimate is a fallback.
+	source := "onchain"
+	if b.alternativeFeeProvider != nil {
+		source = "onchain_fallback"
+	}
+	b.observeEip1559FeeSource(source)
 	b.observeEip1559Fees(&fees)
 	return &fees, err
 }

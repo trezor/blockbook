@@ -687,6 +687,13 @@ panels:
       threshold:
         promql: vector(2)
         legend: target buffer (2x base fee)
+  fees.eip1559_fee_source:
+    title: EIP-1559 fee source (served estimates/s)
+    description: 'Where each served estimate came from, at the serve boundary: provider = alternative provider (Infura/1inch) cache hit; onchain_fallback = provider configured but its cache was stale/unready, so eth_feeHistory was used; onchain = no provider configured. Healthy state is provider dominating on provider-backed coins; a burst of onchain_fallback at startup is cold-cache warmup, not an incident (the cache-age panel disambiguates). Sustained onchain_fallback means the provider is wedged.'
+    queries:
+      by_source:
+        promql: sum by (coin, source) (rate({{name:eth_eip1559_fee_source_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{source}}'
   row.fiat_rates:
     title: Fiat Rates
   fiatrates.tip_fetches:
