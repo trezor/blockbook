@@ -687,6 +687,16 @@ panels:
       threshold:
         promql: vector(2)
         legend: target buffer (2x base fee)
+  fees.block_gas_used_ratio:
+    title: Latest block gas-used ratio (% of gas limit)
+    description: 'gasUsed / gasLimit of the most recently connected block, pushed on subscribeNewBlock. It is what moves the base fee: above the 50% balance point (dashed) the next block''s base fee rises up to +12.5%, below it falls. Read together with the base-fee and maxFeePerGas panels, this is the push-path explanation for "fees went up" - a sustained >50% ratio is real congestion, not an estimator issue.'
+    queries:
+      ratio:
+        promql: '{{name:eth_block_gas_used_ratio}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+      balance:
+        promql: vector(0.5)
+        legend: balance point (50%)
   fees.alt_fee_provider_cache_age:
     title: Alternative fee provider cache age
     description: 'Age of the cached provider fees (time() - last successful refresh), per provider. The pull path keeps serving the cache until it crosses the stale window - 30x the poll period - after which estimateFee falls back to on-chain (visible as onchain_fallback in the fee-source panel). The dashed line marks the default 30-minute cutoff (30x a 60s poll); adjust if a coin polls at a different period. A sawtooth that resets each poll is healthy; a line climbing past the cutoff is a wedged provider.'

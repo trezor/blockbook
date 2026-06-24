@@ -100,6 +100,7 @@ type Metrics struct {
 	EthEip1559Fee                     *prometheus.GaugeVec     `metric:"eth_eip1559_fee"`
 	EthEip1559BaseFee                 prometheus.Gauge         `metric:"eth_eip1559_base_fee"`
 	EthEip1559FeeSource               *prometheus.CounterVec   `metric:"eth_eip1559_fee_source_total"`
+	EthBlockGasUsedRatio              prometheus.Gauge         `metric:"eth_block_gas_used_ratio"`
 	EthSyncRpcErrors                  *prometheus.CounterVec   `metric:"eth_sync_rpc_errors"`
 }
 

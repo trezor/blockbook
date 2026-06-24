@@ -1429,6 +1429,26 @@ func newBlockNotification(block *bchain.Block) *WsNewBlock {
 	return data
 }
 
+// observeNewBlockGas records push-path block-gas metrics from the most recently connected block.
+// It is called synchronously from OnNewBlock (which the single writeBlockWorker invokes in height
+// order) before the async broadcast, so the gauges advance monotonically without a mutex; the
+// per-block broadcast goroutines could otherwise reorder and let an older block clobber a newer
+// value. Last-value semantics: it sweeps catch-up blocks and settles on the tip. Non-EVM and
+// pre-London blocks (no EthereumBlockSpecificData with gas set) are skipped.
+func (s *WebsocketServer) observeNewBlockGas(block *bchain.Block) {
+	if s.metrics == nil {
+		return
+	}
+	bsd, ok := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+	if !ok || bsd == nil {
+		return
+	}
+	if s.metrics.EthBlockGasUsedRatio != nil && bsd.GasUsed != nil && bsd.GasLimit != nil && bsd.GasLimit.Sign() > 0 {
+		ratio, _ := new(big.Float).Quo(new(big.Float).SetInt(bsd.GasUsed), new(big.Float).SetInt(bsd.GasLimit)).Float64()
+		s.metrics.EthBlockGasUsedRatio.Set(ratio)
+	}
+}
+
 func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
@@ -1594,6 +1614,9 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 
 // OnNewBlock is a callback that broadcasts info about new block to subscribed clients
 func (s *WebsocketServer) OnNewBlock(block *bchain.Block) {
+	// Synchronous and before the async dispatch: OnNewBlock is called in monotonic height order, so
+	// the push-path gas gauges never get an older block's value written after a newer one's.
+	s.observeNewBlockGas(block)
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	go s.onNewBlockAsync(block)
