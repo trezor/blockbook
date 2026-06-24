@@ -168,6 +168,31 @@ func counterVecValue(t *testing.T, cv *prometheus.CounterVec, label, value strin
 	return 0
 }
 
+func TestObserveSyncMetric(t *testing.T) {
+	gv := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Name: "test_alt_fee_provider_last_sync"}, []string{"provider"})
+	p := &alternativeFeeProvider{
+		metrics: &common.Metrics{AlternativeFeeProviderLastSync: gv},
+		name:    "infura",
+	}
+	ts := time.Unix(1700000000, 0)
+	p.observeSync(ts)
+
+	if !p.lastSync.Equal(ts) {
+		t.Errorf("lastSync = %v, want %v (must use the same instant as the metric)", p.lastSync, ts)
+	}
+	if got := gaugeValue(t, gv.With(common.Labels{"provider": "infura"})); got != 1700000000 {
+		t.Errorf("last_sync gauge = %v, want 1700000000", got)
+	}
+
+	// nil metrics must still advance lastSync without panicking
+	p2 := &alternativeFeeProvider{name: "1inch"}
+	p2.observeSync(ts)
+	if !p2.lastSync.Equal(ts) {
+		t.Errorf("nil-metrics observeSync must still set lastSync")
+	}
+}
+
 func TestEip1559FeeSourceMetric(t *testing.T) {
 	m := &common.Metrics{
 		EthEip1559FeeSource: prometheus.NewCounterVec(
