@@ -36,15 +36,19 @@ func gaugeFloat(t *testing.T, g prometheus.Gauge) float64 {
 func TestObserveNewBlockGas(t *testing.T) {
 	m := &common.Metrics{
 		EthBlockGasUsedRatio: prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_eth_block_gas_used_ratio"}),
+		EthBlockBaseFee:      prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_eth_block_base_fee"}),
 	}
 	s := &WebsocketServer{metrics: m}
 
-	// half-full post-London block -> ratio 0.5
+	// half-full post-London block -> ratio 0.5, base fee in raw wei
 	s.observeNewBlockGas(&bchain.Block{CoinSpecificData: &bchain.EthereumBlockSpecificData{
 		BaseFeePerGas: big.NewInt(7), GasUsed: big.NewInt(15000000), GasLimit: big.NewInt(30000000),
 	}})
 	if got := gaugeFloat(t, m.EthBlockGasUsedRatio); got != 0.5 {
 		t.Errorf("gas-used ratio = %v, want 0.5", got)
+	}
+	if got := gaugeFloat(t, m.EthBlockBaseFee); got != 7 {
+		t.Errorf("base fee = %v, want 7 (raw wei)", got)
 	}
 
 	// non-EVM block and nil metrics must be safe no-ops

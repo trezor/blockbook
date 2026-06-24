@@ -1447,6 +1447,10 @@ func (s *WebsocketServer) observeNewBlockGas(block *bchain.Block) {
 		ratio, _ := new(big.Float).Quo(new(big.Float).SetInt(bsd.GasUsed), new(big.Float).SetInt(bsd.GasLimit)).Float64()
 		s.metrics.EthBlockGasUsedRatio.Set(ratio)
 	}
+	if s.metrics.EthBlockBaseFee != nil && bsd.BaseFeePerGas != nil {
+		baseFee, _ := new(big.Float).SetInt(bsd.BaseFeePerGas).Float64()
+		s.metrics.EthBlockBaseFee.Set(baseFee)
+	}
 }
 
 func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
