@@ -287,6 +287,16 @@ func (b *TronRPC) GetBestBlockHash() (string, error) {
 
 // GetBlockHash returns block hash in Tron API format (without 0x prefix).
 func (b *TronRPC) GetBlockHash(height uint32) (string, error) {
+	if b.isBlockSolidified(uint64(height)) && b.solidityNodeHTTP != nil {
+		ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
+		defer cancel()
+		hash, err := b.requestBlockHashByNum(ctx, height, true)
+		if err == nil {
+			return hash, nil
+		}
+		glog.V(1).Infof("Tron native getblock hash lookup failed for height %d, falling back to JSON-RPC: %v", height, err)
+	}
+
 	hash, err := b.EthereumRPC.GetBlockHash(height)
 	if err != nil {
 		return "", err
