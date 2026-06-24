@@ -687,6 +687,16 @@ panels:
       threshold:
         promql: vector(2)
         legend: target buffer (2x base fee)
+  fees.base_fee_push_vs_pull:
+    title: Base fee - mined block (push) vs next-block projection (pull) (Gwei)
+    description: 'Solid = base fee of the latest connected block (push path, eth_block_base_fee); dashed = the next-block base fee the pull-path estimate is built on (eth_eip1559_base_fee). They should track within one block''s +/-12.5% step. A persistent gap means the eth_feeHistory projection is drifting from the chain (or, on a provider-backed coin, the provider''s estimatedBaseFee is off) - the base-fee half of a "fees too high" investigation. Note the projection''s meaning differs by source (provider estimate vs feeHistory).'
+    queries:
+      mined:
+        promql: ({{name:eth_block_base_fee}}{job="blockbook", coin="$coin"} / 1e9)
+        legend: '{{coin}} - {{instance}} - mined (push)'
+      projected:
+        promql: ({{name:eth_eip1559_base_fee}}{job="blockbook", coin="$coin"} / 1e9)
+        legend: '{{coin}} - {{instance}} - projected (pull)'
   fees.block_gas_used_ratio:
     title: Latest block gas-used ratio (% of gas limit)
     description: 'gasUsed / gasLimit of the most recently connected block, pushed on subscribeNewBlock. It is what moves the base fee: above the 50% balance point (dashed) the next block''s base fee rises up to +12.5%, below it falls. Read together with the base-fee and maxFeePerGas panels, this is the push-path explanation for "fees went up" - a sustained >50% ratio is real congestion, not an estimator issue.'

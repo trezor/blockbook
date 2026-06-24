@@ -396,6 +396,10 @@ metrics:
     name: blockbook_eth_block_gas_used_ratio
     type: gauge
     help: gasUsed / gasLimit of the most recently connected EVM block (0..1), the congestion signal that drives the next base fee - above 0.5 the next block's base fee rises (up to +12.5% per block), below 0.5 it falls. This is the push path's view of why fees move; updated once per connected block, so it sweeps catch-up blocks and settles on the tip
+  eth_block_base_fee:
+    name: blockbook_eth_block_base_fee
+    type: gauge
+    help: Base fee per gas of the most recently connected EVM block, in wei - divide by 1e9 for Gwei. The realized base fee from the block header (push path); compare with eth_eip1559_base_fee (the pull path's next-block projection) to see whether the projection tracks the chain. Updated once per connected block
   eth_sync_rpc_errors:
     name: blockbook_eth_sync_rpc_errors
     type: counter_vec
