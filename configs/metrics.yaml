@@ -392,6 +392,10 @@ metrics:
     type: counter_vec
     help: Served EIP-1559 pull-path estimates by source observed at the serve boundary - provider (alternative provider cache hit), onchain_fallback (provider configured but cache stale/unready, served from eth_feeHistory) or onchain (no provider configured). Complements alternative_fee_provider_requests (background fetch) and alternative_fee_provider_last_sync_timestamp_seconds (cache age), which together explain why a fallback happened
     labels: [source]
+  eth_block_gas_used_ratio:
+    name: blockbook_eth_block_gas_used_ratio
+    type: gauge
+    help: gasUsed / gasLimit of the most recently connected EVM block (0..1), the congestion signal that drives the next base fee - above 0.5 the next block's base fee rises (up to +12.5% per block), below 0.5 it falls. This is the push path's view of why fees move; updated once per connected block, so it sweeps catch-up blocks and settles on the tip
   eth_sync_rpc_errors:
     name: blockbook_eth_sync_rpc_errors
     type: counter_vec

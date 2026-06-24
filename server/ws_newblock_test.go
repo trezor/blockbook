@@ -7,9 +7,52 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
+
+// gaugeFloat reads a single gauge's value via a throwaway registry, avoiding the
+// prometheus/testutil dependency (and its transitive modules).
+func gaugeFloat(t *testing.T, g prometheus.Gauge) float64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := reg.Register(g); err != nil {
+		t.Fatalf("register gauge: %v", err)
+	}
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("gather gauge: %v", err)
+	}
+	for _, mf := range families {
+		for _, m := range mf.GetMetric() {
+			return m.GetGauge().GetValue()
+		}
+	}
+	return 0
+}
+
+func TestObserveNewBlockGas(t *testing.T) {
+	m := &common.Metrics{
+		EthBlockGasUsedRatio: prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_eth_block_gas_used_ratio"}),
+	}
+	s := &WebsocketServer{metrics: m}
+
+	// half-full post-London block -> ratio 0.5
+	s.observeNewBlockGas(&bchain.Block{CoinSpecificData: &bchain.EthereumBlockSpecificData{
+		BaseFeePerGas: big.NewInt(7), GasUsed: big.NewInt(15000000), GasLimit: big.NewInt(30000000),
+	}})
+	if got := gaugeFloat(t, m.EthBlockGasUsedRatio); got != 0.5 {
+		t.Errorf("gas-used ratio = %v, want 0.5", got)
+	}
+
+	// non-EVM block and nil metrics must be safe no-ops
+	s.observeNewBlockGas(&bchain.Block{})
+	(&WebsocketServer{}).observeNewBlockGas(&bchain.Block{CoinSpecificData: &bchain.EthereumBlockSpecificData{
+		GasUsed: big.NewInt(1), GasLimit: big.NewInt(2),
+	}})
+}
 
 // TestNewBlockNotification covers the block -> subscribeNewBlock payload mapping: only EVM
 // post-London blocks (EthereumBlockSpecificData with BaseFeePerGas set) carry evmData; non-EVM,
