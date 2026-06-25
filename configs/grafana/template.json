@@ -3642,7 +3642,7 @@
         }
       ],
       "type": "timeseries",
-      "x-panel-key": "rest_api.rejections"
+      "x-panel-key": "rest_ui.rejections"
     },
     {
       "fieldConfig": {
@@ -3708,7 +3708,7 @@
         }
       ],
       "type": "timeseries",
-      "x-panel-key": "rest_api.active_ips"
+      "x-panel-key": "rest_ui.active_ips"
     },
     {
       "fieldConfig": {
@@ -3768,7 +3768,7 @@
         }
       ],
       "type": "timeseries",
-      "x-panel-key": "rest_api.max_active_per_ip"
+      "x-panel-key": "rest_ui.max_active_per_ip"
     },
     {
       "fieldConfig": {
