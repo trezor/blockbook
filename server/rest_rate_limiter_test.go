@@ -44,10 +44,10 @@ func TestRestAPIRateLimiterRejectsWith429BeforeHandlerWork(t *testing.T) {
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	var handlerCalls int
-	handler := limiter.wrapAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := limiter.wrapPublic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalls++
 		w.WriteHeader(http.StatusNoContent)
-	}), "/api")
+	}), "/")
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/api/v2/status", nil)
 	req.RemoteAddr = "192.0.2.1:12345"
@@ -91,11 +91,11 @@ func TestRestAPIRateLimiterConcurrentRequests(t *testing.T) {
 	done := make(chan struct{})
 	var startedOnce sync.Once
 
-	handler := limiter.wrapAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := limiter.wrapPublic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startedOnce.Do(func() { close(started) })
 		<-release
 		w.WriteHeader(http.StatusNoContent)
-	}), "/api")
+	}), "/")
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/api/v2/status", nil)
 	req.RemoteAddr = "192.0.2.2:12345"
@@ -134,12 +134,21 @@ func TestRestAPIRateLimiterRouteScope(t *testing.T) {
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	var handlerCalls int
-	handler := limiter.wrapAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := limiter.wrapPublic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalls++
 		w.WriteHeader(http.StatusNoContent)
-	}), "/bb/api")
+	}), "/bb/")
 
-	for _, path := range []string{"/bb/static/app.js", "/bb/websocket", "/bb/apix"} {
+	// Static assets, api-docs, the OpenAPI spec, and the WebSocket endpoint bypass
+	// the limiter and are served unconditionally.
+	for _, path := range []string{
+		"/bb/static/app.js",
+		"/bb/websocket",
+		"/bb/favicon.ico",
+		"/bb/api-docs",
+		"/bb/openapi.yaml",
+		"/bb/test-websocket.html",
+	} {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com"+path, nil)
 		req.RemoteAddr = "192.0.2.3:12345"
 		rec := httptest.NewRecorder()
@@ -149,23 +158,25 @@ func TestRestAPIRateLimiterRouteScope(t *testing.T) {
 		}
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/bb/api", nil)
-	req.RemoteAddr = "192.0.2.3:12345"
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("/bb/api status = %d, want %d", rec.Code, http.StatusNoContent)
+	// One dynamic route consumes the single burst token; the next dynamic route is
+	// rejected, regardless of whether it is the API or an explorer UI page.
+	// deny-all-except-static limits every non-excluded route.
+	for i, path := range []string{"/bb/address/abc", "/bb/api/v2/status"} {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com"+path, nil)
+		req.RemoteAddr = "192.0.2.3:12345"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		wantCode := http.StatusNoContent
+		if i > 0 {
+			wantCode = http.StatusTooManyRequests
+		}
+		if rec.Code != wantCode {
+			t.Fatalf("%s status = %d, want %d", path, rec.Code, wantCode)
+		}
 	}
-
-	req = httptest.NewRequest(http.MethodGet, "http://example.com/bb/api/v2/status", nil)
-	req.RemoteAddr = "192.0.2.3:12345"
-	rec = httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("/bb/api/v2/status status = %d, want %d", rec.Code, http.StatusTooManyRequests)
-	}
-	if handlerCalls != 4 {
-		t.Fatalf("handler calls = %d, want 4", handlerCalls)
+	// 6 bypass requests + 1 accepted dynamic request reached the handler.
+	if handlerCalls != 7 {
+		t.Fatalf("handler calls = %d, want 7", handlerCalls)
 	}
 }
 
@@ -422,22 +433,36 @@ func TestRestAPIRateLimiterCleanup(t *testing.T) {
 
 func TestRestAPIRouteMatching(t *testing.T) {
 	tests := []struct {
-		path    string
-		apiRoot string
-		want    bool
+		path     string
+		basePath string
+		want     bool
 	}{
-		{"/api", "/api", true},
-		{"/api/", "/api", true},
-		{"/api/v2/status", "/api", true},
-		{"/apix", "/api", false},
-		{"/websocket", "/api", false},
-		{"/bb/api", "/bb/api", true},
-		{"/bb/api/v2/status", "/bb/api", true},
-		{"/bb/apix", "/bb/api", false},
+		// Dynamic routes (API + explorer UI) are limited under the base path.
+		{"/", "/", true},
+		{"/api", "/", true},
+		{"/api/v2/status", "/", true},
+		{"/address/abc", "/", true},
+		{"/xpub/x", "/", true},
+		{"/apix", "/", true},
+		{"/bb/", "/bb/", true},
+		{"/bb/api/v2/status", "/bb/", true},
+		{"/bb/address/abc", "/bb/", true},
+		// Static assets, docs, the OpenAPI spec, and WebSocket are exempt.
+		{"/static/app.js", "/", false},
+		{"/favicon.ico", "/", false},
+		{"/api-docs", "/", false},
+		{"/api-docs/", "/", false},
+		{"/openapi.yaml", "/", false},
+		{"/websocket", "/", false},
+		{"/test-websocket.html", "/", false},
+		{"/bb/static/app.js", "/bb/", false},
+		{"/bb/websocket", "/bb/", false},
+		// Requests outside the configured base path are not limited here.
+		{"/other/path", "/bb/", false},
 	}
 	for _, tt := range tests {
-		if got := isRestAPIRoute(tt.path, tt.apiRoot); got != tt.want {
-			t.Fatalf("isRestAPIRoute(%q, %q) = %v, want %v", tt.path, tt.apiRoot, got, tt.want)
+		if got := isRateLimitedRoute(tt.path, tt.basePath); got != tt.want {
+			t.Fatalf("isRateLimitedRoute(%q, %q) = %v, want %v", tt.path, tt.basePath, got, tt.want)
 		}
 	}
 }
@@ -490,10 +515,10 @@ func TestRestAPIRateLimiterBypassDoesNotConsumeToken(t *testing.T) {
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	var calls atomic.Int32
-	handler := limiter.wrapAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := limiter.wrapPublic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusNoContent)
-	}), "/api")
+	}), "/")
 
 	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/static/app.js", nil)
@@ -521,9 +546,9 @@ func TestRestAPIRateLimiterLocalPeerBypass(t *testing.T) {
 	limiter := newTestRestAPIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
-	handler := limiter.wrapAPI(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := limiter.wrapPublic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}), "/api")
+	}), "/")
 
 	// A loopback/private peer without any attribution header is the operator's
 	// own tooling or a proxy that forwards no client IP; limiting that key would

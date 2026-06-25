@@ -106,11 +106,12 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	}
 	handler := http.Handler(serveMux)
 	if restLimiter != nil {
-		// the API root must be derived exactly like the route registrations in
+		// the base path must be derived exactly like the route registrations in
 		// ConnectFullPublicInterface (raw concatenation, not publicPath), so the
 		// limiter covers the same paths the mux actually serves for every
-		// binding shape
-		handler = restLimiter.wrapAPI(handler, path+"api")
+		// binding shape. The limiter governs all dynamic routes under path (the
+		// explorer UI pages and the REST API) under one shared per-client budget
+		handler = restLimiter.wrapPublic(handler, path)
 	}
 	https := &http.Server{
 		Addr:    addr,
