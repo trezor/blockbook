@@ -452,6 +452,9 @@ func TestRestUIRouteMatching(t *testing.T) {
 		{"/favicon.ico", "/", false},
 		{"/api-docs", "/", false},
 		{"/api-docs/", "/", false},
+		// A path that only shares the "api-docs" prefix is not the docs route and
+		// must stay limited (it falls through to the explorer index handler).
+		{"/api-docsx", "/", true},
 		{"/openapi.yaml", "/", false},
 		{"/websocket", "/", false},
 		{"/test-websocket.html", "/", false},
