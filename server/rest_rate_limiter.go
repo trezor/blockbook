@@ -288,8 +288,9 @@ func isRateLimitedRoute(reqPath, basePath string) bool {
 		rel == "openapi.yaml",
 		rel == "test-websocket.html",
 		rel == "websocket",
+		rel == "api-docs",
 		strings.HasPrefix(rel, "static/"),
-		strings.HasPrefix(rel, "api-docs"):
+		strings.HasPrefix(rel, "api-docs/"):
 		return false
 	}
 	return true
