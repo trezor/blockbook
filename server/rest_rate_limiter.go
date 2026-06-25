@@ -230,9 +230,9 @@ func parseNonNegativeDurationEnv(envName string, defaultValue time.Duration) (ti
 	return d, nil
 }
 
-func (l *restAPIRateLimiter) wrapAPI(next http.Handler, apiRoot string) http.Handler {
+func (l *restAPIRateLimiter) wrapPublic(next http.Handler, basePath string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isRestAPIRoute(r.URL.Path, apiRoot) {
+		if !isRateLimitedRoute(r.URL.Path, basePath) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -276,8 +276,23 @@ func (l *restAPIRateLimiter) wrapAPI(next http.Handler, apiRoot string) http.Han
 	})
 }
 
-func isRestAPIRoute(path, apiRoot string) bool {
-	return path == apiRoot || strings.HasPrefix(path, apiRoot+"/")
+func isRateLimitedRoute(reqPath, basePath string) bool {
+	if !strings.HasPrefix(reqPath, basePath) {
+		return false
+	}
+	// basePath always ends in "/" (see splitBinding), and routes are registered by
+	// raw concatenation (basePath+"address/" etc.), so rel is the registered suffix.
+	rel := strings.TrimPrefix(reqPath, basePath)
+	switch {
+	case rel == "favicon.ico",
+		rel == "openapi.yaml",
+		rel == "test-websocket.html",
+		rel == "websocket",
+		strings.HasPrefix(rel, "static/"),
+		strings.HasPrefix(rel, "api-docs"):
+		return false
+	}
+	return true
 }
 
 func (l *restAPIRateLimiter) accept(ipKey, blockKey string, blockable bool, now time.Time) restAPILimitDecision {
