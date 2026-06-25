@@ -468,14 +468,17 @@ func (b *TronRPC) requestBlockByID(ctx context.Context, blockHash string, isSoli
 	return &resp, nil
 }
 
-func (b *TronRPC) requestBlockHashByNum(ctx context.Context, blockNum uint32, isSolidified bool) (string, error) {
+// requestBlockHashByNum resolves a block hash by height via the solidity node's
+// /walletsolidity/getblock endpoint. It is only called for already-solidified
+// heights (see GetBlockHash), so the lookup always targets the solidity node.
+func (b *TronRPC) requestBlockHashByNum(ctx context.Context, blockNum uint32) (string, error) {
 	req := map[string]any{
 		"id_or_num": strconv.FormatUint(uint64(blockNum), 10),
 		"detail":    false,
 	}
-	http := b.getLookupHTTPClient(isSolidified)
+	http := b.getLookupHTTPClient(true)
 	var resp tronGetBlockHeaderResponse
-	if err := http.Request(ctx, tronLookupPath(isSolidified, "/wallet/getblock", "/walletsolidity/getblock"), req, &resp); err != nil {
+	if err := http.Request(ctx, "/walletsolidity/getblock", req, &resp); err != nil {
 		return "", err
 	}
 	if resp.BlockHeader.RawData.Number == nil {

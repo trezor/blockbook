@@ -290,7 +290,7 @@ func (b *TronRPC) GetBlockHash(height uint32) (string, error) {
 	if b.isBlockSolidified(uint64(height)) && b.solidityNodeHTTP != nil {
 		ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 		defer cancel()
-		hash, err := b.requestBlockHashByNum(ctx, height, true)
+		hash, err := b.requestBlockHashByNum(ctx, height)
 		if err == nil {
 			return hash, nil
 		}
