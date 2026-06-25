@@ -113,21 +113,21 @@ metrics:
     name: blockbook_websocket_blocked_connections
     type: counter
     help: Websocket connection attempts rejected before upgrade because the client key was on the temporary IP blocklist
-  rest_api_rate_limit_rejections:
-    name: blockbook_rest_api_rate_limit_rejections
+  rest_ui_rate_limit_rejections:
+    name: blockbook_rest_ui_rate_limit_rejections
     type: counter_vec
     help: Public HTTP requests (explorer UI and REST API) rejected by the per-IP limiter before handler work
     labels: [reason]
-  rest_api_active_ips:
-    name: blockbook_rest_api_active_ips
+  rest_ui_active_ips:
+    name: blockbook_rest_ui_active_ips
     type: gauge
     help: Distinct client keys with at least one in-flight public HTTP request (explorer UI or REST API)
-  rest_api_max_active_requests_per_ip:
-    name: blockbook_rest_api_max_active_requests_per_ip
+  rest_ui_max_active_requests_per_ip:
+    name: blockbook_rest_ui_max_active_requests_per_ip
     type: gauge
     help: Largest number of in-flight public HTTP requests (explorer UI or REST API) held by one client key
-  rest_api_blocked_ips:
-    name: blockbook_rest_api_blocked_ips
+  rest_ui_blocked_ips:
+    name: blockbook_rest_ui_blocked_ips
     type: gauge
     help: Distinct client keys currently blocked from public HTTP requests (explorer UI or REST API)
   index_resync_duration:

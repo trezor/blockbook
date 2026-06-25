@@ -16,35 +16,35 @@ import (
 )
 
 const (
-	defaultRestAPIRateLimit     = 600
-	defaultRestAPIRateWindow    = time.Minute
-	defaultRestAPIBurst         = 120
-	defaultRestAPIMaxConcurrent = 24
-	defaultRestAPIStateTTL      = 10 * time.Minute
-	defaultRestAPIBlockDuration = 0
+	defaultRestUIRateLimit     = 600
+	defaultRestUIRateWindow    = time.Minute
+	defaultRestUIBurst         = 120
+	defaultRestUIMaxConcurrent = 24
+	defaultRestUIStateTTL      = 10 * time.Minute
+	defaultRestUIBlockDuration = 0
 
-	restAPILimiterCleanupInterval = time.Minute
-	restAPIBreachWindow           = 10 * time.Minute
-	restAPIBreachBlockThreshold   = 3
-	// restAPIBreachMinSpacing is the minimum quiet gap between counted breaches:
+	restUILimiterCleanupInterval = time.Minute
+	restUIBreachWindow           = 10 * time.Minute
+	restUIBreachBlockThreshold   = 3
+	// restUIBreachMinSpacing is the minimum quiet gap between counted breaches:
 	// one burst produces many rejections in the same instant (e.g. a page firing
 	// dozens of parallel fetches), and the block threshold should mean separate
 	// abuse episodes, not one spike.
-	restAPIBreachMinSpacing = 10 * time.Second
-	// restAPIMaxTrackedClients bounds the per-key state map so a flood rotating
+	restUIBreachMinSpacing = 10 * time.Second
+	// restUIMaxTrackedClients bounds the per-key state map so a flood rotating
 	// client keys cannot grow it (and the sweeps over it) without bound; past the
 	// cap, new keys are temporarily admitted untracked (fail open) while
 	// already-tracked keys stay limited.
-	restAPIMaxTrackedClients = 100_000
+	restUIMaxTrackedClients = 100_000
 )
 
 const (
-	restAPIRejectRequestRate        = "request_rate"
-	restAPIRejectConcurrentRequests = "concurrent_requests"
-	restAPIRejectIPBlocked          = "ip_blocked"
+	restUIRejectRequestRate        = "request_rate"
+	restUIRejectConcurrentRequests = "concurrent_requests"
+	restUIRejectIPBlocked          = "ip_blocked"
 )
 
-type restAPILimiterConfig struct {
+type restUILimiterConfig struct {
 	rateLimit       int
 	rateWindow      time.Duration
 	burst           int
@@ -56,9 +56,9 @@ type restAPILimiterConfig struct {
 	trustPseudoIPv6 bool
 }
 
-type restAPIRateLimiter struct {
+type restUIRateLimiter struct {
 	mux                sync.Mutex
-	clients            map[string]*restAPIClientLimit
+	clients            map[string]*restUIClientLimit
 	lastCleanup        time.Time
 	capWarned          bool
 	metrics            *common.Metrics
@@ -74,9 +74,9 @@ type restAPIRateLimiter struct {
 	localBypassWarn    sync.Once
 }
 
-type restAPIClientLimit struct {
+type restUIClientLimit struct {
 	active         int
-	bucket         restAPITokenBucket
+	bucket         restUITokenBucket
 	breaches       []time.Time
 	blockedUntil   time.Time
 	blockRejected  int
@@ -85,12 +85,12 @@ type restAPIClientLimit struct {
 	lastRejectKind string
 }
 
-type restAPITokenBucket struct {
+type restUITokenBucket struct {
 	tokens     float64
 	lastRefill time.Time
 }
 
-type restAPILimitDecision struct {
+type restUILimitDecision struct {
 	accepted bool
 	// untracked marks an accepted request for which no per-key state was
 	// created (tracking-cap fail-open); the caller must not release it.
@@ -103,17 +103,17 @@ type restAPILimitDecision struct {
 	shouldLog bool
 }
 
-func newRestAPIRateLimiter(network string, metrics *common.Metrics) (*restAPIRateLimiter, error) {
-	cfg, err := readRestAPILimiterConfig(network)
+func newRestUIRateLimiter(network string, metrics *common.Metrics) (*restUIRateLimiter, error) {
+	cfg, err := readRestUILimiterConfig(network)
 	if err != nil {
 		return nil, err
 	}
 	if cfg.rateLimit == 0 && cfg.maxConcurrent == 0 {
-		glog.Info("REST API rate limiter disabled")
+		glog.Info("REST/UI rate limiter disabled")
 		return nil, nil
 	}
-	l := &restAPIRateLimiter{
-		clients:            make(map[string]*restAPIClientLimit),
+	l := &restUIRateLimiter{
+		clients:            make(map[string]*restUIClientLimit),
 		metrics:            metrics,
 		rateLimit:          cfg.rateLimit,
 		rateWindow:         cfg.rateWindow,
@@ -126,61 +126,61 @@ func newRestAPIRateLimiter(network string, metrics *common.Metrics) (*restAPIRat
 		trustPseudoIPv6:    cfg.trustPseudoIPv6,
 	}
 	if metrics != nil {
-		metrics.RestAPIActiveIPs.Set(0)
-		metrics.RestAPIMaxActiveRequestsPerIP.Set(0)
-		metrics.RestAPIBlockedIPs.Set(0)
+		metrics.RestUIActiveIPs.Set(0)
+		metrics.RestUIMaxActiveRequestsPerIP.Set(0)
+		metrics.RestUIBlockedIPs.Set(0)
 	}
 	if cfg.rateLimit > 0 {
-		glog.Infof("REST API rate limit: %d requests / %s; burst: %d", cfg.rateLimit, cfg.rateWindow, cfg.burst)
+		glog.Infof("REST/UI rate limit: %d requests / %s; burst: %d", cfg.rateLimit, cfg.rateWindow, cfg.burst)
 	} else {
-		glog.Info("REST API request-rate limit disabled")
+		glog.Info("REST/UI request-rate limit disabled")
 	}
 	if cfg.maxConcurrent > 0 {
-		glog.Infof("REST API per-client concurrency limit: %d active requests", cfg.maxConcurrent)
+		glog.Infof("REST/UI per-client concurrency limit: %d active requests", cfg.maxConcurrent)
 	} else {
-		glog.Info("REST API per-client concurrency limit disabled")
+		glog.Info("REST/UI per-client concurrency limit disabled")
 	}
 	if cfg.blockDuration > 0 {
-		glog.Infof("REST API temporary IP block enabled after repeated breaches: %s", cfg.blockDuration)
+		glog.Infof("REST/UI temporary IP block enabled after repeated breaches: %s", cfg.blockDuration)
 		if len(cfg.cloudflareCIDRs) == 0 {
-			glog.Warning("REST API temporary IP block is enabled without Cloudflare peer verification; CF-Connecting-* derived addresses are not blockable in this mode")
+			glog.Warning("REST/UI temporary IP block is enabled without Cloudflare peer verification; CF-Connecting-* derived addresses are not blockable in this mode")
 		}
 	}
-	go l.runMaintenance(restAPILimiterCleanupInterval)
+	go l.runMaintenance(restUILimiterCleanupInterval)
 	return l, nil
 }
 
-func readRestAPILimiterConfig(network string) (restAPILimiterConfig, error) {
+func readRestUILimiterConfig(network string) (restUILimiterConfig, error) {
 	prefix := strings.ToUpper(network)
-	cfg := restAPILimiterConfig{
-		rateLimit:     defaultRestAPIRateLimit,
-		rateWindow:    defaultRestAPIRateWindow,
-		burst:         defaultRestAPIBurst,
-		maxConcurrent: defaultRestAPIMaxConcurrent,
-		stateTTL:      defaultRestAPIStateTTL,
-		blockDuration: defaultRestAPIBlockDuration,
+	cfg := restUILimiterConfig{
+		rateLimit:     defaultRestUIRateLimit,
+		rateWindow:    defaultRestUIRateWindow,
+		burst:         defaultRestUIBurst,
+		maxConcurrent: defaultRestUIMaxConcurrent,
+		stateTTL:      defaultRestUIStateTTL,
+		blockDuration: defaultRestUIBlockDuration,
 	}
 
 	var err error
-	if cfg.rateLimit, err = parseNonNegativeIntEnv(prefix+"_REST_RATE_LIMIT", cfg.rateLimit); err != nil {
+	if cfg.rateLimit, err = parseNonNegativeIntEnv(prefix+"_REST_UI_RATE_LIMIT", cfg.rateLimit); err != nil {
 		return cfg, err
 	}
-	if cfg.rateWindow, err = parsePositiveDurationEnv(prefix+"_REST_RATE_WINDOW", cfg.rateWindow); err != nil {
+	if cfg.rateWindow, err = parsePositiveDurationEnv(prefix+"_REST_UI_RATE_WINDOW", cfg.rateWindow); err != nil {
 		return cfg, err
 	}
-	if cfg.burst, err = parseNonNegativeIntEnv(prefix+"_REST_BURST", cfg.burst); err != nil {
+	if cfg.burst, err = parseNonNegativeIntEnv(prefix+"_REST_UI_BURST", cfg.burst); err != nil {
 		return cfg, err
 	}
 	if cfg.rateLimit > 0 && cfg.burst <= 0 {
-		return cfg, fmt.Errorf("%s_REST_BURST: invalid value %d (want a positive integer when REST request-rate limiting is enabled)", prefix, cfg.burst)
+		return cfg, fmt.Errorf("%s_REST_UI_BURST: invalid value %d (want a positive integer when REST request-rate limiting is enabled)", prefix, cfg.burst)
 	}
-	if cfg.maxConcurrent, err = parseNonNegativeIntEnv(prefix+"_REST_MAX_CONCURRENT", cfg.maxConcurrent); err != nil {
+	if cfg.maxConcurrent, err = parseNonNegativeIntEnv(prefix+"_REST_UI_MAX_CONCURRENT", cfg.maxConcurrent); err != nil {
 		return cfg, err
 	}
-	if cfg.stateTTL, err = parsePositiveDurationEnv(prefix+"_REST_STATE_TTL", cfg.stateTTL); err != nil {
+	if cfg.stateTTL, err = parsePositiveDurationEnv(prefix+"_REST_UI_STATE_TTL", cfg.stateTTL); err != nil {
 		return cfg, err
 	}
-	if cfg.blockDuration, err = parseNonNegativeDurationEnv(prefix+"_REST_BLOCK_DURATION", cfg.blockDuration); err != nil {
+	if cfg.blockDuration, err = parseNonNegativeDurationEnv(prefix+"_REST_UI_BLOCK_DURATION", cfg.blockDuration); err != nil {
 		return cfg, err
 	}
 
@@ -230,7 +230,7 @@ func parseNonNegativeDurationEnv(envName string, defaultValue time.Duration) (ti
 	return d, nil
 }
 
-func (l *restAPIRateLimiter) wrapPublic(next http.Handler, basePath string) http.Handler {
+func (l *restUIRateLimiter) wrapPublic(next http.Handler, basePath string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !isRateLimitedRoute(r.URL.Path, basePath) {
 			next.ServeHTTP(w, r)
@@ -242,7 +242,7 @@ func (l *restAPIRateLimiter) wrapPublic(next http.Handler, basePath string) http
 			// with no client-attribution header: the key would be a shared infrastructure
 			// address, so limiting it would throttle the whole deployment as one client.
 			l.localBypassWarn.Do(func() {
-				glog.Info("REST API request from local/trusted peer ", ip,
+				glog.Info("REST/UI request from local/trusted peer ", ip,
 					" without a client attribution header; such requests are not rate limited")
 			})
 			next.ServeHTTP(w, r)
@@ -262,9 +262,9 @@ func (l *restAPIRateLimiter) wrapPublic(next http.Handler, basePath string) http
 		if !decision.accepted {
 			l.observeRejection(decision.reason)
 			if decision.shouldLog {
-				glog.Warning("REST API request rejected, ", ipKey, ", ", decision.reason)
+				glog.Warning("REST/UI request rejected, ", ipKey, ", ", decision.reason)
 			}
-			writeRestAPIRateLimitResponse(w, decision.retryAfter)
+			writeRestUIRateLimitResponse(w, decision.retryAfter)
 			return
 		}
 		if !decision.untracked {
@@ -295,7 +295,7 @@ func isRateLimitedRoute(reqPath, basePath string) bool {
 	return true
 }
 
-func (l *restAPIRateLimiter) accept(ipKey, blockKey string, blockable bool, now time.Time) restAPILimitDecision {
+func (l *restUIRateLimiter) accept(ipKey, blockKey string, blockable bool, now time.Time) restUILimitDecision {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
@@ -308,36 +308,36 @@ func (l *restAPIRateLimiter) accept(ipKey, blockKey string, blockable bool, now 
 	if bc := l.clients[blockKey]; bc != nil && bc.blockedUntil.After(now) {
 		bc.lastSeen = now
 		bc.blockRejected++
-		return restAPILimitDecision{
-			reason:     restAPIRejectIPBlocked,
+		return restUILimitDecision{
+			reason:     restUIRejectIPBlocked,
 			retryAfter: bc.blockedUntil.Sub(now),
-			shouldLog:  bc.shouldLogRejection(restAPIRejectIPBlocked, now),
+			shouldLog:  bc.shouldLogRejection(restUIRejectIPBlocked, now),
 		}
 	}
 
 	client := l.clients[ipKey]
 	if client == nil {
-		if len(l.clients) >= restAPIMaxTrackedClients {
+		if len(l.clients) >= restUIMaxTrackedClients {
 			l.sweepLocked(now)
 		}
-		if len(l.clients) >= restAPIMaxTrackedClients {
+		if len(l.clients) >= restUIMaxTrackedClients {
 			if !l.capWarned {
 				l.capWarned = true
-				glog.Warning("REST API rate limiter is tracking ", restAPIMaxTrackedClients,
+				glog.Warning("REST/UI rate limiter is tracking ", restUIMaxTrackedClients,
 					" client keys; admitting new keys unlimited until the map shrinks")
 			}
-			return restAPILimitDecision{accepted: true, untracked: true}
+			return restUILimitDecision{accepted: true, untracked: true}
 		}
-		client = &restAPIClientLimit{}
+		client = &restUIClientLimit{}
 		l.clients[ipKey] = client
 	}
 	client.lastSeen = now
 
 	if l.maxConcurrent > 0 && client.active >= l.maxConcurrent {
 		l.recordBreachLocked(blockKey, blockable, now)
-		return restAPILimitDecision{
-			reason:    restAPIRejectConcurrentRequests,
-			shouldLog: client.shouldLogRejection(restAPIRejectConcurrentRequests, now),
+		return restUILimitDecision{
+			reason:    restUIRejectConcurrentRequests,
+			shouldLog: client.shouldLogRejection(restUIRejectConcurrentRequests, now),
 		}
 	}
 
@@ -345,19 +345,19 @@ func (l *restAPIRateLimiter) accept(ipKey, blockKey string, blockable bool, now 
 		ok, retryAfter := client.bucket.allow(now, l.rateLimit, l.rateWindow, l.burst)
 		if !ok {
 			l.recordBreachLocked(blockKey, blockable, now)
-			return restAPILimitDecision{
-				reason:     restAPIRejectRequestRate,
+			return restUILimitDecision{
+				reason:     restUIRejectRequestRate,
 				retryAfter: retryAfter,
-				shouldLog:  client.shouldLogRejection(restAPIRejectRequestRate, now),
+				shouldLog:  client.shouldLogRejection(restUIRejectRequestRate, now),
 			}
 		}
 	}
 
 	client.active++
-	return restAPILimitDecision{accepted: true}
+	return restUILimitDecision{accepted: true}
 }
 
-func (l *restAPIRateLimiter) release(ipKey string, now time.Time) {
+func (l *restUIRateLimiter) release(ipKey string, now time.Time) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
@@ -372,7 +372,7 @@ func (l *restAPIRateLimiter) release(ipKey string, now time.Time) {
 	l.cleanupLocked(now)
 }
 
-func (l *restAPIRateLimiter) recordBreachLocked(blockKey string, blockable bool, now time.Time) {
+func (l *restUIRateLimiter) recordBreachLocked(blockKey string, blockable bool, now time.Time) {
 	if l.blockDuration <= 0 || !blockable {
 		return
 	}
@@ -382,29 +382,29 @@ func (l *restAPIRateLimiter) recordBreachLocked(blockKey string, blockable bool,
 	// the /64 rate limiter still throttles them).
 	client := l.clients[blockKey]
 	if client == nil {
-		if len(l.clients) >= restAPIMaxTrackedClients {
+		if len(l.clients) >= restUIMaxTrackedClients {
 			return
 		}
-		client = &restAPIClientLimit{}
+		client = &restUIClientLimit{}
 		l.clients[blockKey] = client
 	}
 	client.lastSeen = now
-	cutoff := now.Add(-restAPIBreachWindow)
+	cutoff := now.Add(-restUIBreachWindow)
 	client.breaches = trimTimes(client.breaches, cutoff)
 	// every rejection of an over-limit client lands here; only count one breach
 	// per quiet gap so the block threshold means separate abuse episodes
-	if n := len(client.breaches); n > 0 && now.Sub(client.breaches[n-1]) < restAPIBreachMinSpacing {
+	if n := len(client.breaches); n > 0 && now.Sub(client.breaches[n-1]) < restUIBreachMinSpacing {
 		return
 	}
 	client.breaches = append(client.breaches, now)
-	if len(client.breaches) >= restAPIBreachBlockThreshold {
+	if len(client.breaches) >= restUIBreachBlockThreshold {
 		client.blockedUntil = now.Add(l.blockDuration)
 		client.blockRejected = 0
 		client.breaches = client.breaches[:0]
 	}
 }
 
-func (b *restAPITokenBucket) allow(now time.Time, rateLimit int, rateWindow time.Duration, burst int) (bool, time.Duration) {
+func (b *restUITokenBucket) allow(now time.Time, rateLimit int, rateWindow time.Duration, burst int) (bool, time.Duration) {
 	if rateLimit <= 0 {
 		return true, 0
 	}
@@ -440,33 +440,33 @@ func trimTimes(times []time.Time, cutoff time.Time) []time.Time {
 	return times
 }
 
-func (l *restAPIRateLimiter) cleanupLocked(now time.Time) {
-	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < restAPILimiterCleanupInterval {
+func (l *restUIRateLimiter) cleanupLocked(now time.Time) {
+	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < restUILimiterCleanupInterval {
 		return
 	}
 	l.sweepLocked(now)
 }
 
-func (l *restAPIRateLimiter) sweepLocked(now time.Time) {
+func (l *restUIRateLimiter) sweepLocked(now time.Time) {
 	l.lastCleanup = now
 	for ipKey, client := range l.clients {
-		client.breaches = trimTimes(client.breaches, now.Add(-restAPIBreachWindow))
+		client.breaches = trimTimes(client.breaches, now.Add(-restUIBreachWindow))
 		if client.active == 0 && !client.blockedUntil.After(now) && now.Sub(client.lastSeen) > l.stateTTL {
 			delete(l.clients, ipKey)
 		}
 	}
-	if l.capWarned && len(l.clients) < restAPIMaxTrackedClients/2 {
+	if l.capWarned && len(l.clients) < restUIMaxTrackedClients/2 {
 		l.capWarned = false
 	}
 }
 
-func (l *restAPIRateLimiter) sweep(now time.Time) {
+func (l *restUIRateLimiter) sweep(now time.Time) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 	l.sweepLocked(now)
 }
 
-func (l *restAPIRateLimiter) stats(now time.Time) (activeIPs int, maxActiveRequestsPerIP int, blockedIPs int) {
+func (l *restUIRateLimiter) stats(now time.Time) (activeIPs int, maxActiveRequestsPerIP int, blockedIPs int) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 	for _, client := range l.clients {
@@ -483,23 +483,23 @@ func (l *restAPIRateLimiter) stats(now time.Time) (activeIPs int, maxActiveReque
 	return activeIPs, maxActiveRequestsPerIP, blockedIPs
 }
 
-func (l *restAPIRateLimiter) runMaintenance(interval time.Duration) {
+func (l *restUIRateLimiter) runMaintenance(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for now := range ticker.C {
 		l.sweep(now)
 		if l.metrics != nil {
 			activeIPs, maxActive, blockedIPs := l.stats(now)
-			l.metrics.RestAPIActiveIPs.Set(float64(activeIPs))
-			l.metrics.RestAPIMaxActiveRequestsPerIP.Set(float64(maxActive))
-			l.metrics.RestAPIBlockedIPs.Set(float64(blockedIPs))
+			l.metrics.RestUIActiveIPs.Set(float64(activeIPs))
+			l.metrics.RestUIMaxActiveRequestsPerIP.Set(float64(maxActive))
+			l.metrics.RestUIBlockedIPs.Set(float64(blockedIPs))
 		}
 	}
 }
 
-func (l *restAPIRateLimiter) observeRejection(reason string) {
+func (l *restUIRateLimiter) observeRejection(reason string) {
 	if l.metrics != nil {
-		l.metrics.RestAPIRateLimitRejections.With(common.Labels{"reason": reason}).Inc()
+		l.metrics.RestUIRateLimitRejections.With(common.Labels{"reason": reason}).Inc()
 	}
 }
 
@@ -507,9 +507,9 @@ func (l *restAPIRateLimiter) observeRejection(reason string) {
 // rejection kind changes or at most once a minute, plus the first and every
 // 1000th rejection of a blocked client. Called with the limiter mutex held (it
 // mutates client state); the caller emits the log line after unlocking.
-func (client *restAPIClientLimit) shouldLogRejection(reason string, now time.Time) bool {
+func (client *restUIClientLimit) shouldLogRejection(reason string, now time.Time) bool {
 	shouldLog := reason != client.lastRejectKind || now.Sub(client.lastRejectLog) >= time.Minute
-	if reason == restAPIRejectIPBlocked && (client.blockRejected == 1 || client.blockRejected%1000 == 0) {
+	if reason == restUIRejectIPBlocked && (client.blockRejected == 1 || client.blockRejected%1000 == 0) {
 		shouldLog = true
 	}
 	if shouldLog {
@@ -519,7 +519,7 @@ func (client *restAPIClientLimit) shouldLogRejection(reason string, now time.Tim
 	return shouldLog
 }
 
-func writeRestAPIRateLimitResponse(w http.ResponseWriter, retryAfter time.Duration) {
+func writeRestUIRateLimitResponse(w http.ResponseWriter, retryAfter time.Duration) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", getContentSecurityPolicy())
 	if retryAfter > 0 {
@@ -531,6 +531,6 @@ func writeRestAPIRateLimitResponse(w http.ResponseWriter, retryAfter time.Durati
 	}
 	w.WriteHeader(http.StatusTooManyRequests)
 	if _, err := w.Write([]byte("{\"error\":\"rate limit exceeded\"}\n")); err != nil {
-		glog.Warning("write REST API rate-limit response: ", err)
+		glog.Warning("write REST/UI rate-limit response: ", err)
 	}
 }

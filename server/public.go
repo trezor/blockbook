@@ -68,7 +68,7 @@ type PublicServer struct {
 	certFiles           string
 	websocket           *WebsocketServer
 	serveMux            *http.ServeMux
-	restLimiter         *restAPIRateLimiter
+	restLimiter         *restUIRateLimiter
 	https               *http.Server
 	db                  *db.RocksDB
 	txCache             *db.TxCache
@@ -100,7 +100,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
-	restLimiter, err := newRestAPIRateLimiter(is.GetNetwork(), metrics)
+	restLimiter, err := newRestUIRateLimiter(is.GetNetwork(), metrics)
 	if err != nil {
 		return nil, err
 	}
