@@ -61,7 +61,12 @@ Set explicit `tron_fullnode_http_url_template` and `tron_solidity_http_url_templ
 * the scheme differs from the JSON-RPC endpoint
 * the deployment uses non-standard ports
 
+## Sync Performance Tuning
+
+For initial-sync tuning notes, see [Tron Sync Tuning](/docs/tron-sync-tuning.md).
+
 ## Related Docs
 
 * [Config](/docs/config.md)
+* [Tron Sync Tuning](/docs/tron-sync-tuning.md)
 * [Testing](/docs/testing.md)
