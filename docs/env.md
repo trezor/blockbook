@@ -53,7 +53,7 @@ Blockbook reads these from its process environment. When installed from the Debi
 
     The blocklist is kept in memory only: a restart clears all active blocks. A blocked client key still blocks every other client sharing that exact key — the same IPv4 address behind CGNAT — but IPv6 blocks now key on the individual `/128`, so unrelated neighbors sharing a `/64` are no longer caught by one address's block.
 
--   `<network>_REST_UI_RATE_LIMIT` - Maximum number of public HTTP requests a single client key may start within `<network>_REST_UI_RATE_WINDOW`. Accepts a non-negative integer; default `600`, `0` disables request-rate limiting. The client key uses the shared REST/WebSocket attribution rules: an IPv4 address, or an IPv6 `/64` prefix.
+-   `<network>_REST_UI_RATE_LIMIT` - Maximum number of public HTTP requests a single client key may start within `<network>_REST_UI_RATE_WINDOW`. Accepts a non-negative integer; default `180`, `0` disables request-rate limiting. The client key uses the shared REST/WebSocket attribution rules: an IPv4 address, or an IPv6 `/64` prefix.
 
     Despite the `REST_` prefix, this limiter governs **all dynamic public routes under one shared per-client budget** — both the explorer UI pages (`/address/`, `/xpub/`, `/tx/`, `/search/`, `/block/`, …) and the REST API (`/api/...`). Only static assets (`/static/`, `/favicon.ico`), the API docs (`/api-docs`), the OpenAPI spec (`/openapi.yaml`), and the WebSocket endpoint (`/websocket`, which has its own limiter — see `<network>_WS_MESSAGE_RATE_LIMIT`) are exempt. New routes are covered automatically.
 
@@ -61,9 +61,9 @@ Blockbook reads these from its process environment. When installed from the Debi
 
 -   `<network>_REST_UI_RATE_WINDOW` - Token-bucket refill window for `<network>_REST_UI_RATE_LIMIT`, as a Go duration string (e.g. `1m`, `60s`). Default `1m`.
 
--   `<network>_REST_UI_BURST` - Token-bucket burst size for one client key. Default `120`; must be positive when request-rate limiting is enabled.
+-   `<network>_REST_UI_BURST` - Token-bucket burst size for one client key. Default `40`; must be positive when request-rate limiting is enabled.
 
--   `<network>_REST_UI_MAX_CONCURRENT` - Maximum number of in-flight public HTTP requests (explorer UI page or REST API call) accepted from one client key. Default `24`; `0` disables the per-client concurrency limit. This protects slow or expensive handlers held open concurrently from one source.
+-   `<network>_REST_UI_MAX_CONCURRENT` - Maximum number of in-flight public HTTP requests (explorer UI page or REST API call) accepted from one client key. Default `12`; `0` disables the per-client concurrency limit. This protects slow or expensive handlers held open concurrently from one source.
 
 -   `<network>_REST_UI_STATE_TTL` - How long idle limiter state is retained for one client key, as a Go duration string. Default `10m`.
 

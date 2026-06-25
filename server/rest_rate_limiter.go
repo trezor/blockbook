@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	defaultRestUIRateLimit     = 600
+	defaultRestUIRateLimit     = 180
 	defaultRestUIRateWindow    = time.Minute
-	defaultRestUIBurst         = 120
-	defaultRestUIMaxConcurrent = 24
+	defaultRestUIBurst         = 40
+	defaultRestUIMaxConcurrent = 12
 	defaultRestUIStateTTL      = 10 * time.Minute
 	defaultRestUIBlockDuration = 0
 
