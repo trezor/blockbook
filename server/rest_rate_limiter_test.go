@@ -15,14 +15,14 @@ import (
 	"time"
 )
 
-func newTestRestAPIRateLimiter() *restAPIRateLimiter {
-	return &restAPIRateLimiter{
-		clients:       make(map[string]*restAPIClientLimit),
+func newTestRestUIRateLimiter() *restUIRateLimiter {
+	return &restUIRateLimiter{
+		clients:       make(map[string]*restUIClientLimit),
 		rateLimit:     0,
 		rateWindow:    time.Minute,
 		burst:         1,
 		maxConcurrent: 0,
-		stateTTL:      defaultRestAPIStateTTL,
+		stateTTL:      defaultRestUIStateTTL,
 	}
 }
 
@@ -39,8 +39,8 @@ func (b *trackingBody) Close() error {
 	return nil
 }
 
-func TestRestAPIRateLimiterRejectsWith429BeforeHandlerWork(t *testing.T) {
-	limiter := newTestRestAPIRateLimiter()
+func TestRestUIRateLimiterRejectsWith429BeforeHandlerWork(t *testing.T) {
+	limiter := newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	var handlerCalls int
@@ -83,8 +83,8 @@ func TestRestAPIRateLimiterRejectsWith429BeforeHandlerWork(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterConcurrentRequests(t *testing.T) {
-	limiter := newTestRestAPIRateLimiter()
+func TestRestUIRateLimiterConcurrentRequests(t *testing.T) {
+	limiter := newTestRestUIRateLimiter()
 	limiter.maxConcurrent = 1
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -129,8 +129,8 @@ func TestRestAPIRateLimiterConcurrentRequests(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterRouteScope(t *testing.T) {
-	limiter := newTestRestAPIRateLimiter()
+func TestRestUIRateLimiterRouteScope(t *testing.T) {
+	limiter := newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	var handlerCalls int
@@ -303,9 +303,9 @@ func TestClientIPConfigEnvFallback(t *testing.T) {
 	})
 }
 
-func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
+func TestRestUIRateLimiterTemporaryBlock(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	limiter := newTestRestAPIRateLimiter()
+	limiter := newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	limiter.blockDuration = time.Minute
@@ -314,24 +314,24 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 		t.Fatalf("first decision = %+v, want accepted", decision)
 	}
 	limiter.release("192.0.2.10", now)
-	// breaches must be separate episodes (>= restAPIBreachMinSpacing apart) to
+	// breaches must be separate episodes (>= restUIBreachMinSpacing apart) to
 	// count toward the block threshold
 	var last time.Time
-	for i := 0; i < restAPIBreachBlockThreshold; i++ {
-		last = now.Add(time.Duration(i) * restAPIBreachMinSpacing)
+	for i := 0; i < restUIBreachBlockThreshold; i++ {
+		last = now.Add(time.Duration(i) * restUIBreachMinSpacing)
 		decision := limiter.accept("192.0.2.10", "192.0.2.10", true, last)
-		if decision.accepted || decision.reason != restAPIRejectRequestRate {
+		if decision.accepted || decision.reason != restUIRejectRequestRate {
 			t.Fatalf("breach %d decision = %+v, want request-rate rejection", i, decision)
 		}
 	}
 	decision := limiter.accept("192.0.2.10", "192.0.2.10", true, last.Add(time.Second))
-	if decision.accepted || decision.reason != restAPIRejectIPBlocked {
+	if decision.accepted || decision.reason != restUIRejectIPBlocked {
 		t.Fatalf("blocked decision = %+v, want ip_blocked", decision)
 	}
 
 	// a burst of same-instant rejections is one breach episode and must not
 	// trip the temporary block
-	limiter = newTestRestAPIRateLimiter()
+	limiter = newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	limiter.blockDuration = time.Minute
@@ -339,9 +339,9 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 		t.Fatalf("first burst decision = %+v, want accepted", decision)
 	}
 	limiter.release("192.0.2.11", now)
-	for i := 0; i < 3*restAPIBreachBlockThreshold; i++ {
+	for i := 0; i < 3*restUIBreachBlockThreshold; i++ {
 		decision := limiter.accept("192.0.2.11", "192.0.2.11", true, now)
-		if decision.accepted || decision.reason != restAPIRejectRequestRate {
+		if decision.accepted || decision.reason != restUIRejectRequestRate {
 			t.Fatalf("burst rejection %d decision = %+v, want request-rate rejection", i, decision)
 		}
 	}
@@ -349,7 +349,7 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 		t.Fatal("same-instant rejection burst tripped the temporary block")
 	}
 
-	limiter = newTestRestAPIRateLimiter()
+	limiter = newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	limiter.blockDuration = time.Minute
@@ -357,9 +357,9 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 		t.Fatalf("first unblockable decision = %+v, want accepted", decision)
 	}
 	limiter.release("127.0.0.1", now)
-	for i := 0; i < restAPIBreachBlockThreshold+1; i++ {
-		decision = limiter.accept("127.0.0.1", "127.0.0.1", false, now.Add(time.Duration(i)*restAPIBreachMinSpacing))
-		if decision.accepted || decision.reason != restAPIRejectRequestRate {
+	for i := 0; i < restUIBreachBlockThreshold+1; i++ {
+		decision = limiter.accept("127.0.0.1", "127.0.0.1", false, now.Add(time.Duration(i)*restUIBreachMinSpacing))
+		if decision.accepted || decision.reason != restUIRejectRequestRate {
 			t.Fatalf("unblockable breach %d decision = %+v, want request-rate rejection", i, decision)
 		}
 	}
@@ -368,9 +368,9 @@ func TestRestAPIRateLimiterTemporaryBlock(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterIPv6BlockIsPer128(t *testing.T) {
+func TestRestUIRateLimiterIPv6BlockIsPer128(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	limiter := newTestRestAPIRateLimiter()
+	limiter := newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	limiter.blockDuration = time.Minute
@@ -391,20 +391,20 @@ func TestRestAPIRateLimiterIPv6BlockIsPer128(t *testing.T) {
 	}
 	limiter.release(key64, now)
 	var last time.Time
-	for i := 0; i < restAPIBreachBlockThreshold; i++ {
-		last = now.Add(time.Duration(i) * restAPIBreachMinSpacing)
-		if d := limiter.accept(key64, b1, true, last); d.accepted || d.reason != restAPIRejectRequestRate {
+	for i := 0; i < restUIBreachBlockThreshold; i++ {
+		last = now.Add(time.Duration(i) * restUIBreachMinSpacing)
+		if d := limiter.accept(key64, b1, true, last); d.accepted || d.reason != restUIRejectRequestRate {
 			t.Fatalf("breach %d decision = %+v, want request-rate rejection", i, d)
 		}
 	}
 	after := last.Add(time.Second)
-	if d := limiter.accept(key64, b1, true, after); d.accepted || d.reason != restAPIRejectIPBlocked {
+	if d := limiter.accept(key64, b1, true, after); d.accepted || d.reason != restUIRejectIPBlocked {
 		t.Fatalf("b1 decision = %+v, want ip_blocked", d)
 	}
 
 	// A different /128 in the same /64 must NOT inherit the block: it is still
 	// subject to the shared /64 rate limit (request_rate) but never ip_blocked.
-	if d := limiter.accept(key64, b2, true, after); d.reason == restAPIRejectIPBlocked {
+	if d := limiter.accept(key64, b2, true, after); d.reason == restUIRejectIPBlocked {
 		t.Fatalf("b2 (same /64) wrongly ip_blocked: %+v", d)
 	}
 	if c := limiter.clients[b2]; c != nil && c.blockedUntil.After(after) {
@@ -412,12 +412,12 @@ func TestRestAPIRateLimiterIPv6BlockIsPer128(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterCleanup(t *testing.T) {
+func TestRestUIRateLimiterCleanup(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	limiter := newTestRestAPIRateLimiter()
-	limiter.clients["idle"] = &restAPIClientLimit{lastSeen: now.Add(-limiter.stateTTL - time.Second)}
-	limiter.clients["active"] = &restAPIClientLimit{active: 1, lastSeen: now.Add(-limiter.stateTTL - time.Second)}
-	limiter.clients["blocked"] = &restAPIClientLimit{blockedUntil: now.Add(time.Minute), lastSeen: now.Add(-limiter.stateTTL - time.Second)}
+	limiter := newTestRestUIRateLimiter()
+	limiter.clients["idle"] = &restUIClientLimit{lastSeen: now.Add(-limiter.stateTTL - time.Second)}
+	limiter.clients["active"] = &restUIClientLimit{active: 1, lastSeen: now.Add(-limiter.stateTTL - time.Second)}
+	limiter.clients["blocked"] = &restUIClientLimit{blockedUntil: now.Add(time.Minute), lastSeen: now.Add(-limiter.stateTTL - time.Second)}
 
 	limiter.sweep(now)
 	if _, ok := limiter.clients["idle"]; ok {
@@ -431,7 +431,7 @@ func TestRestAPIRateLimiterCleanup(t *testing.T) {
 	}
 }
 
-func TestRestAPIRouteMatching(t *testing.T) {
+func TestRestUIRouteMatching(t *testing.T) {
 	tests := []struct {
 		path     string
 		basePath string
@@ -467,12 +467,12 @@ func TestRestAPIRouteMatching(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterStats(t *testing.T) {
+func TestRestUIRateLimiterStats(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	limiter := newTestRestAPIRateLimiter()
-	limiter.clients["a"] = &restAPIClientLimit{active: 2}
-	limiter.clients["b"] = &restAPIClientLimit{active: 1, blockedUntil: now.Add(time.Minute)}
-	limiter.clients["c"] = &restAPIClientLimit{}
+	limiter := newTestRestUIRateLimiter()
+	limiter.clients["a"] = &restUIClientLimit{active: 2}
+	limiter.clients["b"] = &restUIClientLimit{active: 1, blockedUntil: now.Add(time.Minute)}
+	limiter.clients["c"] = &restUIClientLimit{}
 
 	activeIPs, maxActive, blockedIPs := limiter.stats(now)
 	if activeIPs != 2 || maxActive != 2 || blockedIPs != 1 {
@@ -490,8 +490,8 @@ func prefixesContain(prefixes []netip.Prefix, cidr string) bool {
 	return false
 }
 
-func TestRestAPIRateLimiterReleaseIsPerKey(t *testing.T) {
-	limiter := newTestRestAPIRateLimiter()
+func TestRestUIRateLimiterReleaseIsPerKey(t *testing.T) {
+	limiter := newTestRestUIRateLimiter()
 	limiter.maxConcurrent = 2
 	now := time.Unix(1_700_000_000, 0)
 	if decision := limiter.accept("192.0.2.20", "192.0.2.20", true, now); !decision.accepted {
@@ -510,8 +510,8 @@ func TestRestAPIRateLimiterReleaseIsPerKey(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterBypassDoesNotConsumeToken(t *testing.T) {
-	limiter := newTestRestAPIRateLimiter()
+func TestRestUIRateLimiterBypassDoesNotConsumeToken(t *testing.T) {
+	limiter := newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	var calls atomic.Int32
@@ -542,8 +542,8 @@ func TestRestAPIRateLimiterBypassDoesNotConsumeToken(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterLocalPeerBypass(t *testing.T) {
-	limiter := newTestRestAPIRateLimiter()
+func TestRestUIRateLimiterLocalPeerBypass(t *testing.T) {
+	limiter := newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
 	handler := limiter.wrapPublic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -582,13 +582,13 @@ func TestRestAPIRateLimiterLocalPeerBypass(t *testing.T) {
 	}
 }
 
-func TestRestAPIRateLimiterTrackingCap(t *testing.T) {
+func TestRestUIRateLimiterTrackingCap(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	limiter := newTestRestAPIRateLimiter()
+	limiter := newTestRestUIRateLimiter()
 	limiter.rateLimit = 1
 	limiter.burst = 1
-	for i := 0; i < restAPIMaxTrackedClients; i++ {
-		limiter.clients[strconv.Itoa(i)] = &restAPIClientLimit{lastSeen: now}
+	for i := 0; i < restUIMaxTrackedClients; i++ {
+		limiter.clients[strconv.Itoa(i)] = &restUIClientLimit{lastSeen: now}
 	}
 
 	decision := limiter.accept("192.0.2.99", "192.0.2.99", true, now)

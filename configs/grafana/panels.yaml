@@ -445,24 +445,24 @@ panels:
     description: 'Public HTTP requests (explorer UI pages and REST API, sharing one per-client budget) the per-IP limiter rejected before any handler work (HTTP 429), by reason: request_rate is over the per-client request budget (default 600/min, burst 120), concurrent_requests is more than the per-client in-flight cap (default 24), ip_blocked is a client on the temporary blocklist (only when block duration is enabled; off by default). Sustained non-zero values mean abuse is being actively throttled.'
     queries:
       by_reason:
-        promql: sum(rate({{name:rest_api_rate_limit_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
+        promql: sum(rate({{name:rest_ui_rate_limit_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
         legend: '{{coin}} - {{reason}}/min'
   rest_api.active_ips:
     title: Public HTTP active vs blocked client IPs
     description: 'Distinct client keys (IPv4 address or IPv6 /64 prefix) with at least one in-flight public HTTP request (explorer UI or REST API), plotted against the number currently on the temporary blocklist. Active IPs is the breadth of concurrent callers; a single source pushing heavy traffic shows up not here but as a high busiest-client value. Blocked IPs stays at 0 unless block duration is configured, then it counts clients shut out after repeated rate/concurrency breaches.'
     queries:
       active:
-        promql: sum({{name:rest_api_active_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        promql: sum({{name:rest_ui_active_ips}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - active IPs'
       blocked:
-        promql: sum({{name:rest_api_blocked_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        promql: sum({{name:rest_ui_blocked_ips}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - blocked IPs'
   rest_api.max_active_per_ip:
     title: Public HTTP busiest client (in-flight requests)
     description: 'Largest number of in-flight public HTTP requests (explorer UI or REST API) held by any single client key. A value climbing toward the per-client concurrency cap (default 24) while active IPs stays low means one source is holding many expensive handlers open at once, the per-client concurrency abuse the limiter guards against.'
     queries:
       max:
-        promql: max({{name:rest_api_max_active_requests_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
+        promql: max({{name:rest_ui_max_active_requests_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - max in-flight per IP'
   rest_api.balance_history_txs:
     title: REST API balance-history transactions per request (quantiles)
