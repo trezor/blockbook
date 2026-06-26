@@ -87,6 +87,51 @@ func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 	}
 }
 
+// TestEthereumTypeGetEip1559FeesOnChainShortRewardRow asserts the on-chain tier loop tolerates a
+// non-compliant eth_feeHistory whose reward rows are shorter than the requested percentile count: it
+// must not panic on h.Reward[j][i], and the per-tier average must divide only by the rows that
+// actually contributed a value (so a skipped short row does not deflate the tip).
+func TestEthereumTypeGetEip1559FeesOnChainShortRewardRow(t *testing.T) {
+	// Row 0 has all 4 percentiles; row 1 has only 2. For tiers high(i=2) and instant(i=3) row 1 is
+	// short and must be skipped, leaving the average over row 0 alone.
+	raw := `{"oldestBlock":"0x1",` +
+		`"reward":[["0x1","0x2","0x3","0x4"],["0x3","0x4"]],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"gasUsedRatio":[0.5,0.5,0.5]}`
+	b := &EthereumRPC{
+		RPC:         &feeHistoryRPCStub{raw: raw},
+		Timeout:     time.Second,
+		ChainConfig: &Configuration{Eip1559Fees: true},
+	}
+	fees, err := b.EthereumTypeGetEip1559Fees()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fees == nil {
+		t.Fatal("expected fees")
+	}
+	cases := []struct {
+		name    string
+		fee     *bchain.Eip1559Fee
+		wantTip int64
+	}{
+		{"low", fees.Low, 2},         // avg(1,3) over both rows
+		{"medium", fees.Medium, 3},   // avg(2,4) over both rows
+		{"high", fees.High, 3},       // row 1 short -> avg(3) over row 0 only
+		{"instant", fees.Instant, 4}, // row 1 short -> avg(4) over row 0 only
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.fee == nil {
+				t.Fatal("nil tier")
+			}
+			if c.fee.MaxPriorityFeePerGas.Int64() != c.wantTip {
+				t.Errorf("MaxPriorityFeePerGas = %v, want %d", c.fee.MaxPriorityFeePerGas, c.wantTip)
+			}
+		})
+	}
+}
+
 // gaugeVecSeriesCount reports how many label series a GaugeVec currently holds, using a throwaway
 // registry (same approach as gaugeValue, no prometheus/testutil dependency).
 func gaugeVecSeriesCount(t *testing.T, gv *prometheus.GaugeVec) int {
