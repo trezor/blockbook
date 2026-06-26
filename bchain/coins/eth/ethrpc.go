@@ -1995,14 +1995,26 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	for i := 0; i < 4; i++ {
 		var f bchain.Eip1559Fee
 		// Per-tier tip: average of the requested reward percentile (low=20th .. instant=99th) over the window.
+		// A compliant eth_feeHistory row has one reward per requested percentile, but guard the column index
+		// so a non-conforming backend returning a short row skips that row instead of panicking; the divisor
+		// counts only the rows actually summed so skipped rows don't deflate the average.
 		priorityFee := int64(0)
+		rows := int64(0)
 		for j := 0; j < len(h.Reward); j++ {
+			if len(h.Reward[j]) <= i {
+				continue
+			}
 			p, _ := hexutil.DecodeUint64(h.Reward[j][i])
 			priorityFee += int64(p)
+			rows++
 		}
-		if len(h.Reward) > 0 {
-			priorityFee /= int64(len(h.Reward))
+		if rows > 0 {
+			priorityFee /= rows
 		}
+		// A zero tip is a deliberate, accepted outcome on idle chains: when eth_feeHistory reports empty or
+		// all-zero reward percentiles (quiet testnets such as Sepolia/Holesky, or a backend that omits
+		// rewards) there is no priority competition to price, so maxPriorityFeePerGas is 0. maxFeePerGas
+		// still covers eip1559BaseFeeMultiplier*baseFee below, so the tx stays mineable.
 		tip := big.NewInt(priorityFee)
 		f.MaxPriorityFeePerGas = tip
 		// maxFeePerGas must cover the next-block base fee plus the tip, with headroom for base-fee
