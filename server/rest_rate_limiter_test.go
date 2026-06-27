@@ -303,6 +303,75 @@ func TestClientIPConfigEnvFallback(t *testing.T) {
 	})
 }
 
+func TestReadRestUILimiterConfig(t *testing.T) {
+	t.Run("defaults to the lowered values when unset", func(t *testing.T) {
+		cfg, err := readRestUILimiterConfig("RESTUITESTDEFAULTS")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Lock the lowered defaults so a regression in either the constants or the
+		// env parsing is caught here, not only in the dashboard/docs.
+		if cfg.rateLimit != 180 {
+			t.Fatalf("default rateLimit = %d, want 180", cfg.rateLimit)
+		}
+		if cfg.burst != 40 {
+			t.Fatalf("default burst = %d, want 40", cfg.burst)
+		}
+		if cfg.maxConcurrent != 12 {
+			t.Fatalf("default maxConcurrent = %d, want 12", cfg.maxConcurrent)
+		}
+		if cfg.rateWindow != time.Minute {
+			t.Fatalf("default rateWindow = %s, want 1m", cfg.rateWindow)
+		}
+		if cfg.stateTTL != defaultRestUIStateTTL {
+			t.Fatalf("default stateTTL = %s, want %s", cfg.stateTTL, defaultRestUIStateTTL)
+		}
+		if cfg.blockDuration != defaultRestUIBlockDuration {
+			t.Fatalf("default blockDuration = %s, want %s", cfg.blockDuration, time.Duration(defaultRestUIBlockDuration))
+		}
+	})
+
+	t.Run("REST_UI_* env vars override the defaults", func(t *testing.T) {
+		prefix := "RESTUITESTOVERRIDE"
+		t.Setenv(prefix+"_REST_UI_RATE_LIMIT", "999")
+		t.Setenv(prefix+"_REST_UI_RATE_WINDOW", "30s")
+		t.Setenv(prefix+"_REST_UI_BURST", "55")
+		t.Setenv(prefix+"_REST_UI_MAX_CONCURRENT", "7")
+		t.Setenv(prefix+"_REST_UI_STATE_TTL", "5m")
+		t.Setenv(prefix+"_REST_UI_BLOCK_DURATION", "1h")
+		cfg, err := readRestUILimiterConfig(prefix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.rateLimit != 999 {
+			t.Fatalf("rateLimit = %d, want 999", cfg.rateLimit)
+		}
+		if cfg.rateWindow != 30*time.Second {
+			t.Fatalf("rateWindow = %s, want 30s", cfg.rateWindow)
+		}
+		if cfg.burst != 55 {
+			t.Fatalf("burst = %d, want 55", cfg.burst)
+		}
+		if cfg.maxConcurrent != 7 {
+			t.Fatalf("maxConcurrent = %d, want 7", cfg.maxConcurrent)
+		}
+		if cfg.stateTTL != 5*time.Minute {
+			t.Fatalf("stateTTL = %s, want 5m", cfg.stateTTL)
+		}
+		if cfg.blockDuration != time.Hour {
+			t.Fatalf("blockDuration = %s, want 1h", cfg.blockDuration)
+		}
+	})
+
+	t.Run("zero burst with request-rate limiting enabled is rejected", func(t *testing.T) {
+		prefix := "RESTUITESTBADBURST"
+		t.Setenv(prefix+"_REST_UI_BURST", "0")
+		if _, err := readRestUILimiterConfig(prefix); err == nil {
+			t.Fatal("expected error for zero burst while rate limiting is enabled, got nil")
+		}
+	})
+}
+
 func TestRestUIRateLimiterTemporaryBlock(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	limiter := newTestRestUIRateLimiter()
