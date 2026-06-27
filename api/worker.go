@@ -1088,7 +1088,13 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
 				if err != nil {
 					// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-					glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					if errors.Cause(err) == eth.ErrInvalidErc20Balance {
+						// Benign and high-volume: unparseable/empty balanceOf from a dead or non-ERC20-conforming
+						// token. Tracked via the "invalid" metric; logged at V(2) to avoid flooding logs.
+						glog.V(2).Infof("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					} else {
+						glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					}
 				}
 			}
 			if b != nil {
@@ -1156,7 +1162,11 @@ func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bch
 		b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, contract)
 		if err != nil {
 			// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-			glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
+			if errors.Cause(err) == eth.ErrInvalidErc20Balance {
+				glog.V(2).Infof("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
+			} else {
+				glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
+			}
 		}
 	} else {
 		b = nil
