@@ -188,6 +188,13 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 				}
 				count = ((count - 1) >> 5) + 1
 				for i := 0; i < count; i++ {
+					// A dynamic field whose declared length runs past the data
+					// (malformed or non-32-byte-aligned input) would index beyond
+					// processed, which is sized len(data)/64; treat it as a
+					// non-matching signature instead of panicking.
+					if dynIndex >= len(processed) {
+						return nil, 0, false
+					}
 					processed[dynIndex] = true
 					dynIndex++
 				}
