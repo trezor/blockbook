@@ -85,4 +85,8 @@ Prometheus metrics and the Grafana dashboard share one source of truth, `configs
 - Blockbook instance should be able to : 
  - handle at least 20 000 websocket connections from trezor suite
  - index and catchup with fast L2 chains like Arbitrum or Base 
-- ignore `tests/openapi/node_modules/` and `tests/openapi/package-lock.json` when searching the codebase
+- ignore and do not open following directories and files unless really necessary :
+  - `tests/openapi/node_modules/`
+  - `tests/openapi/package-lock.json`
+  - `./configs/grafana/grafana.json`
+- keep inline comments max one paragraph big with pure logic reasoning
