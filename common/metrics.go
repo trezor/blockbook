@@ -41,10 +41,10 @@ type Metrics struct {
 	WebsocketMaxConnectionsPerIP      prometheus.Gauge         `metric:"websocket_max_connections_per_ip"`
 	WebsocketBlockedIPs               prometheus.Gauge         `metric:"websocket_blocked_ips"`
 	WebsocketBlockedConnections       prometheus.Counter       `metric:"websocket_blocked_connections"`
-	RestUIRateLimitRejections        *prometheus.CounterVec   `metric:"rest_ui_rate_limit_rejections"`
-	RestUIActiveIPs                  prometheus.Gauge         `metric:"rest_ui_active_ips"`
-	RestUIMaxActiveRequestsPerIP     prometheus.Gauge         `metric:"rest_ui_max_active_requests_per_ip"`
-	RestUIBlockedIPs                 prometheus.Gauge         `metric:"rest_ui_blocked_ips"`
+	RestUIRateLimitRejections         *prometheus.CounterVec   `metric:"rest_ui_rate_limit_rejections"`
+	RestUIActiveIPs                   prometheus.Gauge         `metric:"rest_ui_active_ips"`
+	RestUIMaxActiveRequestsPerIP      prometheus.Gauge         `metric:"rest_ui_max_active_requests_per_ip"`
+	RestUIBlockedIPs                  prometheus.Gauge         `metric:"rest_ui_blocked_ips"`
 	IndexResyncDuration               prometheus.Histogram     `metric:"index_resync_duration"`
 	MempoolResyncDuration             prometheus.Histogram     `metric:"mempool_resync_duration"`
 	MempoolResyncThroughput           *prometheus.HistogramVec `metric:"mempool_resync_throughput_txs_per_second"`
