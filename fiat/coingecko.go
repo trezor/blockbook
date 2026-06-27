@@ -283,6 +283,20 @@ func throttleBackoffDelay(err error) time.Duration {
 	return delay + time.Duration(rand.Int63n(int64(delay/5)+1))
 }
 
+// coingeckoUserAgent identifies Blockbook to the fiat-rate providers. Go's HTTP client
+// otherwise sends the default "Go-http-client/1.1" user-agent, which cdn.trezor.io's
+// Cloudflare bot protection rejects with a 403 challenge page: it blocks well-known
+// automation user-agents (Go-http-client, curl, python-requests, ...) independently of any
+// source-IP allow-list. An explicit Blockbook user-agent clears that filter and identifies
+// our traffic to the CDN operators.
+func coingeckoUserAgent() string {
+	version := common.GetVersionInfo().Version
+	if version == "" {
+		version = "unknown"
+	}
+	return "blockbook/" + version
+}
+
 // doReq HTTP client
 func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 	resp, err := client.Do(req)
@@ -435,6 +449,7 @@ func (cg *Coingecko) makeReq(ctx context.Context, url string, endpoint string, p
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", coingeckoUserAgent())
 		if cg.apiKey != "" {
 			// Use the paid-tier header by default when an API key is provided.
 			if plan == "free" {
