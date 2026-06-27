@@ -430,6 +430,33 @@ func TestParseInputData(t *testing.T) {
 	}
 }
 
+// TestParseInputDataMisalignedDynamicData is a regression test for a panic
+// ("index out of range [N] with length N") when a transaction's input data is
+// not 32-byte aligned. Standard ABI-encoded data is always word-aligned, but a
+// malformed/non-standard tx is not, and marking the words of a dynamic field
+// could step one slot past `processed` (sized len(data)/64). ParseInputData must
+// instead reject the signature and fall back to just the method id, without
+// panicking (and without the per-tx panic-recover log spam that masked it).
+func TestParseInputDataMisalignedDynamicData(t *testing.T) {
+	parser := NewEthereumParser(1, false)
+	signatures := []bchain.FourByteSignature{
+		{Name: "store", Parameters: []string{"bytes"}},
+	}
+	// 0x + 4-byte selector, then a "bytes" field: offset word (0x20), length
+	// word (0x21 = 33 bytes), and 66 hex chars of content. The post-selector
+	// data is 194 hex chars — not a multiple of 64 — so `processed` has only 3
+	// entries while the 33-byte field rounds up to a word at index 3.
+	data := "0xaabbccdd" +
+		"0000000000000000000000000000000000000000000000000000000000000020" +
+		"0000000000000000000000000000000000000000000000000000000000000021" +
+		"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021"
+	got := parser.ParseInputData(&signatures, data)
+	want := &bchain.EthereumParsedInputData{MethodId: "0xaabbccdd"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ParseInputData() = %#v, want %#v", got, want)
+	}
+}
+
 func Test_getEnsRecord(t *testing.T) {
 	tests := []struct {
 		name string
