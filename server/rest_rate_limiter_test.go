@@ -460,6 +460,18 @@ func TestRestUIRouteMatching(t *testing.T) {
 		{"/test-websocket.html", "/", false},
 		{"/bb/static/app.js", "/bb/", false},
 		{"/bb/websocket", "/bb/", false},
+		// A "-public=:port/path" binding without a trailing slash yields basePath
+		// "/bb" (splitBinding keeps the path verbatim). Dynamic routes registered by
+		// raw concatenation then live at "/bbapi/" etc., while static assets are
+		// registered via publicPath at "/bb/...". Both shapes must still classify
+		// correctly: dynamic limited, static/docs exempt.
+		{"/bb", "/bb", true},
+		{"/bbapi/v2/status", "/bb", true},
+		{"/bb/address/abc", "/bb", true},
+		{"/bb/static/app.js", "/bb", false},
+		{"/bb/favicon.ico", "/bb", false},
+		{"/bb/api-docs", "/bb", false},
+		{"/bb/openapi.yaml", "/bb", false},
 		// Requests outside the configured base path are not limited here.
 		{"/other/path", "/bb/", false},
 	}

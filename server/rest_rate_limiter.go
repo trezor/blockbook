@@ -280,9 +280,13 @@ func isRateLimitedRoute(reqPath, basePath string) bool {
 	if !strings.HasPrefix(reqPath, basePath) {
 		return false
 	}
-	// basePath always ends in "/" (see splitBinding), and routes are registered by
-	// raw concatenation (basePath+"address/" etc.), so rel is the registered suffix.
-	rel := strings.TrimPrefix(reqPath, basePath)
+	// Routes are registered by raw concatenation (basePath+"address/" etc.), so rel
+	// is the registered suffix. splitBinding does not guarantee basePath ends in "/"
+	// (a "-public=:port/path" binding without a trailing slash yields basePath
+	// "/path"), yet static assets are still registered via publicPath at
+	// "/path/favicon.ico"; trim any leading slash so the deny-list matches the
+	// registered suffix regardless of the binding's trailing-slash shape.
+	rel := strings.TrimPrefix(strings.TrimPrefix(reqPath, basePath), "/")
 	switch {
 	case rel == "favicon.ico",
 		rel == "openapi.yaml",
