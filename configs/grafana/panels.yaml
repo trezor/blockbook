@@ -442,7 +442,7 @@ panels:
         legend: '{{coin}} - {{action}}/min'
   rest_ui.rejections:
     title: Public HTTP rate-limit rejections per minute
-    description: 'Public HTTP requests (explorer UI pages and REST API, sharing one per-client budget) the per-IP limiter rejected before any handler work (HTTP 429), by reason: request_rate is over the per-client request budget (default 600/min, burst 120), concurrent_requests is more than the per-client in-flight cap (default 24), ip_blocked is a client on the temporary blocklist (only when block duration is enabled; off by default). Sustained non-zero values mean abuse is being actively throttled.'
+    description: 'Public HTTP requests (explorer UI pages and REST API, sharing one per-client budget) the per-IP limiter rejected before any handler work (HTTP 429), by reason: request_rate is over the per-client request budget (default 180/min, burst 40), concurrent_requests is more than the per-client in-flight cap (default 12), ip_blocked is a client on the temporary blocklist (only when block duration is enabled; off by default). Sustained non-zero values mean abuse is being actively throttled.'
     queries:
       by_reason:
         promql: sum(rate({{name:rest_ui_rate_limit_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
@@ -459,7 +459,7 @@ panels:
         legend: '{{coin}} - blocked IPs'
   rest_ui.max_active_per_ip:
     title: Public HTTP busiest client (in-flight requests)
-    description: 'Largest number of in-flight public HTTP requests (explorer UI or REST API) held by any single client key. A value climbing toward the per-client concurrency cap (default 24) while active IPs stays low means one source is holding many expensive handlers open at once, the per-client concurrency abuse the limiter guards against.'
+    description: 'Largest number of in-flight public HTTP requests (explorer UI or REST API) held by any single client key. A value climbing toward the per-client concurrency cap (default 12) while active IPs stays low means one source is holding many expensive handlers open at once, the per-client concurrency abuse the limiter guards against.'
     queries:
       max:
         promql: max({{name:rest_ui_max_active_requests_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
