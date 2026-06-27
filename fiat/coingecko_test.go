@@ -813,6 +813,36 @@ func TestMakeReq_NonBootstrapURLStillPacedWhenBootstrapConfigured(t *testing.T) 
 	}
 }
 
+// cdn.trezor.io's Cloudflare bot protection rejects the default "Go-http-client/1.1"
+// user-agent with a 403 challenge page, which stalled startup fiat-rate downloads. Every
+// request must carry an explicit Blockbook user-agent so it is not mistaken for blocked
+// automation traffic.
+func TestMakeReq_SendsBlockbookUserAgent(t *testing.T) {
+	var gotUserAgent string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUserAgent = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{httpClient: mockServer.Client()}
+	if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+		t.Fatalf("makeReq failed: %v", err)
+	}
+
+	if want := coingeckoUserAgent(); gotUserAgent != want {
+		t.Fatalf("unexpected User-Agent: got %q, want %q", gotUserAgent, want)
+	}
+	if !strings.HasPrefix(gotUserAgent, "blockbook/") {
+		t.Fatalf("User-Agent %q is not Blockbook-identifying", gotUserAgent)
+	}
+	// The default Go user-agent is exactly what the CDN's bot filter blocks, so guard against
+	// ever regressing back to it (an empty header lets net/http fall back to that default).
+	if gotUserAgent == "" || strings.HasPrefix(strings.ToLower(gotUserAgent), "go-http-client") {
+		t.Fatalf("User-Agent %q would be blocked by the CDN bot filter", gotUserAgent)
+	}
+}
+
 func TestMarkThrottled_ExtendsNeverShortens(t *testing.T) {
 	cg := &Coingecko{}
 	cg.markThrottled(time.Minute)
