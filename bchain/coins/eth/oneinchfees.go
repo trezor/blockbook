@@ -60,6 +60,12 @@ type oneInchFeeProvider struct {
 	apiKey string
 }
 
+const oneInchFeeStalePeriods = 30
+
+func oneInchFeeStaleDuration(periodSeconds int) time.Duration {
+	return time.Duration(periodSeconds*oneInchFeeStalePeriods) * time.Second
+}
+
 // NewOneInchFeesProvider initializes https://api.1inch.dev provider
 func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
 	p := &oneInchFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{metrics: metrics, name: "1inch"}}
@@ -75,6 +81,7 @@ func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *com
 		return nil, errors.New("NewOneInchFeesProvider: missing ONE_INCH_API_KEY env variable.")
 	}
 	p.chain = chain
+	p.staleSyncDuration = oneInchFeeStaleDuration(p.params.PeriodSeconds)
 	go p.FeeDownloader()
 	return p, nil
 }
