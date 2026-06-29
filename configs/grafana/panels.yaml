@@ -665,7 +665,7 @@ panels:
         legend: '{{instance}} - {{provider}} - {{status}}'
   fees.eip1559_max_fee:
     title: EIP-1559 maxFeePerGas by tier (Gwei)
-    description: The maxFeePerGas the pull path (estimateFee) serves per tier, in Gwei (raw wei / 1e9). This is what wallets such as Trezor Suite spend as the fee cap, so it is the headline panel for "fees too high". On Infura-backed coins these are the provider's padded suggestions; on on-chain coins they are 2x baseFee + tip. The instant tier exists only on the on-chain path (Infura has no instant), so an instant line on a provider coin is a leftover from an onchain_fallback. Compare with the base fee and the buffer-ratio panel to tell a busy chain from an estimator regression.
+    description: The maxFeePerGas the pull path (estimateFee) serves per tier, in Gwei (raw wei / 1e9). This is what wallets such as Trezor Suite spend as the fee cap, so it is the headline panel for "fees too high". On provider-backed coins (e.g. Infura, 1inch) these are the provider's suggestions; on on-chain coins they are 2x baseFee + tip. The instant tier exists only on the on-chain path and on providers that return four tiers (1inch), so an instant line appearing on a provider that does not return it means the provider cache was stale and the on-chain fallback served the estimate. Compare with the base fee and the buffer-ratio panel to tell a busy chain from an estimator regression.
     queries:
       by_tier:
         promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="max_fee"} / 1e9)
@@ -679,7 +679,7 @@ panels:
         legend: '{{coin}} - {{instance}} - {{tier}}'
   fees.eip1559_buffer_ratio:
     title: EIP-1559 buffer ratio (maxFeePerGas / baseFee)
-    description: 'Per-tier maxFeePerGas divided by the next-block base fee - the headroom over the base fee. The on-chain estimator targets 2x by design (eip1559BaseFeeMultiplier), shown as the dashed line; on Infura-backed coins the high tier sits ~2.5x by design, so a steady ratio above 2 there is expected, not an anomaly - the 2x line is the on-chain target only. How to read it: a ratio flat near its source''s normal level while absolute fees are high means the chain is congested (nothing to fix); a ratio climbing well above that level means over-buffering - the "fees too high" signature.'
+    description: 'Per-tier maxFeePerGas divided by the next-block base fee - the headroom over the base fee. The on-chain estimator targets 2x by design (eip1559BaseFeeMultiplier), shown as the dashed line; provider-backed coins return their own padded suggestions which may differ (e.g. Infura''s high tier sits ~2.5x), so a steady ratio above 2 there is expected, not an anomaly - the 2x line is the on-chain target only. How to read it: a ratio flat near its source''s normal level while absolute fees are high means the chain is congested (nothing to fix); a ratio climbing well above that level means over-buffering - the "fees too high" signature.'
     queries:
       ratio:
         promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="max_fee"} / on(job, coin, instance) group_left {{name:eth_eip1559_base_fee}}{job="blockbook", coin="$coin"})
@@ -709,7 +709,7 @@ panels:
         legend: balance point (50%)
   fees.alt_fee_provider_cache_age:
     title: Alternative fee provider cache age
-    description: 'Age of the cached provider fees (time() - last successful refresh), per provider. The pull path keeps serving the cache until it crosses the provider''s stale window, after which estimateFee falls back to on-chain (visible as onchain_fallback in the fee-source panel). For Infura (the EVM default) the window is 30x the poll period; the dashed line marks the default 30-minute cutoff (30x a 60s poll), so adjust it if a coin polls differently. A sawtooth that resets each poll is healthy; a line climbing past the cutoff is a wedged provider.'
+    description: 'Age of the cached provider fees (time() - last successful refresh), per provider. The pull path keeps serving the cache until it crosses the provider''s stale window, after which estimateFee falls back to on-chain (visible as onchain_fallback in the fee-source panel). Both Infura and 1inch use a 30x stale window (e.g. 30 minutes for a 60s poll); the dashed line marks this default cutoff, so adjust it if a coin polls with a different period. A sawtooth that resets each poll is healthy; a line climbing past the cutoff is a wedged provider.'
     queries:
       age:
         promql: (time() - {{name:alternative_fee_provider_last_sync_timestamp_seconds}}{job="blockbook", coin="$coin"})

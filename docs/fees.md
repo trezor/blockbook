@@ -11,7 +11,7 @@ The split is deliberate: Blockbook supplies facts, the wallet decides policy.
 
 - base fee — the next-block projection, taken from the chain
 - priority-fee tiers (tips)
-- congestion and trend signals (via Infura, when configured)
+- congestion and trend signals (via the configured alternative provider, when supported)
 - per-block gas — `baseFee`, `gasUsed`, `gasLimit`
 
 **Trezor Suite — owns the fee policy:**
@@ -23,21 +23,21 @@ The split is deliberate: Blockbook supplies facts, the wallet decides policy.
 - displays the fee options and signs the transaction
 
 This is why the wallet computes `maxFeePerGas` itself instead of trusting a provider's pre-padded
-value (Infura's `suggestedMaxFeePerGas`, which is the source of the "fees too high" reports).
+value (e.g. Infura's `suggestedMaxFeePerGas`, which was the source of the "fees too high" reports).
 
 ---
 
 ## Blockbook — pull path (`estimateFee` / `EthereumTypeGetEip1559Fees`)
 
 On-demand estimate. Returns `Eip1559Fees`: a `baseFeePerGas` plus `low/medium/high` (and `instant`
-on the on-chain path) tiers, and — on the Infura path — congestion/trend ranges.
+on the on-chain path) tiers, and — on supported provider paths — congestion/trend ranges.
 
 ```mermaid
 flowchart TD
     A["estimateFee"] --> B{"EIP-1559 supported?"}
     B -->|no| Z["legacy feePerUnit only"]
-    B -->|yes| C{"fresh Infura fees available?"}
-    C -->|yes| D["use cached Infura fees"]
+    B -->|yes| C{"fresh provider fees available?"}
+    C -->|yes| D["use cached provider fees"]
     C -->|no| E["estimate on-chain from base fee + tips"]
     D --> R["return Eip1559Fees<br/>baseFee + fee tiers"]
     E --> R
@@ -50,9 +50,11 @@ How each source is built:
   (array index `blocks-1`) and per-tier reward percentiles (20/70/90/99) used as tips. Blockbook
   builds `maxFeePerGas = eip1559BaseFeeMultiplier(2) × baseFee + tip`. (Previously this field held the
   tip alone — below the base fee, so not mineable; that was fixed.)
-- **Infura** (archive coins, served from an in-memory cache, no node RPC): blockbook returns Infura's
-  `suggestedMaxFeePerGas` **unchanged**, which is padded well above the base fee (~2.5× for the high
-  tier). Blockbook does not rewrite it — the wallet overrides it (see the Suite section).
+- **Alternative provider** (archive coins, served from an in-memory cache, no node RPC): blockbook
+  returns the provider's `maxFeePerGas` **unchanged**. For Infura, this is `suggestedMaxFeePerGas`,
+  padded well above the base fee (~2.5× for the high tier); for 1inch, it is the provider's own
+  computed `maxFeePerGas`. Blockbook does not rewrite it — the wallet overrides it (see the Suite
+  section).
 
 ---
 
@@ -103,10 +105,9 @@ Details and current coverage:
 - The block-based estimate derives the next-block base fee from the latest block (EIP-1559 formula on
   `gasUsed`/`gasLimit`), takes tips from the block's transaction `maxPriorityFeePerGas` percentiles,
   and sets `maxFeePerGas = 2 × nextBaseFee + tip`. The fallback uses the backend's `eip1559` tiers.
-- **evm-rpc-backed networks**: `getBlock('latest')` returns block gas → block-based fees apply, so the
-  Infura padding is gone.
+- **evm-rpc-backed networks**: `getBlock('latest')` returns block gas → block-based fees apply.
 - **blockbook-backed networks**: `getBlock('latest')` is unsupported → block-based estimate is empty →
-  Suite falls back to the backend (Infura) tiers. Wiring the `subscribeNewBlock` `evmData` push as the
+  Suite falls back to the backend (provider) tiers. Wiring the `subscribeNewBlock` `evmData` push as the
   block-data source for these networks is the remaining step.
 
 ---
