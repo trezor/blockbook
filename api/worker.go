@@ -2018,7 +2018,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 // (0) via <NET>_{WS,REST}_BALANCE_HISTORY_MAX_TXS (<NET>_BALANCE_HISTORY_MAX_TXS
 // sets both).
 const (
-	DefaultBalanceHistoryMaxTxsREST = 250000
+	DefaultBalanceHistoryMaxTxsREST = 100000
 	DefaultBalanceHistoryMaxTxsWS   = 1000000
 )
 
