@@ -361,12 +361,13 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
-				// load spending addresses from TxAddresses
-				tas, err := w.db.GetTxAddresses(bchainVin.Txid)
+				// load the spending address from TxAddresses; only the spent output
+				// is needed, so avoid unpacking the whole previous-tx record
+				output, err := w.db.GetTxAddressesOutput(bchainVin.Txid, vin.Vout)
 				if err != nil {
-					return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
+					return nil, errors.Annotatef(err, "GetTxAddressesOutput %v", bchainVin.Txid)
 				}
-				if tas == nil {
+				if output == nil {
 					// try to load from backend
 					otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 					if err != nil {
@@ -397,16 +398,13 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 					}
 				} else {
-					if len(tas.Outputs) > int(vin.Vout) {
-						output := &tas.Outputs[vin.Vout]
-						vin.ValueSat = (*Amount)(&output.ValueSat)
-						vin.AddrDesc = output.AddrDesc
-						vin.Addresses, vin.IsAddress, err = output.Addresses(w.chainParser)
-						if err != nil {
-							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
-						}
-						aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
+					vin.ValueSat = (*Amount)(&output.ValueSat)
+					vin.AddrDesc = output.AddrDesc
+					vin.Addresses, vin.IsAddress, err = output.Addresses(w.chainParser)
+					if err != nil {
+						glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 					}
+					aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
