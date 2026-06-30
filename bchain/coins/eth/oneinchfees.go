@@ -118,10 +118,15 @@ func oneInchFeesFromResult(result *oneInchFeeFeeResult) *bchain.Eip1559Fee {
 func (p *oneInchFeeProvider) processData(data *oneInchFeeFeesResult) bool {
 	fees := bchain.Eip1559Fees{}
 	fees.BaseFeePerGas = bigIntFromString(data.BaseFee)
-	fees.Instant = oneInchFeesFromResult(&data.Instant)
-	fees.High = oneInchFeesFromResult(&data.High)
-	fees.Medium = oneInchFeesFromResult(&data.Medium)
-	fees.Low = oneInchFeesFromResult(&data.Low)
+	// 1inch's tiers are tighter than Infura's. Remap so the suite's low/medium/high map
+	// to comparable aggressiveness regardless of provider:
+	//   1inch medium → suite low
+	//   1inch high   → suite medium
+	//   1inch instant → suite high
+	// 1inch's low tier is discarded (too conservative).
+	fees.Low = oneInchFeesFromResult(&data.Medium)
+	fees.Medium = oneInchFeesFromResult(&data.High)
+	fees.High = oneInchFeesFromResult(&data.Instant)
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	p.observeSync(time.Now())
