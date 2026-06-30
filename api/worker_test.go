@@ -4,13 +4,20 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
+	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
 func TestSystemInfoInSync(t *testing.T) {
@@ -304,3 +311,105 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 		})
 	}
 }
+
+// BenchmarkTxInputResolution measures GetTransactionFromBchainTx as a function of
+// a transaction's input fan-in, using the plain Bitcoin-testnet parser. Each input's
+// previous output is resolved from the database, so this tracks how per-transaction
+// allocation and time scale with the input count. The fan-in values span a wide range
+// to make that scaling visible and to guard against regressions in input resolution.
+//
+//	go test -tags unittest -run x -bench TxInputResolution -benchmem ./api/
+func BenchmarkTxInputResolution(b *testing.B) {
+	for _, fanIn := range []int{8, 32, 128, 512, 2048} {
+		b.Run("fanIn="+strconv.Itoa(fanIn), func(b *testing.B) {
+			worker, subjectTx, cleanup := buildHighFanInWorker(b, fanIn)
+			defer cleanup()
+			addresses := make(map[string]struct{})
+
+			tx, err := worker.GetTransactionFromBchainTx(subjectTx, 2, false, false, addresses)
+			require.NoError(b, err)
+			require.Len(b, tx.Vin, fanIn)
+			require.True(b, tx.Vin[fanIn-1].IsAddress && tx.Vin[fanIn-1].ValueSat != nil)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := worker.GetTransactionFromBchainTx(subjectTx, 2, false, false, addresses); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// buildHighFanInWorker indexes a previous transaction with fanIn outputs and a
+// subject transaction whose fanIn inputs each spend one of them (all referencing the
+// same previous tx, concentrating resolution on a single large record), and returns
+// a Worker plus the subject tx. Only db + parser are needed: GetTransactionFromBchainTx
+// for a confirmed Bitcoin-type tx (specificJSON=false) does not touch the chain.
+func buildHighFanInWorker(tb testing.TB, fanIn int) (*Worker, *bchain.Tx, func()) {
+	tb.Helper()
+	parser := btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{BlockAddressesToKeep: 1})
+	script := dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, parser)
+
+	prevTxid := fanInHash(1)
+	prevOuts := make([]bchain.Vout, fanIn)
+	subjectIns := make([]bchain.Vin, fanIn)
+	for j := 0; j < fanIn; j++ {
+		prevOuts[j] = fanInVout(uint32(j), script)
+		subjectIns[j] = bchain.Vin{Txid: prevTxid, Vout: uint32(j), Sequence: 0xffffffff}
+	}
+	prevTx := fanInTx(prevTxid, 1, []bchain.Vin{{Coinbase: "01", Sequence: 0xffffffff}}, prevOuts)
+	subjectTx := fanInTx(fanInHash(2), 2, subjectIns, []bchain.Vout{fanInVout(0, script), fanInVout(1, script)})
+
+	blocks := []*bchain.Block{
+		{BlockHeader: bchain.BlockHeader{Hash: fanInHash(1_000_001), Height: 1, Time: 1_700_000_001}, Txs: []bchain.Tx{*prevTx}},
+		{BlockHeader: bchain.BlockHeader{Hash: fanInHash(1_000_002), Height: 2, Time: 1_700_000_002}, Txs: []bchain.Tx{*subjectTx}},
+	}
+
+	tmp, err := os.MkdirTemp("", "vin-resolution")
+	require.NoError(tb, err)
+	database, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, false)
+	require.NoError(tb, err)
+	cleanup := func() {
+		require.NoError(tb, database.Close())
+		require.NoError(tb, os.RemoveAll(tmp))
+	}
+
+	is, err := database.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	require.NoError(tb, err)
+	database.SetInternalState(is)
+
+	bulk, err := database.InitBulkConnect()
+	require.NoError(tb, err)
+	for i, block := range blocks {
+		require.NoError(tb, bulk.ConnectBlock(block, i == len(blocks)-1))
+	}
+	require.NoError(tb, bulk.Close())
+	is.FinishedSync(uint32(len(blocks)))
+
+	return &Worker{db: database, chainParser: parser, chainType: bchain.ChainBitcoinType, is: is}, subjectTx, cleanup
+}
+
+func fanInTx(txid string, height uint32, vin []bchain.Vin, vout []bchain.Vout) *bchain.Tx {
+	return &bchain.Tx{
+		Txid:          txid,
+		Version:       1,
+		Vin:           vin,
+		Vout:          vout,
+		BlockHeight:   height,
+		Confirmations: 1,
+		Time:          int64(1_700_000_000 + height),
+		Blocktime:     int64(1_700_000_000 + height),
+	}
+}
+
+func fanInVout(n uint32, scriptHex string) bchain.Vout {
+	return bchain.Vout{
+		ValueSat:     *big.NewInt(100000),
+		N:            n,
+		ScriptPubKey: bchain.ScriptPubKey{Hex: scriptHex, Addresses: []string{dbtestdata.Addr1}},
+	}
+}
+
+func fanInHash(n uint64) string { return fmt.Sprintf("%064x", n) }

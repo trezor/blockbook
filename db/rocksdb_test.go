@@ -16,6 +16,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
@@ -1744,6 +1745,84 @@ func TestRocksDB_packTxIndexes_unpackTxIndexes(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.data) {
 				t.Errorf("unpackTxIndexes() = %+v, want %+v", got, tt.data)
 			}
+		})
+	}
+}
+
+// setupRocksDBWithExtendedIndex is like setupRocksDB but lets the caller choose
+// the extendedIndex layout; used by TestGetTxAddressesOutput to cover both forms.
+func setupRocksDBWithExtendedIndex(t *testing.T, p bchain.BlockChainParser, extendedIndex bool) *RocksDB {
+	t.Helper()
+	tmp, err := os.MkdirTemp("", "testdb")
+	require.NoError(t, err)
+	d, err := NewRocksDB(tmp, 100000, -1, p, nil, extendedIndex)
+	require.NoError(t, err)
+	is, err := d.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	require.NoError(t, err)
+	d.SetInternalState(is)
+	return d
+}
+
+// TestGetTxAddressesOutput checks that GetTxAddressesOutput(txid, vout) returns the
+// same TxOutput as GetTxAddresses(txid).Outputs[vout]: the former skips over the
+// height, inputs and preceding outputs by length and unpacks only the target output,
+// while the latter unpacks the whole record. It runs with extendedIndex off and on
+// and uses a record with a coinbase input and both spent and unspent outputs, so
+// every length-skip case in packedTxInputLen/packedTxOutputLen is covered.
+func TestGetTxAddressesOutput(t *testing.T) {
+	for _, extendedIndex := range []bool{false, true} {
+		name := "basic"
+		if extendedIndex {
+			name = "extendedIndex"
+		}
+		t.Run(name, func(t *testing.T) {
+			d := setupRocksDBWithExtendedIndex(t, &testBitcoinParser{
+				BitcoinParser: bitcoinTestnetParser(),
+			}, extendedIndex)
+			defer closeAndDestroyRocksDB(t, d)
+
+			ta := &TxAddresses{
+				Height: 12345,
+				Inputs: []TxInput{
+					{ValueSat: *big.NewInt(0)}, // coinbase: empty AddrDesc, no Txid
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr1, d.chainParser), ValueSat: *big.NewInt(1000), Txid: strings.Repeat("b2", 32), Vout: 0},
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr2, d.chainParser), ValueSat: *big.NewInt(2000), Txid: strings.Repeat("c3", 32), Vout: 3},
+				},
+				Outputs: []TxOutput{
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr3, d.chainParser), ValueSat: *big.NewInt(3000)},
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr4, d.chainParser), ValueSat: *big.NewInt(4000), Spent: true, SpentTxid: strings.Repeat("d4", 32), SpentIndex: 5, SpentHeight: 12346},
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr5, d.chainParser), ValueSat: *big.NewInt(5000)},
+				},
+			}
+			txid := strings.Repeat("a1", 32)
+
+			btxID, err := d.chainParser.PackTxid(txid)
+			require.NoError(t, err)
+			wb := grocksdb.NewWriteBatch()
+			defer wb.Destroy()
+			require.NoError(t, d.storeTxAddresses(wb, map[string]*TxAddresses{string(btxID): ta}))
+			require.NoError(t, d.db.Write(d.wo, wb))
+
+			full, err := d.GetTxAddresses(txid)
+			require.NoError(t, err)
+			require.NotNil(t, full)
+
+			// Each output read singly must equal the full-record unpack.
+			for vout := range full.Outputs {
+				got, err := d.GetTxAddressesOutput(txid, uint32(vout))
+				require.NoErrorf(t, err, "vout %d", vout)
+				require.NotNilf(t, got, "vout %d", vout)
+				require.Equalf(t, full.Outputs[vout], *got, "vout %d", vout)
+			}
+
+			// Out-of-range vout and missing txid both return nil.
+			got, err := d.GetTxAddressesOutput(txid, uint32(len(full.Outputs)))
+			require.NoError(t, err)
+			require.Nil(t, got, "out-of-range vout")
+
+			got, err = d.GetTxAddressesOutput(strings.Repeat("ee", 32), 0)
+			require.NoError(t, err)
+			require.Nil(t, got, "missing txid")
 		})
 	}
 }
