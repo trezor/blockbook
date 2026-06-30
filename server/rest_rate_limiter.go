@@ -16,9 +16,12 @@ import (
 )
 
 const (
-	defaultRestUIRateLimit     = 180
+	// Public HTTP (explorer UI + REST API) is for individual human use; Suite uses
+	// the WebSocket interface. Keep per-client rate/burst tight so a distributed
+	// crawler needs many more source IPs to sustain a given aggregate rate.
+	defaultRestUIRateLimit     = 20
 	defaultRestUIRateWindow    = time.Minute
-	defaultRestUIBurst         = 40
+	defaultRestUIBurst         = 20
 	defaultRestUIMaxConcurrent = 12
 	defaultRestUIStateTTL      = 10 * time.Minute
 	defaultRestUIBlockDuration = 0
