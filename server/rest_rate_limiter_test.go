@@ -311,11 +311,11 @@ func TestReadRestUILimiterConfig(t *testing.T) {
 		}
 		// Lock the lowered defaults so a regression in either the constants or the
 		// env parsing is caught here, not only in the dashboard/docs.
-		if cfg.rateLimit != 180 {
-			t.Fatalf("default rateLimit = %d, want 180", cfg.rateLimit)
+		if cfg.rateLimit != 20 {
+			t.Fatalf("default rateLimit = %d, want 20", cfg.rateLimit)
 		}
-		if cfg.burst != 40 {
-			t.Fatalf("default burst = %d, want 40", cfg.burst)
+		if cfg.burst != 20 {
+			t.Fatalf("default burst = %d, want 20", cfg.burst)
 		}
 		if cfg.maxConcurrent != 12 {
 			t.Fatalf("default maxConcurrent = %d, want 12", cfg.maxConcurrent)
