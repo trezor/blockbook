@@ -665,7 +665,7 @@ panels:
         legend: '{{instance}} - {{provider}} - {{status}}'
   fees.eip1559_max_fee:
     title: EIP-1559 maxFeePerGas by tier (Gwei)
-    description: The maxFeePerGas the pull path (estimateFee) serves per tier, in Gwei (raw wei / 1e9). This is what wallets such as Trezor Suite spend as the fee cap, so it is the headline panel for "fees too high". On provider-backed coins (e.g. Infura, 1inch) these are the provider's suggestions; on on-chain coins they are 2x baseFee + tip. The instant tier exists only on the on-chain path and on providers that return four tiers (1inch), so an instant line appearing on a provider that does not return it means the provider cache was stale and the on-chain fallback served the estimate. Compare with the base fee and the buffer-ratio panel to tell a busy chain from an estimator regression.
+    description: The maxFeePerGas the pull path (estimateFee) serves per tier, in Gwei (raw wei / 1e9). This is what wallets such as Trezor Suite spend as the fee cap, so it is the headline panel for "fees too high". On provider-backed coins (e.g. Infura, 1inch) these are the provider's suggestions, remapped per-provider onto low/medium/high for comparable aggressiveness across providers; on on-chain coins they are 2x baseFee + tip. The instant tier exists only on the on-chain path, so an instant line on a provider-backed coin means the provider cache was stale and the on-chain fallback served the estimate. Compare with the base fee and the buffer-ratio panel to tell a busy chain from an estimator regression.
     queries:
       by_tier:
         promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="max_fee"} / 1e9)
