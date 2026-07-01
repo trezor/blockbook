@@ -31,6 +31,10 @@ const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 const maxWebsocketPendingRequests = 48
+
+// maxWebsocketMempoolFiltersResponses caps getMempoolFilters responses accepted
+// by one connection but not yet written to the websocket.
+const maxWebsocketMempoolFiltersResponses = 4
 const maxWebsocketActiveRequests = 2048
 const maxWebsocketEstimateFeeBlocks = 32
 const maxWebsocketSubscribeAddresses = 1000
@@ -58,6 +62,7 @@ type websocketChannel struct {
 	conn                         *websocket.Conn
 	out                          chan *WsRes
 	pendingRequests              chan struct{}
+	mempoolFiltersSlots          chan struct{} // semaphore capping in-flight getMempoolFilters responses, see maxWebsocketMempoolFiltersResponses
 	ip                           string
 	ipKey                        string
 	blockKey                     string
@@ -338,16 +343,17 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(maxWebsocketMessageBytes)
 	c := &websocketChannel{
-		id:              atomic.AddUint64(&connectionCounter, 1),
-		conn:            conn,
-		out:             make(chan *WsRes, outChannelSize),
-		pendingRequests: make(chan struct{}, maxWebsocketPendingRequests),
-		ip:              ip,
-		ipKey:           ipKey,
-		blockKey:        bKey,
-		blockable:       blockable,
-		requestHeader:   r.Header,
-		alive:           true,
+		id:                  atomic.AddUint64(&connectionCounter, 1),
+		conn:                conn,
+		out:                 make(chan *WsRes, outChannelSize),
+		pendingRequests:     make(chan struct{}, maxWebsocketPendingRequests),
+		mempoolFiltersSlots: make(chan struct{}, maxWebsocketMempoolFiltersResponses),
+		ip:                  ip,
+		ipKey:               ipKey,
+		blockKey:            bKey,
+		blockable:           blockable,
+		requestHeader:       r.Header,
+		alive:               true,
 	}
 	if s.messageRateLimit > 0 {
 		c.messageRate = newConnMessageRate(s.messageRateWindow)
@@ -484,7 +490,7 @@ func (c *websocketChannel) CloseOut(reason string) (bool, string) {
 		//clean out
 		close(c.out)
 		for len(c.out) > 0 {
-			<-c.out
+			c.finalize(<-c.out)
 		}
 		return true, closeReason
 	}
@@ -496,17 +502,22 @@ func (c *websocketChannel) DataOut(data *WsRes) {
 	defer c.aliveLock.Unlock()
 	if c.alive {
 		if len(c.out) < outChannelSize-1 {
+			// Enqueued: ownership passes to the out pipeline, which finalizes it
+			// once written (outputLoop) or drained (CloseOut).
 			c.out <- data
-		} else {
-			glog.Warning("Channel ", c.id, " overflow, closing")
-			if c.closeReason == "" {
-				c.closeReason = "overflow"
-			}
-			// close the connection but do not call CloseOut - would call duplicate c.aliveLock.Lock
-			// CloseOut will be called because the closed connection will cause break in the inputLoop
-			c.conn.Close()
+			return
 		}
+		glog.Warning("Channel ", c.id, " overflow, closing")
+		if c.closeReason == "" {
+			c.closeReason = "overflow"
+		}
+		// close the connection but do not call CloseOut - would call duplicate c.aliveLock.Lock
+		// CloseOut will be called because the closed connection will cause break in the inputLoop
+		c.conn.Close()
 	}
+	// Not enqueued (overflow or dead connection): the response never reaches the
+	// out pipeline, so release any slot it held here.
+	c.finalize(data)
 }
 
 func (c *websocketChannel) acquireRequestSlot() bool {
@@ -520,6 +531,27 @@ func (c *websocketChannel) acquireRequestSlot() bool {
 
 func (c *websocketChannel) releaseRequestSlot() {
 	<-c.pendingRequests
+}
+
+func (c *websocketChannel) acquireMempoolFiltersSlot() bool {
+	select {
+	case c.mempoolFiltersSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *websocketChannel) releaseMempoolFiltersSlot() {
+	<-c.mempoolFiltersSlots
+}
+
+// finalize releases any resources a response held, exactly once
+func (c *websocketChannel) finalize(res *WsRes) {
+	if res != nil && res.release != nil {
+		res.release()
+		res.release = nil
+	}
 }
 
 func (s *WebsocketServer) inputLoop(c *websocketChannel) {
@@ -601,6 +633,7 @@ func (s *WebsocketServer) outputLoop(c *websocketChannel) {
 	for m := range c.out {
 		c.conn.SetWriteDeadline(time.Now().Add(defaultTimeout))
 		err := c.conn.WriteJSON(m)
+		c.finalize(m)
 		if err != nil {
 			glog.Error("Error sending message to ", c.id, ", ", err)
 			s.closeChannel(c, "write_error")
@@ -843,6 +876,8 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 	var err error
 	var data interface{}
+	// release is non-nil while this request holds a rate-capped endpoint slot.
+	var release func()
 	f, ok := requestHandlers[req.Method]
 	methodLabel := req.Method
 	if !ok {
@@ -859,9 +894,14 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 		// nil data means no response
 		if data != nil {
 			c.DataOut(&WsRes{
-				ID:   req.ID,
-				Data: data,
+				ID:      req.ID,
+				Data:    data,
+				release: release,
 			})
+			release = nil // ownership handed to the response
+		}
+		if release != nil {
+			release() // no response was produced — free the slot now
 		}
 		s.metrics.WebsocketPendingRequests.With(common.Labels{"method": methodLabel}).Dec()
 	}()
@@ -871,6 +911,17 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 		s.metrics.WebsocketReqDuration.With(common.Labels{"method": methodLabel}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	}()
 	if ok {
+		if req.Method == "getMempoolFilters" {
+			if !c.acquireMempoolFiltersSlot() {
+				e := resultError{}
+				e.Error.Message = "mempool_filters_limit"
+				data = e
+				s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
+				glog.Warning("Client ", c.id, " exceeded getMempoolFilters response limit, ", c.ip)
+				return
+			}
+			release = c.releaseMempoolFiltersSlot
+		}
 		data, err = f(s, c, req)
 		if err == nil {
 			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")

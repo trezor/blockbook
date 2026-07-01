@@ -5,6 +5,7 @@ package eth
 import (
 	"fmt"
 	"math/big"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -224,6 +225,48 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 
 			}
 		})
+	}
+}
+
+func erc1155BatchWord(n uint64) string {
+	return fmt.Sprintf("%064x", n)
+}
+
+func malformedERC1155TransferBatchLog(count uint64) *bchain.RpcLog {
+	return &bchain.RpcLog{
+		Address: "0x1111111111111111111111111111111111111111",
+		Topics: []string{
+			tokenERC1155TransferBatchEventSignature,
+			"0x0000000000000000000000002222222222222222222222222222222222222222",
+			"0x0000000000000000000000003333333333333333333333333333333333333333",
+			"0x0000000000000000000000004444444444444444444444444444444444444444",
+		},
+		Data: "0x" +
+			erc1155BatchWord(0x40) +
+			erc1155BatchWord(0x60) +
+			erc1155BatchWord(count) +
+			erc1155BatchWord(count),
+	}
+}
+
+func Test_contractGetTransfersFromLogRejectsMalformedERC1155TransferBatchBeforeAllocation(t *testing.T) {
+	const count = 200000
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	transfers, err := contractGetTransfersFromLog([]*bchain.RpcLog{malformedERC1155TransferBatchLog(count)})
+	runtime.ReadMemStats(&after)
+	if err == nil {
+		t.Fatal("contractGetTransfersFromLog returned nil error for malformed ERC1155 TransferBatch")
+	}
+	if transfers != nil {
+		t.Fatalf("contractGetTransfersFromLog transfers = %+v, want nil", transfers)
+	}
+	if strings.Contains(err.Error(), "recovered from panic") {
+		t.Fatalf("contractGetTransfersFromLog recovered from panic instead of validating input: %v", err)
+	}
+	if delta := after.TotalAlloc - before.TotalAlloc; delta > 1_000_000 {
+		t.Fatalf("contractGetTransfersFromLog allocated %d bytes for malformed ERC1155 TransferBatch count %d", delta, count)
 	}
 }
 

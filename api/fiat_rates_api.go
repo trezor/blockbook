@@ -13,15 +13,42 @@ import (
 // MaxFiatRatesTimestamps limits batch fiat-rate lookups to bounded request work.
 const MaxFiatRatesTimestamps = 1000
 
-// removeEmpty removes empty strings from a slice.
-func removeEmpty(stringSlice []string) []string {
-	ret := make([]string, 0, len(stringSlice))
-	for _, str := range stringSlice {
-		if str != "" {
-			ret = append(ret, str)
+// MaxFiatRatesCurrencies limits explicit currency selectors. An empty list still
+// means "all available currencies", so legitimate callers do not need a large
+// explicit list.
+const MaxFiatRatesCurrencies = 128
+
+// MaxFiatRatesCurrencyCodeLength bounds each selector before it is copied into
+// per-result response maps.
+const MaxFiatRatesCurrencyCodeLength = 16
+
+// normalizeFiatCurrencies trims, lowercases, deduplicates, and bounds explicit
+// fiat currency selectors before any per-result response maps are allocated.
+func normalizeFiatCurrencies(currencies []string) ([]string, error) {
+	capacity := len(currencies)
+	if capacity > MaxFiatRatesCurrencies {
+		capacity = MaxFiatRatesCurrencies + 1
+	}
+	seen := make(map[string]struct{}, capacity)
+	normalized := make([]string, 0, capacity)
+	for _, currency := range currencies {
+		currency = strings.ToLower(strings.TrimSpace(currency))
+		if currency == "" {
+			continue
+		}
+		if len(currency) > MaxFiatRatesCurrencyCodeLength {
+			return nil, NewAPIError(fmt.Sprintf("currency code too long, max %d", MaxFiatRatesCurrencyCodeLength), true)
+		}
+		if _, found := seen[currency]; found {
+			continue
+		}
+		seen[currency] = struct{}{}
+		normalized = append(normalized, currency)
+		if len(normalized) > MaxFiatRatesCurrencies {
+			return nil, NewAPIError(fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies), true)
 		}
 	}
-	return ret
+	return normalized, nil
 }
 
 func copyTickerRates(rates map[string]float32) map[string]float32 {
@@ -90,12 +117,15 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.Currency
 // GetCurrentFiatRates returns last available fiat rates.
 func (w *Worker) GetCurrentFiatRates(currencies []string, token string) (*FiatTicker, error) {
 	vsCurrency := ""
-	currencies = removeEmpty(currencies)
+	var err error
+	currencies, err = normalizeFiatCurrencies(currencies)
+	if err != nil {
+		return nil, err
+	}
 	if len(currencies) == 1 {
 		vsCurrency = currencies[0]
 	}
 	ticker := getCurrentTicker(w.fiatRates, vsCurrency, token)
-	var err error
 	if ticker == nil {
 		if token == "" {
 			// fallback - get last fiat rate from db if not in current ticker
@@ -135,7 +165,10 @@ func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []stri
 		return nil, NewAPIError(fmt.Sprintf("too many timestamps, max %d", MaxFiatRatesTimestamps), true)
 	}
 	vsCurrency := ""
-	currencies = removeEmpty(currencies)
+	currencies, err := normalizeFiatCurrencies(currencies)
+	if err != nil {
+		return nil, err
+	}
 	if len(currencies) == 1 {
 		vsCurrency = currencies[0]
 	}
