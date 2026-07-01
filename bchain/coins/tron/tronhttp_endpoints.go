@@ -68,6 +68,7 @@ type tronGetBlockResponse struct {
 }
 
 type tronGetBlockHeaderResponse struct {
+	BlockID     string `json:"blockID"`
 	BlockHeader struct {
 		RawData struct {
 			Number *uint64 `json:"number"`
@@ -465,6 +466,32 @@ func (b *TronRPC) requestBlockByID(ctx context.Context, blockHash string, isSoli
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// requestBlockHashByNum resolves a block hash by height via the solidity node's
+// /walletsolidity/getblock endpoint. It is only called for already-solidified
+// heights (see GetBlockHash), so the lookup always targets the solidity node.
+func (b *TronRPC) requestBlockHashByNum(ctx context.Context, blockNum uint32) (string, error) {
+	req := map[string]any{
+		"id_or_num": strconv.FormatUint(uint64(blockNum), 10),
+		"detail":    false,
+	}
+	http := b.getLookupHTTPClient(true)
+	var resp tronGetBlockHeaderResponse
+	if err := http.Request(ctx, "/walletsolidity/getblock", req, &resp); err != nil {
+		return "", err
+	}
+	if resp.BlockHeader.RawData.Number == nil {
+		return "", errors.Errorf("Tron getblock returned missing block_header.raw_data.number for height %d", blockNum)
+	}
+	if *resp.BlockHeader.RawData.Number != uint64(blockNum) {
+		return "", errors.Errorf("Tron getblock returned height %d, want %d", *resp.BlockHeader.RawData.Number, blockNum)
+	}
+	hash := strip0xPrefix(resp.BlockID)
+	if hash == "" {
+		return "", errors.Errorf("Tron getblock returned empty blockID for height %d", blockNum)
+	}
+	return hash, nil
 }
 
 func (b *TronRPC) requestLatestSolidifiedBlockHeight(ctx context.Context) (uint64, error) {
