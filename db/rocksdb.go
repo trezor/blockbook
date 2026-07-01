@@ -1117,6 +1117,49 @@ func (d *RocksDB) GetTxAddresses(txid string) (*TxAddresses, error) {
 	return d.getTxAddresses(btxID)
 }
 
+// GetTxAddressesOutput returns Outputs[vout] of the transaction's TxAddresses
+// record, or nil if the record or that output is not present. Unlike
+// GetTxAddresses it does not unpack the whole record: inputs and preceding
+// outputs are skipped without allocating, so resolving a single previous output
+// costs O(1) allocations regardless of the referenced transaction's size.
+func (d *RocksDB) GetTxAddressesOutput(txid string, vout uint32) (*TxOutput, error) {
+	btxID, err := d.chainParser.PackTxid(txid)
+	if err != nil {
+		return nil, err
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfTxAddresses], btxID)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	buf := val.Data()
+	// 3 is minimum length of a txAddresses record - 1 byte height, 1 byte inputs len, 1 byte outputs len
+	if len(buf) < 3 {
+		return nil, nil
+	}
+	_, l := unpackVaruint(buf) // height
+	if d.extendedIndex {
+		_, n := unpackVaruint(buf[l:]) // vsize
+		l += n
+	}
+	inputs, n := unpackVaruint(buf[l:])
+	l += n
+	for i := uint(0); i < inputs; i++ {
+		l += d.packedTxInputLen(buf[l:])
+	}
+	outputs, n := unpackVaruint(buf[l:])
+	l += n
+	if uint(vout) >= outputs {
+		return nil, nil
+	}
+	for i := uint(0); i < uint(vout); i++ {
+		l += d.packedTxOutputLen(buf[l:])
+	}
+	var output TxOutput
+	d.unpackTxOutput(&output, buf[l:])
+	return &output, nil
+}
+
 // AddrDescForOutpoint is a function that returns address descriptor and value for given outpoint or nil if outpoint not found
 func (d *RocksDB) AddrDescForOutpoint(outpoint bchain.Outpoint) (bchain.AddressDescriptor, *big.Int) {
 	ta, err := d.GetTxAddresses(outpoint.Txid)
@@ -1359,6 +1402,50 @@ func (d *RocksDB) unpackTxOutput(to *TxOutput, buf []byte) int {
 		al += l
 	}
 	return al
+}
+
+// packedTxInputLen returns the byte length of the packed input at the start of buf
+// without allocating. Keep in sync with appendTxInput/unpackTxInput.
+func (d *RocksDB) packedTxInputLen(buf []byte) int {
+	if d.extendedIndex {
+		al, pos := unpackVarint(buf)
+		coinbase := al < 0
+		if coinbase {
+			al = ^al
+		}
+		pos += al                // addrDesc
+		pos += int(buf[pos]) + 1 // value (1-byte length prefix + bytes)
+		if !coinbase {
+			pos += d.chainParser.PackedTxidLen() // prev txid
+			_, n := unpackVaruint(buf[pos:])     // prev vout
+			pos += n
+		}
+		return pos
+	}
+	al, pos := unpackVaruint(buf)
+	pos += int(al)           // addrDesc
+	pos += int(buf[pos]) + 1 // value
+	return pos
+}
+
+// packedTxOutputLen returns the byte length of the packed output at the start of buf
+// without allocating. Keep in sync with appendTxOutput/unpackTxOutput.
+func (d *RocksDB) packedTxOutputLen(buf []byte) int {
+	al, pos := unpackVarint(buf)
+	spent := al < 0
+	if spent {
+		al = ^al
+	}
+	pos += al                // addrDesc
+	pos += int(buf[pos]) + 1 // value
+	if d.extendedIndex && spent {
+		pos += d.chainParser.PackedTxidLen() // spent txid
+		_, n := unpackVaruint(buf[pos:])     // spent index
+		pos += n
+		_, n = unpackVaruint(buf[pos:]) // spent height
+		pos += n
+	}
+	return pos
 }
 
 func (d *RocksDB) packTxIndexes(txi []txIndexes) []byte {
