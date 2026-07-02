@@ -361,6 +361,75 @@ func Test_PublicServer_EthereumType(t *testing.T) {
 	httpTestsEthereumType(t, ts)
 	runWebsocketTests(t, ts, websocketTestsEthereumType)
 }
+
+// allowance(owner, spender) calldata with the 0xdd62ed3e selector
+const rpcCallAllowanceData = "0xdd62ed3e0000000000000000000000009ea3721b5bf3b64b4418c38b603154d2d597fae3000000000000000000000000e4db1c5a1b709ce4d2ada6985d9d506e58f73829"
+
+var websocketTestsEthereumTypeRpcCallAllowlist = []websocketTest{
+	{
+		name: "rpcCall to allowed address",
+		req: websocketReq{
+			Method: "rpcCall",
+			Params: WsRpcCallReq{
+				To:   "0xcdA9FC258358EcaA88845f19Af595e908bb7EfE9",
+				Data: "0x4567",
+			},
+		},
+		want: `{"id":"0","data":{"data":"0x4567abcd"}}`,
+	},
+	{
+		name: "rpcCall with allowed method selector to any address",
+		req: websocketReq{
+			Method: "rpcCall",
+			Params: WsRpcCallReq{
+				To:   "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+				Data: rpcCallAllowanceData,
+			},
+		},
+		want: `{"id":"1","data":{"data":"` + rpcCallAllowanceData + `abcd"}}`,
+	},
+	{
+		name: "rpcCall with not allowed address and method selector",
+		req: websocketReq{
+			Method: "rpcCall",
+			Params: WsRpcCallReq{
+				To:   "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+				Data: "0x70a08231000000000000000000000000e4db1c5a1b709ce4d2ada6985d9d506e58f73829",
+			},
+		},
+		want: `{"id":"2","data":{"error":{"message":"Not supported"}}}`,
+	},
+	{
+		name: "rpcCall with allowed selector but malformed calldata",
+		req: websocketReq{
+			Method: "rpcCall",
+			Params: WsRpcCallReq{
+				To:   "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+				Data: rpcCallAllowanceData[2:],
+			},
+		},
+		want: `{"id":"3","data":{"error":{"message":"Not supported"}}}`,
+	},
+}
+
+func Test_PublicServer_EthereumType_RpcCallAllowlist(t *testing.T) {
+	timeNow = fixedTimeNow
+	t.Setenv("FAKE_ALLOWED_RPC_CALL_TO", "0xcdA9FC258358EcaA88845f19Af595e908bb7EfE9")
+	t.Setenv("FAKE_ALLOWED_EVM_CALL_METHODS", "0xdd62ed3e")
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		glog.Fatal("fakechain: ", err)
+	}
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	runWebsocketTests(t, ts, websocketTestsEthereumTypeRpcCallAllowlist)
+}
 func TestENSResolution(t *testing.T) {
 	parser := eth.NewEthereumParser(1, true)
 	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
