@@ -7,7 +7,65 @@ import (
 	"testing"
 
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/tests/dbtestdata"
 )
+
+func TestRocksDB_DeleteContractInfoForAddress(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	address := "0x" + dbtestdata.EthAddr20
+	ci := &bchain.ContractInfo{
+		Standard: bchain.ERC20TokenStandard,
+		Type:     bchain.ERC20TokenStandard,
+		Contract: address,
+		Name:     "Test contract",
+		Symbol:   "TCT",
+		Decimals: 18,
+	}
+	if err := d.StoreContractInfo(ci); err != nil {
+		t.Fatal(err)
+	}
+	// The get populates the in-memory cache, so a successful delete below also
+	// proves the cache entry is purged along with the DB row.
+	got, err := d.GetContractInfoForAddress(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.Name != ci.Name {
+		t.Fatalf("GetContractInfoForAddress() = %+v, want stored contract", got)
+	}
+
+	found, err := d.DeleteContractInfoForAddress(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Error("DeleteContractInfoForAddress() = false, want true for a stored row")
+	}
+	got, err = d.GetContractInfoForAddress(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Errorf("GetContractInfoForAddress() after delete = %+v, want nil", got)
+	}
+
+	// Idempotent: deleting a missing row is not an error.
+	found, err = d.DeleteContractInfoForAddress(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found {
+		t.Error("DeleteContractInfoForAddress() = true, want false for a missing row")
+	}
+
+	if _, err = d.DeleteContractInfoForAddress("not-an-address"); err == nil {
+		t.Error("DeleteContractInfoForAddress() with invalid address: expected error")
+	}
+}
 
 // packContractInfo only carries the sync-owned core fields. ERC4626 detection
 // data lives in the cfErcProtocols column family and is exercised

@@ -230,10 +230,7 @@ type runtimeSettingResponse struct {
 // apiRuntimeSetting handles GET/POST/PUT/DELETE of a single runtime setting at
 // /admin/runtime-settings/<KEY>.
 func (s *InternalServer) apiRuntimeSetting(r *http.Request, apiVersion int) (interface{}, error) {
-	var key string
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		key = strings.ToUpper(strings.TrimSpace(r.URL.Path[i+1:]))
-	}
+	key := strings.ToUpper(urlPathSegment(r))
 	def := runtimeSettingDefByKey(key)
 	if def == nil {
 		return nil, api.NewAPIError("Unknown runtime setting, supported: "+runtimeSettingKeys(), true)

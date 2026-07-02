@@ -95,7 +95,7 @@ Blockbook reads these from its process environment. When installed from the Debi
 
 ## Runtime settings
 
-The `rpcCall` allowlists can be changed at runtime, without a restart, through the internal server's authenticated admin API (see `BB_ADMIN_USER`/`BB_ADMIN_PASSWORD` above). An override is persisted in the Blockbook database, survives restarts and takes precedence over the corresponding environment variable, which serves only as the startup default. Every change is logged. The `/admin/runtime-settings` page shows the current values and their sources.
+The `rpcCall` allowlists can be changed at runtime, without a restart, through the internal server's authenticated admin API (see `BB_ADMIN_USER`/`BB_ADMIN_PASSWORD` above). An override is persisted in the Blockbook database, survives restarts and takes precedence over the corresponding environment variable, which serves only as the startup default. Every change is logged. The `/admin/runtime-settings` page shows the current values and their sources. The endpoint and the page are registered on every chain type — the runtime-settings mechanism is chain-generic; the currently defined settings only affect EVM `rpcCall` and are simply unset elsewhere.
 
 `GET/POST/DELETE /admin/runtime-settings/<KEY>` where `<KEY>` is `ALLOWED_RPC_CALL_TO` or `ALLOWED_EVM_CALL_METHODS`:
 
@@ -104,6 +104,14 @@ The `rpcCall` allowlists can be changed at runtime, without a restart, through t
 -   `DELETE` removes the stored override and reverts to the environment default. If the environment value is malformed the request is rejected with `400` and the override is kept, so a later restart cannot fail on it.
 
 Old Blockbook versions ignore the stored overrides (the environment applies again after a version rollback) and keep them intact, so rolling forward resumes the override.
+
+## Contract-info admin endpoint
+
+On EVM chains the internal server also exposes `/admin/contract-info/` (same Basic auth) to manage the contract metadata Blockbook caches from the backend node:
+
+-   `GET /admin/contract-info/<address>` returns the contract's metadata as a `ContractInfo` JSON object (fetching it from the backend node and storing it if not cached yet).
+-   `POST` (or `PUT`) `/admin/contract-info/` with a JSON array body `[{ContractInfo},…]` updates the stored metadata of the listed contracts; the response is `{"updated":N}`. The write targets the collection path — a `POST` to an address path is rejected with `400`.
+-   `DELETE /admin/contract-info/<address>` purges the cached metadata of one contract so it is re-fetched from the backend node on the next read; the response is `{"contract":"<address>","deleted":true|false}` (`false` when nothing was stored — the delete is idempotent).
 
 ## Build-time variables
 
