@@ -394,10 +394,14 @@ type contractInfoUpdateResponse struct {
 }
 
 // contractInfoDeleteResponse is the JSON shape returned by
-// DELETE /admin/contract-info/<address>.
+// DELETE /admin/contract-info/<address>. Purged carries the removed record so
+// the operator can restore it verbatim with a POST — the row includes the
+// sync-owned createdInBlock/destructedInBlock fields, which the backend
+// re-fetch on the next read cannot recover.
 type contractInfoDeleteResponse struct {
-	Contract string `json:"contract"`
-	Deleted  bool   `json:"deleted"`
+	Contract string               `json:"contract"`
+	Deleted  bool                 `json:"deleted"`
+	Purged   *bchain.ContractInfo `json:"purged,omitempty"`
 }
 
 // apiContractInfo handles GET/POST/PUT/DELETE of cached contract metadata at
@@ -416,7 +420,7 @@ func (s *InternalServer) apiContractInfo(r *http.Request, apiVersion int) (inter
 		}
 		return s.updateContracts(r)
 	case http.MethodDelete:
-		return s.deleteContractInfo(address)
+		return s.deleteContractInfo(address, r)
 	}
 	return nil, api.NewAPIError("Unsupported method "+r.Method, true)
 }
@@ -456,17 +460,23 @@ func (s *InternalServer) updateContracts(r *http.Request) (interface{}, error) {
 	return &contractInfoUpdateResponse{Updated: len(contractInfos)}, nil
 }
 
-// deleteContractInfo purges the cached metadata of one contract so the next
-// read re-fetches it from the backend node. Deleting is idempotent: a missing
-// row reports deleted=false rather than an error, matching the runtime-settings
-// DELETE semantics.
-func (s *InternalServer) deleteContractInfo(address string) (interface{}, error) {
+// deleteContractInfo purges the stored metadata of one contract so the next
+// read re-fetches it from the backend node. The whole row is discarded — the
+// backend re-fetch restores only name/symbol/decimals, not the sync-owned
+// createdInBlock/destructedInBlock, so the purged record is logged and
+// returned for a POST restore. Deleting is idempotent: a missing row reports
+// deleted=false rather than an error, matching the runtime-settings DELETE
+// semantics.
+func (s *InternalServer) deleteContractInfo(address string, r *http.Request) (interface{}, error) {
 	if address == "" {
 		return nil, api.NewAPIError("Missing contract address", true)
 	}
-	found, err := s.db.DeleteContractInfoForAddress(address)
+	purged, err := s.db.DeleteContractInfoForAddress(address)
 	if err != nil {
 		return nil, api.NewAPIError(err.Error(), true)
 	}
-	return &contractInfoDeleteResponse{Contract: address, Deleted: found}, nil
+	if purged != nil {
+		glog.Infof("admin: contract info %s purged (%+v), client %s", address, *purged, r.RemoteAddr)
+	}
+	return &contractInfoDeleteResponse{Contract: address, Deleted: purged != nil, Purged: purged}, nil
 }

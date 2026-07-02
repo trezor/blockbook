@@ -142,8 +142,17 @@ func TestContractInfoAdminAPI(t *testing.T) {
 	t.Run("DELETE", func(t *testing.T) {
 		// stored by the POST subtest above
 		code, body := adminRequest(t, ts, http.MethodDelete, "/admin/contract-info/"+address, "")
-		if code != http.StatusOK || body != `{"contract":"`+address+`","deleted":true}` {
-			t.Fatalf("DELETE = %d %s, want deleted:true", code, body)
+		if code != http.StatusOK {
+			t.Fatalf("DELETE = %d %s, want 200", code, body)
+		}
+		var resp contractInfoDeleteResponse
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("DELETE body %q does not decode: %v", body, err)
+		}
+		// the purged record is returned so the operator can restore it (incl.
+		// the sync-owned fields the backend re-fetch cannot recover) via POST
+		if !resp.Deleted || resp.Contract != address || resp.Purged == nil || resp.Purged.Name != "Renamed" {
+			t.Fatalf("DELETE = %+v, want deleted:true with the purged record", resp)
 		}
 		// assert on the DB directly — the GET endpoint would re-fetch from the
 		// backend and re-store the row
@@ -156,8 +165,15 @@ func TestContractInfoAdminAPI(t *testing.T) {
 		}
 		// idempotent: deleting a missing row reports deleted:false, not an error
 		code, body = adminRequest(t, ts, http.MethodDelete, "/admin/contract-info/"+address, "")
-		if code != http.StatusOK || body != `{"contract":"`+address+`","deleted":false}` {
-			t.Fatalf("repeated DELETE = %d %s, want deleted:false", code, body)
+		if code != http.StatusOK {
+			t.Fatalf("repeated DELETE = %d %s, want 200", code, body)
+		}
+		resp = contractInfoDeleteResponse{}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("repeated DELETE body %q does not decode: %v", body, err)
+		}
+		if resp.Deleted || resp.Purged != nil {
+			t.Fatalf("repeated DELETE = %+v, want deleted:false without a purged record", resp)
 		}
 	})
 

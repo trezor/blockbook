@@ -123,7 +123,7 @@ func parseAllowedEvmCallMethods(name, value string) (map[string]struct{}, error)
 		selector := strings.TrimPrefix(strings.ToLower(m), "0x")
 		b, err := hex.DecodeString(selector)
 		if err != nil || len(b) != 4 {
-			return nil, errors.Errorf("Invalid EVM call method selector %q in %s, expecting 4 bytes in hex", m, name)
+			return nil, errors.Errorf("invalid EVM call method selector %q in %s, expecting 4 bytes in hex", m, name)
 		}
 		methods[selector] = struct{}{}
 	}
@@ -139,11 +139,26 @@ func runtimeSettingEnvName(network, key string) string {
 	return strings.ToUpper(network) + "_" + key
 }
 
+// runtimeSettingEnvValue returns the trimmed value of the given environment
+// variable, so a stray space or newline in an env file does not leak into the
+// value (admin POSTs are trimmed the same way). A set but whitespace-only
+// value is a configuration error rather than unset: treating it as unset
+// would silently un-restrict rpcCall, unlike every other malformed value,
+// which fails loudly.
+func runtimeSettingEnvValue(envName string) (string, error) {
+	raw := os.Getenv(envName)
+	value := strings.TrimSpace(raw)
+	if raw != "" && value == "" {
+		return "", errors.Errorf("%s contains only whitespace", envName)
+	}
+	return value, nil
+}
+
 // resolveRuntimeSetting returns the effective raw value of a runtime setting
 // and its source: a stored override wins over the environment variable.
-func resolveRuntimeSetting(d *db.RocksDB, network, key string) (string, string, error) {
-	if d != nil {
-		value, found, err := d.GetRuntimeSetting(key)
+func resolveRuntimeSetting(store runtimeSettingStore, network, key string) (string, string, error) {
+	if store != nil {
+		value, found, err := store.GetRuntimeSetting(key)
 		if err != nil {
 			return "", "", err
 		}
@@ -151,7 +166,11 @@ func resolveRuntimeSetting(d *db.RocksDB, network, key string) (string, string, 
 			return value, common.RuntimeSettingSourceDB, nil
 		}
 	}
-	if value := os.Getenv(runtimeSettingEnvName(network, key)); value != "" {
+	value, err := runtimeSettingEnvValue(runtimeSettingEnvName(network, key))
+	if err != nil {
+		return "", "", err
+	}
+	if value != "" {
 		return value, common.RuntimeSettingSourceEnv, nil
 	}
 	return "", common.RuntimeSettingSourceUnset, nil
@@ -163,10 +182,16 @@ func resolveRuntimeSetting(d *db.RocksDB, network, key string) (string, string, 
 // through the admin interface) — is an error; falling back could silently
 // widen access.
 func buildRpcCallAllowlists(d *db.RocksDB, is *common.InternalState) (*common.RpcCallAllowlists, error) {
+	// the explicit nil check avoids a typed-nil interface on which the store
+	// methods would be called
+	var store runtimeSettingStore
+	if d != nil {
+		store = d
+	}
 	network := is.GetNetwork()
 	a := &common.RpcCallAllowlists{}
 	for _, def := range runtimeSettingDefs {
-		value, source, err := resolveRuntimeSetting(d, network, def.key)
+		value, source, err := resolveRuntimeSetting(store, network, def.key)
 		if err != nil {
 			return nil, err
 		}
@@ -212,9 +237,11 @@ func initRpcCallAllowlists(d *db.RocksDB, is *common.InternalState) error {
 	return nil
 }
 
-// runtimeSettingStore persists runtime setting overrides; *db.RocksDB in
-// production, replaceable in tests to exercise storage failures.
+// runtimeSettingStore reads and persists runtime setting overrides;
+// *db.RocksDB in production, replaceable in tests to exercise storage
+// failures.
 type runtimeSettingStore interface {
+	GetRuntimeSetting(name string) (value string, found bool, err error)
 	StoreRuntimeSetting(name, value string) error
 	DeleteRuntimeSetting(name string) error
 }
@@ -321,11 +348,13 @@ func (s *InternalServer) updateRuntimeSetting(def *runtimeSettingDef, r *http.Re
 // the database and the live state divergent and fail the next restart.
 func (s *InternalServer) deleteRuntimeSetting(def *runtimeSettingDef, r *http.Request) (interface{}, error) {
 	envName := runtimeSettingEnvName(s.is.GetNetwork(), def.key)
-	envValue := os.Getenv(envName)
+	envValue, err := runtimeSettingEnvValue(envName)
+	if err != nil {
+		return nil, api.NewAPIError("Cannot remove override, fallback environment value is invalid: "+err.Error()+"; fix the environment or set a value instead", true)
+	}
 	var parsed map[string]struct{}
 	source := common.RuntimeSettingSourceUnset
 	if envValue != "" {
-		var err error
 		parsed, err = def.parse(envName, envValue)
 		if err != nil {
 			return nil, api.NewAPIError("Cannot remove override, fallback environment value is invalid: "+err.Error()+"; fix the environment or set a value instead", true)

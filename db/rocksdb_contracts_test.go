@@ -18,12 +18,13 @@ func TestRocksDB_DeleteContractInfoForAddress(t *testing.T) {
 
 	address := "0x" + dbtestdata.EthAddr20
 	ci := &bchain.ContractInfo{
-		Standard: bchain.ERC20TokenStandard,
-		Type:     bchain.ERC20TokenStandard,
-		Contract: address,
-		Name:     "Test contract",
-		Symbol:   "TCT",
-		Decimals: 18,
+		Standard:       bchain.ERC20TokenStandard,
+		Type:           bchain.ERC20TokenStandard,
+		Contract:       address,
+		Name:           "Test contract",
+		Symbol:         "TCT",
+		Decimals:       18,
+		CreatedInBlock: 1234567,
 	}
 	if err := d.StoreContractInfo(ci); err != nil {
 		t.Fatal(err)
@@ -38,12 +39,18 @@ func TestRocksDB_DeleteContractInfoForAddress(t *testing.T) {
 		t.Fatalf("GetContractInfoForAddress() = %+v, want stored contract", got)
 	}
 
-	found, err := d.DeleteContractInfoForAddress(address)
+	genBefore := d.protocolGen.Load()
+	purged, err := d.DeleteContractInfoForAddress(address)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !found {
-		t.Error("DeleteContractInfoForAddress() = false, want true for a stored row")
+	if purged == nil || purged.Name != ci.Name || purged.CreatedInBlock != ci.CreatedInBlock {
+		t.Errorf("DeleteContractInfoForAddress() = %+v, want the stored record", purged)
+	}
+	// The generation bump protects against a concurrent GetContractInfo
+	// re-inserting the deleted row into the cache (see SetErcProtocol).
+	if d.protocolGen.Load() != genBefore+1 {
+		t.Error("DeleteContractInfoForAddress() did not bump protocolGen")
 	}
 	got, err = d.GetContractInfoForAddress(address)
 	if err != nil {
@@ -53,13 +60,18 @@ func TestRocksDB_DeleteContractInfoForAddress(t *testing.T) {
 		t.Errorf("GetContractInfoForAddress() after delete = %+v, want nil", got)
 	}
 
-	// Idempotent: deleting a missing row is not an error.
-	found, err = d.DeleteContractInfoForAddress(address)
+	// Idempotent: deleting a missing row is not an error and does not bump
+	// the generation (nothing a concurrent reader could re-insert).
+	genBefore = d.protocolGen.Load()
+	purged, err = d.DeleteContractInfoForAddress(address)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if found {
-		t.Error("DeleteContractInfoForAddress() = true, want false for a missing row")
+	if purged != nil {
+		t.Errorf("DeleteContractInfoForAddress() = %+v, want nil for a missing row", purged)
+	}
+	if d.protocolGen.Load() != genBefore {
+		t.Error("DeleteContractInfoForAddress() of a missing row must not bump protocolGen")
 	}
 
 	if _, err = d.DeleteContractInfoForAddress("not-an-address"); err == nil {

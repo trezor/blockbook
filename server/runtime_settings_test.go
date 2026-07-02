@@ -60,6 +60,17 @@ func TestParseAllowedRpcCallTo(t *testing.T) {
 	}
 }
 
+// A whitespace-only environment value must fail startup resolution the same
+// way a value with no parseable entries does — treating it as unset would
+// silently leave rpcCall unrestricted.
+func TestRuntimeSettingWhitespaceOnlyEnvFailsInit(t *testing.T) {
+	t.Setenv("FAKE_ALLOWED_RPC_CALL_TO", " \n")
+	is := &common.InternalState{CoinShortcut: "FAKE"}
+	if err := initRpcCallAllowlists(nil, is); err == nil || !strings.Contains(err.Error(), "only whitespace") {
+		t.Fatalf("initRpcCallAllowlists() err = %v, want whitespace configuration error", err)
+	}
+}
+
 func doRuntimeSettingRequest(t *testing.T, handler http.HandlerFunc, method, key, body string) (int, map[string]string) {
 	t.Helper()
 	var rdr io.Reader
@@ -76,9 +87,13 @@ func doRuntimeSettingRequest(t *testing.T, handler http.HandlerFunc, method, key
 	return w.Code, resp
 }
 
-// failingRuntimeSettingStore fails every persistence call; it stands in for a
+// failingRuntimeSettingStore fails every store call; it stands in for a
 // broken database to exercise the store-before-publish error paths.
 type failingRuntimeSettingStore struct{}
+
+func (failingRuntimeSettingStore) GetRuntimeSetting(name string) (string, bool, error) {
+	return "", false, errors.New("get failed")
+}
 
 func (failingRuntimeSettingStore) StoreRuntimeSetting(name, value string) error {
 	return errors.New("store failed")
@@ -93,7 +108,9 @@ func (failingRuntimeSettingStore) DeleteRuntimeSetting(name string) error {
 // individual subtests.
 func TestRuntimeSettingsAPI(t *testing.T) {
 	const envTo = "0xcdA9FC258358EcaA88845f19Af595e908bb7EfE9"
-	t.Setenv("FAKE_ALLOWED_RPC_CALL_TO", envTo)
+	// the surrounding whitespace must never surface: the env value is trimmed
+	// wherever it is resolved (startup and DELETE fallback alike)
+	t.Setenv("FAKE_ALLOWED_RPC_CALL_TO", " "+envTo+"\n")
 	parser := eth.NewEthereumParser(1, true)
 	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
 	if err != nil {
@@ -264,6 +281,20 @@ func TestRuntimeSettingsAPI(t *testing.T) {
 		}
 		if a := is.GetRpcCallAllowlists(); a.MethodsSource != common.RuntimeSettingSourceDB {
 			t.Fatalf("rejected DELETE must not change the snapshot: %+v", a)
+		}
+	})
+
+	t.Run("DELETE with whitespace-only env fallback is rejected", func(t *testing.T) {
+		// a whitespace-only env value is a configuration error, not unset —
+		// reverting to it would silently un-restrict rpcCall and the next
+		// restart would resolve the same error
+		t.Setenv("FAKE_ALLOWED_EVM_CALL_METHODS", " \n")
+		code, resp := doRuntimeSettingRequest(t, handler, http.MethodDelete, "ALLOWED_EVM_CALL_METHODS", "")
+		if code != http.StatusBadRequest || !strings.Contains(resp["error"], "only whitespace") {
+			t.Fatalf("got %d %v, want 400 whitespace error", code, resp)
+		}
+		if _, found, _ := d.GetRuntimeSetting(runtimeSettingAllowedEvmCallMethods); !found {
+			t.Fatal("rejected DELETE must keep the DB row")
 		}
 	})
 

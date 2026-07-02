@@ -142,6 +142,17 @@ const (
 type RpcCallAllowlists struct {
 	// To and Methods are the parsed allowlists; a nil map means that dimension
 	// is unconfigured. With both nil, rpcCall is unrestricted.
+	//
+	// Each dimension's key format must match what the rpcCall check looks up
+	// (server rpcCallAllowed), and the two deliberately differ:
+	//   - To keys are the configured entries trimmed and lowercased verbatim —
+	//     in practice 0x-prefixed hex addresses, because they are matched
+	//     against the lowercased `to` field of the request as sent by clients.
+	//   - Methods keys are 4-byte selectors as 8 lowercase hex characters
+	//     without the 0x prefix, because they are matched against selectors
+	//     hex-decoded from the request calldata (server evmCallSelector).
+	// A future dimension should document its key format here and keep the
+	// parser (server runtimeSettingDefs) and the rpcCall lookup in lockstep.
 	To      map[string]struct{}
 	Methods map[string]struct{}
 	// Raw comma-separated values and their sources (unset/env/db), kept for
