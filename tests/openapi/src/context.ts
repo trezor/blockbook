@@ -32,7 +32,7 @@ import {
 import type { Capability, AddressResponse, BlockHashResponse, BlockResponse, BlockSummary, FiatTickerResponse, StatusResponse, TxResponse, UtxoResponse, WsEnvelope, WsInfoResponse, WsMethod, WsResponse } from "./types.js";
 
 // ---------------------------------------------------------------------------
-// WebSocket connection pool
+// WebSocket connection
 // ---------------------------------------------------------------------------
 
 // wsConnection wraps a single persistent WebSocket and multiplexes requests
@@ -159,84 +159,6 @@ class wsConnection {
   }
 }
 
-// wsPool maintains a small set of persistent WebSocket connections so that
-// WS tests don't pay a handshake timeout per call.  acquire/release follow
-// a simple lease pattern; callers must release after the request completes.
-class wsPool {
-  private conns: wsConnection[] = [];
-  private busy = new Set<wsConnection>();
-
-  constructor(
-    private readonly url: string,
-    private readonly contract: OpenApiContract,
-    private readonly size: number,
-  ) {}
-
-  get aliveCount(): number {
-    return this.conns.length;
-  }
-
-  async init(): Promise<void> {
-    const results = await Promise.allSettled(
-      Array.from({ length: this.size }, () => {
-        const c = new wsConnection(this.url, this.contract);
-        return c.connect().then(() => c);
-      }),
-    );
-    for (const r of results) {
-      if (r.status === "fulfilled") {
-        this.conns.push(r.value);
-      }
-    }
-    // A partial pool (fewer than this.size connections) is still usable —
-    // acquire() replaces dead slots lazily.  If nothing connected, propagate
-    // the first rejection so the caller can attempt a protocol upgrade.
-    if (this.conns.length === 0) {
-      const first = results.find((r) => r.status === "rejected");
-      throw first ? (first as PromiseRejectedResult).reason : new Error("wsPool init: no connections and no errors");
-    }
-  }
-
-  async acquire(): Promise<wsConnection> {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      for (const c of this.conns) {
-        if (!this.busy.has(c) && !c.isClosed) {
-          this.busy.add(c);
-          return c;
-        }
-      }
-      // All connections are busy or dead.  If any died, replace them lazily.
-      for (let i = 0; i < this.conns.length; i++) {
-        if (this.conns[i].isClosed) {
-          try {
-            const c = new wsConnection(this.url, this.contract);
-            await c.connect();
-            this.conns[i] = c;
-            this.busy.add(c);
-            return c;
-          } catch {
-            // Replacement failed, try the next slot.
-          }
-        }
-      }
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  }
-
-  release(conn: wsConnection): void {
-    this.busy.delete(conn);
-  }
-
-  closeAll(): void {
-    for (const c of this.conns) {
-      c.close();
-    }
-    this.conns = [];
-    this.busy.clear();
-  }
-}
-
 // proxyFromEnv returns the configured egress proxy URL (sandboxed/corporate networks that only allow
 // outbound traffic via HTTP(S)_PROXY), or "" when none is set. Shared by the fetch dispatcher setup
 // in runner.ts and the ws client below.
@@ -257,8 +179,8 @@ function wsProxyAgent(): HttpsProxyAgent<string> | undefined {
 
 export class TestContext {
   readonly client: OpenApiFetchClient;
-  private wsPool_: wsPool | undefined;
-  private wsPoolInit_: Promise<void> | undefined;
+  private wsConn_: wsConnection | undefined;
+  private wsConnInit_: Promise<wsConnection> | undefined;
 
   private status?: NonNullable<StatusResponse["blockbook"]>;
   private nextWSReq = 0;
@@ -724,40 +646,52 @@ export class TestContext {
   }
 
   async wsCallWithID<T>(id: string, method: WsMethod, params: unknown, dataSchemaRef?: string) {
-    // Lazily initialise the WS connection pool.  The first call tries the
-    // configured ws:// URL; if that fails the pool tries wss:// and updates
-    // this.wsURL so subsequent calls skip the fallback.
-    // wsPoolInit_ guards against concurrent calls creating two pools.
-    if (!this.wsPoolInit_) {
-      this.wsPoolInit_ = (async () => {
-        const pool = new wsPool(this.wsURL, this.contract, 3);
+    const conn = await this.ensureWSConnection();
+    const request: WsEnvelope = { id, method, params };
+    return conn.request<T>(request, dataSchemaRef);
+  }
+
+  // ensureWSConnection lazily dials the shared WebSocket connection (so WS
+  // tests pay a single handshake per coin, not one per call) and redials when
+  // the previous connection died. The connection multiplexes concurrent
+  // requests by ID, so callers share it freely. The first dial tries the
+  // configured ws:// URL; if that fails it tries wss:// and updates this.wsURL
+  // so later dials skip the fallback. wsConnInit_ guards against concurrent
+  // calls dialing twice; a failed dial is not cached, so a transient outage
+  // does not poison every later WS test of the coin.
+  private ensureWSConnection(): Promise<wsConnection> {
+    if (this.wsConn_ && !this.wsConn_.isClosed) {
+      return Promise.resolve(this.wsConn_);
+    }
+    if (!this.wsConnInit_) {
+      this.wsConnInit_ = (async () => {
+        const conn = new wsConnection(this.wsURL, this.contract);
         try {
-          await pool.init();
+          await conn.connect();
+          return conn;
         } catch (firstError) {
           const upgraded = upgradeWSBaseToWSS(this.wsURL);
           if (!upgraded) {
             throw firstError;
           }
-          const pool2 = new wsPool(upgraded, this.contract, 3);
-          await pool2.init();
+          const conn2 = new wsConnection(upgraded, this.contract);
+          await conn2.connect();
           this.wsURL = upgraded;
-          this.wsPool_ = pool2;
-          return;
+          return conn2;
         }
-        this.wsPool_ = pool;
-      })();
+      })().then(
+        (conn) => {
+          this.wsConn_ = conn;
+          this.wsConnInit_ = undefined;
+          return conn;
+        },
+        (error) => {
+          this.wsConnInit_ = undefined;
+          throw error;
+        },
+      );
     }
-    await this.wsPoolInit_;
-    // wsPoolInit_ resolved, so wsPool_ is guaranteed to be set.
-    const pool = this.wsPool_!;
-
-    const request: WsEnvelope = { id, method, params };
-    const conn = await pool.acquire();
-    try {
-      return await conn.request<T>(request, dataSchemaRef);
-    } finally {
-      pool.release(conn);
-    }
+    return this.wsConnInit_;
   }
 
   isEVMTxID(txid: string) {
@@ -770,9 +704,9 @@ export class TestContext {
   }
 
   close() {
-    this.wsPool_?.closeAll();
-    this.wsPool_ = undefined;
-    this.wsPoolInit_ = undefined;
+    this.wsConn_?.close();
+    this.wsConn_ = undefined;
+    this.wsConnInit_ = undefined;
   }
 
   private async probeCapabilities() {
