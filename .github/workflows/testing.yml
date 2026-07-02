@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# Rapid pushes queue full unit->connectivity->integration chains for
+# already-superseded commits on the shared self-hosted pool. Cancel only
+# superseded PR runs; pushes to master/develop are never cancelled.
+concurrency:
+  group: testing-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   unit-tests:
     name: Unit Tests
