@@ -400,6 +400,12 @@ metrics:
     name: blockbook_eth_block_base_fee
     type: gauge
     help: Base fee per gas of the most recently connected EVM block, in wei - divide by 1e9 for Gwei. The realized base fee from the block header (push path); compare with eth_eip1559_base_fee (the pull path's next-block projection) to see whether the projection tracks the chain. Updated once per connected block
+  rpc_sync_latency:
+    name: blockbook_rpc_sync_latency
+    type: histogram_vec
+    help: Blockbook-to-backend round-trip time for sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.), in milliseconds, labeled by method and whether the call failed
+    labels: [method, error]
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000]
   eth_sync_rpc_errors:
     name: blockbook_eth_sync_rpc_errors
     type: counter_vec
