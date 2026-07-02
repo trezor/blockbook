@@ -571,7 +571,12 @@ func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool)
 		is.Host = name
 	}
 
-	is.WsGetAccountInfoLimit, _ = strconv.Atoi(os.Getenv(strings.ToUpper(is.GetNetwork()) + "_WS_GETACCOUNTINFO_LIMIT"))
+	limitStr := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_WS_GETACCOUNTINFO_LIMIT")
+	if limitStr == "" {
+		is.WsGetAccountInfoLimit = 42
+	} else {
+		is.WsGetAccountInfoLimit, _ = strconv.Atoi(limitStr)
+	}
 	if is.WsGetAccountInfoLimit > 0 {
 		glog.Info("WsGetAccountInfoLimit enabled with limit ", is.WsGetAccountInfoLimit)
 		is.WsLimitExceedingIPs = make(map[string]int)
