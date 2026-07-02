@@ -36,27 +36,25 @@ export async function runOpenApiE2E() {
 
   // Run coins in parallel — they connect to independent Blockbook instances,
   // so there is no shared state to contend over. Each coin buffers its own
-  // console output and flushes it after completion so per-coin lines are
-  // contiguous rather than interleaved.
-  type CoinResult = { summary: CoinSummary; output: string[] };
-  const results: CoinResult[] = await Promise.all(
-    selectedCoins.map(async (coin) => runCoin(coin, contract)),
+  // console output and flushes it immediately upon completion so that even
+  // if another coin hangs the completed results are still visible.
+  const summaries: CoinSummary[] = [];
+  await Promise.allSettled(
+    selectedCoins.map(async (coin) => {
+      const { summary, output } = await runCoin(coin, contract);
+      for (const line of output) {
+        console.log(line);
+      }
+      summaries.push(summary);
+    }),
   );
-
-  // Flush buffered per-coin output in the original order.
-  for (const { output } of results) {
-    for (const line of output) {
-      console.log(line);
-    }
-  }
 
   // Per-coin and aggregate summary so a run that is green-but-empty (everything skipped) is
   // visible at a glance, not hidden behind a zero-failure exit.
   console.log("\nOpenAPI e2e summary:");
-  for (const { summary } of results) {
+  for (const summary of summaries) {
     console.log(`  ${summary.coin}: ${summary.ok} ok, ${summary.skip} skip, ${summary.fail} fail`);
   }
-  const summaries = results.map((r) => r.summary);
   const totals = summaries.reduce(
     (acc, s) => ({ ok: acc.ok + s.ok, skip: acc.skip + s.skip, fail: acc.fail + s.fail }),
     { ok: 0, skip: 0, fail: 0 },
