@@ -1,0 +1,38 @@
+{{define "specific"}} {{if eq .ChainType 1}}
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Value</th>
+            <th>Source</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .RuntimeSettings}}
+        <tr>
+            <td>{{.Key}}</td>
+            <td style="word-break: break-all">{{.Value}}</td>
+            <td>{{.Source}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+<div class="row" style="margin: 35px">
+    Runtime settings override their environment variable defaults, are stored in the database and survive restarts.
+    Use the /admin/runtime-settings/&lt;KEY&gt; endpoint to manage them. Examples:
+    <div style="margin-top: 20px">
+        <pre>
+            # read the current value and its source (db, env or unset)
+            curl -k -u user:password 'https://&lt;internaladdress&gt;/admin/runtime-settings/ALLOWED_EVM_CALL_METHODS'
+
+            # set an override (an empty value explicitly unconfigures the setting)
+            curl -k -u user:password -X POST 'https://&lt;internaladdress&gt;/admin/runtime-settings/ALLOWED_EVM_CALL_METHODS' \
+            -H 'Content-Type: application/json' \
+            --data '{"value":"0xdd62ed3e,0x70a08231"}'
+
+            # remove the override and revert to the environment default
+            curl -k -u user:password -X DELETE 'https://&lt;internaladdress&gt;/admin/runtime-settings/ALLOWED_EVM_CALL_METHODS'
+        </pre>
+    </div>
+</div>
+{{else}} Not supported {{end}}{{end}}
