@@ -39,19 +39,21 @@ on:
 permissions:
   contents: read
 
+env:
+  RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+
 jobs:
   prepare_build:
     name: Prepare Build Plan
     runs-on: ubuntu-latest
     if: ${{ inputs.mode == 'build' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
-      coins_csv: ${{ steps.plan.outputs.coins_csv }}
     steps:
       - name: Checkout workflow code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Validate branch or tag
         env:
@@ -62,6 +64,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Build build plan
         id: plan
@@ -75,16 +78,15 @@ jobs:
     name: Prepare Deploy Plan
     runs-on: ubuntu-latest
     if: ${{ inputs.mode == 'deploy' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
-      coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout workflow code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Validate branch or tag
         env:
@@ -95,6 +97,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Build deploy/e2e plan
         id: plan
@@ -107,8 +110,9 @@ jobs:
     name: Build (${{ matrix.runner }})
     needs: prepare_build
     if: ${{ inputs.mode == 'build' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    # Generous ceilings so a hung step can't hold a self-hosted runner for
+    # the 360-minute default; sized well above normal runtimes.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -119,6 +123,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -139,8 +144,7 @@ jobs:
     name: Deploy (${{ matrix.coin }})
     needs: prepare_deploy
     if: ${{ inputs.mode == 'deploy' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -151,6 +155,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -175,23 +180,27 @@ jobs:
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_BUILD_ENV: dev
-        run: ./contrib/scripts/deploy-bb-and-backend.sh "${{ matrix.coin }}" --force-confnew
+          DEPLOY_COIN: ${{ matrix.coin }}
+        run: ./contrib/scripts/deploy-bb-and-backend.sh "$DEPLOY_COIN" --force-confnew
 
   wait-for-sync:
     name: Wait For Sync
     needs: [prepare_deploy, deploy]
-    if: ${{ needs.deploy.result == 'success' }}
+    # deploy is a fail-fast:false matrix: one failed coin must not skip sync
+    # verification for the coins that did deploy, so run on partial failure
+    # too. Only 'skipped' (mode=build) and cancellation keep this job off.
+    if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') }}
     runs-on: [self-hosted, bb-dev-selfhosted]
-    timeout-minutes: 31
+    timeout-minutes: 6
     env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       COINS_INPUT: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
-      SYNC_TIMEOUT_SECONDS: "1800"
+      SYNC_TIMEOUT_SECONDS: "300"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -206,16 +215,19 @@ jobs:
   e2e-tests:
     name: E2E Tests (post-deploy)
     needs: [prepare_deploy, deploy, wait-for-sync]
-    if: ${{ needs.deploy.result == 'success' && needs.wait-for-sync.result == 'success' }}
+    # Mirror wait-for-sync: partially failed deploys still get e2e coverage
+    # for the coins that deployed, as long as they reached sync.
+    if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') && needs.wait-for-sync.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 60
     env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       CONNECTIVITY_REGEX: ${{ needs.prepare_deploy.outputs.connectivity_regex }}
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
