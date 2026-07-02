@@ -185,11 +185,11 @@ jobs:
     # too. Only 'skipped' (mode=build) and cancellation keep this job off.
     if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') }}
     runs-on: [self-hosted, bb-dev-selfhosted]
-    timeout-minutes: 31
+    timeout-minutes: 6
     env:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       COINS_INPUT: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
-      SYNC_TIMEOUT_SECONDS: "1800"
+      SYNC_TIMEOUT_SECONDS: "300"
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
