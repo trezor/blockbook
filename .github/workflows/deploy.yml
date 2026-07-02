@@ -107,6 +107,9 @@ jobs:
     name: Build (${{ matrix.runner }})
     needs: prepare_build
     if: ${{ inputs.mode == 'build' }}
+    # Generous ceilings so a hung step can't hold a self-hosted runner for
+    # the 360-minute default; sized well above normal runtimes.
+    timeout-minutes: 240
     env:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     strategy:
@@ -139,6 +142,7 @@ jobs:
     name: Deploy (${{ matrix.coin }})
     needs: prepare_deploy
     if: ${{ inputs.mode == 'deploy' }}
+    timeout-minutes: 45
     env:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     strategy:
@@ -213,6 +217,7 @@ jobs:
     # for the coins that deployed, as long as they reached sync.
     if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') && needs.wait-for-sync.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 60
     env:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       CONNECTIVITY_REGEX: ${{ needs.prepare_deploy.outputs.connectivity_regex }}
