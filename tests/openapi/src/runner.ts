@@ -129,8 +129,17 @@ async function runCoin(coin: string, contract: OpenApiContract): Promise<{ summa
   }
 
   // Eagerly resolve all samples once so downstream tests hit the cache
-  // instead of each triggering its own probe chain.
-  await ctx.preloadSamples();
+  // instead of each triggering its own probe chain. A probe error here is a
+  // coin-level failure like the status preflight — every sample-derived test
+  // would fail downstream for the same root cause.
+  try {
+    await ctx.preloadSamples();
+  } catch (error) {
+    const message = errorMessage(error);
+    emit(`  fail (sample preload): ${message}`);
+    results.push({ coin, name: "SamplePreload", group: "preflight", status: "fail", durationMs: 0, message });
+    return { summary: summarize(coin, results), output };
+  }
 
   for (const testName of apiTests) {
     const def = testRegistry[testName];
