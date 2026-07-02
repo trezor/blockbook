@@ -167,6 +167,174 @@ func TestParseAllowedOrigins(t *testing.T) {
 	}
 }
 
+func TestParseAllowedEvmCallMethods(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     string
+		want    []string
+		wantErr bool
+	}{
+		{name: "empty", env: "", want: nil},
+		{name: "empty entries only", env: " , ,", wantErr: true},
+		{name: "single selector", env: "0xdd62ed3e", want: []string{"dd62ed3e"}},
+		{name: "without prefix", env: "dd62ed3e", want: []string{"dd62ed3e"}},
+		{name: "uppercase", env: "0XDD62ED3E", want: []string{"dd62ed3e"}},
+		{name: "multiple with spaces", env: " 0xdd62ed3e , 0x70a08231 ", want: []string{"dd62ed3e", "70a08231"}},
+		{name: "empty entries skipped", env: "0xdd62ed3e,,0x70a08231", want: []string{"dd62ed3e", "70a08231"}},
+		{name: "too short", env: "0xdd62ed", wantErr: true},
+		{name: "too long", env: "0xdd62ed3e00", wantErr: true},
+		{name: "odd length", env: "0xdd62ed3", wantErr: true},
+		{name: "non hex", env: "0xdd62ed3g", wantErr: true},
+		{name: "bare prefix", env: "0x", wantErr: true},
+		{name: "one invalid among valid", env: "0xdd62ed3e,invalid", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseAllowedEvmCallMethods("FAKE_ALLOWED_EVM_CALL_METHODS", tt.env)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseAllowedEvmCallMethods(%q) = nil err, want error", tt.env)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseAllowedEvmCallMethods(%q) unexpected error: %v", tt.env, err)
+			}
+			if tt.want == nil && got != nil {
+				t.Fatalf("parseAllowedEvmCallMethods(%q) = %v, want nil", tt.env, got)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseAllowedEvmCallMethods(%q) len = %d, want %d", tt.env, len(got), len(tt.want))
+			}
+			for _, selector := range tt.want {
+				if _, ok := got[selector]; !ok {
+					t.Fatalf("parseAllowedEvmCallMethods(%q) missing %q", tt.env, selector)
+				}
+			}
+		})
+	}
+}
+
+func TestRpcCallAllowed(t *testing.T) {
+	// allowance(owner, spender) calldata with the 0xdd62ed3e selector
+	const allowanceData = "0xdd62ed3e0000000000000000000000009ea3721b5bf3b64b4418c38b603154d2d597fae3000000000000000000000000e4db1c5a1b709ce4d2ada6985d9d506e58f73829"
+	const allowedTo = "0xcdA9FC258358EcaA88845f19Af595e908bb7EfE9"
+	const otherTo = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+	allowedToSet := map[string]struct{}{strings.ToLower(allowedTo): {}}
+	allowanceSelectorSet := map[string]struct{}{"dd62ed3e": {}}
+
+	tests := []struct {
+		name    string
+		to      map[string]struct{}
+		methods map[string]struct{}
+		req     WsRpcCallReq
+		want    bool
+	}{
+		{
+			name: "no allowlists configured allows all",
+			req:  WsRpcCallReq{To: otherTo, Data: "0x12345678"},
+			want: true,
+		},
+		{
+			name: "allowed address passes",
+			to:   allowedToSet,
+			req:  WsRpcCallReq{To: allowedTo, Data: "0x12345678"},
+			want: true,
+		},
+		{
+			name: "allowed address is case-insensitive",
+			to:   allowedToSet,
+			req:  WsRpcCallReq{To: strings.ToUpper(allowedTo), Data: "0x12345678"},
+			want: true,
+		},
+		{
+			name: "address not allowed without methods list",
+			to:   allowedToSet,
+			req:  WsRpcCallReq{To: otherTo, Data: allowanceData},
+			want: false,
+		},
+		{
+			name:    "allowed address passes regardless of selector",
+			to:      allowedToSet,
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: allowedTo, Data: "0x12345678"},
+			want:    true,
+		},
+		{
+			name:    "allowed selector passes to any address",
+			to:      allowedToSet,
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: allowanceData},
+			want:    true,
+		},
+		{
+			name:    "selector alone is enough for exact 4 byte calldata",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: "0xdd62ed3e"},
+			want:    true,
+		},
+		{
+			name:    "uppercase hex calldata matches",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: "0XDD62ED3E"},
+			want:    true,
+		},
+		{
+			name:    "only methods list set rejects other selectors",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: "0x70a08231000000000000000000000000e4db1c5a1b709ce4d2ada6985d9d506e58f73829"},
+			want:    false,
+		},
+		{
+			name:    "not allowed address nor selector",
+			to:      allowedToSet,
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: "0x12345678"},
+			want:    false,
+		},
+		{
+			name:    "missing 0x prefix fails closed",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: allowanceData[2:]},
+			want:    false,
+		},
+		{
+			name:    "odd length calldata fails closed",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: allowanceData + "0"},
+			want:    false,
+		},
+		{
+			name:    "non hex tail after valid selector fails closed",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: "0xdd62ed3exx"},
+			want:    false,
+		},
+		{
+			name:    "calldata shorter than selector fails closed",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: "0xdd62ed"},
+			want:    false,
+		},
+		{
+			name:    "empty calldata fails closed",
+			methods: allowanceSelectorSet,
+			req:     WsRpcCallReq{To: otherTo, Data: ""},
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &WebsocketServer{allowedRpcCallTo: tt.to, allowedRpcCallMethods: tt.methods}
+			if got := s.rpcCallAllowed(&tt.req); got != tt.want {
+				t.Fatalf("rpcCallAllowed(to=%q, data=%q) = %v, want %v", tt.req.To, tt.req.Data, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseTrustedProxies(t *testing.T) {
 	tests := []struct {
 		name      string
