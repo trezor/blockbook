@@ -13,6 +13,9 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: [self-hosted, bb-dev-selfhosted]
+    # Generous ceilings so a hung step can't hold a self-hosted runner for
+    # the 360-minute default; sized well above normal runtimes.
+    timeout-minutes: 60
     # Defense-in-depth: never run untrusted fork-PR code on the self-hosted
     # runner. connectivity/integration already carry this guard; without it
     # here, unit-tests relied solely on the repo "require approval for fork
@@ -33,6 +36,7 @@ jobs:
   connectivity-tests:
     name: Connectivity Tests
     runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 30
     needs: unit-tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
@@ -58,6 +62,7 @@ jobs:
   integration-tests:
     name: Integration Tests (RPC + Sync)
     runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 180
     needs: connectivity-tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
