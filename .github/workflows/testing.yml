@@ -105,3 +105,8 @@ jobs:
 
       - name: Validate backend artifact sources
         run: python3 ./.github/scripts/validate_backend_artifacts.py
+
+      - name: Run CI pipeline script tests
+        # Stdlib-only unit tests for the build/deploy plan scripts; without
+        # this step a regression in .github/scripts ships with green CI.
+        run: python3 -m unittest discover -s .github/scripts -p '*_test.py'
