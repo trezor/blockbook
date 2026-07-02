@@ -52,6 +52,8 @@ jobs:
     steps:
       - name: Checkout workflow code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Validate branch or tag
         env:
@@ -62,6 +64,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Build build plan
         id: plan
@@ -85,6 +88,8 @@ jobs:
     steps:
       - name: Checkout workflow code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Validate branch or tag
         env:
@@ -95,6 +100,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Build deploy/e2e plan
         id: plan
@@ -122,6 +128,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -155,6 +162,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -179,7 +187,8 @@ jobs:
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_BUILD_ENV: dev
-        run: ./contrib/scripts/deploy-bb-and-backend.sh "${{ matrix.coin }}" --force-confnew
+          DEPLOY_COIN: ${{ matrix.coin }}
+        run: ./contrib/scripts/deploy-bb-and-backend.sh "$DEPLOY_COIN" --force-confnew
 
   wait-for-sync:
     name: Wait For Sync
@@ -199,6 +208,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -226,6 +236,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
