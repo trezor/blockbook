@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -105,7 +106,6 @@ type WebsocketServer struct {
 	fiatRatesTokenSubscriptions  map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock   sync.Mutex
 	allowedOrigins               map[string]struct{}
-	allowedRpcCallTo             map[string]struct{}
 	trustedProxyPrefixes         []netip.Prefix
 	// cloudflarePrefixes gates trust of the CF-Connecting-* headers: when
 	// non-empty, those headers are honored only when the TCP peer is inside one
@@ -175,13 +175,8 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	}
 	originEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_ALLOWED_ORIGINS"
 	s.allowedOrigins = parseAllowedOrigins(originEnvName, os.Getenv(originEnvName))
-	envRpcCall := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_ALLOWED_RPC_CALL_TO")
-	if envRpcCall != "" {
-		s.allowedRpcCallTo = make(map[string]struct{})
-		for _, c := range strings.Split(envRpcCall, ",") {
-			s.allowedRpcCallTo[strings.ToLower(c)] = struct{}{}
-		}
-		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
+	if err := initRpcCallAllowlists(db, is); err != nil {
+		return nil, err
 	}
 	clientIPCfg, err := readClientIPConfig(is.GetNetwork())
 	if err != nil {
@@ -1201,12 +1196,64 @@ func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res i
 	}, nil
 }
 
-func (s *WebsocketServer) rpcCall(r *WsRpcCallReq) (*WsRpcCallRes, error) {
-	if s.allowedRpcCallTo != nil {
-		_, ok := s.allowedRpcCallTo[strings.ToLower(r.To)]
-		if !ok {
-			return nil, errors.New("Not supported")
+// evmCallSelector extracts the 4-byte function selector from hex-encoded EVM
+// calldata as lowercase hex without the 0x prefix. It validates the full
+// calldata hex (odd length or non-hex characters fail closed) but decodes
+// only the first 4 bytes (8 hex chars) so that arbitrarily long calldata
+// does not cause a large allocation that is then discarded.
+func evmCallSelector(data string) (string, bool) {
+	if len(data) < 10 || data[0] != '0' || (data[1] != 'x' && data[1] != 'X') {
+		return "", false
+	}
+	s := data[2:]
+	if len(s)&1 == 1 {
+		return "", false
+	}
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] >= '0' && s[i] <= '9':
+		case s[i] >= 'a' && s[i] <= 'f':
+		case s[i] >= 'A' && s[i] <= 'F':
+		default:
+			return "", false
 		}
+	}
+	b, err := hex.DecodeString(s[:8])
+	if err != nil {
+		return "", false
+	}
+	return hex.EncodeToString(b), true
+}
+
+// rpcCallAllowed reports whether a rpcCall request passes the allowlists. With
+// no allowlist configured rpcCall is unrestricted; otherwise the call must
+// target an allowed address or invoke an allowed method selector. The snapshot
+// is nil only when initRpcCallAllowlists has not run (bare test servers);
+// NewWebsocketServer and NewInternalServer fail construction when they cannot
+// publish one.
+func (s *WebsocketServer) rpcCallAllowed(r *WsRpcCallReq) bool {
+	a := s.is.GetRpcCallAllowlists()
+	if a == nil || (a.To == nil && a.Methods == nil) {
+		return true
+	}
+	if a.To != nil {
+		if _, ok := a.To[strings.ToLower(r.To)]; ok {
+			return true
+		}
+	}
+	if a.Methods != nil {
+		if selector, ok := evmCallSelector(r.Data); ok {
+			if _, ok := a.Methods[selector]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *WebsocketServer) rpcCall(r *WsRpcCallReq) (*WsRpcCallRes, error) {
+	if !s.rpcCallAllowed(r) {
+		return nil, errors.New("Not supported")
 	}
 	data, err := s.chain.EthereumTypeRpcCall(r.Data, r.To, r.From)
 	if err != nil {

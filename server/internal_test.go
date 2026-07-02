@@ -65,6 +65,28 @@ func TestRequireAdminAuth(t *testing.T) {
 	}
 }
 
+func Test_urlPathSegment(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"/admin/contract-info/0xAbC123", "0xAbC123"}, // case preserved
+		{"/admin/runtime-settings/allowed_rpc_call_to", "allowed_rpc_call_to"},
+		{"/admin/contract-info/ 0xabc \t", "0xabc"}, // whitespace trimmed
+		{"/admin/contract-info/", ""},               // collection path
+		{"/admin", ""},                              // root-level path has no sub-segment
+		{"/", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		r := httptest.NewRequest(http.MethodGet, "/x", nil)
+		r.URL.Path = tt.path // bypass NewRequest path validation to test raw shapes
+		if got := urlPathSegment(r); got != tt.want {
+			t.Errorf("urlPathSegment(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
 // TestAdminSubtreeIsGated guards against the ServeMux fall-through where
 // trailing-slash or unknown /admin paths would otherwise reach the unauthenticated
 // index handler. It mirrors the route registration in NewInternalServer.
@@ -81,7 +103,7 @@ func TestAdminSubtreeIsGated(t *testing.T) {
 
 	// Without credentials, every /admin path is gated (401) and never reaches the
 	// unauthenticated index handler.
-	for _, p := range []string{"/admin", "/admin/", "/admin/unknown", "/admin/contract-info"} {
+	for _, p := range []string{"/admin", "/admin/", "/admin/unknown", "/admin/contract-info", "/admin/runtime-settings/ALLOWED_RPC_CALL_TO"} {
 		t.Run("no-auth "+p, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, p, nil)
 			w := httptest.NewRecorder()

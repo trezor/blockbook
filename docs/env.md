@@ -81,7 +81,9 @@ Blockbook reads these from its process environment. When installed from the Debi
     3. `COINGECKO_API_KEY`
     Example: for Optimism, `network=OP` and `coin shortcut=ETH`, so `OP_COINGECKO_API_KEY` is preferred over `ETH_COINGECKO_API_KEY`.
 
--   `<coin shortcut>_ALLOWED_RPC_CALL_TO` - Addresses to which `rpcCall` websocket requests can be made, as a comma-separated list. If omitted, `rpcCall` is enabled for all addresses.
+-   `<network or coin shortcut>_ALLOWED_RPC_CALL_TO` - Addresses to which `rpcCall` websocket requests can be made, as a comma-separated list. The value and its entries are trimmed and empty entries skipped; a set value that contains no addresses at all (a whitespace-only value included) is a configuration error and Blockbook fails on startup. If omitted (and `ALLOWED_EVM_CALL_METHODS` is not set either), `rpcCall` is enabled for all addresses. This is the startup default of a [runtime setting](#runtime-settings): an override stored through the admin API takes precedence.
+
+-   `<network or coin shortcut>_ALLOWED_EVM_CALL_METHODS` - EVM method selectors (first 4 bytes of the calldata, for example `0xdd62ed3e` for ERC-20 `allowance(address,address)`) that `rpcCall` websocket requests may invoke on any address, as a comma-separated list; the `0x` prefix is optional and matching is case-insensitive. Combines with `ALLOWED_RPC_CALL_TO`: a call is allowed when either its target address or its calldata selector is allowed. When only this variable is set, only calls with an allowed selector pass. Malformed calldata (missing `0x` prefix, invalid or odd-length hex, fewer than 4 bytes) never matches a selector. A malformed selector in the list, or a set variable that contains no selectors at all (a whitespace-only value included), is a configuration error and Blockbook fails on startup. This is the startup default of a [runtime setting](#runtime-settings): an override stored through the admin API takes precedence.
 
 -   `<network or coin shortcut>_ALTERNATIVE_SENDTX_URLS` - Comma-separated list of alternative EVM `eth_sendRawTransaction` providers, used for private/MEV-protected transaction submission. The prefix is the configured `network` value when present (for example `OP`, `BASE`, `POL`, `BSC`, `ARB`, `AVAX`), otherwise the coin shortcut (for example `ETH`). If omitted, Blockbook sends transactions through the normal backend RPC.
 
@@ -90,6 +92,26 @@ Blockbook reads these from its process environment. When installed from the Debi
 -   `<network or coin shortcut>_ALTERNATIVE_FETCH_MEMPOOL_TX` - Set to `TRUE` to fetch and cache transactions submitted through the alternative provider, so Blockbook can expose them as pending even if they are not visible in the public backend mempool. Cached transactions are periodically checked with the alternative provider's `eth_getTransactionByHash`; an empty response or mined transaction removes the local pending entry. When the alternative provider is enabled, the default alternative cache timeout is 5 minutes and the default Blockbook EVM mempool timeout is 10 minutes; both can be overridden in coin config with `alternativeMempoolTxTimeout` and `mempoolTxTimeout`.
 
     WebSocket `sendTransaction` can bypass the alternative provider for a single request by setting `disableAlternativeRPC` to `true`.
+
+## Runtime settings
+
+The `rpcCall` allowlists can be changed at runtime, without a restart, through the internal server's authenticated admin API (see `BB_ADMIN_USER`/`BB_ADMIN_PASSWORD` above). An override is persisted in the Blockbook database, survives restarts and takes precedence over the corresponding environment variable, which serves only as the startup default. Every change is logged. The `/admin/runtime-settings` page shows the current values and their sources. The endpoint and the page are registered on every chain type — the runtime-settings mechanism is chain-generic; the currently defined settings only affect EVM `rpcCall` and are simply unset elsewhere.
+
+`GET/POST/DELETE /admin/runtime-settings/<KEY>` where `<KEY>` is `ALLOWED_RPC_CALL_TO` or `ALLOWED_EVM_CALL_METHODS`:
+
+-   `GET` returns the effective value and its source (`db` = stored override, `env` = environment default, `unset` = neither): `{"key":"ALLOWED_EVM_CALL_METHODS","value":"0xdd62ed3e","source":"env"}`.
+-   `POST` (or `PUT`) with body `{"value":"0xdd62ed3e,0x70a08231"}` validates the value (invalid values are rejected with `400` and change nothing), stores it in the database and only then applies it to the live allowlists — a database failure returns `500` and leaves the live state unchanged. A `"value"` of exactly `""` is a valid override meaning "explicitly unconfigured" (that allowlist dimension is disabled, as if its environment variable was not set) — it is the only way to un-restrict at runtime while the environment variable has a value. A value containing only whitespace or separators is rejected with `400`, so a botched automation input cannot silently disable the allowlist.
+-   `DELETE` removes the stored override and reverts to the environment default. If the environment value is malformed the request is rejected with `400` and the override is kept, so a later restart cannot fail on it.
+
+Old Blockbook versions ignore the stored overrides (the environment applies again after a version rollback) and keep them intact, so rolling forward resumes the override.
+
+## Contract-info admin endpoint
+
+On EVM chains the internal server also exposes `/admin/contract-info/` (same Basic auth) to manage the contract metadata Blockbook caches from the backend node:
+
+-   `GET /admin/contract-info/<address>` returns the contract's metadata as a `ContractInfo` JSON object (fetching it from the backend node and storing it if not cached yet).
+-   `POST` (or `PUT`) `/admin/contract-info/` with a JSON array body `[{ContractInfo},…]` updates the stored metadata of the listed contracts; the response is `{"updated":N}`. The write targets the collection path — a `POST` to an address path is rejected with `400`.
+-   `DELETE /admin/contract-info/<address>` purges the stored metadata of one contract so it is re-fetched from the backend node on the next read; the response is `{"contract":"<address>","deleted":true|false,"purged":{ContractInfo}}` (`deleted` is `false` and `purged` absent when nothing was stored — the delete is idempotent). Note that the whole record is discarded: the backend re-fetch restores only name/symbol/decimals, not the sync-owned `createdInBlock`/`destructedInBlock` fields, which are otherwise recoverable only by a reindex. The `purged` record in the response (also logged) can be `POST`ed back to restore them.
 
 ## Build-time variables
 

@@ -119,6 +119,67 @@ type InternalState struct {
 	// shared /64. Guarded by its own mutex (consulted on every connection attempt).
 	wsBlockMux   sync.Mutex
 	wsBlockedIPs map[string]*WsBlockedIP
+
+	// rpcCallAllowlists is the effective websocket rpcCall allowlist snapshot,
+	// resolved from the DB runtime-setting overrides and the environment
+	// defaults (see server initRpcCallAllowlists). Unexported so it is never
+	// serialized by Pack; replaced wholesale via the accessors below, giving
+	// the rpcCall hot path a lock-free, consistent view.
+	rpcCallAllowlists atomic.Pointer[RpcCallAllowlists]
+}
+
+// Sources of a runtime setting value, reported by the /admin runtime-settings
+// interface.
+const (
+	RuntimeSettingSourceUnset = "unset"
+	RuntimeSettingSourceEnv   = "env"
+	RuntimeSettingSourceDB    = "db"
+)
+
+// RpcCallAllowlists is an immutable snapshot of the websocket rpcCall
+// allowlists. Readers must not mutate the maps; writers build a new snapshot
+// and replace it via SetRpcCallAllowlists.
+type RpcCallAllowlists struct {
+	// To and Methods are the parsed allowlists; a nil map means that dimension
+	// is unconfigured. With both nil, rpcCall is unrestricted.
+	//
+	// Each dimension's key format must match what the rpcCall check looks up
+	// (server rpcCallAllowed), and the two deliberately differ:
+	//   - To keys are the configured entries trimmed and lowercased verbatim —
+	//     in practice 0x-prefixed hex addresses, because they are matched
+	//     against the lowercased `to` field of the request as sent by clients.
+	//   - Methods keys are 4-byte selectors as 8 lowercase hex characters
+	//     without the 0x prefix, because they are matched against selectors
+	//     hex-decoded from the request calldata (server evmCallSelector).
+	// A future dimension should document its key format here and keep the
+	// parser (server runtimeSettingDefs) and the rpcCall lookup in lockstep.
+	To      map[string]struct{}
+	Methods map[string]struct{}
+	// Raw comma-separated values and their sources (unset/env/db), kept for
+	// the admin interface and logging.
+	ToValue       string
+	MethodsValue  string
+	ToSource      string
+	MethodsSource string
+}
+
+// GetRpcCallAllowlists returns the current rpcCall allowlist snapshot, nil
+// when not yet initialized.
+func (is *InternalState) GetRpcCallAllowlists() *RpcCallAllowlists {
+	return is.rpcCallAllowlists.Load()
+}
+
+// SetRpcCallAllowlists atomically replaces the rpcCall allowlist snapshot.
+func (is *InternalState) SetRpcCallAllowlists(a *RpcCallAllowlists) {
+	is.rpcCallAllowlists.Store(a)
+}
+
+// InitRpcCallAllowlists publishes the initial snapshot only when none exists
+// yet and reports whether it did. The compare-and-swap keeps a snapshot that
+// was already published — possibly updated by the admin interface in the
+// meantime — intact when several server constructors initialize in any order.
+func (is *InternalState) InitRpcCallAllowlists(a *RpcCallAllowlists) bool {
+	return is.rpcCallAllowlists.CompareAndSwap(nil, a)
 }
 
 // WsBlockedIP records a websocket client key (IPv4 address or full IPv6 /128)
