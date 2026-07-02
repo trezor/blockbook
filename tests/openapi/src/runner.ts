@@ -34,10 +34,31 @@ export async function runOpenApiE2E() {
     return;
   }
 
+  // Run coins in parallel — they connect to independent Blockbook instances,
+  // so there is no shared state to contend over. Each coin buffers its own
+  // console output and flushes it immediately upon completion so that even
+  // if another coin hangs the completed results are still visible.
   const summaries: CoinSummary[] = [];
-  for (const coin of selectedCoins) {
-    summaries.push(await runCoin(coin, contract));
-  }
+  await Promise.all(
+    selectedCoins.map(async (coin) => {
+      try {
+        const { summary, output } = await runCoin(coin, contract);
+        for (const line of output) {
+          console.log(line);
+        }
+        summaries.push(summary);
+      } catch (error) {
+        // A rejection here means the coin aborted outside runCoin's own error
+        // handling. Record it as a coin-level failure so the run cannot go
+        // green while a selected coin was never tested.
+        const message = errorMessage(error);
+        console.error(`\nOpenAPI e2e ${coin}: aborted: ${message}`);
+        summaries.push(
+          summarize(coin, [{ coin, name: "CoinRun", group: "run", status: "fail", durationMs: 0, message }]),
+        );
+      }
+    }),
+  );
 
   // Per-coin and aggregate summary so a run that is green-but-empty (everything skipped) is
   // visible at a glance, not hidden behind a zero-failure exit.
@@ -78,17 +99,22 @@ export async function runOpenApiE2E() {
   console.log(`\nOpenAPI e2e passed for ${summaries.length} coin(s): ${selectedCoins.join(", ")}`);
 }
 
-async function runCoin(coin: string, contract: OpenApiContract): Promise<CoinSummary> {
+async function runCoin(coin: string, contract: OpenApiContract): Promise<{ summary: CoinSummary; output: string[] }> {
   const testsConfig = loadTestsConfig();
   const apiTests = testsConfig[coin]?.api ?? [];
   const results: TestResult[] = [];
+  const output: string[] = [];
+
+  const emit = (msg: string) => output.push(msg);
+
   if (apiTests.length === 0) {
-    console.log(`OpenAPI e2e ${coin}: no api tests configured, skipping.`);
-    return summarize(coin, results);
+    emit(`OpenAPI e2e ${coin}: no api tests configured, skipping.`);
+    return { summary: summarize(coin, results), output };
   }
 
   const ctx = await TestContext.create(coin, contract);
-  console.log(`\nOpenAPI e2e ${coin}: ${apiTests.length} tests`);
+  try {
+    emit(`\nOpenAPI e2e ${coin}: ${apiTests.length} tests`);
 
   // Status preflight: if the node is unreachable or not in sync, every sample-derived test would
   // fail or skip downstream for the same root cause. Surface it once as a single coin-level failure
@@ -97,16 +123,29 @@ async function runCoin(coin: string, contract: OpenApiContract): Promise<CoinSum
     await ctx.getStatus();
   } catch (error) {
     const message = errorMessage(error);
-    console.error(`  fail (status preflight): ${message}`);
+    emit(`  fail (status preflight): ${message}`);
     results.push({ coin, name: "StatusPreflight", group: "preflight", status: "fail", durationMs: 0, message });
-    return summarize(coin, results);
+    return { summary: summarize(coin, results), output };
+  }
+
+  // Eagerly resolve all samples once so downstream tests hit the cache
+  // instead of each triggering its own probe chain. A probe error here is a
+  // coin-level failure like the status preflight — every sample-derived test
+  // would fail downstream for the same root cause.
+  try {
+    await ctx.preloadSamples();
+  } catch (error) {
+    const message = errorMessage(error);
+    emit(`  fail (sample preload): ${message}`);
+    results.push({ coin, name: "SamplePreload", group: "preflight", status: "fail", durationMs: 0, message });
+    return { summary: summarize(coin, results), output };
   }
 
   for (const testName of apiTests) {
     const def = testRegistry[testName];
     if (!def) {
       const message = "test is listed in tests/tests.json but not implemented";
-      console.error(`  fail ${testName}: ${message}`);
+      emit(`  fail ${testName}: ${message}`);
       results.push({ coin, name: testName, group: "unknown", status: "fail", durationMs: 0, message });
       continue;
     }
@@ -118,17 +157,17 @@ async function runCoin(coin: string, contract: OpenApiContract): Promise<CoinSum
       }
       await def.run(ctx);
       const durationMs = Date.now() - started;
-      console.log(`  ok   ${testName} (${durationMs}ms)`);
+      emit(`  ok   ${testName} (${durationMs}ms)`);
       results.push({ coin, name: testName, group: def.group, status: "ok", durationMs });
     } catch (error) {
       const durationMs = Date.now() - started;
       if (error instanceof SkipTest) {
-        console.log(`  skip ${testName}: ${error.message}`);
+        emit(`  skip ${testName}: ${error.message}`);
         results.push({ coin, name: testName, group: def.group, status: "skip", durationMs, message: error.message });
         continue;
       }
       const message = errorMessage(error);
-      console.error(`  fail ${testName}: ${message}`);
+      emit(`  fail ${testName}: ${message}`);
       results.push({ coin, name: testName, group: def.group, status: "fail", durationMs, message });
     }
   }
@@ -139,10 +178,13 @@ async function runCoin(coin: string, contract: OpenApiContract): Promise<CoinSum
   const summary = summarize(coin, results);
   if (summary.ok === 0 && summary.fail === 0 && results.length > 0) {
     const message = `coin ${coin} had 0 passing tests (${summary.skip} skipped) — likely not in sync or the recent-block window yielded no usable sample data`;
-    console.error(`  fail (coin health): ${message}`);
+    emit(`  fail (coin health): ${message}`);
     results.push({ coin, name: "CoinHealth", group: "health", status: "fail", durationMs: 0, message });
-    return summarize(coin, results);
+    return { summary: summarize(coin, results), output };
   }
 
-  return summary;
+    return { summary, output };
+  } finally {
+    ctx.close();
+  }
 }
