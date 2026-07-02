@@ -81,7 +81,7 @@ func TestAdminSubtreeIsGated(t *testing.T) {
 
 	// Without credentials, every /admin path is gated (401) and never reaches the
 	// unauthenticated index handler.
-	for _, p := range []string{"/admin", "/admin/", "/admin/unknown", "/admin/contract-info"} {
+	for _, p := range []string{"/admin", "/admin/", "/admin/unknown", "/admin/contract-info", "/admin/runtime-settings/ALLOWED_RPC_CALL_TO"} {
 		t.Run("no-auth "+p, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, p, nil)
 			w := httptest.NewRecorder()

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -45,6 +46,12 @@ type InternalServer struct {
 	adminAuthEnabled bool
 	adminUserHash    [32]byte
 	adminPassHash    [32]byte
+	// runtimeSettingsMux serializes runtime-setting writes (validate → store
+	// to DB → publish snapshot) so concurrent admin requests cannot publish a
+	// snapshot whose value lost the database write. runtimeSettings is the
+	// persistence backend of those writes (the RocksDB in production).
+	runtimeSettingsMux sync.Mutex
+	runtimeSettings    runtimeSettingStore
 }
 
 // NewInternalServer creates new internal http interface to blockbook and returns its handle
@@ -64,15 +71,16 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 		htmlTemplates: htmlTemplates[InternalTemplateData]{
 			debug: true,
 		},
-		https:       https,
-		certFiles:   certFiles,
-		db:          db,
-		txCache:     txCache,
-		chain:       chain,
-		chainParser: chain.GetChainParser(),
-		mempool:     mempool,
-		is:          is,
-		api:         api,
+		https:           https,
+		certFiles:       certFiles,
+		db:              db,
+		txCache:         txCache,
+		chain:           chain,
+		chainParser:     chain.GetChainParser(),
+		mempool:         mempool,
+		is:              is,
+		api:             api,
+		runtimeSettings: db,
 	}
 	s.htmlTemplates.newTemplateData = s.newTemplateData
 	s.htmlTemplates.newTemplateDataWithError = s.newTemplateDataWithError
@@ -104,9 +112,14 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	serveMux.HandleFunc(adminPath+"/", s.requireAdminAuth(s.adminSubtreeHandler(adminPath)))
 	serveMux.HandleFunc(adminPath+"/ws-limit-exceeding-ips", s.requireAdminAuth(s.htmlTemplateHandler(s.wsLimitExceedingIPs)))
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		if err := initRpcCallAllowlists(db, is); err != nil {
+			return nil, err
+		}
 		serveMux.HandleFunc(adminPath+"/internal-data-errors", s.requireAdminAuth(s.htmlTemplateHandler(s.internalDataErrors)))
 		serveMux.HandleFunc(adminPath+"/contract-info", s.requireAdminAuth(s.htmlTemplateHandler(s.contractInfoPage)))
 		serveMux.HandleFunc(adminPath+"/contract-info/", s.requireAdminAuth(s.jsonHandler(s.apiContractInfo, 0)))
+		serveMux.HandleFunc(adminPath+"/runtime-settings", s.requireAdminAuth(s.htmlTemplateHandler(s.runtimeSettingsPage)))
+		serveMux.HandleFunc(adminPath+"/runtime-settings/", s.requireAdminAuth(s.jsonHandler(s.apiRuntimeSetting, 0)))
 	}
 	return s, nil
 }
@@ -219,6 +232,7 @@ const (
 	adminInternalErrorsTpl
 	adminLimitExceedingIPSTpl
 	adminContractInfoTpl
+	adminRuntimeSettingsTpl
 
 	internalTplCount
 )
@@ -252,6 +266,7 @@ type InternalTemplateData struct {
 	WsGetAccountInfoLimit  int
 	WsLimitExceedingIPs    []WsLimitExceedingIP
 	WsBlockedIPs           []WsBlockedIPView
+	RuntimeSettings        []RuntimeSettingView
 }
 
 func (s *InternalServer) newTemplateData(r *http.Request) *InternalTemplateData {
@@ -287,6 +302,7 @@ func (s *InternalServer) parseTemplates() []*template.Template {
 	t[adminInternalErrorsTpl] = createTemplate("./static/internal_templates/block_internal_data_errors.html", "./static/internal_templates/base.html")
 	t[adminLimitExceedingIPSTpl] = createTemplate("./static/internal_templates/ws_limit_exceeding_ips.html", "./static/internal_templates/base.html")
 	t[adminContractInfoTpl] = createTemplate("./static/internal_templates/contract_info.html", "./static/internal_templates/base.html")
+	t[adminRuntimeSettingsTpl] = createTemplate("./static/internal_templates/runtime_settings.html", "./static/internal_templates/base.html")
 	return t
 }
 

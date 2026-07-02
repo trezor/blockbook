@@ -4,9 +4,11 @@
 package server
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -410,6 +412,118 @@ var websocketTestsEthereumTypeRpcCallAllowlist = []websocketTest{
 		},
 		want: `{"id":"3","data":{"error":{"message":"Not supported"}}}`,
 	},
+}
+
+// Test_PublicServer_EthereumType_RuntimeSettingsLiveUpdate proves the full
+// runtime-settings flow: a websocket rpcCall rejected under the env-seeded
+// allowlist starts passing right after an authenticated admin POST (no
+// restart), the override is resolved from the DB on a simulated restart with
+// precedence over the environment, and DELETE reverts to the env default.
+func Test_PublicServer_EthereumType_RuntimeSettingsLiveUpdate(t *testing.T) {
+	timeNow = fixedTimeNow
+	t.Setenv("FAKE_ALLOWED_EVM_CALL_METHODS", "0xdd62ed3e")
+	t.Setenv("BB_ADMIN_USER", "admin")
+	t.Setenv("BB_ADMIN_PASSWORD", "password")
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		glog.Fatal("fakechain: ", err)
+	}
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	internal, err := NewInternalServer("localhost:12346", "", s.db, s.chain, s.mempool, s.txCache, metrics, s.is, s.fiatRates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tsAdmin := httptest.NewServer(internal.https.Handler)
+	defer tsAdmin.Close()
+
+	const balanceOfData = "0x70a08231000000000000000000000000e4db1c5a1b709ce4d2ada6985d9d506e58f73829"
+	balanceOfCall := func(name, want string) []websocketTest {
+		return []websocketTest{{
+			name: name,
+			req: websocketReq{
+				Method: "rpcCall",
+				Params: WsRpcCallReq{
+					To:   "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+					Data: balanceOfData,
+				},
+			},
+			want: want,
+		}}
+	}
+	rejected := `{"id":"0","data":{"error":{"message":"Not supported"}}}`
+	allowed := `{"id":"0","data":{"data":"` + balanceOfData + `abcd"}}`
+
+	adminURL := tsAdmin.URL + "/admin/runtime-settings/ALLOWED_EVM_CALL_METHODS"
+	doAdmin := func(method, body string) (int, string) {
+		t.Helper()
+		var rdr io.Reader
+		if body != "" {
+			rdr = strings.NewReader(body)
+		}
+		req, err := http.NewRequest(method, adminURL, rdr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.SetBasicAuth("admin", "password")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, strings.TrimSpace(string(b))
+	}
+
+	// the balanceOf selector is not in the env-seeded allowlist
+	runWebsocketTests(t, ts, balanceOfCall("rpcCall balanceOf rejected by env allowlist", rejected))
+
+	// the admin endpoint requires authentication
+	resp, err := http.Post(adminURL, "application/json", strings.NewReader(`{"value":"0x70a08231"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated POST status = %d, want 401", resp.StatusCode)
+	}
+
+	// authenticated POST adds the selector and takes effect without a restart
+	code, body := doAdmin(http.MethodPost, `{"value":"0xdd62ed3e,0x70a08231"}`)
+	if code != http.StatusOK || body != `{"key":"ALLOWED_EVM_CALL_METHODS","value":"0xdd62ed3e,0x70a08231","source":"db"}` {
+		t.Fatalf("admin POST = %d %s", code, body)
+	}
+	runWebsocketTests(t, ts, balanceOfCall("rpcCall balanceOf allowed after admin update", allowed))
+
+	// simulated restart: a fresh InternalState resolves the override from the
+	// DB with precedence over the environment variable
+	is2 := &common.InternalState{CoinShortcut: "FAKE"}
+	if err := initRpcCallAllowlists(s.db, is2); err != nil {
+		t.Fatal(err)
+	}
+	a := is2.GetRpcCallAllowlists()
+	if a.MethodsSource != common.RuntimeSettingSourceDB || a.MethodsValue != "0xdd62ed3e,0x70a08231" {
+		t.Fatalf("after simulated restart got source %q value %q, want db override", a.MethodsSource, a.MethodsValue)
+	}
+	if _, ok := a.Methods["70a08231"]; !ok {
+		t.Fatal("after simulated restart the stored selector is missing")
+	}
+
+	// DELETE reverts to the env default and the call is rejected again
+	code, body = doAdmin(http.MethodDelete, "")
+	if code != http.StatusOK || body != `{"key":"ALLOWED_EVM_CALL_METHODS","value":"0xdd62ed3e","source":"env"}` {
+		t.Fatalf("admin DELETE = %d %s", code, body)
+	}
+	runWebsocketTests(t, ts, balanceOfCall("rpcCall balanceOf rejected after revert", rejected))
 }
 
 func Test_PublicServer_EthereumType_RpcCallAllowlist(t *testing.T) {

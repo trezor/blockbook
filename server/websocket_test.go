@@ -18,6 +18,7 @@ import (
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
@@ -327,12 +328,21 @@ func TestRpcCallAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebsocketServer{allowedRpcCallTo: tt.to, allowedRpcCallMethods: tt.methods}
+			is := &common.InternalState{}
+			is.SetRpcCallAllowlists(&common.RpcCallAllowlists{To: tt.to, Methods: tt.methods})
+			s := &WebsocketServer{is: is}
 			if got := s.rpcCallAllowed(&tt.req); got != tt.want {
 				t.Fatalf("rpcCallAllowed(to=%q, data=%q) = %v, want %v", tt.req.To, tt.req.Data, got, tt.want)
 			}
 		})
 	}
+
+	t.Run("nil snapshot allows all", func(t *testing.T) {
+		s := &WebsocketServer{is: &common.InternalState{}}
+		if !s.rpcCallAllowed(&WsRpcCallReq{To: otherTo, Data: "0x12345678"}) {
+			t.Fatal("rpcCallAllowed with uninitialized snapshot = false, want true")
+		}
+	})
 }
 
 func TestParseTrustedProxies(t *testing.T) {

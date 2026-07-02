@@ -106,14 +106,7 @@ type WebsocketServer struct {
 	fiatRatesTokenSubscriptions  map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock   sync.Mutex
 	allowedOrigins               map[string]struct{}
-	allowedRpcCallTo             map[string]struct{}
-	// allowedRpcCallMethods holds 4-byte EVM call selectors (lowercase hex,
-	// no 0x prefix) that rpcCall may invoke on any address; nil when
-	// unconfigured. Together with allowedRpcCallTo it forms the rpcCall
-	// allowlist: a call passes when either the target address or the calldata
-	// selector is allowed; if both are nil, rpcCall is unrestricted.
-	allowedRpcCallMethods map[string]struct{}
-	trustedProxyPrefixes  []netip.Prefix
+	trustedProxyPrefixes         []netip.Prefix
 	// cloudflarePrefixes gates trust of the CF-Connecting-* headers: when
 	// non-empty, those headers are honored only when the TCP peer is inside one
 	// of these ranges (or a loopback/private proxy). Empty disables verification
@@ -182,22 +175,8 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	}
 	originEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_ALLOWED_ORIGINS"
 	s.allowedOrigins = parseAllowedOrigins(originEnvName, os.Getenv(originEnvName))
-	envRpcCall := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_ALLOWED_RPC_CALL_TO")
-	if envRpcCall != "" {
-		s.allowedRpcCallTo = make(map[string]struct{})
-		for _, c := range strings.Split(envRpcCall, ",") {
-			s.allowedRpcCallTo[strings.ToLower(c)] = struct{}{}
-		}
-		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
-	}
-	methodsEnvName := strings.ToUpper(is.GetNetwork()) + "_ALLOWED_EVM_CALL_METHODS"
-	envRpcCallMethods := os.Getenv(methodsEnvName)
-	s.allowedRpcCallMethods, err = parseAllowedEvmCallMethods(methodsEnvName, envRpcCallMethods)
-	if err != nil {
+	if err := initRpcCallAllowlists(db, is); err != nil {
 		return nil, err
-	}
-	if s.allowedRpcCallMethods != nil {
-		glog.Info("Support of rpcCall for these method selectors: ", envRpcCallMethods)
 	}
 	clientIPCfg, err := readClientIPConfig(is.GetNetwork())
 	if err != nil {
@@ -254,35 +233,6 @@ func parseAllowedOrigins(originEnvName, envAllowedOrigins string) map[string]str
 	}
 	glog.Info("Websocket origin allowlist enabled: ", envAllowedOrigins)
 	return allowedOrigins
-}
-
-// parseAllowedEvmCallMethods parses a comma-separated list of 4-byte EVM call
-// selectors (optional 0x prefix, case-insensitive) into a set keyed by
-// lowercase hex without the prefix. Returns nil when the variable is unset.
-// A malformed selector or a set variable that parses to no selectors at all
-// is a configuration error that aborts startup so a typo cannot silently
-// disable the intended allowlist.
-func parseAllowedEvmCallMethods(envName, envValue string) (map[string]struct{}, error) {
-	if envValue == "" {
-		return nil, nil
-	}
-	methods := make(map[string]struct{})
-	for _, m := range strings.Split(envValue, ",") {
-		m = strings.TrimSpace(m)
-		if m == "" {
-			continue
-		}
-		selector := strings.TrimPrefix(strings.ToLower(m), "0x")
-		b, err := hex.DecodeString(selector)
-		if err != nil || len(b) != 4 {
-			return nil, errors.Errorf("Invalid EVM call method selector %q in %s, expecting 4 bytes in hex", m, envName)
-		}
-		methods[selector] = struct{}{}
-	}
-	if len(methods) == 0 {
-		return nil, errors.Errorf("%s is set but contains no method selectors", envName)
-	}
-	return methods, nil
 }
 
 func (s *WebsocketServer) checkOrigin(r *http.Request) bool {
@@ -1264,19 +1214,23 @@ func evmCallSelector(data string) (string, bool) {
 
 // rpcCallAllowed reports whether a rpcCall request passes the allowlists. With
 // no allowlist configured rpcCall is unrestricted; otherwise the call must
-// target an allowed address or invoke an allowed method selector.
+// target an allowed address or invoke an allowed method selector. The snapshot
+// is nil only when initRpcCallAllowlists has not run (bare test servers);
+// NewWebsocketServer and NewInternalServer fail construction when they cannot
+// publish one.
 func (s *WebsocketServer) rpcCallAllowed(r *WsRpcCallReq) bool {
-	if s.allowedRpcCallTo == nil && s.allowedRpcCallMethods == nil {
+	a := s.is.GetRpcCallAllowlists()
+	if a == nil || (a.To == nil && a.Methods == nil) {
 		return true
 	}
-	if s.allowedRpcCallTo != nil {
-		if _, ok := s.allowedRpcCallTo[strings.ToLower(r.To)]; ok {
+	if a.To != nil {
+		if _, ok := a.To[strings.ToLower(r.To)]; ok {
 			return true
 		}
 	}
-	if s.allowedRpcCallMethods != nil {
+	if a.Methods != nil {
 		if selector, ok := evmCallSelector(r.Data); ok {
-			if _, ok := s.allowedRpcCallMethods[selector]; ok {
+			if _, ok := a.Methods[selector]; ok {
 				return true
 			}
 		}
