@@ -288,13 +288,13 @@ panels:
         legend: '{{subscription}} - {{event}}'
   sync.rpc_sync_latency:
     title: Sync RPC latency (p50/p95)
-    description: Round-trip time for sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.) that are not tracked by the general RPC latency panel. These directly affect block indexing speed.
+    description: Round-trip time of successful sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.) that are not tracked by the general RPC latency panel; these directly affect block indexing speed. Typically sub-100ms; a sustained multi-second p95 means the backend is overloaded. Failed calls are excluded so timeout expiries (~10-15s) do not skew the quantiles; they show up in the Ethereum sync RPC errors panel instead.
     queries:
       p95:
-        promql: histogram_quantile(0.95, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, method, le))
+        promql: histogram_quantile(0.95, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin", error=""}[1m])) by (coin, method, le))
         legend: '{{coin}} - {{method}}'
       p50:
-        promql: histogram_quantile(0.50, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, method, le))
+        promql: histogram_quantile(0.50, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin", error=""}[1m])) by (coin, method, le))
         legend: '{{coin}} - {{method}}'
   row.websocket:
     title: Websocket
