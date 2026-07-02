@@ -286,6 +286,16 @@ panels:
       events:
         promql: sum by (subscription, event) (rate({{name:backend_subscription_events}}{job="blockbook", coin="$coin"}[5m]))
         legend: '{{subscription}} - {{event}}'
+  sync.rpc_sync_latency:
+    title: Sync RPC latency (p50/p95)
+    description: Round-trip time for sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.) that are not tracked by the general RPC latency panel. These directly affect block indexing speed.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, method, le))
+        legend: '{{coin}} - {{method}}'
+      p50:
+        promql: histogram_quantile(0.50, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, method, le))
+        legend: '{{coin}} - {{method}}'
   row.websocket:
     title: Websocket
   websocket.clients:
