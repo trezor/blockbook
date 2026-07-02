@@ -403,7 +403,7 @@ metrics:
   rpc_sync_latency:
     name: blockbook_rpc_sync_latency
     type: histogram_vec
-    help: Blockbook-to-backend round-trip time for sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.), in milliseconds, labeled by method and whether the call failed
+    help: Blockbook-to-backend round-trip time for sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.), in milliseconds, labeled by method and whether the call failed. Typically sub-100ms; multi-second values mean an overloaded backend, and observations near 10-15s are trace_timeout/rpc_timeout expiries rather than real round trips
     labels: [method, error]
     buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000]
   eth_sync_rpc_errors:
