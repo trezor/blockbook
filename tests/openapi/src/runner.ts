@@ -102,7 +102,8 @@ async function runCoin(coin: string, contract: OpenApiContract): Promise<{ summa
   }
 
   const ctx = await TestContext.create(coin, contract);
-  emit(`\nOpenAPI e2e ${coin}: ${apiTests.length} tests`);
+  try {
+    emit(`\nOpenAPI e2e ${coin}: ${apiTests.length} tests`);
 
   // Status preflight: if the node is unreachable or not in sync, every sample-derived test would
   // fail or skip downstream for the same root cause. Surface it once as a single coin-level failure
@@ -162,5 +163,8 @@ async function runCoin(coin: string, contract: OpenApiContract): Promise<{ summa
     return { summary: summarize(coin, results), output };
   }
 
-  return { summary, output };
+    return { summary, output };
+  } finally {
+    ctx.close();
+  }
 }

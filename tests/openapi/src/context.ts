@@ -137,7 +137,13 @@ class wsConnection {
         timer,
       });
       if (this.ws) {
-        this.ws.send(JSON.stringify(request));
+        try {
+          this.ws.send(JSON.stringify(request));
+        } catch (err) {
+          clearTimeout(timer);
+          this.pendings.delete(request.id);
+          reject(err);
+        }
       } else {
         clearTimeout(timer);
         this.pendings.delete(request.id);
@@ -252,6 +258,7 @@ function wsProxyAgent(): HttpsProxyAgent<string> | undefined {
 export class TestContext {
   readonly client: OpenApiFetchClient;
   private wsPool_: wsPool | undefined;
+  private wsPoolInit_: Promise<void> | undefined;
 
   private status?: NonNullable<StatusResponse["blockbook"]>;
   private nextWSReq = 0;
@@ -720,29 +727,36 @@ export class TestContext {
     // Lazily initialise the WS connection pool.  The first call tries the
     // configured ws:// URL; if that fails the pool tries wss:// and updates
     // this.wsURL so subsequent calls skip the fallback.
-    if (!this.wsPool_) {
-      this.wsPool_ = new wsPool(this.wsURL, this.contract, 3);
-      try {
-        await this.wsPool_.init();
-      } catch (firstError) {
-        const upgraded = upgradeWSBaseToWSS(this.wsURL);
-        if (!upgraded) {
-          this.wsPool_ = undefined;
-          throw firstError;
+    // wsPoolInit_ guards against concurrent calls creating two pools.
+    if (!this.wsPoolInit_) {
+      this.wsPoolInit_ = (async () => {
+        const pool = new wsPool(this.wsURL, this.contract, 3);
+        try {
+          await pool.init();
+        } catch (firstError) {
+          const upgraded = upgradeWSBaseToWSS(this.wsURL);
+          if (!upgraded) {
+            throw firstError;
+          }
+          const pool2 = new wsPool(upgraded, this.contract, 3);
+          await pool2.init();
+          this.wsURL = upgraded;
+          this.wsPool_ = pool2;
+          return;
         }
-        const pool2 = new wsPool(upgraded, this.contract, 3);
-        await pool2.init();
-        this.wsPool_ = pool2;
-        this.wsURL = upgraded;
-      }
+        this.wsPool_ = pool;
+      })();
     }
+    await this.wsPoolInit_;
+    // wsPoolInit_ resolved, so wsPool_ is guaranteed to be set.
+    const pool = this.wsPool_!;
 
     const request: WsEnvelope = { id, method, params };
-    const conn = await this.wsPool_.acquire();
+    const conn = await pool.acquire();
     try {
       return await conn.request<T>(request, dataSchemaRef);
     } finally {
-      this.wsPool_.release(conn);
+      pool.release(conn);
     }
   }
 
@@ -753,6 +767,12 @@ export class TestContext {
 
   isEVMAddress(address: string) {
     return isEVMAddressValue(address) || (this.coin === "tron" && isTronAddress(address));
+  }
+
+  close() {
+    this.wsPool_?.closeAll();
+    this.wsPool_ = undefined;
+    this.wsPoolInit_ = undefined;
   }
 
   private async probeCapabilities() {
