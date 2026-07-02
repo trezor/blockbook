@@ -190,26 +190,45 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 
 // DeleteContractInfoForAddress removes the stored contract metadata for the given
 // address (and its in-memory cache entry) so the next read re-fetches it from the
-// backend node. Returns whether a stored row existed. ERC-4626 protocol-detection
-// rows in cfErcProtocols are kept: they are sync-owned, chain-derived state with
-// their own lifecycle, merged on read — not cached backend metadata.
-func (d *RocksDB) DeleteContractInfoForAddress(address string) (bool, error) {
+// backend node. It returns the purged record (nil when no row was stored): the
+// whole row is discarded, including the sync-owned CreatedInBlock and
+// DestructedInBlock, which a backend re-fetch cannot restore — only a reindex or
+// storing the returned record back can. ERC-4626 protocol-detection rows in
+// cfErcProtocols are kept: they live in their own column family with their own
+// lifecycle and are merged on read.
+func (d *RocksDB) DeleteContractInfoForAddress(address string) (*bchain.ContractInfo, error) {
 	contract, err := d.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if contract == nil {
-		return false, errors.Errorf("invalid address %s", address)
+		return nil, errors.Errorf("invalid address %s", address)
 	}
 	val, err := d.db.GetCF(d.ro, d.cfh[cfContracts], contract)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	found := len(val.Data()) > 0
+	buf := val.Data()
+	var purged *bchain.ContractInfo
+	if len(buf) > 0 {
+		purged, _ = unpackContractInfo(buf)
+		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(contract)
+		if len(addresses) > 0 {
+			purged.Contract = addresses[0]
+		}
+	}
 	val.Free()
-	if err := d.db.DeleteCF(d.wo, d.cfh[cfContracts], contract); err != nil {
-		return false, err
+	if purged == nil {
+		return nil, nil
 	}
+	if err := d.db.DeleteCF(d.wo, d.cfh[cfContracts], contract); err != nil {
+		return nil, err
+	}
+	// Bump before the cache delete: a concurrent GetContractInfo that already
+	// sampled the old protocolGen and is about to re-add the just-deleted row
+	// will mismatch on the next read and miss, even if its add lands after our
+	// delete clears the slot (same idiom as SetErcProtocol).
+	d.protocolGen.Add(1)
 	cachedContracts.delete(string(contract))
-	return found, nil
+	return purged, nil
 }

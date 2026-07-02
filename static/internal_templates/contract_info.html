@@ -38,8 +38,11 @@
             -H 'Content-Type: application/json' \
             --data '[{ContractInfo},{ContractInfo},...]'
 
-            # purge the cached metadata of one contract so it is re-fetched from the
-            # backend node on the next read; the response is {"contract":"...","deleted":true|false}
+            # purge the stored metadata of one contract so it is re-fetched from the
+            # backend node on the next read; the response
+            # {"contract":"...","deleted":true|false,"purged":{ContractInfo}}
+            # returns the removed record — POST it back to restore the sync-owned
+            # createdInBlock/destructedInBlock fields the re-fetch cannot recover
             curl -k -u user:password -X DELETE 'https://&lt;internaladdress&gt;/admin/contract-info/&lt;address&gt;'
         </pre>
     </div>
