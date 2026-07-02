@@ -21,6 +21,15 @@ def log(message: str) -> None:
     print(f"{LOG_PREFIX} {message}", flush=True)
 
 
+def read_error_body(exc: urllib.error.HTTPError) -> bytes:
+    # The connection can be reset while reading the error body (e.g. a proxy
+    # 502); that must degrade to an empty body, not kill the retry loop.
+    try:
+        return exc.read()
+    except Exception:
+        return b""
+
+
 def parse_requested_coins(raw: str) -> list[str]:
     text = raw.strip()
     if not text:
@@ -192,7 +201,7 @@ def main() -> None:
                 status, body = fetch_status(base_url, request_timeout, ssl_context)
             except urllib.error.HTTPError as exc:
                 status = exc.code
-                body = exc.read()
+                body = read_error_body(exc)
             except Exception as exc:
                 last_seen[coin] = f"{base_url}/api/status request failed: {exc}"
                 continue
@@ -204,7 +213,7 @@ def main() -> None:
                     status, body = fetch_status(base_url, request_timeout, ssl_context)
                 except urllib.error.HTTPError as exc:
                     status = exc.code
-                    body = exc.read()
+                    body = read_error_body(exc)
                 except Exception as exc:
                     last_seen[coin] = f"{base_url}/api/status request failed: {exc}"
                     continue
@@ -224,14 +233,16 @@ def main() -> None:
         if not pending:
             break
 
-        remaining_seconds = int(max(0, deadline - time.monotonic()))
-        if remaining_seconds == 0:
+        # Keep sub-second remainders: int() truncation used to declare a
+        # timeout with up to a second of budget (and one last poll) unused.
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0:
             break
 
         details = "; ".join(
             f"{coin}: {last_seen[coin]}" for coin in sorted(pending)
         )
-        log(f"Still waiting for Blockbook sync ({remaining_seconds}s left): {details}")
+        log(f"Still waiting for Blockbook sync ({remaining_seconds:.0f}s left): {details}")
         time.sleep(min(poll_seconds, remaining_seconds))
 
     if pending:
