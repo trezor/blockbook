@@ -180,7 +180,10 @@ jobs:
   wait-for-sync:
     name: Wait For Sync
     needs: [prepare_deploy, deploy]
-    if: ${{ needs.deploy.result == 'success' }}
+    # deploy is a fail-fast:false matrix: one failed coin must not skip sync
+    # verification for the coins that did deploy, so run on partial failure
+    # too. Only 'skipped' (mode=build) and cancellation keep this job off.
+    if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') }}
     runs-on: [self-hosted, bb-dev-selfhosted]
     timeout-minutes: 31
     env:
@@ -206,7 +209,9 @@ jobs:
   e2e-tests:
     name: E2E Tests (post-deploy)
     needs: [prepare_deploy, deploy, wait-for-sync]
-    if: ${{ needs.deploy.result == 'success' && needs.wait-for-sync.result == 'success' }}
+    # Mirror wait-for-sync: partially failed deploys still get e2e coverage
+    # for the coins that deployed, as long as they reached sync.
+    if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') && needs.wait-for-sync.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
     env:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
