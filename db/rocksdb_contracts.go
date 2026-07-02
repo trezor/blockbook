@@ -2,6 +2,7 @@ package db
 
 import (
 	vlq "github.com/bsm/go-vlq"
+	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 )
@@ -185,4 +186,30 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 		cachedContracts.delete(cacheKey)
 	}
 	return nil
+}
+
+// DeleteContractInfoForAddress removes the stored contract metadata for the given
+// address (and its in-memory cache entry) so the next read re-fetches it from the
+// backend node. Returns whether a stored row existed. ERC-4626 protocol-detection
+// rows in cfErcProtocols are kept: they are sync-owned, chain-derived state with
+// their own lifecycle, merged on read — not cached backend metadata.
+func (d *RocksDB) DeleteContractInfoForAddress(address string) (bool, error) {
+	contract, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		return false, err
+	}
+	if contract == nil {
+		return false, errors.Errorf("invalid address %s", address)
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfContracts], contract)
+	if err != nil {
+		return false, err
+	}
+	found := len(val.Data()) > 0
+	val.Free()
+	if err := d.db.DeleteCF(d.wo, d.cfh[cfContracts], contract); err != nil {
+		return false, err
+	}
+	cachedContracts.delete(string(contract))
+	return found, nil
 }
