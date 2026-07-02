@@ -55,18 +55,40 @@ class wsConnection {
   }
 
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
+      // Guard against hangs below the ws handshake layer (DNS / TCP).
+      let settled = false;
+      const guard = setTimeout(() => {
+        if (settled) { return; }
+        settled = true;
+        this.ws?.terminate();
+        reject(new Error(`websocket connect timed out for ${this.url}`));
+      }, wsDialTimeoutMs);
+
       this.ws = new WebSocket(this.url, {
         handshakeTimeout: wsDialTimeoutMs,
         rejectUnauthorized: process.env.OPENAPI_INSECURE_TLS === "0",
         agent: wsProxyAgent(),
       });
-      this.ws.on("open", () => resolve());
+      this.ws.on("open", () => {
+        if (settled) { return; }
+        settled = true;
+        clearTimeout(guard);
+        resolve();
+      });
       this.ws.on("error", (err) => {
+        if (settled) { return; }
+        settled = true;
+        clearTimeout(guard);
         this.closed = true;
         reject(err);
       });
       this.ws.on("close", () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(guard);
+          reject(new Error("websocket closed before handshake completed"));
+        }
         this.closed = true;
         for (const [, p] of this.pendings) {
           clearTimeout(p.timer);
@@ -149,20 +171,23 @@ class wsPool {
   }
 
   async init(): Promise<void> {
-    const errors: Error[] = [];
-    for (let i = 0; i < this.size; i++) {
-      try {
+    const results = await Promise.allSettled(
+      Array.from({ length: this.size }, () => {
         const c = new wsConnection(this.url, this.contract);
-        await c.connect();
-        this.conns.push(c);
-      } catch (error) {
-        errors.push(error instanceof Error ? error : new Error(String(error)));
+        return c.connect().then(() => c);
+      }),
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        this.conns.push(r.value);
       }
     }
-    // If none connected, propagate the first error so the caller can attempt
-    // a protocol upgrade (ws→wss).  A partial pool is still usable.
-    if (this.conns.length === 0 && errors.length > 0) {
-      throw errors[0];
+    // A partial pool (fewer than this.size connections) is still usable —
+    // acquire() replaces dead slots lazily.  If nothing connected, propagate
+    // the first rejection so the caller can attempt a protocol upgrade.
+    if (this.conns.length === 0) {
+      const first = results.find((r) => r.status === "rejected");
+      throw first ? (first as PromiseRejectedResult).reason : new Error("wsPool init: no connections and no errors");
     }
   }
 
@@ -315,17 +340,15 @@ export class TestContext {
     return found;
   }
 
-  // preloadSamples eagerly resolves every sample type so that all downstream
-  // tests hit the cache rather than triggering redundant probe chains. Safe to
-  // call multiple times; subsequent calls are no-ops because every resolver is
-  // guarded by a resolved flag. A SkipTest from a fiat ticker that is
-  // temporarily unavailable is swallowed — tests that need fiat data check the
-  // availability flag and skip themselves.
+  // preloadSamples eagerly resolves the most commonly-needed sample types so
+  // that downstream tests hit the cache rather than triggering redundant probe
+  // chains.  getSampleAddressTx is deliberately excluded here — it can probe
+  // 40+ transactions with paginated address lookups and is only needed by a
+  // handful of tests; it stays lazy.
   async preloadSamples() {
     await this.getSampleIndexedBlock();
     await this.getSampleTxID();
     await this.getSampleAddress();
-    await this.getSampleAddressTx();
     try {
       await this.sampleFiatTickerOrSkip();
     } catch (error) {
