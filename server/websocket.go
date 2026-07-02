@@ -1197,19 +1197,32 @@ func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res i
 }
 
 // evmCallSelector extracts the 4-byte function selector from hex-encoded EVM
-// calldata as lowercase hex without the 0x prefix. It decodes the whole data
-// string so malformed calldata (missing 0x prefix, odd length, non-hex
-// characters, fewer than 4 bytes) never yields a selector and thus fails
-// closed in the rpcCall allowlist check.
+// calldata as lowercase hex without the 0x prefix. It validates the full
+// calldata hex (odd length or non-hex characters fail closed) but decodes
+// only the first 4 bytes (8 hex chars) so that arbitrarily long calldata
+// does not cause a large allocation that is then discarded.
 func evmCallSelector(data string) (string, bool) {
-	if len(data) < 2 || data[0] != '0' || (data[1] != 'x' && data[1] != 'X') {
+	if len(data) < 10 || data[0] != '0' || (data[1] != 'x' && data[1] != 'X') {
 		return "", false
 	}
-	b, err := hex.DecodeString(data[2:])
-	if err != nil || len(b) < 4 {
+	s := data[2:]
+	if len(s)&1 == 1 {
 		return "", false
 	}
-	return hex.EncodeToString(b[:4]), true
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] >= '0' && s[i] <= '9':
+		case s[i] >= 'a' && s[i] <= 'f':
+		case s[i] >= 'A' && s[i] <= 'F':
+		default:
+			return "", false
+		}
+	}
+	b, err := hex.DecodeString(s[:8])
+	if err != nil {
+		return "", false
+	}
+	return hex.EncodeToString(b), true
 }
 
 // rpcCallAllowed reports whether a rpcCall request passes the allowlists. With
