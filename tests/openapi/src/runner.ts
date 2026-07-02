@@ -39,13 +39,24 @@ export async function runOpenApiE2E() {
   // console output and flushes it immediately upon completion so that even
   // if another coin hangs the completed results are still visible.
   const summaries: CoinSummary[] = [];
-  await Promise.allSettled(
+  await Promise.all(
     selectedCoins.map(async (coin) => {
-      const { summary, output } = await runCoin(coin, contract);
-      for (const line of output) {
-        console.log(line);
+      try {
+        const { summary, output } = await runCoin(coin, contract);
+        for (const line of output) {
+          console.log(line);
+        }
+        summaries.push(summary);
+      } catch (error) {
+        // A rejection here means the coin aborted outside runCoin's own error
+        // handling. Record it as a coin-level failure so the run cannot go
+        // green while a selected coin was never tested.
+        const message = errorMessage(error);
+        console.error(`\nOpenAPI e2e ${coin}: aborted: ${message}`);
+        summaries.push(
+          summarize(coin, [{ coin, name: "CoinRun", group: "run", status: "fail", durationMs: 0, message }]),
+        );
       }
-      summaries.push(summary);
     }),
   );
 
