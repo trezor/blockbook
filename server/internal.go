@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -393,6 +394,18 @@ type contractInfoUpdateResponse struct {
 	Updated int `json:"updated"`
 }
 
+// contractInfoListResponse is the JSON shape returned by GET /admin/contract-info/.
+// Next, when present, is the from parameter of the next page.
+type contractInfoListResponse struct {
+	Contracts []bchain.ContractInfo `json:"contracts"`
+	Next      string                `json:"next,omitempty"`
+}
+
+const (
+	contractInfoListDefaultLimit = 1000
+	contractInfoListMaxLimit     = 10000
+)
+
 // contractInfoDeleteResponse is the JSON shape returned by
 // DELETE /admin/contract-info/<address>. Purged carries the removed record so
 // the operator can restore it verbatim with a POST — the row includes the
@@ -406,11 +419,15 @@ type contractInfoDeleteResponse struct {
 
 // apiContractInfo handles GET/POST/PUT/DELETE of cached contract metadata at
 // /admin/contract-info/<address> (POST/PUT write the collection path
-// /admin/contract-info/ with a JSON array body).
+// /admin/contract-info/ with a JSON array body; a GET of the collection path
+// lists the stored records page by page).
 func (s *InternalServer) apiContractInfo(r *http.Request, apiVersion int) (interface{}, error) {
 	address := urlPathSegment(r)
 	switch r.Method {
 	case http.MethodGet:
+		if address == "" {
+			return s.listContractInfos(r)
+		}
 		return s.getContractInfo(address)
 	case http.MethodPost, http.MethodPut:
 		// The bulk write addresses each contract in its body; reject a POST to
@@ -425,10 +442,27 @@ func (s *InternalServer) apiContractInfo(r *http.Request, apiVersion int) (inter
 	return nil, api.NewAPIError("Unsupported method "+r.Method, true)
 }
 
-func (s *InternalServer) getContractInfo(address string) (interface{}, error) {
-	if address == "" {
-		return nil, api.NewAPIError("Missing contract address", true)
+// listContractInfos returns one page of the stored contract records. Unlike
+// the runtime-settings list, the collection is unbounded (sync stores a row
+// per contract creation), so the page size is limited and the response
+// carries a next cursor.
+func (s *InternalServer) listContractInfos(r *http.Request) (interface{}, error) {
+	limit := contractInfoListDefaultLimit
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > contractInfoListMaxLimit {
+			return nil, api.NewAPIError("Invalid limit, expecting a number in 1.."+strconv.Itoa(contractInfoListMaxLimit), true)
+		}
+		limit = n
 	}
+	contracts, next, err := s.db.ListContractInfos(r.URL.Query().Get("from"), limit)
+	if err != nil {
+		return nil, api.NewAPIError(err.Error(), true)
+	}
+	return &contractInfoListResponse{Contracts: contracts, Next: next}, nil
+}
+
+func (s *InternalServer) getContractInfo(address string) (interface{}, error) {
 	contractInfo, valid, err := s.api.GetContractInfo(address, bchain.UnknownTokenStandard)
 	if err != nil {
 		return nil, api.NewAPIError(err.Error(), true)
