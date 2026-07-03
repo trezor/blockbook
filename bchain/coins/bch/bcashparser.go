@@ -431,6 +431,9 @@ func GetAddrDescAndTokenFromVout(parser bchain.BlockChainParser, vout *bchain.Vo
 
 func GetAddressesAndTokenFromAddrDesc(parser bchain.BlockChainParser, addrDesc bchain.AddressDescriptor) (bchain.AddressDescriptor, []string, bool, *bchain.BcashToken, error) {
 	addrDesc, token, err := GetAddrDescAndTokenFromAddrDesc(parser, addrDesc)
+	if err != nil {
+		return nil, nil, false, nil, err
+	}
 
 	a, s, err := parser.GetAddressesFromAddrDesc(addrDesc)
 

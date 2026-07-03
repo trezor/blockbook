@@ -1596,6 +1596,7 @@ func (d *RocksDB) unpackAddrBalance(buf []byte, txidUnpackedLen int, detail Addr
 		ab.Utxos = make([]Utxo, 0, len(buf[l:])/txidUnpackedLen+3)
 		// ab.utxosMap = make(map[string]int, cap(ab.Utxos))
 		for len(buf[l:]) >= txidUnpackedLen+3 {
+			var bcashToken *bchain.BcashToken
 			btxID := append([]byte(nil), buf[l:l+txidUnpackedLen]...)
 			l += txidUnpackedLen
 			vout, ll := unpackVaruint(buf[l:])

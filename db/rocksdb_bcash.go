@@ -445,11 +445,10 @@ func (d *RocksDB) processBcashTokens(block *bchain.Block, addresses addressesMap
 		for i, mq := range metaQueue {
 			serializedMetaQueue[i] = append(PackBcashTokenMetaQueueKey(mq, make([]byte, 34)), PackBcashTokenMetaQueue(mq, make([]byte, 9))...)
 		}
-		// The queue is persisted; the periodic downloader will catch up if the signal is dropped.
 		select {
 		case common.BcmrMetaQueueSignal <- serializedMetaQueue:
 		default:
-			glog.Warning("BCMR queue signal dropped; downloader is busy")
+			glog.Warningf("BCMR queue signal dropped at height %d; downloader is busy", block.Height)
 		}
 	}
 

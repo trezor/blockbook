@@ -378,6 +378,20 @@ func Test_GetAddrDescFromVout(t *testing.T) {
 			wantErr:    false,
 		},
 		{
+			name:       "main-P2PK-CashTokens",
+			parser:     mainParserCashAddr,
+			wantHex:    "76a914065a05c17ba9204ee56625fa83753569d58df91d88ac",
+			searchable: true,
+			hex: func() string {
+				token := &bchain.BcashToken{
+					Category: hexToBytes("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+					Amount:   (common.Amount)(*big.NewInt(1)),
+				}
+				return hex.EncodeToString(append(PackTokenData(token), hexToBytes("2103db3c3977c5165058bf38c46f72d32f4e872112dbafc13083a948676165cd1603ac")...))
+			}(),
+			wantErr: false,
+		},
+		{
 			name:       "OP_RETURN ascii",
 			parser:     mainParserCashAddr,
 			wantHex:    "6a0461686f6a",
@@ -1010,6 +1024,18 @@ func Test_InvalidTokenPrefixes(t *testing.T) {
 			t.Errorf("expected error to contain %q, got %q", expectedError, err.Error())
 			return
 		}
+	}
+}
+
+func Test_GetAddressesAndTokenFromAddrDesc_PropagatesTokenDecodeError(t *testing.T) {
+	mainParserCashAddr, _, _, _ := setupParsers(t)
+
+	_, _, _, _, err := GetAddressesAndTokenFromAddrDesc(mainParserCashAddr, bchain.AddressDescriptor{bchain.PREFIX_TOKEN})
+	if err == nil {
+		t.Fatal("GetAddressesAndTokenFromAddrDesc() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "insufficient length") {
+		t.Fatalf("GetAddressesAndTokenFromAddrDesc() error = %v, want token decode failure", err)
 	}
 }
 

@@ -893,7 +893,7 @@ func tokenCategory2HueSaturation(category string) string {
 	if err != nil || len(bin) != 32 {
 		glog.Warningf("tokenCategory2HueSaturation: invalid category: %s", category)
 		// return gray color for invalid category
-		return "0,0%,50%"
+		return "0,0%"
 	}
 	raw := big.NewFloat(1)
 	tmp := new(big.Float)
@@ -926,8 +926,8 @@ func tokenCategory2HueSaturation(category string) string {
 func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
 	var rv strings.Builder
 	if token != nil {
-		categoryHex := token.Category
-		hueSat := tokenCategory2HueSaturation(categoryHex)
+		categoryHex := html.EscapeString(token.Category)
+		hueSat := tokenCategory2HueSaturation(token.Category)
 		tokenColor := "hsl(" + hueSat + ",40%)"
 
 		// outer div
@@ -940,7 +940,7 @@ func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
 
 		hasAmount := token.Amount.AsInt64() != 0
 
-		categoryName := html.EscapeString(categoryHex)
+		categoryName := categoryHex
 		if token.Name != "" {
 			categoryName = html.EscapeString(token.Name)
 		}
@@ -950,7 +950,7 @@ func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
 			tokenCategoryImg = fmt.Sprintf(`<img onerror="this.style.display='none'" src="%s" alt="Token Icon" width="32px" height="32px"> `, html.EscapeString(token.Icon))
 		}
 
-		rv.WriteString(fmt.Sprintf(`<div class="ellipsis copyable flex-1 cc="%s" title="Token Category"><a href="/token/%s">%s%s</a></div>`, html.EscapeString(categoryHex), html.EscapeString(categoryHex), tokenCategoryImg, categoryName))
+		rv.WriteString(fmt.Sprintf(`<div class="ellipsis copyable flex-1" cc="%s" title="Token Category"><a href="/token/%s">%s%s</a></div>`, categoryHex, categoryHex, tokenCategoryImg, categoryName))
 
 		rv.WriteString(`<div class="flex flex-1 w-half float-align-right justify-end" title="Token Amount">`)
 		if hasAmount {
@@ -961,7 +961,7 @@ func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
 
 		// token nft capability and commitment
 		if token.Nft != nil {
-			commitmentHex := token.Nft.Commitment
+			commitmentHex := html.EscapeString(token.Nft.Commitment)
 			rv.WriteString(`<div class="flex">`)
 
 			rv.WriteString(`<div class="flex align-center flex-1" title="NFT Capability">`)

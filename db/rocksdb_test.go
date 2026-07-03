@@ -1522,25 +1522,25 @@ func Test_packAddrBalance_unpackAddrBalance_BcashTokenReset(t *testing.T) {
 	d := getRocksDb(parser, false, t).setCoinShortcut("BCH")
 	defer closeAndDestroyRocksDB(t, d)
 
-	data := &AddrBalance{
-		BalanceSat: *big.NewInt(43),
-		SentSat:    *big.NewInt(1234),
+	want := &AddrBalance{
+		BalanceSat: *big.NewInt(2),
+		SentSat:    *big.NewInt(2),
 		Txs:        2,
 		Utxos: []Utxo{
 			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
-				Vout:     12,
-				Height:   123456,
-				ValueSat: *big.NewInt(42),
+				Vout:     1,
+				Height:   100,
+				ValueSat: *big.NewInt(1),
 				BcashToken: &bchain.BcashToken{
-					Amount:   common.Amount(*big.NewInt(17)),
+					Amount:   (common.Amount)(*big.NewInt(7)),
 					Category: hexToBytes("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
 				},
 			},
 			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T2),
-				Vout:     0,
-				Height:   52345689,
+				Vout:     2,
+				Height:   101,
 				ValueSat: *big.NewInt(1),
 			},
 		},
@@ -1548,19 +1548,19 @@ func Test_packAddrBalance_unpackAddrBalance_BcashTokenReset(t *testing.T) {
 
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf := make([]byte, 32)
-	packed := d.packAddrBalance(data, buf, varBuf)
+	packed := d.packAddrBalance(want, buf, varBuf)
 	got, err := d.unpackAddrBalance(packed, parser.PackedTxidLen(), AddressBalanceDetailUTXO)
 	if err != nil {
 		t.Fatalf("unpackAddrBalance() error = %v", err)
 	}
 	if got.Utxos[0].BcashToken == nil {
-		t.Fatal("expected first utxo to retain token data")
+		t.Fatal("first utxo lost token metadata")
 	}
 	if got.Utxos[1].BcashToken != nil {
-		t.Fatalf("expected second utxo to remain token-free, got %+v", got.Utxos[1].BcashToken)
+		t.Fatalf("second utxo unexpectedly kept token metadata: %+v", got.Utxos[1].BcashToken)
 	}
-	if !reflect.DeepEqual(got, data) {
-		t.Errorf("unpackAddrBalance() = %+v, want %+v", got, data)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("roundtrip mismatch:\n got: %+v\nwant: %+v", got, want)
 	}
 }
 

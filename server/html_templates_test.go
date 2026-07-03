@@ -497,3 +497,37 @@ func Test_jsStrEscapesQRCodeTextInJSContext(t *testing.T) {
 		t.Fatalf("escaped QR code text literal not found in output: %s", body)
 	}
 }
+
+func Test_tokenCategory2HueSaturationInvalid(t *testing.T) {
+	if got := tokenCategory2HueSaturation("not-hex"); got != "0,0%" {
+		t.Fatalf("tokenCategory2HueSaturation() = %q, want %q", got, "0,0%")
+	}
+}
+
+func Test_bcashTokenEscapesMetadata(t *testing.T) {
+	s := &PublicServer{}
+	got := string(s.bcashToken(&api.BcashToken{
+		Category: strings.Repeat("ab", 32),
+		Name:     `<script>alert(1)</script>`,
+		Icon:     `x" onerror="alert(1)`,
+		Nft: &api.BcashTokenNft{
+			Capability: "minting",
+			Commitment: strings.Repeat("cd", 8),
+			Name:       `<img src=x onerror=alert(2)>`,
+			Icon:       `y" onerror="alert(3)`,
+		},
+	}))
+
+	if strings.Contains(got, `<script>alert(1)</script>`) {
+		t.Fatalf("bcashToken() leaked unescaped token name: %s", got)
+	}
+	if strings.Contains(got, `x" onerror="alert(1)`) {
+		t.Fatalf("bcashToken() leaked unescaped token icon: %s", got)
+	}
+	if strings.Contains(got, `<img src=x onerror=alert(2)>`) {
+		t.Fatalf("bcashToken() leaked unescaped NFT name: %s", got)
+	}
+	if strings.Contains(got, `y" onerror="alert(3)`) {
+		t.Fatalf("bcashToken() leaked unescaped NFT icon: %s", got)
+	}
+}
