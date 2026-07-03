@@ -1,5 +1,10 @@
 name: Build / Deploy
 
+# Surface what the run actually does in the run list; without this every
+# dispatch shows only the generic workflow name. env context is not
+# available in run-name, so the ref fallback is inlined.
+run-name: "${{ inputs.mode }} ${{ inputs.coins }} (${{ inputs.mode == 'build' && inputs.env || 'dev' }}) @ ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}"
+
 on:
   workflow_dispatch:
     inputs:
@@ -107,7 +112,7 @@ jobs:
         run: python3 ./.github/scripts/deploy_plan.py
 
   build:
-    name: Build (${{ matrix.runner }})
+    name: "Build (${{ matrix.runner }}: ${{ matrix.coins_csv }})"
     needs: prepare_build
     if: ${{ inputs.mode == 'build' }}
     # Generous ceilings so a hung step can't hold a self-hosted runner for

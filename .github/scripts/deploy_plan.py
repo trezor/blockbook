@@ -14,6 +14,7 @@ from runner import (
     parse_json_object,
     require_coin_config,
     resolve_deploy_selection,
+    write_step_summary,
 )
 
 
@@ -89,6 +90,20 @@ def main() -> None:
 
     log("Selected coins: " + ", ".join(requested))
     log("Connectivity regex: " + connectivity_regex)
+
+    summary_lines = [
+        "### Deploy plan",
+        "",
+        "| Coin | Runner |",
+        "| --- | --- |",
+    ]
+    for item in runner_matrix:
+        summary_lines.append(f"| {item['coin']} | {item['runner']} |")
+    summary_lines += [
+        "",
+        "E2E test coins: " + ", ".join(unique_test_coins),
+    ]
+    write_step_summary("\n".join(summary_lines))
 
 
 if __name__ == "__main__":

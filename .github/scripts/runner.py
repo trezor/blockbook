@@ -41,6 +41,15 @@ def log(message: str) -> None:
     print(f"{LOG_PREFIX} {message}", flush=True)
 
 
+def write_step_summary(markdown: str) -> None:
+    # Renders on the workflow run's summary page; a no-op outside Actions.
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    with open(summary_path, "a", encoding="utf-8") as summary:
+        summary.write(markdown.rstrip("\n") + "\n")
+
+
 def parse_json_object(raw: str, description: str) -> dict:
     try:
         payload = json.loads(raw)
