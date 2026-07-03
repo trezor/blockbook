@@ -75,7 +75,7 @@ func ToNFTCapabilityType(l BcashNFTCapabilityLabel) BcashNFTCapabilityType {
 
 type BcashTokenNft struct {
 	Capability BcashNFTCapabilityLabel `json:"capability" ts_doc:"Capability of the NFT, which can be 'none', 'mutable', or 'minting'"`
-	Commitment []byte                  `json:"commitment" ts_doc:"Commitment of the NFT, hex encoded, maximum 40 bytes"`
+	Commitment []byte                  `json:"commitment" ts_doc:"Commitment of the NFT, hex encoded, maximum 128 bytes"`
 }
 
 // BcashToken represents a CashToken in a BitcoinCash transaction

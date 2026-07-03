@@ -1091,3 +1091,66 @@ func Test_GetAddrDescAndTokenFromVout_NormalizesP2PK(t *testing.T) {
 		t.Fatalf("GetAddressesAndTokenFromVout() token = %+v, want %+v", gotToken, token)
 	}
 }
+
+func Test_GetAddrDescAndTokenFromVout_PreservesP2SLikeScriptsAndLargeCommitments(t *testing.T) {
+	mainParserCashAddr, _, _, _ := setupParsers(t)
+
+	token := &bchain.BcashToken{
+		Category: hexToBytes(strings.Repeat("b", 64)),
+		Amount:   common.Amount(*big.NewInt(1)),
+		Nft: &bchain.BcashTokenNft{
+			Capability: bchain.NFTCapabilityLabelMutable,
+			Commitment: bytes.Repeat([]byte{0xcc}, 128),
+		},
+	}
+	p2sScript := bytes.Repeat([]byte{0x61}, 201)
+	script := append(PackTokenData(token), p2sScript...)
+	vout := &bchain.Vout{ScriptPubKey: bchain.ScriptPubKey{Hex: hex.EncodeToString(script)}}
+
+	wantAddrDesc, err := mainParserCashAddr.GetAddrDescFromVout(vout)
+	if err != nil {
+		t.Fatalf("GetAddrDescFromVout() error = %v", err)
+	}
+	if !bytes.Equal(wantAddrDesc, p2sScript) {
+		t.Fatalf("GetAddrDescFromVout() addrDesc = %x, want %x", wantAddrDesc, p2sScript)
+	}
+
+	wantAddresses, wantIsAddress, err := mainParserCashAddr.GetAddressesFromAddrDesc(wantAddrDesc)
+	if err != nil {
+		t.Fatalf("GetAddressesFromAddrDesc() error = %v", err)
+	}
+	if len(wantAddresses) != 0 {
+		t.Fatalf("GetAddressesFromAddrDesc() addresses = %+v, want empty", wantAddresses)
+	}
+	if wantIsAddress {
+		t.Fatalf("GetAddressesFromAddrDesc() isAddress = %v, want false", wantIsAddress)
+	}
+
+	gotAddrDesc, gotToken, err := GetAddrDescAndTokenFromVout(mainParserCashAddr, vout)
+	if err != nil {
+		t.Fatalf("GetAddrDescAndTokenFromVout() error = %v", err)
+	}
+	if !bytes.Equal(gotAddrDesc, wantAddrDesc) {
+		t.Fatalf("GetAddrDescAndTokenFromVout() addrDesc = %x, want %x", gotAddrDesc, wantAddrDesc)
+	}
+	if !reflect.DeepEqual(gotToken, token) {
+		t.Fatalf("GetAddrDescAndTokenFromVout() token = %+v, want %+v", gotToken, token)
+	}
+
+	gotAddrDesc, gotAddresses, gotIsAddress, gotToken, err := GetAddressesAndTokenFromVout(mainParserCashAddr, vout)
+	if err != nil {
+		t.Fatalf("GetAddressesAndTokenFromVout() error = %v", err)
+	}
+	if !bytes.Equal(gotAddrDesc, wantAddrDesc) {
+		t.Fatalf("GetAddressesAndTokenFromVout() addrDesc = %x, want %x", gotAddrDesc, wantAddrDesc)
+	}
+	if len(gotAddresses) != 0 {
+		t.Fatalf("GetAddressesAndTokenFromVout() addresses = %+v, want empty", gotAddresses)
+	}
+	if gotIsAddress {
+		t.Fatalf("GetAddressesAndTokenFromVout() isAddress = %v, want false", gotIsAddress)
+	}
+	if !reflect.DeepEqual(gotToken, token) {
+		t.Fatalf("GetAddressesAndTokenFromVout() token = %+v, want %+v", gotToken, token)
+	}
+}

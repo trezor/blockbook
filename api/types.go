@@ -146,7 +146,7 @@ type BcashToken struct {
 
 type BcashTokenNft struct {
 	Capability  string `json:"capability" ts_doc:"Capability of the NFT, which can be 'none', 'mutable', or 'minting'"`
-	Commitment  string `json:"commitment" ts_doc:"Commitment of the NFT, hex encoded, maximum 40 bytes"`
+	Commitment  string `json:"commitment" ts_doc:"Commitment of the NFT, hex encoded, maximum 128 bytes"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 	Icon        string `json:"icon,omitempty"`
@@ -269,7 +269,7 @@ type Token struct {
 	Protocols        TokenProtocols           `json:"protocols,omitempty" ts_type:"string[]" ts_doc:"Protocol identifiers the contract participates in (e.g., \"erc4626\"); for fresh per-vault data, use getContractInfo."`
 	ContractIndex    string                   `json:"-"`
 	Category         string                   `json:"category,omitempty" ts_doc:"Identifier of the token, 32 bytes"`
-	Commitments      []string                 `json:"commitments,omitempty" ts_doc:"Array of hex-encoded token commitments, each up to 40 bytes"`
+	Commitments      []string                 `json:"commitments,omitempty" ts_doc:"Array of hex-encoded token commitments, each up to 128 bytes"`
 	Description      string                   `json:"description,omitempty" ts_doc:"Description of the token, if available."`
 	Icon             string                   `json:"icon,omitempty" ts_doc:"URL to an icon image for this token, if available."`
 	Website          string                   `json:"website,omitempty" ts_doc:"URL to the token's official website, if available."`
