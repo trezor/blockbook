@@ -73,10 +73,23 @@ func TestContractInfoAdminAPI(t *testing.T) {
 
 	address := "0x" + dbtestdata.EthAddr20
 
-	t.Run("GET missing address", func(t *testing.T) {
+	t.Run("GET collection lists stored contracts", func(t *testing.T) {
 		code, body := adminRequest(t, ts, http.MethodGet, "/admin/contract-info/", "")
-		if code != http.StatusBadRequest || !strings.Contains(body, "Missing contract address") {
-			t.Fatalf("GET = %d %s, want 400 Missing contract address", code, body)
+		if code != http.StatusOK {
+			t.Fatalf("GET = %d %s, want 200", code, body)
+		}
+		var resp contractInfoListResponse
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("GET body %q does not decode: %v", body, err)
+		}
+	})
+
+	t.Run("GET collection with invalid limit", func(t *testing.T) {
+		for _, q := range []string{"limit=0", "limit=-1", "limit=abc", "limit=10001"} {
+			code, body := adminRequest(t, ts, http.MethodGet, "/admin/contract-info/?"+q, "")
+			if code != http.StatusBadRequest {
+				t.Fatalf("%s: GET = %d %s, want 400", q, code, body)
+			}
 		}
 	})
 
@@ -115,6 +128,26 @@ func TestContractInfoAdminAPI(t *testing.T) {
 		}
 		if stored == nil || stored.Name != "Renamed" {
 			t.Fatalf("stored contract = %+v, want name Renamed", stored)
+		}
+	})
+
+	t.Run("GET collection contains the updated contract", func(t *testing.T) {
+		code, body := adminRequest(t, ts, http.MethodGet, "/admin/contract-info/?limit=10", "")
+		if code != http.StatusOK {
+			t.Fatalf("GET = %d %s, want 200", code, body)
+		}
+		var resp contractInfoListResponse
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("GET body %q does not decode: %v", body, err)
+		}
+		found := false
+		for _, c := range resp.Contracts {
+			if c.Name == "Renamed" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("list %+v does not contain the contract stored by POST", resp.Contracts)
 		}
 	})
 

@@ -188,6 +188,53 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 	return nil
 }
 
+// ListContractInfos returns up to limit stored contract records ordered by
+// address descriptor, starting at the optional from address (inclusive), and
+// the address to pass as from to fetch the next page ("" when the listing is
+// complete). A page limit is mandatory: the rows are sync-populated (every
+// contract creation when internal data processing is enabled), so the full
+// set can run into millions on a busy chain.
+func (d *RocksDB) ListContractInfos(from string, limit int) ([]bchain.ContractInfo, string, error) {
+	var start bchain.AddressDescriptor
+	if from != "" {
+		var err error
+		start, err = d.chainParser.GetAddrDescFromAddress(from)
+		if err != nil {
+			return nil, "", err
+		}
+		if start == nil {
+			return nil, "", errors.Errorf("invalid address %s", from)
+		}
+	}
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfContracts])
+	defer it.Close()
+	if start != nil {
+		it.Seek(start)
+	} else {
+		it.SeekToFirst()
+	}
+	contracts := make([]bchain.ContractInfo, 0, limit)
+	for ; it.Valid(); it.Next() {
+		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(it.Key().Data())
+		if len(contracts) == limit {
+			// one more row exists — its address is the cursor of the next page
+			if len(addresses) > 0 {
+				return contracts, addresses[0], nil
+			}
+			return contracts, "", nil
+		}
+		contractInfo, err := unpackContractInfo(it.Value().Data())
+		if err != nil {
+			return nil, "", err
+		}
+		if len(addresses) > 0 {
+			contractInfo.Contract = addresses[0]
+		}
+		contracts = append(contracts, *contractInfo)
+	}
+	return contracts, "", nil
+}
+
 // DeleteContractInfoForAddress removes the stored contract metadata for the given
 // address (and its in-memory cache entry) so the next read re-fetches it from the
 // backend node. It returns the purged record (nil when no row was stored): the

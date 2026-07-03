@@ -32,6 +32,11 @@
             # read the cached metadata of one contract
             curl -k -u user:password 'https://&lt;internaladdress&gt;/admin/contract-info/&lt;address&gt;'
 
+            # list the stored records page by page; the response
+            # {"contracts":[...],"next":"&lt;address&gt;"} carries the from cursor of the
+            # next page (the collection can hold millions of sync-stored records)
+            curl -k -u user:password 'https://&lt;internaladdress&gt;/admin/contract-info/?limit=1000&amp;from=&lt;address&gt;'
+
             # update contracts; POST targets the collection path with a JSON array body,
             # the response is {"updated":N}
             curl -k -u user:password -X POST 'https://&lt;internaladdress&gt;/admin/contract-info/' \

@@ -4,11 +4,67 @@ package db
 
 import (
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
+
+func TestRocksDB_ListContractInfos(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	// ordered by address descriptor: 0x20… < 0x4b… < 0x55…
+	addresses := []string{"0x" + dbtestdata.EthAddr20, "0x" + dbtestdata.EthAddr4b, "0x" + dbtestdata.EthAddr55}
+	for i, a := range addresses {
+		if err := d.StoreContractInfo(&bchain.ContractInfo{
+			Standard: bchain.ERC20TokenStandard,
+			Type:     bchain.ERC20TokenStandard,
+			Contract: a,
+			Name:     "Contract " + strconv.Itoa(i),
+			Decimals: 18,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	contracts, next, err := d.ListContractInfos("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contracts) != 3 || next != "" {
+		t.Fatalf("ListContractInfos() = %d rows, next %q, want 3 rows and no next", len(contracts), next)
+	}
+	for i, c := range contracts {
+		if !strings.EqualFold(c.Contract, addresses[i]) {
+			t.Errorf("row %d = %s, want %s", i, c.Contract, addresses[i])
+		}
+	}
+
+	// paging: a full first page and a next cursor pointing at the third row
+	contracts, next, err = d.ListContractInfos("", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contracts) != 2 || !strings.EqualFold(next, addresses[2]) {
+		t.Fatalf("ListContractInfos(limit 2) = %d rows, next %q, want 2 rows and next %s", len(contracts), next, addresses[2])
+	}
+	contracts, next, err = d.ListContractInfos(next, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contracts) != 1 || next != "" || !strings.EqualFold(contracts[0].Contract, addresses[2]) {
+		t.Fatalf("ListContractInfos(from next) = %+v next %q, want only the third row", contracts, next)
+	}
+
+	if _, _, err = d.ListContractInfos("not-an-address", 2); err == nil {
+		t.Error("ListContractInfos() with invalid from: expected error")
+	}
+}
 
 func TestRocksDB_DeleteContractInfoForAddress(t *testing.T) {
 	d := setupRocksDB(t, &testEthereumParser{
