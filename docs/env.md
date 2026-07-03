@@ -99,11 +99,13 @@ The `rpcCall` allowlists can be changed at runtime, without a restart, through t
 
 `GET/POST/DELETE /admin/runtime-settings/<KEY>` where `<KEY>` is `ALLOWED_RPC_CALL_TO` or `ALLOWED_EVM_CALL_METHODS`:
 
--   `GET` returns the effective value and its source (`db` = stored override, `env` = environment default, `unset` = neither): `{"key":"ALLOWED_EVM_CALL_METHODS","value":"0xdd62ed3e","source":"env"}`.
+-   `GET` returns the effective value and its source (`db` = stored override, `env` = environment default, `unset` = neither): `{"key":"ALLOWED_EVM_CALL_METHODS","value":"0xdd62ed3e","source":"env"}`. A `GET` of the bare collection path `/admin/runtime-settings/` returns all settings as a JSON array.
 -   `POST` (or `PUT`) with body `{"value":"0xdd62ed3e,0x70a08231"}` validates the value (invalid values are rejected with `400` and change nothing), stores it in the database and only then applies it to the live allowlists — a database failure returns `500` and leaves the live state unchanged. A `"value"` of exactly `""` is a valid override meaning "explicitly unconfigured" (that allowlist dimension is disabled, as if its environment variable was not set) — it is the only way to un-restrict at runtime while the environment variable has a value. A value containing only whitespace or separators is rejected with `400`, so a botched automation input cannot silently disable the allowlist.
 -   `DELETE` removes the stored override and reverts to the environment default. If the environment value is malformed the request is rejected with `400` and the override is kept, so a later restart cannot fail on it.
 
 Old Blockbook versions ignore the stored overrides (the environment applies again after a version rollback) and keep them intact, so rolling forward resumes the override.
+
+The two sources play distinct roles in a replicated deployment. The environment variable is the deploy-managed baseline: it is shipped identically to every replica with the deployment's env file, applies from the first second of the process (before the admin port is even reachable) and — unlike the database, which is wiped when a replica is resynced — survives a database rebuild, so a freshly synced replica never starts with the allowlists silently unconfigured. The stored override is the runtime layer on top: it takes effect without a restart and persists across restarts until the deployment ships an updated environment and the override is removed. Because an override shadows the environment value, the two can drift (a replica that missed an admin update, or an env change rolled out while an override exists); the drift is visible in the `source` field and Blockbook logs a warning at startup when a stored override shadows a different environment value.
 
 ## Contract-info admin endpoint
 

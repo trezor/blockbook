@@ -234,7 +234,33 @@ func initRpcCallAllowlists(d *db.RocksDB, is *common.InternalState) error {
 	if a.Methods != nil {
 		glog.Info("Support of rpcCall for these method selectors (source ", a.MethodsSource, "): ", a.MethodsValue)
 	}
+	warnShadowedRuntimeSettingEnv(a, is.GetNetwork())
 	return nil
+}
+
+// warnShadowedRuntimeSettingEnv logs a warning for every stored override that
+// shadows a different environment value, so drift between the deployed env
+// file and the database (for example a replica that missed an admin update,
+// or an env change rolled out while an override exists) is visible at
+// startup. It only compares — a shadowed environment value is never parsed or
+// validated, so it cannot fail the start.
+func warnShadowedRuntimeSettingEnv(a *common.RpcCallAllowlists, network string) {
+	for _, def := range runtimeSettingDefs {
+		value, source := def.get(a)
+		if source != common.RuntimeSettingSourceDB {
+			continue
+		}
+		envName := runtimeSettingEnvName(network, def.key)
+		envValue, err := runtimeSettingEnvValue(envName)
+		if err != nil {
+			glog.Warning("runtime setting ", def.key, ": stored override shadows a malformed environment value: ", err)
+			continue
+		}
+		if envValue != "" && envValue != value {
+			glog.Warningf("runtime setting %s: stored override %q shadows a different environment value %q (%s); the override wins until it is removed",
+				def.key, value, envValue, envName)
+		}
+	}
 }
 
 // runtimeSettingStore reads and persists runtime setting overrides;
@@ -255,9 +281,13 @@ type runtimeSettingResponse struct {
 }
 
 // apiRuntimeSetting handles GET/POST/PUT/DELETE of a single runtime setting at
-// /admin/runtime-settings/<KEY>.
+// /admin/runtime-settings/<KEY>; a GET of the bare collection path returns all
+// settings, so a management tool can read the whole state in one request.
 func (s *InternalServer) apiRuntimeSetting(r *http.Request, apiVersion int) (interface{}, error) {
 	key := strings.ToUpper(urlPathSegment(r))
+	if key == "" && r.Method == http.MethodGet {
+		return s.listRuntimeSettings()
+	}
 	def := runtimeSettingDefByKey(key)
 	if def == nil {
 		return nil, api.NewAPIError("Unknown runtime setting, supported: "+runtimeSettingKeys(), true)
@@ -291,6 +321,21 @@ func (s *InternalServer) getRuntimeSetting(def *runtimeSettingDef) (interface{},
 	}
 	value, source := def.get(a)
 	return &runtimeSettingResponse{Key: def.key, Value: value, Source: source}, nil
+}
+
+// listRuntimeSettings returns the effective value and source of every runtime
+// setting as a JSON array.
+func (s *InternalServer) listRuntimeSettings() (interface{}, error) {
+	a, err := s.currentRpcCallAllowlists()
+	if err != nil {
+		return nil, err
+	}
+	settings := make([]runtimeSettingResponse, len(runtimeSettingDefs))
+	for i, def := range runtimeSettingDefs {
+		value, source := def.get(a)
+		settings[i] = runtimeSettingResponse{Key: def.key, Value: value, Source: source}
+	}
+	return settings, nil
 }
 
 // updateRuntimeSetting validates the new value, persists it to the database
