@@ -577,6 +577,7 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 					"delegated_frozenV2_balance_for_energy": int64(3210000),
 				},
 				"delegated_frozenV2_balance_for_bandwidth": int64(654000),
+				"latest_withdraw_time":                     int64(1777000000000),
 			},
 			"/wallet/getReward": map[string]any{
 				"reward": int64(42767),
@@ -618,7 +619,8 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 			"votes":[{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","voteCount":"20"}],
 			"unclaimedReward":"42767",
 			"delegatedBalanceEnergy":"3210000",
-			"delegatedBalanceBandwidth":"654000"
+			"delegatedBalanceBandwidth":"654000",
+			"latestWithdrawTime":1777000000
 		}
 	}`, string(payload))
 	paths, bodies := mockHTTP.SnapshotRequests()

@@ -95,6 +95,12 @@
     <td><span class="copyable">{{$staking.UnclaimedReward}}</span> sun</td>
 </tr>
 {{end}}
+{{if $staking.LatestWithdrawTime}}
+<tr>
+    <td>Last Reward Claim</td>
+    <td>{{unixTimeSpan $staking.LatestWithdrawTime}}</td>
+</tr>
+{{end}}
 {{if $staking.DelegatedBalanceEnergyValue}}
 <tr>
     <td>Delegated for Energy</td>

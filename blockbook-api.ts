@@ -49,6 +49,7 @@ export interface TronStakingInfo {
     unclaimedReward: string;
     delegatedBalanceEnergy: string;
     delegatedBalanceBandwidth: string;
+    latestWithdrawTime: number;
 }
 export interface TronAccountExtraData {
     availableStakedBandwidth: number;

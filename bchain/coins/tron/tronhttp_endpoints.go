@@ -49,11 +49,12 @@ type tronUnfrozenV2Entry struct {
 }
 
 type tronGetAccountResponse struct {
-	Address         string                `json:"address,omitempty"`
-	FrozenV2        []tronFrozenV2Entry   `json:"frozenV2,omitempty"`
-	UnfrozenV2      []tronUnfrozenV2Entry `json:"unfrozenV2,omitempty"`
-	Votes           []tronTxVote          `json:"votes,omitempty"`
-	AccountResource struct {
+	Address            string                `json:"address,omitempty"`
+	FrozenV2           []tronFrozenV2Entry   `json:"frozenV2,omitempty"`
+	UnfrozenV2         []tronUnfrozenV2Entry `json:"unfrozenV2,omitempty"`
+	Votes              []tronTxVote          `json:"votes,omitempty"`
+	LatestWithdrawTime *int64                `json:"latest_withdraw_time,omitempty"`
+	AccountResource    struct {
 		DelegatedFrozenV2BalanceForEnergy int64 `json:"delegated_frozenV2_balance_for_energy"`
 	} `json:"account_resource,omitempty"`
 	DelegatedFrozenV2BalanceForBandwidth int64 `json:"delegated_frozenV2_balance_for_bandwidth"`
@@ -257,6 +258,11 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 	delegatedEnergy := max(accountResp.AccountResource.DelegatedFrozenV2BalanceForEnergy, 0)
 	delegatedBandwidth := max(accountResp.DelegatedFrozenV2BalanceForBandwidth, 0)
 
+	latestWithdrawTime := int64(0)
+	if accountResp.LatestWithdrawTime != nil && *accountResp.LatestWithdrawTime > 0 {
+		latestWithdrawTime = *accountResp.LatestWithdrawTime / 1000
+	}
+
 	return &bchain.TronStakingInfo{
 		StakedBalance:             stakedBalance.String(),
 		StakedBalanceEnergy:       stakedEnergy.String(),
@@ -268,6 +274,7 @@ func tronBuildStakingInfo(accountResp *tronGetAccountResponse, resourceResp *tro
 		UnclaimedReward:           strconv.FormatInt(unclaimedReward, 10),
 		DelegatedBalanceEnergy:    strconv.FormatInt(delegatedEnergy, 10),
 		DelegatedBalanceBandwidth: strconv.FormatInt(delegatedBandwidth, 10),
+		LatestWithdrawTime:        latestWithdrawTime,
 	}
 }
 
