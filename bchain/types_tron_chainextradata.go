@@ -53,6 +53,7 @@ type TronStakingInfo struct {
 	UnclaimedReward           string               `json:"unclaimedReward"`
 	DelegatedBalanceEnergy    string               `json:"delegatedBalanceEnergy"`
 	DelegatedBalanceBandwidth string               `json:"delegatedBalanceBandwidth"`
+	LatestWithdrawTime        int64                `json:"latestWithdrawTime"`
 }
 
 // TronAccountExtraData contains normalized Tron-specific account resource metadata.

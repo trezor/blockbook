@@ -188,6 +188,7 @@ func (c *fakeBlockChainTronType) GetAddressChainExtraData(addrDesc bchain.Addres
 		UnclaimedReward:           "42767",
 		DelegatedBalanceEnergy:    "3210000",
 		DelegatedBalanceBandwidth: "654000",
+		LatestWithdrawTime:        1777018452,
 	}
 
 	payload, err := json.Marshal(extra)

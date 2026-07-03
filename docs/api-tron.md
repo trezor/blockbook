@@ -101,3 +101,4 @@ Resource fields:
 - `unclaimedReward` (`string`): unclaimed voting reward (sun)
 - `delegatedBalanceEnergy` (`string`): delegated staked energy in sun
 - `delegatedBalanceBandwidth` (`string`): delegated staked bandwidth in sun
+- `latestWithdrawTime` (`number`): Unix timestamp in **seconds** of the account's last voting-reward withdrawal, or `0` if it has never withdrawn.
