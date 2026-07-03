@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/martinboehm/bchutil"
 	"github.com/martinboehm/btcd/wire"
@@ -61,6 +62,8 @@ type BCashParser struct {
 	*btc.BitcoinLikeParser
 	AddressFormat AddressFormat
 }
+
+const scriptAddressPrefix = "script-"
 
 // NewBCashParser returns new BCashParser instance
 func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser, error) {
@@ -148,6 +151,17 @@ func (p *BCashParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) (
 
 // addressToOutputScript converts bitcoin address to ScriptPubKey
 func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
+	if strings.HasPrefix(address, scriptAddressPrefix) {
+		scriptHex := address[len(scriptAddressPrefix):]
+		script, err := hex.DecodeString(scriptHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid script address: %w", err)
+		}
+		if len(script) == 0 {
+			return nil, fmt.Errorf("invalid script address: empty script")
+		}
+		return script, nil
+	}
 	if isCashAddr(address) {
 		da, err := bchutil.DecodeAddress(address, p.Params)
 		if err != nil {
@@ -206,7 +220,7 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 			if or != "" {
 				return []string{or}, false, nil
 			}
-			return []string{}, false, nil
+			return []string{scriptAddressPrefix + hex.EncodeToString(script)}, true, nil
 		}
 		return nil, false, err
 	}
