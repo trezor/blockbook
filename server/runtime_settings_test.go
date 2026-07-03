@@ -156,6 +156,40 @@ func TestRuntimeSettingsAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("GET all settings", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/admin/runtime-settings/", nil)
+		w := httptest.NewRecorder()
+		handler(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("got %d %s, want 200", w.Code, w.Body.String())
+		}
+		var settings []runtimeSettingResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &settings); err != nil {
+			t.Fatalf("cannot unmarshal response %q: %v", w.Body.String(), err)
+		}
+		want := map[string]runtimeSettingResponse{
+			runtimeSettingAllowedRpcCallTo:      {Key: runtimeSettingAllowedRpcCallTo, Value: envTo, Source: common.RuntimeSettingSourceEnv},
+			runtimeSettingAllowedEvmCallMethods: {Key: runtimeSettingAllowedEvmCallMethods, Value: "", Source: common.RuntimeSettingSourceUnset},
+		}
+		if len(settings) != len(want) {
+			t.Fatalf("got %d settings %v, want %d", len(settings), settings, len(want))
+		}
+		for _, s := range settings {
+			if s != want[s.Key] {
+				t.Fatalf("setting %s = %+v, want %+v", s.Key, s, want[s.Key])
+			}
+		}
+	})
+
+	t.Run("empty key accepts only GET", func(t *testing.T) {
+		for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
+			code, resp := doRuntimeSettingRequest(t, handler, method, "", `{"value":""}`)
+			if code != http.StatusBadRequest || !strings.Contains(resp["error"], "Unknown runtime setting") {
+				t.Fatalf("%s: got %d %v, want 400 unknown runtime setting", method, code, resp)
+			}
+		}
+	})
+
 	t.Run("key is case-insensitive", func(t *testing.T) {
 		code, resp := doRuntimeSettingRequest(t, handler, http.MethodGet, "allowed_rpc_call_to", "")
 		if code != http.StatusOK || resp["key"] != runtimeSettingAllowedRpcCallTo {
@@ -253,6 +287,21 @@ func TestRuntimeSettingsAPI(t *testing.T) {
 		a := restarted.GetRpcCallAllowlists()
 		if a.To != nil || a.ToValue != "" || a.ToSource != common.RuntimeSettingSourceDB {
 			t.Fatalf("after restart got To %v value %q source %q, want unconfigured db override", a.To, a.ToValue, a.ToSource)
+		}
+	})
+
+	t.Run("stored override shadows malformed env without failing init", func(t *testing.T) {
+		// drift between a stored override and the environment must not fail a
+		// restart — the shadowed env value is never parsed, the override wins
+		// and the mismatch is only logged
+		t.Setenv("FAKE_ALLOWED_EVM_CALL_METHODS", "not-a-selector")
+		restarted := &common.InternalState{CoinShortcut: "FAKE"}
+		if err := initRpcCallAllowlists(d, restarted); err != nil {
+			t.Fatal(err)
+		}
+		a := restarted.GetRpcCallAllowlists()
+		if a.MethodsSource != common.RuntimeSettingSourceDB || a.MethodsValue != "0xdd62ed3e,0x70a08231" {
+			t.Fatalf("got source %q value %q, want the db override", a.MethodsSource, a.MethodsValue)
 		}
 	})
 
