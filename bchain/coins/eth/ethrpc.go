@@ -2004,7 +2004,10 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 
 	hs, _ := json.Marshal(h)
 	baseFee, _ := hexutil.DecodeUint64(h.BaseFeePerGas[blocks-1])
-	fees.BaseFeePerGas = big.NewInt(int64(baseFee))
+	// SetUint64, not big.NewInt(int64(...)): base fee is wei and a value above math.MaxInt64
+	// (~9.22e18) would wrap negative on the int64 cast. Unreachable on mainnet today but possible
+	// on high-fee L2s. Matches the header path in attachBlockGas.
+	fees.BaseFeePerGas = new(big.Int).SetUint64(baseFee)
 	// We expose only baseFeePerGas here and deliberately do NOT add a separate "next block" base-fee
 	// field. eth_feeHistory returns one extra projected element beyond the requested range, but its
 	// meaning is backend-dependent: nodes with no distinct pending block (e.g. Erigon, which ethereum
