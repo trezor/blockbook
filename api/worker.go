@@ -281,6 +281,11 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 	return tx, nil
 }
 
+// GetTransactionFromBchainTx reads transaction data from a backend transaction.
+func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
+	return w.getTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
+}
+
 // GetRawTransaction gets raw transaction data in hex format from txid
 func (w *Worker) GetRawTransaction(txid string) (string, error) {
 	return w.chain.EthereumTypeGetRawTransaction(txid)
@@ -295,7 +300,7 @@ func (w *Worker) getTransaction(txid string, spendingTxs bool, specificJSON bool
 		}
 		return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found (%v)", txid, err), true)
 	}
-	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
+	return w.getTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
 }
 
 func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedInputData {
@@ -513,13 +518,31 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		bchainVout := &bchainTx.Vout[i]
 		vout := &vouts[i]
 		vout.N = i
-		vout.ValueSat = (*Amount)(&bchainVout.ValueSat)
-		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.Hex = bchainVout.ScriptPubKey.Hex
-		vout.AddrDesc, vout.Addresses, vout.IsAddress, vout.BcashToken, err = w.GetAddressesAndTokenFromVout(bchainVout)
-		if err != nil {
-			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, bchainTx.Txid, bchainVout.N)
+		var voutErr error
+
+		if ta != nil && len(ta.Outputs) > i {
+			output := &ta.Outputs[i]
+			vout.ValueSat = (*Amount)(&output.ValueSat)
+			vout.AddrDesc = output.AddrDesc
+			vout.Addresses, vout.IsAddress, voutErr = output.Addresses(w.chainParser)
+			if voutErr != nil {
+				glog.V(2).Infof("output.Addresses error %v, %v, output %v, output %+v", voutErr, bchainTx.Txid, i, output)
+			}
+			if output.BcashToken != nil {
+				vout.BcashToken, voutErr = w.convertToApiBcashToken(output.BcashToken)
+				if voutErr != nil {
+					glog.Errorf("convertToApiBcashToken error %v, tx %v, output %v, output %+v", voutErr, bchainTx.Txid, i, output)
+				}
+			}
+		} else {
+			vout.ValueSat = (*Amount)(&bchainVout.ValueSat)
+			vout.AddrDesc, vout.Addresses, vout.IsAddress, vout.BcashToken, voutErr = w.GetAddressesAndTokenFromVout(bchainVout)
+			if voutErr != nil {
+				glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", voutErr, bchainTx.Txid, bchainVout.N)
+			}
 		}
+		valOutSat.Add(&valOutSat, (*big.Int)(vout.ValueSat))
 		aggregateAddresses(addresses, vout.Addresses, vout.IsAddress)
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
@@ -1084,6 +1107,90 @@ func (w *Worker) convertToApiBcashToken(t *bchain.BcashToken) (*BcashToken, erro
 		}
 	}
 	return r, nil
+}
+
+func (w *Worker) convertToBchainBcashToken(t *BcashToken) (*bchain.BcashToken, error) {
+	if t == nil {
+		return nil, nil
+	}
+
+	category, err := hex.DecodeString(t.Category)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &bchain.BcashToken{
+		Category: category,
+		Amount:   common.Amount(t.Amount),
+	}
+	if t.Nft != nil {
+		commitment, err := hex.DecodeString(t.Nft.Commitment)
+		if err != nil {
+			return nil, err
+		}
+		r.Nft = &bchain.BcashTokenNft{
+			Capability: bchain.BcashNFTCapabilityLabel(t.Nft.Capability),
+			Commitment: commitment,
+		}
+	}
+
+	return r, nil
+}
+
+func (w *Worker) bcashPostProcessApiTx(txId string, vins *[]Vin, vouts *[]Vout) (*bchain.BcashSpecific, error) {
+	if !w.is.IsBCH() {
+		return nil, nil
+	}
+
+	var tokenVins []*bchain.BcashToken
+	var tokenVouts []*bchain.BcashToken
+	nVinTokens := 0
+	nVoutTokens := 0
+
+	if len(*vins) > 0 {
+		tokenVins = make([]*bchain.BcashToken, len(*vins))
+		for i := range *vins {
+			if (*vins)[i].BcashToken == nil {
+				continue
+			}
+			token, err := w.convertToBchainBcashToken((*vins)[i].BcashToken)
+			if err != nil {
+				glog.Errorf("convertToBchainBcashToken error %v, tx %v, vin %v", err, txId, i)
+				return nil, err
+			}
+			tokenVins[i] = token
+			nVinTokens++
+		}
+	}
+
+	if len(*vouts) > 0 {
+		tokenVouts = make([]*bchain.BcashToken, len(*vouts))
+		for i := range *vouts {
+			if (*vouts)[i].BcashToken == nil {
+				continue
+			}
+			token, err := w.convertToBchainBcashToken((*vouts)[i].BcashToken)
+			if err != nil {
+				glog.Errorf("convertToBchainBcashToken error %v, tx %v, vout %v", err, txId, i)
+				return nil, err
+			}
+			tokenVouts[i] = token
+			nVoutTokens++
+		}
+	}
+
+	if nVinTokens == 0 && nVoutTokens == 0 {
+		return nil, nil
+	}
+
+	bcashSpecific := &bchain.BcashSpecific{}
+	if nVinTokens > 0 {
+		bcashSpecific.TokenVins = tokenVins
+	}
+	if nVoutTokens > 0 {
+		bcashSpecific.TokenVouts = tokenVouts
+	}
+	return bcashSpecific, nil
 }
 
 func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockInfo, bestheight uint32, addresses map[string]struct{}) *Tx {

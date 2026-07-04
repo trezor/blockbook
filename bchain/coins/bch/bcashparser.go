@@ -205,6 +205,9 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 	if err != nil {
 		return nil, false, err
 	}
+	if len(script) == 0 {
+		return []string{}, false, nil
+	}
 
 	// convert possible P2PK script to P2PK, which bchutil can process
 	script, err = txscript.ConvertP2PKtoP2PKH(p.Params.Base58CksumHasher, script)

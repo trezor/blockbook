@@ -85,6 +85,12 @@ type BcashToken struct {
 	Nft      *BcashTokenNft `json:"nft,omitempty" ts_doc:"Optional pointer to a BcashTokenNft object if the token also holds an NFT"`
 }
 
+// BcashSpecific contains data specific to BitcoinCash transactions.
+type BcashSpecific struct {
+	TokenVins  []*BcashToken `json:"tokenVins,omitempty" ts_doc:"Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vin"`
+	TokenVouts []*BcashToken `json:"tokenVouts,omitempty" ts_doc:"Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vout"`
+}
+
 // MarshalJSON implements custom JSON marshalling for BcashToken to encode Category as hex string.
 func (t *BcashToken) MarshalJSON() ([]byte, error) {
 	type Alias BcashToken
