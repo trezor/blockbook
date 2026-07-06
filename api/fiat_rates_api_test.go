@@ -39,7 +39,7 @@ func TestNormalizeFiatCurrencies(t *testing.T) {
 	}
 }
 
-func TestNormalizeFiatCurrencies_LimitsUniqueCurrencies(t *testing.T) {
+func TestNormalizeFiatCurrencies_LimitsCurrencyCount(t *testing.T) {
 	currencies := make([]string, MaxFiatRatesCurrencies+1)
 	for i := range currencies {
 		currencies[i] = fmt.Sprintf("c%03d", i)
@@ -52,8 +52,8 @@ func TestNormalizeFiatCurrencies_LimitsUniqueCurrencies(t *testing.T) {
 	}
 }
 
-func TestNormalizeFiatCurrencies_DeduplicatesBeforeLimit(t *testing.T) {
-	currencies := make([]string, MaxFiatRatesCurrencies+1)
+func TestNormalizeFiatCurrencies_DeduplicatesWithinLimit(t *testing.T) {
+	currencies := make([]string, MaxFiatRatesCurrencies)
 	for i := range currencies {
 		currencies[i] = "USD"
 	}
@@ -63,6 +63,21 @@ func TestNormalizeFiatCurrencies_DeduplicatesBeforeLimit(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, []string{"usd"}) {
 		t.Fatalf("unexpected normalized currencies: got %v", got)
+	}
+}
+
+func TestNormalizeFiatCurrencies_LimitAppliesToRawInputLength(t *testing.T) {
+	// The count cap bounds the raw input length, so even a list that would
+	// deduplicate to a single entry is rejected when it is too long.
+	currencies := make([]string, MaxFiatRatesCurrencies+1)
+	for i := range currencies {
+		currencies[i] = "USD"
+	}
+	_, err := normalizeFiatCurrencies(currencies)
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
 	}
 }
 

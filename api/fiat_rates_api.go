@@ -24,13 +24,14 @@ const MaxFiatRatesCurrencyCodeLength = 16
 
 // normalizeFiatCurrencies trims, lowercases, deduplicates, and bounds explicit
 // fiat currency selectors before any per-result response maps are allocated.
+// The count limit applies to the raw input length so the work done here is
+// bounded by it as well.
 func normalizeFiatCurrencies(currencies []string) ([]string, error) {
-	capacity := len(currencies)
-	if capacity > MaxFiatRatesCurrencies {
-		capacity = MaxFiatRatesCurrencies + 1
+	if len(currencies) > MaxFiatRatesCurrencies {
+		return nil, NewAPIError(fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies), true)
 	}
-	seen := make(map[string]struct{}, capacity)
-	normalized := make([]string, 0, capacity)
+	seen := make(map[string]struct{}, len(currencies))
+	normalized := make([]string, 0, len(currencies))
 	for _, currency := range currencies {
 		currency = strings.ToLower(strings.TrimSpace(currency))
 		if currency == "" {
@@ -44,9 +45,6 @@ func normalizeFiatCurrencies(currencies []string) ([]string, error) {
 		}
 		seen[currency] = struct{}{}
 		normalized = append(normalized, currency)
-		if len(normalized) > MaxFiatRatesCurrencies {
-			return nil, NewAPIError(fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies), true)
-		}
 	}
 	return normalized, nil
 }
