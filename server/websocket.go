@@ -32,8 +32,14 @@ const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 const maxWebsocketPendingRequests = 48
 
-// maxWebsocketMempoolFiltersResponses caps getMempoolFilters responses accepted
-// by one connection but not yet written to the websocket.
+// maxWebsocketMempoolFiltersResponses caps per-connection getMempoolFilters
+// requests over their whole lifecycle: the slot is acquired before the handler
+// computes the (potentially large) response and released only after the
+// response is written to the websocket (or drained on close). The point is to
+// bound the peak memory held in computed-but-unwritten filter responses, so the
+// cap deliberately covers compute, queueing, and write together; a client that
+// pipelines more than this many requests, or reads slower than it requests,
+// gets a mempool_filters_limit error instead of queueing further responses.
 const maxWebsocketMempoolFiltersResponses = 4
 const maxWebsocketActiveRequests = 2048
 const maxWebsocketEstimateFeeBlocks = 32
