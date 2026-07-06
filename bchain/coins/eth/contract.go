@@ -241,10 +241,8 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 	if endValues > len(data) {
 		return nil, errors.New("ERC1155 TransferBatch, invalid values data length")
 	}
-	maxInt := uint64(^uint(0) >> 1)
-	if countValues > maxInt {
-		return nil, errors.New("ERC1155 TransferBatch, invalid data length")
-	}
+	// countValues cannot truncate: the endValues <= len(data) check above bounds
+	// it to len(data)/evmWordHex.
 	count := int(countValues)
 	idValues := make([]bchain.MultiTokenValue, count)
 	for i := 0; i < count; i++ {
