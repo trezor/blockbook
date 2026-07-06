@@ -111,7 +111,7 @@ func TestGetFiatRatesResult_NonTokenSelectedCurrencies(t *testing.T) {
 		},
 	}
 
-	got, err := w.getFiatRatesResult([]string{"USD", "gbp"}, ticker, "")
+	got, err := w.getFiatRatesResult([]string{"usd", "gbp"}, ticker, "")
 	if err != nil {
 		t.Fatalf("getFiatRatesResult returned error: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestGetFiatRatesResult_TokenRates(t *testing.T) {
 		},
 	}
 
-	got, err := w.getFiatRatesResult([]string{"USD", "EUR", "JPY"}, ticker, "0xToken")
+	got, err := w.getFiatRatesResult([]string{"usd", "eur", "jpy"}, ticker, "0xToken")
 	if err != nil {
 		t.Fatalf("getFiatRatesResult returned error: %v", err)
 	}

@@ -870,10 +870,7 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	if w.metrics != nil {
 		w.metrics.BalanceHistoryPoints.With(common.Labels{"path": "xpub"}).Observe(float64(len(bha)))
 	}
-	err = w.setFiatRateToBalanceHistories(bha, currencies, "xpub")
-	if err != nil {
-		return nil, err
-	}
+	w.setFiatRateToBalanceHistories(bha, currencies, "xpub")
 	glog.V(1).Info("GetUtxoBalanceHistory ", xpub[:xpubLogPrefix], ", cache ", inCache, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ",  ", time.Since(start))
 	return bha, nil
 }

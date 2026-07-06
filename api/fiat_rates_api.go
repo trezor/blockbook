@@ -58,6 +58,7 @@ func copyTickerRates(rates map[string]float32) map[string]float32 {
 }
 
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result.
+// currencies must already be normalized by normalizeFiatCurrencies.
 func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.CurrencyRatesTicker, token string) (*FiatTicker, error) {
 	if token != "" {
 		capacity := len(currencies)
@@ -76,7 +77,6 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.Currency
 			}
 		} else {
 			for _, currency := range currencies {
-				currency = strings.ToLower(currency)
 				rate := ticker.TokenRateInCurrency(token, currency)
 				if rate <= 0 {
 					rate = -1
@@ -99,7 +99,6 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.Currency
 	// Check if currencies from the list are available in the ticker rates.
 	rates := make(map[string]float32, len(currencies))
 	for _, currency := range currencies {
-		currency = strings.ToLower(currency)
 		if rate, found := ticker.Rates[currency]; found {
 			rates[currency] = rate
 		} else {

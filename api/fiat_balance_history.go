@@ -166,23 +166,21 @@ func (w *Worker) applyFallbackTickersToBalanceHistories(histories BalanceHistori
 	w.observeBalanceHistoryFiatDuration(pathLabel, "fallback", stats.status(), fallbackStarted)
 }
 
-func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string, pathLabel string) error {
+// setFiatRateToBalanceHistories fills FiatRates of the passed histories.
+// currenciesLowercase must already be normalized by normalizeFiatCurrencies;
+// both entry points (GetBalanceHistory, GetXpubBalanceHistory) do so.
+func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currenciesLowercase []string, pathLabel string) {
 	if len(histories) == 0 || w.fiatRates == nil || !w.fiatRates.Enabled {
-		return nil
+		return
 	}
 	pathLabel = normalizeBalanceHistoryPathLabel(pathLabel)
-	currenciesLowercase, err := normalizeFiatCurrencies(currencies)
-	if err != nil {
-		return err
-	}
 	timestamps := buildBalanceHistoryTimestamps(histories)
 	tickers, batchFetchValid, reason, returnedTickers, err := w.lookupBalanceHistoryBatchTickers(timestamps, pathLabel, len(histories))
 	if batchFetchValid {
 		applyBatchTickersToBalanceHistories(histories, tickers, currenciesLowercase)
-		return nil
+		return
 	}
 	glog.Errorf("Error finding tickers for %d timestamps (returned %d, reason %s). Error: %v", len(timestamps), returnedTickers, reason, err)
 	w.incrementBalanceHistoryFiatFallback(pathLabel, reason)
 	w.applyFallbackTickersToBalanceHistories(histories, currenciesLowercase, pathLabel)
-	return nil
 }
