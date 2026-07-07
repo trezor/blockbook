@@ -36,8 +36,13 @@ func TestHasEthereumTokenNonzeroHoldings(t *testing.T) {
 			want:  true,
 		},
 		{
-			name:  "erc721 ids",
+			name:  "erc721 zero ids",
 			token: &Token{Ids: []Amount{Amount(*big.NewInt(0))}},
+			want:  false,
+		},
+		{
+			name:  "erc721 nonzero ids",
+			token: &Token{Ids: []Amount{Amount(*big.NewInt(1))}},
 			want:  true,
 		},
 		{

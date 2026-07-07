@@ -1206,8 +1206,10 @@ func hasEthereumTokenNonzeroHoldings(t *Token) bool {
 	if t.BalanceSat != nil && !IsZeroBigInt((*big.Int)(t.BalanceSat)) {
 		return true
 	}
-	if len(t.Ids) > 0 {
-		return true
+	for _, id := range t.Ids {
+		if !IsZeroBigInt((*big.Int)(&id)) {
+			return true
+		}
 	}
 	for i := range t.MultiTokenValues {
 		if t.MultiTokenValues[i].Value == nil || !IsZeroBigInt((*big.Int)(t.MultiTokenValues[i].Value)) {
