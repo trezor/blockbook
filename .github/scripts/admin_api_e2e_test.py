@@ -1,6 +1,30 @@
+import os
 import unittest
+from unittest import mock
 
-from admin_api_e2e import coin_deployed, parse_env_credentials, plan_settings_roundtrip
+from admin_api_e2e import (
+    coin_deployed,
+    parse_env_credentials,
+    plan_settings_roundtrip,
+    resolve_admin_url,
+)
+
+
+class ResolveAdminUrlTest(unittest.TestCase):
+    def test_explicit_url_wins(self) -> None:
+        with mock.patch.dict(os.environ, {"BB_ADMIN_E2E_URL": "https://example.test:9999/"}, clear=False):
+            self.assertEqual(resolve_admin_url("base_archive"), "https://example.test:9999")
+
+    def test_derives_from_test_name_variable_and_config_port(self) -> None:
+        # the URL repo variables follow the tests.json test-name convention
+        # (BB_DEV_API_URL_HTTP_base for base_archive, not ..._base_archive);
+        # the port comes from the real coin config's ports.blockbook_internal
+        env = {
+            "BB_ADMIN_E2E_URL": "",
+            "BB_DEV_API_URL_HTTP_base": "https://blockbook-dev.test:9311",
+        }
+        with mock.patch.dict(os.environ, env, clear=False):
+            self.assertEqual(resolve_admin_url("base_archive"), "https://blockbook-dev.test:9211")
 
 
 class ParseEnvCredentialsTest(unittest.TestCase):

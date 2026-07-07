@@ -39,7 +39,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from runner import LOG_PREFIX, fail, log
+from runner import LOG_PREFIX, ValidationError, fail, load_test_coin_name, log
 from wait_for_sync import build_ssl_context, resolve_http_base
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -88,15 +88,20 @@ def coin_deployed(deployed_csv: str, coin: str) -> bool:
 
 def resolve_admin_url(coin: str) -> str:
     """Resolve the internal-server base URL: an explicit BB_ADMIN_E2E_URL
-    wins; otherwise the host follows the same BB_DEV_API_URL_HTTP_<coin> repo
-    variable every other post-deploy check uses, with the internal port from
-    the coin config. The internal server always serves HTTPS (the packaged
-    self-signed certificate)."""
+    wins; otherwise the host follows the same repo variable every other
+    post-deploy check uses — keyed by the coin's *test name* (tests.json
+    convention, e.g. BB_DEV_API_URL_HTTP_base for base_archive), not the
+    deploy alias — with the internal port from the coin config. The internal
+    server always serves HTTPS (the packaged self-signed certificate)."""
     explicit = os.environ.get("BB_ADMIN_E2E_URL", "").strip()
     if explicit:
         return explicit.rstrip("/")
-    host = urllib.parse.urlparse(resolve_http_base(coin)).hostname
     config_path = REPO_ROOT / "configs" / "coins" / (coin + ".json")
+    try:
+        test_coin = load_test_coin_name(config_path)
+    except ValidationError as exc:
+        fail(str(exc))
+    host = urllib.parse.urlparse(resolve_http_base(test_coin)).hostname
     try:
         with open(config_path, encoding="utf-8") as f:
             port = json.load(f)["ports"]["blockbook_internal"]
