@@ -284,3 +284,19 @@ jobs:
           name: openapi-e2e-report
           path: tests/openapi/reports/
           if-no-files-found: warn
+
+      # Idempotent roundtrip of the internal-server admin API (runtime settings
+      # + contract info) against the deployed dev instance. The target URL is
+      # derived from the BB_DEV_API_URL_HTTP_<coin> repo variable (exported
+      # above) plus the coin config's internal port. The script skips itself —
+      # with a visible annotation — when the target coin is not part of this
+      # deploy run (DEPLOYED_COINS carries deploy config names, hence
+      # coins_csv, not test_coins_csv) or the BB_RUNTIME_ENV secret is not
+      # set; credentials are parsed inside the script from BB_ENV, which is
+      # intentionally not exported to other steps.
+      - name: Run admin API e2e tests
+        env:
+          BB_ENV: ${{ secrets.BB_RUNTIME_ENV }}
+          BB_ADMIN_E2E_COIN: base_archive
+          DEPLOYED_COINS: ${{ needs.prepare_deploy.outputs.coins_csv }}
+        run: python3 ./.github/scripts/admin_api_e2e.py
