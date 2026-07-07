@@ -51,11 +51,12 @@ Inputs:
   - default is `dev`
   - selected value is exported downstream as `BB_BUILD_ENV`
   - ignored when `mode=deploy`
-- `always_build_backend`:
-  - `false` derives backend builds per coin from the selected `BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>` value
-  - backend is built when that env var is unset, empty, or resolves to `localhost`, `127.0.0.1`, or `::1`
-  - backend is skipped only when the env var is present and points to a non-loopback target
-  - `true` forces backend builds for all selected coins
+- `backend_mode`:
+  - `auto` derives backend builds per coin from the selected `BB_{DEV|PROD}_RPC_URL_HTTP_<coin_alias>` value
+  - in `auto`, backend is built when that env var is unset, empty, or resolves to `localhost`, `127.0.0.1`, or `::1`
+  - in `auto`, backend is skipped only when the env var is present and points to a non-loopback target
+  - `always` forces backend builds for all selected coins
+  - `never` skips backend builds for coins that also produce a blockbook package; backend-only coins still build their backend package
   - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
 - `branch_or_tag`: optional branch or tag to check out and deploy; leave empty to use the workflow run ref name
@@ -64,6 +65,8 @@ Inputs:
 In `mode=build`, selected coins are grouped by runner so one build job can build multiple
 `deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.
 Deploy and test-related workflow steps use `BB_BUILD_ENV=dev`.
+Generated dev Blockbook services start with pprof enabled on `:<blockbook_internal + 20000>`, for example Ethereum
+uses `:29036`. Generated prod services do not include `-prof`.
 
 Env vars :
 
@@ -92,6 +95,7 @@ Special cases:
 | Runner mapping                | BB_RUNNER_<coin>                       | BB_RUNNER_POLYGON_ARCHIVE            |
 | Build env selector            | BB_BUILD_ENV                           | dev                                  |
 | Backend RPC env identity      | coin.alias                             | BB_DEV_RPC_URL_HTTP_polygon_archive_bor |
+| Backend MQ env identity       | coin.alias                             | BB_DEV_MQ_URL_polygon_archive_bor    |
 | Blockbook package name        | blockbook.package_name                 | blockbook-polygon                    |
 | Backend package name          | backend.package_name                   | backend-polygon                      |
 | Build target identity         | workflow/config coin name              | deb-blockbook-polygon_archive        |
@@ -116,7 +120,7 @@ For `polygon_archive` specifically:
 Wrapper entrypoint:
 
 ```bash
-./.github/bin/bb_deploy
+./.github/bin/bbcli
 ```
 
 Without `--run`, `build` and `deploy` print the underlying `gh workflow run ...`
@@ -129,7 +133,7 @@ The output below assumes `BB_RUNNER_*` repository variables are valid for the cu
 List coins buildable on dev runners:
 
 ```bash
-./.github/bin/bb_deploy list --env dev
+./.github/bin/bbcli list --env dev
 ```
 
 ```text
@@ -153,7 +157,7 @@ zcash
 List all configured runner-mapped coins in CSV form:
 
 ```bash
-./.github/bin/bb_deploy list --env prod --format csv
+./.github/bin/bbcli list --env prod --format csv
 ```
 
 ```text
@@ -163,7 +167,7 @@ arbitrum_archive,avalanche_archive,base_archive,bcash,bitcoin,bitcoin_regtest,bi
 Print the default dev build command for selected coins:
 
 ```bash
-./.github/bin/bb_deploy build --coins bitcoin,dogecoin
+./.github/bin/bbcli build --coins bitcoin,dogecoin
 ```
 
 ```text
@@ -173,17 +177,27 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the prod build command for selected coins:
 
 ```bash
-./.github/bin/bb_deploy build --env prod --coins bitcoin,bsc_archive
+./.github/bin/bbcli build --env prod --coins bitcoin,bsc_archive
 ```
 
 ```text
 gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=bitcoin,bsc_archive -f branch_or_tag=new-test-name-config
 ```
 
+Print a build command that skips backend packages entirely:
+
+```bash
+./.github/bin/bbcli build --coins bitcoin,dogecoin --backend-mode never
+```
+
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=bitcoin,dogecoin -f backend_mode=never -f branch_or_tag=new-test-name-config
+```
+
 Print the dev build command for all selectable coins:
 
 ```bash
-./.github/bin/bb_deploy build --coins ALL
+./.github/bin/bbcli build --coins ALL
 ```
 
 ```text
@@ -193,7 +207,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the prod build command for all selectable coins:
 
 ```bash
-./.github/bin/bb_deploy build --env prod --coins ALL
+./.github/bin/bbcli build --env prod --coins ALL
 ```
 
 ```text
@@ -203,7 +217,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the deploy command for selected coins:
 
 ```bash
-./.github/bin/bb_deploy deploy --coins bitcoin,dogecoin
+./.github/bin/bbcli deploy --coins bitcoin,dogecoin
 ```
 
 ```text
@@ -213,7 +227,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the deploy command with an explicit branch or tag:
 
 ```bash
-./.github/bin/bb_deploy deploy --coins bitcoin --branch-or-tag master
+./.github/bin/bbcli deploy --coins bitcoin --branch-or-tag master
 ```
 
 ```text

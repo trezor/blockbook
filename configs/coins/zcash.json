@@ -7,7 +7,6 @@
     },
     "ports": {
         "backend_rpc": 8032,
-        "backend_message_queue": 38332,
         "blockbook_internal": 9032,
         "blockbook_public": 9132
     },
@@ -16,17 +15,16 @@
         "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_user": "rpc",
         "rpc_pass": "rpc",
-        "rpc_timeout": 25,
-        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+        "rpc_timeout": 25
     },
     "backend": {
         "package_name": "backend-zcash",
         "package_revision": "satoshilabs-1",
         "system_user": "zcash",
-        "version": "4.1.0",
-        "docker_image": "zfnd/zebra:4.1.0",
+        "version": "5.0.0",
+        "docker_image": "zfnd/zebra:5.0.0",
         "verification_type": "docker",
-        "verification_source": "9e82f1029527183ec5bf691bd9b8eae61357bf439d33f3f7dfcb0dba5ea7d760",
+        "verification_source": "cfcdc088977ccd85562a60911845b24d962317c93d861b12aa1b98813f9f2374",
         "extract_command": "mkdir backend/bin && docker cp extract:/usr/local/bin/zebrad backend/bin/zebrad",
         "exclude_files": [],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zebrad --config {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/zcash.conf start",
@@ -54,6 +52,7 @@
             "xpub_magic": 76067358,
             "slip44": 133,
             "additional_params": {
+                "averageBlockTimeMs": 75000,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
                 "fiat_rates_params": "{\"coin\": \"zcash\", \"periodSeconds\": 900}"

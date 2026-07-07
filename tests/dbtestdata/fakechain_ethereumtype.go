@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/trezor/blockbook/bchain"
 )
@@ -19,7 +20,7 @@ func NewFakeBlockChainEthereumType(parser bchain.BlockChainParser) (bchain.Block
 }
 
 func (c *fakeBlockChainEthereumType) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
-	return bchain.NewMempoolEthereumType(chain, 1, false), nil
+	return bchain.NewMempoolEthereumType(chain, time.Hour, false), nil
 }
 
 func (c *fakeBlockChainEthereumType) GetChainInfo() (v *bchain.ChainInfo, err error) {
@@ -114,8 +115,10 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetBalance(addrDesc bchain.Addr
 	return big.NewInt(123450000 + int64(addrDesc[0])), nil
 }
 
-func (c *fakeBlockChainEthereumType) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
-	return uint64(addrDesc[0]), nil
+func (c *fakeBlockChainEthereumType) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
+	// pending and confirmed are equal in the fake; production fetches them from
+	// distinct block tags ("pending" vs "latest"), and only fetches confirmed when requested.
+	return uint64(addrDesc[0]), uint64(addrDesc[0]), withConfirmed, nil
 }
 
 func (c *fakeBlockChainEthereumType) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {

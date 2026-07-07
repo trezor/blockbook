@@ -72,14 +72,47 @@ type EthereumInternalData struct {
 // ContractInfo contains info about a contract
 type ContractInfo struct {
 	// Deprecated: Use Standard instead.
-	Type              TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
-	Standard          TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
+	Type              TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard          TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155'"`
 	Contract          string            `json:"contract" ts_doc:"Smart contract address."`
 	Name              string            `json:"name" ts_doc:"Readable name of the contract."`
 	Symbol            string            `json:"symbol" ts_doc:"Symbol for tokens under this contract, if applicable."`
 	Decimals          int               `json:"decimals" ts_doc:"Number of decimal places, if applicable."`
 	CreatedInBlock    uint32            `json:"createdInBlock,omitempty" ts_doc:"Block height where contract was first created."`
 	DestructedInBlock uint32            `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
+	// IsErc4626 is set on a successful asset()+totalAssets() probe; lazy and one-way.
+	IsErc4626 bool `json:"-"`
+	// Erc4626AssetContract is the underlying asset (EIP-55), read on the same probe.
+	Erc4626AssetContract string `json:"-"`
+}
+
+// EthereumTypeRPCCall defines one eth_call request payload.
+type EthereumTypeRPCCall struct {
+	Data string
+	To   string
+	From string
+}
+
+// EthereumTypeRPCCallResult carries one eth_call response payload.
+type EthereumTypeRPCCallResult struct {
+	Data  string
+	Error error
+}
+
+// EthereumMulticallCall is one sub-call in a Multicall3 aggregate3 batch.
+// CallData is "0x"-prefixed hex. AllowFailure=true lets a revert produce
+// Success=false in the result slot instead of failing the batch.
+type EthereumMulticallCall struct {
+	Target       string
+	CallData     string
+	AllowFailure bool
+}
+
+// EthereumMulticallResult is one slot of the aggregate3 return; Data is the
+// "0x"-prefixed return bytes (or revert payload when Success=false).
+type EthereumMulticallResult struct {
+	Success bool
+	Data    string
 }
 
 // Ethereum token standard names
@@ -198,6 +231,11 @@ type EthereumBlockSpecificData struct {
 	InternalDataError   string               `ts_doc:"Error message for processing block internal data, if any."`
 	AddressAliasRecords []AddressAliasRecord `ts_doc:"List of address-to-alias mappings discovered in this block."`
 	Contracts           []ContractInfo       `ts_doc:"List of contracts created or updated in this block."`
+	// GasUsed/GasLimit/BaseFeePerGas are transient block-level EIP-1559 figures used for the new-block
+	// notification; they are not persisted (storeBlockSpecificDataEthereumType ignores them).
+	GasUsed       *big.Int `json:"-"`
+	GasLimit      *big.Int `json:"-"`
+	BaseFeePerGas *big.Int `json:"-"`
 }
 
 // StakingPoolData holds data about address participation in a staking pool contract

@@ -55,9 +55,9 @@ func (b *BaseChain) EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int
 	return nil, errors.New("not supported")
 }
 
-// EthereumTypeGetNonce is not supported
-func (b *BaseChain) EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error) {
-	return 0, errors.New("not supported")
+// EthereumTypeGetNonces is not supported
+func (b *BaseChain) EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
+	return 0, 0, false, errors.New("not supported")
 }
 
 // EthereumTypeEstimateGas is not supported
@@ -101,6 +101,16 @@ func (b *BaseChain) EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) 
 // EthereumTypeRpcCall calls eth_call with given data and to address
 func (b *BaseChain) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return "", errors.New("not supported")
+}
+
+// EthereumTypeRpcCallBatch performs batch eth_call requests.
+func (b *BaseChain) EthereumTypeRpcCallBatch(calls []EthereumTypeRPCCall) ([]EthereumTypeRPCCallResult, error) {
+	return nil, errors.New("not supported")
+}
+
+// EthereumTypeMulticallAggregate3 issues a Multicall3 aggregate3 call.
+func (b *BaseChain) EthereumTypeMulticallAggregate3(calls []EthereumMulticallCall, blockNumber *big.Int) ([]EthereumMulticallResult, error) {
+	return nil, errors.New("not supported")
 }
 
 func (b *BaseChain) EthereumTypeGetRawTransaction(txid string) (string, error) {

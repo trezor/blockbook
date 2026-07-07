@@ -64,6 +64,18 @@ type bulkHotnessStats struct {
 	evictions  uint64
 }
 
+func (b *BulkConnect) releaseBulkMemory() {
+	b.bulkAddresses = nil
+	b.bulkAddressesCount = 0
+	b.ethBlockTxs = nil
+	b.txAddressesMap = nil
+	b.blockFilters = nil
+	b.balances = nil
+	b.addressContracts = nil
+	b.bulkStats = bulkConnectStats{}
+	b.bulkHotness = bulkHotnessStats{}
+}
+
 // InitBulkConnect initializes bulk connect and switches DB to inconsistent state
 func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	b := &BulkConnect{
@@ -76,6 +88,9 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	}
 	if err := d.SetInconsistentState(true); err != nil {
 		return nil, err
+	}
+	if b.chainType == bchain.ChainEthereumType {
+		d.addrContractsCacheMaxBytes = d.bulkAddrContractsCacheMaxBytes
 	}
 	glog.Info("rocksdb: bulk connect init, db set to inconsistent state")
 	return b, nil
@@ -491,9 +506,18 @@ func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) erro
 	return b.d.ConnectBlock(block)
 }
 
-// Close flushes the cached data and switches DB from inconsistent state open
+// Close flushes the cached data, restores tip cache sizing, and switches DB from inconsistent state open
 // after Close, the BulkConnect cannot be used
 func (b *BulkConnect) Close() error {
+	bulkClosed := false
+	if b.d != nil && b.chainType == bchain.ChainEthereumType {
+		defer func(db *RocksDB) {
+			db.addrContractsCacheMaxBytes = db.tipAddrContractsCacheMaxBytes
+			if bulkClosed {
+				db.flushAddrContractsCacheIfOverCap()
+			}
+		}(b.d)
+	}
 	glog.Info("rocksdb: bulk connect closing")
 	start := time.Now()
 	var storeTxAddressesChan, storeBalancesChan, storeAddressContractsChan chan error
@@ -562,6 +586,8 @@ func (b *BulkConnect) Close() error {
 		}(d)
 	}
 
+	bulkClosed = true
+	b.releaseBulkMemory()
 	b.d = nil
 	return nil
 }

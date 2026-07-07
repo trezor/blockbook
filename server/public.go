@@ -32,12 +32,18 @@ const txsOnPage = 25
 const blocksOnPage = 50
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
+const maxWebsocketBlockPageSize = 10000
+const maxBlockFiltersRange = 10000
 const maxPageNumber = 1000000
 const maxGapValue = 10000
+const maxSafePagingOffset = 1000000000
+const maxAccountHistoryPagingOffset = 100000
 const maxSendTxBodyBytes int64 = 8 * 1024 * 1024
 
 const secondaryCoinCookieName = "secondary_coin"
 const templatesDir = "./static/templates"
+const apiDocsIndexFile = "./static/api-docs/index.html"
+const openAPIFile = "./openapi.yaml"
 const (
 	txBitcoinTypeTemplate         = templatesDir + "/tx_bitcointype.html"
 	txEthereumTypeTemplate        = templatesDir + "/tx_ethereumtype.html"
@@ -60,8 +66,9 @@ type PublicServer struct {
 	htmlTemplates[TemplateData]
 	binding             string
 	certFiles           string
-	socketio            *SocketIoServer
 	websocket           *WebsocketServer
+	serveMux            *http.ServeMux
+	restLimiter         *restUIRateLimiter
 	https               *http.Server
 	db                  *db.RocksDB
 	txCache             *db.TxCache
@@ -86,11 +93,6 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		return nil, err
 	}
 
-	socketio, err := NewSocketIoServer(db, chain, mempool, txCache, metrics, is, fiatRates)
-	if err != nil {
-		return nil, err
-	}
-
 	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return nil, err
@@ -98,9 +100,22 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
+	restLimiter, err := newRestUIRateLimiter(is.GetNetwork(), metrics)
+	if err != nil {
+		return nil, err
+	}
+	handler := http.Handler(serveMux)
+	if restLimiter != nil {
+		// the base path must be derived exactly like the route registrations in
+		// ConnectFullPublicInterface (raw concatenation, not publicPath), so the
+		// limiter covers the same paths the mux actually serves for every
+		// binding shape. The limiter governs all dynamic routes under path (the
+		// explorer UI pages and the REST API) under one shared per-client budget
+		handler = restLimiter.wrapPublic(handler, path)
+	}
 	https := &http.Server{
 		Addr:    addr,
-		Handler: serveMux,
+		Handler: handler,
 	}
 
 	s := &PublicServer{
@@ -110,9 +125,10 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		},
 		binding:             binding,
 		certFiles:           certFiles,
+		serveMux:            serveMux,
+		restLimiter:         restLimiter,
 		https:               https,
 		api:                 api,
-		socketio:            socketio,
 		websocket:           websocket,
 		db:                  db,
 		txCache:             txCache,
@@ -132,8 +148,13 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	s.templates = s.parseTemplates()
 
 	// map only basic functions, the rest is enabled by method MapFullPublicInterface
-	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
-	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
+	serveMux.Handle(publicPath(path, "favicon.ico"), prefixedStaticFileServer(publicPath(path, "")))
+	staticPath := publicPath(path, "static") + "/"
+	serveMux.Handle(staticPath, prefixedStaticFileServer(staticPath))
+	apiDocsPath := publicPath(path, "api-docs")
+	serveMux.HandleFunc(apiDocsPath, s.apiDocsHandler(path))
+	serveMux.HandleFunc(apiDocsPath+"/", s.apiDocsHandler(path))
+	serveMux.HandleFunc(publicPath(path, "openapi.yaml"), s.openAPISpecHandler)
 	// default handler
 	serveMux.HandleFunc(path, s.htmlTemplateHandler(s.explorerIndex))
 	// default API handler
@@ -154,11 +175,10 @@ func (s *PublicServer) Run() error {
 
 // ConnectFullPublicInterface enables complete public functionality
 func (s *PublicServer) ConnectFullPublicInterface() {
-	serveMux := s.https.Handler.(*http.ServeMux)
+	serveMux := s.serveMux
 	_, path := splitBinding(s.binding)
 	// support for test pages
-	serveMux.Handle(path+"test-socketio.html", http.FileServer(http.Dir("./static/")))
-	serveMux.Handle(path+"test-websocket.html", http.FileServer(http.Dir("./static/")))
+	serveMux.Handle(publicPath(path, "test-websocket.html"), prefixedStaticFileServer(publicPath(path, "")))
 	if s.internalExplorer {
 		// internal explorer handlers
 		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
@@ -204,6 +224,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
 	serveMux.HandleFunc(path+"api/rawtx/", s.jsonHandler(s.apiRawTx, apiDefault))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
+	serveMux.HandleFunc(path+"api/contract/", s.jsonHandler(s.apiContract, apiDefault))
 	serveMux.HandleFunc(path+"api/xpub/", s.jsonHandler(s.apiXpub, apiDefault))
 	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiUtxo, apiDefault))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
@@ -217,6 +238,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
+	serveMux.HandleFunc(path+"api/v2/contract/", s.jsonHandler(s.apiContract, apiV2))
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
@@ -228,8 +250,6 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/multi-tickers/", s.jsonHandler(s.apiMultiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiAvailableVsCurrencies, apiV2))
-	// socket.io interface
-	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
 	serveMux.Handle(path+"websocket", s.websocket.GetHandler())
 	s.isFullInterface = true
@@ -246,26 +266,28 @@ func (s *PublicServer) Close() error {
 	return s.https.Close()
 }
 
-// Shutdown shuts down the server
+// Shutdown shuts down the server. http.Server.Shutdown does not drain
+// hijacked WebSocket connections, so after the HTTP listener stops we also
+// drain the WebSocket server's in-flight DB-touching goroutines; otherwise a
+// long getAccountInfo can race rocksdb_close in cgo and SIGSEGV the process.
 func (s *PublicServer) Shutdown(ctx context.Context) error {
 	glog.Infof("public server: shutdown")
-	return s.https.Shutdown(ctx)
+	httpErr := s.https.Shutdown(ctx)
+	wsErr := s.websocket.Shutdown(ctx)
+	if httpErr != nil {
+		return httpErr
+	}
+	return wsErr
 }
 
 // OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
 func (s *PublicServer) OnNewBlock(block *bchain.Block) {
-	s.socketio.OnNewBlockHash(block.Hash)
 	s.websocket.OnNewBlock(block)
 }
 
 // OnNewFiatRatesTicker notifies users subscribed to bitcoind/fiatrates about new ticker
 func (s *PublicServer) OnNewFiatRatesTicker(ticker *common.CurrencyRatesTicker) {
 	s.websocket.OnNewFiatRatesTicker(ticker)
-}
-
-// OnNewTxAddr notifies users subscribed to notification about new tx
-func (s *PublicServer) OnNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
-	s.socketio.OnNewTxAddr(tx.Txid, desc)
 }
 
 // OnNewTx notifies users subscribed to notification about new tx
@@ -283,12 +305,105 @@ func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
 }
 
+func (s *PublicServer) apiDocsHandler(basePath string) http.HandlerFunc {
+	docsPath := publicPath(basePath, "api-docs")
+	specPath := docsPath + "/openapi.yaml"
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case docsPath:
+			if !allowGetOrHead(w, r) {
+				return
+			}
+			http.Redirect(w, r, docsPath+"/", http.StatusMovedPermanently)
+		case docsPath + "/":
+			s.serveAPIDocs(w, r)
+		case specPath:
+			s.openAPISpecHandler(w, r)
+		default:
+			setOpenAPISecurityHeaders(w, "text/plain; charset=utf-8", false)
+			http.NotFound(w, r)
+		}
+	}
+}
+
+func (s *PublicServer) serveAPIDocs(w http.ResponseWriter, r *http.Request) {
+	if !allowGetOrHead(w, r) {
+		return
+	}
+	if s.metrics != nil {
+		s.metrics.ExplorerViews.With(common.Labels{"action": "api-docs"}).Inc()
+	}
+	serveStaticContent(w, r, apiDocsIndexFile, "text/html; charset=utf-8", true)
+}
+
+func (s *PublicServer) openAPISpecHandler(w http.ResponseWriter, r *http.Request) {
+	if !allowGetOrHead(w, r) {
+		return
+	}
+	if s.metrics != nil {
+		s.metrics.ExplorerViews.With(common.Labels{"action": "openapi-spec"}).Inc()
+	}
+	serveStaticContent(w, r, openAPIFile, "application/yaml; charset=utf-8", false)
+}
+
+func serveStaticContent(w http.ResponseWriter, r *http.Request, filename string, contentType string, allowSwaggerAssets bool) {
+	body, err := os.ReadFile(filename)
+	if err != nil {
+		glog.Errorf("serve %s: %v", filename, err)
+		setOpenAPISecurityHeaders(w, "text/plain; charset=utf-8", allowSwaggerAssets)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	setOpenAPISecurityHeaders(w, contentType, allowSwaggerAssets)
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodHead {
+		return
+	}
+	if _, err := w.Write(body); err != nil {
+		glog.Warning("write response ", err)
+	}
+}
+
+func allowGetOrHead(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return true
+	}
+	w.Header().Set("Allow", "GET, HEAD")
+	setOpenAPISecurityHeaders(w, "text/plain; charset=utf-8", false)
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	return false
+}
+
+func setOpenAPISecurityHeaders(w http.ResponseWriter, contentType string, allowSwaggerAssets bool) {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()")
+	if allowSwaggerAssets {
+		w.Header().Set("Content-Security-Policy", getSwaggerContentSecurityPolicy())
+	} else {
+		w.Header().Set("Content-Security-Policy", getOpenAPISpecContentSecurityPolicy())
+	}
+}
+
+func prefixedStaticFileServer(prefix string) http.Handler {
+	return http.StripPrefix(prefix, http.FileServer(http.Dir("./static/")))
+}
+
 func splitBinding(binding string) (addr string, path string) {
 	i := strings.Index(binding, "/")
 	if i >= 0 {
 		return binding[0:i], binding[i:]
 	}
 	return binding, "/"
+}
+
+func publicPath(basePath string, item string) string {
+	if basePath == "/" {
+		return "/" + item
+	}
+	return strings.TrimRight(basePath, "/") + "/" + item
 }
 
 func joinURL(base string, part string) string {
@@ -824,8 +939,11 @@ func tokenCount(tokens []api.Token, t bchain.TokenStandardName) int {
 	return count
 }
 
-func jsStr(s string) template.JSStr {
-	return template.JSStr(s)
+// jsStr renders s as a complete, quoted JS string literal for use in a JS expression context (e.g. inside <script>).
+// json.Marshal also escapes <, >, & so the result is safe to embed in <script>; it never errors for a string input.
+func jsStr(s string) template.JS {
+	b, _ := json.Marshal(s)
+	return template.JS(b)
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -865,15 +983,7 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 	return errorTpl, nil, err
 }
 
-// validateIntParam validates and sanitizes integer parameters from query strings
-func validateIntParam(value string, defaultValue int, min int, max int) int {
-	if value == "" {
-		return defaultValue
-	}
-	val, err := strconv.Atoi(value)
-	if err != nil {
-		return defaultValue
-	}
+func validateIntValue(val, defaultValue int, min int, max int) int {
 	if val < min {
 		return defaultValue
 	}
@@ -883,23 +993,61 @@ func validateIntParam(value string, defaultValue int, min int, max int) int {
 	return val
 }
 
+func parseProtocolsQuery(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	protocols := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, protocol := range strings.Split(value, ",") {
+			protocol = strings.TrimSpace(protocol)
+			if protocol != "" {
+				protocols = append(protocols, protocol)
+			}
+		}
+	}
+	return protocols
+}
+
+// validateIntParam validates and sanitizes integer parameters from query strings
+func validateIntParam(value string, defaultValue int, min int, max int) int {
+	if value == "" {
+		return defaultValue
+	}
+	val, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return validateIntValue(val, defaultValue, min, max)
+}
+
+func sanitizePagingParams(page, pageSize, defaultPageSize, maxPageSize int) (int, int) {
+	return sanitizePagingParamsWithMaxOffset(page, pageSize, defaultPageSize, maxPageSize, maxSafePagingOffset)
+}
+
+func sanitizeAccountPagingParams(page, pageSize, defaultPageSize, maxPageSize int) (int, int) {
+	return sanitizePagingParamsWithMaxOffset(page, pageSize, defaultPageSize, maxPageSize, maxAccountHistoryPagingOffset)
+}
+
+func sanitizePagingParamsWithMaxOffset(page, pageSize, defaultPageSize, maxPageSize, maxPagingOffset int) (int, int) {
+	page = validateIntValue(page, 0, 0, maxPageNumber)
+	pageSize = validateIntValue(pageSize, defaultPageSize, 0, maxPageSize)
+	if pageSize == 0 {
+		pageSize = defaultPageSize
+	}
+	if page > 0 && pageSize > 0 && page > maxPagingOffset/pageSize {
+		page = maxPagingOffset / pageSize
+	}
+	return page, pageSize
+}
+
 func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int) {
 	var voutFilter = api.AddressFilterVoutOff
 	page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
 	pageSize := validateIntParam(r.URL.Query().Get("pageSize"), maxPageSize, 0, maxPageSize)
-	if pageSize == 0 {
-		pageSize = maxPageSize
-	}
+	page, pageSize = sanitizeAccountPagingParams(page, pageSize, maxPageSize, maxPageSize)
 	from := validateIntParam(r.URL.Query().Get("from"), 0, 0, 10000000000)
 	to := validateIntParam(r.URL.Query().Get("to"), 0, 0, 10000000000)
-
-	// Check for overflow in page * pageSize calculation
-	const maxSafeOffset = 1000000000
-	if page > 0 && pageSize > 0 {
-		if page > maxSafeOffset/pageSize {
-			page = maxSafeOffset / pageSize
-		}
-	}
 
 	filterParam := r.URL.Query().Get("filter")
 	if len(filterParam) > 0 {
@@ -940,12 +1088,15 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	// Validate gap: non-negative, reasonable max (gap limit typically small, maxGapValue)
 	gap := validateIntParam(r.URL.Query().Get("gap"), 0, 0, maxGapValue)
 	contract := r.URL.Query().Get("contract")
+	withConfirmedNonce, _ := strconv.ParseBool(r.URL.Query().Get("confirmedNonce"))
 	return page, pageSize, accountDetails, &api.AddressFilter{
-		Vout:           voutFilter,
-		TokensToReturn: tokensToReturn,
-		FromHeight:     uint32(from),
-		ToHeight:       uint32(to),
-		Contract:       contract,
+		Vout:               voutFilter,
+		TokensToReturn:     tokensToReturn,
+		FromHeight:         uint32(from),
+		ToHeight:           uint32(to),
+		Contract:           contract,
+		Protocols:          parseProtocolsQuery(r.URL.Query()["protocols"]),
+		WithConfirmedNonce: withConfirmedNonce,
 	}, filterParam, gap
 }
 
@@ -1278,7 +1429,7 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 		BlockFilters map[int]blockFilterResult `json:"blockFilters"`
 	}
 
-	lastN := validateIntParam(r.URL.Query().Get("lastN"), 0, 0, 10000)
+	lastN := validateIntParam(r.URL.Query().Get("lastN"), 0, 0, maxBlockFiltersRange)
 	from := validateIntParam(r.URL.Query().Get("from"), 0, 0, 10000000000)
 	to := validateIntParam(r.URL.Query().Get("to"), 0, 0, 10000000000)
 	scriptType := r.URL.Query().Get("scriptType")
@@ -1314,6 +1465,10 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 		if to == 0 {
 			to = int(bestHeight)
 		}
+	}
+
+	if to-from+1 > maxBlockFiltersRange {
+		return nil, api.NewAPIError(fmt.Sprintf("Requested block filter range too large, max %d", maxBlockFiltersRange), true)
 	}
 
 	handleBlockFiltersResultFromTo := func(fromHeight int, toHeight int) (interface{}, error) {
@@ -1417,12 +1572,28 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
 	page, pageSize, details, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	if err := s.api.ValidateProtocolsForChain(filter.Protocols); err != nil {
+		return nil, err
+	}
 	secondaryCoin := strings.ToLower(r.URL.Query().Get("secondary"))
 	address, err = s.api.GetAddress(addressParam, page, pageSize, details, filter, secondaryCoin)
 	if err == nil && apiVersion == apiV1 {
 		return s.api.AddressToV1(address), nil
 	}
 	return address, err
+}
+
+func (s *PublicServer) apiContract(r *http.Request, apiVersion int) (interface{}, error) {
+	var contract string
+	i := strings.LastIndex(r.URL.Path, "contract/")
+	if i > 0 {
+		contract = r.URL.Path[i+9:]
+	}
+	if len(contract) == 0 {
+		return nil, api.NewAPIError("Missing contract", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-contract"}).Inc()
+	return s.api.GetContractInfoData(contract, strings.ToLower(r.URL.Query().Get("currency")), parseProtocolsQuery(r.URL.Query()["protocols"]))
 }
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {
@@ -1507,11 +1678,16 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 		if fiat != "" {
 			fiatArray = []string{fiat}
 		}
-		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, gap, uint32(groupBy))
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, gap, uint32(groupBy), s.is.BalanceHistoryMaxTxsREST, api.BalanceHistoryTransportREST)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
+		} else if apiErr, ok := err.(*api.APIError); ok && apiErr.Public {
+			// A public error from the xpub path (e.g. the range spans too many
+			// transactions) is definitive for a valid xpub; do not retry as an
+			// address, which would mask it with an address-parse error.
+			return history, err
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, uint32(groupBy))
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, uint32(groupBy), s.is.BalanceHistoryMaxTxsREST, api.BalanceHistoryTransportREST)
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}
@@ -1604,7 +1780,7 @@ func (s *PublicServer) apiAvailableVsCurrencies(r *http.Request, apiVersion int)
 	if err != nil {
 		return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
 	}
-	token := strings.ToLower(r.URL.Query().Get("token"))
+	token := r.URL.Query().Get("token")
 	result, err := s.api.GetAvailableVsCurrencies(timestamp, token)
 	return result, err
 }
@@ -1619,7 +1795,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	if currency != "" {
 		currencies = []string{currency}
 	}
-	token := strings.ToLower(r.URL.Query().Get("token"))
+	token := r.URL.Query().Get("token")
 
 	if block := r.URL.Query().Get("block"); block != "" {
 		// Get tickers for specified block height or block hash
@@ -1650,6 +1826,22 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	return result, nil
 }
 
+func countCommaSeparatedValues(s string, limit int) int {
+	if s == "" {
+		return 0
+	}
+	count := 1
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' {
+			count++
+			if count > limit {
+				return count
+			}
+		}
+	}
+	return count
+}
+
 // apiMultiTickers returns FiatRates ticker prices for the specified comma separated list of timestamps.
 func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interface{}, error) {
 	var result []api.FiatTicker
@@ -1660,10 +1852,13 @@ func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interfa
 	if currency != "" {
 		currencies = []string{currency}
 	}
-	token := strings.ToLower(r.URL.Query().Get("token"))
+	token := r.URL.Query().Get("token")
 	if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-multi-tickers-date"}).Inc()
+		if countCommaSeparatedValues(timestampString, api.MaxFiatRatesTimestamps) > api.MaxFiatRatesTimestamps {
+			return nil, api.NewAPIError(fmt.Sprintf("too many timestamps, max %d", api.MaxFiatRatesTimestamps), true)
+		}
 		timestamps := strings.Split(timestampString, ",")
 		t := make([]int64, len(timestamps))
 		for i := range timestamps {

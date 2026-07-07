@@ -6,14 +6,24 @@ on:
   pull_request:
     branches: [ '**' ]
 
+permissions:
+  contents: read
+
 jobs:
   unit-tests:
     name: Unit Tests
     runs-on: [self-hosted, bb-dev-selfhosted]
+    # Defense-in-depth: never run untrusted fork-PR code on the self-hosted
+    # runner. connectivity/integration already carry this guard; without it
+    # here, unit-tests relied solely on the repo "require approval for fork
+    # PR workflows" setting.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Run unit tests
         env:
@@ -28,7 +38,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -38,6 +50,9 @@ jobs:
       - name: Run connectivity tests
         env:
           BB_BUILD_ENV: dev
+          # CI can reach the node RPC backends directly, so check them too; local
+          # runs default to Blockbook-only connectivity.
+          BB_TEST_BACKEND_CONNECTIVITY: "1"
         run: make test-connectivity
 
   integration-tests:
@@ -48,7 +63,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -59,3 +76,32 @@ jobs:
         env:
           BB_BUILD_ENV: dev
         run: make test-integration ARGS="-v"
+
+  lint:
+    name: Lint
+    # Pure static analysis of configs/ (Grafana dashboards + coin backend
+    # artifacts): no secrets, no backend access, safe to run for fork PRs on an
+    # ephemeral GitHub-hosted runner. Unlike unit-tests (self-hosted, skipped for
+    # fork PRs), this job runs for forks too, so dashboard/artifact regressions
+    # are caught on every PR. The only third-party dependency is the pinned
+    # PyYAML used by the Grafana renderer.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install Python dependencies
+        run: |
+          rm -rf .python-deps
+          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --disable-pip-version-check --quiet --target .python-deps -r .github/requirements.txt
+
+      - name: Validate Grafana dashboard sources
+        run: |
+          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana_test.py
+          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana.py --check
+
+      - name: Validate backend artifact sources
+        run: python3 ./.github/scripts/validate_backend_artifacts.py

@@ -215,8 +215,8 @@ func (c *blockChainWithMetrics) CreateMempool(chain bchain.BlockChain) (bchain.M
 	return c.b.CreateMempool(chain)
 }
 
-func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
-	return c.b.InitializeMempool(addrDescForOutpoint, onNewTxAddr, onNewTx)
+func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTx bchain.OnNewTxFunc) error {
+	return c.b.InitializeMempool(addrDescForOutpoint, onNewTx)
 }
 
 func (c *blockChainWithMetrics) Shutdown(ctx context.Context) error {
@@ -338,9 +338,9 @@ func (c *blockChainWithMetrics) EthereumTypeGetBalance(addrDesc bchain.AddressDe
 	return c.b.EthereumTypeGetBalance(addrDesc)
 }
 
-func (c *blockChainWithMetrics) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (v uint64, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonce", s, err) }(time.Now())
-	return c.b.EthereumTypeGetNonce(addrDesc)
+func (c *blockChainWithMetrics) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonces", s, err) }(time.Now())
+	return c.b.EthereumTypeGetNonces(addrDesc, withConfirmed)
 }
 
 func (c *blockChainWithMetrics) EthereumTypeEstimateGas(params map[string]interface{}) (v uint64, err error) {
@@ -387,6 +387,28 @@ func (c *blockChainWithMetrics) EthereumTypeGetStakingPoolsData(addrDesc bchain.
 func (c *blockChainWithMetrics) EthereumTypeRpcCall(data, to, from string) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeRpcCall", s, err) }(time.Now())
 	return c.b.EthereumTypeRpcCall(data, to, from)
+}
+
+func (c *blockChainWithMetrics) EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) (v []bchain.EthereumTypeRPCCallResult, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeRpcCallBatch", s, err) }(time.Now())
+	batcher, ok := c.b.(interface {
+		EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error)
+	})
+	if !ok {
+		return nil, errors.New("EthereumTypeRpcCallBatch: not supported")
+	}
+	return batcher.EthereumTypeRpcCallBatch(calls)
+}
+
+func (c *blockChainWithMetrics) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) (v []bchain.EthereumMulticallResult, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeMulticallAggregate3", s, err) }(time.Now())
+	caller, ok := c.b.(interface {
+		EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error)
+	})
+	if !ok {
+		return nil, errors.New("EthereumTypeMulticallAggregate3: not supported")
+	}
+	return caller.EthereumTypeMulticallAggregate3(calls, blockNumber)
 }
 
 func (c *blockChainWithMetrics) EthereumTypeGetRawTransaction(txid string) (v string, err error) {
@@ -489,4 +511,27 @@ func (c *blockChainWithMetrics) CheckENSExpiration(name string) (bool, error) {
 		return ensResolver.CheckENSExpiration(name)
 	}
 	return false, errors.New("ENS expiration check not supported by underlying chain")
+}
+
+// AverageBlockTimeDuration forwards the wrapped chain's configured block cadence
+// so blockbook.go's duck-typed lookup reaches it through the metrics wrapper.
+// Returns an error when the underlying chain doesn't expose one.
+func (c *blockChainWithMetrics) AverageBlockTimeDuration() (time.Duration, error) {
+	if p, ok := c.b.(interface {
+		AverageBlockTimeDuration() (time.Duration, error)
+	}); ok {
+		return p.AverageBlockTimeDuration()
+	}
+	return 0, errors.New("average block time not supported by underlying chain")
+}
+
+// MissingBlockRetryOverride forwards the wrapped chain's per-chain sync-worker
+// retry override through the metrics wrapper; nil when none is provided.
+func (c *blockChainWithMetrics) MissingBlockRetryOverride() *bchain.MissingBlockRetry {
+	if p, ok := c.b.(interface {
+		MissingBlockRetryOverride() *bchain.MissingBlockRetry
+	}); ok {
+		return p.MissingBlockRetryOverride()
+	}
+	return nil
 }

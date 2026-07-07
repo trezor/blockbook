@@ -32,7 +32,7 @@ Good examples of coin configuration are
     * `backend_*` – Additional back-end ports can be documented here. Actually the only purpose is to get them to
        port table (prefix is removed and rest of string is used as note).
     * `blockbook_internal` – Blockbook's internal port that is used for metric collecting, debugging etc.
-    * `blockbook_public` – Blockbook's public port that is used to communicate with Trezor wallet (via Socket.IO).
+    * `blockbook_public` – Blockbook's public HTTP/API/WebSocket port.
 
 * `ipc` – Defines how Blockbook connects its back-end service.
     * `rpc_url_template` – Template that defines URL of back-end RPC service. See note on templates below. You can
@@ -47,7 +47,10 @@ Good examples of coin configuration are
     * `rpc_pass` – Password of back-end RPC service, used by both Blockbook and back-end configuration templates.
     * `rpc_timeout` – RPC timeout used by Blockbook.
     * `message_queue_binding_template` – Template that defines URL of back-end's message queue (ZMQ), used by both
-       Blockbook and back-end configuration template. See note on templates below.
+       Blockbook and back-end configuration template. You can override it at build time by setting the selected
+       `BB_DEV_MQ_URL_<coin alias>` or `BB_PROD_MQ_URL_<coin alias>` variable (for example,
+       `BB_BUILD_ENV=dev BB_DEV_MQ_URL_bitcoin=tcp://backend_hostname:28332`), which is used as-is during template
+       generation. See note on templates below.
 
 * `backend` – Definition of back-end package, configuration and service.
     * `package_name` – Name of package. See convention note in [build guide](/docs/build.md#on-naming-conventions-and-versioning).
@@ -97,13 +100,25 @@ Good examples of coin configuration are
         * `mempool_sub_workers` – Number of subworkers for BitcoinType mempool.
         * `block_addresses_to_keep` – Number of blocks that are to be kept in blockaddresses column.
         * `additional_params` – Object of coin-specific params.
+          * Tron-specific endpoint configuration is documented in [Tron Config](/docs/tron-config.md).
+          * Infura alternative EIP-1559 fee provider configuration:
+            * `alternative_estimate_fee` – Set to `infura` to use Infura Gas API fee suggestions instead of native node fee estimation.
+            * `alternative_estimate_fee_params` – JSON string with `url` and `periodSeconds`. `periodSeconds` controls how often Blockbook polls Infura.
+              Cached Infura fees remain usable for 30 failed polling periods, so `periodSeconds: 60` keeps the last successful fees for up to 30 minutes before native fallback.
+          * Ethereum mempool timeout configuration:
+            * `mempoolTxTimeoutHours` – Legacy Blockbook-side EVM mempool retention in whole hours. It is used when `mempoolTxTimeout` is not set and no alternative send transaction provider is enabled.
+            * `mempoolTxTimeout` – Optional Blockbook-side EVM mempool retention as a Go duration string such as `"10m"`; `"0s"` preserves the legacy zero-retention setting. If omitted and an alternative send transaction provider is enabled, Blockbook uses **10 minutes** instead of the legacy hour-based value.
+            * `alternativeMempoolTxTimeout` – Optional alternative-provider transaction cache retention as a positive Go duration string such as `"5m"`. Defaults to **5 minutes** when the alternative send transaction provider is enabled.
           * Hot-address configuration (Blockbook, Ethereum-type indexing):
             * `hot_address_min_contracts` – Minimum number of contracts before hotness tracking applies (default **192**).
             * `hot_address_min_hits` – Lookups within the current block required to mark an address hot (default **3**, clamped to **10**).
             * `hot_address_lru_cache_size` – Max hot addresses kept in the LRU (default **20000**, clamped to **100,000**).
+          * Ethereum trace configuration (Blockbook, Ethereum-type indexing):
+            * `trace_timeout` – Optional per-request timeout passed to `debug_traceBlockByHash` as tracer config, formatted as a Go duration string such as `"20s"`.
           * Address-contracts cache configuration (Blockbook, Ethereum-type indexing):
             * `address_contracts_cache_min_size` – Minimum packed size (bytes) before an addressContracts entry is cached (default **300000**).
-            * `address_contracts_cache_max_bytes` – Cache size cap in bytes; when exceeded, cached entries are flushed early (default **4000000000**).
+            * `address_contracts_cache_max_bytes` – Cache size cap in bytes used while syncing near chain tip; when exceeded, cached entries are flushed early (default **2000000000**).
+            * `address_contracts_cache_bulk_max_bytes` – Cache size cap in bytes used during bulk connect; when exceeded, cached entries are flushed early (default **4000000000**).
 
 * `meta` – Common package metadata.
     * `package_maintainer` – Full name of package maintainer.

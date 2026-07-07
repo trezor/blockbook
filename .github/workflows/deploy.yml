@@ -19,11 +19,15 @@ on:
           - prod
         required: true
         default: dev
-      always_build_backend:
-        description: "Build backend packages for all selected coins; used only when mode=build"
-        type: boolean
+      backend_mode:
+        description: "Backend package build mode; in never mode, backend-only coins still build backend packages"
+        type: choice
+        options:
+          - auto
+          - always
+          - never
         required: true
-        default: false
+        default: auto
       coins:
         description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
         required: true
@@ -47,13 +51,15 @@ jobs:
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Validate branch or tag
-        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+        env:
+          REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -73,18 +79,20 @@ jobs:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
-      e2e_regex: ${{ steps.plan.outputs.e2e_regex }}
+      connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Validate branch or tag
-        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+        env:
+          REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -108,7 +116,7 @@ jobs:
     runs-on: ${{ fromJSON(matrix.labels_json) }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -122,7 +130,10 @@ jobs:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_PACKAGE_ROOT: /opt/blockbook-builds
           BB_BUILD_ENV: ${{ inputs.env }}
-        run: python3 ./.github/scripts/build_packages.py ${{ inputs.always_build_backend && '--always-build-backend' || '' }} ${{ join(matrix.coins, ' ') }}
+          BACKEND_MODE: ${{ inputs.backend_mode }}
+          # Space-separated, allowlisted coin aliases; intentionally word-split below.
+          COINS: ${{ join(matrix.coins, ' ') }}
+        run: python3 ./.github/scripts/build_packages.py --backend-mode "$BACKEND_MODE" $COINS
 
   deploy:
     name: Deploy (${{ matrix.coin }})
@@ -137,7 +148,7 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -146,11 +157,25 @@ jobs:
         with:
           vars_json: ${{ toJSON(vars) }}
 
+      - name: Materialize blockbook runtime env
+        env:
+          BB_ENV: ${{ secrets.BB_RUNTIME_ENV }}
+        run: |
+          if [ -z "$BB_ENV" ]; then
+            echo "BB_RUNTIME_ENV secret not set; leaving any existing /etc/blockbook/blockbook.env untouched"
+            exit 0
+          fi
+          sudo install -d -m 0755 -o root -g root /etc/blockbook
+          # Pre-create restricted so secrets are never briefly world-readable;
+          # tee truncates the existing file without changing its 0600 mode.
+          sudo install -m 0600 -o root -g root /dev/null /etc/blockbook/blockbook.env
+          printf '%s\n' "$BB_ENV" | sudo tee /etc/blockbook/blockbook.env >/dev/null
+
       - name: Deploy blockbook package
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_BUILD_ENV: dev
-        run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}"
+        run: ./contrib/scripts/deploy-bb-and-backend.sh "${{ matrix.coin }}" --force-confnew
 
   wait-for-sync:
     name: Wait For Sync
@@ -164,7 +189,7 @@ jobs:
       SYNC_TIMEOUT_SECONDS: "1800"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -185,10 +210,10 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted]
     env:
       RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
-      E2E_REGEX: ${{ needs.prepare_deploy.outputs.e2e_regex }}
+      CONNECTIVITY_REGEX: ${{ needs.prepare_deploy.outputs.connectivity_regex }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
@@ -197,7 +222,48 @@ jobs:
         with:
           vars_json: ${{ toJSON(vars) }}
 
-      - name: Run e2e tests
+      - name: Run Blockbook connectivity tests
         env:
           BB_BUILD_ENV: dev
-        run: make test-e2e ARGS="-v"
+          CONNECTIVITY_REGEX: ${{ env.CONNECTIVITY_REGEX }}
+          # The freshly deployed nodes are reachable here, so verify backend RPC
+          # connectivity in addition to Blockbook (local runs skip the node checks).
+          BB_TEST_BACKEND_CONNECTIVITY: "1"
+        run: make test-connectivity ARGS="-v"
+
+      - name: Setup Node.js for OpenAPI tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/openapi/package-lock.json
+
+      - name: Cache OpenAPI test dependencies
+        id: openapi-node-modules-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: tests/openapi/node_modules
+          key: openapi-node-modules-node22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/openapi/package-lock.json') }}
+          restore-keys: |
+            openapi-node-modules-node22-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install OpenAPI test dependencies
+        if: steps.openapi-node-modules-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefix tests/openapi --prefer-offline --no-audit --no-fund
+
+      - name: Run OpenAPI API e2e tests
+        env:
+          BB_BUILD_ENV: dev
+          OPENAPI_COINS: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
+          OPENAPI_JUNIT_PATH: ${{ github.workspace }}/tests/openapi/reports/junit.xml
+        run: contrib/tests/run-openapi-tests.sh
+
+      # Upload even on failure: the runner writes the report before exiting non-zero, and a failed
+      # run is exactly when the per-test breakdown (which coin/test failed or skipped) is most useful.
+      - name: Upload OpenAPI e2e report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openapi-e2e-report
+          path: tests/openapi/reports/
+          if-no-files-found: warn

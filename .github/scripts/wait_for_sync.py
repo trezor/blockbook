@@ -69,10 +69,19 @@ def upgrade_http_base_to_https(raw: str) -> str:
 
 
 def resolve_http_base(coin: str) -> str:
-    value = os.environ.get("BB_DEV_API_URL_HTTP_" + coin, "").strip()
-    if not value:
-        fail(f"missing BB_DEV_API_URL_HTTP_{coin} for selected test coin {coin!r}")
-    return normalize_http_base(value)
+    candidates = [coin]
+    if "-" in coin:
+        candidates.append(coin.replace("-", "_"))
+
+    for candidate in candidates:
+        value = os.environ.get("BB_DEV_API_URL_HTTP_" + candidate, "").strip()
+        if value:
+            return normalize_http_base(value)
+
+    expected = ", ".join(f"BB_DEV_API_URL_HTTP_{c}" for c in candidates)
+    fail(
+        f"missing {expected} for selected test coin {coin!r}"
+    )
 
 
 def preview_body(body: bytes, limit: int = 200) -> str:
@@ -82,11 +91,41 @@ def preview_body(body: bytes, limit: int = 200) -> str:
     return text[: limit - 3] + "..."
 
 
-def fetch_status(base_url: str, request_timeout: int) -> tuple[int, bytes]:
+def build_ssl_context() -> tuple[ssl.SSLContext, str]:
+    # Dev Blockbook instances are reached over HTTPS, usually with an
+    # internally-issued (often self-signed) certificate, so chain verification
+    # is opt-in (see security_report_final.md L1):
+    #   * SYNC_CA_FILE=<path>  verify the chain against that internal CA bundle
+    #                          (preferred for internal hosts);
+    #   * SYNC_TLS_INSECURE=0  verify against the system trust store;
+    #   * otherwise            verification is disabled (default; preserves the
+    #                          prior behavior for self-signed dev certs).
+    ca_file = os.environ.get("SYNC_CA_FILE", "").strip()
+    if ca_file:
+        return ssl.create_default_context(cafile=ca_file), f"verified against {ca_file}"
+    insecure = os.environ.get("SYNC_TLS_INSECURE", "1").strip().lower()
+    if insecure not in ("1", "true", "yes", "on"):
+        return ssl.create_default_context(), "verified against the system trust store"
+    return (
+        ssl._create_unverified_context(),
+        "DISABLED (set SYNC_CA_FILE to pin an internal CA)",
+    )
+
+
+def fetch_status(
+    base_url: str, request_timeout: int, context: ssl.SSLContext
+) -> tuple[int, bytes]:
     request = urllib.request.Request(base_url + "/api/status")
-    context = ssl._create_unverified_context()
     with urllib.request.urlopen(request, timeout=request_timeout, context=context) as resp:
         return resp.getcode(), resp.read()
+
+
+def parse_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
 
 
 def parse_sync_state(body: bytes) -> tuple[bool, str]:
@@ -99,10 +138,28 @@ def parse_sync_state(body: bytes) -> tuple[bool, str]:
     if not isinstance(blockbook, dict):
         return False, "response missing blockbook object"
 
+    backend = payload.get("backend")
+    if backend is not None and not isinstance(backend, dict):
+        return False, "response missing backend object"
+
     in_sync = blockbook.get("inSync")
-    best_height = blockbook.get("bestHeight")
-    summary = f"inSync={in_sync!r}, bestHeight={best_height!r}"
-    return in_sync is True, summary
+    initial_sync = blockbook.get("initialSync")
+    best_height = parse_int(blockbook.get("bestHeight"))
+    backend_blocks = parse_int(backend.get("blocks")) if isinstance(backend, dict) else None
+
+    ready = in_sync is True and initial_sync is not True
+    summary = (
+        f"inSync={in_sync!r}, initialSync={initial_sync!r}, "
+        f"bestHeight={best_height!r}, backendBlocks={backend_blocks!r}"
+    )
+
+    if best_height is not None and backend_blocks is not None:
+        height_lag = backend_blocks - best_height
+        summary += f", heightLag={height_lag!r}"
+        if height_lag > 1:
+            ready = False
+
+    return ready, summary
 
 
 def main() -> None:
@@ -110,6 +167,9 @@ def main() -> None:
     timeout_seconds = int(os.environ.get("SYNC_TIMEOUT_SECONDS", "1800"))
     poll_seconds = int(os.environ.get("SYNC_POLL_SECONDS", "10"))
     request_timeout = int(os.environ.get("SYNC_REQUEST_TIMEOUT_SECONDS", "20"))
+
+    ssl_context, tls_mode = build_ssl_context()
+    log(f"TLS certificate verification: {tls_mode}")
 
     pending = {}
     last_seen = {}
@@ -129,7 +189,7 @@ def main() -> None:
         for coin in sorted(list(pending)):
             base_url = pending[coin]
             try:
-                status, body = fetch_status(base_url, request_timeout)
+                status, body = fetch_status(base_url, request_timeout, ssl_context)
             except urllib.error.HTTPError as exc:
                 status = exc.code
                 body = exc.read()
@@ -141,7 +201,7 @@ def main() -> None:
                 base_url = upgrade_http_base_to_https(base_url)
                 pending[coin] = base_url
                 try:
-                    status, body = fetch_status(base_url, request_timeout)
+                    status, body = fetch_status(base_url, request_timeout, ssl_context)
                 except urllib.error.HTTPError as exc:
                     status = exc.code
                     body = exc.read()

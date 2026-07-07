@@ -1,48 +1,70 @@
 BIN_IMAGE = blockbook-build
 DEB_IMAGE = blockbook-build-deb
 PACKAGER = $(shell id -u):$(shell id -g)
-DOCKER_VERSION = $(shell docker version --format '{{.Client.Version}}')
+DOCKER_VERSION = 29.4.3
+DOCKER_SHA256 = bc9734a89d3edd15eeca8620961f6499ba69948814c85d7ac3488e34b3e16d01
 BASE_IMAGE = $$(awk -F= '$$1=="ID" { print $$2 ;}' /etc/os-release):$$(awk -F= '$$1=="VERSION_ID" { print $$2 ;}' /etc/os-release | tr -d '"')
 NO_CACHE = false
 TCMALLOC =
 PORTABLE = 0
 ARGS ?=
-# Forward BB_BUILD_ENV, BB_*_RPC_URL_*, BB_RPC_*, and BB_DEV_API_* overrides into Docker for build/test tooling.
-BB_RPC_ENV := $(shell env | awk -F= '/^BB_BUILD_ENV$$|^BB_(DEV|PROD)_RPC_URL_(HTTP|WS)_|^BB_RPC_(BIND_HOST|ALLOW_IP)_|^BB_DEV_API_URL_(HTTP|WS)_/ {print "-e " $$1}')
+GITCOMMIT ?= $(shell git describe --always --dirty 2>/dev/null)
+# Forward the build-time override variables into Docker for build/test tooling.
+# The prefix set is the single source of truth in build/bb-build-var-prefixes.txt,
+# shared with .github/actions/export-env-vars and build/tools/templates.go.
+# (BB_BUILD_ENV is forwarded separately via -e BB_BUILD_ENV=... on each docker run.)
+BB_VAR_PREFIX_FILE := build/bb-build-var-prefixes.txt
+BB_RPC_ENV := $(shell env | awk -F= 'NR==FNR{line=$$0;gsub(/[[:space:]]/,"",line);if(substr(line,1,3)=="BB_")pfx[line]=1;next}{for(p in pfx){if(index($$1,p)==1){print "-e " $$1;next}}}' $(BB_VAR_PREFIX_FILE) -)
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 
 .PHONY: build build-debug test test-connectivity test-integration test-e2e test-all deb
 
 build: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
 
 build-debug: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build-debug ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build-debug ARGS="$(ARGS)"
 
 test: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test ARGS="$(ARGS)"
 
 test-integration: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
 
-test-e2e: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e E2E_REGEX $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-e2e ARGS="$(ARGS)"
+# `make test-e2e [coin] [url]` — e.g. `make test-e2e bitcoin https://btc.trezor.io`.
+# Extra goals after test-e2e are consumed as positional args (coin, base URL)
+# and turned into OPENAPI_COINS / BB_DEV_API_URL_HTTP_<coin> for the test runner.
+ifeq (test-e2e,$(firstword $(MAKECMDGOALS)))
+  E2E_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  ifneq ($(E2E_ARGS),)
+    # no-op catch-all so make does not try to build the positional args as targets
+%:
+	@:
+  endif
+endif
+
+test-e2e:
+	@if [ ! -x tests/openapi/node_modules/.bin/redocly ]; then npm ci --prefix tests/openapi --prefer-offline --no-audit --no-fund; fi
+	@coin="$(word 1,$(E2E_ARGS))"; url="$(word 2,$(E2E_ARGS))"; \
+	if [ -n "$$coin" ]; then export OPENAPI_COINS="$$coin"; fi; \
+	if [ -n "$$url" ]; then export "BB_DEV_API_URL_HTTP_$$(printf %s "$$coin" | tr - _)=$$url"; fi; \
+	contrib/tests/run-openapi-tests.sh
 
 test-connectivity: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-connectivity ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) -e CONNECTIVITY_REGEX -e BB_TEST_BACKEND_CONNECTIVITY $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-connectivity ARGS="$(ARGS)"
 
 test-all: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) -e BB_TEST_BACKEND_CONNECTIVITY $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
 
 deb-backend-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
 
 deb-blockbook-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
 
 deb-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
 
 deb-blockbook-all: clean-deb $(addprefix deb-blockbook-, $(TARGETS))
 
@@ -64,7 +86,7 @@ build-images: clean-images
 .deb-image: .bin-image
 	@if [ $$(build/tools/image_status.sh $(DEB_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(DEB_IMAGE)..."; \
-		docker build --no-cache=$(NO_CACHE) --build-arg DOCKER_VERSION=$(DOCKER_VERSION) -t $(DEB_IMAGE) build/docker/deb; \
+		docker build --no-cache=$(NO_CACHE) --build-arg DOCKER_VERSION=$(DOCKER_VERSION) --build-arg DOCKER_SHA256=$(DOCKER_SHA256) -t $(DEB_IMAGE) build/docker/deb; \
 	else \
 		echo "Image $(DEB_IMAGE) is up to date"; \
 	fi

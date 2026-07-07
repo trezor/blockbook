@@ -18,6 +18,7 @@
             {{if $chainExtra.DelegateAmountValue}}<span class="ms-2">delegate {{formattedAmountSpan $chainExtra.DelegateAmountValue 6 "TRX" $data ""}}</span>{{else if $chainExtra.DelegateAmount}}<span class="ms-2">delegate {{$chainExtra.DelegateAmount}} sun</span>{{end}}
             {{if $chainExtra.StakeAmountValue}}<span class="ms-2">stake {{formattedAmountSpan $chainExtra.StakeAmountValue 6 "TRX" $data ""}}</span>{{else if $chainExtra.StakeAmount}}<span class="ms-2">stake {{$chainExtra.StakeAmount}} sun</span>{{end}}
             {{if $chainExtra.UnstakeAmountValue}}<span class="ms-2">unstake {{formattedAmountSpan $chainExtra.UnstakeAmountValue 6 "TRX" $data ""}}</span>{{else if $chainExtra.UnstakeAmount}}<span class="ms-2">unstake {{$chainExtra.UnstakeAmount}} sun</span>{{end}}
+            {{if $chainExtra.ClaimedVoteRewardValue}}<span class="ms-2">withdraw reward {{formattedAmountSpan $chainExtra.ClaimedVoteRewardValue 6 "TRX" $data ""}}</span>{{else if $chainExtra.ClaimedVoteReward}}<span class="ms-2">withdraw reward {{$chainExtra.ClaimedVoteReward}} sun</span>{{end}}
         </div>
         {{end}}
     </div>

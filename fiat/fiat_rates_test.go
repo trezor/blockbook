@@ -296,6 +296,77 @@ func TestFiatRates(t *testing.T) {
 	}
 }
 
+func TestFiatRatesTronCurrentTickers_PreserveBase58TokenAddress(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		var mockData string
+
+		switch r.URL.Path {
+		case "/coins/list":
+			mockData, err = getFiatRatesMockData("coinlist_tron")
+		case "/simple/supported_vs_currencies":
+			mockData, err = getFiatRatesMockData("vs_currencies_tron")
+		case "/simple/price":
+			if r.URL.Query().Get("ids") == "tron" {
+				mockData, err = getFiatRatesMockData("simpleprice_base_tron")
+			} else {
+				mockData, err = getFiatRatesMockData("simpleprice_tokens_tron")
+			}
+		default:
+			t.Fatalf("Unknown URL path: %v", r.URL.Path)
+		}
+
+		if err != nil {
+			t.Fatalf("Error loading stub data: %v", err)
+		}
+		fmt.Fprintln(w, mockData)
+	}))
+	defer mockServer.Close()
+
+	config := common.Config{
+		CoinName:        "fakecoin",
+		CoinShortcut:    "TRX",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"url": "` + mockServer.URL + `", "coin": "tron","platformIdentifier": "tron","platformVsCurrency": "trx","periodSeconds": 60}`,
+	}
+
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	fiatRates, err := NewFiatRates(d, &config, nil, nil)
+	if err != nil {
+		t.Fatalf("FiatRates init error: %v", err)
+	}
+	coingeckoDownloader, ok := fiatRates.downloader.(*Coingecko)
+	if !ok {
+		t.Fatalf("unexpected downloader type: %T", fiatRates.downloader)
+	}
+	coingeckoDownloader.tipURL = mockServer.URL
+
+	currentTickers, err := fiatRates.downloader.CurrentTickers()
+	if err != nil {
+		t.Fatalf("Error in CurrentTickers: %v", err)
+	}
+	if currentTickers == nil {
+		t.Fatal("CurrentTickers returned nil value")
+	}
+
+	const tronUSDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+	if got := currentTickers.TokenRates[tronUSDT]; got != 9 {
+		t.Fatalf("unexpected canonical tron token rate: got %v, want %v", got, float32(9))
+	}
+
+	rate, found := currentTickers.GetTokenRate(tronUSDT)
+	if !found {
+		t.Fatalf("expected tron token rate for canonical Base58 address %q", tronUSDT)
+	}
+	if rate != 9 {
+		t.Fatalf("unexpected tron token base rate: got %v, want %v", rate, float32(9))
+	}
+}
+
 func TestGetTickersForTimestamps_UsesGranularityAndFallback(t *testing.T) {
 	fr := &FiatRates{
 		Enabled: true,
@@ -495,6 +566,95 @@ func TestGetTickersForTimestamps_ConcurrentReadersAndWriters(t *testing.T) {
 	}
 	if totalCalls < readers {
 		t.Fatalf("too few reader calls made: got %d", totalCalls)
+	}
+}
+
+// TestLogTickersInfo_ConcurrentWithCacheWriters reproduces the data race between the historical
+// goroutine (which calls logTickersInfo after a daily cycle) and the current goroutine (which
+// replaces the hourly/5-minute ticker maps and their bounds under fr.mux). Before logTickersInfo
+// took the read lock this failed under -race. It mirrors the production split introduced by
+// RunDownloader starting runHistoricalLoop and runCurrentLoop concurrently.
+func TestLogTickersInfo_ConcurrentWithCacheWriters(t *testing.T) {
+	fr := &FiatRates{Enabled: true, provider: "coingecko"}
+
+	const (
+		writers      = 2
+		loggers      = 4
+		testDuration = 300 * time.Millisecond
+		waitTimeout  = 3 * time.Second
+	)
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// writeCacheState mimics the locked sections of setHourlyTickers/setFiveMinutesTickers/
+	// setCurrentTicker: it replaces the map headers and the int64 bounds under fr.mux.
+	writeCacheState := func(counter int64) {
+		fr.mux.Lock()
+		fr.hourlyTickers = map[int64]*common.CurrencyRatesTicker{
+			3600 + counter: {Timestamp: time.Unix(3600+counter, 0).UTC()},
+		}
+		fr.hourlyTickersFrom = 3600 + counter
+		fr.hourlyTickersTo = 7200 + counter
+		fr.fiveMinutesTickers = map[int64]*common.CurrencyRatesTicker{
+			600 + counter: {Timestamp: time.Unix(600+counter, 0).UTC()},
+		}
+		fr.fiveMinutesTickersFrom = 600 + counter
+		fr.fiveMinutesTickersTo = 900 + counter
+		fr.dailyTickers = map[int64]*common.CurrencyRatesTicker{
+			86400 + counter: {Timestamp: time.Unix(86400+counter, 0).UTC()},
+		}
+		fr.dailyTickersFrom = 86400 + counter
+		fr.dailyTickersTo = 172800 + counter
+		fr.mux.Unlock()
+	}
+
+	writeCacheState(0)
+
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(seed int) {
+			defer wg.Done()
+			counter := int64(seed)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				writeCacheState(counter)
+				counter++
+			}
+		}(w)
+	}
+
+	for l := 0; l < loggers; l++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				fr.logTickersInfo()
+			}
+		}()
+	}
+
+	time.Sleep(testDuration)
+	close(stop)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(waitTimeout):
+		t.Fatal("concurrent logTickersInfo/writers did not finish in time")
 	}
 }
 

@@ -3,8 +3,10 @@
 package fiat
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,8 +14,49 @@ import (
 	"testing"
 	"time"
 
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 )
+
+// midnightDaysAgo returns the UTC midnight (a whole-day bucket) n days before today.
+func midnightDaysAgo(n int) time.Time {
+	s := time.Now().UTC().Unix()
+	s -= s % secondsInDay
+	s -= int64(n) * secondsInDay
+	return time.Unix(s, 0).UTC()
+}
+
+// seedDailyTicker stores a single daily ticker directly into the DB for test setup.
+func seedDailyTicker(t *testing.T, d *db.RocksDB, ts time.Time, rates map[string]float32, tokenRates map[string]float32) {
+	t.Helper()
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	ticker := &common.CurrencyRatesTicker{Timestamp: ts, Rates: rates, TokenRates: tokenRates}
+	if err := d.FiatRatesStoreTicker(wb, ticker); err != nil {
+		t.Fatalf("FiatRatesStoreTicker failed: %v", err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatalf("WriteBatch failed: %v", err)
+	}
+}
+
+// roundTripFunc serves canned HTTP responses without binding a loopback port
+// (httptest needs a local listener, which some sandboxes disallow) and lets a
+// test assert the exact number of attempts deterministically.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func stubHTTPResponse(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Header:     make(http.Header),
+	}
+}
+
+const cloudflareBanBody = "<!DOCTYPE html><html><body>The owner of this website has banned you temporarily. error code: 1015</body></html>"
 
 func testCoinGeckoScopedAPIKeyEnvName(prefix string) string {
 	return strings.ToUpper(strings.TrimSpace(prefix)) + coingeckoAPIKeyEnvSuffix
@@ -106,17 +149,17 @@ func TestValidateCoinGeckoAPIKeyEnv(t *testing.T) {
 func TestCanUseBootstrapMax(t *testing.T) {
 	tests := []struct {
 		name        string
-		cg          Coingecko
+		cg          *Coingecko
 		expectAllow bool
 	}{
 		{
 			name:        "bootstrap url allows max",
-			cg:          Coingecko{bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3"},
+			cg:          &Coingecko{bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3"},
 			expectAllow: true,
 		},
 		{
 			name:        "missing bootstrap url does not allow max",
-			cg:          Coingecko{},
+			cg:          &Coingecko{},
 			expectAllow: false,
 		},
 	}
@@ -219,18 +262,59 @@ func TestResolveHistoricalDays(t *testing.T) {
 		}
 	})
 
-	t.Run("recent ticker is tip query", func(t *testing.T) {
+	t.Run("one day gap is the tip", func(t *testing.T) {
 		cg := Coingecko{}
 		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
-			Timestamp: time.Now().AddDate(0, 0, -5),
+			Timestamp: time.Now().AddDate(0, 0, -1),
 		}, false)
-		if !shouldRequest || days != "5" {
+		if !shouldRequest || days != "1" {
 			t.Fatalf("unexpected tip result: days=%q shouldRequest=%v", days, shouldRequest)
 		}
 		if rangeKind != coingeckoRangeTip {
 			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeTip)
 		}
 	})
+
+	t.Run("multi-day gap is backfill", func(t *testing.T) {
+		cg := Coingecko{}
+		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
+			Timestamp: time.Now().AddDate(0, 0, -5),
+		}, false)
+		if !shouldRequest || days != "5" {
+			t.Fatalf("unexpected backfill result: days=%q shouldRequest=%v", days, shouldRequest)
+		}
+		if rangeKind != coingeckoRangeBackfill {
+			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeBackfill)
+		}
+	})
+}
+
+func TestSourceURLForRange(t *testing.T) {
+	cdn := "https://cdn.trezor.io/dynamic/coingecko/api/v3"
+	tip := "https://api.coingecko.com/api/v3"
+	withCDN := &Coingecko{tipURL: tip, bootstrapURL: cdn}
+	noCDN := &Coingecko{tipURL: tip}
+
+	tests := []struct {
+		name      string
+		cg        *Coingecko
+		rangeKind string
+		want      string
+	}{
+		{name: "tip routes to CDN when configured", cg: withCDN, rangeKind: coingeckoRangeTip, want: cdn},
+		{name: "backfill routes to CDN", cg: withCDN, rangeKind: coingeckoRangeBackfill, want: cdn},
+		{name: "capped routes to CDN", cg: withCDN, rangeKind: coingeckoRangeCapped, want: cdn},
+		{name: "historical routes to CDN", cg: withCDN, rangeKind: coingeckoRangeHistorical, want: cdn},
+		{name: "backfill falls back to tip without CDN", cg: noCDN, rangeKind: coingeckoRangeBackfill, want: tip},
+		{name: "tip without CDN stays on free tier", cg: noCDN, rangeKind: coingeckoRangeTip, want: tip},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cg.sourceURLForRange(tt.rangeKind); got != tt.want {
+				t.Fatalf("sourceURLForRange(%q) = %q, want %q", tt.rangeKind, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestUpdateHistoricalTickers_BootstrapStoresSuccessfulCurrenciesEvenWhenSomeFail(t *testing.T) {
@@ -298,38 +382,111 @@ func TestUpdateHistoricalTickers_BootstrapStoresSuccessfulCurrenciesEvenWhenSome
 	}
 }
 
-func TestMakeReq_ThrottleRetriesExhausted(t *testing.T) {
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+func TestUpdateHistoricalTickers_CloudflareBanStopsPassAndStoresPartial(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	// steady state (bootstrap already complete) so the pass targets the tip URL
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	// usd succeeds, eur returns a Cloudflare 1015 ban (served as a 403 HTML page)
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			return stubHTTPResponse(http.StatusOK, `["usd","eur"]`), nil
+		case "/coins/ethereum/market_chart":
+			switch r.URL.Query().Get("vs_currency") {
+			case "usd":
+				return stubHTTPResponse(http.StatusOK, `{"prices":[[1654732800000,1234.5]]}`), nil
+			case "eur":
+				return stubHTTPResponse(http.StatusForbidden, cloudflareBanBody), nil
+			}
+			return stubHTTPResponse(http.StatusBadRequest, "unexpected vs_currency"), nil
+		}
+		return stubHTTPResponse(http.StatusNotFound, "unexpected path "+r.URL.Path), nil
+	})
+
+	cg := &Coingecko{
+		coin:       "ethereum",
+		tipURL:     "http://coingecko.test",
+		httpClient: &http.Client{Transport: transport},
+		db:         d,
+		plan:       coingeckoPlanFree,
+	}
+
+	err := cg.UpdateHistoricalTickers()
+	if err == nil {
+		t.Fatal("expected UpdateHistoricalTickers to return the Cloudflare ban error")
+	}
+	if !isCoingeckoCloudflareBanError(err) {
+		t.Fatalf("expected a Cloudflare ban error, got %v", err)
+	}
+
+	// currencies processed before the ban must be persisted (partial progress)
+	usdTicker, err := d.FiatRatesFindLastTicker("usd", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker usd failed: %v", err)
+	}
+	if usdTicker == nil {
+		t.Fatal("expected usd ticker to be stored before the ban")
+	}
+	// the banned currency (and anything after it) must be absent; resumed next cycle
+	eurTicker, err := d.FiatRatesFindLastTicker("eur", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker eur failed: %v", err)
+	}
+	if eurTicker != nil {
+		t.Fatalf("expected eur ticker to be missing after the ban, got %+v", eurTicker)
+	}
+}
+
+func TestMakeReq_ThrottleRetriesWithoutCap(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
+	// 429 more times than the old retry cap (4) to prove makeReq keeps retrying past it instead
+	// of giving up, then succeeds once the provider stops throttling.
+	throttleHits := 9
 	var requests atomic.Int32
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests.Add(1)
-		http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+		if int(requests.Add(1)) <= throttleHits {
+			http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer mockServer.Close()
 
 	cg := &Coingecko{
 		httpClient: mockServer.Client(),
 	}
-	_, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
-	if err == nil {
-		t.Fatal("expected makeReq to fail after retries are exhausted")
+	resp, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
+	if err != nil {
+		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
-	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
-	if got := int(requests.Load()); got != wantRequests {
-		t.Fatalf("unexpected number of requests: got %d, want %d", got, wantRequests)
+	if string(resp) != `{"ok":true}` {
+		t.Fatalf("unexpected response body: %s", string(resp))
+	}
+	if got, want := int(requests.Load()), throttleHits+1; got != want {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, want)
 	}
 }
 
 func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
 	var requests atomic.Int32
@@ -345,7 +502,7 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 	cg := &Coingecko{
 		httpClient: mockServer.Client(),
 	}
-	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
+	resp, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
 	if err != nil {
 		t.Fatalf("makeReq unexpectedly failed: %v", err)
 	}
@@ -357,7 +514,565 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 	}
 }
 
-func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
+func TestIsCoingeckoCloudflareBanError(t *testing.T) {
+	bans := []error{
+		errors.New("error code: 1015"),
+		errors.New("Error Code: 1015"), // case-insensitive
+		&coingeckoHTTPError{status: http.StatusForbidden, body: cloudflareBanBody},
+		&coingeckoHTTPError{status: http.StatusTooManyRequests, body: "error code: 1015"},
+		fmt.Errorf("wrapped: %w", &coingeckoHTTPError{status: http.StatusForbidden, body: cloudflareBanBody}),
+	}
+	for _, err := range bans {
+		if !isCoingeckoCloudflareBanError(err) {
+			t.Fatalf("expected Cloudflare ban detection for %v", err)
+		}
+	}
+
+	notBans := []error{
+		nil,
+		errors.New("exceeded the rate limit"), // application-level 429, must stay retryable
+		&coingeckoHTTPError{status: http.StatusTooManyRequests, body: `{"msg":"slow down"}`},
+		errors.New("could not find coin with the given id"),
+	}
+	for _, err := range notBans {
+		if isCoingeckoCloudflareBanError(err) {
+			t.Fatalf("did not expect Cloudflare ban detection for %v", err)
+		}
+	}
+}
+
+func TestMakeReq_CloudflareBanFastFails(t *testing.T) {
+	// A genuine 1015 ban must fast-fail immediately (no retry), unlike a plain 429.
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
+	defer func() { coingeckoThrottleBackoff = originalBackoff }()
+
+	var requests atomic.Int32
+	cg := &Coingecko{
+		httpClient: &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				requests.Add(1)
+				return &http.Response{
+					StatusCode: http.StatusForbidden,
+					Body:       io.NopCloser(strings.NewReader(cloudflareBanBody)),
+					Header:     make(http.Header),
+				}, nil
+			}),
+		},
+	}
+
+	resp, err := cg.makeReq(context.Background(), "http://coingecko.invalid/coins/x/market_chart", "market_chart", coingeckoPlanFree, priorityLow)
+	if err == nil {
+		t.Fatal("expected makeReq to fast-fail on a Cloudflare 1015 ban, got nil error")
+	}
+	if !isCoingeckoCloudflareBanError(err) {
+		t.Fatalf("expected a Cloudflare ban error, got %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response on ban, got %q", string(resp))
+	}
+	if got := int(requests.Load()); got != 1 {
+		t.Fatalf("expected exactly 1 request (no retry on a ban), got %d", got)
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{"seconds", "5", 5 * time.Second},
+		{"trimmed seconds", "  10 ", 10 * time.Second},
+		{"zero", "0", 0},
+		{"negative", "-3", 0},
+		{"empty", "", 0},
+		{"garbage", "soon", 0},
+		{"http-date unsupported", "Wed, 10 Jun 2026 11:34:33 GMT", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseRetryAfter(tt.value); got != tt.want {
+				t.Fatalf("parseRetryAfter(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRetryAfterFromError(t *testing.T) {
+	if got := retryAfterFromError(&coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 7 * time.Second}); got != 7*time.Second {
+		t.Fatalf("retryAfterFromError direct = %v, want 7s", got)
+	}
+	// errors.As must unwrap wrapped errors to reach the underlying Retry-After.
+	wrapped := fmt.Errorf("wrapped: %w", &coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 7 * time.Second})
+	if got := retryAfterFromError(wrapped); got != 7*time.Second {
+		t.Fatalf("retryAfterFromError wrapped = %v, want 7s", got)
+	}
+	if got := retryAfterFromError(errors.New("boom")); got != 0 {
+		t.Fatalf("retryAfterFromError non-http = %v, want 0", got)
+	}
+}
+
+func TestThrottleBackoffDelay(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 10 * time.Second
+	defer func() { coingeckoThrottleBackoff = originalBackoff }()
+
+	within := func(t *testing.T, got, base time.Duration) {
+		t.Helper()
+		upper := base + base/5 // base + up to ~20% jitter
+		if got < base || got > upper {
+			t.Fatalf("delay %v out of expected [%v, %v]", got, base, upper)
+		}
+	}
+
+	noRetryAfter := &coingeckoHTTPError{status: http.StatusTooManyRequests}
+	// The fixed backoff is used only when there is no Retry-After hint.
+	within(t, throttleBackoffDelay(noRetryAfter), 10*time.Second)
+	// A Retry-After hint takes priority over the fixed backoff, whether it is longer...
+	within(t, throttleBackoffDelay(&coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 30 * time.Second}), 30*time.Second)
+	// ...or shorter than the fixed backoff.
+	within(t, throttleBackoffDelay(&coingeckoHTTPError{status: http.StatusTooManyRequests, retryAfter: 5 * time.Second}), 5*time.Second)
+
+	// A zeroed backoff with no Retry-After stays instant (keeps the throttle tests fast).
+	coingeckoThrottleBackoff = 0
+	if got := throttleBackoffDelay(noRetryAfter); got != 0 {
+		t.Fatalf("zeroed backoff delay = %v, want 0", got)
+	}
+}
+
+func TestDoReq_ParsesRetryAfter(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header()["retry-after"] = []string{"5"}
+		http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+	}))
+	defer mockServer.Close()
+
+	req, err := http.NewRequest("GET", mockServer.URL, nil)
+	if err != nil {
+		t.Fatalf("NewRequest failed: %v", err)
+	}
+	_, err = doReq(req, mockServer.Client())
+	var httpErr *coingeckoHTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("expected coingeckoHTTPError, got %v", err)
+	}
+	if httpErr.status != http.StatusTooManyRequests {
+		t.Fatalf("unexpected status: %d", httpErr.status)
+	}
+	if httpErr.retryAfter != 5*time.Second {
+		t.Fatalf("unexpected retryAfter: %v, want 5s", httpErr.retryAfter)
+	}
+}
+
+func TestIsCoingeckoThrottleError_StatusCode(t *testing.T) {
+	// A 429 must be detected even when the body has none of the legacy throttle keywords.
+	if !isCoingeckoThrottleError(&coingeckoHTTPError{status: http.StatusTooManyRequests, body: `{"msg":"slow down"}`}) {
+		t.Fatal("expected 429 to be detected as throttle")
+	}
+	if isCoingeckoThrottleError(&coingeckoHTTPError{status: http.StatusInternalServerError, body: "boom"}) {
+		t.Fatal("did not expect 500 to be detected as throttle")
+	}
+	// Legacy keyless-endpoint signal still matches via body text.
+	if !isCoingeckoThrottleError(errors.New("error code: 1015")) {
+		t.Fatal("expected Cloudflare 1015 to be detected as throttle")
+	}
+	// Cloudflare actually returns the 1015 code inside a full HTML page, so the
+	// substring must be detected even when it is not the entire error string.
+	cloudflareBody := "<!DOCTYPE html><html><body>The owner of this website has banned you temporarily. error code: 1015</body></html>"
+	if !isCoingeckoThrottleError(&coingeckoHTTPError{status: http.StatusForbidden, body: cloudflareBody}) {
+		t.Fatal("expected Cloudflare 1015 HTML page to be detected as throttle")
+	}
+	if isCoingeckoThrottleError(nil) {
+		t.Fatal("nil error must not be a throttle error")
+	}
+}
+
+func TestMakeReq_Detects429ByStatus(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
+	defer func() {
+		coingeckoThrottleBackoff = originalBackoff
+	}()
+
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 429 with a body that contains none of the legacy keywords; detection must rely on status.
+		if requests.Add(1) <= 2 {
+			http.Error(w, `{"error":"please slow down"}`, http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{httpClient: mockServer.Client()}
+	resp, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityHigh)
+	if err != nil {
+		t.Fatalf("makeReq unexpectedly failed: %v", err)
+	}
+	if string(resp) != `{"ok":true}` {
+		t.Fatalf("unexpected response body: %s", string(resp))
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+func TestMakeReq_PacesRequests(t *testing.T) {
+	interval := 60 * time.Millisecond
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient:             mockServer.Client(),
+		minHttpRequestInterval: interval,
+	}
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+			t.Fatalf("makeReq failed on call %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+	// 3 requests => 2 enforced gaps of at least `interval` each.
+	if minElapsed := 2 * interval; elapsed < minElapsed {
+		t.Fatalf("expected pacing to take at least %v across 3 requests, took %v", minElapsed, elapsed)
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+// The bootstrap CDN has no CoinGecko rate limit, so requests to it must use the light
+// bootstrap spacing instead of the (potentially multi-second) plan pacing. Otherwise the
+// free-plan 6s spacing would stretch the initial bootstrap from minutes to hours.
+func TestMakeReq_BootstrapCDNBypassesPlanPacing(t *testing.T) {
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient:               mockServer.Client(),
+		minHttpRequestInterval:   10 * time.Second, // plan pacing, must NOT apply to the CDN
+		bootstrapRequestInterval: 0,
+		bootstrapURL:             mockServer.URL,
+	}
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		if _, err := cg.makeReq(context.Background(), mockServer.URL+"/coins/list", "coins/list", coingeckoPlanFree, priorityLow); err != nil {
+			t.Fatalf("makeReq failed on call %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+	// With plan pacing applied this would take >= 20s; the CDN path must be far faster.
+	if elapsed > time.Second {
+		t.Fatalf("bootstrap CDN requests were paced at the plan interval: 3 requests took %v", elapsed)
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+// A configured bootstrap URL must not relax pacing for the rate-limited CoinGecko API
+// hosts: only requests whose URL actually targets the CDN get the light spacing.
+func TestMakeReq_NonBootstrapURLStillPacedWhenBootstrapConfigured(t *testing.T) {
+	interval := 60 * time.Millisecond
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient:               mockServer.Client(),
+		minHttpRequestInterval:   interval,
+		bootstrapRequestInterval: 0,
+		bootstrapURL:             "https://cdn.trezor.io/dynamic/coingecko/api/v3", // different host than mockServer
+	}
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+			t.Fatalf("makeReq failed on call %d: %v", i, err)
+		}
+	}
+	elapsed := time.Since(start)
+	if minElapsed := 2 * interval; elapsed < minElapsed {
+		t.Fatalf("expected pacing to take at least %v across 3 requests, took %v", minElapsed, elapsed)
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
+	}
+}
+
+// cdn.trezor.io's Cloudflare bot protection rejects the default "Go-http-client/1.1"
+// user-agent with a 403 challenge page, which stalled startup fiat-rate downloads. Every
+// request must carry an explicit Blockbook user-agent so it is not mistaken for blocked
+// automation traffic.
+func TestMakeReq_SendsBlockbookUserAgent(t *testing.T) {
+	var gotUserAgent string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUserAgent = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{httpClient: mockServer.Client()}
+	if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+		t.Fatalf("makeReq failed: %v", err)
+	}
+
+	if want := coingeckoUserAgent(); gotUserAgent != want {
+		t.Fatalf("unexpected User-Agent: got %q, want %q", gotUserAgent, want)
+	}
+	if !strings.HasPrefix(gotUserAgent, "blockbook/") {
+		t.Fatalf("User-Agent %q is not Blockbook-identifying", gotUserAgent)
+	}
+	// The default Go user-agent is exactly what the CDN's bot filter blocks, so guard against
+	// ever regressing back to it (an empty header lets net/http fall back to that default).
+	if gotUserAgent == "" || strings.HasPrefix(strings.ToLower(gotUserAgent), "go-http-client") {
+		t.Fatalf("User-Agent %q would be blocked by the CDN bot filter", gotUserAgent)
+	}
+}
+
+func TestMarkThrottled_ExtendsNeverShortens(t *testing.T) {
+	cg := &Coingecko{}
+	cg.markThrottled(time.Minute)
+	first := cg.throttledUntil
+	if first.IsZero() {
+		t.Fatal("markThrottled did not open the throttle window")
+	}
+	// a shorter delay must not shorten the already open window
+	cg.markThrottled(time.Second)
+	if !cg.throttledUntil.Equal(first) {
+		t.Fatalf("shorter delay moved the window: %v -> %v", first, cg.throttledUntil)
+	}
+	// a longer delay extends it
+	cg.markThrottled(2 * time.Minute)
+	if !cg.throttledUntil.After(first) {
+		t.Fatalf("longer delay did not extend the window past %v: %v", first, cg.throttledUntil)
+	}
+}
+
+func TestWaitForRequestSlot_HighPriorityWaitsOutWindowButIsNotParked(t *testing.T) {
+	cg := &Coingecko{
+		throttledUntil:       time.Now().Add(100 * time.Millisecond),
+		highPriorityInFlight: 1, // a concurrent high-priority request must not park another one
+	}
+	until := cg.throttledUntil
+	done := make(chan time.Time, 1)
+	go func() {
+		cg.waitForRequestSlot(context.Background(), priorityHigh, cg.minHttpRequestInterval)
+		done <- time.Now()
+	}()
+	select {
+	case returnedAt := <-done:
+		if returnedAt.Before(until) {
+			t.Fatalf("high priority request fired at %v, before the throttle window cleared at %v", returnedAt, until)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("high priority request was parked; it must only wait out the throttle window")
+	}
+}
+
+func TestWaitForRequestSlot_LowPriorityParksUntilHighPriorityCompletes(t *testing.T) {
+	originalPoll := coingeckoLowPriorityPollInterval
+	coingeckoLowPriorityPollInterval = time.Millisecond
+	defer func() { coingeckoLowPriorityPollInterval = originalPoll }()
+
+	cg := &Coingecko{
+		throttledUntil:       time.Now().Add(10 * time.Second),
+		highPriorityInFlight: 1,
+	}
+	done := make(chan struct{})
+	go func() {
+		cg.waitForRequestSlot(context.Background(), priorityLow, cg.minHttpRequestInterval)
+		close(done)
+	}()
+	// while throttled with a high-priority request in flight, low priority must stay parked
+	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("low priority request fired while throttled with a high priority request in flight")
+	default:
+	}
+	// once the high-priority request completes and the window clears, low priority proceeds
+	cg.reqMu.Lock()
+	cg.highPriorityInFlight = 0
+	cg.throttledUntil = time.Now()
+	cg.reqMu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("low priority request stayed parked after the gate cleared")
+	}
+}
+
+func TestWaitForRequestSlot_RechecksWindowExtendedDuringSleep(t *testing.T) {
+	cg := &Coingecko{}
+	cg.markThrottled(200 * time.Millisecond)
+	done := make(chan time.Time, 1)
+	go func() {
+		cg.waitForRequestSlot(context.Background(), priorityHigh, cg.minHttpRequestInterval)
+		done <- time.Now()
+	}()
+	// wait until the goroutine reserved its slot inside the first window
+	for {
+		cg.reqMu.Lock()
+		reserved := !cg.lastRequestAt.IsZero()
+		cg.reqMu.Unlock()
+		if reserved {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// extend the window while the goroutine sleeps on its already-reserved slot
+	cg.markThrottled(500 * time.Millisecond)
+	cg.reqMu.Lock()
+	extendedUntil := cg.throttledUntil
+	cg.reqMu.Unlock()
+	returnedAt := <-done
+	if returnedAt.Before(extendedUntil) {
+		t.Fatalf("request fired at %v, inside the extended throttle window ending %v", returnedAt, extendedUntil)
+	}
+}
+
+// A 429 received by one request opens a throttle window that a second, unrelated request
+// waits out as well.
+func TestMakeReq_SharedThrottleWindow(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 100 * time.Millisecond
+	defer func() { coingeckoThrottleBackoff = originalBackoff }()
+
+	var requests atomic.Int32
+	var windowUntil atomic.Int64 // unix nanos of the shared window once opened
+	var violations atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if until := windowUntil.Load(); until != 0 && time.Now().UnixNano() < until {
+			violations.Add(1)
+		}
+		if requests.Add(1) == 1 {
+			http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{httpClient: mockServer.Client()}
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := cg.makeReq(context.Background(), mockServer.URL, "market_chart", coingeckoPlanFree, priorityLow)
+		firstDone <- err
+	}()
+	// wait until the first request's 429 opened the shared window
+	for {
+		cg.reqMu.Lock()
+		until := cg.throttledUntil
+		cg.reqMu.Unlock()
+		if !until.IsZero() {
+			windowUntil.Store(until.UnixNano())
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// a second request on another endpoint must wait out the shared window too
+	if _, err := cg.makeReq(context.Background(), mockServer.URL, "simple/price", coingeckoPlanFree, priorityHigh); err != nil {
+		t.Fatalf("second makeReq failed: %v", err)
+	}
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first makeReq failed: %v", err)
+	}
+	if violations.Load() != 0 {
+		t.Fatal("a request reached the server inside the shared throttle window")
+	}
+}
+
+// While a high-priority request keeps retrying through a 429 storm, a concurrent
+// low-priority request stays parked and reaches the server only after the high-priority
+// request succeeded.
+func TestMakeReq_LowPriorityYieldsToHighDuringThrottle(t *testing.T) {
+	originalBackoff := coingeckoThrottleBackoff
+	originalPoll := coingeckoLowPriorityPollInterval
+	coingeckoThrottleBackoff = 60 * time.Millisecond
+	coingeckoLowPriorityPollInterval = time.Millisecond
+	defer func() {
+		coingeckoThrottleBackoff = originalBackoff
+		coingeckoLowPriorityPollInterval = originalPoll
+	}()
+
+	var highThrottleHits atomic.Int32
+	var highSucceededAt atomic.Int64
+	var lowArrivedAt atomic.Int64
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/high":
+			if highThrottleHits.Add(1) <= 2 {
+				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+				return
+			}
+			highSucceededAt.Store(time.Now().UnixNano())
+		case "/low":
+			lowArrivedAt.Store(time.Now().UnixNano())
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient: mockServer.Client(),
+		// spacing larger than the loopback round trip keeps an unparked low-priority
+		// request from firing in the instant between a window expiring and the retrying
+		// high-priority request extending it
+		minHttpRequestInterval: 20 * time.Millisecond,
+	}
+	highDone := make(chan error, 1)
+	go func() {
+		_, err := cg.makeReq(context.Background(), mockServer.URL+"/high", "market_chart", coingeckoPlanFree, priorityHigh)
+		highDone <- err
+	}()
+	// wait until the high-priority request opened the window (it stays in flight while retrying)
+	for {
+		cg.reqMu.Lock()
+		opened := !cg.throttledUntil.IsZero()
+		cg.reqMu.Unlock()
+		if opened {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	lowDone := make(chan error, 1)
+	go func() {
+		_, err := cg.makeReq(context.Background(), mockServer.URL+"/low", "simple/price", coingeckoPlanFree, priorityLow)
+		lowDone <- err
+	}()
+	if err := <-highDone; err != nil {
+		t.Fatalf("high priority makeReq failed: %v", err)
+	}
+	if err := <-lowDone; err != nil {
+		t.Fatalf("low priority makeReq failed: %v", err)
+	}
+	high, low := highSucceededAt.Load(), lowArrivedAt.Load()
+	if high == 0 || low == 0 {
+		t.Fatal("expected both endpoints to be hit")
+	}
+	if low < high {
+		t.Fatalf("low priority request reached the server %v before the high priority request succeeded", time.Duration(high-low))
+	}
+}
+
+// Throttled requests are retried without an attempt cap, so a provider-wide 429 no longer ends
+// the pass: makeReq keeps backing off until the request succeeds, then the pass proceeds through
+// the remaining currencies. Every currency is eventually fetched and stored.
+func TestUpdateHistoricalTickers_RetriesThrottleUntilSuccess(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -369,21 +1084,14 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
 	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
-	originalVsCurrencies := vsCurrencies
-	originalPlatformIds := platformIds
-	originalPlatformIdsToTokens := platformIdsToTokens
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		vsCurrencies = originalVsCurrencies
-		platformIds = originalPlatformIds
-		platformIdsToTokens = originalPlatformIdsToTokens
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
-	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
-	}()
-
+	// Throttle usd more times than the old retry cap (4) to prove the attempt cap is gone.
+	throttleHits := 7
 	var usdRequests atomic.Int32
 	var eurRequests atomic.Int32
 
@@ -394,8 +1102,11 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
 		case "/coins/ethereum/market_chart":
 			switch r.URL.Query().Get("vs_currency") {
 			case "usd":
-				usdRequests.Add(1)
-				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+				if int(usdRequests.Add(1)) <= throttleHits {
+					http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+					return
+				}
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1111.1]]}`))
 			case "eur":
 				eurRequests.Add(1)
 				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
@@ -417,24 +1128,115 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
 		plan:         coingeckoPlanFree,
 	}
 
-	err := cg.UpdateHistoricalTickers()
-	if err == nil {
-		t.Fatal("expected throttle exhaustion error")
-	}
-	if !isCoingeckoThrottleRetriesExhaustedError(err) {
-		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	if err := cg.UpdateHistoricalTickers(); err != nil {
+		t.Fatalf("UpdateHistoricalTickers returned error: %v", err)
 	}
 
-	wantUSDRequests := 1 + len(coingeckoThrottleRetryBackoff)
-	if got := int(usdRequests.Load()); got != wantUSDRequests {
-		t.Fatalf("unexpected usd request count: got %d, want %d", got, wantUSDRequests)
+	// usd is retried past the old attempt cap until it finally succeeds.
+	if got, want := int(usdRequests.Load()), throttleHits+1; got != want {
+		t.Fatalf("unexpected usd request count: got %d, want %d", got, want)
 	}
-	if got := int(eurRequests.Load()); got != 0 {
-		t.Fatalf("expected eur request count 0 after throttle exhaustion, got %d", got)
+	// once usd succeeds the pass continues to eur (no break on throttle anymore).
+	if got := int(eurRequests.Load()); got != 1 {
+		t.Fatalf("unexpected eur request count: got %d, want 1", got)
+	}
+	for _, cur := range []string{"usd", "eur"} {
+		ticker, err := d.FiatRatesFindLastTicker(cur, "")
+		if err != nil {
+			t.Fatalf("FiatRatesFindLastTicker %s failed: %v", cur, err)
+		}
+		if ticker == nil {
+			t.Fatalf("expected %s ticker to be stored after retry-until-success", cur)
+		}
 	}
 }
 
-func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
+// Even during bootstrap, throttled requests are retried without an attempt cap: the pass waits
+// out the provider-wide 429 instead of failing the bootstrap cycle. Once the requests succeed,
+// every currency is fetched and the bootstrap pass completes without error.
+func TestUpdateHistoricalTickers_RetriesThrottleUntilSuccessDuringBootstrap(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(false); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
+	defer func() {
+		coingeckoThrottleBackoff = originalBackoff
+	}()
+
+	// Throttle usd more times than the old retry cap (4) to prove the attempt cap is gone.
+	throttleHits := 7
+	var usdRequests atomic.Int32
+	var eurRequests atomic.Int32
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd","eur"]`))
+		case "/coins/ethereum/market_chart":
+			switch r.URL.Query().Get("vs_currency") {
+			case "usd":
+				if int(usdRequests.Add(1)) <= throttleHits {
+					http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+					return
+				}
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1111.1]]}`))
+			case "eur":
+				eurRequests.Add(1)
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
+			default:
+				http.Error(w, "unexpected vs_currency", http.StatusBadRequest)
+			}
+		default:
+			http.Error(w, fmt.Sprintf("unexpected path %s", r.URL.Path), http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	if err := cg.UpdateHistoricalTickers(); err != nil {
+		t.Fatalf("UpdateHistoricalTickers returned error during bootstrap: %v", err)
+	}
+
+	// usd is retried past the old attempt cap until it finally succeeds.
+	if got, want := int(usdRequests.Load()), throttleHits+1; got != want {
+		t.Fatalf("unexpected usd request count: got %d, want %d", got, want)
+	}
+	// once usd succeeds the bootstrap pass continues to eur (no break on throttle anymore).
+	if got := int(eurRequests.Load()); got != 1 {
+		t.Fatalf("unexpected eur request count: got %d, want 1", got)
+	}
+	for _, cur := range []string{"usd", "eur"} {
+		ticker, err := d.FiatRatesFindLastTicker(cur, "")
+		if err != nil {
+			t.Fatalf("FiatRatesFindLastTicker %s failed: %v", cur, err)
+		}
+		if ticker == nil {
+			t.Fatalf("expected %s ticker to be stored after retry-until-success", cur)
+		}
+	}
+}
+
+// Throttled requests are retried without an attempt cap, so a provider-wide 429 no longer stops
+// the token pass after the first throttled token: makeReq waits out the 429 until the request
+// succeeds, and the pass then continues through the remaining tokens.
+func TestUpdateHistoricalTokenTickers_RetriesThrottleUntilSuccess(t *testing.T) {
 	config := common.Config{
 		CoinName: "fakecoin",
 	}
@@ -446,21 +1248,14 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
 	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
-	originalVsCurrencies := vsCurrencies
-	originalPlatformIds := platformIds
-	originalPlatformIdsToTokens := platformIdsToTokens
+	originalBackoff := coingeckoThrottleBackoff
+	coingeckoThrottleBackoff = 0
 	defer func() {
-		vsCurrencies = originalVsCurrencies
-		platformIds = originalPlatformIds
-		platformIdsToTokens = originalPlatformIdsToTokens
+		coingeckoThrottleBackoff = originalBackoff
 	}()
 
-	originalBackoff := coingeckoThrottleRetryBackoff
-	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
-	defer func() {
-		coingeckoThrottleRetryBackoff = originalBackoff
-	}()
-
+	// Throttle the token requests more times than the old retry cap (4) to prove the cap is gone.
+	throttleHits := 7
 	var marketChartRequests atomic.Int32
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -471,8 +1266,11 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
 				{"id":"token-b","symbol":"b","name":"B","platforms":{"ethereum":"0xb"}}
 			]`))
 		case "/coins/token-a/market_chart", "/coins/token-b/market_chart":
-			marketChartRequests.Add(1)
-			http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			if int(marketChartRequests.Add(1)) <= throttleHits {
+				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+				return
+			}
+			_, _ = w.Write([]byte(`{"prices":[[1654732800000,1.5]]}`))
 		default:
 			http.Error(w, fmt.Sprintf("unexpected path %s", r.URL.Path), http.StatusNotFound)
 		}
@@ -490,17 +1288,14 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
 		plan:               coingeckoPlanFree,
 	}
 
-	err := cg.UpdateHistoricalTokenTickers()
-	if err == nil {
-		t.Fatal("expected throttle exhaustion error")
-	}
-	if !isCoingeckoThrottleRetriesExhaustedError(err) {
-		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	if err := cg.UpdateHistoricalTokenTickers(); err != nil {
+		t.Fatalf("UpdateHistoricalTokenTickers returned error: %v", err)
 	}
 
-	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
-	if got := int(marketChartRequests.Load()); got != wantRequests {
-		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, wantRequests)
+	// The first token absorbs all the throttles (retried past the old cap until it succeeds); the
+	// remaining token then succeeds on its first request. No token is dropped on a 429.
+	if got, want := int(marketChartRequests.Load()), throttleHits+2; got != want {
+		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, want)
 	}
 }
 
@@ -514,5 +1309,474 @@ func TestUpdateHistoricalTokenTickers_ReturnsInProgressError(t *testing.T) {
 	}
 	if !errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetHighGranularityTickers_NotEnoughPricePoints(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// return only 1 price point
+		_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:       "ethereum",
+		tipURL:     mockServer.URL,
+		httpClient: mockServer.Client(),
+		plan:       coingeckoPlanFree,
+	}
+
+	tickers, err := cg.HourlyTickers()
+	if err == nil {
+		t.Fatal("expected error for not enough price points")
+	}
+	if !strings.Contains(err.Error(), "not enough price points") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if tickers != nil {
+		t.Fatal("expected nil tickers")
+	}
+}
+
+// Reconciliation fills an interior missing day (no record at all) for both the base coin and
+// a token, fetching from the CDN, and must touch only the missing day (existing days intact).
+func TestReconcileHistoricalRates_RepairsInteriorHole(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	// present: d2, d4, d5 (all older than the tip); d3 is an interior hole (no record).
+	d2, d3, d4, d5 := midnightDaysAgo(2), midnightDaysAgo(3), midnightDaysAgo(4), midnightDaysAgo(5)
+	seedDailyTicker(t, d, d2, map[string]float32{"usd": 222}, nil)
+	seedDailyTicker(t, d, d4, map[string]float32{"usd": 444}, nil)
+	seedDailyTicker(t, d, d5, map[string]float32{"usd": 555}, nil)
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/list":
+			_, _ = w.Write([]byte(`[{"id":"ethereum","symbol":"eth","name":"Ethereum","platforms":{}},{"id":"token-a","symbol":"ta","name":"Token A","platforms":{"ethereum":"0xabc"}}]`))
+		case "/coins/ethereum/market_chart":
+			// d2 returns 999 to prove the present day is not touched (only d3 is wanted).
+			body := fmt.Sprintf(`{"prices":[[%d,999],[%d,333],[%d,888]]}`,
+				d2.Unix()*1000, d3.Unix()*1000, d4.Unix()*1000)
+			_, _ = w.Write([]byte(body))
+		case "/coins/token-a/market_chart":
+			body := fmt.Sprintf(`{"prices":[[%d,0.5]]}`, d3.Unix()*1000)
+			_, _ = w.Write([]byte(body))
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:               "ethereum",
+		platformIdentifier: "ethereum",
+		platformVsCurrency: "eth",
+		bootstrapURL:       mockServer.URL,
+		tipURL:             mockServer.URL,
+		httpClient:         mockServer.Client(),
+		db:                 d,
+		plan:               coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 2 { // usd + token on d3
+		t.Fatalf("unexpected filled points: got %d, want 2", filled)
+	}
+
+	t3, err := d.FiatRatesGetTicker(&d3)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d3 failed: %v", err)
+	}
+	if t3 == nil || t3.Rates["usd"] != 333 {
+		t.Fatalf("interior hole base rate not repaired: got %+v, want usd=333", t3)
+	}
+	if t3.TokenRates["0xabc"] != 0.5 {
+		t.Fatalf("interior hole token rate not repaired: got %+v, want 0xabc=0.5", t3.TokenRates)
+	}
+	t2, err := d.FiatRatesGetTicker(&d2)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d2 failed: %v", err)
+	}
+	if t2 == nil || t2.Rates["usd"] != 222 {
+		t.Fatalf("present day was modified: got %+v, want usd=222", t2)
+	}
+}
+
+// A healthy DB (no missing days in the window) must make no network requests at all.
+func TestReconcileHistoricalRates_HealthyMakesNoRequests(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// continuous coverage from d5 to d2 (the last reconcilable day) -> no gaps
+	for _, n := range []int{2, 3, 4, 5} {
+		seedDailyTicker(t, d, midnightDaysAgo(n), map[string]float32{"usd": 100}, nil)
+	}
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("healthy DB must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("healthy DB should fill nothing, got %d", filled)
+	}
+}
+
+// A young DB whose only records are in the tip zone (today/yesterday) is not a gap and must
+// not be flagged or fetched.
+func TestReconcileHistoricalRates_YoungDBMakesNoRequests(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// only tip-zone records exist (today, yesterday) -> nothing older to reconcile
+	seedDailyTicker(t, d, midnightDaysAgo(0), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(1), map[string]float32{"usd": 100}, nil)
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("young DB must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("young DB should fill nothing, got %d", filled)
+	}
+}
+
+// When the number of missing days reaches the guard it is flagged as gap_too_large and
+// nothing is fetched (not even the series enumeration), avoiding a backfill storm on a
+// probably-broken DB.
+func TestReconcileHistoricalRates_GapTooLargeSkipsFetch(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// only two records far apart -> ~197 missing days between them, well over the 90 guard
+	seedDailyTicker(t, d, midnightDaysAgo(2), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(200), map[string]float32{"usd": 100}, nil)
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("gap_too_large must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("gap_too_large should fill nothing, got %d", filled)
+	}
+}
+
+// Reconciliation is a no-op when no CDN URL is configured (must not hit any endpoint).
+func TestReconcileHistoricalRates_NoCDNIsNoOp(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("no HTTP request expected without a CDN URL, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:       "ethereum",
+		tipURL:     "http://coingecko.test",
+		httpClient: &http.Client{Transport: called},
+		db:         d,
+		plan:       coingeckoPlanFree,
+	}
+
+	if _, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90); err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+}
+
+// An already-cancelled context (shutdown or budget timeout) aborts the pass without issuing
+// any request, even when there is a genuine (sub-guard) gap to repair.
+func TestReconcileHistoricalRates_CancelledContextAbortsBeforeFetch(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// a real interior hole at d3 (present d1,d2,d4,d5) -> work to do, but well under the guard
+	seedDailyTicker(t, d, midnightDaysAgo(5), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(4), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(2), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(1), map[string]float32{"usd": 100}, nil)
+
+	called := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("shutdown before backfill must not issue requests, got %s", r.URL)
+		return stubHTTPResponse(http.StatusNotFound, ""), nil
+	})
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3",
+		tipURL:       "http://coingecko.test",
+		httpClient:   &http.Client{Transport: called},
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	// an already-cancelled context simulates an in-flight shutdown / elapsed budget
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	filled, err := cg.ReconcileHistoricalRates(ctx, 365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("aborted reconciliation should fill nothing, got %d", filled)
+	}
+}
+
+// When the wall-clock budget elapses while a backfill fetch is in flight, the pass aborts
+// (without error) instead of stalling startup: metadata succeeds fast, the first chart fetch
+// blocks until the budget cancels the request context.
+func TestReconcileHistoricalRates_BudgetExhaustedAbortsMidBackfill(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// a real interior hole at d3 -> work to do, well under the gap guard
+	seedDailyTicker(t, d, midnightDaysAgo(2), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(4), map[string]float32{"usd": 100}, nil)
+	seedDailyTicker(t, d, midnightDaysAgo(5), map[string]float32{"usd": 100}, nil)
+
+	var chartReqs int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd","eur"]`)) // metadata returns immediately
+		case "/coins/ethereum/market_chart":
+			atomic.AddInt32(&chartReqs, 1)
+			<-r.Context().Done() // block until the reconcile budget cancels the request
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	filled, err := cg.ReconcileHistoricalRates(ctx, 365, 90)
+	if err != nil {
+		t.Fatalf("budget-exhausted reconciliation must not return an error, got: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("a fetch cut short by the budget should fill nothing, got %d", filled)
+	}
+	if atomic.LoadInt32(&chartReqs) == 0 {
+		t.Fatal("expected the backfill loop to attempt at least one market_chart fetch before the budget expired")
+	}
+}
+
+// A budget/shutdown abort during the token phase must NOT persist the base-only day records
+// already accumulated by the (finished) base phase. If it did, stage-1's whole-day key-only scan
+// would treat those days as "present" next startup and never reconcile their token rates again.
+// The aborted pass must discard everything so the gap is re-reconciled in full later. (The same
+// discard path covers a base-phase abort, which would persist partial base rates.)
+func TestReconcileHistoricalRates_TokenPhaseAbortDiscardsBaseOnly(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// present d2, d4, d5; d3 is the interior hole to repair.
+	d2, d3, d4, d5 := midnightDaysAgo(2), midnightDaysAgo(3), midnightDaysAgo(4), midnightDaysAgo(5)
+	seedDailyTicker(t, d, d2, map[string]float32{"usd": 222}, nil)
+	seedDailyTicker(t, d, d4, map[string]float32{"usd": 444}, nil)
+	seedDailyTicker(t, d, d5, map[string]float32{"usd": 555}, nil)
+
+	var baseFetched int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/list":
+			_, _ = w.Write([]byte(`[{"id":"ethereum","symbol":"eth","name":"Ethereum","platforms":{}},{"id":"token-a","symbol":"ta","name":"Token A","platforms":{"ethereum":"0xabc"}}]`))
+		case "/coins/ethereum/market_chart":
+			// base phase succeeds, filling d3's base rate into the shared map
+			atomic.AddInt32(&baseFetched, 1)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"prices":[[%d,333]]}`, d3.Unix()*1000)))
+		case "/coins/token-a/market_chart":
+			// token phase blocks until the budget cancels the request -> abort mid-token-phase
+			<-r.Context().Done()
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:               "ethereum",
+		platformIdentifier: "ethereum",
+		platformVsCurrency: "eth",
+		bootstrapURL:       mockServer.URL,
+		tipURL:             mockServer.URL,
+		httpClient:         mockServer.Client(),
+		db:                 d,
+		plan:               coingeckoPlanFree,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	filled, err := cg.ReconcileHistoricalRates(ctx, 365, 90)
+	if err != nil {
+		t.Fatalf("token-phase abort must not return an error, got: %v", err)
+	}
+	if filled != 0 {
+		t.Fatalf("aborted reconciliation must persist nothing, got filled=%d", filled)
+	}
+	if atomic.LoadInt32(&baseFetched) == 0 {
+		t.Fatal("expected the base phase to run (and fill d3) before the abort")
+	}
+	// Key assertion: the base-only d3 record must NOT have been persisted, so d3 stays a hole and
+	// is re-reconciled later instead of being silently frozen without its token rate.
+	t3, err := d.FiatRatesGetTicker(&d3)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d3 failed: %v", err)
+	}
+	if t3 != nil {
+		t.Fatalf("base-only day was persisted on abort (token rates would be lost forever): %+v", t3)
+	}
+	// present days must remain untouched
+	t2, err := d.FiatRatesGetTicker(&d2)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d2 failed: %v", err)
+	}
+	if t2 == nil || t2.Rates["usd"] != 222 {
+		t.Fatalf("present day was modified: got %+v, want usd=222", t2)
+	}
+}
+
+// A coin without tokens reconciles base rates only; a clean pass must still persist them
+// (base-only is "complete" when no tokens are configured -- the discard-on-abort guard must not
+// over-prune the normal completion path).
+func TestReconcileHistoricalRates_NoTokensPersistsBaseOnly(t *testing.T) {
+	config := common.Config{CoinName: "fakecoin"}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	// present d2, d4, d5; d3 is the interior hole to repair.
+	d2, d3, d4, d5 := midnightDaysAgo(2), midnightDaysAgo(3), midnightDaysAgo(4), midnightDaysAgo(5)
+	seedDailyTicker(t, d, d2, map[string]float32{"usd": 222}, nil)
+	seedDailyTicker(t, d, d4, map[string]float32{"usd": 444}, nil)
+	seedDailyTicker(t, d, d5, map[string]float32{"usd": 555}, nil)
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd"]`))
+		case "/coins/ethereum/market_chart":
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"prices":[[%d,333]]}`, d3.Unix()*1000)))
+		default:
+			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	filled, err := cg.ReconcileHistoricalRates(context.Background(), 365, 90)
+	if err != nil {
+		t.Fatalf("ReconcileHistoricalRates failed: %v", err)
+	}
+	if filled != 1 {
+		t.Fatalf("unexpected filled points: got %d, want 1", filled)
+	}
+	t3, err := d.FiatRatesGetTicker(&d3)
+	if err != nil {
+		t.Fatalf("FiatRatesGetTicker d3 failed: %v", err)
+	}
+	if t3 == nil || t3.Rates["usd"] != 333 {
+		t.Fatalf("interior hole base rate not repaired: got %+v, want usd=333", t3)
 	}
 }

@@ -22,6 +22,8 @@ const txInput = 1
 const txOutput = 2
 
 const xpubCacheExpirationSeconds = 3600
+const xpubCacheMaxEntries = 128
+const maxXpubAddressDerivations = (maxAddressesGap + 1) * 2
 
 var cachedXpubs map[string]xpubData
 var cachedXpubsMux sync.Mutex
@@ -67,6 +69,7 @@ type xpubData struct {
 	txCountEstimate uint32
 	sentSat         big.Int
 	balanceSat      big.Int
+	mergedTxids     xpubTxids
 	addresses       [][]xpubAddress
 }
 
@@ -85,9 +88,18 @@ func (w *Worker) initXpubCache() {
 }
 
 func (w *Worker) evictXpubCacheItems() {
+	now := time.Now().Unix()
 	cachedXpubsMux.Lock()
-	defer cachedXpubsMux.Unlock()
-	threshold := time.Now().Unix() - xpubCacheExpirationSeconds
+	count := evictXpubCacheItemsLocked(now)
+	cacheSize := len(cachedXpubs)
+	cachedXpubsMux.Unlock()
+
+	w.metrics.XPubCacheSize.Set(float64(cacheSize))
+	glog.Info("Evicted ", count, " items from xpub cache, cache size ", cacheSize)
+}
+
+func evictXpubCacheItemsLocked(now int64) int {
+	threshold := now - xpubCacheExpirationSeconds
 	count := 0
 	for k, v := range cachedXpubs {
 		if v.accessed < threshold {
@@ -95,8 +107,43 @@ func (w *Worker) evictXpubCacheItems() {
 			count++
 		}
 	}
-	w.metrics.XPubCacheSize.Set(float64(len(cachedXpubs)))
-	glog.Info("Evicted ", count, " items from xpub cache, cache size ", len(cachedXpubs))
+	return count + trimXpubCacheItemsLocked()
+}
+
+func trimXpubCacheItemsLocked() int {
+	if len(cachedXpubs) <= xpubCacheMaxEntries {
+		return 0
+	}
+	type cacheEntry struct {
+		key      string
+		accessed int64
+	}
+	entries := make([]cacheEntry, 0, len(cachedXpubs))
+	for k, v := range cachedXpubs {
+		entries = append(entries, cacheEntry{key: k, accessed: v.accessed})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].accessed == entries[j].accessed {
+			return entries[i].key < entries[j].key
+		}
+		return entries[i].accessed < entries[j].accessed
+	})
+	count := len(cachedXpubs) - xpubCacheMaxEntries
+	for i := 0; i < count; i++ {
+		delete(cachedXpubs, entries[i].key)
+	}
+	return count
+}
+
+func validateXpubScanLimits(xd *bchain.XpubDescriptor, gap int) error {
+	if len(xd.ChangeIndexes) > bchain.MaxXpubChangeIndexes {
+		return errors.Errorf("Xpub descriptor change index count %d exceeds limit %d", len(xd.ChangeIndexes), bchain.MaxXpubChangeIndexes)
+	}
+	derivations := len(xd.ChangeIndexes) * gap
+	if derivations > maxXpubAddressDerivations {
+		return errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", derivations, maxXpubAddressDerivations)
+	}
+	return nil
 }
 
 func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, fromHeight, toHeight uint32, maxResults int) ([]xpubTxid, bool, error) {
@@ -151,10 +198,32 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 	return txs, complete, nil
 }
 
-func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, maxHeight uint32, maxResults int) error {
+func isUnfilteredXpubTxidFilter(filter *AddressFilter) bool {
+	return filter == nil || filter.FromHeight == 0 && filter.ToHeight == 0 && filter.Vout == AddressFilterVoutOff
+}
+
+func mergeXpubTxids(data *xpubData) xpubTxids {
+	txcMap := make(map[string]struct{}, data.txCountEstimate)
+	txc := make(xpubTxids, 0, data.txCountEstimate)
+	for _, da := range data.addresses {
+		for i := range da {
+			for _, txid := range da[i].txids {
+				if _, foundTx := txcMap[txid.txid]; foundTx {
+					continue
+				}
+				txcMap[txid.txid] = struct{}{}
+				txc = append(txc, txid)
+			}
+		}
+	}
+	sort.Stable(txc)
+	return txc
+}
+
+func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, maxHeight uint32, maxResults int) (bool, error) {
 	// skip if not used
 	if ad.balance == nil {
-		return nil
+		return false, nil
 	}
 	// if completely loaded, check if there are not some new txs and load if necessary
 	if ad.complete {
@@ -168,14 +237,14 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 					glog.Warning("xpubCheckAndLoadTxids inconsistency ", ad.addrDesc, ", ad.txs=", ad.txs, ", ad.balance.Txs=", ad.balance.Txs)
 				}
 			}
-			return err
+			return err == nil, err
 		}
-		return nil
+		return false, nil
 	}
 	// load all txids to get paging correctly
 	newTxids, complete, err := w.xpubGetAddressTxids(ad.addrDesc, false, 0, maxHeight, maxInt)
 	if err != nil {
-		return err
+		return false, err
 	}
 	ad.txids = newTxids
 	ad.complete = complete
@@ -186,7 +255,7 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 			glog.Warning("xpubCheckAndLoadTxids inconsistency ", ad.addrDesc, ", ad.txs=", ad.txs, ", ad.balance.Txs=", ad.balance.Txs)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (bool, error) {
@@ -203,7 +272,10 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 	return false, nil
 }
 
-func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, addresses []xpubAddress, gap int, change uint32, minDerivedIndex int, fork bool) (int, []xpubAddress, error) {
+func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, addresses []xpubAddress, gap int, change uint32, minDerivedIndex int, fork bool, derivedBefore int) (int, []xpubAddress, error) {
+	if total := derivedBefore + len(addresses); total > maxXpubAddressDerivations {
+		return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxXpubAddressDerivations)
+	}
 	// rescan known addresses
 	lastUsed := 0
 	for i := range addresses {
@@ -230,6 +302,9 @@ func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, ad
 		to := from + gap - missing
 		if to < minDerivedIndex {
 			to = minDerivedIndex
+		}
+		if total := derivedBefore + to; total > maxXpubAddressDerivations {
+			return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxXpubAddressDerivations)
 		}
 		descriptors, err := w.chainParser.DeriveAddressDescriptorsFromTo(xd, change, uint32(from), uint32(to))
 		if err != nil {
@@ -325,6 +400,9 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	}
 	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
 	gap++
+	if err := validateXpubScanLimits(xd, gap); err != nil {
+		return nil, 0, false, err
+	}
 	var processedHash string
 	cachedXpubsMux.Lock()
 	data, inCache := cachedXpubs[xd.XpubDescriptor]
@@ -365,28 +443,46 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			data.balanceSat = *new(big.Int)
 			data.sentSat = *new(big.Int)
 			data.txCountEstimate = 0
+			data.mergedTxids = nil
 			var minDerivedIndex int
+			totalDerived := 0
 			for i, change := range xd.ChangeIndexes {
-				minDerivedIndex, data.addresses[i], err = w.xpubScanAddresses(xd, &data, data.addresses[i], gap, change, minDerivedIndex, fork)
+				minDerivedIndex, data.addresses[i], err = w.xpubScanAddresses(xd, &data, data.addresses[i], gap, change, minDerivedIndex, fork, totalDerived)
 				if err != nil {
 					return nil, 0, inCache, err
 				}
+				totalDerived += len(data.addresses[i])
 			}
 		}
 		if option >= AccountDetailsTxidHistory {
+			txidsChanged := false
 			for _, da := range data.addresses {
 				for i := range da {
-					if err = w.xpubCheckAndLoadTxids(&da[i], filter, bestheight, (page+1)*txsOnPage); err != nil {
+					changed := false
+					if changed, err = w.xpubCheckAndLoadTxids(&da[i], bestheight, (page+1)*txsOnPage); err != nil {
 						return nil, 0, inCache, err
 					}
+					txidsChanged = txidsChanged || changed
 				}
+			}
+			if txidsChanged {
+				data.mergedTxids = nil
+			}
+			if isUnfilteredXpubTxidFilter(filter) && data.mergedTxids == nil {
+				data.mergedTxids = mergeXpubTxids(&data)
 			}
 		}
 	}
 	data.accessed = time.Now().Unix()
 	cachedXpubsMux.Lock()
+	if cachedXpubs == nil {
+		cachedXpubs = make(map[string]xpubData)
+	}
 	cachedXpubs[xd.XpubDescriptor] = data
+	trimXpubCacheItemsLocked()
+	cacheSize := len(cachedXpubs)
 	cachedXpubsMux.Unlock()
+	w.metrics.XPubCacheSize.Set(float64(cacheSize))
 	return &data, bestheight, inCache, nil
 }
 
@@ -456,6 +552,16 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 				for _, txid := range newTxids {
 					// the same tx can have multiple addresses from the same xpub, get it from backend it only once
 					tx, foundTx := txmMap[txid.txid]
+					if option == AccountDetailsBasic {
+						// Basic detail: skip per-tx loading. Count unique mempool txids
+						// across derived addresses; the count may transiently include
+						// entries that have just been confirmed but not yet evicted.
+						if !foundTx {
+							txmMap[txid.txid] = nil
+							unconfirmedTxs++
+						}
+						continue
+					}
 					if !foundTx {
 						tx, err = w.getTransaction(txid.txid, false, true, addresses)
 						// mempool transaction may fail
@@ -491,30 +597,35 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		}
 	}
 	if option >= AccountDetailsTxidHistory {
-		txcMap := make(map[string]bool)
-		txc = make(xpubTxids, 0, 32)
-		for _, da := range data.addresses {
-			for i := range da {
-				ad := &da[i]
-				for _, txid := range ad.txids {
-					added, foundTx := txcMap[txid.txid]
-					// count txs regardless of filter but only once
-					if !foundTx {
-						txCount++
-					}
-					// add tx only once
-					if !added {
-						add := txidFilter == nil || txidFilter(&txid, ad)
-						txcMap[txid.txid] = add
-						if add {
-							txc = append(txc, txid)
+		if txidFilter == nil {
+			// Shared with xpubData cache; do not mutate in this request path.
+			txc = data.mergedTxids
+			if txc == nil {
+				txc = mergeXpubTxids(data)
+			}
+			txCount = len(txc)
+		} else {
+			txcMap := make(map[string]bool)
+			txc = make(xpubTxids, 0, 32)
+			for _, da := range data.addresses {
+				for i := range da {
+					ad := &da[i]
+					for _, txid := range ad.txids {
+						added := txcMap[txid.txid]
+						// add tx only once
+						if !added {
+							add := txidFilter(&txid, ad)
+							txcMap[txid.txid] = add
+							if add {
+								txc = append(txc, txid)
+							}
 						}
 					}
 				}
 			}
+			sort.Stable(txc)
+			txCount = len(txcMap)
 		}
-		sort.Stable(txc)
-		txCount = len(txcMap)
 		totalResults := txCount
 		if filtered {
 			totalResults = -1
@@ -586,6 +697,10 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		}
 	}
 
+	var unconfirmedBalanceSat *Amount
+	if option > AccountDetailsBasic {
+		unconfirmedBalanceSat = (*Amount)(&uBalSat)
+	}
 	addr := Address{
 		Paging:                pg,
 		AddrStr:               xpub,
@@ -594,7 +709,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		TotalSentSat:          (*Amount)(&data.sentSat),
 		Txs:                   txCount,
 		AddrTxCount:           addrTxCount,
-		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
+		UnconfirmedBalanceSat: unconfirmedBalanceSat,
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txids:                 txids,
@@ -604,7 +719,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		XPubAddresses:         xpubAddresses,
 		AddressAliases:        w.getAddressAliases(addresses),
 	}
-	glog.Info("GetXpubAddress ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", txCount, " txs, ", time.Since(start))
+	glog.V(1).Info("GetXpubAddress ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", txCount, " txs, ", time.Since(start))
 	return &addr, nil
 }
 
@@ -615,7 +730,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 	if err != nil {
 		return nil, err
 	}
-	data, _, inCache, err := w.getXpubData(xd, 0, 1, AccountDetailsBasic, &AddressFilter{
+	data, bestheight, inCache, err := w.getXpubData(xd, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
 		OnlyConfirmed: onlyConfirmed,
 	}, gap)
@@ -633,7 +748,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 				}
 				onlyMempool = true
 			}
-			utxos, err := w.getAddrDescUtxo(ad.addrDesc, ad.balance, onlyConfirmed, onlyMempool)
+			utxos, err := w.getAddrDescUtxo(ad.addrDesc, ad.balance, onlyConfirmed, onlyMempool, &bestheight)
 			if err != nil {
 				return nil, err
 			}
@@ -649,12 +764,16 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 		}
 	}
 	sort.Stable(r)
-	glog.Info("GetXpubUtxo ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", len(r), " utxos,  ", time.Since(start))
+	glog.V(1).Info("GetXpubUtxo ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", len(r), " utxos,  ", time.Since(start))
 	return r, nil
 }
 
-// GetXpubBalanceHistory returns history of balance for given xpub
-func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, currencies []string, gap int, groupBy uint32) (BalanceHistories, error) {
+// GetXpubBalanceHistory returns history of balance for given xpub. maxTxs bounds
+// how many transactions in the requested range (summed across the derived
+// addresses) may be aggregated (0 = unlimited); the caller supplies the
+// transport-specific cap (WS vs REST). transport labels the emitted metrics with
+// the serving surface.
+func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, currencies []string, gap int, groupBy uint32, maxTxs int, transport string) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
@@ -665,11 +784,13 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	if err != nil {
 		return nil, err
 	}
-	data, _, inCache, err := w.getXpubData(xd, 0, 1, AccountDetailsTxidHistory, &AddressFilter{
+	// Load only the derived addresses and their balances (cheap, shared cache), not
+	// AccountDetailsTxidHistory -- that loads every address's full txid history
+	// (unbounded, ignoring from/to) before any cap could reject it. Instead query each
+	// address's txids within the height range below, bounded to maxTxs+1.
+	data, _, inCache, err := w.getXpubData(xd, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
 		OnlyConfirmed: true,
-		FromHeight:    fromHeight,
-		ToHeight:      toHeight,
 	}, gap)
 	if err != nil {
 		return nil, err
@@ -680,18 +801,63 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 			selfAddrDesc[string(da[i].addrDesc)] = struct{}{}
 		}
 	}
+	// Bound the work: each transaction costs a DB read below, so load at most one
+	// more than the cap across all derived addresses (overflow detectable), then
+	// reject rather than silently truncate.
+	remaining := maxInt
+	if maxTxs > 0 {
+		remaining = maxTxs + 1
+	}
+	type addrTxids struct {
+		addrDesc bchain.AddressDescriptor
+		txids    []string
+	}
+	var loaded []addrTxids
+	total := 0
+	rangeFilter := &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}
 	for _, da := range data.addresses {
 		for i := range da {
 			ad := &da[i]
-			txids := ad.txids
-			for txi := len(txids) - 1; txi >= 0; txi-- {
-				bh, err := w.balanceHistoryForTxid(ad.addrDesc, txids[txi].txid, fromUnix, toUnix, selfAddrDesc)
-				if err != nil {
-					return nil, err
+			if ad.balance == nil {
+				continue
+			}
+			txids, err := w.getAddressTxids(ad.addrDesc, false, rangeFilter, remaining)
+			if err != nil {
+				return nil, err
+			}
+			if len(txids) == 0 {
+				continue
+			}
+			loaded = append(loaded, addrTxids{addrDesc: ad.addrDesc, txids: txids})
+			total += len(txids)
+			if maxTxs > 0 {
+				if remaining -= len(txids); remaining <= 0 {
+					break
 				}
-				if bh != nil {
-					bhs = append(bhs, *bh)
-				}
+			}
+		}
+		if maxTxs > 0 && remaining <= 0 {
+			break
+		}
+	}
+	if w.metrics != nil {
+		w.metrics.BalanceHistoryTxs.With(common.Labels{"transport": transport, "path": "xpub"}).Observe(float64(total))
+	}
+	if maxTxs > 0 && total > maxTxs {
+		if w.metrics != nil {
+			w.metrics.BalanceHistoryCapExceeded.With(common.Labels{"transport": transport, "path": "xpub"}).Inc()
+		}
+		return nil, NewAPIError(fmt.Sprintf("balance history for xpub spans more than %d transactions in the requested range; narrow the from/to range", maxTxs), true)
+	}
+	for _, at := range loaded {
+		txids := at.txids
+		for txi := len(txids) - 1; txi >= 0; txi-- {
+			bh, err := w.balanceHistoryForTxid(at.addrDesc, txids[txi], fromUnix, toUnix, selfAddrDesc)
+			if err != nil {
+				return nil, err
+			}
+			if bh != nil {
+				bhs = append(bhs, *bh)
 			}
 		}
 	}
@@ -703,6 +869,6 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetUtxoBalanceHistory ", xpub[:xpubLogPrefix], ", cache ", inCache, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ",  ", time.Since(start))
+	glog.V(1).Info("GetUtxoBalanceHistory ", xpub[:xpubLogPrefix], ", cache ", inCache, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ",  ", time.Since(start))
 	return bha, nil
 }

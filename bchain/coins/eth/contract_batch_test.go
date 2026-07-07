@@ -78,6 +78,7 @@ type rpcCall struct {
 type mockBatchCallRPC struct {
 	batchResults map[string]string
 	batchErrors  map[string]error
+	batchRPCErr  error
 	callResults  map[string]string
 	callErrors   map[string]error
 	batchCalls   []rpcCall
@@ -120,6 +121,9 @@ func (m *mockBatchCallRPC) CallContext(ctx context.Context, result interface{}, 
 }
 
 func (m *mockBatchCallRPC) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
+	if m.batchRPCErr != nil {
+		return m.batchRPCErr
+	}
 	for i := range batch {
 		elem := &batch[i]
 		if elem.Method != "eth_call" {
@@ -263,6 +267,92 @@ func TestErc20BalancesBatchFallback(t *testing.T) {
 	}
 	if mock.calls[0].data != callData {
 		t.Fatalf("expected fallback call data %q, got %q", callData, mock.calls[0].data)
+	}
+}
+
+func TestErc20BalancesBatchWholeBatchRPCError(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+	contractAKey := hexutil.Encode(contractA.Bytes())
+	contractBKey := hexutil.Encode(contractB.Bytes())
+	callData := erc20BalanceOfCallData(bchain.AddressDescriptor(addr.Bytes()))
+	mock := &mockBatchCallRPC{
+		batchRPCErr: errors.New("connection reset"),
+		callResults: map[string]string{
+			contractAKey: fmt.Sprintf("0x%064x", 11),
+			contractBKey: fmt.Sprintf("0x%064x", 22),
+		},
+	}
+	rpcClient := &EthereumRPC{
+		RPC:     mock,
+		Timeout: time.Second,
+	}
+	balances, err := rpcClient.erc20BalancesBatch(mock, callData, []bchain.AddressDescriptor{
+		bchain.AddressDescriptor(contractA.Bytes()),
+		bchain.AddressDescriptor(contractB.Bytes()),
+	})
+	if err != nil {
+		t.Fatalf("expected nil error after fallback, got %v", err)
+	}
+	if len(balances) != 2 {
+		t.Fatalf("expected 2 balances, got %d", len(balances))
+	}
+	if balances[0] == nil || balances[0].Cmp(big.NewInt(11)) != 0 {
+		t.Fatalf("unexpected balance[0]: %v", balances[0])
+	}
+	if balances[1] == nil || balances[1].Cmp(big.NewInt(22)) != 0 {
+		t.Fatalf("unexpected balance[1]: %v", balances[1])
+	}
+	if len(mock.calls) != 2 {
+		t.Fatalf("expected 2 single-call fallbacks, got %d", len(mock.calls))
+	}
+	gotTos := map[string]bool{mock.calls[0].to: true, mock.calls[1].to: true}
+	if !gotTos[contractAKey] || !gotTos[contractBKey] {
+		t.Fatalf("expected fallbacks for both contracts, got %+v", mock.calls)
+	}
+	for _, call := range mock.calls {
+		if call.data != callData {
+			t.Fatalf("unexpected fallback call data: %q", call.data)
+		}
+	}
+}
+
+func TestErc20BalancesBatchWholeBatchRPCErrorPartialSingleFailure(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+	contractAKey := hexutil.Encode(contractA.Bytes())
+	contractBKey := hexutil.Encode(contractB.Bytes())
+	callData := erc20BalanceOfCallData(bchain.AddressDescriptor(addr.Bytes()))
+	mock := &mockBatchCallRPC{
+		batchRPCErr: errors.New("connection reset"),
+		callResults: map[string]string{
+			contractAKey: fmt.Sprintf("0x%064x", 11),
+		},
+		callErrors: map[string]error{
+			contractBKey: errors.New("still broken"),
+		},
+	}
+	rpcClient := &EthereumRPC{
+		RPC:     mock,
+		Timeout: time.Second,
+	}
+	balances, err := rpcClient.erc20BalancesBatch(mock, callData, []bchain.AddressDescriptor{
+		bchain.AddressDescriptor(contractA.Bytes()),
+		bchain.AddressDescriptor(contractB.Bytes()),
+	})
+	if err != nil {
+		t.Fatalf("expected nil error after fallback, got %v", err)
+	}
+	if len(balances) != 2 {
+		t.Fatalf("expected 2 balances, got %d", len(balances))
+	}
+	if balances[0] == nil || balances[0].Cmp(big.NewInt(11)) != 0 {
+		t.Fatalf("unexpected balance[0]: %v", balances[0])
+	}
+	if balances[1] != nil {
+		t.Fatalf("expected balance[1] to be nil after single-call failure, got %v", balances[1])
 	}
 }
 

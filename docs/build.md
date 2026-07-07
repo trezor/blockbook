@@ -90,6 +90,8 @@ command: `make NO_CACHE=true all-bitcoin`.
 
 `BB_BUILD_ENV`: Selects which RPC URL override family is active during package/config generation. Defaults to `dev`.
 Accepted values are `dev` and `prod`.
+Generated dev Blockbook services include `-prof=:<blockbook_internal + 20000>` automatically, while generated prod
+services do not include `-prof`.
 
 `BB_DEV_RPC_URL_HTTP_<coin alias>` / `BB_PROD_RPC_URL_HTTP_<coin alias>`: Override `ipc.rpc_url_template` while generating
 package definitions so you can target hosted HTTP RPC endpoints without editing coin JSON. The root `Makefile` forwards
@@ -100,6 +102,11 @@ Resolution prefers the exact alias and also accepts archive variants such as `<a
 `BB_DEV_RPC_URL_WS_<coin alias>` / `BB_PROD_RPC_URL_WS_<coin alias>`: Override `ipc.rpc_url_ws_template` for WebSocket
 subscriptions. The selected value should point to the same host as the selected HTTP RPC override and follows the same
 fallback resolution.
+
+`BB_DEV_MQ_URL_<coin alias>` / `BB_PROD_MQ_URL_<coin alias>`: Override `ipc.message_queue_binding_template` during
+package/config generation. The value is used as-is and should be a full MQ endpoint such as
+`tcp://backend_hostname:28332`. The root `Makefile` forwards these variables into the Docker build/test containers and
+the same alias/archive fallback resolution applies.
 
 Example:
 `BB_BUILD_ENV=prod BB_PROD_RPC_URL_HTTP_ethereum=http://backend_hostname:1234 BB_PROD_RPC_URL_WS_ethereum_archive=ws://backend_hostname:1234 make deb-ethereum_archive`.
@@ -281,7 +288,7 @@ Example for Bitcoin:
 ./blockbook -sync -blockchaincfg=build/blockchaincfg.json -internal=:9030 -public=:9130 -certfile=server/testcert -logtostderr
 ```
 
-This command starts Blockbook with parallel synchronization and providing HTTP and Socket.IO interface, with database
+This command starts Blockbook with parallel synchronization and providing HTTP API and WebSocket interfaces, with database
 in local directory *data* and established ZeroMQ and RPC connections to back-end daemon specified in configuration
 file passed to *-blockchaincfg* option.
 

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
@@ -962,131 +961,6 @@ func (d *RocksDB) storeInternalDataEthereumType(wb *grocksdb.WriteBatch, blockTx
 	return nil
 }
 
-var cachedContracts = make(map[string]*bchain.ContractInfo)
-var cachedContractsMux sync.Mutex
-
-func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
-	buf := packString(contractInfo.Name)
-	buf = append(buf, packString(contractInfo.Symbol)...)
-	buf = append(buf, packString(string(contractInfo.Standard))...)
-	varBuf := make([]byte, vlq.MaxLen64)
-	l := packVaruint(uint(contractInfo.Decimals), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	l = packVaruint(uint(contractInfo.CreatedInBlock), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	l = packVaruint(uint(contractInfo.DestructedInBlock), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	return buf
-}
-
-func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
-	var contractInfo bchain.ContractInfo
-	var s string
-	var l int
-	var ui uint
-	contractInfo.Name, l = unpackString(buf)
-	buf = buf[l:]
-	contractInfo.Symbol, l = unpackString(buf)
-	buf = buf[l:]
-	s, l = unpackString(buf)
-	contractInfo.Standard = bchain.TokenStandardName(s)
-	contractInfo.Type = bchain.TokenStandardName(s)
-	buf = buf[l:]
-	ui, l = unpackVaruint(buf)
-	contractInfo.Decimals = int(ui)
-	buf = buf[l:]
-	ui, l = unpackVaruint(buf)
-	contractInfo.CreatedInBlock = uint32(ui)
-	buf = buf[l:]
-	ui, _ = unpackVaruint(buf)
-	contractInfo.DestructedInBlock = uint32(ui)
-	return &contractInfo, nil
-}
-
-func (d *RocksDB) GetContractInfoForAddress(address string) (*bchain.ContractInfo, error) {
-	contract, err := d.chainParser.GetAddrDescFromAddress(address)
-	if err != nil || contract == nil {
-		return nil, err
-	}
-	return d.GetContractInfo(contract, "")
-}
-
-// GetContractInfo gets contract from cache or DB and possibly updates the standard from standardFromContext
-// it is hard to guess the standard of the contract using API, it is easier to set it the first time the contract is processed in a tx
-func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName) (*bchain.ContractInfo, error) {
-	cacheKey := string(contract)
-	cachedContractsMux.Lock()
-	contractInfo, found := cachedContracts[cacheKey]
-	cachedContractsMux.Unlock()
-	if !found {
-		val, err := d.db.GetCF(d.ro, d.cfh[cfContracts], contract)
-		if err != nil {
-			return nil, err
-		}
-		defer val.Free()
-		buf := val.Data()
-		if len(buf) == 0 {
-			return nil, nil
-		}
-		contractInfo, _ = unpackContractInfo(buf)
-		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(contract)
-		if len(addresses) > 0 {
-			contractInfo.Contract = addresses[0]
-		}
-		// if the standard is specified and stored contractInfo has unknown standard, set and store it
-		if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
-			contractInfo.Standard = standardFromContext
-			contractInfo.Type = standardFromContext
-			err = d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo))
-			if err != nil {
-				return nil, err
-			}
-		}
-		cachedContractsMux.Lock()
-		cachedContracts[cacheKey] = contractInfo
-		cachedContractsMux.Unlock()
-	}
-	return contractInfo, nil
-}
-
-// StoreContractInfo stores contractInfo in DB
-// if CreatedInBlock==0 and DestructedInBlock!=0, it is evaluated as a destruction of a contract, the contract info is updated
-// in all other cases the contractInfo overwrites previously stored data in DB (however it should not really happen as contract is created only once)
-func (d *RocksDB) StoreContractInfo(contractInfo *bchain.ContractInfo) error {
-	wb := grocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	if err := d.storeContractInfo(wb, contractInfo); err != nil {
-		return err
-	}
-	return d.WriteBatch(wb)
-}
-
-func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchain.ContractInfo) error {
-	if contractInfo.Contract != "" {
-		key, err := d.chainParser.GetAddrDescFromAddress(contractInfo.Contract)
-		if err != nil {
-			return err
-		}
-		if contractInfo.CreatedInBlock == 0 && contractInfo.DestructedInBlock != 0 {
-			storedCI, err := d.GetContractInfo(key, "")
-			if err != nil {
-				return err
-			}
-			if storedCI == nil {
-				return nil
-			}
-			storedCI.DestructedInBlock = contractInfo.DestructedInBlock
-			contractInfo = storedCI
-		}
-		wb.PutCF(d.cfh[cfContracts], key, packContractInfo(contractInfo))
-		cacheKey := string(key)
-		cachedContractsMux.Lock()
-		delete(cachedContracts, cacheKey)
-		cachedContractsMux.Unlock()
-	}
-	return nil
-}
-
 func packBlockTx(buf []byte, blockTx *ethBlockTx) []byte {
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf = append(buf, blockTx.btxID...)
@@ -1374,17 +1248,24 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 						addrContracts.markContractIndexDirty()
 					} else {
 						// update the values of the contract, reverse the direction
-						var index int32
-						if bytes.Equal(addrDesc, btxContract.to) {
-							index = transferFrom
-						} else {
-							index = transferTo
-						}
-						addToContract(addrContract, contractIndex, index, btxContract.contract, &bchain.TokenTransfer{
+						transfer := &bchain.TokenTransfer{
 							Standard:         btxContract.transferStandard,
 							Value:            btxContract.value,
 							MultiTokenValues: btxContract.idValues,
-						}, false)
+						}
+						if bytes.Equal(btxContract.from, btxContract.to) {
+							// Self-transfers were connected through both sides while counting one tx.
+							addToContract(addrContract, contractIndex, transferTo, btxContract.contract, transfer, false)
+							addToContract(addrContract, contractIndex, transferFrom, btxContract.contract, transfer, false)
+						} else {
+							var index int32
+							if bytes.Equal(addrDesc, btxContract.to) {
+								index = transferFrom
+							} else {
+								index = transferTo
+							}
+							addToContract(addrContract, contractIndex, index, btxContract.contract, transfer, false)
+						}
 					}
 				} else {
 					glog.Warning("AddressContracts ", addrDesc, ", contract ", contractIndex, " Txs would be negative, tx ", hex.EncodeToString(btxID))
@@ -1484,9 +1365,14 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height
 	return nil
 }
 
-// DisconnectBlockRangeEthereumType removes all data belonging to blocks in range lower-higher
-// it is able to disconnect only blocks for which there are data in the blockTxs column
+// DisconnectBlockRangeEthereumType removes all data for blocks in [lower,higher].
+// Requires blockTxs data for the range. Holds connectBlockMux to serialize the
+// protocol scan + flush against SetErcProtocol writers; sync calls
+// connect/disconnect serially so this can't deadlock against ConnectBlock.
 func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) error {
+	d.connectBlockMux.Lock()
+	defer d.connectBlockMux.Unlock()
+
 	blocks := make([][]ethBlockTx, higher-lower+1)
 	for height := lower; height <= higher; height++ {
 		blockTxs, err := d.getBlockTxsEthereumType(height)
@@ -1512,9 +1398,14 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], key)
 	}
 	d.storeUnpackedAddressContracts(wb, contracts)
+	// Revert protocol rows whose persistHeight fell into [lower,higher].
+	if err := d.disconnectErcProtocols(wb, lower, higher); err != nil {
+		return err
+	}
 	err := d.WriteBatch(wb)
 	if err == nil {
 		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
+		d.reorgGen.Add(1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err
@@ -1528,6 +1419,7 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 	glog.Info("SortAddressContracts: starting")
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	it := d.db.NewIteratorCF(ro, d.cfh[cfAddressContracts])
 	defer it.Close()
@@ -1636,6 +1528,19 @@ func (acs *unpackedAddrContracts) rebuildContractIndex() {
 	}
 	acs.contractIndex = m
 	acs.contractIndexDirty = false
+}
+
+func (acs *unpackedAddrContracts) dropContractIndex() {
+	acs.contractIndex = nil
+	acs.contractIndexDirty = false
+}
+
+func (d *RocksDB) dropAddrContractsContractIndex(addrKey addressHotnessKey) {
+	d.addrContractsCacheMux.Lock()
+	if acs := d.addrContractsCache[string(addrKey[:])]; acs != nil {
+		acs.dropContractIndex()
+	}
+	d.addrContractsCacheMux.Unlock()
 }
 
 func (acs *unpackedAddrContracts) findContractIndex(addrDesc, contract bchain.AddressDescriptor, hot *addressHotness) (int, bool) {
@@ -1985,6 +1890,19 @@ func (d *RocksDB) flushAddrContractsCache() {
 		d.writeContractsCacheSnapshot(cache)
 	}
 	glog.Info("storeAddrContractsCache: store ", count, " entries in ", time.Since(start))
+}
+
+func (d *RocksDB) flushAddrContractsCacheIfOverCap() {
+	maxBytes := d.addrContractsCacheMaxBytes
+	if maxBytes <= 0 {
+		return
+	}
+	d.addrContractsCacheMux.Lock()
+	overCap := d.addrContractsCacheBytes > maxBytes
+	d.addrContractsCacheMux.Unlock()
+	if overCap {
+		d.flushAddrContractsCache()
+	}
 }
 
 func (d *RocksDB) storeAddrContractsCache() {

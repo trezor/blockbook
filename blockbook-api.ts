@@ -14,6 +14,7 @@ export interface TronVoteExtra {
 export interface TronChainExtraData {
     contractType?: string;
     operation?: string;
+    note?: string;
     resource?: string;
     stakeAmount?: string;
     unstakeAmount?: string;
@@ -29,11 +30,38 @@ export interface TronChainExtraData {
     result?: string;
     votes?: TronVoteExtra[];
 }
+export interface TronVote {
+    address: string;
+    voteCount: string;
+}
+export interface TronUnstakingBatch {
+    amount: string;
+    expireTime: number;
+}
+export interface TronStakingInfo {
+    stakedBalance: string;
+    stakedBalanceEnergy: string;
+    stakedBalanceBandwidth: string;
+    unstakingBatches: TronUnstakingBatch[];
+    totalVotingPower: string;
+    availableVotingPower: string;
+    votes: TronVote[];
+    unclaimedReward: string;
+    delegatedBalanceEnergy: string;
+    delegatedBalanceBandwidth: string;
+}
 export interface TronAccountExtraData {
-    availableBandwidth: number;
-    totalBandwidth: number;
+    availableStakedBandwidth: number;
+    totalStakedBandwidth: number;
+    availableFreeBandwidth: number;
+    totalFreeBandwidth: number;
     availableEnergy: number;
     totalEnergy: number;
+    totalEnergyLimit: number;
+    totalEnergyWeight: number;
+    totalBandwidthLimit: number;
+    totalBandwidthWeight: number;
+    stakingInfo?: TronStakingInfo;
 }
 export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
 export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any };
@@ -112,8 +140,8 @@ export interface MultiTokenValue {
 }
 export interface TokenTransfer {
     /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
     /** Source address of the token transfer. */
     from: string;
     /** Destination address of the token transfer. */
@@ -124,8 +152,8 @@ export interface TokenTransfer {
     name?: string;
     /** Token symbol. */
     symbol?: string;
-    /** Number of decimals for this token (if applicable). */
-    decimals?: number;
+    /** Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable. */
+    decimals: number;
     /** Amount (in base units) of tokens transferred. */
     value?: string;
     /** List of multiple ID-value pairs for ERC1155 transfers. */
@@ -259,27 +287,38 @@ export interface StakingPool {
     /** Any balance automatically reinvested into the pool. */
     autocompoundBalance?: string;
 }
-export interface ContractInfo {
-    /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
-    /** Smart contract address. */
+export interface Erc4626TokenMetadata {
+    /** Token contract address. */
     contract: string;
-    /** Readable name of the contract. */
-    name: string;
-    /** Symbol for tokens under this contract, if applicable. */
-    symbol: string;
-    /** Number of decimal places, if applicable. */
+    /** Human-readable token name. */
+    name?: string;
+    /** Token symbol. */
+    symbol?: string;
+    /** Token decimals. */
     decimals: number;
-    /** Block height where contract was first created. */
-    createdInBlock?: number;
-    /** Block height where contract was destroyed (if any). */
-    destructedInBlock?: number;
+}
+export interface Erc4626Token {
+    /** Metadata of the underlying asset token. */
+    asset?: Erc4626TokenMetadata;
+    /** Metadata of the vault share token. */
+    share?: Erc4626TokenMetadata;
+    /** Total underlying assets managed by the vault. */
+    totalAssets?: string;
+    /** Underlying assets for one whole share unit. */
+    convertToAssets1Share?: string;
+    /** Shares for one whole underlying asset unit. */
+    convertToShares1Asset?: string;
+    /** Previewed shares minted for one whole underlying asset unit. */
+    previewDeposit1Asset?: string;
+    /** Previewed assets redeemed for one whole share unit. */
+    previewRedeem1Share?: string;
+    /** Error message for partial failures while fetching ERC4626 fields. */
+    error?: string;
 }
 export interface Token {
     /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
     /** Readable name of the token. */
     name: string;
     /** Derivation path if this token is derived from an XPUB-based address. */
@@ -290,8 +329,8 @@ export interface Token {
     transfers: number;
     /** Symbol for the token (e.g., 'ETH', 'USDT'). */
     symbol?: string;
-    /** Number of decimals for this token. */
-    decimals?: number;
+    /** Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable. */
+    decimals: number;
     /** Current token balance (in minimal base units). */
     balance?: string;
     /** Value in the base currency (e.g. ETH for ERC20 tokens). */
@@ -306,6 +345,8 @@ export interface Token {
     totalReceived?: string;
     /** Total amount of tokens sent. */
     totalSent?: string;
+    /** Protocol identifiers the contract participates in (e.g., "erc4626"); for fresh per-vault data, use getContractInfo. */
+    protocols?: string[];
 }
 export interface Address {
     /** Current page index. */
@@ -322,7 +363,7 @@ export interface Address {
     totalReceived?: string;
     /** Total amount ever sent by this address. */
     totalSent?: string;
-    /** Unconfirmed balance for this address. */
+    /** Unconfirmed balance for this address. Omitted for AccountDetailsBasic, where mempool transactions are not aggregated. */
     unconfirmedBalance?: string;
     /** Number of unconfirmed transactions for this address. */
     unconfirmedTxs: number;
@@ -342,8 +383,10 @@ export interface Address {
     transactions?: Tx[];
     /** List of transaction IDs (if detailed data is not requested). */
     txids?: string[];
-    /** Current transaction nonce for Ethereum-like addresses. */
+    /** Current (pending) transaction nonce for Ethereum-like addresses, including mempool transactions. This is the next nonce the account will use. */
     nonce?: string;
+    /** Confirmed transaction nonce for Ethereum-like addresses, reflecting only mined transactions (eth_getTransactionCount at the latest block). Equals nonce when the account has no pending transactions. */
+    confirmedNonce?: string;
     /** Number of tokens with any historical usage at this address. */
     usedTokens?: number;
     /** List of tokens associated with this address. */
@@ -358,16 +401,51 @@ export interface Address {
     totalBaseValue?: number;
     /** Address's entire value in secondary currency, including tokens. */
     totalSecondaryValue?: number;
-    /** Extra info if the address is a contract (ABI, type). */
-    contractInfo?: ContractInfo;
+    /** Extra info if the address is a contract. Shape matches getContractInfo; rates and protocols are populated only when explicitly requested via getContractInfo. */
+    contractInfo?: ContractInfoResult;
     /** @deprecated: replaced by contractInfo */
-    erc20Contract?: ContractInfo;
+    erc20Contract?: ContractInfoResult;
     /** Aliases assigned to this address. */
     addressAliases?: {[key: string]: AddressAlias};
     /** List of staking pool data if address interacts with staking. */
     stakingPools?: StakingPool[];
     /** Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload. */
     chainExtraData?: AccountChainExtraData;
+}
+export interface ContractInfoProtocols {
+    /** ERC4626 vault details when explicitly requested and detected. */
+    erc4626?: Erc4626Token;
+}
+export interface ContractInfoRates {
+    /** Current price of one whole token in the chain base currency, when available. */
+    baseRate?: number;
+    /** Requested secondary currency code for the secondaryRate field, lower-cased. */
+    currency?: string;
+    /** Current price of one whole token in the requested secondary currency, when available. */
+    secondaryRate?: number;
+}
+export interface ContractInfoResult {
+    /** @deprecated: Use standard instead. */
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    /** Smart contract address. */
+    contract: string;
+    /** Readable name of the contract. */
+    name: string;
+    /** Symbol for tokens under this contract, if applicable. */
+    symbol: string;
+    /** Number of decimal places, if applicable. */
+    decimals: number;
+    /** Block height where contract was first created. */
+    createdInBlock?: number;
+    /** Block height where contract was destroyed (if any). */
+    destructedInBlock?: number;
+    /** Current rate data for the contract when available. */
+    rates?: ContractInfoRates;
+    /** Optional protocol-specific enrichments requested by the caller. */
+    protocols?: ContractInfoProtocols;
+    /** Indexed best block height used as freshness metadata for this response. */
+    blockHeight: number;
 }
 export interface Utxo {
     /** Transaction ID in which this UTXO was created. */
@@ -592,7 +670,7 @@ export interface WsReq {
     /** Unique request identifier. */
     id: string;
     /** Requested method name. */
-    method: 'getAccountInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
+    method: 'getAccountInfo' | 'getContractInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters';
     /** Parameters for the requested method in raw JSON format. */
     params: any;
 }
@@ -609,6 +687,8 @@ export interface WsAccountInfoReq {
     details?: 'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs';
     /** Which tokens to include in the account info. */
     tokens?: 'derived' | 'used' | 'nonzero';
+    /** Optional protocol enrichments to include. Supported values currently include 'erc4626'. */
+    protocols?: string[];
     /** Number of items per page, if paging is used. */
     pageSize?: number;
     /** Requested page index, if paging is used. */
@@ -623,6 +703,16 @@ export interface WsAccountInfoReq {
     secondaryCurrency?: string;
     /** Gap limit for XPUB scanning, if relevant. */
     gap?: number;
+    /** If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call). */
+    confirmedNonce?: boolean;
+}
+export interface WsContractInfoReq {
+    /** Contract address to query. */
+    contract: string;
+    /** Optional secondary currency code used to include fiat pricing information. */
+    currency?: string;
+    /** Optional protocol enrichments to include. Supported values currently include 'erc4626'. */
+    protocols?: string[];
 }
 export interface WsBackendInfo {
     /** Backend version string. */
@@ -667,9 +757,9 @@ export interface WsBlockHashRes {
 export interface WsBlockReq {
     /** Block identifier (hash). */
     id: string;
-    /** Number of transactions per page in the block. */
+    /** Number of transactions per page in the block. Defaults to 1000 and is capped at 10000. */
     pageSize?: number;
-    /** Page index to retrieve if multiple pages of transactions are available. */
+    /** 1-based page index to retrieve if multiple pages of transactions are available. Values above the safe internal limit are clamped. */
     page?: number;
 }
 export interface WsBlockFilterReq {
@@ -755,6 +845,22 @@ export interface WsLongTermFeeRateRes {
     feePerUnit: string;
     /** Amount of blocks used for the long term fee rate estimation. */
     blocks: number;
+}
+export interface EthereumGasData {
+    /** Base fee per gas of the new block (post-London). */
+    baseFeePerGas?: string;
+    /** Total gas used by the new block (decimal). */
+    blockGasUsed?: string;
+    /** Gas limit of the new block (decimal). */
+    blockGasLimit?: string;
+}
+export interface WsNewBlock {
+    /** Height of the new block. */
+    height: number;
+    /** Hash of the new block. */
+    hash: string;
+    /** EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains. */
+    evmData: EthereumGasData | null;
 }
 export interface WsSendTransactionReq {
     /** Hex-encoded transaction data to broadcast (string format). */

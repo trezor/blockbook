@@ -20,7 +20,12 @@ import (
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
 	*bchain.BaseChain
-	client                 http.Client
+	client http.Client
+	// callCtx is the base context for all RPC HTTP requests; Shutdown cancels it
+	// so an in-flight sync call aborts promptly instead of running to the client
+	// timeout (which would otherwise delay process shutdown by up to that timeout).
+	callCtx                context.Context
+	cancelCall             context.CancelFunc
 	rpcURL                 string
 	user                   string
 	password               string
@@ -34,6 +39,29 @@ type BitcoinRPC struct {
 	mempoolFilterScripts   string
 	mempoolUseZeroedKey    bool
 	alternativeFeeProvider alternativeFeeProviderInterface
+	metrics                *common.Metrics
+}
+
+// SetMetrics sets prometheus metrics collector
+func (b *BitcoinRPC) SetMetrics(metrics *common.Metrics) {
+	b.metrics = metrics
+}
+
+// AverageBlockTimeDuration exposes the chain's nominal block cadence so the
+// blockbook_average_block_time_seconds gauge can normalize tip-age alerts
+// across coins. Returns an error if the config didn't set averageBlockTimeMs.
+func (b *BitcoinRPC) AverageBlockTimeDuration() (time.Duration, error) {
+	return b.ChainConfig.AverageBlockTimeDuration()
+}
+
+// MissingBlockRetryOverride exposes the per-chain sync-worker retry override
+// (or nil to use built-in defaults). Consumed by blockbook.go at SyncWorker
+// construction via a duck-typed interface assertion.
+func (b *BitcoinRPC) MissingBlockRetryOverride() *bchain.MissingBlockRetry {
+	if b.ChainConfig == nil {
+		return nil
+	}
+	return b.ChainConfig.MissingBlockRetry
 }
 
 // Configuration represents json config file
@@ -65,7 +93,29 @@ type Configuration struct {
 	MempoolGolombFilterP         uint8  `json:"mempool_golomb_filter_p,omitempty"`
 	MempoolFilterScripts         string `json:"mempool_filter_scripts,omitempty"`
 	MempoolFilterUseZeroedKey    bool   `json:"mempool_filter_use_zeroed_key,omitempty"`
+	// AverageBlockTimeMs is the chain's nominal block cadence in ms.
+	// Optional on UTXO chains; when set it is exposed as the
+	// blockbook_average_block_time_seconds gauge for alert normalization.
+	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
+	// MissingBlockRetry overrides the sync-worker missing-block retry policy
+	// per chain. All fields are optional; missing fields use built-in defaults.
+	MissingBlockRetry *bchain.MissingBlockRetry `json:"missingBlockRetry,omitempty"`
 }
+
+// AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.
+// Returns an error when unset so callers can distinguish "no configured cadence"
+// from a real zero — matching the EVM Configuration helper.
+func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
+	if c.AverageBlockTimeMs <= 0 {
+		return 0, errors.Errorf("averageBlockTimeMs must be a positive integer")
+	}
+	return time.Duration(c.AverageBlockTimeMs) * time.Millisecond, nil
+}
+
+// defaultRPCTimeoutSeconds is used when rpc_timeout is unset or non-positive.
+// A zero http.Client.Timeout means no timeout at all, so a blocked backend could
+// hang a sync RPC (and thus shutdown) forever; a finite floor is enforced instead.
+const defaultRPCTimeoutSeconds = 15
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
 func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
@@ -98,8 +148,15 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	c.SupportsEstimateFee = true
 	c.SupportsEstimateSmartFee = true
 
+	if c.RPCTimeout <= 0 {
+		glog.Warningf("rpc_timeout=%d is invalid, using default %d seconds", c.RPCTimeout, defaultRPCTimeoutSeconds)
+		c.RPCTimeout = defaultRPCTimeoutSeconds
+	}
+
 	transport := &http.Transport{
-		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
+		// DialContext (not Dial) so a request context cancelled by Shutdown also
+		// interrupts a blocked TCP connect, not just an established request.
+		DialContext:         (&net.Dialer{KeepAlive: 600 * time.Second}).DialContext,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100, // necessary to not to deplete ports
 	}
@@ -118,8 +175,19 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 		mempoolFilterScripts: c.MempoolFilterScripts,
 		mempoolUseZeroedKey:  c.MempoolFilterUseZeroedKey,
 	}
+	s.callCtx, s.cancelCall = context.WithCancel(context.Background())
 
 	return s, nil
+}
+
+// requestContext returns the base context for RPC HTTP requests. Shutdown cancels
+// it so in-flight calls abort promptly. Falls back to context.Background() when
+// unset (e.g. a directly-constructed test instance).
+func (b *BitcoinRPC) requestContext() context.Context {
+	if b.callCtx != nil {
+		return b.callCtx
+	}
+	return context.Background()
 }
 
 // Initialize initializes BitcoinRPC instance.
@@ -150,21 +218,21 @@ func (b *BitcoinRPC) Initialize() error {
 
 	if b.ChainConfig.AlternativeEstimateFee == "whatthefee" {
 		glog.Info("Using WhatTheFee")
-		if b.alternativeFeeProvider, err = NewWhatTheFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+		if b.alternativeFeeProvider, err = NewWhatTheFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
 			glog.Error("NewWhatTheFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
 		}
 	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspace" {
 		glog.Info("Using MempoolSpaceFee")
-		if b.alternativeFeeProvider, err = NewMempoolSpaceFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+		if b.alternativeFeeProvider, err = NewMempoolSpaceFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
 			glog.Error("MempoolSpaceFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
 		}
 	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspaceblock" {
 		glog.Info("Using MempoolSpaceBlockFee")
-		if b.alternativeFeeProvider, err = NewMempoolSpaceBlockFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+		if b.alternativeFeeProvider, err = NewMempoolSpaceBlockFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
 			glog.Error("MempoolSpaceBlockFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
@@ -187,33 +255,46 @@ func (b *BitcoinRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, err
 }
 
 // InitializeMempool creates ZeroMQ subscription and sets AddrDescForOutpointFunc to the Mempool
-func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
+func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTx bchain.OnNewTxFunc) error {
 	if b.Mempool == nil {
 		return errors.New("Mempool not created")
 	}
 	b.Mempool.AddrDescForOutpoint = addrDescForOutpoint
-	b.Mempool.OnNewTxAddr = onNewTxAddr
 	b.Mempool.OnNewTx = onNewTx
-	if b.mq == nil {
-		bitcoinTopics := bchain.SubscriptionTopics{
-			BlockSubscribe: "hashblock",
-			BlockReceive:   "hashblock",
-			TxSubscribe:    "hashtx",
-			TxReceive:      "hashtx",
-		}
 
-		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler, bitcoinTopics)
-		if err != nil {
-			glog.Error("mq: ", err)
-			return err
-		}
-		b.mq = mq
+	if b.mq != nil {
+		return nil
 	}
+	if b.ChainConfig.MessageQueueBinding == "" {
+		glog.Warning("ZeroMQ subscription disabled: message_queue_binding is empty; relying on polling")
+		return nil
+	}
+
+	bitcoinTopics := bchain.SubscriptionTopics{
+		BlockSubscribe: "hashblock",
+		BlockReceive:   "hashblock",
+		TxSubscribe:    "hashtx",
+		TxReceive:      "hashtx",
+	}
+
+	mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler, bitcoinTopics)
+	if err != nil {
+		glog.Error("mq: ", err)
+		return err
+	}
+	b.mq = mq
+
 	return nil
 }
 
 // Shutdown ZeroMQ and other resources
 func (b *BitcoinRPC) Shutdown(ctx context.Context) error {
+	// Cancel in-flight RPC HTTP requests so a sync call cannot delay shutdown up to
+	// the client timeout. Covers every coin that reaches the backend through Call
+	// (all BitcoinRPC-embedding coins that do not run their own HTTP client).
+	if b.cancelCall != nil {
+		b.cancelCall()
+	}
 	if b.mq != nil {
 		if err := b.mq.Shutdown(ctx); err != nil {
 			glog.Error("MQ.Shutdown error: ", err)
@@ -1059,7 +1140,7 @@ func (b *BitcoinRPC) callBatch(req []rpcBatchRequest, res *[]rpcBatchResponse) e
 	if err != nil {
 		return err
 	}
-	httpReq, err := http.NewRequest("POST", b.rpcURL, bytes.NewBuffer(httpData))
+	httpReq, err := http.NewRequestWithContext(b.requestContext(), "POST", b.rpcURL, bytes.NewBuffer(httpData))
 	if err != nil {
 		return err
 	}
@@ -1091,7 +1172,7 @@ func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 	if err != nil {
 		return err
 	}
-	httpReq, err := http.NewRequest("POST", b.rpcURL, bytes.NewBuffer(httpData))
+	httpReq, err := http.NewRequestWithContext(b.requestContext(), "POST", b.rpcURL, bytes.NewBuffer(httpData))
 	if err != nil {
 		return err
 	}

@@ -60,3 +60,43 @@ func TestCurrencyRatesTicker_ConvertToken(t *testing.T) {
 		})
 	}
 }
+
+func TestCurrencyRatesTicker_GetTokenRate_UsesExactMatchForCaseSensitiveTokens(t *testing.T) {
+	const tronUSDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+
+	ticker := &CurrencyRatesTicker{
+		Rates: map[string]float32{
+			"trx": 1,
+		},
+		TokenRates: map[string]float32{
+			tronUSDT: 9,
+		},
+	}
+
+	got, found := ticker.GetTokenRate(tronUSDT)
+	if !found {
+		t.Fatalf("expected exact-match lookup to find tron token %q", tronUSDT)
+	}
+	if got != 9 {
+		t.Fatalf("unexpected tron token rate: got %v, want %v", got, float32(9))
+	}
+}
+
+func TestCurrencyRatesTicker_GetTokenRate_FallsBackToLowercaseForHexTokens(t *testing.T) {
+	ticker := &CurrencyRatesTicker{
+		Rates: map[string]float32{
+			"usd": 1,
+		},
+		TokenRates: map[string]float32{
+			"0xa4dd6bc15be95af55f0447555c8b6aa3088562f3": 1.2,
+		},
+	}
+
+	got, found := ticker.GetTokenRate("0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3")
+	if !found {
+		t.Fatal("expected mixed-case hex token lookup to fall back to lowercase")
+	}
+	if got != 1.2 {
+		t.Fatalf("unexpected hex token rate: got %v, want %v", got, float32(1.2))
+	}
+}

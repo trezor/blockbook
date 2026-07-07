@@ -24,9 +24,9 @@
         "package_revision": "satoshilabs-1",
         "system_user": "bcash",
         "version": "28.0.1",
-        "binary_url": "https://github.com/bitcoin-cash-node/bitcoin-cash-node/releases/download/v28.0.1/bitcoin-cash-node-28.0.1-x86_64-linux-gnu.tar.gz",
+        "binary_url": "https://github.com/bitcoin-cash-node/bitcoin-cash-node/releases/download/v29.0.0/bitcoin-cash-node-29.0.0-x86_64-linux-gnu.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "d69ee632147f886ca540cecdff5b1b85512612b4c005e86b09083a63c35b64fa",
+        "verification_source": "6125d1cbecc1db476f2b6b7b91da5acde92d2311b8e738124e3db64ca84b33e1",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": ["bin/bitcoin-qt"],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -56,6 +56,7 @@
             "xpub_magic": 76067358,
             "slip44": 145,
             "additional_params": {
+                "averageBlockTimeMs": 600000,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
                 "fiat_rates_params": "{\"coin\": \"bitcoin-cash\", \"periodSeconds\": 900}"

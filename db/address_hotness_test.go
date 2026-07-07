@@ -95,8 +95,34 @@ func Test_addressHotness_LRUEviction(t *testing.T) {
 	}
 }
 
+func Test_addressHotness_LRUEvictionHook(t *testing.T) {
+	hot := newAddressHotness(1, 1, 1)
+	if hot == nil {
+		t.Fatal("expected hotness tracker to be initialized")
+	}
+	a := makeHotKey(13)
+	b := makeHotKey(14)
+	var evicted []addressHotnessKey
+	hot.onEvict = func(key addressHotnessKey) {
+		evicted = append(evicted, key)
+	}
+
+	if !hot.ShouldUseIndex(a, 1) {
+		t.Fatal("expected A to be promoted to hot")
+	}
+	if len(evicted) != 0 {
+		t.Fatal("did not expect eviction before LRU is full")
+	}
+	if !hot.ShouldUseIndex(b, 1) {
+		t.Fatal("expected B to be promoted to hot")
+	}
+	if len(evicted) != 1 || evicted[0] != a {
+		t.Fatalf("expected A to be evicted, got %v", evicted)
+	}
+}
+
 func Test_addressHotness_Specs(t *testing.T) {
-	t.Run("it should reset per-block hits", func(t *testing.T) {
+	t.Run("it should accumulate hits across blocks", func(t *testing.T) {
 		hot := newAddressHotness(1, 2, 2)
 		if hot == nil {
 			t.Fatal("expected hotness tracker to be initialized")
@@ -107,8 +133,30 @@ func Test_addressHotness_Specs(t *testing.T) {
 			t.Fatal("expected first hit to stay cold")
 		}
 		hot.BeginBlock()
-		if hot.ShouldUseIndex(key, 1) {
-			t.Fatal("expected hit count to reset between blocks")
+		if !hot.ShouldUseIndex(key, 1) {
+			t.Fatal("expected hit counts to accumulate across blocks and promote")
+		}
+	})
+
+	t.Run("it should reset pending hits once the candidate map exceeds its bound", func(t *testing.T) {
+		// lruSize (and thus maxPendingHits) is 1 here.
+		hot := newAddressHotness(1, 1, 2)
+		if hot == nil {
+			t.Fatal("expected hotness tracker to be initialized")
+		}
+		a := makeHotKey(30)
+		b := makeHotKey(31)
+		hot.BeginBlock()
+		if hot.ShouldUseIndex(a, 1) {
+			t.Fatal("expected first hit on A to stay cold")
+		}
+		if hot.ShouldUseIndex(b, 1) {
+			t.Fatal("expected first hit on B to stay cold")
+		}
+		// hits now holds 2 pending entries > maxPendingHits (1), so BeginBlock clears it.
+		hot.BeginBlock()
+		if hot.ShouldUseIndex(a, 1) {
+			t.Fatal("expected A's pending hit to be cleared once the bound was exceeded")
 		}
 	})
 

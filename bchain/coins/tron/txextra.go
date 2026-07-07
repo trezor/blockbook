@@ -1,6 +1,7 @@
 package tron
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 
@@ -17,10 +18,10 @@ type tronGetTransactionInfoByIDResponse struct {
 	Result               string                    `json:"result,omitempty"` // omitted on success, FAILED on error
 	ResMessage           string                    `json:"resMessage,omitempty"`
 	AssetIssueID         string                    `json:"assetIssueID,omitempty"`
-	WithdrawAmount       *int64                    `json:"withdraw_amount,omitempty"`
+	WithdrawAmount       *int64                    `json:"withdraw_amount,omitempty"` // rewards from voting, super representatives rewards
 	UnfreezeAmount       *int64                    `json:"unfreeze_amount,omitempty"`
 	InternalTransactions []tronInternalTransaction `json:"internal_transactions,omitempty"`
-	WithdrawExpireAmount *int64                    `json:"withdraw_expire_amount,omitempty"`
+	WithdrawExpireAmount *int64                    `json:"withdraw_expire_amount,omitempty"` // stake 2.0 withdraw of TRX after unfreeze
 	Receipt              struct {
 		Result             string `json:"result"`
 		EnergyUsage        *int64 `json:"energy_usage,omitempty"`
@@ -36,12 +37,18 @@ type tronGetTransactionInfoByIDResponse struct {
 
 func tronOperationFromContractType(contractType string) string {
 	switch contractType {
+	case "AccountCreateContract":
+		return "activateAccount"
 	case "VoteWitnessContract":
 		return "vote"
 	case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 		return "freeze"
-	case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
+	case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract":
 		return "unfreeze"
+	case "WithdrawExpireUnfreezeContract":
+		return "withdraw"
+	case "WithdrawBalanceContract":
+		return "voteRewardAmount"
 	case "DelegateResourceContract":
 		return "delegate"
 	case "UnDelegateResourceContract":
@@ -64,9 +71,27 @@ func tronFirstContract(txByID *tronGetTransactionByIDResponse) *tronTxContract {
 	return &txByID.RawData.Contract[0]
 }
 
+const tronNoteMaxBytes = 4096
+
+func tronDecodeNote(noteHex string) string {
+	noteHex = strip0xPrefix(strings.TrimSpace(noteHex))
+	if noteHex == "" {
+		return ""
+	}
+	b, err := hex.DecodeString(noteHex)
+	if err != nil {
+		return ""
+	}
+	if len(b) > tronNoteMaxBytes {
+		b = b[:tronNoteMaxBytes]
+	}
+	return strings.ToValidUTF8(string(b), "")
+}
+
 func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) bchain.TronChainExtraData {
 	extra := bchain.TronChainExtraData{}
 	extra.FeeLimit = tronInt64PtrToString(txByID.RawData.FeeLimit)
+	extra.Note = tronDecodeNote(txByID.RawData.Data)
 
 	if c := tronFirstContract(txByID); c != nil {
 		extra.ContractType = c.Type
@@ -88,8 +113,14 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			}
 		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 			extra.StakeAmount = tronInt64PtrToString(v.FrozenBalance)
-		case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
+		case "UnfreezeBalanceContract":
+			extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
+		case "UnfreezeBalanceV2Contract":
 			extra.UnstakeAmount = tronInt64PtrToString(v.UnfreezeBalance)
+		case "WithdrawExpireUnfreezeContract":
+			extra.UnstakeAmount = tronInt64PtrToString(txInfo.WithdrawExpireAmount)
+		case "WithdrawBalanceContract":
+			extra.ClaimedVoteReward = tronInt64PtrToString(txInfo.WithdrawAmount)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
 			extra.DelegateAmount = tronInt64PtrToString(v.Balance)
 			extra.DelegateTo = ToTronAddressFromAddress(v.ReceiverAddress)
@@ -110,15 +141,14 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 	if extra.Result == "" {
 		extra.Result = strings.TrimSpace(txInfo.Result)
 	}
-	if extra.UnstakeAmount == "" {
-		extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
-	}
 
 	return extra
 }
 
 func tronBuildRpcReceipt(txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
-	receipt := &bchain.RpcReceipt{}
+	receipt := &bchain.RpcReceipt{
+		GasUsed: "0x0",
+	}
 	if strings.TrimSpace(txInfo.Result) == "" {
 		receipt.Status = "0x1" // success
 	} else {
@@ -159,9 +189,13 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		v := c.Parameter.Value
 		tx.From = ToTronAddressFromAddress(v.OwnerAddress)
 		switch c.Type {
-		case "TransferContract", "TransferAssetContract":
+		case "AccountCreateContract":
+			tx.To = strings.TrimSpace(v.AccountAddress)
+		case "TransferContract": // TRX transfer
 			tx.To = strings.TrimSpace(v.ToAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.Amount)
+		case "TransferAssetContract": // TRC-10 transfer
+			tx.To = strings.TrimSpace(v.ToAddress)
 		case "TriggerSmartContract":
 			tx.To = strings.TrimSpace(v.ContractAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.CallValue)
@@ -171,14 +205,16 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.FrozenBalance)
-		case "UnfreezeBalanceContract", "WithdrawExpireUnfreezeContract":
+		case "UnfreezeBalanceContract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
+		case "WithdrawExpireUnfreezeContract":
+			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
+			tx.Value = tronInt64PtrToHexQuantity(txInfo.WithdrawExpireAmount)
 		case "UnfreezeBalanceV2Contract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
 			tx.Value = tronInt64PtrToHexQuantity(v.UnfreezeBalance)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
 			tx.To = tronFirstAddress(v.ReceiverAddress, v.ContractAddress, v.ToAddress)
-			tx.Value = tronInt64PtrToHexQuantity(v.Balance)
 		default:
 			tx.To = tronFirstAddress(v.ToAddress, v.ContractAddress, v.ReceiverAddress)
 			if tx.Payload == "0x" {

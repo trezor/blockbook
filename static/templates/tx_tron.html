@@ -43,6 +43,12 @@
             <td>Value</td>
             <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
         </tr>
+        {{if $chainExtra.Note}}
+        <tr>
+            <td>Note</td>
+            <td><span class="copyable" style="white-space: pre-wrap; overflow-wrap: anywhere;">{{$chainExtra.Note}}</span></td>
+        </tr>
+        {{end}}
         {{if $chainExtra.Operation}}
         <tr>
             <td>Operation</td>
@@ -110,6 +116,17 @@
         <tr>
             <td>Delegate Amount</td>
             <td><span class="copyable">{{$chainExtra.DelegateAmount}}</span> sun</td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.ClaimedVoteRewardValue}}
+        <tr>
+            <td>Withdraw Reward Amount</td>
+            <td>{{formattedAmountSpan $chainExtra.ClaimedVoteRewardValue 6 "TRX" $data "copyable"}}</td>
+        </tr>
+        {{else if $chainExtra.ClaimedVoteReward}}
+        <tr>
+            <td>Withdraw Reward Amount</td>
+            <td><span class="copyable">{{$chainExtra.ClaimedVoteReward}}</span> sun</td>
         </tr>
         {{end}}
         {{if $chainExtra.AssetIssueID}}

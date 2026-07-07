@@ -9,7 +9,7 @@ import (
 // WsReq represents a generic WebSocket request with an ID, method, and raw parameters.
 type WsReq struct {
 	ID     string          `json:"id" ts_doc:"Unique request identifier."`
-	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
+	Method string          `json:"method" ts_type:"'getAccountInfo' | 'getContractInfo' | 'getInfo' | 'getBlockHash'| 'getBlock' | 'getAccountUtxo' | 'getBalanceHistory' | 'getTransaction' | 'getTransactionSpecific' | 'estimateFee' | 'sendTransaction' | 'subscribeNewBlock' | 'unsubscribeNewBlock' | 'subscribeNewTransaction' | 'unsubscribeNewTransaction' | 'subscribeAddresses' | 'unsubscribeAddresses' | 'subscribeFiatRates' | 'unsubscribeFiatRates' | 'ping' | 'getCurrentFiatRates' | 'getFiatRatesForTimestamps' | 'getFiatRatesTickersList' | 'getMempoolFilters'" ts_doc:"Requested method name."`
 	Params json.RawMessage `json:"params" ts_type:"any" ts_doc:"Parameters for the requested method in raw JSON format."`
 }
 
@@ -19,18 +19,33 @@ type WsRes struct {
 	Data interface{} `json:"data" ts_doc:"Payload of the response, structure depends on the request."`
 }
 
+type resultError struct {
+	Error struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 // WsAccountInfoReq carries parameters for the 'getAccountInfo' method.
 type WsAccountInfoReq struct {
-	Descriptor        string `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
-	Details           string `json:"details,omitempty" ts_type:"'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs'" ts_doc:"Level of detail to retrieve about the account."`
-	Tokens            string `json:"tokens,omitempty" ts_type:"'derived' | 'used' | 'nonzero'" ts_doc:"Which tokens to include in the account info."`
-	PageSize          int    `json:"pageSize,omitempty" ts_doc:"Number of items per page, if paging is used."`
-	Page              int    `json:"page,omitempty" ts_doc:"Requested page index, if paging is used."`
-	FromHeight        int    `json:"from,omitempty" ts_doc:"Starting block height for transaction filtering."`
-	ToHeight          int    `json:"to,omitempty" ts_doc:"Ending block height for transaction filtering."`
-	ContractFilter    string `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
-	SecondaryCurrency string `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
-	Gap               int    `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+	Descriptor        string   `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
+	Details           string   `json:"details,omitempty" ts_type:"'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs'" ts_doc:"Level of detail to retrieve about the account."`
+	Tokens            string   `json:"tokens,omitempty" ts_type:"'derived' | 'used' | 'nonzero'" ts_doc:"Which tokens to include in the account info."`
+	Protocols         []string `json:"protocols,omitempty" ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
+	PageSize          int      `json:"pageSize,omitempty" ts_doc:"Number of items per page, if paging is used."`
+	Page              int      `json:"page,omitempty" ts_doc:"Requested page index, if paging is used."`
+	FromHeight        int      `json:"from,omitempty" ts_doc:"Starting block height for transaction filtering."`
+	ToHeight          int      `json:"to,omitempty" ts_doc:"Ending block height for transaction filtering."`
+	ContractFilter    string   `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
+	SecondaryCurrency string   `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
+	Gap               int      `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+	ConfirmedNonce    bool     `json:"confirmedNonce,omitempty" ts_doc:"If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
+}
+
+// WsContractInfoReq carries parameters for the 'getContractInfo' method.
+type WsContractInfoReq struct {
+	Contract  string   `json:"contract" ts_doc:"Contract address to query."`
+	Currency  string   `json:"currency,omitempty" ts_doc:"Optional secondary currency code used to include fiat pricing information."`
+	Protocols []string `json:"protocols,omitempty" ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
 }
 
 // WsBackendInfo holds extended info about the connected backend node.
@@ -68,8 +83,8 @@ type WsBlockHashRes struct {
 // WsBlockReq is used to request details of a block (by ID) with paging options.
 type WsBlockReq struct {
 	Id       string `json:"id" ts_doc:"Block identifier (hash)."`
-	PageSize int    `json:"pageSize,omitempty" ts_doc:"Number of transactions per page in the block."`
-	Page     int    `json:"page,omitempty" ts_doc:"Page index to retrieve if multiple pages of transactions are available."`
+	PageSize int    `json:"pageSize,omitempty" ts_doc:"Number of transactions per page in the block. Defaults to 1000 and is capped at 10000."`
+	Page     int    `json:"page,omitempty" ts_doc:"1-based page index to retrieve if multiple pages of transactions are available. Values above the safe internal limit are clamped."`
 }
 
 // WsAccountUtxoReq is used to request unspent transaction outputs (UTXOs) for a given xpub/address.
@@ -131,6 +146,21 @@ type WsEstimateFeeRes struct {
 	FeePerUnit string           `json:"feePerUnit,omitempty" ts_doc:"Estimated fee per unit (sat/byte, Wei/gas, etc.)."`
 	FeeLimit   string           `json:"feeLimit,omitempty" ts_doc:"Max fee limit for blockchains like Ethereum."`
 	Eip1559    *api.Eip1559Fees `json:"eip1559,omitempty"`
+}
+
+// EthereumGasData carries EVM block-level gas figures used by the frontend to deterministically
+// project the next block's EIP-1559 base fee. Decimal strings, omitted for pre-London blocks.
+type EthereumGasData struct {
+	BaseFeePerGas *api.Amount `json:"baseFeePerGas,omitempty" ts_doc:"Base fee per gas of the new block (post-London)."`
+	BlockGasUsed  *api.Amount `json:"blockGasUsed,omitempty" ts_doc:"Total gas used by the new block (decimal)."`
+	BlockGasLimit *api.Amount `json:"blockGasLimit,omitempty" ts_doc:"Gas limit of the new block (decimal)."`
+}
+
+// WsNewBlock is pushed to subscribeNewBlock subscribers when a new block is connected.
+type WsNewBlock struct {
+	Height  uint32           `json:"height" ts_doc:"Height of the new block."`
+	Hash    string           `json:"hash" ts_doc:"Hash of the new block."`
+	EVMData *EthereumGasData `json:"evmData" ts_doc:"EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains."`
 }
 
 // WsLongTermFeeRateRes is returned in response to a long term fee rate request.

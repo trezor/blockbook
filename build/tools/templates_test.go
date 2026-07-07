@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,19 @@ func TestLookupEnvWithArchiveFallback_UsesArchiveInfixFallback(t *testing.T) {
 	}
 }
 
+func TestLookupEnvWithArchiveFallback_UsesUnderscoreVariantForHyphenAlias(t *testing.T) {
+	const prefix = "TEST_LOOKUP_PREFIX_"
+	t.Setenv(prefix+"ethereum_classic", "https://classic")
+
+	got, ok := lookupEnvWithArchiveFallback(prefix, "ethereum-classic")
+	if !ok {
+		t.Fatal("expected underscore variant lookup to succeed")
+	}
+	if got != "https://classic" {
+		t.Fatalf("unexpected underscore variant value %q", got)
+	}
+}
+
 func TestLookupEnvWithArchiveFallback_DoesNotDoubleArchive(t *testing.T) {
 	const prefix = "TEST_LOOKUP_PREFIX_"
 	t.Setenv(prefix+"polygon_archive_archive_bor", "https://invalid")
@@ -148,6 +162,153 @@ func TestLoadConfigSetsWantsBackendServiceFromEffectiveRPCURL(t *testing.T) {
 	})
 }
 
+func TestLoadConfigOverridesMessageQueueBindingFromEnv(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"bitcoin",
+		devMQURLPrefix+"bitcoin_archive",
+		prodMQURLPrefix+"bitcoin",
+		prodMQURLPrefix+"bitcoin_archive",
+	)
+
+	t.Setenv(buildEnvVar, buildEnvDev)
+	t.Setenv(devMQURLPrefix+"bitcoin", "tcp://mq-dev.example:38330")
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	renderedMQ, err := renderConfigTemplate(config, "IPC.MessageQueueBindingTemplate")
+	if err != nil {
+		t.Fatalf("renderConfigTemplate(MessageQueueBindingTemplate) error = %v", err)
+	}
+	if renderedMQ != "tcp://mq-dev.example:38330" {
+		t.Fatalf("message_queue_binding = %q, want %q", renderedMQ, "tcp://mq-dev.example:38330")
+	}
+}
+
+func TestLoadConfigUsesProdMQOverrideWhenBuildEnvIsProd(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"bitcoin",
+		prodMQURLPrefix+"bitcoin",
+	)
+
+	t.Setenv(buildEnvVar, buildEnvProd)
+	t.Setenv(devMQURLPrefix+"bitcoin", "tcp://mq-dev.example:38330")
+	t.Setenv(prodMQURLPrefix+"bitcoin", "tcp://mq-prod.example:48330")
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	renderedMQ, err := renderConfigTemplate(config, "IPC.MessageQueueBindingTemplate")
+	if err != nil {
+		t.Fatalf("renderConfigTemplate(MessageQueueBindingTemplate) error = %v", err)
+	}
+	if renderedMQ != "tcp://mq-prod.example:48330" {
+		t.Fatalf("message_queue_binding = %q, want %q", renderedMQ, "tcp://mq-prod.example:48330")
+	}
+}
+
+func TestLoadConfigUsesUnderscoreMQOverrideForHyphenAlias(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"ethereum_classic",
+		prodMQURLPrefix+"ethereum_classic",
+	)
+
+	t.Setenv(buildEnvVar, buildEnvDev)
+	t.Setenv(devMQURLPrefix+"ethereum_classic", "tcp://mq-classic.example:9037")
+
+	config, err := LoadConfig(configsDir, "ethereum-classic")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	renderedMQ, err := renderConfigTemplate(config, "IPC.MessageQueueBindingTemplate")
+	if err != nil {
+		t.Fatalf("renderConfigTemplate(MessageQueueBindingTemplate) error = %v", err)
+	}
+	if renderedMQ != "tcp://mq-classic.example:9037" {
+		t.Fatalf("message_queue_binding = %q, want %q", renderedMQ, "tcp://mq-classic.example:9037")
+	}
+}
+
+func TestLoadConfigSetsBlockbookPprofBindingForDevBuilds(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	tests := []struct {
+		name     string
+		buildEnv string
+	}{
+		{name: "default-dev"},
+		{name: "explicit-dev", buildEnv: buildEnvDev},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withTemporarilyUnsetEnv(t, buildEnvVar)
+			if tt.buildEnv != "" {
+				t.Setenv(buildEnvVar, tt.buildEnv)
+			}
+
+			config, err := LoadConfig(configsDir, "ethereum")
+			if err != nil {
+				t.Fatalf("LoadConfig() error = %v", err)
+			}
+			if config.Env.BlockbookPprofBinding != ":29036" {
+				t.Fatalf("BlockbookPprofBinding = %q, want %q", config.Env.BlockbookPprofBinding, ":29036")
+			}
+
+			templ := config.ParseTemplate()
+			templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "debian", "service")))
+
+			var service bytes.Buffer
+			if err := templ.ExecuteTemplate(&service, "main", config); err != nil {
+				t.Fatalf("ExecuteTemplate(blockbook service) error = %v", err)
+			}
+			if rendered := service.String(); !strings.Contains(rendered, " -prof=:29036 ") {
+				t.Fatalf("expected pprof flag in rendered service:\n%s", rendered)
+			}
+		})
+	}
+}
+
+func TestLoadConfigOmitsBlockbookPprofBindingForProdBuild(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t, buildEnvVar)
+	t.Setenv(buildEnvVar, buildEnvProd)
+
+	config, err := LoadConfig(configsDir, "ethereum")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if config.Env.BlockbookPprofBinding != "" {
+		t.Fatalf("BlockbookPprofBinding = %q, want empty", config.Env.BlockbookPprofBinding)
+	}
+
+	templ := config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "debian", "service")))
+
+	var service bytes.Buffer
+	if err := templ.ExecuteTemplate(&service, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(blockbook service) error = %v", err)
+	}
+	if rendered := service.String(); strings.Contains(rendered, "-prof=") {
+		t.Fatalf("did not expect pprof flag in rendered service:\n%s", rendered)
+	}
+}
+
 func TestBlockbookServiceTemplateGatesWantsLine(t *testing.T) {
 	config := &Config{}
 	config.Coin.Name = "Bitcoin"
@@ -179,6 +340,61 @@ func TestBlockbookServiceTemplateGatesWantsLine(t *testing.T) {
 	}
 	if rendered := renderService(t, false); strings.Contains(rendered, "Wants=backend-bitcoin.service") {
 		t.Fatalf("did not expect Wants line in rendered service:\n%s", rendered)
+	}
+}
+
+func TestEthereumClassicRPCAndBackendHTTPPortStayAligned(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devRPCURLHTTPPrefix+"ethereum_classic",
+		devRPCURLWSPrefix+"ethereum_classic",
+		prodRPCURLHTTPPrefix+"ethereum_classic",
+		prodRPCURLWSPrefix+"ethereum_classic",
+	)
+
+	config, err := LoadConfig(configsDir, "ethereum-classic")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	templ := config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "blockchaincfg.json")))
+
+	var blockchainCfg bytes.Buffer
+	if err := templ.ExecuteTemplate(&blockchainCfg, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(blockchaincfg) error = %v", err)
+	}
+
+	var renderedCfg struct {
+		RPCURL   string `json:"rpc_url"`
+		RPCURLWS string `json:"rpc_url_ws"`
+	}
+	if err := json.Unmarshal(blockchainCfg.Bytes(), &renderedCfg); err != nil {
+		t.Fatalf("json.Unmarshal(blockchaincfg) error = %v", err)
+	}
+
+	if renderedCfg.RPCURL != "http://127.0.0.1:8037" {
+		t.Fatalf("rpc_url = %q, want %q", renderedCfg.RPCURL, "http://127.0.0.1:8037")
+	}
+	if renderedCfg.RPCURLWS != "ws://127.0.0.1:8037" {
+		t.Fatalf("rpc_url_ws = %q, want %q", renderedCfg.RPCURLWS, "ws://127.0.0.1:8037")
+	}
+
+	templ = config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "backend", "debian", "service")))
+
+	var backendService bytes.Buffer
+	if err := templ.ExecuteTemplate(&backendService, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(backend service) error = %v", err)
+	}
+
+	if !strings.Contains(backendService.String(), "--http.port 8037") {
+		t.Fatalf("expected ETC backend service to render --http.port 8037:\n%s", backendService.String())
+	}
+	if !strings.Contains(backendService.String(), "--ws.port 8037") {
+		t.Fatalf("expected ETC backend service to render --ws.port 8037:\n%s", backendService.String())
 	}
 }
 

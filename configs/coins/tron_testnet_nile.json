@@ -1,7 +1,8 @@
 {
     "coin": {
         "name": "Tron Testnet Nile",
-        "shortcut": "TRX",
+        "network": "tTRX",
+        "shortcut": "tTRX",
         "label": "Tron Nile",
         "alias": "tron_testnet_nile"
     },
@@ -21,15 +22,15 @@
         "package_name": "backend-tron-testnet-nile",
         "package_revision": "latest",
         "system_user": "tron",
-        "version": "4.8.0.2",
-        "binary_url": "https://github.com/tron-nile-testnet/nile-testnet/releases/download/GreatVoyage-Nile-v4.8.0.2/FullNode-Nile-4.8.0.2.jar",
+        "version": "4.8.1-build4",
+        "binary_url": "https://github.com/tron-nile-testnet/nile-testnet/releases/download/GreatVoyage-Nile-v4.8.1-build4/FullNode-Nile-x64-4.8.1-build4.jar",
         "verification_type": "sha256",
-        "verification_source": "3525d415bf16da86386904614e15c3b4549d2f96e1c1adb8db80892e4a6b0f07",
-        "extract_command": "mv ${ARCHIVE} backend/ && wget -q https://raw.githubusercontent.com/tron-nile-testnet/nile-testnet/refs/heads/master/framework/src/main/resources/config-nile.conf -O test_net_config.conf && sed -i 's/^[ \\t]*#*[ \\t]*httpFullNodeEnable.*/httpFullNodeEnable = true/' test_net_config.conf && sed -i 's/^[ \\t]*#*[ \\t]*httpFullNodePort.*/httpFullNodePort = 8545/' test_net_config.conf && sed -i '/triggerName *= *\"block\"/{n;s/enable *= *.*/enable = true/;}' test_net_config.conf && sed -i 's/^[ \\t]*supportConstant[ \\t]*=[ \\t]*false/supportConstant = true/' test_net_config.conf && mv test_net_config.conf backend/ && echo ",
+        "verification_source": "fe71b6ea77d4506ff53cb34a8d8c0d8230bace2d4ab1c79bc32e4458c6531878",
+        "extract_command": "mv ${ARCHIVE} backend/ && wget -q https://raw.githubusercontent.com/tron-nile-testnet/nile-testnet/3f6f53ca3b1f113dabd7bcba346d66b1fb71b710/framework/src/main/resources/config-nile.conf -O test_net_config.conf && sha256sum test_net_config.conf | grep -q '^296455a150477bc0f80a4125a57809cafcd843c271f1d7973ee051576a827b84' && sed -i 's/^[ \\t]*#*[ \\t]*httpFullNodeEnable.*/httpFullNodeEnable = true/' test_net_config.conf && sed -i 's/^[ \\t]*#*[ \\t]*httpFullNodePort.*/httpFullNodePort = 8545/' test_net_config.conf && sed -i '/triggerName *= *\"block\"/{n;s/enable *= *.*/enable = true/;}' test_net_config.conf && sed -i 's/^[ \\t]*supportConstant[ \\t]*=[ \\t]*false/supportConstant = true/' test_net_config.conf && mv test_net_config.conf backend/ && echo ",
         "exclude_files": [],
-        "exec_command_template": "/usr/bin/java -Xms32G -Xmx32G -XX:ReservedCodeCacheSize=256m -XX:MetaspaceSize=256m -XX:MaxMetaspaceSize=512m -XX:MaxDirectMemorySize=1G -XX:+PrintGCDetails -XX:+PrintGCDateStamps -Xloggc:gc.log -XX:+UseConcMarkSweepGC -XX:NewRatio=2 -XX:+CMSScavengeBeforeRemark -XX:+ParallelRefProcEnabled -XX:+HeapDumpOnOutOfMemoryError -XX:+UseCMSInitiatingOccupancyOnly -XX:CMSInitiatingOccupancyFraction=70 -jar {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/FullNode-Nile-4.8.0.2.jar --es -c {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/test_net_config.conf >> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log 2>&1",
+        "exec_command_template": "/usr/bin/java -Xms9G -Xmx16G -XX:ReservedCodeCacheSize=256m -XX:MetaspaceSize=256m -XX:MaxMetaspaceSize=512m -XX:MaxDirectMemorySize=1G -XX:+PrintGCDetails -XX:+PrintGCDateStamps -Xloggc:{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/gc.log -XX:+UseConcMarkSweepGC -XX:NewRatio=2 -XX:+CMSScavengeBeforeRemark -XX:+ParallelRefProcEnabled -XX:+HeapDumpOnOutOfMemoryError -XX:+UseCMSInitiatingOccupancyOnly -XX:CMSInitiatingOccupancyFraction=70 -jar {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/FullNode-Nile-x64-4.8.1-build4.jar --es --output-directory {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/output-directory -c {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/test_net_config.conf",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-        "postinst_script_template": "",
+        "postinst_script_template": "mkdir -p {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/logs && chown {{.Backend.SystemUser}}:{{.Backend.SystemUser}} {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/logs",
         "service_type": "simple",
         "service_additional_params_template": "StandardOutput=append:{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log\nStandardError=inherit",
         "protect_memory": false,
@@ -38,7 +39,7 @@
         "client_config_file": ""
     },
     "blockbook": {
-        "package_name": "blockbook-tron",
+        "package_name": "blockbook-tron-testnet-nile",
         "system_user": "blockbook-tron",
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
@@ -50,14 +51,13 @@
             "mempool_sub_workers": 0,
             "block_addresses_to_keep": 10000,
             "additional_params": {
-                "tron_fullnode_http_url_template": "http://127.0.0.1:8090",
-                "tron_solidity_http_url_template": "http://127.0.0.1:8091",
                 "address_aliases": true,
                 "mempoolTxTimeoutHours": 4,
                 "queryBackendOnMempoolResync": true,
+                "averageBlockTimeMs": 3000,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "USD,EUR,CNY",
-                "fiat_rates_params": "{\"coin\": \"tron\",\"platformIdentifier\": \"tron\",\"platformVsCurrency\": \"trx\",\"periodSeconds\": 900}",
+                "fiat_rates_params": "{\"coin\": \"tron\",\"platformIdentifier\": \"tron\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}",
                 "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
             }
         }

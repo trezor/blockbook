@@ -267,6 +267,10 @@ const (
 	P2TR
 )
 
+// MaxXpubChangeIndexes limits how many change branches one xpub descriptor can
+// expand during account scans.
+const MaxXpubChangeIndexes = 10
+
 // XpubDescriptor contains parsed data from xpub descriptor
 type XpubDescriptor struct {
 	XpubDescriptor string      `ts_doc:"Full descriptor string including xpub and script type."`
@@ -297,9 +301,6 @@ type ENSResolution struct {
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(block *Block)
 
-// OnNewTxAddrFunc is used to send notification about a new transaction/address
-type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
-
 // OnNewTxFunc is used to send notification about a new transaction/address
 type OnNewTxFunc func(tx *MempoolTx)
 
@@ -319,7 +320,7 @@ type BlockChain interface {
 	// create mempool but do not initialize it
 	CreateMempool(BlockChain) (Mempool, error)
 	// initialize mempool, create ZeroMQ (or other) subscription
-	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc, OnNewTxFunc) error
+	InitializeMempool(AddrDescForOutpointFunc, OnNewTxFunc) error
 	// shutdown mempool, ZeroMQ and block chain connections
 	Shutdown(ctx context.Context) error
 	// chain info
@@ -351,7 +352,7 @@ type BlockChain interface {
 	GetChainParser() BlockChainParser
 	// EthereumType specific
 	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
-	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
+	EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetEip1559Fees() (*Eip1559Fees, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
@@ -426,4 +427,24 @@ type Mempool interface {
 	GetAllEntries() MempoolTxidEntries
 	GetTransactionTime(txid string) uint32
 	GetTxidFilterEntries(filterScripts string, fromTimestamp uint32) (MempoolTxidFilterEntries, error)
+}
+
+// MissingBlockRetry is the JSON wire shape for per-chain overrides of the
+// sync-worker missing-block retry policy. Each field is optional; zero / missing
+// values fall back to the db package's built-in defaults. Operators set this
+// under `additional_params.missingBlockRetry` in `configs/coins/*.json`.
+type MissingBlockRetry struct {
+	// RetryDelayMs is the sleep between successive GetBlock attempts for the same
+	// missing block in the parallel worker path. The sequential tip path applies
+	// an additional internal cap of 250 ms regardless of this value.
+	RetryDelayMs int `json:"retryDelayMs,omitempty"`
+	// RecheckThreshold is the number of consecutive retryable errors in the
+	// parallel worker before probing the chain via shouldRestartSyncOnMissingBlock.
+	RecheckThreshold int `json:"recheckThreshold,omitempty"`
+	// TipRecheckThreshold is the equivalent threshold once the hash queue is
+	// closed (we are at the tail of a range) or for the sequential tip path.
+	TipRecheckThreshold int `json:"tipRecheckThreshold,omitempty"`
+	// MaxStallMs is the wall-clock budget per stuck block before the retry loop
+	// yields errResync to the outer machinery.
+	MaxStallMs int `json:"maxStallMs,omitempty"`
 }

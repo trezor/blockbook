@@ -91,6 +91,8 @@ type InternalState struct {
 
 	BackendInfo BackendInfo `json:"-" ts_doc:"Information about the connected blockchain backend (not exposed in JSON)."`
 
+	BackendTipLastAdvance time.Time `json:"-" ts_doc:"Wall-clock time when BackendInfo.Blocks was last observed to advance (not exposed in JSON)."`
+
 	// database migrations
 	UtxoChecked            bool `json:"utxoChecked" ts_doc:"Indicates if UTXO consistency checks have been performed."`
 	SortedAddressContracts bool `json:"sortedAddressContracts" ts_doc:"Indicates if address/contract sorting has been completed."`
@@ -103,6 +105,30 @@ type InternalState struct {
 	// allowed number of fetched accounts over websocket
 	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
 	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
+
+	// BalanceHistoryMaxTxsWS / BalanceHistoryMaxTxsREST cap how many transactions a
+	// single balance-history request (address or xpub) may aggregate; each costs a DB
+	// read, so this bounds a cheap-to-send DoS and errors past the cap (0 = unlimited).
+	// WS is generous (Trezor Suite's full-history graph); REST is tighter (open surface).
+	BalanceHistoryMaxTxsWS   int `json:"-" ts_doc:"Max transactions aggregated per WS balance-history request, 0 = unlimited (not exposed)."`
+	BalanceHistoryMaxTxsREST int `json:"-" ts_doc:"Max transactions aggregated per REST balance-history request, 0 = unlimited (not exposed)."`
+
+	// websocket IP blocklist: keys (IPv4 address or full IPv6 /128) blocked from
+	// opening new connections after flooding a single connection past the message-rate
+	// limit. Keyed on the /128 (not the limiter's /64) so a block cannot take out a
+	// shared /64. Guarded by its own mutex (consulted on every connection attempt).
+	wsBlockMux   sync.Mutex
+	wsBlockedIPs map[string]*WsBlockedIP
+}
+
+// WsBlockedIP records a websocket client key (IPv4 address or full IPv6 /128)
+// that is temporarily blocked from opening new websocket connections.
+type WsBlockedIP struct {
+	Key       string    `ts_doc:"Blocked client key: an IPv4 address or a full IPv6 /128 address."`
+	BlockedAt time.Time `ts_doc:"Time the key was first blocked in the current block."`
+	Until     time.Time `ts_doc:"Time the block expires."`
+	Breaches  int       `ts_doc:"How many times this key tripped the per-connection message rate limit."`
+	Rejected  int       `ts_doc:"How many new connections were rejected while the key was blocked."`
 }
 
 // StartedSync signals start of synchronization
@@ -328,10 +354,15 @@ func (is *InternalState) GetNetwork() string {
 	return network
 }
 
-// SetBackendInfo sets new BackendInfo
+// SetBackendInfo sets new BackendInfo and records the time when Blocks advances.
+// On the first observation the advance time is seeded to now so the
+// derived tip-age metric reads a meaningful value instead of "since epoch."
 func (is *InternalState) SetBackendInfo(bi *BackendInfo) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
+	if bi.Blocks > is.BackendInfo.Blocks || is.BackendTipLastAdvance.IsZero() {
+		is.BackendTipLastAdvance = time.Now()
+	}
 	is.BackendInfo = *bi
 }
 
@@ -340,6 +371,19 @@ func (is *InternalState) GetBackendInfo() BackendInfo {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	return is.BackendInfo
+}
+
+// GetBackendTipLastAdvance returns the wall-clock time when the backend's
+// Blocks height was last observed to advance. BackendTipLastAdvance is not
+// persisted, so on startup (before the first SetBackendInfo) it is zero; seed
+// it to now on first read so tip-age metrics don't report a bogus huge age.
+func (is *InternalState) GetBackendTipLastAdvance() time.Time {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	if is.BackendTipLastAdvance.IsZero() {
+		is.BackendTipLastAdvance = time.Now()
+	}
+	return is.BackendTipLastAdvance
 }
 
 // Pack marshals internal state to json
@@ -379,4 +423,97 @@ func (is *InternalState) ResetWsLimitExceedingIPs() {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.WsLimitExceedingIPs = make(map[string]int)
+}
+
+// WsLimitExceedingIPsSnapshot returns a copy of the limit-exceeding counters.
+// The map is mutated under is.mux by AddWsLimitExceedingIP, so readers (the
+// admin page) must not range over it directly.
+func (is *InternalState) WsLimitExceedingIPsSnapshot() map[string]int {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	out := make(map[string]int, len(is.WsLimitExceedingIPs))
+	for k, v := range is.WsLimitExceedingIPs {
+		out[k] = v
+	}
+	return out
+}
+
+// BlockWsIP flags a websocket client key (an IPv4 address or full IPv6 /128) as
+// blocked until the given time. If the key is already blocked the block is
+// extended to the later of the two expirations and the breach counter is
+// incremented; otherwise a new entry is created. now is passed in so callers can
+// inject a clock in tests.
+func (is *InternalState) BlockWsIP(key string, until, now time.Time) {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	if is.wsBlockedIPs == nil {
+		is.wsBlockedIPs = make(map[string]*WsBlockedIP)
+	}
+	e := is.wsBlockedIPs[key]
+	if e == nil || !now.Before(e.Until) {
+		// new block, or the previous one had already expired: reset the window
+		e = &WsBlockedIP{Key: key, BlockedAt: now}
+		is.wsBlockedIPs[key] = e
+	}
+	e.Breaches++
+	if until.After(e.Until) {
+		e.Until = until
+	}
+}
+
+// IsWsIPBlocked reports whether the key is currently blocked. When blocked it
+// records a rejected connection so the admin page can show how much traffic the
+// block is shedding, and returns the updated count so the caller can throttle
+// per-attempt logging. Expired entries are treated as not blocked (the periodic
+// SweepWsBlockedIPs removes them).
+func (is *InternalState) IsWsIPBlocked(key string, now time.Time) (bool, int) {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	e := is.wsBlockedIPs[key]
+	if e == nil || now.Before(e.BlockedAt) {
+		return false, 0
+	}
+	if !now.Before(e.Until) {
+		return false, 0
+	}
+	e.Rejected++
+	return true, e.Rejected
+}
+
+// SweepWsBlockedIPs removes expired entries and returns the number of keys that
+// remain blocked, for the websocket_blocked_ips gauge.
+func (is *InternalState) SweepWsBlockedIPs(now time.Time) int {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	for key, e := range is.wsBlockedIPs {
+		if !now.Before(e.Until) {
+			delete(is.wsBlockedIPs, key)
+		}
+	}
+	return len(is.wsBlockedIPs)
+}
+
+// WsBlockedIPsSnapshot returns a copy of the currently blocked entries, newest
+// expiry first, skipping any that have already expired.
+func (is *InternalState) WsBlockedIPsSnapshot(now time.Time) []WsBlockedIP {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	out := make([]WsBlockedIP, 0, len(is.wsBlockedIPs))
+	for _, e := range is.wsBlockedIPs {
+		if !now.Before(e.Until) {
+			continue
+		}
+		out = append(out, *e)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Until.After(out[j].Until)
+	})
+	return out
+}
+
+// ResetWsBlockedIPs clears the websocket IP blocklist.
+func (is *InternalState) ResetWsBlockedIPs() {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	is.wsBlockedIPs = make(map[string]*WsBlockedIP)
 }

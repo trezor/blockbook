@@ -46,7 +46,7 @@
         }
     },
     "blockbook": {
-        "package_name": "blockbook-polygon",
+        "package_name": "blockbook-polygon-bor",
         "system_user": "blockbook-polygon",
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
@@ -58,11 +58,12 @@
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 300,
             "additional_params": {
-                "mempoolTxTimeoutHours": 48,
+                "averageBlockTimeMs": 2000,
+                "mempoolTxTimeoutHours": 12,
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
-                "fiat_rates_params": "{\"coin\": \"matic-network\",\"platformIdentifier\": \"polygon-pos\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}"
+                "fiat_rates_params": "{\"coin\": \"polygon-ecosystem-token\",\"platformIdentifier\": \"polygon-pos\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}"
             }
         }
     },

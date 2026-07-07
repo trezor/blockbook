@@ -107,6 +107,14 @@ Column families used only by **Ethereum type** coins:
                          <(nr_values vuint)+[]((id bigInt)+(value bigInt)) if ERC1155>
   ```
 
+  This is a **dense counted-entry record**:
+
+  - a small fixed prefix with address-level counters
+  - a counted list of per-contract entries
+  - each contract entry stores a compact standard-discriminated payload
+
+  It is optimized for compactness and hot-path account reads, not for extensibility.
+
   - Contract ordering & hotness lookup
 
   Contract entries are appended in discovery order (they are not sorted). Lookups are normally a linear scan, but for
@@ -118,8 +126,9 @@ Column families used only by **Ethereum type** coins:
 
   To reduce repeated RocksDB reads/writes for very large entries, Blockbook caches addressContracts blobs whose packed
   size exceeds `address_contracts_cache_min_size`. The cache is flushed periodically, and also flushed early when its
-  total size crosses `address_contracts_cache_max_bytes`. Early flush avoids unbounded memory growth at the cost of
-  more frequent writes.
+  total size crosses the active cache cap. Chain-tip sync uses `address_contracts_cache_max_bytes`; bulk connect uses
+  `address_contracts_cache_bulk_max_bytes`. Early flush avoids unbounded memory growth at the cost of more frequent
+  writes.
 
 - **internalData** (used only by Ethereum type coins)
 
@@ -178,12 +187,54 @@ Column families used only by **Ethereum type** coins:
 
 - **contracts** (used only by Ethereum type coins)
 
-  Maps contract _addrDesc_ to information about contract - _name_, _symbol_, _type_ (ERC20,ERC721 or ERC1155), _decimals_, _created_ and _destructed_ in block height
+  Maps contract _addrDesc_ to indexed contract metadata. Sync owns this column
+  family; API code does not write here. Protocol-specific detection records
+  (e.g. ERC-4626 vault status) live in **ercProtocols** so API-time
+  writes cannot collide with sync's whole-row writes.
 
   ```
   (addrDesc []byte) -> (name string)+(symbol string)+(type string)+(decimals vuint)+
                        (createdInBlock vuint)+(destroyedInBlock vuint)
   ```
+
+- **ercProtocols** (used only by EVM coins)
+
+  Per-protocol detection records keyed by contract address. Decoupled from
+  **contracts** so API-driven protocol writes never clobber sync-driven
+  contract metadata, and so disconnect can revert protocol records
+  independently.
+
+  Two prefixes share the column family:
+
+  ```
+  (0x00 || protocolId byte || addrDesc []byte) -> (persistHeight vuint)+(payload []byte)
+  (0x01 || protocolId byte || persistHeight uint32 || addrDesc []byte) -> ()
+  ```
+
+  - **byContract** (prefix `0x00`) is the read path: one row per
+    `(contract, protocolId)`, value carries the persist-height and the
+    protocol-specific payload.
+  - **byHeight** (prefix `0x01`) is the secondary index used by `DisconnectBlockRangeEthereumType`:
+    a small range scan over the disconnected height range yields exactly the rows
+    whose persistence is no longer canonical, and both rows are deleted
+    in the same batch as the rest of the disconnect.
+
+  Reserved protocol IDs:
+
+  - `protocolId = 1` (`erc4626`): payload is the ERC-4626 vault's underlying
+    asset address.
+
+    ```
+    erc4626 payload := (underlyingAssetContract string)
+    ```
+
+    Presence of the row implies the contract was observed as a vault at
+    `persistHeight`; absence means either not-a-vault or never observed.
+    The asset address is captured by the contractInfo API path on a
+    successful Multicall3 probe of `asset()` and `totalAssets()`; indexing
+    itself does not mark vaults.
+
+  Future protocol IDs append the next free byte. `0x00` is reserved.
 
 - **functionSignatures** (used only by Ethereum type coins)
 

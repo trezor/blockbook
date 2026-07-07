@@ -101,26 +101,30 @@ type Config struct {
 		PackageMaintainerEmail string `json:"package_maintainer_email"`
 	} `json:"meta"`
 	Env struct {
-		Version              string `json:"version"`
-		BackendInstallPath   string `json:"backend_install_path"`
-		BackendDataPath      string `json:"backend_data_path"`
-		BlockbookInstallPath string `json:"blockbook_install_path"`
-		BlockbookDataPath    string `json:"blockbook_data_path"`
-		Architecture         string `json:"architecture"`
-		RPCBindHost          string `json:"-"` // Derived from BB_RPC_BIND_HOST_* to keep default RPC exposure local.
-		RPCAllowIP           string `json:"-"` // Derived to align rpcallowip with RPC bind host intent.
-		WantsBackendService  bool   `json:"-"` // Derived from the effective RPC URL so systemd only wants a local backend.
+		Version               string `json:"version"`
+		BackendInstallPath    string `json:"backend_install_path"`
+		BackendDataPath       string `json:"backend_data_path"`
+		BlockbookInstallPath  string `json:"blockbook_install_path"`
+		BlockbookDataPath     string `json:"blockbook_data_path"`
+		Architecture          string `json:"architecture"`
+		RPCBindHost           string `json:"-"` // Derived from BB_RPC_BIND_HOST_* to keep default RPC exposure local.
+		RPCAllowIP            string `json:"-"` // Derived to align rpcallowip with RPC bind host intent.
+		BlockbookPprofBinding string `json:"-"` // Derived for dev builds so deployed Blockbooks expose pprof on a per-coin port.
+		WantsBackendService   bool   `json:"-"` // Derived from the effective RPC URL so systemd only wants a local backend.
 	} `json:"-"`
 }
 
 const (
-	buildEnvVar          = "BB_BUILD_ENV"
-	buildEnvDev          = "dev"
-	buildEnvProd         = "prod"
-	devRPCURLHTTPPrefix  = "BB_DEV_RPC_URL_HTTP_"
-	devRPCURLWSPrefix    = "BB_DEV_RPC_URL_WS_"
-	prodRPCURLHTTPPrefix = "BB_PROD_RPC_URL_HTTP_"
-	prodRPCURLWSPrefix   = "BB_PROD_RPC_URL_WS_"
+	buildEnvVar                 = "BB_BUILD_ENV"
+	buildEnvDev                 = "dev"
+	buildEnvProd                = "prod"
+	devRPCURLHTTPPrefix         = "BB_DEV_RPC_URL_HTTP_"
+	devRPCURLWSPrefix           = "BB_DEV_RPC_URL_WS_"
+	devMQURLPrefix              = "BB_DEV_MQ_URL_"
+	prodRPCURLHTTPPrefix        = "BB_PROD_RPC_URL_HTTP_"
+	prodRPCURLWSPrefix          = "BB_PROD_RPC_URL_WS_"
+	prodMQURLPrefix             = "BB_PROD_MQ_URL_"
+	devBlockbookPprofPortOffset = 20000
 )
 
 func jsonToString(msg json.RawMessage) (string, error) {
@@ -187,6 +191,9 @@ func loadCoinAliases(configsDir string) (map[string]struct{}, error) {
 		}
 		if alias != "" {
 			validAliases[alias] = struct{}{}
+			if strings.Contains(alias, "-") {
+				validAliases[strings.ReplaceAll(alias, "-", "_")] = struct{}{}
+			}
 		}
 	}
 
@@ -211,8 +218,10 @@ func rpcEnvPrefixes() []string {
 	return []string{
 		devRPCURLWSPrefix,
 		devRPCURLHTTPPrefix,
+		devMQURLPrefix,
 		prodRPCURLWSPrefix,
 		prodRPCURLHTTPPrefix,
+		prodMQURLPrefix,
 		"BB_RPC_BIND_HOST_",
 		"BB_RPC_ALLOW_IP_",
 	}
@@ -260,6 +269,22 @@ func rpcURLPrefixesForBuildEnv(buildEnv string) (string, string) {
 	default:
 		return devRPCURLHTTPPrefix, devRPCURLWSPrefix
 	}
+}
+
+func mqURLPrefixForBuildEnv(buildEnv string) string {
+	switch buildEnv {
+	case buildEnvProd:
+		return prodMQURLPrefix
+	default:
+		return devMQURLPrefix
+	}
+}
+
+func blockbookPprofBindingForBuildEnv(config *Config, buildEnv string) string {
+	if buildEnv != buildEnvDev || isEmpty(config, "blockbook") || config.Ports.BlockbookInternal <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(":%d", config.Ports.BlockbookInternal+devBlockbookPprofPortOffset)
 }
 
 func renderConfigTemplate(config *Config, name string) (string, error) {
@@ -370,6 +395,7 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 
 	config.Meta.BuildDatetime = time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700")
 	config.Env.Architecture = runtime.GOARCH
+	config.Env.BlockbookPprofBinding = blockbookPprofBindingForBuildEnv(config, buildEnv)
 
 	rpcBindKey := "BB_RPC_BIND_HOST_" + config.Coin.Alias // Bind host is per coin alias to match deployment naming.
 	config.Env.RPCBindHost = "127.0.0.1"                  // Default to localhost to avoid unintended remote exposure.
@@ -383,6 +409,7 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	}
 
 	rpcURLHTTPPrefix, rpcURLWSPrefix := rpcURLPrefixesForBuildEnv(buildEnv)
+	mqURLPrefix := mqURLPrefixForBuildEnv(buildEnv)
 
 	// Resolve RPC env by exact alias first and fall back to *_archive for shared test/deploy wiring.
 	if rpcURL, ok := lookupEnvWithArchiveFallback(rpcURLHTTPPrefix, config.Coin.Alias); ok {
@@ -391,6 +418,9 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	}
 	if rpcURLWS, ok := lookupEnvWithArchiveFallback(rpcURLWSPrefix, config.Coin.Alias); ok {
 		config.IPC.RPCURLWSTemplate = rpcURLWS
+	}
+	if mqURL, ok := lookupEnvWithArchiveFallback(mqURLPrefix, config.Coin.Alias); ok {
+		config.IPC.MessageQueueBindingTemplate = mqURL
 	}
 
 	if !isEmpty(config, "backend") {
@@ -455,7 +485,7 @@ func lookupEnvWithArchiveFallback(prefix, alias string) (string, bool) {
 func aliasCandidates(alias string) []string {
 	candidates := []string{alias}
 	if strings.Contains(alias, archiveSuffix) {
-		return candidates
+		return withEnvAliasVariants(candidates)
 	}
 
 	candidates = append(candidates, alias+archiveSuffix)
@@ -467,7 +497,26 @@ func aliasCandidates(alias string) []string {
 		}
 	}
 
-	return candidates
+	return withEnvAliasVariants(candidates)
+}
+
+func withEnvAliasVariants(candidates []string) []string {
+	seen := make(map[string]struct{}, len(candidates)*2)
+	var out []string
+	for _, candidate := range candidates {
+		if _, ok := seen[candidate]; !ok {
+			seen[candidate] = struct{}{}
+			out = append(out, candidate)
+		}
+		if strings.Contains(candidate, "-") {
+			normalized := strings.ReplaceAll(candidate, "-", "_")
+			if _, ok := seen[normalized]; !ok {
+				seen[normalized] = struct{}{}
+				out = append(out, normalized)
+			}
+		}
+	}
+	return out
 }
 
 // GeneratePackageDefinitions generate the package definitions from the config
