@@ -215,21 +215,28 @@ func (d *RocksDB) ListContractInfos(from string, limit int) ([]bchain.ContractIn
 	}
 	contracts := make([]bchain.ContractInfo, 0, limit)
 	for ; it.Valid(); it.Next() {
-		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(it.Key().Data())
+		// The key is the contract's address descriptor. A key that fails to
+		// decode to an address is a corrupt row: fail loudly (as the
+		// unpackContractInfo error below does) rather than fall through to
+		// return next="", which a caller cannot tell apart from a completed
+		// listing and which would silently drop the boundary row's cursor —
+		// or return an in-page record with an empty Contract.
+		addresses, _, err := d.chainParser.GetAddressesFromAddrDesc(it.Key().Data())
+		if err != nil {
+			return nil, "", err
+		}
+		if len(addresses) == 0 {
+			return nil, "", errors.Errorf("no address for contract descriptor %x", it.Key().Data())
+		}
 		if len(contracts) == limit {
 			// one more row exists — its address is the cursor of the next page
-			if len(addresses) > 0 {
-				return contracts, addresses[0], nil
-			}
-			return contracts, "", nil
+			return contracts, addresses[0], nil
 		}
 		contractInfo, err := unpackContractInfo(it.Value().Data())
 		if err != nil {
 			return nil, "", err
 		}
-		if len(addresses) > 0 {
-			contractInfo.Contract = addresses[0]
-		}
+		contractInfo.Contract = addresses[0]
 		contracts = append(contracts, *contractInfo)
 	}
 	return contracts, "", nil
