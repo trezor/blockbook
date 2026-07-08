@@ -15,10 +15,9 @@ import (
 
 func Test_contractGetTransfersFromLog(t *testing.T) {
 	tests := []struct {
-		name    string
-		args    []*bchain.RpcLog
-		want    bchain.TokenTransfers
-		wantErr bool
+		name string
+		args []*bchain.RpcLog
+		want bchain.TokenTransfers
 	}{
 		{
 			name: "ERC20 transfer 1",
@@ -209,11 +208,7 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 		}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := contractGetTransfersFromLog(tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("contractGetTransfersFromLog error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			got := contractGetTransfersFromLog(tt.args, "0xtxid")
 			if len(got) != len(tt.want) {
 				t.Errorf("contractGetTransfersFromLog len not same, %+v, want %+v", got, tt.want)
 			}
@@ -249,24 +244,47 @@ func malformedERC1155TransferBatchLog(count uint64) *bchain.RpcLog {
 	}
 }
 
-func Test_contractGetTransfersFromLogRejectsMalformedERC1155TransferBatchBeforeAllocation(t *testing.T) {
+func Test_processERC1155TransferBatchEventRejectsMalformedLogBeforeAllocation(t *testing.T) {
 	const count = 200000
 	runtime.GC()
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
-	transfers, err := contractGetTransfersFromLog([]*bchain.RpcLog{malformedERC1155TransferBatchLog(count)})
+	transfer, err := processERC1155TransferBatchEvent(malformedERC1155TransferBatchLog(count))
 	runtime.ReadMemStats(&after)
 	if err == nil {
-		t.Fatal("contractGetTransfersFromLog returned nil error for malformed ERC1155 TransferBatch")
+		t.Fatal("processERC1155TransferBatchEvent returned nil error for malformed ERC1155 TransferBatch")
 	}
-	if transfers != nil {
-		t.Fatalf("contractGetTransfersFromLog transfers = %+v, want nil", transfers)
+	if transfer != nil {
+		t.Fatalf("processERC1155TransferBatchEvent transfer = %+v, want nil", transfer)
 	}
 	if strings.Contains(err.Error(), "recovered from panic") {
-		t.Fatalf("contractGetTransfersFromLog recovered from panic instead of validating input: %v", err)
+		t.Fatalf("processERC1155TransferBatchEvent recovered from panic instead of validating input: %v", err)
 	}
 	if delta := after.TotalAlloc - before.TotalAlloc; delta > 1_000_000 {
-		t.Fatalf("contractGetTransfersFromLog allocated %d bytes for malformed ERC1155 TransferBatch count %d", delta, count)
+		t.Fatalf("processERC1155TransferBatchEvent allocated %d bytes for malformed ERC1155 TransferBatch count %d", delta, count)
+	}
+}
+
+func Test_contractGetTransfersFromLogSkipsMalformedERC1155TransferBatch(t *testing.T) {
+	logs := []*bchain.RpcLog{
+		malformedERC1155TransferBatchLog(200000),
+		{ // valid ERC20 Transfer in the same receipt
+			Address: "0x76a45e8976499ab9ae223cc584019341d5a84e96",
+			Topics: []string{
+				tokenTransferEventSignature,
+				"0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8",
+				"0x000000000000000000000000e9a5216ff992cfa01594d43501a56e12769eb9d2",
+			},
+			Data: "0x0000000000000000000000000000000000000000000000000000000000000123",
+		},
+	}
+	transfers := contractGetTransfersFromLog(logs, "0xtxid")
+	if len(transfers) != 1 {
+		t.Fatalf("contractGetTransfersFromLog transfers = %+v, want the valid transfer kept", transfers)
+	}
+	// the address could have different case
+	if strings.ToLower(transfers[0].Contract) != "0x76a45e8976499ab9ae223cc584019341d5a84e96" {
+		t.Fatalf("contractGetTransfersFromLog kept transfer of contract %s, want the valid ERC20 transfer", transfers[0].Contract)
 	}
 }
 

@@ -268,14 +268,17 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 	}, nil
 }
 
-func contractGetTransfersFromLog(logs []*bchain.RpcLog) (bchain.TokenTransfers, error) {
+// contractGetTransfersFromLog extracts token transfers from receipt logs.
+// An unparseable log is skipped with a warning so that one malformed event
+// does not discard the valid transfers of the transaction.
+func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string) bchain.TokenTransfers {
 	var r bchain.TokenTransfers
-	var tt *bchain.TokenTransfer
-	var err error
 	for _, l := range logs {
 		tl := len(l.Topics)
 		if tl > 0 {
 			signature := l.Topics[0]
+			var tt *bchain.TokenTransfer
+			var err error
 			if signature == tokenTransferEventSignature {
 				tt, err = processTransferEvent(l)
 			} else if signature == tokenERC1155TransferSingleEventSignature {
@@ -286,14 +289,15 @@ func contractGetTransfersFromLog(logs []*bchain.RpcLog) (bchain.TokenTransfers, 
 				continue
 			}
 			if err != nil {
-				return nil, err
+				glog.Warningf("contractGetTransfersFromLog: skipping unparseable log of contract %s, tx %s: %v", l.Address, txid, err)
+				continue
 			}
 			if tt != nil {
 				r = append(r, tt)
 			}
 		}
 	}
-	return r, nil
+	return r
 }
 
 func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfers, error) {
