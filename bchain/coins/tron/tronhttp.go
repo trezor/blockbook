@@ -5,8 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
+)
+
+const (
+	tronMaxIdleConnsPerHost = 64
+	tronMaxIdleConns        = 100
 )
 
 type TronHTTP interface {
@@ -19,10 +25,15 @@ type TronHTTPClient struct {
 }
 
 func NewTronHTTPClient(baseURL string, timeout time.Duration) *TronHTTPClient {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = tronMaxIdleConns
+	transport.MaxIdleConnsPerHost = tronMaxIdleConnsPerHost
+
 	return &TronHTTPClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout:   timeout,
+			Transport: transport,
 		},
 	}
 }
@@ -43,7 +54,14 @@ func (c *TronHTTPClient) Request(ctx context.Context, path string, reqBody inter
 	if err != nil {
 		return fmt.Errorf("HTTP error calling Tron API %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	// Drain the body before closing so net/http can return the connection to the
+	// idle pool for keep-alive reuse. Without this, the >=300 early return (which
+	// reads nothing) and any bytes the JSON decoder leaves unconsumed would force
+	// the connection closed, defeating the MaxIdleConns* pooling configured above.
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("Tron API returned status %d at path: %s %s", resp.StatusCode, c.baseURL, path)
