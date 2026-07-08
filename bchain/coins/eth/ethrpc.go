@@ -1727,6 +1727,49 @@ func (b *EthereumRPC) removeTransactionFromMempool(txid string) {
 	}
 }
 
+// recoverMinedTransaction reconstructs a mined transaction that eth_getTransactionByHash
+// failed to return. Some archive backends prune the transaction-by-hash index beyond a
+// recent window while still serving full block bodies and receipts (observed on QuikNode
+// Base), so an older-but-retained transaction reads as missing. The receipt still carries
+// the block hash, from which the full block body yields the transaction. Returns nil when
+// the backend genuinely has no record of the transaction (so the caller falls back to
+// ErrTxNotFound) or when the recovery lookups fail; failures are logged, not propagated,
+// to preserve the not-found semantics of the primary lookup.
+func (b *EthereumRPC) recoverMinedTransaction(txid string) *bchain.RpcTransaction {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	// eth_getTransactionReceipt keeps working on such backends; the block hash is enough
+	// to fetch the block body, which contains the full transaction.
+	var receipt struct {
+		BlockHash string `json:"blockHash"`
+	}
+	if err := b.RPC.CallContext(ctx, &receipt, "eth_getTransactionReceipt", ethcommon.HexToHash(txid)); err != nil {
+		glog.Warningf("recoverMinedTransaction %s: eth_getTransactionReceipt failed: %v", txid, err)
+		return nil
+	}
+	if receipt.BlockHash == "" {
+		// No receipt: the transaction is genuinely unknown to the backend.
+		return nil
+	}
+	raw, err := b.getBlockRaw(receipt.BlockHash, 0, true)
+	if err != nil {
+		glog.Warningf("recoverMinedTransaction %s: getBlockRaw %s failed: %v", txid, receipt.BlockHash, err)
+		return nil
+	}
+	var body rpcBlockTransactions
+	if err := json.Unmarshal(raw, &body); err != nil {
+		glog.Warningf("recoverMinedTransaction %s: decode block %s failed: %v", txid, receipt.BlockHash, err)
+		return nil
+	}
+	for i := range body.Transactions {
+		if strings.EqualFold(body.Transactions[i].Hash, txid) {
+			return &body.Transactions[i]
+		}
+	}
+	glog.Warningf("recoverMinedTransaction %s: not present in block %s body", txid, receipt.BlockHash)
+	return nil
+}
+
 // GetTransaction returns a transaction by the transaction ID.
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
@@ -1746,8 +1789,18 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 	}
 	if *tx == (bchain.RpcTransaction{}) {
-		b.removeTransactionFromMempool(txid)
-		return nil, bchain.ErrTxNotFound
+		// eth_getTransactionByHash returned null. Some archive backends (observed on
+		// QuikNode Base) prune the transaction-by-hash index beyond a recent window
+		// while still serving block bodies and receipts, so a mined transaction older
+		// than that window is invisible to this call even though it is fully retained.
+		// Recover it from its receipt (which still carries the block hash) plus the
+		// block body before treating it as not found.
+		if recovered := b.recoverMinedTransaction(txid); recovered != nil {
+			tx = recovered
+		} else {
+			b.removeTransactionFromMempool(txid)
+			return nil, bchain.ErrTxNotFound
+		}
 	}
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
