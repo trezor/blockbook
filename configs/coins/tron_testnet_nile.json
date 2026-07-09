@@ -22,7 +22,7 @@
         "package_name": "backend-tron-testnet-nile",
         "package_revision": "latest",
         "system_user": "tron",
-        "version": "4.8.1-build4",
+        "version": "4.8.2-pq1-build1",
         "binary_url": "https://github.com/tron-nile-testnet/nile-testnet/releases/download/GreatVoyage-Nile-v4.8.2-PQ1-build1/FullNode-Nile-x64-4.8.2-pq1-build1.jar",
         "verification_type": "sha256",
         "verification_source": "c013cbfdccc17bf57c300b637b6d2e24a725cab671760a6f63f7af7b7b16c0a9",
