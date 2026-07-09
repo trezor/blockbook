@@ -457,6 +457,27 @@ func TestParseInputDataMisalignedDynamicData(t *testing.T) {
 	}
 }
 
+func TestParseInputDataOverflowDynamicLength(t *testing.T) {
+	parser := NewEthereumParser(1, false)
+	signatures := []bchain.FourByteSignature{
+		{Name: "store", Parameters: []string{"bytes"}},
+	}
+	// A "bytes" argument whose declared length word is 0x7FFFFFFFFFFFFFC0.
+	// In processParam count<<1 overflows int64 and wraps to -128, so
+	// de = d + (count<<1) = 128 - 128 = 0 while d = 128. Before the fix the old
+	// `de < 0` guard did not catch de==0 and data[128:0] panicked (recovered by
+	// ParseInputData, which then returned nil); with the `de < d` guard the field
+	// is rejected cleanly and ParseInputData returns the method id only.
+	data := "0xaabbccdd" +
+		"0000000000000000000000000000000000000000000000000000000000000020" +
+		"0000000000000000000000000000000000000000000000007fffffffffffffc0"
+	got := parser.ParseInputData(&signatures, data)
+	want := &bchain.EthereumParsedInputData{MethodId: "0xaabbccdd"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ParseInputData() = %#v, want %#v", got, want)
+	}
+}
+
 func Test_getEnsRecord(t *testing.T) {
 	tests := []struct {
 		name string
@@ -519,6 +540,43 @@ func Test_getEnsRecord(t *testing.T) {
 						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
 					},
 					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000ff9756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			want: nil,
+		},
+		{
+			// Regression: c = 0x7FFFFFFFFFFFFF7F makes int(c)<<1 wrap to -258, so
+			// de = 194+64+(-258) = 0. Before the fix this slipped past the old
+			// `de < 0` guard (0 is not < 0) and l.Data[258:0] panicked, crashing the
+			// sync goroutine. Must be rejected cleanly.
+			name: "overflow name length wrapping to de=0",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000007fffffffffffff7f756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			want: nil,
+		},
+		{
+			// Regression: c = 0x7FFFFFFFFFFFFFFF (MaxInt64) makes int(c)<<1 wrap to
+			// -2, so de = 256. Before the fix this passed both old guards and
+			// l.Data[258:256] panicked (start > end). Must be rejected cleanly.
+			name: "overflow name length wrapping to de=256",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000007fffffffffffffff756e726176656c65640000000000000000000000000000000000000000000000",
 				},
 			},
 			want: nil,
