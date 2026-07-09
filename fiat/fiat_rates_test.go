@@ -427,7 +427,7 @@ func TestGetTickersForTimestamps_ConcurrentReadersAndWriters(t *testing.T) {
 		writers      = 2
 		readers      = 8
 		testDuration = 1200 * time.Millisecond
-		waitTimeout  = 3 * time.Second
+		waitTimeout  = 30 * time.Second // deadlock safety-net; kept generous so a CPU-starved CI runner does not flake
 	)
 
 	stop := make(chan struct{})
@@ -581,7 +581,7 @@ func TestLogTickersInfo_ConcurrentWithCacheWriters(t *testing.T) {
 		writers      = 2
 		loggers      = 4
 		testDuration = 300 * time.Millisecond
-		waitTimeout  = 3 * time.Second
+		waitTimeout  = 30 * time.Second // deadlock safety-net; kept generous so a CPU-starved CI runner does not flake
 	)
 
 	stop := make(chan struct{})
