@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -1626,6 +1627,18 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	logsCh := make(chan logsResult, 1)         // Buffered so send won't block if we return early.
 	internalCh := make(chan internalResult, 1) // Buffered to avoid goroutine leak on early return.
 	go func() {
+		// Defense-in-depth: processEventsForBlock/getEnsRecord parse attacker-controlled
+		// on-chain log data. This goroutine has no other recover() on its stack, so an
+		// unrecovered panic here would terminate the whole process and — because the
+		// block is not yet committed — crash-loop on restart. Recover into an error so
+		// block sync surfaces/handles it instead of the process dying.
+		defer func() {
+			if r := recover(); r != nil {
+				glog.Error("GetBlock: recovered from panic in processEventsForBlock: ", r)
+				debug.PrintStack()
+				logsCh <- logsResult{err: fmt.Errorf("recovered from panic in processEventsForBlock: %v", r)}
+			}
+		}()
 		logs, ens, err := b.processEventsForBlock(head.Number)
 		logsCh <- logsResult{logs: logs, ens: ens, err: err} // Send result without shared state.
 	}()

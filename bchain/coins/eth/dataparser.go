@@ -169,8 +169,12 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		dynIndex++
 		if t.T == abi.StringTy || t.T == abi.BytesTy {
 			d += 64
+			// count<<1 can overflow and wrap below d (same class as the
+			// getEnsRecord bug); the lower bound must be the slice start d, not 0,
+			// so that d <= de <= len(data) and data[d:de] below can never panic.
+			// count==0 gives de==d, which is still accepted.
 			de := d + (count << 1)
-			if de > len(data) || de < 0 {
+			if de > len(data) || de < d {
 				return nil, 0, false
 			}
 			if count == 0 {
@@ -310,8 +314,14 @@ func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
 		if err != nil {
 			return nil
 		}
+		// int(c)<<1 can overflow: c is attacker-controlled (up to 2^63-1) and Go's
+		// signed left shift wraps silently, so de can land anywhere in [0, 257]
+		// below the name start offset (194+64). The lower bound must be the slice
+		// start index, not 0 — a de below the start makes l.Data[194+64:de] a
+		// low>high slice expression that panics. Checking de < 194+64 guarantees
+		// 194+64 <= de <= len(l.Data), so the slice below can never panic.
 		de := 194 + 64 + (int(c) << 1)
-		if de > len(l.Data) || de < 0 {
+		if de > len(l.Data) || de < 194+64 {
 			return nil
 		}
 		b, err := hex.DecodeString(l.Data[194+64 : de])
