@@ -1,6 +1,6 @@
 export const wsDialTimeoutMs = 3_000;
 export const wsMessageTimeoutMs = 10_000;
-export const txSearchWindow = 12;
+export const txSearchWindow = 20;
 export const blockPageSize = 1;
 export const sampleBlockPageSize = 3;
 export const sampleBlockProbeMax = 3;
