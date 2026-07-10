@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
@@ -1380,6 +1382,64 @@ func TestWebsocketCloseOutReleasesQueuedMempoolFilterResponses(t *testing.T) {
 	}
 	if got := len(c.mempoolFiltersSlots); got != 0 {
 		t.Fatalf("held mempool filter slots = %d after CloseOut, want 0", got)
+	}
+}
+
+// TestWebsocketOutputLoopReleasesMempoolFilterSlotAfterWrite exercises the
+// primary slot-release path for a live connection: outputLoop's c.finalize(m)
+// after a successful WriteJSON. Neither TestWebsocketMempoolFilterResponseSlots
+// (raw semaphore) nor TestWebsocketCloseOutReleasesQueuedMempoolFilterResponses
+// (drain-on-close) touch this line, so without this test a removal of the
+// finalize call would leak a slot on every successful response and go undetected.
+func TestWebsocketOutputLoopReleasesMempoolFilterSlotAfterWrite(t *testing.T) {
+	// Stand up a real websocket connection pair so outputLoop's WriteJSON and
+	// finalize run against a live *websocket.Conn.
+	upgrader := websocket.Upgrader{}
+	serverConnCh := make(chan *websocket.Conn, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("upgrade: %v", err)
+			return
+		}
+		serverConnCh <- conn
+	}))
+	defer ts.Close()
+
+	clientConn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http"), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer clientConn.Close()
+	serverConn := <-serverConnCh
+	defer serverConn.Close()
+
+	c := &websocketChannel{
+		conn:                serverConn,
+		out:                 make(chan *WsRes, outChannelSize),
+		mempoolFiltersSlots: make(chan struct{}, maxWebsocketMempoolFiltersResponses),
+		alive:               true,
+	}
+	if !c.acquireMempoolFiltersSlot() {
+		t.Fatal("acquireMempoolFiltersSlot() = false")
+	}
+	c.out <- &WsRes{ID: "mempool", Data: struct{}{}, release: c.releaseMempoolFiltersSlot}
+	close(c.out) // outputLoop returns once the single queued response is written
+
+	s := &WebsocketServer{}
+	done := make(chan struct{})
+	go func() {
+		s.outputLoop(c)
+		close(done)
+	}()
+
+	if _, _, err := clientConn.ReadMessage(); err != nil {
+		t.Fatalf("client read: %v", err)
+	}
+	<-done
+
+	if got := len(c.mempoolFiltersSlots); got != 0 {
+		t.Fatalf("held mempool filter slots = %d after successful write, want 0", got)
 	}
 }
 
