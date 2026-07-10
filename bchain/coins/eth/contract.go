@@ -33,6 +33,11 @@ const contractBalanceOfSignature = "0x70a08231"
 
 const ENSRegistryAddress = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" // ENSRegistryAddress is the mainnet ENS registry contract address
 
+const (
+	evmWordBytes = 32
+	evmWordHex   = evmWordBytes * 2
+)
+
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
 	var ok bool
@@ -131,6 +136,44 @@ func processERC1155TransferSingleEvent(l *bchain.RpcLog) (transfer *bchain.Token
 	}, nil
 }
 
+func parseEVMLogWordUint64(data string, offset int) (uint64, error) {
+	if offset < 0 || offset > len(data) || len(data)-offset < evmWordHex {
+		return 0, errors.New("ERC1155 TransferBatch, invalid data length")
+	}
+	var b big.Int
+	_, ok := b.SetString(data[offset:offset+evmWordHex], 16)
+	if !ok || !b.IsUint64() {
+		return 0, errors.New("ERC1155 TransferBatch, not a number")
+	}
+	return b.Uint64(), nil
+}
+
+func erc1155BatchOffsetHex(offsetBytes uint64) (int, error) {
+	if offsetBytes < 2*evmWordBytes {
+		return 0, errors.New("ERC1155 TransferBatch, invalid offset")
+	}
+	if offsetBytes%evmWordBytes != 0 {
+		return 0, errors.New("ERC1155 TransferBatch, invalid offset")
+	}
+	maxInt := uint64(^uint(0) >> 1)
+	if offsetBytes > maxInt/2 {
+		return 0, errors.New("ERC1155 TransferBatch, invalid offset")
+	}
+	return int(offsetBytes * 2), nil
+}
+
+func erc1155BatchArrayEnd(offset int, count uint64) (int, error) {
+	if offset < 0 {
+		return 0, errors.New("ERC1155 TransferBatch, invalid offset")
+	}
+	maxInt := uint64(^uint(0) >> 1)
+	base := uint64(offset) + evmWordHex
+	if base > maxInt || count > (maxInt-base)/evmWordHex {
+		return 0, errors.New("ERC1155 TransferBatch, invalid data length")
+	}
+	return int(base + count*evmWordHex), nil
+}
+
 func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -154,40 +197,63 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 	if has0xPrefix(l.Data) {
 		data = data[2:]
 	}
-	var b big.Int
-	_, ok := b.SetString(data[:64], 16)
-	if !ok || !b.IsInt64() {
-		return nil, errors.New("ERC1155 TransferBatch, not a number")
+	if len(data) < 2*evmWordHex || len(data)%evmWordHex != 0 {
+		return nil, errors.New("ERC1155 TransferBatch, invalid data length")
 	}
-	offsetIds := int(b.Int64()) * 2
-	_, ok = b.SetString(data[64:128], 16)
-	if !ok || !b.IsInt64() {
-		return nil, errors.New("ERC1155 TransferBatch, not a number")
+	offsetIdsBytes, err := parseEVMLogWordUint64(data, 0)
+	if err != nil {
+		return nil, err
 	}
-	offsetValues := int(b.Int64()) * 2
-	_, ok = b.SetString(data[offsetIds:offsetIds+64], 16)
-	if !ok || !b.IsInt64() {
-		return nil, errors.New("ERC1155 TransferBatch, not a number")
+	offsetIds, err := erc1155BatchOffsetHex(offsetIdsBytes)
+	if err != nil {
+		return nil, err
 	}
-	countIds := int(b.Int64())
-	_, ok = b.SetString(data[offsetValues:offsetValues+64], 16)
-	if !ok || !b.IsInt64() {
-		return nil, errors.New("ERC1155 TransferBatch, not a number")
+	offsetValuesBytes, err := parseEVMLogWordUint64(data, evmWordHex)
+	if err != nil {
+		return nil, err
 	}
-	countValues := int(b.Int64())
+	offsetValues, err := erc1155BatchOffsetHex(offsetValuesBytes)
+	if err != nil {
+		return nil, err
+	}
+	countIds, err := parseEVMLogWordUint64(data, offsetIds)
+	if err != nil {
+		return nil, err
+	}
+	countValues, err := parseEVMLogWordUint64(data, offsetValues)
+	if err != nil {
+		return nil, err
+	}
 	if countIds != countValues {
 		return nil, errors.New("ERC1155 TransferBatch, count values and ids does not match")
 	}
-	idValues := make([]bchain.MultiTokenValue, countValues)
-	for i := 0; i < countValues; i++ {
+	endIds, err := erc1155BatchArrayEnd(offsetIds, countValues)
+	if err != nil {
+		return nil, err
+	}
+	if endIds > len(data) {
+		return nil, errors.New("ERC1155 TransferBatch, invalid ids data length")
+	}
+	endValues, err := erc1155BatchArrayEnd(offsetValues, countValues)
+	if err != nil {
+		return nil, err
+	}
+	if endValues > len(data) {
+		return nil, errors.New("ERC1155 TransferBatch, invalid values data length")
+	}
+	// countValues cannot truncate: the endValues <= len(data) check above bounds
+	// it to len(data)/evmWordHex.
+	count := int(countValues)
+	idValues := make([]bchain.MultiTokenValue, count)
+	for i := 0; i < count; i++ {
 		var id, value big.Int
-		o := offsetIds + 64 + 64*i
-		_, ok := id.SetString(data[o:o+64], 16)
+		o := offsetIds + evmWordHex + evmWordHex*i
+		_, ok := id.SetString(data[o:o+evmWordHex], 16)
 		if !ok {
 			return nil, errors.New("ERC1155 log Data id is not a number")
 		}
-		o = offsetValues + 64 + 64*i
-		_, ok = value.SetString(data[o:o+64], 16)
+		o = offsetValues + evmWordHex + evmWordHex*i
+		_, ok = value.SetString(data[o:o+evmWordHex], 16)
 		if !ok {
 			return nil, errors.New("ERC1155 log Data value is not a number")
 		}
@@ -202,14 +268,17 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 	}, nil
 }
 
-func contractGetTransfersFromLog(logs []*bchain.RpcLog) (bchain.TokenTransfers, error) {
+// contractGetTransfersFromLog extracts token transfers from receipt logs.
+// An unparseable log is skipped with a warning so that one malformed event
+// does not discard the valid transfers of the transaction.
+func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string) bchain.TokenTransfers {
 	var r bchain.TokenTransfers
-	var tt *bchain.TokenTransfer
-	var err error
 	for _, l := range logs {
 		tl := len(l.Topics)
 		if tl > 0 {
 			signature := l.Topics[0]
+			var tt *bchain.TokenTransfer
+			var err error
 			if signature == tokenTransferEventSignature {
 				tt, err = processTransferEvent(l)
 			} else if signature == tokenERC1155TransferSingleEventSignature {
@@ -220,14 +289,15 @@ func contractGetTransfersFromLog(logs []*bchain.RpcLog) (bchain.TokenTransfers, 
 				continue
 			}
 			if err != nil {
-				return nil, err
+				glog.Warningf("contractGetTransfersFromLog: skipping unparseable log of contract %s, tx %s: %v", l.Address, txid, err)
+				continue
 			}
 			if tt != nil {
 				r = append(r, tt)
 			}
 		}
 	}
-	return r, nil
+	return r
 }
 
 func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfers, error) {

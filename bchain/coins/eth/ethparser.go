@@ -571,12 +571,12 @@ func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bch
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Receipt != nil {
-			r, err = contractGetTransfersFromLog(csd.Receipt.Logs)
+			r = contractGetTransfersFromLog(csd.Receipt.Logs, tx.Txid)
 		} else {
 			r, err = contractGetTransfersFromTx(csd.Tx)
-		}
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return r, nil

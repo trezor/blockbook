@@ -13,15 +13,40 @@ import (
 // MaxFiatRatesTimestamps limits batch fiat-rate lookups to bounded request work.
 const MaxFiatRatesTimestamps = 1000
 
-// removeEmpty removes empty strings from a slice.
-func removeEmpty(stringSlice []string) []string {
-	ret := make([]string, 0, len(stringSlice))
-	for _, str := range stringSlice {
-		if str != "" {
-			ret = append(ret, str)
-		}
+// MaxFiatRatesCurrencies limits explicit currency selectors. An empty list still
+// means "all available currencies", so legitimate callers do not need a large
+// explicit list.
+const MaxFiatRatesCurrencies = 128
+
+// MaxFiatRatesCurrencyCodeLength bounds each selector before it is copied into
+// per-result response maps.
+const MaxFiatRatesCurrencyCodeLength = 16
+
+// normalizeFiatCurrencies trims, lowercases, deduplicates, and bounds explicit
+// fiat currency selectors before any per-result response maps are allocated.
+// The count limit applies to the raw input length so the work done here is
+// bounded by it as well.
+func normalizeFiatCurrencies(currencies []string) ([]string, error) {
+	if len(currencies) > MaxFiatRatesCurrencies {
+		return nil, NewAPIError(fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies), true)
 	}
-	return ret
+	seen := make(map[string]struct{}, len(currencies))
+	normalized := make([]string, 0, len(currencies))
+	for _, currency := range currencies {
+		currency = strings.ToLower(strings.TrimSpace(currency))
+		if currency == "" {
+			continue
+		}
+		if len(currency) > MaxFiatRatesCurrencyCodeLength {
+			return nil, NewAPIError(fmt.Sprintf("currency code too long, max %d", MaxFiatRatesCurrencyCodeLength), true)
+		}
+		if _, found := seen[currency]; found {
+			continue
+		}
+		seen[currency] = struct{}{}
+		normalized = append(normalized, currency)
+	}
+	return normalized, nil
 }
 
 func copyTickerRates(rates map[string]float32) map[string]float32 {
@@ -33,6 +58,7 @@ func copyTickerRates(rates map[string]float32) map[string]float32 {
 }
 
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result.
+// currencies must already be normalized by normalizeFiatCurrencies.
 func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.CurrencyRatesTicker, token string) (*FiatTicker, error) {
 	if token != "" {
 		capacity := len(currencies)
@@ -51,7 +77,6 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.Currency
 			}
 		} else {
 			for _, currency := range currencies {
-				currency = strings.ToLower(currency)
 				rate := ticker.TokenRateInCurrency(token, currency)
 				if rate <= 0 {
 					rate = -1
@@ -74,7 +99,6 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.Currency
 	// Check if currencies from the list are available in the ticker rates.
 	rates := make(map[string]float32, len(currencies))
 	for _, currency := range currencies {
-		currency = strings.ToLower(currency)
 		if rate, found := ticker.Rates[currency]; found {
 			rates[currency] = rate
 		} else {
@@ -90,12 +114,15 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.Currency
 // GetCurrentFiatRates returns last available fiat rates.
 func (w *Worker) GetCurrentFiatRates(currencies []string, token string) (*FiatTicker, error) {
 	vsCurrency := ""
-	currencies = removeEmpty(currencies)
+	var err error
+	currencies, err = normalizeFiatCurrencies(currencies)
+	if err != nil {
+		return nil, err
+	}
 	if len(currencies) == 1 {
 		vsCurrency = currencies[0]
 	}
 	ticker := getCurrentTicker(w.fiatRates, vsCurrency, token)
-	var err error
 	if ticker == nil {
 		if token == "" {
 			// fallback - get last fiat rate from db if not in current ticker
@@ -135,7 +162,10 @@ func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []stri
 		return nil, NewAPIError(fmt.Sprintf("too many timestamps, max %d", MaxFiatRatesTimestamps), true)
 	}
 	vsCurrency := ""
-	currencies = removeEmpty(currencies)
+	currencies, err := normalizeFiatCurrencies(currencies)
+	if err != nil {
+		return nil, err
+	}
 	if len(currencies) == 1 {
 		vsCurrency = currencies[0]
 	}
