@@ -56,7 +56,7 @@ jobs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -66,7 +66,7 @@ jobs:
         run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
@@ -89,7 +89,7 @@ jobs:
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -99,7 +99,7 @@ jobs:
         run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
@@ -125,7 +125,7 @@ jobs:
     runs-on: ${{ fromJSON(matrix.labels_json) }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
@@ -157,7 +157,7 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
@@ -202,7 +202,7 @@ jobs:
       SYNC_TIMEOUT_SECONDS: "300"
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
@@ -229,7 +229,7 @@ jobs:
       CONNECTIVITY_REGEX: ${{ needs.prepare_deploy.outputs.connectivity_regex }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
@@ -249,13 +249,13 @@ jobs:
         run: make test-connectivity ARGS="-v"
 
       - name: Setup Node.js for OpenAPI tests
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
 
       - name: Cache OpenAPI test dependencies
         id: openapi-node-modules-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: tests/openapi/node_modules
           key: openapi-node-modules-node22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/openapi/package-lock.json') }}
@@ -277,7 +277,7 @@ jobs:
       # run is exactly when the per-test breakdown (which coin/test failed or skipped) is most useful.
       - name: Upload OpenAPI e2e report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openapi-e2e-report
           path: tests/openapi/reports/
