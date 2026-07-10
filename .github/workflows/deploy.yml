@@ -253,6 +253,15 @@ jobs:
         with:
           node-version: 22
 
+      - name: Cache npm packages
+        id: openapi-npm-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .npm-cache
+          key: openapi-npm-cache-node22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/openapi/package-lock.json') }}
+          restore-keys: |
+            openapi-npm-cache-node22-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Cache OpenAPI test dependencies
         id: openapi-node-modules-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -264,7 +273,7 @@ jobs:
 
       - name: Install OpenAPI test dependencies
         if: steps.openapi-node-modules-cache.outputs.cache-hit != 'true'
-        run: npm ci --prefix tests/openapi --prefer-offline --no-audit --no-fund
+        run: npm ci --prefix tests/openapi --cache .npm-cache --prefer-offline --no-audit --no-fund
 
       - name: Run OpenAPI API e2e tests
         env:
