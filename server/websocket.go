@@ -46,6 +46,13 @@ const maxWebsocketActiveRequests = 2048
 const maxWebsocketEstimateFeeBlocks = 32
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
+
+// maxWebsocketSubscribeFiatRatesTokens caps the number of tokens a single
+// subscribeFiatRates request may register. The list is retained for the
+// connection lifetime and re-iterated on every fiat-rate broadcast (per
+// subscribed currency) while the global fiatRatesSubscriptionsLock is held, so
+// an uncapped list allows both amplified heap retention and lock contention.
+const maxWebsocketSubscribeFiatRatesTokens = 1000
 const websocketLogPreviewBytes = 256
 
 // allRates is a special "currency" parameter that means all available currencies
@@ -836,6 +843,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		err = json.Unmarshal(req.Params, &r)
 		if err != nil {
 			return nil, err
+		}
+		if len(r.Tokens) > maxWebsocketSubscribeFiatRatesTokens {
+			return nil, api.NewAPIError("tokens max "+strconv.Itoa(maxWebsocketSubscribeFiatRatesTokens), true)
 		}
 		r.Currency = strings.ToLower(r.Currency)
 
