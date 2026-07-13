@@ -31,7 +31,10 @@ const outChannelSize = 500
 const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
-const maxWebsocketPendingRequests = 48
+// defaultWsPendingRequestsLimit is the default per-connection cap on
+// concurrently executing requests; override with
+// <network>_WS_PENDING_REQUESTS_LIMIT (0 disables), see docs/env.md.
+const defaultWsPendingRequestsLimit = 48
 
 // maxWebsocketMempoolFiltersResponses caps per-connection getMempoolFilters
 // requests over their whole lifecycle: the slot is acquired before the handler
@@ -135,6 +138,9 @@ type WebsocketServer struct {
 	messageRateLimit  int
 	messageRateWindow time.Duration
 	ipBlockDuration   time.Duration
+	// pendingRequestsLimit caps how many requests a single connection may have
+	// executing concurrently before it is closed; 0 disables the cap.
+	pendingRequestsLimit int
 	// ipBlockEnabled gates the whole IP blocklist: true only when the rate limit can
 	// produce breaches (messageRateLimit > 0) and blocking is configured
 	// (ipBlockDuration > 0). When false, all block checks/sweeps are skipped.
@@ -209,6 +215,9 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		glog.Info("Cloudflare Pseudo-IPv4 mode enabled (", clientIPCfg.pseudoIPv6EnvName, "); CF-Connecting-IPv6 is honored as the client IP (requires Cloudflare \"Pseudo IPv4: Overwrite Headers\")")
 	}
 	if err := s.configureMessageRateLimit(is.GetNetwork()); err != nil {
+		return nil, err
+	}
+	if err := s.configurePendingRequestsLimit(is.GetNetwork()); err != nil {
 		return nil, err
 	}
 	if s.metrics != nil {
@@ -344,11 +353,16 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn.SetReadLimit(maxWebsocketMessageBytes)
+	// a nil channel disables the per-connection pending request cap
+	var pendingRequests chan struct{}
+	if s.pendingRequestsLimit > 0 {
+		pendingRequests = make(chan struct{}, s.pendingRequestsLimit)
+	}
 	c := &websocketChannel{
 		id:                  atomic.AddUint64(&connectionCounter, 1),
 		conn:                conn,
 		out:                 make(chan *WsRes, outChannelSize),
-		pendingRequests:     make(chan struct{}, maxWebsocketPendingRequests),
+		pendingRequests:     pendingRequests,
 		mempoolFiltersSlots: make(chan struct{}, maxWebsocketMempoolFiltersResponses),
 		ip:                  ip,
 		ipKey:               ipKey,
@@ -523,6 +537,10 @@ func (c *websocketChannel) DataOut(data *WsRes) {
 }
 
 func (c *websocketChannel) acquireRequestSlot() bool {
+	if c.pendingRequests == nil {
+		// pending request limit disabled
+		return true
+	}
 	select {
 	case c.pendingRequests <- struct{}{}:
 		return true
@@ -532,6 +550,9 @@ func (c *websocketChannel) acquireRequestSlot() bool {
 }
 
 func (c *websocketChannel) releaseRequestSlot() {
+	if c.pendingRequests == nil {
+		return
+	}
 	<-c.pendingRequests
 }
 

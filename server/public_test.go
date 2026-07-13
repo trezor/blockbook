@@ -1194,7 +1194,7 @@ func Test_WebsocketRejectsOversizedMessage(t *testing.T) {
 	t.Fatalf("unexpected websocket error after oversized message: %v", err)
 }
 
-func Test_WebsocketClosesWhenPendingRequestLimitExceeded(t *testing.T) {
+func testWebsocketPendingRequestLimit(t *testing.T, limit int) {
 	parser, chain := setupChain(t)
 
 	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
@@ -1203,7 +1203,7 @@ func Test_WebsocketClosesWhenPendingRequestLimitExceeded(t *testing.T) {
 
 	releaseRequests := make(chan struct{})
 	defer close(releaseRequests)
-	startedRequests := make(chan struct{}, maxWebsocketPendingRequests)
+	startedRequests := make(chan struct{}, limit)
 	originalPingHandler := requestHandlers["ping"]
 	requestHandlers["ping"] = func(s *WebsocketServer, c *websocketChannel, req *WsReq) (interface{}, error) {
 		startedRequests <- struct{}{}
@@ -1220,12 +1220,12 @@ func Test_WebsocketClosesWhenPendingRequestLimitExceeded(t *testing.T) {
 	ws := connectWebsocket(t, ts)
 	defer ws.Close()
 
-	for i := 0; i < maxWebsocketPendingRequests; i++ {
+	for i := 0; i < limit; i++ {
 		if err := ws.WriteJSON(websocketReq{ID: strconv.Itoa(i), Method: "ping"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for i := 0; i < maxWebsocketPendingRequests; i++ {
+	for i := 0; i < limit; i++ {
 		select {
 		case <-startedRequests:
 		case <-time.After(2 * time.Second):
@@ -1249,6 +1249,17 @@ func Test_WebsocketClosesWhenPendingRequestLimitExceeded(t *testing.T) {
 	if errors.As(err, &netErr) && netErr.Timeout() {
 		t.Fatal("expected connection close after pending request limit was exceeded, got timeout")
 	}
+}
+
+func Test_WebsocketClosesWhenPendingRequestLimitExceeded(t *testing.T) {
+	testWebsocketPendingRequestLimit(t, defaultWsPendingRequestsLimit)
+}
+
+func Test_WebsocketPendingRequestLimitEnvOverride(t *testing.T) {
+	// the test coin sets no Network, so GetNetwork() falls back to the
+	// CoinShortcut FAKE
+	t.Setenv("FAKE_WS_PENDING_REQUESTS_LIMIT", "3")
+	testWebsocketPendingRequestLimit(t, 3)
 }
 
 var websocketTestsBitcoinType = []websocketTest{

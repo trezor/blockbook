@@ -71,6 +71,23 @@ func (s *WebsocketServer) configureMessageRateLimit(network string) error {
 	return nil
 }
 
+// configurePendingRequestsLimit reads the per-connection cap on concurrently
+// executing ("pending") requests from the environment, applying the default
+// (see docs/env.md); 0 disables the cap entirely.
+func (s *WebsocketServer) configurePendingRequestsLimit(network string) error {
+	prefix := strings.ToUpper(network)
+	var err error
+	if s.pendingRequestsLimit, err = parseNonNegativeIntEnv(prefix+"_WS_PENDING_REQUESTS_LIMIT", defaultWsPendingRequestsLimit); err != nil {
+		return err
+	}
+	if s.pendingRequestsLimit > 0 {
+		glog.Infof("Websocket per-connection pending request limit: %d", s.pendingRequestsLimit)
+	} else {
+		glog.Info("Websocket per-connection pending request limit disabled")
+	}
+	return nil
+}
+
 func newWebsocketConnectionLimiter() *websocketConnectionLimiter {
 	return &websocketConnectionLimiter{
 		clients: make(map[string]*websocketClientLimit),
