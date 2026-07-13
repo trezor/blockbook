@@ -21,6 +21,7 @@ $NITRO_BIN \
   --init.genesis-json-file $INSTALL_DIR/{{.Coin.Alias}}.conf \
   --init.download-path $DATA_DIR/tmp \
   --auth.jwtsecret $DATA_DIR/jwtsecret \
+  --persistent.global-config $DATA_DIR \
   --persistent.chain $DATA_DIR \
   --parent-chain.connection.url http://127.0.0.1:8116 \
   --parent-chain.blob-client.beacon-url http://127.0.0.1:7516 \
