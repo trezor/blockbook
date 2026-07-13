@@ -21,6 +21,15 @@ type testEthereumParser struct {
 	*eth.EthereumParser
 }
 
+type tokenTransferTestParser struct {
+	*eth.EthereumParser
+	transfers bchain.TokenTransfers
+}
+
+func (p *tokenTransferTestParser) EthereumTypeGetTokenTransfersFromTx(*bchain.Tx) (bchain.TokenTransfers, error) {
+	return p.transfers, nil
+}
+
 func ethereumTestnetParser() *eth.EthereumParser {
 	return eth.NewEthereumParser(1, true)
 }
@@ -41,6 +50,103 @@ func makeTestAddrDesc(seed int) bchain.AddressDescriptor {
 		b[i] = byte(seed)
 	}
 	return b
+}
+
+func TestIdsInsertDoesNotDuplicate(t *testing.T) {
+	ids := Ids{*big.NewInt(1), *big.NewInt(2), *big.NewInt(3)}
+	for _, id := range []int64{1, 2, 3} {
+		ids.insert(*big.NewInt(id))
+	}
+	want := Ids{*big.NewInt(1), *big.NewInt(2), *big.NewInt(3)}
+	if !reflect.DeepEqual(ids, want) {
+		t.Fatalf("Ids = %v, want %v", ids, want)
+	}
+
+	unpacked := unpackedIds{
+		{Value: big.NewInt(1)},
+		{Value: big.NewInt(2)},
+		{Value: big.NewInt(3)},
+	}
+	for _, id := range []int64{1, 2, 3} {
+		unpacked.insert(*big.NewInt(id))
+	}
+	if len(unpacked) != 3 {
+		t.Fatalf("unpackedIds length = %d, want 3", len(unpacked))
+	}
+	for i, id := range []int64{1, 2, 3} {
+		if unpacked[i].get().Cmp(big.NewInt(id)) != 0 {
+			t.Fatalf("unpackedIds[%d] = %v, want %d", i, unpacked[i].get(), id)
+		}
+	}
+}
+
+func TestERC721RepeatedTransferDoesNotLeaveStaleDuplicate(t *testing.T) {
+	contract := makeTestAddrDesc(0x7210)
+	c := &unpackedAddrContract{
+		Standard: bchain.NonFungibleToken,
+		Contract: contract,
+	}
+	transfer := &bchain.TokenTransfer{
+		Standard: bchain.NonFungibleToken,
+		Value:    *big.NewInt(42),
+	}
+
+	addToContract(c, 0, transferTo, contract, transfer, false, true)
+	addToContract(c, 0, transferTo, contract, transfer, false, true)
+	if len(c.Ids) != 1 || c.Ids[0].get().Cmp(&transfer.Value) != 0 {
+		t.Fatalf("Ids after repeated transfer-in = %v, want [42]", c.Ids)
+	}
+
+	addToContract(c, 0, transferFrom, contract, transfer, false, true)
+	if len(c.Ids) != 0 {
+		t.Fatalf("Ids after transfer-out = %v, want empty", c.Ids)
+	}
+}
+
+func TestERC721SelfTransferDoesNotMutateHoldings(t *testing.T) {
+	parser := ethereumTestnetParser()
+	address := dbtestdata.EthAddr83
+	contractAddress := dbtestdata.EthAddrContractCd
+	addrDesc := addressToAddrDesc(address, parser)
+	contractDesc := addressToAddrDesc(contractAddress, parser)
+	transfer := &bchain.TokenTransfer{
+		Standard: bchain.NonFungibleToken,
+		Contract: contractAddress,
+		From:     address,
+		To:       address,
+		Value:    *big.NewInt(42),
+	}
+	d := &RocksDB{chainParser: &tokenTransferTestParser{
+		EthereumParser: parser,
+		transfers:      bchain.TokenTransfers{transfer},
+	}}
+	acs := &unpackedAddrContracts{
+		TotalTxs: 3,
+		Contracts: []unpackedAddrContract{{
+			Standard: bchain.NonFungibleToken,
+			Contract: contractDesc,
+			Txs:      3,
+			Ids:      unpackedIds{{Value: big.NewInt(42)}},
+		}},
+	}
+	addresses := addressesMap{}
+	addressContracts := map[string]*unpackedAddrContracts{string(addrDesc): acs}
+	blockTx := &ethBlockTx{btxID: []byte{0x01}}
+
+	if err := d.processContractTransfers(blockTx, &bchain.Tx{}, addresses, addressContracts); err != nil {
+		t.Fatal(err)
+	}
+	if acs.TotalTxs != 4 || acs.Contracts[0].Txs != 4 {
+		t.Fatalf("transaction counts = (%d, %d), want (4, 4)", acs.TotalTxs, acs.Contracts[0].Txs)
+	}
+	if len(acs.Contracts[0].Ids) != 1 || acs.Contracts[0].Ids[0].get().Cmp(big.NewInt(42)) != 0 {
+		t.Fatalf("Ids = %v, want [42]", acs.Contracts[0].Ids)
+	}
+	txIndexes := addresses[string(addrDesc)]
+	wantIndexes := []int32{ContractIndexOffset, ^int32(ContractIndexOffset)}
+	if len(txIndexes) != 1 || !reflect.DeepEqual(txIndexes[0].indexes, wantIndexes) {
+		t.Fatalf("address indexes = %+v, want %v for one transaction", txIndexes, wantIndexes)
+	}
 }
 
 func Test_unpackedAddrContracts_findContractIndex_LazyMap(t *testing.T) {
@@ -1540,7 +1646,7 @@ func Test_addToContracts(t *testing.T) {
 					Standard: tt.args.transfer.Standard,
 				})
 			}
-			if got := addToContract(&unpackedAddrContracts.Contracts[contractIndex], contractIndex, tt.args.index, tt.args.contract, tt.args.transfer, tt.args.addTxCount); got != tt.wantIndex {
+			if got := addToContract(&unpackedAddrContracts.Contracts[contractIndex], contractIndex, tt.args.index, tt.args.contract, tt.args.transfer, tt.args.addTxCount, true); got != tt.wantIndex {
 				t.Errorf("addToContracts() = %v, want %v", got, tt.wantIndex)
 			}
 			// convert from partially unpacked form to final form used by API
@@ -1564,7 +1670,7 @@ func Test_addToContract_ERC20ZeroesExistingValue(t *testing.T) {
 		Contract: makeTestAddrDesc(123),
 		Value:    unpackedBigInt{Value: big.NewInt(123456)},
 	}
-	addToContract(c, 0, 1, c.Contract, transfer, false)
+	addToContract(c, 0, 1, c.Contract, transfer, false, true)
 	if c.Value.Value == nil || c.Value.Value.Sign() != 0 {
 		t.Fatalf("expected ERC20 value to be zeroed, got %v", c.Value.Value)
 	}
@@ -1577,7 +1683,7 @@ func Test_addToContract_ERC20ZeroesExistingValue(t *testing.T) {
 		Contract: makeTestAddrDesc(124),
 		Value:    unpackedBigInt{Slice: []byte{0x1, 0x2}},
 	}
-	addToContract(c, 0, 1, c.Contract, transfer, false)
+	addToContract(c, 0, 1, c.Contract, transfer, false, true)
 	if c.Value.Value == nil || c.Value.Value.Sign() != 0 {
 		t.Fatalf("expected ERC20 value to be zeroed after slice, got %v", c.Value.Value)
 	}
