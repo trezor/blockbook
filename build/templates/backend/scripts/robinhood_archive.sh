@@ -38,6 +38,8 @@ $NITRO_BIN \
   --file-logging.enable='false' \
   --node.staker.enable='false' \
   --execution.caching.archive \
+  --execution.caching.state-scheme path \
+  --execution.caching.state-history 0 \
   --execution.tx-indexer.tx-lookup-limit 0 \
   --validation.wasm.allowed-wasm-module-roots "$INSTALL_DIR/target/machines"
 
