@@ -402,6 +402,14 @@ func addToAddressesMapEthereumType(addresses addressesMap, strAddrDesc string, b
 	return false
 }
 
+// isNFTSelfTransfer reports whether the transfer is an ERC721 transfer from an address to itself.
+// Such a transfer must be indexed and counted, but it must not change the address's holdings -
+// both processContractTransfers (connect) and disconnectAddress (rollback) derive the
+// mutateHoldings behavior of addToContract from this predicate.
+func isNFTSelfTransfer(from, to bchain.AddressDescriptor, standard bchain.TokenStandard) bool {
+	return standard == bchain.NonFungibleToken && bytes.Equal(from, to)
+}
+
 func addToContract(c *unpackedAddrContract, contractIndex int, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, mutateHoldings bool) int32 {
 	var aggregate AggregateFn
 	// index 0 is for ETH transfers, index 1 (InternalTxIndexOffset) is for internal transfers, contract indexes start with 2 (ContractIndexOffset)
@@ -421,8 +429,10 @@ func addToContract(c *unpackedAddrContract, contractIndex int, index int32, cont
 		}
 	}
 	if !mutateHoldings {
-		// An ERC721 self-transfer must still be indexed in both directions and counted once,
-		// but it cannot change the address's holdings.
+		// mutateHoldings is false only for ERC721 self-transfers (see isNFTSelfTransfer):
+		// the transfer must still be indexed in both directions and counted once, but it
+		// cannot change the address's holdings. Other standards must not pass false here,
+		// it would silently skip their value normalization and aggregation.
 		if addTxCount {
 			c.Txs++
 		}
@@ -681,7 +691,7 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 			continue
 		}
 		eq := bytes.Equal(from, to)
-		mutateHoldings := !eq || t.Standard != bchain.NonFungibleToken
+		mutateHoldings := !isNFTSelfTransfer(from, to, t.Standard)
 		if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, int32(i), contract, t, true, mutateHoldings, addresses, addressContracts); err != nil {
 			return err
 		}
@@ -1265,11 +1275,13 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 							Value:            btxContract.value,
 							MultiTokenValues: btxContract.idValues,
 						}
-						selfTransfer := bytes.Equal(btxContract.from, btxContract.to)
-						if selfTransfer && btxContract.transferStandard != bchain.NonFungibleToken {
-							addToContract(addrContract, contractIndex, transferTo, btxContract.contract, transfer, false, true)
-							addToContract(addrContract, contractIndex, transferFrom, btxContract.contract, transfer, false, true)
-						} else if !selfTransfer {
+						if bytes.Equal(btxContract.from, btxContract.to) {
+							// an NFT self-transfer did not change holdings on connect, there is nothing to reverse
+							if !isNFTSelfTransfer(btxContract.from, btxContract.to, btxContract.transferStandard) {
+								addToContract(addrContract, contractIndex, transferTo, btxContract.contract, transfer, false, true)
+								addToContract(addrContract, contractIndex, transferFrom, btxContract.contract, transfer, false, true)
+							}
+						} else {
 							var index int32
 							if bytes.Equal(addrDesc, btxContract.to) {
 								index = transferFrom

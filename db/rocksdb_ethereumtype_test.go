@@ -3,6 +3,7 @@
 package db
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -28,6 +29,15 @@ type tokenTransferTestParser struct {
 
 func (p *tokenTransferTestParser) EthereumTypeGetTokenTransfersFromTx(*bchain.Tx) (bchain.TokenTransfers, error) {
 	return p.transfers, nil
+}
+
+type txTokenTransferTestParser struct {
+	*eth.EthereumParser
+	transfers map[string]bchain.TokenTransfers
+}
+
+func (p *txTokenTransferTestParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bchain.TokenTransfers, error) {
+	return p.transfers[tx.Txid], nil
 }
 
 func ethereumTestnetParser() *eth.EthereumParser {
@@ -146,6 +156,102 @@ func TestERC721SelfTransferDoesNotMutateHoldings(t *testing.T) {
 	wantIndexes := []int32{ContractIndexOffset, ^int32(ContractIndexOffset)}
 	if len(txIndexes) != 1 || !reflect.DeepEqual(txIndexes[0].indexes, wantIndexes) {
 		t.Fatalf("address indexes = %+v, want %v for one transaction", txIndexes, wantIndexes)
+	}
+}
+
+// TestERC721SelfTransferConnectDisconnectRoundTrip verifies the connect/disconnect symmetry
+// of an ERC721 self-transfer: the holdings are untouched on both sides and the transaction
+// counts stay balanced after the block with the self-transfer is rolled back.
+func TestERC721SelfTransferConnectDisconnectRoundTrip(t *testing.T) {
+	parser := ethereumTestnetParser()
+	owner := dbtestdata.EthAddr83
+	contractAddress := dbtestdata.EthAddrContractCd
+	tokenID := big.NewInt(42)
+	txidTransferIn := "80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05201"
+	txidSelfTransfer := "80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05202"
+	d := setupRocksDB(t, &txTokenTransferTestParser{
+		EthereumParser: parser,
+		transfers: map[string]bchain.TokenTransfers{
+			txidTransferIn: {{
+				Standard: bchain.NonFungibleToken,
+				Contract: contractAddress,
+				From:     dbtestdata.EthAddr7b,
+				To:       owner,
+				Value:    *tokenID,
+			}},
+			txidSelfTransfer: {{
+				Standard: bchain.NonFungibleToken,
+				Contract: contractAddress,
+				From:     owner,
+				To:       owner,
+				Value:    *tokenID,
+			}},
+		},
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	ownerDesc := addressToAddrDesc(owner, parser)
+	contractDesc := addressToAddrDesc(contractAddress, parser)
+
+	makeBlock := func(height uint32, hash, txid, from string) *bchain.Block {
+		return &bchain.Block{
+			BlockHeader: bchain.BlockHeader{
+				Height: height,
+				Hash:   hash,
+				Time:   1534858022,
+			},
+			Txs: []bchain.Tx{{
+				Txid: txid,
+				Vin:  []bchain.Vin{{Addresses: []string{from}}},
+				Vout: []bchain.Vout{{ScriptPubKey: bchain.ScriptPubKey{Addresses: []string{contractAddress}}}},
+			}},
+		}
+	}
+
+	ownerContracts := func(stage string, wantTotalTxs uint, wantContractTxs uint) *unpackedAddrContracts {
+		t.Helper()
+		acs, err := d.getUnpackedAddrDescContracts(ownerDesc)
+		if err != nil {
+			t.Fatalf("%s: %v", stage, err)
+		}
+		if acs == nil {
+			t.Fatalf("%s: owner address contracts not found", stage)
+		}
+		if acs.TotalTxs != wantTotalTxs {
+			t.Fatalf("%s: TotalTxs = %d, want %d", stage, acs.TotalTxs, wantTotalTxs)
+		}
+		i, found := findContractInAddressContracts(contractDesc, acs.Contracts)
+		if !found {
+			t.Fatalf("%s: contract not found in owner address contracts", stage)
+		}
+		c := &acs.Contracts[i]
+		if c.Txs != wantContractTxs {
+			t.Fatalf("%s: contract Txs = %d, want %d", stage, c.Txs, wantContractTxs)
+		}
+		if len(c.Ids) != 1 || c.Ids[0].get().Cmp(tokenID) != 0 {
+			t.Fatalf("%s: Ids = %v, want [42]", stage, c.Ids)
+		}
+		return acs
+	}
+
+	// connect a block transferring the token to the owner
+	if err := d.ConnectBlock(makeBlock(4321000, "0xc7b98df95acfd11c51ba25611a39e004fe56c8fdfc1582af99354fcd09c17b11", txidTransferIn, dbtestdata.EthAddr7b)); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := packUnpackedAddrContracts(ownerContracts("after connect of transfer in", 1, 1))
+
+	// connect a block with a self-transfer of the token: holdings must stay [42], tx counts must increase
+	if err := d.ConnectBlock(makeBlock(4321001, "0x2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee", txidSelfTransfer, owner)); err != nil {
+		t.Fatal(err)
+	}
+	ownerContracts("after connect of self-transfer", 2, 2)
+
+	// disconnect the self-transfer block: holdings must stay [42], tx counts must return to the previous state
+	if err := d.DisconnectBlockRangeEthereumType(4321001, 4321001); err != nil {
+		t.Fatal(err)
+	}
+	restored := packUnpackedAddrContracts(ownerContracts("after disconnect of self-transfer", 1, 1))
+	if !bytes.Equal(snapshot, restored) {
+		t.Fatalf("owner address contracts after disconnect = %s, want %s", hex.EncodeToString(restored), hex.EncodeToString(snapshot))
 	}
 }
 
