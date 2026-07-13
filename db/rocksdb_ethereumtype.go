@@ -46,6 +46,9 @@ func (s *Ids) search(id big.Int) int {
 // insert id in ascending order
 func (s *Ids) insert(id big.Int) {
 	i := s.search(id)
+	if i < len(*s) && (*s)[i].CmpAbs(&id) == 0 {
+		return
+	}
 	if i == len(*s) {
 		*s = append(*s, id)
 	} else {
@@ -399,7 +402,15 @@ func addToAddressesMapEthereumType(addresses addressesMap, strAddrDesc string, b
 	return false
 }
 
-func addToContract(c *unpackedAddrContract, contractIndex int, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool) int32 {
+// isNFTSelfTransfer reports whether the transfer is an ERC721 transfer from an address to itself.
+// Such a transfer must be indexed and counted, but it must not change the address's holdings -
+// both processContractTransfers (connect) and disconnectAddress (rollback) derive the
+// mutateHoldings behavior of addToContract from this predicate.
+func isNFTSelfTransfer(from, to bchain.AddressDescriptor, standard bchain.TokenStandard) bool {
+	return standard == bchain.NonFungibleToken && bytes.Equal(from, to)
+}
+
+func addToContract(c *unpackedAddrContract, contractIndex int, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, mutateHoldings bool) int32 {
 	var aggregate AggregateFn
 	// index 0 is for ETH transfers, index 1 (InternalTxIndexOffset) is for internal transfers, contract indexes start with 2 (ContractIndexOffset)
 	if index < 0 {
@@ -416,6 +427,16 @@ func addToContract(c *unpackedAddrContract, contractIndex int, index int32, cont
 		aggregate = func(s, v *big.Int) {
 			s.Add(s, v)
 		}
+	}
+	if !mutateHoldings {
+		// mutateHoldings is false only for ERC721 self-transfers (see isNFTSelfTransfer):
+		// the transfer must still be indexed in both directions and counted once, but it
+		// cannot change the address's holdings. Other standards must not pass false here,
+		// it would silently skip their value normalization and aggregation.
+		if addTxCount {
+			c.Txs++
+		}
+		return index
 	}
 	if transfer.Standard == bchain.FungibleToken {
 		// Skip ERC20 balance aggregation; ensure a zero value is available for packing.
@@ -445,7 +466,7 @@ func addToContract(c *unpackedAddrContract, contractIndex int, index int32, cont
 	return index
 }
 
-func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts) error {
+func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, mutateHoldings bool, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts) error {
 	var err error
 	strAddrDesc := string(addrDesc)
 	ac, e := addressContracts[strAddrDesc]
@@ -484,7 +505,7 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 				ac.addContractIndex(contract, contractIndex)
 			}
 			c := &ac.Contracts[contractIndex]
-			index = addToContract(c, contractIndex, index, contract, transfer, addTxCount)
+			index = addToContract(c, contractIndex, index, contract, transfer, addTxCount, mutateHoldings)
 		} else {
 			if index < 0 {
 				index = transferFrom
@@ -539,7 +560,7 @@ func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresse
 				glog.Warningf("rocksdb: processBaseTxData: %v, tx %v, output", err, tx.Txid)
 			}
 		} else {
-			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, transferTo, nil, nil, true, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, transferTo, nil, nil, true, true, addresses, addressContracts); err != nil {
 				return err
 			}
 			blockTx.to = to
@@ -553,7 +574,7 @@ func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresse
 				glog.Warningf("rocksdb: processBaseTxData: %v, tx %v, input", err, tx.Txid)
 			}
 		} else {
-			if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, transferFrom, nil, nil, !bytes.Equal(from, to), addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, transferFrom, nil, nil, !bytes.Equal(from, to), true, addresses, addressContracts); err != nil {
 				return err
 			}
 			blockTx.from = from
@@ -599,7 +620,7 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 					return err
 				}
 			}
-			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, true, addresses, addressContracts); err != nil {
 				return err
 			}
 		}
@@ -622,7 +643,7 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 						return err
 					}
 				}
-				if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts); err != nil {
+				if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, true, addresses, addressContracts); err != nil {
 					return err
 				}
 				ito.to = to
@@ -638,7 +659,7 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 						return err
 					}
 				}
-				if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, internalTransferFrom, nil, nil, !bytes.Equal(from, to), addresses, addressContracts); err != nil {
+				if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, internalTransferFrom, nil, nil, !bytes.Equal(from, to), true, addresses, addressContracts); err != nil {
 					return err
 				}
 				ito.from = from
@@ -669,11 +690,12 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 			glog.Warningf("rocksdb: processContractTransfers %v, tx %v, transfer %v", err, tx.Txid, t)
 			continue
 		}
-		if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, int32(i), contract, t, true, addresses, addressContracts); err != nil {
+		eq := bytes.Equal(from, to)
+		mutateHoldings := !isNFTSelfTransfer(from, to, t.Standard)
+		if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, int32(i), contract, t, true, mutateHoldings, addresses, addressContracts); err != nil {
 			return err
 		}
-		eq := bytes.Equal(from, to)
-		if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, ^int32(i), contract, t, !eq, addresses, addressContracts); err != nil {
+		if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, ^int32(i), contract, t, !eq, mutateHoldings, addresses, addressContracts); err != nil {
 			return err
 		}
 		bc := &blockTx.contracts[i]
@@ -1254,9 +1276,11 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 							MultiTokenValues: btxContract.idValues,
 						}
 						if bytes.Equal(btxContract.from, btxContract.to) {
-							// Self-transfers were connected through both sides while counting one tx.
-							addToContract(addrContract, contractIndex, transferTo, btxContract.contract, transfer, false)
-							addToContract(addrContract, contractIndex, transferFrom, btxContract.contract, transfer, false)
+							// an NFT self-transfer did not change holdings on connect, there is nothing to reverse
+							if !isNFTSelfTransfer(btxContract.from, btxContract.to, btxContract.transferStandard) {
+								addToContract(addrContract, contractIndex, transferTo, btxContract.contract, transfer, false, true)
+								addToContract(addrContract, contractIndex, transferFrom, btxContract.contract, transfer, false, true)
+							}
 						} else {
 							var index int32
 							if bytes.Equal(addrDesc, btxContract.to) {
@@ -1264,7 +1288,7 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 							} else {
 								index = transferTo
 							}
-							addToContract(addrContract, contractIndex, index, btxContract.contract, transfer, false)
+							addToContract(addrContract, contractIndex, index, btxContract.contract, transfer, false, true)
 						}
 					}
 				} else {
@@ -1596,6 +1620,9 @@ func (s *unpackedIds) search(id big.Int) int {
 // insert id in ascending order
 func (s *unpackedIds) insert(id big.Int) {
 	i := s.search(id)
+	if i < len(*s) && (*s)[i].get().CmpAbs(&id) == 0 {
+		return
+	}
 	if i == len(*s) {
 		*s = append(*s, unpackedBigInt{Value: &id})
 	} else {
