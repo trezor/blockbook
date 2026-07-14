@@ -115,7 +115,9 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	}
 
 	var gen uint64
-	if retErr == nil {
+	// keyed on acceptedURL rather than retErr, so registration does not silently depend on
+	// callHttpStringResult never returning an empty result without an error
+	if acceptedURL != "" {
 		gen = p.registerSuccessfulSend(hex, acceptedURL)
 	}
 
