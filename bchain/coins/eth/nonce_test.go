@@ -286,6 +286,7 @@ func TestEthereumTypeGetNonces_AlternativeProvider_UsedForRecentSender(t *testin
 }
 
 func TestEthereumTypeGetNonces_AlternativeProvider_FallbackToPrimaryOnProviderError(t *testing.T) {
+	// without any cached private tx there is no floor to apply, so the primary answer stands
 	server := newNonceRPCServer(t, nil, map[string]bool{"pending": true})
 	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
 	sender := ethcommon.BytesToAddress(nonceTestAddr)
@@ -297,6 +298,33 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FallbackToPrimaryOnProviderEr
 	}
 	if pending != 4 {
 		t.Errorf("pending = %d, want 4 from the primary RPC fallback", pending)
+	}
+}
+
+func TestEthereumTypeGetNonces_AlternativeProvider_FallbackRaisedToCacheFloor(t *testing.T) {
+	// the provider lookup fails and the primary answers 4, but the alternative mempool cache
+	// still holds a pending private tx with nonce 0x7 from the sender - the fallback must
+	// report at least 8, otherwise a wallet building on the primary answer would replace the
+	// sender's in-flight private transaction
+	server := newNonceRPCServer(t, nil, map[string]bool{"pending": true})
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+	sender := ethcommon.BytesToAddress(nonceTestAddr)
+	provider := newRecentSenderProvider(server, sender)
+	provider.fetchMempoolTx = true
+	provider.mempoolTxs = map[string]storedTx{
+		testAlternativeTxID: {
+			tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: "0x7"},
+			time: uint32(time.Now().Unix()),
+		},
+	}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: provider}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+	if err != nil {
+		t.Fatalf("provider failure must fall back to the primary RPC, got error: %v", err)
+	}
+	if pending != 8 {
+		t.Errorf("pending = %d, want 8 (cache floor: highest cached nonce 0x7 + 1)", pending)
 	}
 }
 

@@ -1043,3 +1043,26 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 		}
 	})
 }
+
+func TestAlternativeSendTxProviderPendingNonceFloor(t *testing.T) {
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	provider := &AlternativeSendTxProvider{
+		mempoolTxs: map[string]storedTx{
+			"0x01": {tx: &bchain.RpcTransaction{From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x4"}},
+			"0x02": {tx: &bchain.RpcTransaction{From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x7"}},
+			"0x03": {tx: &bchain.RpcTransaction{From: "0x2222222222222222222222222222222222222222", AccountNonce: "0xZZ"}}, // unparsable, skipped
+			"0x04": {tx: &bchain.RpcTransaction{From: "0x3333333333333333333333333333333333333333", AccountNonce: "0x9"}},
+		},
+	}
+
+	floor, found := provider.pendingNonceFloor(sender)
+	if !found {
+		t.Fatal("no floor found for sender with cached txs")
+	}
+	if floor != 8 {
+		t.Errorf("floor = %d, want 8 (highest cached nonce 0x7 + 1)", floor)
+	}
+	if _, found := provider.pendingNonceFloor(ethcommon.HexToAddress("0x4444444444444444444444444444444444444444")); found {
+		t.Error("floor found for address without cached txs")
+	}
+}

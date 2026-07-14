@@ -2247,7 +2247,10 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // for addresses that recently sent a transaction via that provider (see useForNonces) —
 // those may have a pending transaction the primary RPC does not know about. All other
 // addresses go straight to the primary RPC so that the hottest API endpoint does not burn
-// the provider's rate-limit quota.
+// the provider's rate-limit quota. When the provider lookup for such a sender fails, the
+// primary RPC answer is used as fallback, raised to the floor implied by the alternative
+// mempool cache (see pendingNonceFloor) so it never contradicts Blockbook's own pending
+// view of the sender's private transactions.
 //
 // The pending nonce (eth_getTransactionCount at the "pending" tag) counts transactions
 // still queued in the mempool and is the next nonce the account will use; it is always
@@ -2262,7 +2265,8 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
 
-	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
+	useAlternative := b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress)
+	if useAlternative {
 		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
 		if err == nil {
 			return pending, confirmed, confirmedOK, nil
@@ -2274,6 +2278,15 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 	if err != nil {
 		glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
 		return 0, 0, false, err
+	}
+	if useAlternative {
+		// The primary RPC cannot see the sender's private pending transactions. Raise its
+		// answer to the floor implied by the alternative mempool cache so the fallback never
+		// reports a pending nonce that a wallet could use to accidentally replace the
+		// sender's in-flight private transaction.
+		if floor, ok := b.alternativeSendTxProvider.pendingNonceFloor(ethAddress); ok && floor > pending {
+			pending = floor
+		}
 	}
 	return pending, confirmed, confirmedOK, nil
 }
