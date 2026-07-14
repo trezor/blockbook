@@ -209,7 +209,7 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionFetchesFromAnyProvider
 	provider.mempoolTxs = make(map[string]storedTx)
 	provider.urls = append(provider.urls, knownServer.URL)
 
-	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err != nil {
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 0); err != nil {
 		t.Fatalf("handleMempoolTransaction() error = %v", err)
 	}
 	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
@@ -223,7 +223,7 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsEmptyTransaction(
 	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
 	provider.mempoolTxs = make(map[string]storedTx)
 
-	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err == nil {
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 0); err == nil {
 		t.Fatal("handleMempoolTransaction() error = nil, want ErrTxNotFound")
 	}
 	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
@@ -237,7 +237,7 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsTransactionWithou
 	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
 	provider.mempoolTxs = make(map[string]storedTx)
 
-	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err == nil {
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 0); err == nil {
 		t.Fatal("handleMempoolTransaction() error = nil, want ErrTxNotFound")
 	}
 	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
@@ -629,7 +629,7 @@ func TestAlternativeSendTxProviderRBFReplacementObservesMetrics(t *testing.T) {
 		provider.RemoveTransaction(txid)
 	}
 
-	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err != nil {
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 0); err != nil {
 		t.Fatalf("handleMempoolTransaction: %v", err)
 	}
 
@@ -1066,9 +1066,14 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 	})
 }
 
-func TestAlternativeSendTxProviderHandleMempoolTransactionStampsGeneration(t *testing.T) {
-	// the cached entry must carry the sender's current send generation so that
-	// releaseRecentSender can order its eviction against later sends
+func TestAlternativeSendTxProviderHandleMempoolTransactionStampsOwnGeneration(t *testing.T) {
+	// The cached entry must carry the generation of ITS OWN submission, not the sender's
+	// current generation: the fetch-back is a network round-trip during which a concurrent
+	// send can bump the sender's generation. Simulated here: transaction A (generation 1)
+	// finishes its slow fetch-back after a concurrent transaction B (generation 2) was
+	// registered but left no cache entry because B's own fetch-back failed. Stamping A with
+	// generation 2 would make A's eviction release the sender's routing while B is still
+	// privately pending.
 	server := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
 	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
 	provider := &AlternativeSendTxProvider{
@@ -1077,14 +1082,21 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionStampsGeneration(t *te
 		mempoolTxsTimeout: time.Hour,
 		rpcTimeout:        time.Second,
 		mempoolTxs:        map[string]storedTx{},
-		recentSenders:     map[ethcommon.Address]recentSender{sender: {time: time.Now(), gen: 5}},
+		recentSenders:     map[ethcommon.Address]recentSender{sender: {time: time.Now(), gen: 2}},
 	}
 
-	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err != nil {
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 1); err != nil {
 		t.Fatalf("handleMempoolTransaction() error = %v", err)
 	}
-	if got := provider.mempoolTxs[testAlternativeTxID].gen; got != 5 {
-		t.Errorf("cached tx generation = %d, want 5 (the sender's current send generation)", got)
+	if got := provider.mempoolTxs[testAlternativeTxID].gen; got != 1 {
+		t.Errorf("cached tx generation = %d, want 1 (the generation of its own submission)", got)
+	}
+
+	// evicting A must keep the routing alive for the uncached, possibly still pending B
+	provider.RemoveTransaction(testAlternativeTxID)
+
+	if !provider.useForNonces(sender) {
+		t.Error("sender routing released although a newer private send (generation 2) may still be pending")
 	}
 }
 
