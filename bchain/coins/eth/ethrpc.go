@@ -2243,6 +2243,12 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // EthereumTypeGetNonces returns the pending account nonce and, only when withConfirmed
 // is set, the confirmed (latest) nonce.
 //
+// When an alternative send-tx provider is configured, the lookup is routed through it only
+// for addresses that recently sent a transaction via that provider (see useForNonces) —
+// those may have a pending transaction the primary RPC does not know about. All other
+// addresses go straight to the primary RPC so that the hottest API endpoint does not burn
+// the provider's rate-limit quota.
+//
 // The pending nonce (eth_getTransactionCount at the "pending" tag) counts transactions
 // still queued in the mempool and is the next nonce the account will use; it is always
 // fetched and is required, so a failure to obtain it returns an error. The confirmed nonce
@@ -2256,12 +2262,12 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
 
-	if b.alternativeSendTxProvider != nil {
+	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
 		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
 		if err == nil {
 			return pending, confirmed, confirmedOK, nil
 		}
-		glog.Errorf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
+		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 	}
 
 	pending, confirmed, confirmedOK, err := b.getNoncesRPC(ethAddress, withConfirmed)

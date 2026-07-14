@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,9 @@ import (
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
@@ -820,6 +824,121 @@ func TestAlternativeSendTxProviderGetNonces(t *testing.T) {
 
 		if _, _, _, err := provider.getNonces(addr, true); err == nil {
 			t.Fatal("expected fatal error on batch transport failure")
+		}
+	})
+}
+
+// signedTestTx builds a signed raw transaction with a throwaway key and returns its hex
+// encoding together with the sender address the key derives to.
+func signedTestTx(t *testing.T) (string, ethcommon.Address) {
+	t.Helper()
+	key, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	if err != nil {
+		t.Fatalf("HexToECDSA() error = %v", err)
+	}
+	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
+	tx, err := types.SignNewTx(key, types.LatestSignerForChainID(big.NewInt(1)), &types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(1),
+		Gas:      21000,
+		To:       &to,
+		Value:    big.NewInt(0),
+	})
+	if err != nil {
+		t.Fatalf("SignNewTx() error = %v", err)
+	}
+	raw, err := tx.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary() error = %v", err)
+	}
+	return hexutil.Encode(raw), crypto.PubkeyToAddress(key.PublicKey)
+}
+
+func TestAlternativeSendTxProviderUseForNonces(t *testing.T) {
+	recent := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	expired := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
+	unknown := ethcommon.HexToAddress("0x4444444444444444444444444444444444444444")
+	provider := &AlternativeSendTxProvider{
+		mempoolTxsTimeout: time.Hour,
+		recentSenders: map[ethcommon.Address]time.Time{
+			recent:  time.Now(),
+			expired: time.Now().Add(-2 * time.Hour),
+		},
+	}
+
+	if !provider.useForNonces(recent) {
+		t.Error("recent sender not routed to the alternative provider")
+	}
+	if provider.useForNonces(unknown) {
+		t.Error("unknown address routed to the alternative provider")
+	}
+	if provider.useForNonces(expired) {
+		t.Error("expired sender routed to the alternative provider")
+	}
+	if _, found := provider.recentSenders[expired]; found {
+		t.Error("expired sender not evicted on lookup")
+	}
+}
+
+func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
+	rawTx, sender := signedTestTx(t)
+	// callHttpStringResult dials a fresh client per call, so its first request always has id 1
+	sendTxResponse := `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`
+
+	t.Run("successful send records the decoded sender", func(t *testing.T) {
+		server := newAlternativeTxProviderTestServer(t, sendTxResponse)
+		// recentSenders left nil to also cover the lazy initialization on write
+		provider := &AlternativeSendTxProvider{urls: []string{server.URL}, mempoolTxsTimeout: time.Hour, rpcTimeout: time.Second}
+
+		if _, err := provider.SendRawTransaction(rawTx); err != nil {
+			t.Fatalf("SendRawTransaction() error = %v", err)
+		}
+		if !provider.useForNonces(sender) {
+			t.Error("sender not routed to the alternative provider after a successful send")
+		}
+	})
+
+	t.Run("failed send records nothing", func(t *testing.T) {
+		provider := &AlternativeSendTxProvider{urls: []string{"http://127.0.0.1:1"}, mempoolTxsTimeout: time.Hour, rpcTimeout: time.Second}
+
+		if _, err := provider.SendRawTransaction(rawTx); err == nil {
+			t.Fatal("expected error from unreachable provider")
+		}
+		if provider.useForNonces(sender) {
+			t.Error("sender recorded despite failed send")
+		}
+	})
+
+	t.Run("undecodable transaction records nothing", func(t *testing.T) {
+		server := newAlternativeTxProviderTestServer(t, sendTxResponse)
+		provider := &AlternativeSendTxProvider{urls: []string{server.URL}, mempoolTxsTimeout: time.Hour, rpcTimeout: time.Second}
+
+		if _, err := provider.SendRawTransaction("0xdeadbeef"); err != nil {
+			t.Fatalf("SendRawTransaction() error = %v", err)
+		}
+		if len(provider.recentSenders) != 0 {
+			t.Errorf("recentSenders has %d entries, want 0 after undecodable raw tx", len(provider.recentSenders))
+		}
+	})
+
+	t.Run("send sweeps expired senders", func(t *testing.T) {
+		server := newAlternativeTxProviderTestServer(t, sendTxResponse)
+		stale := ethcommon.HexToAddress("0x5555555555555555555555555555555555555555")
+		provider := &AlternativeSendTxProvider{
+			urls:              []string{server.URL},
+			mempoolTxsTimeout: time.Hour,
+			rpcTimeout:        time.Second,
+			recentSenders:     map[ethcommon.Address]time.Time{stale: time.Now().Add(-2 * time.Hour)},
+		}
+
+		if _, err := provider.SendRawTransaction(rawTx); err != nil {
+			t.Fatalf("SendRawTransaction() error = %v", err)
+		}
+		if _, found := provider.recentSenders[stale]; found {
+			t.Error("expired sender not swept on send")
+		}
+		if _, found := provider.recentSenders[sender]; !found {
+			t.Error("new sender not recorded")
 		}
 	})
 }
