@@ -163,9 +163,10 @@ func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acce
 // which Blockbook stops surfacing the tx as pending) sent a transaction through it can have
 // a pending transaction the primary RPC does not know about; for everybody else the primary
 // is authoritative and the provider round-trip is pure waste of its rate-limit quota.
-// Accepted limitations: a restart wipes the map (exposure bounded by mempoolTxsTimeout), a
-// transaction pending longer than the timeout, and private transactions submitted outside
-// this Blockbook instance.
+// Senders whose cached transactions have all settled are released before the timeout (see
+// releaseRecentSender). Accepted limitations: a restart wipes the map (exposure bounded by
+// mempoolTxsTimeout), a transaction pending longer than the timeout, and private
+// transactions submitted outside this Blockbook instance.
 func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
@@ -178,6 +179,25 @@ func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 		return false
 	}
 	return true
+}
+
+// releaseRecentSender drops the sender's nonce-routing entry once its last cached
+// transaction left the alternative mempool cache (mined, superseded, replaced or timed
+// out), so address polling stops consuming the alternative provider's quota as soon as no
+// private transaction remains pending. The entry is kept when it is newer than the evicted
+// transaction: the sender submitted again since then and the newer transaction may not have
+// a cache entry of its own (e.g. when the post-send fetch-back failed).
+func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address, evictedTxUnix uint32) {
+	p.recentSendersMux.Lock()
+	defer p.recentSendersMux.Unlock()
+	s, found := p.recentSenders[sender]
+	if !found {
+		return
+	}
+	if s.time.After(time.Unix(int64(evictedTxUnix), 0).Add(time.Second)) {
+		return
+	}
+	delete(p.recentSenders, sender)
 }
 
 // handleMempoolTransaction handles the transaction when using only alternative providers
@@ -238,9 +258,7 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 
 	if found {
 		if time.Unix(int64(storedTx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
-			p.mempoolTxsMux.Lock()
-			delete(p.mempoolTxs, txid)
-			p.mempoolTxsMux.Unlock()
+			p.RemoveTransaction(txid)
 			// the same staleness timeout the reconcile loop applies, just reached on the read path
 			// first; record it so the timeout counter and residence histogram do not undercount
 			// entries read after expiry but before the next reconcile cycle evicts them.
@@ -515,15 +533,35 @@ func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) {
 	p.RemoveTransaction(txid)
 }
 
-// RemoveTransaction removes a transaction from alternative mempool cache
+// RemoveTransaction removes a transaction from alternative mempool cache. When the removed
+// transaction was the sender's last cached one, the sender's nonce-routing entry is released
+// as well (see releaseRecentSender) so address polling stops hitting the alternative provider
+// once nothing private remains pending.
 func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) {
 	if !p.fetchMempoolTx {
 		return
 	}
 
 	p.mempoolTxsMux.Lock()
+	removedTx, found := p.mempoolTxs[txid]
 	delete(p.mempoolTxs, txid)
+	senderSettled := false
+	var sender ethcommon.Address
+	if found && removedTx.tx != nil && removedTx.tx.From != "" {
+		sender = ethcommon.HexToAddress(removedTx.tx.From)
+		senderSettled = true
+		for _, storedTx := range p.mempoolTxs {
+			if storedTx.tx != nil && ethcommon.HexToAddress(storedTx.tx.From) == sender {
+				senderSettled = false
+				break
+			}
+		}
+	}
 	p.mempoolTxsMux.Unlock()
+
+	if senderSettled {
+		p.releaseRecentSender(sender, removedTx.time)
+	}
 }
 
 // UseOnlyAlternativeProvider returns true if only alternative providers should be used
