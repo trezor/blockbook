@@ -39,7 +39,6 @@ type AlternativeSendTxProvider struct {
 	urls                         []string
 	onlyAlternative              bool
 	fetchMempoolTx               bool
-	nonceForAllAddresses         bool
 	mempoolTxs                   map[string]storedTx
 	mempoolTxsMux                sync.Mutex
 	mempoolTxsTimeout            time.Duration
@@ -60,31 +59,26 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 	urls := strings.Split(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_URLS"), ",")
 	onlyAlternative := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
 	fetchMempoolTx := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_FETCH_MEMPOOL_TX")) == "TRUE"
-	nonceForAllAddresses := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_NONCE_FOR_ALL_ADDRESSES")) == "TRUE"
 	// Empty URL keeps the normal public RPC send path.
 	if len(urls) == 0 || urls[0] == "" {
 		return nil
 	}
 
 	provider := &AlternativeSendTxProvider{
-		urls:                 urls,
-		onlyAlternative:      onlyAlternative,
-		fetchMempoolTx:       fetchMempoolTx,
-		nonceForAllAddresses: nonceForAllAddresses,
-		rpcTimeout:           time.Duration(rpcTimeout) * time.Second,
-		mempoolTxsTimeout:    mempoolTxsTimeout,
-		mempoolTxs:           make(map[string]storedTx),
-		recentSenders:        make(map[ethcommon.Address]recentSender),
-		metrics:              metrics,
-		stop:                 make(chan struct{}),
+		urls:              urls,
+		onlyAlternative:   onlyAlternative,
+		fetchMempoolTx:    fetchMempoolTx,
+		rpcTimeout:        time.Duration(rpcTimeout) * time.Second,
+		mempoolTxsTimeout: mempoolTxsTimeout,
+		mempoolTxs:        make(map[string]storedTx),
+		recentSenders:     make(map[ethcommon.Address]recentSender),
+		metrics:           metrics,
+		stop:              make(chan struct{}),
 	}
 
 	glog.Infof("Using alternative send transaction providers %v. Only alternative providers %v", urls, onlyAlternative)
 	if fetchMempoolTx {
 		glog.Infof("Alternative fetch mempool tx %v", fetchMempoolTx)
-	}
-	if nonceForAllAddresses {
-		glog.Infof("Alternative provider nonce routing enabled for all addresses")
 	}
 
 	return provider
@@ -187,14 +181,9 @@ func (p *AlternativeSendTxProvider) currentSenderGeneration(from string) uint64 
 // releaseRecentSender). Accepted limitations: a restart wipes the map (exposure bounded by
 // mempoolTxsTimeout), a transaction pending longer than the timeout, and private
 // transactions submitted outside this Blockbook instance - which includes sends accepted
-// by ANOTHER replica in a load-balanced deployment without request affinity. Deployments
-// that cannot guarantee affinity can set *_ALTERNATIVE_NONCE_FOR_ALL_ADDRESSES=TRUE to
-// bypass the gate and route every address to the provider (the pre-gating behavior, at
-// the cost of its rate-limit quota).
+// by another replica in a load-balanced deployment without request affinity (wallet
+// websocket flows are naturally sticky to one instance; see docs/env.md).
 func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
-	if p.nonceForAllAddresses {
-		return true
-	}
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
 	s, found := p.recentSenders[addr]
