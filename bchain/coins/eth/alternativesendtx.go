@@ -21,6 +21,7 @@ import (
 type storedTx struct {
 	tx   *bchain.RpcTransaction
 	time uint32
+	gen  uint64 // sender's send generation when the tx was cached, orders it against later sends
 }
 
 // recentSender records when an address last successfully sent a transaction through an
@@ -28,6 +29,7 @@ type storedTx struct {
 type recentSender struct {
 	time time.Time
 	url  string
+	gen  uint64 // monotonic send generation, orders the send against cached-tx evictions
 }
 
 const alternativeMempoolTxCheckPeriod = time.Minute
@@ -48,6 +50,7 @@ type AlternativeSendTxProvider struct {
 	stop                         chan struct{}
 	stopOnce                     sync.Once
 	recentSenders                map[ethcommon.Address]recentSender
+	sendGeneration               uint64 // counts successful sends; guarded by recentSendersMux
 	recentSendersMux             sync.Mutex
 }
 
@@ -155,7 +158,18 @@ func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acce
 			delete(p.recentSenders, addr)
 		}
 	}
-	p.recentSenders[sender] = recentSender{time: now, url: acceptedURL}
+	p.sendGeneration++
+	p.recentSenders[sender] = recentSender{time: now, url: acceptedURL, gen: p.sendGeneration}
+}
+
+// currentSenderGeneration returns the send generation of the sender's most recent
+// successful send. Cached transactions are stamped with it so releaseRecentSender can
+// order evictions against later sends precisely, without relying on wall-clock resolution
+// (two sends can land within the same whole-second storedTx timestamp).
+func (p *AlternativeSendTxProvider) currentSenderGeneration(from string) uint64 {
+	p.recentSendersMux.Lock()
+	defer p.recentSendersMux.Unlock()
+	return p.recentSenders[ethcommon.HexToAddress(from)].gen
 }
 
 // useForNonces reports whether nonce lookups for addr should be routed to the alternative
@@ -184,21 +198,22 @@ func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 // releaseRecentSender drops the sender's nonce-routing entry once its last cached
 // transaction left the alternative mempool cache (mined, superseded, replaced or timed
 // out), so address polling stops consuming the alternative provider's quota as soon as no
-// private transaction remains pending. The entry is kept when it is newer than the evicted
-// transaction: the sender submitted again since then and the newer transaction may not have
-// a cache entry of its own (e.g. when the post-send fetch-back failed).
-// Residual risk, accepted: a sibling transaction that never got a cache entry (failed
-// fetch-back) can still cause a premature release - a newer send landing within the
-// one-second comparison slack, or an uncached older send outliving an evicted newer one.
-// Both require that exceptional-path failure combined with unusual timing.
-func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address, evictedTxUnix uint32) {
+// private transaction remains pending. The entry is kept when its send generation is newer
+// than the evicted transaction's: the sender submitted again after that transaction was
+// cached (even within the same wall-clock second) and the newer transaction may not have a
+// cache entry of its own (e.g. when the post-send fetch-back failed).
+// Residual risk, accepted: an UNCACHED send OLDER than the evicted transaction cannot be
+// represented and loses its routing with the release. It needs a failed fetch-back, and
+// mined evictions largely exclude it anyway - the sender's nonces are sequential, so an
+// older transaction cannot still be pending once a newer one mined.
+func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address, evictedTxGen uint64) {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
 	s, found := p.recentSenders[sender]
 	if !found {
 		return
 	}
-	if s.time.After(time.Unix(int64(evictedTxUnix), 0).Add(time.Second)) {
+	if s.gen > evictedTxGen {
 		return
 	}
 	delete(p.recentSenders, sender)
@@ -250,6 +265,8 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (strin
 		return txid, bchain.ErrTxNotFound
 	}
 
+	gen := p.currentSenderGeneration(tx.From)
+
 	p.mempoolTxsMux.Lock()
 	// remove potential RBF transactions - with equal from and nonce
 	var rbfTxid string
@@ -261,7 +278,7 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (strin
 			break
 		}
 	}
-	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix())}
+	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen}
 	p.mempoolTxsMux.Unlock()
 
 	if rbfTxid != "" {
@@ -599,7 +616,7 @@ func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) {
 	p.mempoolTxsMux.Unlock()
 
 	if senderSettled {
-		p.releaseRecentSender(sender, removedTx.time)
+		p.releaseRecentSender(sender, removedTx.gen)
 	}
 }
 
