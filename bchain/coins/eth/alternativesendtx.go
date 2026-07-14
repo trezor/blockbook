@@ -187,6 +187,10 @@ func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 // private transaction remains pending. The entry is kept when it is newer than the evicted
 // transaction: the sender submitted again since then and the newer transaction may not have
 // a cache entry of its own (e.g. when the post-send fetch-back failed).
+// Residual risk, accepted: a sibling transaction that never got a cache entry (failed
+// fetch-back) can still cause a premature release - a newer send landing within the
+// one-second comparison slack, or an uncached older send outliving an evicted newer one.
+// Both require that exceptional-path failure combined with unusual timing.
 func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address, evictedTxUnix uint32) {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
