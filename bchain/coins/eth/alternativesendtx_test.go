@@ -998,28 +998,28 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 
 func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) {
 	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
-	cachedTx := func(nonce string, added time.Time) storedTx {
+	cachedTx := func(nonce string, gen uint64) storedTx {
 		return storedTx{
 			tx: &bchain.RpcTransaction{
 				Hash:         testAlternativeTxID,
 				From:         "0x2222222222222222222222222222222222222222",
 				AccountNonce: nonce,
 			},
-			time: uint32(added.Unix()),
+			time: uint32(time.Now().Unix()),
+			gen:  gen,
 		}
 	}
-	makeProvider := func(senderTime time.Time, txs map[string]storedTx) *AlternativeSendTxProvider {
+	makeProvider := func(senderGen uint64, txs map[string]storedTx) *AlternativeSendTxProvider {
 		return &AlternativeSendTxProvider{
 			fetchMempoolTx:    true,
 			mempoolTxsTimeout: time.Hour,
 			mempoolTxs:        txs,
-			recentSenders:     map[ethcommon.Address]recentSender{sender: {time: senderTime}},
+			recentSenders:     map[ethcommon.Address]recentSender{sender: {time: time.Now(), gen: senderGen}},
 		}
 	}
 
 	t.Run("evicting the last cached tx releases the sender", func(t *testing.T) {
-		now := time.Now()
-		provider := makeProvider(now, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", now)})
+		provider := makeProvider(1, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", 1)})
 
 		provider.RemoveTransaction(testAlternativeTxID)
 
@@ -1029,10 +1029,9 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 	})
 
 	t.Run("another cached tx from the sender keeps the entry", func(t *testing.T) {
-		now := time.Now()
-		provider := makeProvider(now, map[string]storedTx{
-			testAlternativeTxID:       cachedTx("0x1", now),
-			testAlternativeSecondTxID: cachedTx("0x2", now),
+		provider := makeProvider(2, map[string]storedTx{
+			testAlternativeTxID:       cachedTx("0x1", 1),
+			testAlternativeSecondTxID: cachedTx("0x2", 2),
 		})
 
 		provider.RemoveTransaction(testAlternativeTxID)
@@ -1044,9 +1043,10 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 
 	t.Run("a newer send since the evicted tx keeps the entry", func(t *testing.T) {
 		// the sender submitted again after the evicted tx was cached (possibly without a cache
-		// entry of its own, e.g. when the post-send fetch-back failed) - the entry must survive
-		now := time.Now()
-		provider := makeProvider(now, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", now.Add(-10*time.Minute))})
+		// entry of its own, e.g. when the post-send fetch-back failed) - the entry must survive.
+		// The generation counter orders the sends precisely, so this holds even when both sends
+		// landed within the same wall-clock second.
+		provider := makeProvider(2, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", 1)})
 
 		provider.RemoveTransaction(testAlternativeTxID)
 
@@ -1056,8 +1056,7 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 	})
 
 	t.Run("unknown txid releases nothing", func(t *testing.T) {
-		now := time.Now()
-		provider := makeProvider(now, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", now)})
+		provider := makeProvider(1, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", 1)})
 
 		provider.RemoveTransaction("0xdoesnotexist")
 
@@ -1065,6 +1064,28 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 			t.Error("sender released by removal of an unknown txid")
 		}
 	})
+}
+
+func TestAlternativeSendTxProviderHandleMempoolTransactionStampsGeneration(t *testing.T) {
+	// the cached entry must carry the sender's current send generation so that
+	// releaseRecentSender can order its eviction against later sends
+	server := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		rpcTimeout:        time.Second,
+		mempoolTxs:        map[string]storedTx{},
+		recentSenders:     map[ethcommon.Address]recentSender{sender: {time: time.Now(), gen: 5}},
+	}
+
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID); err != nil {
+		t.Fatalf("handleMempoolTransaction() error = %v", err)
+	}
+	if got := provider.mempoolTxs[testAlternativeTxID].gen; got != 5 {
+		t.Errorf("cached tx generation = %d, want 5 (the sender's current send generation)", got)
+	}
 }
 
 func TestAlternativeSendTxProviderPendingNonceFloor(t *testing.T) {
