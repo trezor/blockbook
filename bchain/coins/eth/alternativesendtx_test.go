@@ -951,6 +951,29 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 		}
 	})
 
+	t.Run("batched nonce read follows the accepting provider", func(t *testing.T) {
+		// withConfirmed=true exercises the batch branch of getNonces, which dials the url
+		// itself instead of going through callHttpStringResult - it must pick the accepting
+		// provider the same way as the pending-only branch
+		server := newNonceRPCServer(t, map[string]string{"": testAlternativeTxID, "pending": "0x9", "latest": "0x5"}, nil)
+		provider := &AlternativeSendTxProvider{
+			urls:              []string{"http://127.0.0.1:1", server.URL},
+			mempoolTxsTimeout: time.Hour,
+			rpcTimeout:        time.Second,
+		}
+
+		if _, err := provider.SendRawTransaction(rawTx); err != nil {
+			t.Fatalf("SendRawTransaction() error = %v", err)
+		}
+		pending, confirmed, confirmedOK, err := provider.getNonces(sender, true)
+		if err != nil {
+			t.Fatalf("getNonces() error = %v", err)
+		}
+		if pending != 9 || confirmed != 5 || !confirmedOK {
+			t.Errorf("got (pending=%d confirmed=%d ok=%v), want (9 5 true) from the provider that accepted the send", pending, confirmed, confirmedOK)
+		}
+	})
+
 	t.Run("send sweeps expired senders", func(t *testing.T) {
 		server := newAlternativeTxProviderTestServer(t, sendTxResponse)
 		stale := ethcommon.HexToAddress("0x5555555555555555555555555555555555555555")
