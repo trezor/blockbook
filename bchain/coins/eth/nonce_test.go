@@ -232,6 +232,74 @@ func TestEthereumTypeGetNonces_SequentialFallback_ConfirmedFailureIsBestEffort(t
 	}
 }
 
+// newRecentSenderProvider returns an alternative provider backed by server whose recentSenders
+// map holds the given addresses, i.e. useForNonces routes exactly those to the provider.
+func newRecentSenderProvider(server *nonceRPCServer, senders ...ethcommon.Address) *AlternativeSendTxProvider {
+	recentSenders := make(map[ethcommon.Address]time.Time)
+	for _, sender := range senders {
+		recentSenders[sender] = time.Now()
+	}
+	return &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		mempoolTxsTimeout: time.Hour,
+		rpcTimeout:        time.Second,
+		recentSenders:     recentSenders,
+	}
+}
+
+// TestEthereumTypeGetNonces_AlternativeProvider_SkippedForUnknownAddress is the regression test
+// for #1627: an address without a recently privately-submitted tx must be served by the primary
+// RPC without any round-trip to the alternative provider.
+func TestEthereumTypeGetNonces_AlternativeProvider_SkippedForUnknownAddress(t *testing.T) {
+	server := newNonceRPCServer(t, map[string]string{"pending": "0x9"}, nil)
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: newRecentSenderProvider(server)}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 4 {
+		t.Errorf("pending = %d, want 4 from the primary RPC", pending)
+	}
+	if got := server.callCount("pending"); got != 0 {
+		t.Errorf("alternative provider queried %d times, want 0 for an address that did not send through it", got)
+	}
+}
+
+func TestEthereumTypeGetNonces_AlternativeProvider_UsedForRecentSender(t *testing.T) {
+	server := newNonceRPCServer(t, map[string]string{"pending": "0x9"}, nil)
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+	sender := ethcommon.BytesToAddress(nonceTestAddr)
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: newRecentSenderProvider(server, sender)}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 9 {
+		t.Errorf("pending = %d, want 9 from the alternative provider", pending)
+	}
+	if len(stub.queried) != 0 {
+		t.Errorf("primary RPC queried tags %v, want none for a recent private sender", stub.queried)
+	}
+}
+
+func TestEthereumTypeGetNonces_AlternativeProvider_FallbackToPrimaryOnProviderError(t *testing.T) {
+	server := newNonceRPCServer(t, nil, map[string]bool{"pending": true})
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+	sender := ethcommon.BytesToAddress(nonceTestAddr)
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: newRecentSenderProvider(server, sender)}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+	if err != nil {
+		t.Fatalf("provider failure must fall back to the primary RPC, got error: %v", err)
+	}
+	if pending != 4 {
+		t.Errorf("pending = %d, want 4 from the primary RPC fallback", pending)
+	}
+}
+
 func TestEthereumTypeGetNonces_SequentialFallback_ConfirmedDecodeFailureIsBestEffort(t *testing.T) {
 	// sequential-fallback counterpart of the batched decode-failure case: an unparsable latest
 	// result must be best-effort (pending returned, confirmedOK=false, no error)

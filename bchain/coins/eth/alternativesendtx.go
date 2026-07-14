@@ -10,6 +10,7 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -39,6 +40,8 @@ type AlternativeSendTxProvider struct {
 	watchMempoolTxsOnce          sync.Once
 	stop                         chan struct{}
 	stopOnce                     sync.Once
+	recentSenders                map[ethcommon.Address]time.Time
+	recentSendersMux             sync.Mutex
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
@@ -58,6 +61,7 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 		rpcTimeout:        time.Duration(rpcTimeout) * time.Second,
 		mempoolTxsTimeout: mempoolTxsTimeout,
 		mempoolTxs:        make(map[string]storedTx),
+		recentSenders:     make(map[ethcommon.Address]time.Time),
 		metrics:           metrics,
 		stop:              make(chan struct{}),
 	}
@@ -96,11 +100,71 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		}
 	}
 
+	if retErr == nil {
+		p.registerSuccessfulSend(hex)
+	}
+
 	if p.onlyAlternative && p.fetchMempoolTx {
 		p.handleMempoolTransaction(txid)
 	}
 
 	return txid, retErr
+}
+
+// alternativeTxSender recovers the sender address from a raw transaction hex. The chain id
+// needed to derive the sender is taken from the transaction itself.
+func alternativeTxSender(rawTxHex string) (ethcommon.Address, error) {
+	var tx types.Transaction
+	if err := tx.UnmarshalBinary(ethcommon.FromHex(rawTxHex)); err != nil {
+		return ethcommon.Address{}, err
+	}
+	return types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
+}
+
+// registerSuccessfulSend records the sender of a transaction accepted by an alternative
+// provider so that useForNonces routes the sender's nonce lookups to that provider while
+// the transaction may still be pending there. Expired entries are swept on the way; the map
+// only ever holds senders of the last mempoolTxsTimeout window, so the sweep is cheap.
+func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string) {
+	sender, err := alternativeTxSender(rawTxHex)
+	if err != nil {
+		glog.Warningf("cannot decode sender of transaction sent to alternative provider: %v", err)
+		return
+	}
+	now := time.Now()
+	p.recentSendersMux.Lock()
+	defer p.recentSendersMux.Unlock()
+	if p.recentSenders == nil {
+		p.recentSenders = make(map[ethcommon.Address]time.Time)
+	}
+	for addr, t := range p.recentSenders {
+		if now.Sub(t) > p.mempoolTxsTimeout {
+			delete(p.recentSenders, addr)
+		}
+	}
+	p.recentSenders[sender] = now
+}
+
+// useForNonces reports whether nonce lookups for addr should be routed to the alternative
+// provider. Only addresses that recently (within mempoolTxsTimeout, the same horizon at
+// which Blockbook stops surfacing the tx as pending) sent a transaction through it can have
+// a pending transaction the primary RPC does not know about; for everybody else the primary
+// is authoritative and the provider round-trip is pure waste of its rate-limit quota.
+// Accepted limitations: a restart wipes the map (exposure bounded by mempoolTxsTimeout), a
+// transaction pending longer than the timeout, and private transactions submitted outside
+// this Blockbook instance.
+func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
+	p.recentSendersMux.Lock()
+	defer p.recentSendersMux.Unlock()
+	t, found := p.recentSenders[addr]
+	if !found {
+		return false
+	}
+	if time.Since(t) > p.mempoolTxsTimeout {
+		delete(p.recentSenders, addr)
+		return false
+	}
+	return true
 }
 
 // handleMempoolTransaction handles the transaction when using only alternative providers
