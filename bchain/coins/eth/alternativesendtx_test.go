@@ -972,3 +972,74 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 		}
 	})
 }
+
+func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) {
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	cachedTx := func(nonce string, added time.Time) storedTx {
+		return storedTx{
+			tx: &bchain.RpcTransaction{
+				Hash:         testAlternativeTxID,
+				From:         "0x2222222222222222222222222222222222222222",
+				AccountNonce: nonce,
+			},
+			time: uint32(added.Unix()),
+		}
+	}
+	makeProvider := func(senderTime time.Time, txs map[string]storedTx) *AlternativeSendTxProvider {
+		return &AlternativeSendTxProvider{
+			fetchMempoolTx:    true,
+			mempoolTxsTimeout: time.Hour,
+			mempoolTxs:        txs,
+			recentSenders:     map[ethcommon.Address]recentSender{sender: {time: senderTime}},
+		}
+	}
+
+	t.Run("evicting the last cached tx releases the sender", func(t *testing.T) {
+		now := time.Now()
+		provider := makeProvider(now, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", now)})
+
+		provider.RemoveTransaction(testAlternativeTxID)
+
+		if provider.useForNonces(sender) {
+			t.Error("sender still routed to the alternative provider after its last cached tx settled")
+		}
+	})
+
+	t.Run("another cached tx from the sender keeps the entry", func(t *testing.T) {
+		now := time.Now()
+		provider := makeProvider(now, map[string]storedTx{
+			testAlternativeTxID:       cachedTx("0x1", now),
+			testAlternativeSecondTxID: cachedTx("0x2", now),
+		})
+
+		provider.RemoveTransaction(testAlternativeTxID)
+
+		if !provider.useForNonces(sender) {
+			t.Error("sender released while another of its txs is still cached")
+		}
+	})
+
+	t.Run("a newer send since the evicted tx keeps the entry", func(t *testing.T) {
+		// the sender submitted again after the evicted tx was cached (possibly without a cache
+		// entry of its own, e.g. when the post-send fetch-back failed) - the entry must survive
+		now := time.Now()
+		provider := makeProvider(now, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", now.Add(-10*time.Minute))})
+
+		provider.RemoveTransaction(testAlternativeTxID)
+
+		if !provider.useForNonces(sender) {
+			t.Error("sender released although a newer private send may still be pending")
+		}
+	})
+
+	t.Run("unknown txid releases nothing", func(t *testing.T) {
+		now := time.Now()
+		provider := makeProvider(now, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", now)})
+
+		provider.RemoveTransaction("0xdoesnotexist")
+
+		if !provider.useForNonces(sender) {
+			t.Error("sender released by removal of an unknown txid")
+		}
+	})
+}
