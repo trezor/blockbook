@@ -860,9 +860,9 @@ func TestAlternativeSendTxProviderUseForNonces(t *testing.T) {
 	unknown := ethcommon.HexToAddress("0x4444444444444444444444444444444444444444")
 	provider := &AlternativeSendTxProvider{
 		mempoolTxsTimeout: time.Hour,
-		recentSenders: map[ethcommon.Address]time.Time{
-			recent:  time.Now(),
-			expired: time.Now().Add(-2 * time.Hour),
+		recentSenders: map[ethcommon.Address]recentSender{
+			recent:  {time: time.Now()},
+			expired: {time: time.Now().Add(-2 * time.Hour)},
 		},
 	}
 
@@ -896,6 +896,9 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 		if !provider.useForNonces(sender) {
 			t.Error("sender not routed to the alternative provider after a successful send")
 		}
+		if s := provider.recentSenders[sender]; s.url != server.URL {
+			t.Errorf("recorded accepting url = %q, want %q", s.url, server.URL)
+		}
 	})
 
 	t.Run("failed send records nothing", func(t *testing.T) {
@@ -921,6 +924,33 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 		}
 	})
 
+	t.Run("nonce reads follow the accepting provider", func(t *testing.T) {
+		// urls[0] is unreachable: the broadcast succeeds only through the second provider, so
+		// nonce reads for the sender must go there too - urls[0] never saw the transaction.
+		// The nonce server answers eth_sendRawTransaction via the empty tag and
+		// eth_getTransactionCount via the "pending" tag.
+		server := newNonceRPCServer(t, map[string]string{"": testAlternativeTxID, "pending": "0x9"}, nil)
+		provider := &AlternativeSendTxProvider{
+			urls:              []string{"http://127.0.0.1:1", server.URL},
+			mempoolTxsTimeout: time.Hour,
+			rpcTimeout:        time.Second,
+		}
+
+		if _, err := provider.SendRawTransaction(rawTx); err != nil {
+			t.Fatalf("SendRawTransaction() error = %v", err)
+		}
+		pending, _, _, err := provider.getNonces(sender, false)
+		if err != nil {
+			t.Fatalf("getNonces() error = %v", err)
+		}
+		if pending != 9 {
+			t.Errorf("pending = %d, want 9 from the provider that accepted the send", pending)
+		}
+		if got := server.callCount("pending"); got != 1 {
+			t.Errorf("accepting provider queried %d times for pending, want 1", got)
+		}
+	})
+
 	t.Run("send sweeps expired senders", func(t *testing.T) {
 		server := newAlternativeTxProviderTestServer(t, sendTxResponse)
 		stale := ethcommon.HexToAddress("0x5555555555555555555555555555555555555555")
@@ -928,7 +958,7 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 			urls:              []string{server.URL},
 			mempoolTxsTimeout: time.Hour,
 			rpcTimeout:        time.Second,
-			recentSenders:     map[ethcommon.Address]time.Time{stale: time.Now().Add(-2 * time.Hour)},
+			recentSenders:     map[ethcommon.Address]recentSender{stale: {time: time.Now().Add(-2 * time.Hour)}},
 		}
 
 		if _, err := provider.SendRawTransaction(rawTx); err != nil {

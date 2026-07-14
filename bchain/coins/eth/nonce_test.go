@@ -235,9 +235,9 @@ func TestEthereumTypeGetNonces_SequentialFallback_ConfirmedFailureIsBestEffort(t
 // newRecentSenderProvider returns an alternative provider backed by server whose recentSenders
 // map holds the given addresses, i.e. useForNonces routes exactly those to the provider.
 func newRecentSenderProvider(server *nonceRPCServer, senders ...ethcommon.Address) *AlternativeSendTxProvider {
-	recentSenders := make(map[ethcommon.Address]time.Time)
+	recentSenders := make(map[ethcommon.Address]recentSender)
 	for _, sender := range senders {
-		recentSenders[sender] = time.Now()
+		recentSenders[sender] = recentSender{time: time.Now(), url: server.URL}
 	}
 	return &AlternativeSendTxProvider{
 		urls:              []string{server.URL},
