@@ -226,6 +226,15 @@ func (p *AlternativeSendTxProvider) pendingNonceFloor(addr ethcommon.Address) (u
 	return floor, found
 }
 
+// raiseToPendingFloor returns pending, raised to pendingNonceFloor(addr) when the cache
+// holds a higher-nonce private transaction for the address.
+func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, pending uint64) uint64 {
+	if floor, found := p.pendingNonceFloor(addr); found && floor > pending {
+		return floor
+	}
+	return pending
+}
+
 // handleMempoolTransaction handles the transaction when using only alternative providers
 func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (string, error) {
 	tx, found, err := p.getTransactionFromProviders(txid)
