@@ -2247,10 +2247,10 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // for addresses that recently sent a transaction via that provider (see useForNonces) —
 // those may have a pending transaction the primary RPC does not know about. All other
 // addresses go straight to the primary RPC so that the hottest API endpoint does not burn
-// the provider's rate-limit quota. For gated senders the pending answer - whether from the
-// provider or from the primary RPC fallback - is raised to the floor implied by the
-// alternative mempool cache (see pendingNonceFloor) so it never contradicts Blockbook's
-// own pending view of the sender's private transactions.
+// the provider's rate-limit quota. Whenever a provider is configured, the pending answer -
+// whether from the provider or from the primary RPC - is raised to the floor implied by
+// the alternative mempool cache (see pendingNonceFloor) so it never contradicts
+// Blockbook's own pending view of the sender's private transactions.
 //
 // The pending nonce (eth_getTransactionCount at the "pending" tag) counts transactions
 // still queued in the mempool and is the next nonce the account will use; it is always
@@ -2265,15 +2265,13 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
 
-	useAlternative := b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress)
-	if useAlternative {
+	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
 		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
 		if err == nil {
 			// Even the provider's own answer can fall below Blockbook's advertised pending
 			// view: Blink-style relays stop counting a still-pending tx at the pending tag
 			// while Blockbook keeps exposing it until the cache timeout (see
-			// reconcileMempoolTxs). Raise to the cache floor so the invariant holds
-			// unconditionally.
+			// reconcileMempoolTxs).
 			return b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), confirmed, confirmedOK, nil
 		}
 		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
@@ -2284,10 +2282,13 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
 		return 0, 0, false, err
 	}
-	if useAlternative {
-		// The primary RPC cannot see the sender's private pending transactions at all -
-		// without the raise, a wallet building on the fallback answer could reuse the nonce
-		// of an in-flight private transaction and replace it.
+	if b.alternativeSendTxProvider != nil {
+		// Applied whenever a provider is configured, not only for gated senders: the routing
+		// entry expires at send time + timeout while the cached tx stays exposed as pending
+		// until fetch-back time + timeout (plus reconcile granularity), and in that window a
+		// primary answer below the floor would contradict the pending tx Blockbook still
+		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
+		// the hot path.
 		pending = b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
 	}
 	return pending, confirmed, confirmedOK, nil

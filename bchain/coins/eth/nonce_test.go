@@ -358,6 +358,36 @@ func TestEthereumTypeGetNonces_AlternativeProvider_ProviderAnswerRaisedToCacheFl
 	}
 }
 
+func TestEthereumTypeGetNonces_AlternativeProvider_FloorAppliedWithoutRouting(t *testing.T) {
+	// the routing entry can expire before the cached tx stops being exposed as pending
+	// (recentSender.time is stamped at send time, storedTx.time at the later fetch-back time,
+	// and the reconcile ticker adds up to a minute of granularity) - the floor must hold even
+	// when the gate no longer routes the sender to the provider
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+	sender := ethcommon.BytesToAddress(nonceTestAddr)
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{"http://127.0.0.1:1"},
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		rpcTimeout:        time.Second,
+		mempoolTxs: map[string]storedTx{
+			testAlternativeTxID: {
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: "0x7"},
+				time: uint32(time.Now().Unix()),
+			},
+		},
+	}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: provider}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 8 {
+		t.Errorf("pending = %d, want 8 (floor applied although the sender is not routed)", pending)
+	}
+}
+
 func TestEthereumTypeGetNonces_SequentialFallback_ConfirmedDecodeFailureIsBestEffort(t *testing.T) {
 	// sequential-fallback counterpart of the batched decode-failure case: an unparsable latest
 	// result must be best-effort (pending returned, confirmedOK=false, no error)
