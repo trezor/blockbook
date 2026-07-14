@@ -200,6 +200,32 @@ func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address
 	delete(p.recentSenders, sender)
 }
 
+// pendingNonceFloor returns the lowest pending nonce consistent with the private
+// transactions the alternative mempool cache holds for addr (highest cached account nonce
+// + 1), and whether any such transaction exists. Blockbook exposes these cached txs as
+// pending, so reporting a pending nonce below the floor would contradict its own view and
+// lead a wallet to reuse the nonce of an in-flight private transaction.
+func (p *AlternativeSendTxProvider) pendingNonceFloor(addr ethcommon.Address) (uint64, bool) {
+	p.mempoolTxsMux.Lock()
+	defer p.mempoolTxsMux.Unlock()
+	var floor uint64
+	var found bool
+	for _, storedTx := range p.mempoolTxs {
+		if storedTx.tx == nil || ethcommon.HexToAddress(storedTx.tx.From) != addr {
+			continue
+		}
+		nonce, err := hexutil.DecodeUint64(storedTx.tx.AccountNonce)
+		if err != nil {
+			continue
+		}
+		if nonce+1 > floor {
+			floor = nonce + 1
+			found = true
+		}
+	}
+	return floor, found
+}
+
 // handleMempoolTransaction handles the transaction when using only alternative providers
 func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (string, error) {
 	tx, found, err := p.getTransactionFromProviders(txid)
