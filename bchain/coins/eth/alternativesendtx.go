@@ -21,7 +21,7 @@ import (
 type storedTx struct {
 	tx   *bchain.RpcTransaction
 	time uint32
-	gen  uint64 // sender's send generation when the tx was cached, orders it against later sends
+	gen  uint64 // send generation of the submission that created this entry, orders it against later sends
 }
 
 // recentSender records when an address last successfully sent a transaction through an
@@ -114,12 +114,13 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		}
 	}
 
+	var gen uint64
 	if retErr == nil {
-		p.registerSuccessfulSend(hex, acceptedURL)
+		gen = p.registerSuccessfulSend(hex, acceptedURL)
 	}
 
 	if p.onlyAlternative && p.fetchMempoolTx {
-		p.handleMempoolTransaction(txid)
+		p.handleMempoolTransaction(txid, gen)
 	}
 
 	return txid, retErr
@@ -141,11 +142,14 @@ func alternativeTxSender(rawTxHex string) (ethcommon.Address, error) {
 // accepts it, so the accepting URL is recorded too - it is the one provider guaranteed to
 // know the transaction (see nonceURL). Expired entries are swept on the way; the map only
 // ever holds senders of the last mempoolTxsTimeout window, so the sweep is cheap.
-func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acceptedURL string) {
+// It returns the send generation assigned to this submission (0 when the sender cannot be
+// decoded); the caller must carry that exact value to the cache entry it creates for the
+// transaction, so that releaseRecentSender can order evictions against later sends.
+func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acceptedURL string) uint64 {
 	sender, err := alternativeTxSender(rawTxHex)
 	if err != nil {
 		glog.Warningf("cannot decode sender of transaction sent to alternative provider: %v", err)
-		return
+		return 0
 	}
 	now := time.Now()
 	p.recentSendersMux.Lock()
@@ -160,16 +164,7 @@ func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acce
 	}
 	p.sendGeneration++
 	p.recentSenders[sender] = recentSender{time: now, url: acceptedURL, gen: p.sendGeneration}
-}
-
-// currentSenderGeneration returns the send generation of the sender's most recent
-// successful send. Cached transactions are stamped with it so releaseRecentSender can
-// order evictions against later sends precisely, without relying on wall-clock resolution
-// (two sends can land within the same whole-second storedTx timestamp).
-func (p *AlternativeSendTxProvider) currentSenderGeneration(from string) uint64 {
-	p.recentSendersMux.Lock()
-	defer p.recentSendersMux.Unlock()
-	return p.recentSenders[ethcommon.HexToAddress(from)].gen
+	return p.sendGeneration
 }
 
 // useForNonces reports whether nonce lookups for addr should be routed to the alternative
@@ -256,8 +251,13 @@ func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, 
 	return pending
 }
 
-// handleMempoolTransaction handles the transaction when using only alternative providers
-func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (string, error) {
+// handleMempoolTransaction handles the transaction when using only alternative providers.
+// gen is the send generation registerSuccessfulSend assigned to THIS submission - it must be
+// passed in rather than read from recentSenders here, because the fetch-back above is a
+// network round-trip during which a concurrent send from the same sender can bump the
+// sender's current generation; stamping the cache entry with that newer generation would let
+// its eviction release the sender's routing while the newer transaction is still pending.
+func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen uint64) (string, error) {
 	tx, found, err := p.getTransactionFromProviders(txid)
 	if err != nil {
 		glog.Errorf("eth_getTransactionByHash from alternative providers returned error %v", err)
@@ -266,8 +266,6 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (strin
 		glog.Errorf("eth_getTransactionByHash from alternative providers did not find txid %s", txid)
 		return txid, bchain.ErrTxNotFound
 	}
-
-	gen := p.currentSenderGeneration(tx.From)
 
 	p.mempoolTxsMux.Lock()
 	// remove potential RBF transactions - with equal from and nonce
