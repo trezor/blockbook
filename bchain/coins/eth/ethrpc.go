@@ -2049,6 +2049,17 @@ func (b *EthereumRPC) observeEip1559FeeSource(source string) {
 	b.metrics.EthEip1559FeeSource.With(common.Labels{"source": source}).Inc()
 }
 
+// observeAlternativeNonceRequest records an eth_getTransactionCount lookup routed to the alternative
+// send-tx provider, labeled by result: success (provider answered) or error (provider failed and the
+// lookup fell back to the primary RPC). Only recent private senders are routed here (see useForNonces),
+// so this counts the gated subset rather than every address request.
+func (b *EthereumRPC) observeAlternativeNonceRequest(result string) {
+	if b.metrics == nil || b.metrics.EthAlternativeNonceRequests == nil {
+		return
+	}
+	b.metrics.EthAlternativeNonceRequests.With(common.Labels{"result": result}).Inc()
+}
+
 // eip1559BaseFeeMultiplier is the headroom applied to the projected base fee when deriving
 // maxFeePerGas for the on-chain EIP-1559 estimate (maxFeePerGas = multiplier*baseFee + tip).
 // 2x is the EIP-1559-standard buffer: it keeps a transaction mineable across ~6 consecutive full
@@ -2268,12 +2279,14 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
 		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
 		if err == nil {
+			b.observeAlternativeNonceRequest("success")
 			// Even the provider's own answer can fall below Blockbook's advertised pending
 			// view: Blink-style relays stop counting a still-pending tx at the pending tag
 			// while Blockbook keeps exposing it until the cache timeout (see
 			// reconcileMempoolTxs).
 			return b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), confirmed, confirmedOK, nil
 		}
+		b.observeAlternativeNonceRequest("error")
 		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 	}
 

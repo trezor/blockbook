@@ -10,7 +10,9 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // nonceTagFromArgs extracts the block tag ("pending"/"latest") from eth_getTransactionCount args.
@@ -356,6 +358,71 @@ func TestEthereumTypeGetNonces_AlternativeProvider_ProviderAnswerRaisedToCacheFl
 	if len(stub.queried) != 0 {
 		t.Errorf("primary RPC queried tags %v, want none for a successful provider lookup", stub.queried)
 	}
+}
+
+// TestEthereumTypeGetNonces_AlternativeProvider_ObservesNonceRequests asserts the
+// eth_alternative_nonce_requests_total counter is incremented only for lookups actually routed to the
+// alternative provider (labeled success/error), and never for a gated-out address served by the primary
+// RPC - so the metric measures the small gated subset, not the hot eth_getTransactionCount endpoint.
+func TestEthereumTypeGetNonces_AlternativeProvider_ObservesNonceRequests(t *testing.T) {
+	newMetrics := func() *common.Metrics {
+		return &common.Metrics{
+			EthAlternativeNonceRequests: prometheus.NewCounterVec(
+				prometheus.CounterOpts{Name: "test_alt_nonce_requests_total"}, []string{"result"}),
+		}
+	}
+	sender := ethcommon.BytesToAddress(nonceTestAddr)
+
+	t.Run("routed provider success increments result=success", func(t *testing.T) {
+		server := newNonceRPCServer(t, map[string]string{"pending": "0x9"}, nil)
+		stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+		m := newMetrics()
+		b := &EthereumRPC{RPC: stub, Timeout: time.Second, metrics: m, alternativeSendTxProvider: newRecentSenderProvider(server, sender)}
+
+		if _, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := counterVecValue(t, m.EthAlternativeNonceRequests, "result", "success"); got != 1 {
+			t.Errorf("result=success = %v, want 1", got)
+		}
+		if got := counterVecValue(t, m.EthAlternativeNonceRequests, "result", "error"); got != 0 {
+			t.Errorf("result=error = %v, want 0", got)
+		}
+	})
+
+	t.Run("routed provider error increments result=error", func(t *testing.T) {
+		server := newNonceRPCServer(t, nil, map[string]bool{"pending": true})
+		stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+		m := newMetrics()
+		b := &EthereumRPC{RPC: stub, Timeout: time.Second, metrics: m, alternativeSendTxProvider: newRecentSenderProvider(server, sender)}
+
+		if _, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false); err != nil {
+			t.Fatalf("provider failure must fall back to the primary RPC, got error: %v", err)
+		}
+		if got := counterVecValue(t, m.EthAlternativeNonceRequests, "result", "error"); got != 1 {
+			t.Errorf("result=error = %v, want 1", got)
+		}
+		if got := counterVecValue(t, m.EthAlternativeNonceRequests, "result", "success"); got != 0 {
+			t.Errorf("result=success = %v, want 0", got)
+		}
+	})
+
+	t.Run("gated-out address records nothing", func(t *testing.T) {
+		server := newNonceRPCServer(t, map[string]string{"pending": "0x9"}, nil)
+		stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+		m := newMetrics()
+		// no recent senders: the address is served by the primary RPC and must not be counted
+		b := &EthereumRPC{RPC: stub, Timeout: time.Second, metrics: m, alternativeSendTxProvider: newRecentSenderProvider(server)}
+
+		if _, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		total := counterVecValue(t, m.EthAlternativeNonceRequests, "result", "success") +
+			counterVecValue(t, m.EthAlternativeNonceRequests, "result", "error")
+		if total != 0 {
+			t.Errorf("nonce-request counter = %v, want 0 for a gated-out address", total)
+		}
+	})
 }
 
 func TestEthereumTypeGetNonces_AlternativeProvider_FloorAppliedWithoutRouting(t *testing.T) {
