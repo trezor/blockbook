@@ -878,6 +878,13 @@ func TestAlternativeSendTxProviderUseForNonces(t *testing.T) {
 	if _, found := provider.recentSenders[expired]; found {
 		t.Error("expired sender not evicted on lookup")
 	}
+
+	// *_ALTERNATIVE_NONCE_FOR_ALL_ADDRESSES bypasses the gate entirely - for load-balanced
+	// deployments without request affinity, where process-local sender state is insufficient
+	ungated := &AlternativeSendTxProvider{nonceForAllAddresses: true, mempoolTxsTimeout: time.Hour}
+	if !ungated.useForNonces(unknown) {
+		t.Error("unknown address not routed to the provider with nonceForAllAddresses set")
+	}
 }
 
 func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
