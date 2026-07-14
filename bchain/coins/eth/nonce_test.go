@@ -328,6 +328,36 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FallbackRaisedToCacheFloor(t 
 	}
 }
 
+func TestEthereumTypeGetNonces_AlternativeProvider_ProviderAnswerRaisedToCacheFloor(t *testing.T) {
+	// Blink-style relays stop counting a still-pending tx at the pending tag while Blockbook
+	// keeps exposing it until the cache timeout: the provider answers 4 although the cache
+	// holds a pending private tx with nonce 0x7 from the sender - the answer must be raised
+	// to 8 so it never contradicts Blockbook's own pending view
+	server := newNonceRPCServer(t, map[string]string{"pending": "0x4"}, nil)
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x2"}}
+	sender := ethcommon.BytesToAddress(nonceTestAddr)
+	provider := newRecentSenderProvider(server, sender)
+	provider.fetchMempoolTx = true
+	provider.mempoolTxs = map[string]storedTx{
+		testAlternativeTxID: {
+			tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: "0x7"},
+			time: uint32(time.Now().Unix()),
+		},
+	}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: provider}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 8 {
+		t.Errorf("pending = %d, want 8 (cache floor over the provider answer)", pending)
+	}
+	if len(stub.queried) != 0 {
+		t.Errorf("primary RPC queried tags %v, want none for a successful provider lookup", stub.queried)
+	}
+}
+
 func TestEthereumTypeGetNonces_SequentialFallback_ConfirmedDecodeFailureIsBestEffort(t *testing.T) {
 	// sequential-fallback counterpart of the batched decode-failure case: an unparsable latest
 	// result must be best-effort (pending returned, confirmedOK=false, no error)
