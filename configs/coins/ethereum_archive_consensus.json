@@ -25,7 +25,7 @@
         "verification_source": "6efcd238124e000783f55a4430f0962b324a32599cf33219415f7f6dece8363f",
         "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
         "exclude_files": [],
-        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --mainnet --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=7516 --rpc-port=7517 --monitoring-port=7518 --p2p-tcp-port=3516 --p2p-udp-port=2516 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_archive/backend/erigon/jwt.hex 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --mainnet --accept-terms-of-use --semi-supernode --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=7516 --rpc-port=7517 --monitoring-port=7518 --p2p-tcp-port=3516 --p2p-udp-port=2516 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_archive/backend/erigon/jwt.hex 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",
