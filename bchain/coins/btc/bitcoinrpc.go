@@ -64,6 +64,16 @@ func (b *BitcoinRPC) MissingBlockRetryOverride() *bchain.MissingBlockRetry {
 	return b.ChainConfig.MissingBlockRetry
 }
 
+// XpubConfigOverride exposes the per-chain xpub expansion and cache config
+// override (or nil to use built-in defaults). Consumed by api.NewWorker via
+// a duck-typed interface assertion.
+func (b *BitcoinRPC) XpubConfigOverride() *bchain.XpubConfig {
+	if b.ChainConfig == nil {
+		return nil
+	}
+	return b.ChainConfig.XpubConfig
+}
+
 // Configuration represents json config file
 type Configuration struct {
 	CoinName                     string `json:"coin_name"`
@@ -100,6 +110,9 @@ type Configuration struct {
 	// MissingBlockRetry overrides the sync-worker missing-block retry policy
 	// per chain. All fields are optional; missing fields use built-in defaults.
 	MissingBlockRetry *bchain.MissingBlockRetry `json:"missingBlockRetry,omitempty"`
+	// XpubConfig overrides the xpub address expansion and cache limits.
+	// All fields are optional; missing fields use built-in defaults.
+	XpubConfig *bchain.XpubConfig `json:"xpubConfig,omitempty"`
 }
 
 // AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.

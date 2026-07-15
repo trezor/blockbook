@@ -535,3 +535,14 @@ func (c *blockChainWithMetrics) MissingBlockRetryOverride() *bchain.MissingBlock
 	}
 	return nil
 }
+
+// XpubConfigOverride forwards the wrapped chain's per-chain xpub config
+// override through the metrics wrapper; nil when none is provided.
+func (c *blockChainWithMetrics) XpubConfigOverride() *bchain.XpubConfig {
+	if p, ok := c.b.(interface {
+		XpubConfigOverride() *bchain.XpubConfig
+	}); ok {
+		return p.XpubConfigOverride()
+	}
+	return nil
+}
