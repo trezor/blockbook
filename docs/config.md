@@ -119,6 +119,24 @@ Good examples of coin configuration are
             * `address_contracts_cache_min_size` – Minimum packed size (bytes) before an addressContracts entry is cached (default **300000**).
             * `address_contracts_cache_max_bytes` – Cache size cap in bytes used while syncing near chain tip; when exceeded, cached entries are flushed early (default **2000000000**).
             * `address_contracts_cache_bulk_max_bytes` – Cache size cap in bytes used during bulk connect; when exceeded, cached entries are flushed early (default **4000000000**).
+          * `xpubConfig` – xpub/descriptor expansion and cache tuning (BitcoinType only). Each field is optional; a missing or `<= 0` value keeps the built-in default, and a negative value is logged as invalid and ignored. When an override is present, Blockbook logs one `xpub: xpubConfig override applied: …` line at startup so you can confirm the effective values.
+
+            | Field | Default | Semantic |
+            | --- | --- | --- |
+            | `maxCacheEntries` | **1024** | Maximum number of xpubs kept in the in-memory derivation cache before the oldest entries are evicted. Raising it reduces re-derivation on busy instances but increases resident memory, since each entry holds the xpub's derived addresses and their tx lists — size the host accordingly. |
+            | `maxCacheExpirationSeconds` | **3600** | Time after last access before a cached xpub entry is dropped. |
+            | `defaultAddressesGap` | **20** | Gap limit used when a request does not specify one. Clamped down to `maxAddressesGap` if set higher. |
+            | `maxAddressesGap` | **10000** | Upper bound on the caller-supplied gap limit, protecting against unreasonably large scans. |
+
+            Example override in `configs/coins/*.json`:
+
+            ```json
+            "additional_params": {
+                "xpubConfig": {
+                    "maxCacheEntries": 2048
+                }
+            }
+            ```
 
 * `meta` – Common package metadata.
     * `package_maintainer` – Full name of package maintainer.

@@ -34,6 +34,7 @@ type Worker struct {
 	is                *common.InternalState
 	fiatRates         *fiat.FiatRates
 	metrics           *common.Metrics
+	xpubConfig        XpubConfig
 }
 
 var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
@@ -49,6 +50,17 @@ type contractInfoCache = map[string]*bchain.ContractInfo
 
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
+	// Resolve per-chain xpub config override, if any.
+	xpubCfg := DefaultXpubConfig()
+	if provider, ok := chain.(interface {
+		XpubConfigOverride() *bchain.XpubConfig
+	}); ok {
+		if override := provider.XpubConfigOverride(); override != nil {
+			xpubCfg = ApplyXpubConfig(override)
+			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
+				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
+		}
+	}
 	w := &Worker{
 		db:                db,
 		txCache:           txCache,
@@ -60,6 +72,7 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		is:                is,
 		fiatRates:         fiatRates,
 		metrics:           metrics,
+		xpubConfig:        xpubCfg,
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()

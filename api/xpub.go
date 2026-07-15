@@ -15,15 +15,63 @@ import (
 	"github.com/trezor/blockbook/db"
 )
 
-const defaultAddressesGap = 20
-const maxAddressesGap = 10000
-
 const txInput = 1
 const txOutput = 2
 
-const xpubCacheExpirationSeconds = 3600
-const xpubCacheMaxEntries = 128
-const maxXpubAddressDerivations = (maxAddressesGap + 1) * 2
+// XpubConfig is the resolved xpub configuration for a single Worker instance.
+type XpubConfig struct {
+	MaxCacheExpirationSeconds int
+	MaxCacheEntries           int
+	DefaultAddressesGap       int
+	MaxAddressesGap           int
+	MaxAddressDerivations     int // computed: (MaxAddressesGap + 1) * 2
+}
+
+// DefaultXpubConfig returns the built-in defaults for xpub expansion and
+// caching. Operators can override these per-coin via
+// `additional_params.xpubConfig` in `configs/coins/*.json`.
+func DefaultXpubConfig() XpubConfig {
+	return finalizeXpubConfig(XpubConfig{
+		MaxCacheExpirationSeconds: 3600,
+		MaxCacheEntries:           1024,
+		DefaultAddressesGap:       20,
+		MaxAddressesGap:           10000,
+	})
+}
+
+// finalizeXpubConfig computes MaxAddressDerivations from MaxAddressesGap and clamps DefaultAddressesGap to not exceed
+// MaxAddressesGap; every path producing an XpubConfig must run through it.
+func finalizeXpubConfig(cfg XpubConfig) XpubConfig {
+	if cfg.DefaultAddressesGap > cfg.MaxAddressesGap {
+		cfg.DefaultAddressesGap = cfg.MaxAddressesGap
+	}
+	cfg.MaxAddressDerivations = (cfg.MaxAddressesGap + 1) * 2
+	return cfg
+}
+
+// ApplyXpubConfig overlays the optional per-coin override onto the built-in
+// defaults. Zero / missing wire fields keep the default; explicitly set but
+// invalid values (negative) keep the default and log a warning.
+func ApplyXpubConfig(o *bchain.XpubConfig) XpubConfig {
+	cfg := DefaultXpubConfig()
+	if o == nil {
+		return cfg
+	}
+	apply := func(field string, v int, set func(int)) {
+		if v <= 0 {
+			if v < 0 {
+				glog.Warningf("xpub: xpubConfig.%s=%d is invalid, keeping default", field, v)
+			}
+			return
+		}
+		set(v)
+	}
+	apply("maxCacheExpirationSeconds", o.MaxCacheExpirationSeconds, func(v int) { cfg.MaxCacheExpirationSeconds = v })
+	apply("maxCacheEntries", o.MaxCacheEntries, func(v int) { cfg.MaxCacheEntries = v })
+	apply("defaultAddressesGap", o.DefaultAddressesGap, func(v int) { cfg.DefaultAddressesGap = v })
+	apply("maxAddressesGap", o.MaxAddressesGap, func(v int) { cfg.MaxAddressesGap = v })
+	return finalizeXpubConfig(cfg)
+}
 
 var cachedXpubs map[string]xpubData
 var cachedXpubsMux sync.Mutex
@@ -90,7 +138,7 @@ func (w *Worker) initXpubCache() {
 func (w *Worker) evictXpubCacheItems() {
 	now := time.Now().Unix()
 	cachedXpubsMux.Lock()
-	count := evictXpubCacheItemsLocked(now)
+	count := evictXpubCacheItemsLocked(now, int64(w.xpubConfig.MaxCacheExpirationSeconds), w.xpubConfig.MaxCacheEntries)
 	cacheSize := len(cachedXpubs)
 	cachedXpubsMux.Unlock()
 
@@ -98,8 +146,8 @@ func (w *Worker) evictXpubCacheItems() {
 	glog.Info("Evicted ", count, " items from xpub cache, cache size ", cacheSize)
 }
 
-func evictXpubCacheItemsLocked(now int64) int {
-	threshold := now - xpubCacheExpirationSeconds
+func evictXpubCacheItemsLocked(now int64, expirationSeconds int64, maxEntries int) int {
+	threshold := now - expirationSeconds
 	count := 0
 	for k, v := range cachedXpubs {
 		if v.accessed < threshold {
@@ -107,11 +155,11 @@ func evictXpubCacheItemsLocked(now int64) int {
 			count++
 		}
 	}
-	return count + trimXpubCacheItemsLocked()
+	return count + trimXpubCacheItemsLocked(maxEntries)
 }
 
-func trimXpubCacheItemsLocked() int {
-	if len(cachedXpubs) <= xpubCacheMaxEntries {
+func trimXpubCacheItemsLocked(maxEntries int) int {
+	if len(cachedXpubs) <= maxEntries {
 		return 0
 	}
 	type cacheEntry struct {
@@ -128,20 +176,20 @@ func trimXpubCacheItemsLocked() int {
 		}
 		return entries[i].accessed < entries[j].accessed
 	})
-	count := len(cachedXpubs) - xpubCacheMaxEntries
+	count := len(cachedXpubs) - maxEntries
 	for i := 0; i < count; i++ {
 		delete(cachedXpubs, entries[i].key)
 	}
 	return count
 }
 
-func validateXpubScanLimits(xd *bchain.XpubDescriptor, gap int) error {
+func validateXpubScanLimits(xd *bchain.XpubDescriptor, gap int, maxDerivations int) error {
 	if len(xd.ChangeIndexes) > bchain.MaxXpubChangeIndexes {
 		return errors.Errorf("Xpub descriptor change index count %d exceeds limit %d", len(xd.ChangeIndexes), bchain.MaxXpubChangeIndexes)
 	}
 	derivations := len(xd.ChangeIndexes) * gap
-	if derivations > maxXpubAddressDerivations {
-		return errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", derivations, maxXpubAddressDerivations)
+	if derivations > maxDerivations {
+		return errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", derivations, maxDerivations)
 	}
 	return nil
 }
@@ -272,9 +320,9 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 	return false, nil
 }
 
-func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, addresses []xpubAddress, gap int, change uint32, minDerivedIndex int, fork bool, derivedBefore int) (int, []xpubAddress, error) {
-	if total := derivedBefore + len(addresses); total > maxXpubAddressDerivations {
-		return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxXpubAddressDerivations)
+func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, addresses []xpubAddress, gap int, change uint32, minDerivedIndex int, fork bool, derivedBefore int, maxDerivations int) (int, []xpubAddress, error) {
+	if total := derivedBefore + len(addresses); total > maxDerivations {
+		return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxDerivations)
 	}
 	// rescan known addresses
 	lastUsed := 0
@@ -303,8 +351,8 @@ func (w *Worker) xpubScanAddresses(xd *bchain.XpubDescriptor, data *xpubData, ad
 		if to < minDerivedIndex {
 			to = minDerivedIndex
 		}
-		if total := derivedBefore + to; total > maxXpubAddressDerivations {
-			return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxXpubAddressDerivations)
+		if total := derivedBefore + to; total > maxDerivations {
+			return 0, nil, errors.Errorf("Xpub descriptor scan size %d exceeds limit %d", total, maxDerivations)
 		}
 		descriptors, err := w.chainParser.DeriveAddressDescriptorsFromTo(xd, change, uint32(from), uint32(to))
 		if err != nil {
@@ -393,14 +441,14 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 		besthash   string
 	)
 	if gap <= 0 {
-		gap = defaultAddressesGap
-	} else if gap > maxAddressesGap {
+		gap = w.xpubConfig.DefaultAddressesGap
+	} else if gap > w.xpubConfig.MaxAddressesGap {
 		// limit the maximum gap to protect against unreasonably big values that could cause high load of the server
-		gap = maxAddressesGap
+		gap = w.xpubConfig.MaxAddressesGap
 	}
 	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
 	gap++
-	if err := validateXpubScanLimits(xd, gap); err != nil {
+	if err := validateXpubScanLimits(xd, gap, w.xpubConfig.MaxAddressDerivations); err != nil {
 		return nil, 0, false, err
 	}
 	var processedHash string
@@ -447,7 +495,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			var minDerivedIndex int
 			totalDerived := 0
 			for i, change := range xd.ChangeIndexes {
-				minDerivedIndex, data.addresses[i], err = w.xpubScanAddresses(xd, &data, data.addresses[i], gap, change, minDerivedIndex, fork, totalDerived)
+				minDerivedIndex, data.addresses[i], err = w.xpubScanAddresses(xd, &data, data.addresses[i], gap, change, minDerivedIndex, fork, totalDerived, w.xpubConfig.MaxAddressDerivations)
 				if err != nil {
 					return nil, 0, inCache, err
 				}
@@ -479,7 +527,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 		cachedXpubs = make(map[string]xpubData)
 	}
 	cachedXpubs[xd.XpubDescriptor] = data
-	trimXpubCacheItemsLocked()
+	trimXpubCacheItemsLocked(w.xpubConfig.MaxCacheEntries)
 	cacheSize := len(cachedXpubs)
 	cachedXpubsMux.Unlock()
 	w.metrics.XPubCacheSize.Set(float64(cacheSize))
