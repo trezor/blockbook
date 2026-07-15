@@ -23,7 +23,7 @@ $NITRO_BIN \
   --auth.jwtsecret $DATA_DIR/jwtsecret \
   --persistent.global-config $DATA_DIR \
   --persistent.chain $DATA_DIR \
-  --parent-chain.connection.url http://127.0.0.1:8116 \
+  --parent-chain.connection.url http://127.0.0.1:8016 \
   --parent-chain.blob-client.beacon-url http://127.0.0.1:7516 \
   --node.feed.input.url wss://feed.mainnet.chain.robinhood.com \
   --execution.forwarding-target https://sequencer.mainnet.chain.robinhood.com \
