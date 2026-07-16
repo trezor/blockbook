@@ -64,7 +64,10 @@ jobs:
           # CI can reach the node RPC backends directly, so check them too; local
           # runs default to Blockbook-only connectivity.
           BB_TEST_BACKEND_CONNECTIVITY: "1"
-        run: make test-connectivity
+        # -v so a passing run still surfaces LoadConfig's ::warning:: for RPC env
+        # vars referencing coins absent on this branch; go test buffers (and thus
+        # discards) a passing binary's stderr without it. Mirrors integration/e2e.
+        run: make test-connectivity ARGS="-v"
 
   integration-tests:
     name: Integration Tests (RPC + Sync)
