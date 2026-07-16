@@ -162,6 +162,26 @@ func TestLoadConfigSetsWantsBackendServiceFromEffectiveRPCURL(t *testing.T) {
 	})
 }
 
+func TestLoadConfigToleratesRPCEnvForCoinMissingOnBranch(t *testing.T) {
+	// Repo-global GitHub variables are shared by every branch, so a variable for
+	// a coin whose config lives only on another feature branch (here a stand-in
+	// "robinhood_archive" that has no configs/coins entry) must not fail the load
+	// of an unrelated coin. Regression guard for the cross-branch connectivity CI
+	// failure that this warn-don't-fail behavior fixes.
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	t.Setenv(buildEnvVar, buildEnvDev)
+	t.Setenv(devRPCURLHTTPPrefix+"robinhood_archive", "https://robinhood-archive.example:8030")
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v, want nil (off-branch RPC var must only warn)", err)
+	}
+	if config == nil {
+		t.Fatal("LoadConfig() returned nil config")
+	}
+}
+
 func TestLoadConfigOverridesMessageQueueBindingFromEnv(t *testing.T) {
 	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
 

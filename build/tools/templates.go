@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 )
@@ -360,13 +361,25 @@ func copyNonZeroBackendFields(toValue *Backend, fromValue *Backend) {
 	}
 }
 
+// rpcEnvWarnOnce keeps the cross-branch RPC-env warning to a single line per
+// process; LoadConfig runs once per coin (17+ times in a connectivity run) but
+// the offending variable set is process-global, so repeating it is just noise.
+var rpcEnvWarnOnce sync.Once
+
 // LoadConfig loads the config files
 func LoadConfig(configsDir, coin string) (*Config, error) {
 	config := new(Config)
 
-	// Fail fast if RPC override variables reference coins that do not exist in configs/coins.
+	// Warn (don't fail) when RPC override variables reference coins missing from
+	// configs/coins. GitHub repository variables are repo-global and shared by
+	// every branch, but configs/coins is per-branch: a variable added for a coin
+	// that only exists on another feature branch (e.g. BB_*_RPC_URL_*_robinhood_archive)
+	// would otherwise fail-fast here for every unrelated coin. The override for a
+	// missing coin is inert anyway, so surface it as an annotation and continue.
 	if err := validateRPCEnvVars(configsDir); err != nil {
-		return nil, err
+		rpcEnvWarnOnce.Do(func() {
+			fmt.Fprintf(os.Stderr, "::warning::%v (ignored: these coins are not present in configs/coins on this branch)\n", err)
+		})
 	}
 	buildEnv, err := resolveBuildEnv()
 	if err != nil {
