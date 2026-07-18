@@ -469,6 +469,30 @@ span.btn-paging:hover {
     float: right !important;
 }
 
+.tx-io-toggle {
+    display: block;
+    width: 100%;
+    background: #f6f6f6;
+    border: none;
+    padding: 0.5rem 1.3rem;
+    color: #757575;
+    font-size: 0.85em;
+    text-align: center;
+    cursor: pointer;
+}
+
+.tx-io-toggle:hover {
+    color: #333;
+}
+
+.tx-io-toggle::after {
+    content: " \25BC";
+}
+
+.tx-io-toggle[aria-expanded="true"]::after {
+    content: " \25B2";
+}
+
 .spent {
     color: #dc3545 !important;
 }
