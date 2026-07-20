@@ -215,4 +215,12 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     })
   );
+
+  // keep the transaction in view when its input/output list is collapsed,
+  // instead of leaving the viewport wherever the shrinking content left it
+  document.querySelectorAll(".tx-in.collapse, .tx-out.collapse").forEach((e) =>
+    e.addEventListener("hidden.bs.collapse", () =>
+      e.closest(".tx-detail")?.scrollIntoView({ block: "nearest" })
+    )
+  );
 });

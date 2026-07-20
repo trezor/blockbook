@@ -1,5 +1,5 @@
-{{define "txdetail"}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
-<div class="tx-detail">
+{{define "txdetail"}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}{{$collapseThreshold := .TxIOCollapseThreshold}}
+<div class="tx-detail" id="tx-{{$tx.Txid}}">
     <div class="row head">
         <div class="col-xs-7 col-md-8">
             <a href="/tx/{{$tx.Txid}}" class="ellipsis copyable txid">{{$tx.Txid}}</a>
@@ -14,7 +14,10 @@
     <div class="row body">
         <div class="col-md-5">
             {{$vinCount := len $tx.Vin}}
-            <div{{if gt $vinCount 8}} id="txvin-{{$tx.Txid}}"{{end}} class="row tx-in{{if gt $vinCount 8}} collapse{{end}}">
+            {{if gt $vinCount $collapseThreshold}}
+            <button type="button" class="tx-io-toggle" data-bs-toggle="collapse" data-bs-target="#txvin-{{$tx.Txid}}" aria-expanded="false" aria-controls="txvin-{{$tx.Txid}}">{{$vinCount}} inputs</button>
+            {{end}}
+            <div{{if gt $vinCount $collapseThreshold}} id="txvin-{{$tx.Txid}}"{{end}} class="row tx-in{{if gt $vinCount $collapseThreshold}} collapse{{end}}">
                 {{range $vin := $tx.Vin}}
                 <div class="col-12{{if $vin.IsOwn}} tx-own{{end}}">
                     {{range $a := $vin.Addresses}}
@@ -33,14 +36,17 @@
                 <div class="col-12">No Inputs</div>
                 {{end}}
             </div>
-            {{if gt $vinCount 8}}
+            {{if gt $vinCount $collapseThreshold}}
             <button type="button" class="tx-io-toggle" data-bs-toggle="collapse" data-bs-target="#txvin-{{$tx.Txid}}" aria-expanded="false" aria-controls="txvin-{{$tx.Txid}}">{{$vinCount}} inputs</button>
             {{end}}
         </div>
         <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
         <div class="col-md-6">
             {{$voutCount := len $tx.Vout}}
-            <div{{if gt $voutCount 8}} id="txvout-{{$tx.Txid}}"{{end}} class="row tx-out{{if gt $voutCount 8}} collapse{{end}}">
+            {{if gt $voutCount $collapseThreshold}}
+            <button type="button" class="tx-io-toggle" data-bs-toggle="collapse" data-bs-target="#txvout-{{$tx.Txid}}" aria-expanded="false" aria-controls="txvout-{{$tx.Txid}}">{{$voutCount}} outputs</button>
+            {{end}}
+            <div{{if gt $voutCount $collapseThreshold}} id="txvout-{{$tx.Txid}}"{{end}} class="row tx-out{{if gt $voutCount $collapseThreshold}} collapse{{end}}">
                 {{range $vout := $tx.Vout}}
                 <div class="col-12{{if $vout.IsOwn}} tx-own{{end}}">
                     {{range $a := $vout.Addresses}}
@@ -60,7 +66,7 @@
                 <div class="col-12">No Outputs</div>
                 {{end}}
             </div>
-            {{if gt $voutCount 8}}
+            {{if gt $voutCount $collapseThreshold}}
             <button type="button" class="tx-io-toggle" data-bs-toggle="collapse" data-bs-target="#txvout-{{$tx.Txid}}" aria-expanded="false" aria-controls="txvout-{{$tx.Txid}}">{{$voutCount}} outputs</button>
             {{end}}
         </div>

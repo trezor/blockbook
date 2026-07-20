@@ -30,6 +30,15 @@ import (
 
 const txsOnPage = 25
 const blocksOnPage = 50
+
+// txIOCollapseThresholdTx is the input/output count above which the tx-detail
+// template collapses the list by default on the standalone tx page.
+const txIOCollapseThresholdTx = 8
+
+// txIOCollapseThresholdAggregate is the higher threshold used on aggregate pages
+// (address/xpub/block), where people scan many txs for their own address and a
+// collapsed (display:none) list would hide it from in-page find and tx-own highlighting.
+const txIOCollapseThresholdAggregate = 30
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
 const maxWebsocketBlockPageSize = 10000
@@ -428,12 +437,13 @@ func getFunctionName(i interface{}) string {
 
 func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 	t := &TemplateData{
-		CoinName:         s.is.Coin,
-		CoinShortcut:     s.is.CoinShortcut,
-		CoinLabel:        s.is.CoinLabel,
-		ChainType:        s.chainParser.GetChainType(),
-		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
-		TOSLink:          api.Text.TOSLink,
+		CoinName:              s.is.Coin,
+		CoinShortcut:          s.is.CoinShortcut,
+		CoinLabel:             s.is.CoinLabel,
+		ChainType:             s.chainParser.GetChainType(),
+		InternalExplorer:      s.internalExplorer && !s.is.InitialSync,
+		TOSLink:               api.Text.TOSLink,
+		TxIOCollapseThreshold: txIOCollapseThresholdAggregate,
 	}
 	if t.ChainType == bchain.ChainEthereumType {
 		t.FungibleTokenName = bchain.EthereumTokenStandardMap[bchain.FungibleToken]
@@ -547,6 +557,7 @@ type TemplateData struct {
 	TxDate                   string
 	TxSecondaryCoinRate      float64
 	TxTicker                 *common.CurrencyRatesTicker
+	TxIOCollapseThreshold    int
 }
 
 func defaultTxTemplate(chainType bchain.ChainType) string {
@@ -959,6 +970,7 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, 
 	}
 	data := s.newTemplateData(r)
 	data.Tx = tx
+	data.TxIOCollapseThreshold = txIOCollapseThresholdTx
 	return txTpl, data, nil
 }
 
