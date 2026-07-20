@@ -27,12 +27,12 @@ $NITRO_BIN \
   --parent-chain.blob-client.beacon-url http://127.0.0.1:7516 \
   --node.feed.input.url wss://feed.mainnet.chain.robinhood.com \
   --execution.forwarding-target https://sequencer.mainnet.chain.robinhood.com \
-  --http.addr {{.Env.RPCBindHost}} \
+  --http.addr 0.0.0.0 \
   --http.port {{.Ports.BackendHttp}} \
   --http.api eth,net,web3,debug,txpool,arb \
   --http.vhosts '*' \
   --http.corsdomain '*' \
-  --ws.addr {{.Env.RPCBindHost}} \
+  --ws.addr 0.0.0.0 \
   --ws.api eth,net,web3,debug,txpool,arb \
   --ws.port {{.Ports.BackendRPC}} \
   --ws.origins '*' \
