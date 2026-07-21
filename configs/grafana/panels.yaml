@@ -204,6 +204,13 @@ panels:
       by_result:
         promql: sum by (coin, result) (rate({{name:eth_alternative_nonce_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
         legend: '{{coin}} - {{result}}'
+  sync.eth_alternative_estimate_gas_requests:
+    title: Alternative send-tx provider gas estimates (req/s)
+    description: 'eth_estimateGas calls routed to the alternative send-tx provider, per second, split by result. Only addresses that recently sent a private transaction through the provider are routed here (see useForNonces / #1629); every other address is served by the primary RPC and never appears, so this is the small gated subset, not total estimateFee traffic. success = the provider answered and its estimate was served; error = the provider failed and the estimate fell back to the primary RPC. Expect a low total that tracks recent private-send activity - a sustained climb means the gating is not shedding the hot estimateFee endpoint off the provider''s rate quota, and a rising error share means the relay is unhealthy (read alongside the nonce-requests panel above).'
+    queries:
+      by_result:
+        promql: sum by (coin, result) (rate({{name:eth_alternative_estimate_gas_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{result}}'
   sync.mempool_resync_throughput_p95:
     title: 95% quantile of mempool resync throughput
     description: Transactions returned by a mempool reload divided by reload duration; low values mean the backend or parser is feeding the mempool slowly.

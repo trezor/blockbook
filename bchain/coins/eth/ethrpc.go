@@ -1994,8 +1994,15 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 			params,
 		)
 		if err == nil {
-			b.observeAlternativeEstimateGasRequest("success")
-			return hexutil.DecodeUint64(result)
+			// Count success only once the result decodes: a malformed hex quantity is a provider
+			// failure, so fall through to the primary RPC rather than returning the decode error
+			// to the caller (and keep the "success" label honest for the quota dashboard).
+			if gas, decErr := hexutil.DecodeUint64(result); decErr == nil {
+				b.observeAlternativeEstimateGasRequest("success")
+				return gas, nil
+			} else {
+				err = decErr
+			}
 		}
 		// Previously the provider error was swallowed silently, hiding quota exhaustion (#1629);
 		// log it and fall back to the primary RPC below.

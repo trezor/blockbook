@@ -138,6 +138,34 @@ func TestEthereumTypeEstimateGasFallsBackWhenProviderFails(t *testing.T) {
 	}
 }
 
+// TestEthereumTypeEstimateGasFallsBackWhenProviderReturnsMalformedResult confirms a provider that
+// answers without a transport error but with a non-decodable gas value is treated as a failure:
+// the estimate falls back to the primary backend rather than surfacing the decode error.
+func TestEthereumTypeEstimateGasFallsBackWhenProviderReturnsMalformedResult(t *testing.T) {
+	primary, primaryHits := countingEstimateGasServer(t, "0x5208")
+	// a provider that returns a non-hex string result for eth_estimateGas
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":"not-a-hex-quantity"}`))
+	}))
+	t.Cleanup(provider.Close)
+	b := newEstimateGasTestRPC(t, primary.URL, provider.URL)
+
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	b.alternativeSendTxProvider.recentSenders[sender] = recentSender{time: time.Now(), url: provider.URL, gen: 1}
+
+	gas, err := b.EthereumTypeEstimateGas(map[string]interface{}{"from": sender.Hex()})
+	if err != nil {
+		t.Fatalf("EthereumTypeEstimateGas() error = %v, want fallback to primary", err)
+	}
+	if gas != 0x5208 {
+		t.Fatalf("gas = %#x, want 0x5208 (primary fallback value)", gas)
+	}
+	if got := atomic.LoadInt32(primaryHits); got != 1 {
+		t.Fatalf("primary hits = %d, want 1 (malformed provider result must fall back)", got)
+	}
+}
+
 // TestEthereumTypeEstimateGasNoFromUsesPrimary confirms an estimate without a sender takes the
 // primary path - the gate cannot apply without a from address.
 func TestEthereumTypeEstimateGasNoFromUsesPrimary(t *testing.T) {
