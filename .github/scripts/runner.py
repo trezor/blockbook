@@ -113,6 +113,34 @@ def load_runner_map(vars_map: dict) -> dict[str, str]:
     return mapping
 
 
+def load_staging_coins(vars_map: dict) -> set[str]:
+    # BB_STAGING lists work-in-progress coins (comma/space separated); include the
+    # '-'/'_' variants so it matches either coin-name spelling.
+    staging: set[str] = set()
+    for token in re.split(r"[\s,]+", str(vars_map.get("BB_STAGING") or "")):
+        name = token.strip().lower()
+        if name:
+            staging.update({name, name.replace("-", "_"), name.replace("_", "-")})
+    return staging
+
+
+def prune_staging_coins(
+    workspace: Path, runner_map: dict[str, str], staging: set[str]
+) -> dict[str, str]:
+    # Drop a staging coin only where its config is absent, so an unmerged coin's
+    # repo-wide variables don't break sibling branches while the feature branch that
+    # carries the config still builds and deploys it normally.
+    if not staging:
+        return runner_map
+    kept = {}
+    for coin, runner in runner_map.items():
+        if coin in staging and not coin_config_path(workspace, coin).exists():
+            log(f"BB_STAGING: skipping '{coin}' (no configs/coins/{coin}.json on this branch)")
+            continue
+        kept[coin] = runner
+    return kept
+
+
 def parse_coin_tokens(raw: str, *, allow_all: bool) -> tuple[bool, list[str]]:
     text = raw.strip()
     if not text:
@@ -201,6 +229,7 @@ def validate_runner_map_configs(workspace: Path, runner_map: dict[str, str]) -> 
         raise ValidationError(
             "BB_RUNNER_* entries without matching configs/coins/<coin>.json: "
             + ", ".join(missing)
+            + " (add a work-in-progress coin to the BB_STAGING variable if its config is on another branch)"
         )
 
 
@@ -305,6 +334,7 @@ def load_coin_context(
 ) -> CoinContext:
     runner_map = load_runner_map(vars_map)
     runner_map = normalize_runner_map(workspace, runner_map)
+    runner_map = prune_staging_coins(workspace, runner_map, load_staging_coins(vars_map))
     if not runner_map:
         raise ValidationError("no BB_RUNNER_* variables found")
 
