@@ -1397,7 +1397,7 @@ func TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack(t *testing.
 	if cached.From != strings.ToLower(sender.Hex()) || cached.AccountNonce != "0x4" {
 		t.Errorf("cached body = (from=%s nonce=%s), want (%s 0x4)", cached.From, cached.AccountNonce, strings.ToLower(sender.Hex()))
 	}
-	if floor, stranded := provider.raiseToPendingFloor(sender, 4); floor != 5 || stranded {
+	if floor, stranded := provider.raiseToPendingFloor(sender, 4, nil); floor != 5 || stranded {
 		t.Errorf("raiseToPendingFloor(4) = (%d, %v), want (5, false)", floor, stranded)
 	}
 	if got := counterVecValue(t, metrics.EthAlternativeSendNotSurfaced, "reason", "not_found"); got != 1 {
@@ -1454,7 +1454,7 @@ func TestAlternativeSendTxProviderRoutingHorizonIsIndependentOfRetention(t *test
 	if provider.useForNonces(sender) {
 		t.Error("sender still routed to the relay 30 min after its send, twice the routing horizon")
 	}
-	if floor, stranded := provider.raiseToPendingFloor(sender, 4); floor != 5 || stranded {
+	if floor, stranded := provider.raiseToPendingFloor(sender, 4, nil); floor != 5 || stranded {
 		t.Errorf("raiseToPendingFloor(4) = (%d, %v), want (5, false) - the cached tx must keep its nonce reserved after routing lapsed", floor, stranded)
 	}
 	// the acceptance must outlive routing: it is what retires a predecessor whose replacement the
@@ -1680,8 +1680,8 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionStampsOwnGeneration(t 
 
 // TestAlternativeSendTxProviderRaiseToPendingFloor pins the contiguity clamp of #1675: the floor
 // advances the backend's pending answer across the run of cached nonces starting at it, never across a
-// hole. A blind max(cached)+1 answers 8 for the gap case below, queuing every later send behind a nonce
-// nothing fills.
+// hole, over the cached nonces and the caller-declared ones alike. A blind max+1 answers 8 for the gap
+// case below, queuing every later send behind a nonce nothing fills.
 func TestAlternativeSendTxProviderRaiseToPendingFloor(t *testing.T) {
 	const senderHex = "0x2222222222222222222222222222222222222222"
 	sender := ethcommon.HexToAddress(senderHex)
@@ -1700,6 +1700,7 @@ func TestAlternativeSendTxProviderRaiseToPendingFloor(t *testing.T) {
 		name         string
 		addr         ethcommon.Address
 		cached       map[string]storedTx
+		declared     []uint64
 		pending      uint64
 		wantFloor    uint64
 		wantStranded bool
@@ -1715,12 +1716,23 @@ func TestAlternativeSendTxProviderRaiseToPendingFloor(t *testing.T) {
 		{name: "another sender's cache is invisible", addr: ethcommon.HexToAddress("0x4444444444444444444444444444444444444444"), cached: cached("0x4"), pending: 4, wantFloor: 4},
 		{name: "first send of an account", addr: sender, cached: cached("0x0"), pending: 0, wantFloor: 1},
 		{name: "the walk cannot wrap below the backend answer", addr: sender, cached: cached(hexutil.EncodeUint64(math.MaxUint64)), pending: math.MaxUint64, wantFloor: math.MaxUint64},
+		// a caller-declared nonce holds a slot exactly like a cached one, which is what lets a wallet
+		// whose send this instance never saw get the same answer as one whose send it cached
+		{name: "declared alone, nothing cached", addr: sender, cached: cached(), declared: []uint64{4}, pending: 4, wantFloor: 5},
+		{name: "declared continues the cached run", addr: sender, cached: cached("0x4"), declared: []uint64{5}, pending: 4, wantFloor: 6},
+		{name: "declared fills the hole the cache left", addr: sender, cached: cached("0x5"), declared: []uint64{4}, pending: 4, wantFloor: 6},
+		{name: "declared duplicates a cached nonce", addr: sender, cached: cached("0x4"), declared: []uint64{4}, pending: 4, wantFloor: 5},
+		{name: "declared below the pending nonce is already consumed", addr: sender, cached: cached(), declared: []uint64{2, 3}, pending: 4, wantFloor: 4},
+		{name: "declared above a hole strands, it does not jump", addr: sender, cached: cached(), declared: []uint64{7}, pending: 4, wantFloor: 4, wantStranded: true},
+		{name: "declared nonce 0 is a literal, not a sentinel", addr: sender, cached: cached(), declared: []uint64{0}, pending: 0, wantFloor: 1},
+		{name: "declared set is order-independent", addr: sender, cached: cached(), declared: []uint64{6, 4, 5}, pending: 4, wantFloor: 7},
+		{name: "declared for another address is invisible", addr: ethcommon.HexToAddress("0x4444444444444444444444444444444444444444"), cached: cached("0x4"), pending: 4, wantFloor: 4},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := &AlternativeSendTxProvider{mempoolTxs: tt.cached}
-			floor, stranded := provider.raiseToPendingFloor(tt.addr, tt.pending)
+			floor, stranded := provider.raiseToPendingFloor(tt.addr, tt.pending, tt.declared)
 			if floor != tt.wantFloor || stranded != tt.wantStranded {
 				t.Errorf("raiseToPendingFloor(%d) = (%d, %v), want (%d, %v)", tt.pending, floor, stranded, tt.wantFloor, tt.wantStranded)
 			}
@@ -2563,7 +2575,7 @@ func TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval(t *testing.T)
 	if _, found := provider.mempoolTxs[txID]; found {
 		t.Fatal("the fetch-back re-inserted a transaction that had already left the cache")
 	}
-	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 1 || stranded {
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1, nil); floor != 1 || stranded {
 		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want the backend answer (1, false) after the entry was removed", floor, stranded)
 	}
 }
@@ -2588,7 +2600,7 @@ func TestAlternativeSendTxProviderFetchBackKeepsDerivedBody(t *testing.T) {
 	if cached.From != strings.ToLower(sender.Hex()) {
 		t.Errorf("cached From = %q, want the derived %q kept", cached.From, strings.ToLower(sender.Hex()))
 	}
-	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1, nil); floor != 2 || stranded {
 		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
@@ -2722,7 +2734,7 @@ func TestAlternativeSendTxProviderDroppedRefreshNotMetered(t *testing.T) {
 	if _, found := provider.GetTransaction(txID); !found {
 		t.Error("accepted send is not served as pending")
 	}
-	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1, nil); floor != 2 || stranded {
 		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
@@ -2784,7 +2796,7 @@ func TestAlternativeSendTxProviderNotSurfacedErrorMetered(t *testing.T) {
 	if _, found := provider.GetTransaction(txID); !found {
 		t.Error("transaction is not served as pending after a failed fetch-back")
 	}
-	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1, nil); floor != 2 || stranded {
 		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
@@ -2824,7 +2836,7 @@ func TestAlternativeSendTxProviderSendKeysOnSignedBytesHash(t *testing.T) {
 	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
 		t.Error("transaction was cached under the relay's echoed hash")
 	}
-	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1, nil); floor != 2 || stranded {
 		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
@@ -3018,7 +3030,7 @@ func TestAlternativeSendTxProviderUndecodableReplacementIsCached(t *testing.T) {
 	if _, found := provider.GetTransaction(replacementTxID); !found {
 		t.Fatal("the undecodable replacement is exposed nowhere: not served, not indexed, floor not raised")
 	}
-	if floor, _ := provider.raiseToPendingFloor(sender, 1); floor != 2 {
+	if floor, _ := provider.raiseToPendingFloor(sender, 1, nil); floor != 2 {
 		t.Errorf("raiseToPendingFloor(1) = %d, want 2 (the replacement holds nonce 1)", floor)
 	}
 	// and it retires the predecessor it replaces, exactly as a decodable replacement would
