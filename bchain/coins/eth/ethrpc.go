@@ -1977,17 +1977,43 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 
-	if b.alternativeSendTxProvider != nil {
+	// Route eth_estimateGas through the alternative provider ONLY for a sender that recently
+	// sent a private transaction through it (see useForNonces) - that sender may have a pending
+	// private tx the primary RPC does not know about, so estimating against the provider's state
+	// is what the provider path exists for. Every other estimate (the overwhelming majority - the
+	// wallet calls estimateFee on every send-form keystroke, see trezor-suite
+	// sendFormEthereumThunks) goes straight to the primary backend, so the hot estimateFee
+	// endpoint no longer burns the provider's rate-limit quota (#1629). A missing/empty `from`
+	// also takes the primary path: without a sender the gate cannot apply and the primary is
+	// authoritative for gas estimation anyway.
+	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
+		b.alternativeSendTxProvider.useForNonces(msg.From) {
 		result, err := b.alternativeSendTxProvider.callHttpStringResult(
-			b.alternativeSendTxProvider.urls[0],
+			b.alternativeSendTxProvider.nonceURL(msg.From),
 			"eth_estimateGas",
 			params,
 		)
 		if err == nil {
+			b.observeAlternativeEstimateGasRequest("success")
 			return hexutil.DecodeUint64(result)
 		}
+		// Previously the provider error was swallowed silently, hiding quota exhaustion (#1629);
+		// log it and fall back to the primary RPC below.
+		b.observeAlternativeEstimateGasRequest("error")
+		glog.Warningf("Alternative provider failed for eth_estimateGas: %v, falling back to primary RPC", err)
 	}
 	return b.Client.EstimateGas(ctx, msg)
+}
+
+// observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
+// send-tx provider, labeled by result: success (provider answered) or error (provider failed and
+// the estimate fell back to the primary RPC). Only recent private senders are routed here (see
+// useForNonces), so this counts the gated subset rather than every estimateFee request.
+func (b *EthereumRPC) observeAlternativeEstimateGasRequest(result string) {
+	if b.metrics == nil || b.metrics.EthAlternativeEstimateGasRequests == nil {
+		return
+	}
+	b.metrics.EthAlternativeEstimateGasRequests.With(common.Labels{"result": result}).Inc()
 }
 
 // bigIntToFloat converts a wei amount to float64 for gauge export. float64 holds integers
