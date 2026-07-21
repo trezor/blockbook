@@ -1325,3 +1325,79 @@ func TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval(t *testing.T) {
 		t.Errorf("mined residence samples = %d, want 0", got)
 	}
 }
+
+// TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration verifies the RBF eviction is
+// generation-ordered: it retires a strictly-older predecessor for the nonce slot but leaves a
+// strictly-newer replacement intact, so an older submission's late fetch-back cannot drop the newer
+// tx that will actually mine (#1573 follow-up / finding #1).
+func TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration(t *testing.T) {
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	entry := func(txid string, gen uint64) storedTx {
+		return storedTx{
+			tx:   &bchain.RpcTransaction{Hash: txid, From: sender.Hex(), AccountNonce: "0x1"},
+			time: uint32(time.Now().Unix()),
+			gen:  gen,
+		}
+	}
+
+	t.Run("keeps a strictly newer replacement", func(t *testing.T) {
+		provider := &AlternativeSendTxProvider{
+			fetchMempoolTx: true,
+			mempoolTxs:     map[string]storedTx{testAlternativeTxID: entry(testAlternativeTxID, 2)},
+		}
+		provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+		// an older send (keepGen 1) reconciling its own tx must not evict the newer gen-2 entry
+		provider.evictReplacedByNonce(sender, 1, "0xolder", 1)
+		if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
+			t.Fatal("strictly newer replacement was evicted by an older send")
+		}
+	})
+
+	t.Run("evicts a strictly older predecessor", func(t *testing.T) {
+		provider := &AlternativeSendTxProvider{
+			fetchMempoolTx: true,
+			mempoolTxs:     map[string]storedTx{testAlternativeSecondTxID: entry(testAlternativeSecondTxID, 1)},
+		}
+		provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+		provider.evictReplacedByNonce(sender, 1, testAlternativeTxID, 2)
+		if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
+			t.Fatal("older predecessor was not evicted by a newer replacement")
+		}
+	})
+}
+
+// TestAlternativeSendTxProviderHandleMempoolTransactionSkipsStaleFetchBack verifies that a slow
+// fetch-back for an older submission does not cache itself or evict the newer same-nonce
+// replacement a concurrent higher-generation send already cached (#1573 follow-up / finding #1).
+func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsStaleFetchBack(t *testing.T) {
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	// getTransactionByHash returns the older tx A (testAlternativeTxID), same sender+nonce as the
+	// newer cached replacement B (testAlternativeSecondTxID, gen 2)
+	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":{"hash":"`+testAlternativeTxID+`","from":"`+sender.Hex()+`","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs: map[string]storedTx{
+			testAlternativeSecondTxID: {
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeSecondTxID, From: sender.Hex(), AccountNonce: "0x1"},
+				time: uint32(time.Now().Unix()),
+				gen:  2,
+			},
+		},
+	}
+	provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+
+	// A is gen 1 - older than the cached gen-2 replacement B
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 1); err != nil {
+		t.Fatalf("handleMempoolTransaction() error = %v", err)
+	}
+	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+		t.Fatal("stale (older-generation) fetch-back was cached, should be skipped")
+	}
+	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; !found {
+		t.Fatal("newer replacement was evicted by a stale older-generation fetch-back")
+	}
+}

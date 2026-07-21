@@ -139,7 +139,7 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		if from, nonce, err := alternativeTxSenderAndNonce(hex); err != nil {
 			glog.Warningf("cannot decode sender/nonce of accepted transaction for RBF eviction: %v", err)
 		} else {
-			p.evictReplacedByNonce(from, nonce, txid)
+			p.evictReplacedByNonce(from, nonce, txid, gen)
 		}
 		p.handleMempoolTransaction(txid, gen)
 	}
@@ -301,16 +301,42 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 		return txid, bchain.ErrTxNotFound
 	}
 
+	from, nonce, decoded := txSenderAndNonce(tx)
+
 	p.mempoolTxsMux.Lock()
-	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen}
+	// Skip a stale fetch-back: the eth_getTransactionByHash round-trip above is slow enough that a
+	// concurrent, higher-generation send for the same (from, nonce) slot can already have cached
+	// its replacement. Inserting this older submission would surface a second pending tx for the
+	// same nonce and, worse, its eviction below would drop the newer replacement that will actually
+	// mine. The send generations exist to order exactly this; consult them here (#1573 follow-up).
+	obsolete := false
+	if decoded {
+		for otherTxid, st := range p.mempoolTxs {
+			if otherTxid == txid {
+				continue
+			}
+			if f, n, ok := txSenderAndNonce(st.tx); ok && f == from && n == nonce && newerGen(st.gen, gen) {
+				obsolete = true
+				break
+			}
+		}
+	}
+	if !obsolete {
+		p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen}
+	}
 	p.mempoolTxsMux.Unlock()
+
+	if obsolete {
+		// a newer replacement already occupies this nonce slot; do not cache or surface this one
+		return txid, nil
+	}
 
 	// Retire any cached predecessor sharing this tx's sender and nonce. The send path already
 	// does this from the raw hex the moment the relay accepts the replacement (see
 	// SendRawTransaction, #1573); repeating it here from the surfaced tx is a harmless no-op in
 	// that flow and keeps the removal correct when handleMempoolTransaction is reached directly.
-	if from, nonce, ok := txSenderAndNonce(tx); ok {
-		p.evictReplacedByNonce(from, nonce, txid)
+	if decoded {
+		p.evictReplacedByNonce(from, nonce, txid, gen)
 	}
 
 	if p.mempool != nil {
@@ -334,14 +360,24 @@ func txSenderAndNonce(tx *bchain.RpcTransaction) (ethcommon.Address, uint64, boo
 	return ethcommon.HexToAddress(tx.From), nonce, true
 }
 
+// newerGen reports whether send generation a is strictly newer than b. Generation 0 means the
+// order is unknown (the submission's sender could not be decoded, or a legacy/test entry carries
+// no generation), so it never wins a comparison - callers then fall back to generation-agnostic
+// behavior rather than acting on a guessed order.
+func newerGen(a, b uint64) bool {
+	return a > 0 && b > 0 && a > b
+}
+
 // evictReplacedByNonce removes any cached transaction that shares sender `from` and account
-// `nonce` with a newly accepted replacement, except the replacement `keepTxid` itself. Once a
-// replacement for a nonce slot is accepted, the previously cached transaction for that slot can
-// never mine, so it leaves the cache by fee-replacement: the exit is counted as rbf_replaced and
-// its residence observed, consistent with every other way an entry leaves (so the lifecycle
-// metrics stay balanced). Matching is by decoded address and numeric nonce rather than raw
-// strings, so provider differences in hex casing or zero-padding cannot hide a predecessor.
-func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address, nonce uint64, keepTxid string) {
+// `nonce` with a newly accepted replacement identified by (keepTxid, keepGen), except that
+// replacement itself. Once a replacement for a nonce slot is accepted, the previously cached
+// transaction for that slot can never mine, so it leaves the cache by fee-replacement: the exit is
+// counted as rbf_replaced and its residence observed, consistent with every other way an entry
+// leaves (so the lifecycle metrics stay balanced). Matching is by decoded address and numeric
+// nonce rather than raw strings, so provider differences in hex casing or zero-padding cannot hide
+// a predecessor. A cached entry from a strictly newer send (newerGen) is left intact: when an older
+// submission's slow fetch-back races a newer replacement, the older one must not evict the newer.
+func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address, nonce uint64, keepTxid string, keepGen uint64) {
 	p.mempoolTxsMux.Lock()
 	var rbfTxid string
 	var rbfTime uint32
@@ -351,6 +387,9 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 		}
 		cachedFrom, cachedNonce, ok := txSenderAndNonce(storedTx.tx)
 		if !ok || cachedFrom != from || cachedNonce != nonce {
+			continue
+		}
+		if newerGen(storedTx.gen, keepGen) {
 			continue
 		}
 		rbfTxid = txid
