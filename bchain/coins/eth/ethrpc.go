@@ -2305,21 +2305,32 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // lookup fails, the pending nonce is still returned with confirmedOK=false so the caller
 // can omit it rather than failing the whole request. When confirmedOK is false the returned
 // confirmed value is 0 and must be ignored.
-func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
+func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (uint64, uint64, bool, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
+	// The caller may declare the account nonces of its in-flight private transactions (see
+	// server.WsPrivatePending). declaredFloor is the lowest pending nonce consistent with them,
+	// or 0 when none were declared.
+	declaredFloor := declaredPendingFloor(privatePendingNonces)
 
-	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
-		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
-		if err == nil {
-			b.observeAlternativeNonceRequest("success")
-			// Even the provider's own answer can fall below Blockbook's advertised pending
-			// view: Blink-style relays stop counting a still-pending tx at the pending tag
-			// while Blockbook keeps exposing it until the cache timeout (see
-			// reconcileMempoolTxs).
-			return b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), confirmed, confirmedOK, nil
+	if b.alternativeSendTxProvider != nil {
+		// Route to the provider when the caller declared in-flight private txs (a deterministic
+		// short-circuit: the wallet knows this authoritatively) OR when our own heuristic says the
+		// sender recently sent privately through this instance. The declared hint bypasses the
+		// recentSenders guess and its restart / load-balanced-replica fragility (#1629 rationale).
+		if declaredFloor > 0 || b.alternativeSendTxProvider.useForNonces(ethAddress) {
+			pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
+			if err == nil {
+				b.observeAlternativeNonceRequest("success")
+				// Even the provider's own answer can fall below Blockbook's advertised pending
+				// view: Blink-style relays stop counting a still-pending tx at the pending tag
+				// while Blockbook keeps exposing it until the cache timeout (see
+				// reconcileMempoolTxs). The declared floor covers the same gap for a tx this
+				// instance never cached (accepted by another replica, or lost to a restart).
+				return raiseToFloor(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor), confirmed, confirmedOK, nil
+			}
+			b.observeAlternativeNonceRequest("error")
+			glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 		}
-		b.observeAlternativeNonceRequest("error")
-		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 	}
 
 	pending, confirmed, confirmedOK, err := b.getNoncesRPC(ethAddress, withConfirmed)
@@ -2333,10 +2344,33 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// until fetch-back time + timeout (plus reconcile granularity), and in that window a
 		// primary answer below the floor would contradict the pending tx Blockbook still
 		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
-		// the hot path.
-		pending = b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+		// the hot path. The caller-declared floor is folded in for the same reason.
+		pending = raiseToFloor(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor)
 	}
 	return pending, confirmed, confirmedOK, nil
+}
+
+// declaredPendingFloor returns the lowest pending nonce consistent with the caller-declared
+// in-flight private transactions (highest declared nonce + 1), or 0 when none were declared. The
+// wallet knows its own submitted nonces authoritatively, so honoring this keeps the reported
+// pending nonce from falling below a private transaction the wallet has in flight even when this
+// Blockbook instance never saw it (a different replica accepted it, or a restart cleared the cache).
+func declaredPendingFloor(nonces []uint64) uint64 {
+	var floor uint64
+	for _, n := range nonces {
+		if n+1 > floor {
+			floor = n + 1
+		}
+	}
+	return floor
+}
+
+// raiseToFloor returns the larger of pending and floor.
+func raiseToFloor(pending, floor uint64) uint64 {
+	if floor > pending {
+		return floor
+	}
+	return pending
 }
 
 // getNoncesRPC fetches the pending account nonce from the primary RPC, plus the confirmed
