@@ -76,6 +76,7 @@ type Metrics struct {
 	EthSendTxPath                     *prometheus.CounterVec   `metric:"eth_sendtx_path_total"`
 	EthAlternativeSendTx              *prometheus.CounterVec   `metric:"eth_alternative_sendtx_total"`
 	EthAlternativeSendTxDuration      *prometheus.HistogramVec `metric:"eth_alternative_sendtx_duration_seconds"`
+	EthAlternativeEstimateGasRequests *prometheus.CounterVec   `metric:"eth_alternative_estimate_gas_requests_total"`
 	EstimatedFee                      *prometheus.GaugeVec     `metric:"estimated_fee"`
 	AvgBlockPeriod                    prometheus.Gauge         `metric:"avg_block_period"`
 	SyncBlockStats                    *prometheus.GaugeVec     `metric:"sync_block_stats"`
