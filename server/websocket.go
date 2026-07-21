@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,8 +53,8 @@ const maxWebsocketEstimateFeeBlocks = 32
 
 // maxPrivatePendingNonces bounds how many declared in-flight private nonces a getAccountInfo
 // request may contribute (see WsPrivatePending). An address realistically has a handful of
-// in-flight transactions; the cap keeps a malformed or hostile request from forcing unbounded
-// work, and only the highest nonce is needed to raise the pending floor anyway.
+// in-flight transactions; the cap keeps a malformed or hostile request from forcing unbounded work,
+// and it bounds how far the pending-nonce walk can advance in one request.
 const maxPrivatePendingNonces = 64
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
@@ -1064,13 +1065,22 @@ func privatePendingNonces(p *WsPrivatePending) []uint64 {
 	if p == nil || len(p.Nonces) == 0 {
 		return nil
 	}
-	n := p.Nonces
-	if len(n) > maxPrivatePendingNonces {
-		n = n[:maxPrivatePendingNonces]
+	if len(p.Nonces) <= maxPrivatePendingNonces {
+		out := make([]uint64, len(p.Nonces))
+		copy(out, p.Nonces)
+		return out
 	}
-	out := make([]uint64, len(n))
-	copy(out, n)
-	return out
+	// More declared nonces than we carry downstream - a malformed or hostile request, since a real
+	// wallet has only a handful of sequential in-flight nonces. Keep the LOWEST ones: the pending
+	// nonce advances from the backend's own answer across a contiguous run (see
+	// raiseToPendingFloor), so the slots just above that answer are the only ones that can be
+	// consumed, and anything dropped here sits above them and would have stranded anyway. Sorting
+	// first also keeps the answer independent of the order the client happened to send.
+	out := make([]uint64, len(p.Nonces))
+	copy(out, p.Nonces)
+	slices.Sort(out)
+
+	return out[:maxPrivatePendingNonces]
 }
 
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
