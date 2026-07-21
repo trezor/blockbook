@@ -405,13 +405,15 @@ func TestValidateRPCEnvVarsToleratesStagingCoin(t *testing.T) {
 	// An RPC override for a coin whose config lives only on a feature branch.
 	t.Setenv(devRPCURLHTTPPrefix+"robinhood_archive", "http://backend.example:8030")
 
-	if err := validateRPCEnvVars(configsDir); err == nil {
-		t.Fatal("expected unknown coin alias to be rejected without BB_STAGING")
+	// Assert on this coin specifically, not on a globally-clean result: the env may
+	// carry other orphan overrides (the multi-WIP-coin case this feature targets).
+	if err := validateRPCEnvVars(configsDir); err == nil || !strings.Contains(err.Error(), "robinhood_archive") {
+		t.Fatalf("expected robinhood_archive to be rejected without BB_STAGING, got %v", err)
 	}
 
 	t.Setenv(stagingEnvVar, "robinhood_archive")
-	if err := validateRPCEnvVars(configsDir); err != nil {
-		t.Fatalf("BB_STAGING should tolerate the orphan RPC var, got %v", err)
+	if err := validateRPCEnvVars(configsDir); err != nil && strings.Contains(err.Error(), "robinhood_archive") {
+		t.Fatalf("BB_STAGING should tolerate robinhood_archive, got %v", err)
 	}
 }
 

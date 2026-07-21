@@ -85,6 +85,7 @@ Special cases:
 - `mode=build` + `env=dev` fails if you explicitly request a coin whose `BB_RUNNER_*` is `production_builder`
 - `mode=deploy` is dev-only and fails fast if any selected coin is mapped to `production_builder`
 - a coin listed in the `BB_STAGING` repository variable is skipped where its `configs/coins/<coin>.json` is absent, so a work-in-progress coin's repo-wide `BB_*` variables don't fail builds/deploys on branches that lack its config yet
+- tolerance is opt-in, so a mistyped or abandoned `BB_STAGING` entry (no config on any branch) is silently skipped rather than erroring — the skip is logged, and entries should be removed once the coin merges
 
 ## Naming Matrix
 
