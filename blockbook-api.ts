@@ -820,8 +820,8 @@ export interface WsTransactionSpecificReq {
 export interface WsEstimateFeeReq {
     /** Block confirmations targets for which fees should be estimated. */
     blocks?: number[];
-    /** Additional chain-specific parameters (e.g. for Ethereum). */
-    specific?: {conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string;};
+    /** Additional chain-specific parameters (e.g. for Ethereum). privatePending (Ethereum-like) declares the sender's in-flight private transactions so the gas estimate is routed to the alternative send-tx provider; see WsPrivatePending and docs/evm-send.md. */
+    specific?: {conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string; privatePending?: {nonces?: number[]; txids?: string[]};};
 }
 export interface Eip1559Fee {
     maxFeePerGas?: string;
