@@ -2099,6 +2099,9 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	// the wallet calls estimateFee on each send-form keystroke - goes straight to the primary and no
 	// longer burns the provider's quota (#1629); so does a missing `from`. Unlike a declared nonce,
 	// which is itself the answer, a declared estimate only picks the backend: Blockbook still simulates.
+	// The hint is an unauthenticated per-request client signal: it can route only the caller's own
+	// request to the relay and never touches shared state, so it does not re-open the #1629 hot-path
+	// quota drain (accepted trust boundary, see docs/evm-send.md).
 	declaredPrivatePending := estimatePrivatePendingDeclared(params)
 	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
 		(declaredPrivatePending || b.alternativeSendTxProvider.useForNonces(msg.From)) {

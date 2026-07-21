@@ -71,6 +71,54 @@ func TestEthereumTypeGetNonces_PrivatePendingHint_RaisesPrimaryFallback(t *testi
 	}
 }
 
+// TestEthereumTypeGetNonces_PrivatePendingHint_WithConfirmedNonce exercises the exact production
+// combination (api/worker.go passes WithConfirmedNonce together with PrivatePendingNonces...): the
+// declaration must raise only the PENDING nonce and leave the confirmed (latest) nonce untouched.
+func TestEthereumTypeGetNonces_PrivatePendingHint_WithConfirmedNonce(t *testing.T) {
+	server := newNonceRPCServer(t, map[string]string{"pending": "0x9", "latest": "0x5"}, nil)
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4", "latest": "0x2"}}
+	// no recent senders → routed purely by the declaration
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: newRecentSenderProvider(server)}
+
+	// declared nonce 9 sits exactly at the provider's pending answer, so the walk advances to 10
+	pending, confirmed, confirmedOK, err := b.EthereumTypeGetNonces(nonceTestAddr, true, 9)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 10 {
+		t.Errorf("pending = %d, want 10 (declared nonce 9 is in flight)", pending)
+	}
+	if confirmed != 5 || !confirmedOK {
+		t.Errorf("confirmed = (%d, ok=%v), want (5, true) — the floor must not touch the confirmed nonce", confirmed, confirmedOK)
+	}
+	if len(stub.queried) != 0 {
+		t.Errorf("primary RPC queried tags %v, want none once routed to the provider", stub.queried)
+	}
+}
+
+// TestEthereumTypeGetNonces_PrivatePendingHint_RoutesOnDeclaredZero confirms a declared nonce of 0
+// (a wallet's very first tx) still trips the routing guard (declaredFloor 1 > 0) and raises the
+// pending nonce to 1 — the boundary the routing tests above (nonce 42) do not exercise.
+func TestEthereumTypeGetNonces_PrivatePendingHint_RoutesOnDeclaredZero(t *testing.T) {
+	server := newNonceRPCServer(t, map[string]string{"pending": "0x0"}, nil)
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x0"}}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: newRecentSenderProvider(server)}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 1 {
+		t.Errorf("pending = %d, want 1 (declared nonce 0 → floor 1)", pending)
+	}
+	if got := server.callCount("pending"); got != 1 {
+		t.Errorf("alternative provider queried %d times, want 1 (declared 0 must still route)", got)
+	}
+	if len(stub.queried) != 0 {
+		t.Errorf("primary RPC queried tags %v, want none once routed to the provider", stub.queried)
+	}
+}
+
 // TestEthereumTypeGetNonces_PrivatePendingHint_IgnoredWithoutProvider confirms the hint is a
 // relay-deployment feature: with no alternative provider configured there is no private mempool for
 // it to describe, so it is ignored and the primary answer stands unchanged.

@@ -51,7 +51,7 @@ type WsAccountInfoReq struct {
 // rather than guessing from which addresses recently sent through this instance. Only Nonces drive
 // behavior today; Txids are accepted for forward compatibility (future pending-tx correlation).
 type WsPrivatePending struct {
-	Nonces []uint64 `json:"nonces,omitempty" ts_doc:"Account nonces of the wallet's in-flight private transactions for this address."`
+	Nonces []uint64 `json:"nonces,omitempty" ts_doc:"Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel); do not pad or default the array, as any entry raises the reported pending nonce to at least value+1."`
 	Txids  []string `json:"txids,omitempty" ts_doc:"Transaction hashes of the in-flight private transactions (reserved for future use)."`
 }
 
@@ -151,7 +151,7 @@ type WsTransactionSpecificReq struct {
 // WsEstimateFeeReq requests an estimation of transaction fees for a set of blocks or with specific parameters.
 type WsEstimateFeeReq struct {
 	Blocks   []int                  `json:"blocks,omitempty" ts_doc:"Block confirmations targets for which fees should be estimated."`
-	Specific map[string]interface{} `json:"specific,omitempty" ts_type:"{conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string; privatePending?: {nonces?: number[]; txids?: string[]};}" ts_doc:"Additional chain-specific parameters (e.g. for Ethereum). privatePending (Ethereum-like) declares the sender's in-flight private transactions so the gas estimate is routed to the alternative send-tx provider; see WsPrivatePending and docs/evm-send.md."`
+	Specific map[string]interface{} `json:"specific,omitempty" ts_type:"{conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string; privatePending?: WsPrivatePending;}" ts_doc:"Additional chain-specific parameters (e.g. for Ethereum). privatePending (Ethereum-like) declares the sender's in-flight private transactions so the gas estimate is routed to the alternative send-tx provider; see WsPrivatePending and docs/evm-send.md."`
 }
 
 // WsEstimateFeeRes is returned in response to a fee estimation request.
