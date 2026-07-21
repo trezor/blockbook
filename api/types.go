@@ -405,6 +405,11 @@ type AddressFilter struct {
 	// WithConfirmedNonce set to true makes the Ethereum-like address response include the confirmed nonce,
 	// which requires an extra eth_getTransactionCount("latest") backend call; off by default to avoid that cost.
 	WithConfirmedNonce bool `ts_doc:"If true, additionally fetch and return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
+	// PrivatePendingNonces carries the account nonces of the caller's in-flight private (alternative
+	// send-tx) transactions when the request declared them (see server.WsPrivatePending). For
+	// Ethereum-like nonce lookups it routes the query to the alternative provider and raises the
+	// reported pending nonce above these values, from authoritative wallet state; empty otherwise.
+	PrivatePendingNonces []uint64 `ts_doc:"Ethereum-like: account nonces of the caller's in-flight private transactions, if the request declared them."`
 }
 
 // StakingPool holds data about address participation in a staking pool contract
