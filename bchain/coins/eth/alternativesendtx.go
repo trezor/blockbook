@@ -122,6 +122,22 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	}
 
 	if p.onlyAlternative && p.fetchMempoolTx {
+		if acceptedURL != "" {
+			// A successful relay acceptance of this (from, nonce) is positive, irreversible proof
+			// that any previously cached transaction with the same sender and nonce can no longer
+			// mine - it has been replaced or cancelled. Retire it now, from the raw hex, WITHOUT
+			// waiting for the relay to surface THIS transaction via eth_getTransactionByHash.
+			// Blink drop-mode cancels are never surfaced at all, and an accepted-but-unsurfaced
+			// RBF replacement never reached handleMempoolTransaction's own removal, so both cases
+			// previously left the predecessor showing "Unconfirmed" until the cache timeout (#1573).
+			// This is distinct from an empty getTransactionByHash probe, which is NOT authoritative
+			// (see reconcileMempoolTxs) - here the ACK of a same-nonce replacement is the fact.
+			if from, nonce, err := alternativeTxSenderAndNonce(hex); err != nil {
+				glog.Warningf("cannot decode sender/nonce of accepted transaction for RBF eviction: %v", err)
+			} else {
+				p.evictReplacedByNonce(from, nonce, txid)
+			}
+		}
 		p.handleMempoolTransaction(txid, gen)
 	}
 
@@ -131,11 +147,24 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 // alternativeTxSender recovers the sender address from a raw transaction hex. The chain id
 // needed to derive the sender is taken from the transaction itself.
 func alternativeTxSender(rawTxHex string) (ethcommon.Address, error) {
+	sender, _, err := alternativeTxSenderAndNonce(rawTxHex)
+	return sender, err
+}
+
+// alternativeTxSenderAndNonce recovers the sender address and account nonce from a raw
+// transaction hex. The chain id needed to derive the sender is taken from the transaction
+// itself. The nonce lets a successful send identify the (from, nonce) slot it fills, so any
+// cached predecessor for that slot can be retired at acceptance time (see evictReplacedByNonce).
+func alternativeTxSenderAndNonce(rawTxHex string) (ethcommon.Address, uint64, error) {
 	var tx types.Transaction
 	if err := tx.UnmarshalBinary(ethcommon.FromHex(rawTxHex)); err != nil {
-		return ethcommon.Address{}, err
+		return ethcommon.Address{}, 0, err
 	}
-	return types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
+	sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
+	if err != nil {
+		return ethcommon.Address{}, 0, err
+	}
+	return sender, tx.Nonce(), nil
 }
 
 // registerSuccessfulSend records the sender of a transaction accepted by an alternative
@@ -270,28 +299,15 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 	}
 
 	p.mempoolTxsMux.Lock()
-	// remove potential RBF transactions - with equal from and nonce
-	var rbfTxid string
-	var rbfTime uint32
-	for rbf, storedTx := range p.mempoolTxs {
-		if storedTx.tx.From == tx.From && storedTx.tx.AccountNonce == tx.AccountNonce {
-			rbfTxid = rbf
-			rbfTime = storedTx.time
-			break
-		}
-	}
 	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen}
 	p.mempoolTxsMux.Unlock()
 
-	if rbfTxid != "" {
-		glog.Infof("eth_sendRawTransaction replacing txid %s by %s", rbfTxid, txid)
-		// the replaced entry leaves the cache by fee-replacement rather than reconciliation; record the
-		// exit reason and its residence so the lifecycle metrics account for every way an entry leaves.
-		p.observeMempoolReconciliation("rbf_replaced")
-		p.observeMempoolTxResidence("rbf_replaced", rbfTime)
-		if p.removeTransactionFromMempool != nil {
-			p.removeTransactionFromMempool(rbfTxid)
-		}
+	// Retire any cached predecessor sharing this tx's sender and nonce. The send path already
+	// does this from the raw hex the moment the relay accepts the replacement (see
+	// SendRawTransaction, #1573); repeating it here from the surfaced tx is a harmless no-op in
+	// that flow and keeps the removal correct when handleMempoolTransaction is reached directly.
+	if from, nonce, ok := txSenderAndNonce(tx); ok {
+		p.evictReplacedByNonce(from, nonce, txid)
 	}
 
 	if p.mempool != nil {
@@ -299,6 +315,54 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 	}
 
 	return txid, nil
+}
+
+// txSenderAndNonce decodes the sender address and account nonce of a cached RPC transaction,
+// reporting ok=false when either field is missing or unparsable so callers skip the entry rather
+// than act on a zero value.
+func txSenderAndNonce(tx *bchain.RpcTransaction) (ethcommon.Address, uint64, bool) {
+	if tx == nil || tx.From == "" || tx.AccountNonce == "" {
+		return ethcommon.Address{}, 0, false
+	}
+	nonce, err := hexutil.DecodeUint64(tx.AccountNonce)
+	if err != nil {
+		return ethcommon.Address{}, 0, false
+	}
+	return ethcommon.HexToAddress(tx.From), nonce, true
+}
+
+// evictReplacedByNonce removes any cached transaction that shares sender `from` and account
+// `nonce` with a newly accepted replacement, except the replacement `keepTxid` itself. Once a
+// replacement for a nonce slot is accepted, the previously cached transaction for that slot can
+// never mine, so it leaves the cache by fee-replacement: the exit is counted as rbf_replaced and
+// its residence observed, consistent with every other way an entry leaves (so the lifecycle
+// metrics stay balanced). Matching is by decoded address and numeric nonce rather than raw
+// strings, so provider differences in hex casing or zero-padding cannot hide a predecessor.
+func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address, nonce uint64, keepTxid string) {
+	p.mempoolTxsMux.Lock()
+	var rbfTxid string
+	var rbfTime uint32
+	for txid, storedTx := range p.mempoolTxs {
+		if txid == keepTxid {
+			continue
+		}
+		cachedFrom, cachedNonce, ok := txSenderAndNonce(storedTx.tx)
+		if !ok || cachedFrom != from || cachedNonce != nonce {
+			continue
+		}
+		rbfTxid = txid
+		rbfTime = storedTx.time
+		break
+	}
+	p.mempoolTxsMux.Unlock()
+
+	if rbfTxid == "" {
+		return
+	}
+	glog.Infof("eth_sendRawTransaction replacing txid %s by %s", rbfTxid, keepTxid)
+	p.observeMempoolReconciliation("rbf_replaced")
+	p.observeMempoolTxResidence("rbf_replaced", rbfTime)
+	p.removeMempoolTx(rbfTxid)
 }
 
 // GetTransaction gets a transaction from alternative mempool cache
