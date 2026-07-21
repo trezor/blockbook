@@ -1,0 +1,13 @@
+{
+    "_comment": "PLACEHOLDER FIXTURE — fill every field below with real values captured from a synced HyperEVM (chain 999) nanoreth node before running the rpc/integration suite. Pick a settled block, list its tx hashes in blockTxs, put an address that is active in that block plus a few active ERC-20 contract addresses under ethCallBatch, and add one of the block's transactions to txDetails (vout[].value is decimal HYPE). See tests/rpc/testdata/arbitrum.json for a completed example.",
+    "blockHeight": 0,
+    "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "blockTime": 0,
+    "blockSize": 0,
+    "blockTxs": [],
+    "ethCallBatch": {
+        "address": "0x0000000000000000000000000000000000000000",
+        "contracts": []
+    },
+    "txDetails": {}
+}
