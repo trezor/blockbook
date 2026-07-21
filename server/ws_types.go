@@ -29,18 +29,30 @@ type resultError struct {
 
 // WsAccountInfoReq carries parameters for the 'getAccountInfo' method.
 type WsAccountInfoReq struct {
-	Descriptor        string   `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
-	Details           string   `json:"details,omitempty" ts_type:"'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs'" ts_doc:"Level of detail to retrieve about the account."`
-	Tokens            string   `json:"tokens,omitempty" ts_type:"'derived' | 'used' | 'nonzero'" ts_doc:"Which tokens to include in the account info."`
-	Protocols         []string `json:"protocols,omitempty" ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
-	PageSize          int      `json:"pageSize,omitempty" ts_doc:"Number of items per page, if paging is used."`
-	Page              int      `json:"page,omitempty" ts_doc:"Requested page index, if paging is used."`
-	FromHeight        int      `json:"from,omitempty" ts_doc:"Starting block height for transaction filtering."`
-	ToHeight          int      `json:"to,omitempty" ts_doc:"Ending block height for transaction filtering."`
-	ContractFilter    string   `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
-	SecondaryCurrency string   `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
-	Gap               int      `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
-	ConfirmedNonce    bool     `json:"confirmedNonce,omitempty" ts_doc:"If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
+	Descriptor        string            `json:"descriptor" ts_doc:"Address or XPUB descriptor to query."`
+	Details           string            `json:"details,omitempty" ts_type:"'basic' | 'tokens' | 'tokenBalances' | 'txids' | 'txslight' | 'txs'" ts_doc:"Level of detail to retrieve about the account."`
+	Tokens            string            `json:"tokens,omitempty" ts_type:"'derived' | 'used' | 'nonzero'" ts_doc:"Which tokens to include in the account info."`
+	Protocols         []string          `json:"protocols,omitempty" ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
+	PageSize          int               `json:"pageSize,omitempty" ts_doc:"Number of items per page, if paging is used."`
+	Page              int               `json:"page,omitempty" ts_doc:"Requested page index, if paging is used."`
+	FromHeight        int               `json:"from,omitempty" ts_doc:"Starting block height for transaction filtering."`
+	ToHeight          int               `json:"to,omitempty" ts_doc:"Ending block height for transaction filtering."`
+	ContractFilter    string            `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
+	SecondaryCurrency string            `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
+	Gap               int               `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+	ConfirmedNonce    bool              `json:"confirmedNonce,omitempty" ts_doc:"If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
+	PrivatePending    *WsPrivatePending `json:"privatePending,omitempty" ts_doc:"Ethereum-like only: the sender's in-flight private (alternative send-tx / relay) transactions the wallet is tracking for this address. When present, Blockbook answers the pending-nonce lookup from this authoritative wallet state instead of inferring it from recently accepted sends (see docs/evm-send.md)."`
+}
+
+// WsPrivatePending declares the private (alternative send-tx / relay) transactions a wallet knows
+// are in flight for the queried Ethereum-like address. A private relay exposes no mempool, so a tx
+// pending only there is invisible to the public backend RPC; declaring it lets Blockbook route the
+// nonce lookup to the relay and raise the reported pending nonce above these nonces deterministically,
+// rather than guessing from which addresses recently sent through this instance. Only Nonces drive
+// behavior today; Txids are accepted for forward compatibility (future pending-tx correlation).
+type WsPrivatePending struct {
+	Nonces []uint64 `json:"nonces,omitempty" ts_doc:"Account nonces of the wallet's in-flight private transactions for this address."`
+	Txids  []string `json:"txids,omitempty" ts_doc:"Transaction hashes of the in-flight private transactions (reserved for future use)."`
 }
 
 // WsContractInfoReq carries parameters for the 'getContractInfo' method.
