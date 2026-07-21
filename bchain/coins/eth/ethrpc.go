@@ -1975,21 +1975,24 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 
-	// Route eth_estimateGas through the alternative provider ONLY for a sender that recently
-	// sent a private transaction through it (see useForNonces) - that sender may have a pending
-	// private tx the primary RPC does not know about, so estimating against the provider's state
-	// is what the provider path exists for. Every other estimate (the overwhelming majority - the
-	// wallet calls estimateFee on every send-form keystroke, see trezor-suite
-	// sendFormEthereumThunks) goes straight to the primary backend, so the hot estimateFee
-	// endpoint no longer burns the provider's rate-limit quota (#1629). A missing/empty `from`
-	// also takes the primary path: without a sender the gate cannot apply and the primary is
-	// authoritative for gas estimation anyway.
+	// Route eth_estimateGas through the alternative provider when the request declares in-flight
+	// private transactions for the sender (privatePending), or - failing that - when our own
+	// heuristic says the sender recently sent privately (see useForNonces). Both mean the same
+	// thing: the estimate must run against the relay's pending-private state the primary RPC cannot
+	// see (e.g. a privately-submitted approve that a following swap's gas depends on). The declared
+	// signal is authoritative and does not depend on this instance having accepted the send, so it
+	// bypasses the recentSenders heuristic and its restart / load-balanced-replica gaps. Every other
+	// estimate (the overwhelming majority) goes straight to the primary backend, so the hot
+	// estimateFee endpoint does not burn the provider's rate-limit quota (#1629); a missing/empty
+	// `from` also takes the primary path. Unlike the nonce hint - which IS the answer and short-
+	// circuits the lookup - a declared estimate only selects the backend; Blockbook still simulates.
+	declaredPrivatePending := estimatePrivatePendingDeclared(params)
 	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
-		b.alternativeSendTxProvider.useForNonces(msg.From) {
+		(declaredPrivatePending || b.alternativeSendTxProvider.useForNonces(msg.From)) {
 		result, err := b.alternativeSendTxProvider.callHttpStringResult(
 			b.alternativeSendTxProvider.nonceURL(msg.From),
 			"eth_estimateGas",
-			params,
+			estimateParamsWithoutPrivatePending(params),
 		)
 		if err == nil {
 			// Count success only once the result decodes: a malformed hex quantity is a provider
@@ -2018,13 +2021,47 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 
 // observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
 // send-tx provider, labeled by result: success (provider answered) or error (provider failed and
-// the estimate fell back to the primary RPC). Only recent private senders are routed here (see
-// useForNonces), so this counts the gated subset rather than every estimateFee request.
+// the estimate fell back to the primary RPC). Only senders that declared private-pending state or
+// recently sent privately (see useForNonces) are routed here, so this counts the gated subset
+// rather than every estimateFee request.
 func (b *EthereumRPC) observeAlternativeEstimateGasRequest(result string) {
 	if b.metrics == nil || b.metrics.EthAlternativeEstimateGasRequests == nil {
 		return
 	}
 	b.metrics.EthAlternativeEstimateGasRequests.With(common.Labels{"result": result}).Inc()
+}
+
+// estimatePrivatePendingDeclared reports whether an estimateFee request declared in-flight private
+// transactions for the sender via privatePending.nonces in its specific params (see
+// server.WsPrivatePending). It is only a routing signal - unlike a nonce, the wallet cannot compute
+// gas itself, so Blockbook must still simulate the call; the declaration just says "estimate against
+// the relay's pending-private state". Only presence matters, not the values. params is a decoded
+// JSON object, so nested objects/arrays are map[string]interface{} / []interface{}.
+func estimatePrivatePendingDeclared(params map[string]interface{}) bool {
+	pp, ok := params["privatePending"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	nonces, ok := pp["nonces"].([]interface{})
+	return ok && len(nonces) > 0
+}
+
+// estimateParamsWithoutPrivatePending returns params with the privatePending key removed, so the
+// wallet's bookkeeping is not forwarded as part of the eth_estimateGas call object. It copies only
+// when the key is present, so the common (no-hint) path is zero-cost and never mutates the caller's
+// map.
+func estimateParamsWithoutPrivatePending(params map[string]interface{}) map[string]interface{} {
+	if _, ok := params["privatePending"]; !ok {
+		return params
+	}
+	out := make(map[string]interface{}, len(params))
+	for k, v := range params {
+		if k == "privatePending" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // bigIntToFloat converts a wei amount to float64 for gauge export. float64 holds integers
