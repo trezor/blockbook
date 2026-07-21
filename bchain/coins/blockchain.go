@@ -35,6 +35,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/fujicoin"
 	"github.com/trezor/blockbook/bchain/coins/gamecredits"
 	"github.com/trezor/blockbook/bchain/coins/grs"
+	"github.com/trezor/blockbook/bchain/coins/hyperevm"
 	"github.com/trezor/blockbook/bchain/coins/koto"
 	"github.com/trezor/blockbook/bchain/coins/liquid"
 	"github.com/trezor/blockbook/bchain/coins/litecoin"
@@ -154,6 +155,7 @@ func init() {
 	BlockChainFactories["Base Archive"] = base.NewBaseRPC
 	BlockChainFactories["Robinhood Archive"] = robinhood.NewRobinhoodRPC
 	BlockChainFactories["Robinhood Testnet"] = robinhood.NewRobinhoodRPC
+	BlockChainFactories["HyperEVM Archive"] = hyperevm.NewHyperevmRPC
 	BlockChainFactories["Tron"] = tron.NewTronRPC
 	BlockChainFactories["Tron Testnet Nile"] = tron.NewTronRPC
 }
