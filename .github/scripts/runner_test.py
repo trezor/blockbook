@@ -78,6 +78,17 @@ class RunnerSelectionTest(unittest.TestCase):
 
         self.assertIn("dogecoin", context.all_coins)
 
+    def test_load_coin_context_reports_all_staging_pruned_distinctly(self) -> None:
+        vars_map = {
+            "BB_RUNNER_ROBINHOOD_ARCHIVE": "blockbook-dev",
+            "BB_STAGING": "robinhood_archive",
+        }
+
+        with self.assertRaisesRegex(
+            ValidationError, r"all BB_RUNNER_\* coins are BB_STAGING"
+        ):
+            load_coin_context(self.workspace, vars_map)
+
     def test_staging_prune_matches_hyphen_underscore_variant(self) -> None:
         vars_map = {
             **self.valid_vars_map,

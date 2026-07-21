@@ -334,9 +334,13 @@ def load_coin_context(
 ) -> CoinContext:
     runner_map = load_runner_map(vars_map)
     runner_map = normalize_runner_map(workspace, runner_map)
-    runner_map = prune_staging_coins(workspace, runner_map, load_staging_coins(vars_map))
     if not runner_map:
         raise ValidationError("no BB_RUNNER_* variables found")
+    runner_map = prune_staging_coins(workspace, runner_map, load_staging_coins(vars_map))
+    if not runner_map:
+        raise ValidationError(
+            "all BB_RUNNER_* coins are BB_STAGING work-in-progress without a config on this branch"
+        )
 
     validate_runner_map_configs(workspace, runner_map)
     all_coins = list_all_coins(workspace, runner_map)
