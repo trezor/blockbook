@@ -8,6 +8,12 @@
     "typecheck": "tsc --noEmit",
     "e2e": "tsx src/e2e.ts"
   },
+  "overrides": {
+    "fast-uri": "3.1.3",
+    "js-yaml": "4.3.0",
+    "brace-expansion@2": "2.1.2",
+    "brace-expansion@>=3": "5.0.7"
+  },
   "devDependencies": {
     "@redocly/cli": "2.11.1",
     "@types/ws": "8.18.1",
