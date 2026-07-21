@@ -143,6 +143,10 @@ On EVM chains the internal server also exposes `/admin/contract-info/` (same Bas
 -   `BB_RUNNER_<coin>` - Maps a workflow/config coin name from `configs/coins/<coin>.json` to the self-hosted runner label
     used by the `Build / Deploy` workflow. `production_builder` marks coins that are buildable only in `env=prod`; those builds run on the `production-builder` self-hosted runner label.
 
+-   `BB_STAGING` - Comma/space separated work-in-progress coins whose `BB_*` variables exist repo-wide but whose
+    `configs/coins/<coin>.json` is only on a feature branch. Each listed coin is skipped where its config is absent (so
+    sibling branches don't fail on the orphan variables) and builds/tests/deploys normally where the config is present.
+
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.
 
