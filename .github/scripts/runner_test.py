@@ -63,6 +63,32 @@ class RunnerSelectionTest(unittest.TestCase):
         ):
             load_coin_context(self.workspace, self.stale_vars_map)
 
+    def test_load_coin_context_prunes_staging_coin_without_config(self) -> None:
+        vars_map = {**self.stale_vars_map, "BB_STAGING": "stale"}
+
+        context = load_coin_context(self.workspace, vars_map)
+
+        self.assertNotIn("stale", context.all_coins)
+        self.assertIn("dogecoin", context.all_coins)
+
+    def test_load_coin_context_keeps_staging_coin_that_has_config(self) -> None:
+        vars_map = {**self.valid_vars_map, "BB_STAGING": "dogecoin"}
+
+        context = load_coin_context(self.workspace, vars_map)
+
+        self.assertIn("dogecoin", context.all_coins)
+
+    def test_staging_prune_matches_hyphen_underscore_variant(self) -> None:
+        vars_map = {
+            **self.valid_vars_map,
+            "BB_RUNNER_ROBINHOOD_ARCHIVE": "blockbook-dev",
+            "BB_STAGING": "robinhood-archive",
+        }
+
+        context = load_coin_context(self.workspace, vars_map)
+
+        self.assertNotIn("robinhood_archive", context.all_coins)
+
     def test_build_all_uses_all_configured_runner_mapped_coins(self) -> None:
         context = load_coin_context(self.workspace, self.valid_vars_map)
 
