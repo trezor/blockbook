@@ -741,20 +741,27 @@ func (p *AlternativeSendTxProvider) cachedNoncesFor(addr ethcommon.Address) map[
 	return nonces
 }
 
-// raiseToPendingFloor advances the backend's pending nonce across the CONTIGUOUS run of cached private
-// nonces that starts at it, and reports whether the cache also holds a nonce above that run. Blockbook
-// exposes the cached txs as pending, so answering below the run would hand a wallet the nonce of one
-// that is in flight. Answering above a hole is the opposite failure and the one #1675 describes: the
-// cache can hold N+1 while nothing fills N - an accepted send that never reached the cache, or a reorg
-// re-exposing the slot - and a wallet given N+2 there queues every later send behind a nonce that may
-// never be consumed, which is all a blind max(cached)+1 floor could answer. The walk yields
-// pending <= floor <= pending+len(cached), always consistent with what Blockbook itself displays.
+// raiseToPendingFloor advances the backend's pending nonce across the CONTIGUOUS run of in-flight
+// nonces that starts at it, and reports whether one sits above that run. In flight means either
+// cached here or declared by the caller (see server.WsPrivatePending): both are transactions that
+// hold a nonce slot, so both belong in the same walk, and a wallet that declares a send this
+// instance never cached gets the same answer as one whose send it did.
 //
-// The trade this accepts: an under-reporting backend now lowers the answer where max(cached)+1 rode
-// over it. That input is indistinguishable from a real hole, and costs one collision that resolves in
-// a block against a wallet stranded for the whole cache retention.
-func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, pending uint64) (uint64, bool) {
+// Blockbook exposes the cached txs as pending, so answering below the run would hand a wallet the
+// nonce of one that is in flight. Answering above a hole is the opposite failure and the one #1675
+// describes: N+1 can be in flight while nothing fills N - an accepted send that never reached the
+// cache, or a reorg re-exposing the slot - and a wallet given N+2 there queues every later send
+// behind a nonce that may never be consumed, which is all a blind max+1 floor could answer. The walk
+// yields pending <= floor <= pending+len(nonces), always consistent with what Blockbook displays.
+//
+// The trade this accepts: an under-reporting backend now lowers the answer where max+1 rode over it.
+// That input is indistinguishable from a real hole, and costs one collision that resolves in a block
+// against a wallet stranded for the whole cache retention.
+func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, pending uint64, declared []uint64) (uint64, bool) {
 	nonces := p.cachedNoncesFor(addr)
+	for _, nonce := range declared {
+		nonces[nonce] = struct{}{}
+	}
 	floor := pending
 	for {
 		if _, cached := nonces[floor]; !cached {

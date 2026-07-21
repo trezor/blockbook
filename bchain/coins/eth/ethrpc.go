@@ -2496,29 +2496,40 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // lookup fails, the pending nonce is still returned with confirmedOK=false so the caller
 // can omit it rather than failing the whole request. When confirmedOK is false the returned
 // confirmed value is 0 and must be ignored.
-func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
+func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (uint64, uint64, bool, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
+	// The caller may declare the account nonces of its own in-flight private transactions (see
+	// server.WsPrivatePending). They join the cached ones in the floor below; their presence alone
+	// is what routes the lookup, so no separate declared floor is computed.
+	declared := len(privatePendingNonces) > 0
 
-	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
-		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
-		if err == nil {
-			b.observeAlternativeNonceRequest("success")
-			// Even the provider's own answer can fall below Blockbook's advertised pending view.
-			// The relay counts a pending tx over the whole pending window, so this floor is a
-			// safety net for a lagging or misbehaving relay node rather than the routine case it
-			// was before that alignment; a sustained floor_raised{source=provider} rate means the
-			// relay's pending count regressed below its window again.
-			raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
-			if raised > pending {
-				b.observePendingFloorRaised("provider")
+	if b.alternativeSendTxProvider != nil {
+		// Route to the provider when the caller declared in-flight private txs - a wallet knows its
+		// own submitted nonces authoritatively, where the recentSenders heuristic is defeated by a
+		// restart or by a load-balanced replica that did not accept the send - or when that
+		// heuristic says this sender sent privately through this instance recently.
+		if declared || b.alternativeSendTxProvider.useForNonces(ethAddress) {
+			pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
+			if err == nil {
+				b.observeAlternativeNonceRequest("success")
+				// Even the provider's own answer can fall below Blockbook's advertised pending view.
+				// The relay counts a pending tx over the whole pending window, so this floor is a
+				// safety net for a lagging or misbehaving relay node rather than the routine case it
+				// was before that alignment; a sustained floor_raised{source=provider} rate means the
+				// relay's pending count regressed below its window again. A declared nonce is folded
+				// in as the same safety net, for a transaction the answering node never saw.
+				raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending, privatePendingNonces)
+				if raised > pending {
+					b.observePendingFloorRaised("provider")
+				}
+				if stranded {
+					b.observePendingFloorStranded("provider")
+				}
+				return raised, confirmed, confirmedOK, nil
 			}
-			if stranded {
-				b.observePendingFloorStranded("provider")
-			}
-			return raised, confirmed, confirmedOK, nil
+			b.observeAlternativeNonceRequest("error")
+			glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 		}
-		b.observeAlternativeNonceRequest("error")
-		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 	}
 
 	pending, confirmed, confirmedOK, err := b.getNoncesRPC(ethAddress, withConfirmed)
@@ -2533,7 +2544,9 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// primary answer below the floor would contradict the pending tx Blockbook still
 		// displays. The scan is over the private sends still pending for the whole window, and
 		// decodes nothing per entry (see storedTx.slot), so it stays cheap on this hot path.
-		raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+		// Declared nonces are folded in for the same reason. Without a provider there is no
+		// private mempool to contradict, so a declared nonce is deliberately a no-op.
+		raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending, privatePendingNonces)
 		if raised > pending {
 			b.observePendingFloorRaised("primary")
 		}
