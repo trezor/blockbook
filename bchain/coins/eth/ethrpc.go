@@ -2090,16 +2090,22 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 
-	// Route eth_estimateGas through the provider ONLY for a sender that recently sent a private tx
-	// through it (see useForNonces) and so may have pending state the primary RPC does not know about.
-	// Every other estimate - the bulk of them, since the wallet calls estimateFee on each send-form
-	// keystroke - goes straight to the primary and no longer burns the provider's quota (#1629).
+	// Route eth_estimateGas through the provider when the request declares in-flight private txs for
+	// the sender, or when useForNonces says it sent privately through this instance recently. Both
+	// mean the estimate must run against pending private state the primary RPC cannot see - a
+	// privately submitted approve that a following swap's gas depends on. The declared signal does
+	// not depend on this instance having accepted the send, so it covers the restart and
+	// load-balanced-replica gaps the heuristic leaves. Every other estimate - the bulk of them, since
+	// the wallet calls estimateFee on each send-form keystroke - goes straight to the primary and no
+	// longer burns the provider's quota (#1629); so does a missing `from`. Unlike a declared nonce,
+	// which is itself the answer, a declared estimate only picks the backend: Blockbook still simulates.
+	declaredPrivatePending := estimatePrivatePendingDeclared(params)
 	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
-		b.alternativeSendTxProvider.useForNonces(msg.From) {
+		(declaredPrivatePending || b.alternativeSendTxProvider.useForNonces(msg.From)) {
 		result, err := b.alternativeSendTxProvider.callHttpStringResult(
 			b.alternativeSendTxProvider.nonceURL(msg.From),
 			"eth_estimateGas",
-			params,
+			estimateParamsWithoutPrivatePending(params),
 		)
 		if err == nil {
 			// Count success only once the result decodes: a malformed hex quantity is a provider
@@ -2150,12 +2156,46 @@ func (b *EthereumRPC) remainingEstimateTimeout(started time.Time) time.Duration 
 
 // observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
 // send-tx provider, labeled success (provider answered) or error (fell back to the primary RPC). Only
-// recent private senders are routed here (see useForNonces), a gated subset of estimateFee traffic.
+// senders that declared private-pending state or sent privately recently (see useForNonces) are routed
+// here, a gated subset of estimateFee traffic.
 func (b *EthereumRPC) observeAlternativeEstimateGasRequest(result string) {
 	if b.metrics == nil || b.metrics.EthAlternativeEstimateGasRequests == nil {
 		return
 	}
 	b.metrics.EthAlternativeEstimateGasRequests.With(common.Labels{"result": result}).Inc()
+}
+
+// estimatePrivatePendingDeclared reports whether an estimateFee request declared in-flight private
+// transactions for the sender via privatePending.nonces in its specific params (see
+// server.WsPrivatePending). It is only a routing signal - unlike a nonce, the wallet cannot compute
+// gas itself, so Blockbook must still simulate the call; the declaration just says "estimate against
+// the relay's pending-private state". Only presence matters, not the values. params is a decoded
+// JSON object, so nested objects/arrays are map[string]interface{} / []interface{}.
+func estimatePrivatePendingDeclared(params map[string]interface{}) bool {
+	pp, ok := params["privatePending"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	nonces, ok := pp["nonces"].([]interface{})
+	return ok && len(nonces) > 0
+}
+
+// estimateParamsWithoutPrivatePending returns params with the privatePending key removed, so the
+// wallet's bookkeeping is not forwarded as part of the eth_estimateGas call object. It copies only
+// when the key is present, so the common (no-hint) path is zero-cost and never mutates the caller's
+// map.
+func estimateParamsWithoutPrivatePending(params map[string]interface{}) map[string]interface{} {
+	if _, ok := params["privatePending"]; !ok {
+		return params
+	}
+	out := make(map[string]interface{}, len(params))
+	for k, v := range params {
+		if k == "privatePending" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // bigIntToFloat converts a wei amount to float64 for gauge export. float64 holds integers
