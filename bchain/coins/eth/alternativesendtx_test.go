@@ -1401,3 +1401,35 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsStaleFetchBack(t 
 		t.Fatal("newer replacement was evicted by a stale older-generation fetch-back")
 	}
 }
+
+// TestAlternativeSendTxProviderGetTransactionTimeoutCleansWrappedMempool verifies the read-path
+// staleness eviction routes through the removeTransactionFromMempool delegate (which clears the
+// wrapped Blockbook mempool's address index), not the cache-only RemoveTransaction. Before the fix
+// an expired private tx lingered in the wrapped mempool whenever the caller's own primary-RPC
+// lookup errored instead of returning null (finding #3).
+func TestAlternativeSendTxProviderGetTransactionTimeoutCleansWrappedMempool(t *testing.T) {
+	var removed string
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Minute,
+		mempoolTxs: map[string]storedTx{
+			testAlternativeTxID: {
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x1"},
+				time: uint32(time.Now().Add(-2 * time.Minute).Unix()), // already past mempoolTxsTimeout
+			},
+		},
+		metrics: newReconcileTestMetrics(),
+	}
+	// stands in for EthereumRPC.removeTransactionFromMempool, which clears b.Mempool too
+	provider.removeTransactionFromMempool = func(txid string) { removed = txid; provider.RemoveTransaction(txid) }
+
+	if _, found := provider.GetTransaction(testAlternativeTxID); found {
+		t.Fatal("expired tx returned as found")
+	}
+	if removed != testAlternativeTxID {
+		t.Fatalf("removeTransactionFromMempool delegate not invoked on read-path timeout; removed=%q, want %q", removed, testAlternativeTxID)
+	}
+	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+		t.Fatal("expired tx remained in provider cache")
+	}
+}

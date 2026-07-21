@@ -427,11 +427,13 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 	if found {
 		if time.Unix(int64(storedTx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
 			// the same staleness timeout the reconcile loop applies, just reached on the read path
-			// first; record it so the timeout counter and residence histogram do not undercount
-			// entries read after expiry but before the next reconcile cycle evicts them - but only
-			// if this read is the one that removed the entry, so a concurrent reconcile eviction of
-			// the same expired tx does not also count it.
-			if p.RemoveTransaction(txid) {
+			// first; route it through removeMempoolTx (not RemoveTransaction) so the wrapped
+			// Blockbook mempool's per-address index is cleared too - otherwise, when the caller's
+			// own primary-RPC lookup errors instead of returning null, the expired private tx keeps
+			// being listed as pending for the address until the 10-minute mempool sweep. Record the
+			// exit only if this read is the one that removed the entry, so a concurrent reconcile
+			// eviction of the same expired tx does not also count it.
+			if p.removeMempoolTx(txid) {
 				p.observeMempoolReconciliation("timeout")
 				p.observeMempoolTxResidence("timeout", storedTx.time)
 			}
