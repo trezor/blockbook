@@ -151,7 +151,7 @@ type WsTransactionSpecificReq struct {
 // WsEstimateFeeReq requests an estimation of transaction fees for a set of blocks or with specific parameters.
 type WsEstimateFeeReq struct {
 	Blocks   []int                  `json:"blocks,omitempty" ts_doc:"Block confirmations targets for which fees should be estimated."`
-	Specific map[string]interface{} `json:"specific,omitempty" ts_type:"{conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string;}" ts_doc:"Additional chain-specific parameters (e.g. for Ethereum)."`
+	Specific map[string]interface{} `json:"specific,omitempty" ts_type:"{conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string; privatePending?: {nonces?: number[]; txids?: string[]};}" ts_doc:"Additional chain-specific parameters (e.g. for Ethereum). privatePending (Ethereum-like) declares the sender's in-flight private transactions so the gas estimate is routed to the alternative send-tx provider; see WsPrivatePending and docs/evm-send.md."`
 }
 
 // WsEstimateFeeRes is returned in response to a fee estimation request.
