@@ -1287,3 +1287,41 @@ func TestAlternativeSendTxProviderRejectedSendSkipsMempoolFetch(t *testing.T) {
 		t.Fatalf("eth_getTransactionByHash calls = %d, want 0 (rejected send must not touch the mempool cache path)", got)
 	}
 }
+
+// TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval verifies the lifecycle metrics are
+// attributed to the single eviction that actually removed a cache entry. A second eviction of the
+// same txid (e.g. reconcile working off a stale snapshot after the read-path already evicted the
+// entry) must not record another event or residence sample under a different action.
+func TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval(t *testing.T) {
+	added := uint32(time.Now().Add(-3 * time.Minute).Unix())
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs: map[string]storedTx{
+			testAlternativeTxID: {
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x1"},
+				time: added,
+			},
+		},
+		metrics: newReconcileTestMetrics(),
+	}
+	provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+
+	// first eviction removes the entry and is metered
+	provider.evictMempoolTx("timeout", testAlternativeTxID, added)
+	// second eviction targets the already-gone entry under a different action and must be a no-op
+	provider.evictMempoolTx("mined", testAlternativeTxID, added)
+
+	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "timeout"); got != 1 {
+		t.Errorf("timeout events = %v, want 1", got)
+	}
+	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 0 {
+		t.Errorf("mined events = %v, want 0 (entry already removed, must not be re-counted)", got)
+	}
+	if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "timeout"); got != 1 {
+		t.Errorf("timeout residence samples = %d, want 1", got)
+	}
+	if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "mined"); got != 0 {
+		t.Errorf("mined residence samples = %d, want 0", got)
+	}
+}

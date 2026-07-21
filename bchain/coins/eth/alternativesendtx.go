@@ -363,9 +363,13 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 		return
 	}
 	glog.Infof("eth_sendRawTransaction replacing txid %s by %s", rbfTxid, keepTxid)
-	p.observeMempoolReconciliation("rbf_replaced")
-	p.observeMempoolTxResidence("rbf_replaced", rbfTime)
-	p.removeMempoolTx(rbfTxid)
+	// Meter the fee-replacement exit only if this call is the one that removed the predecessor;
+	// the acceptance-time and handleMempoolTransaction passes can both target it, as can a
+	// concurrent reconcile eviction, so gating on the removal avoids double-counting rbf_replaced.
+	if p.removeMempoolTx(rbfTxid) {
+		p.observeMempoolReconciliation("rbf_replaced")
+		p.observeMempoolTxResidence("rbf_replaced", rbfTime)
+	}
 }
 
 // GetTransaction gets a transaction from alternative mempool cache
@@ -383,12 +387,15 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 
 	if found {
 		if time.Unix(int64(storedTx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
-			p.RemoveTransaction(txid)
 			// the same staleness timeout the reconcile loop applies, just reached on the read path
 			// first; record it so the timeout counter and residence histogram do not undercount
-			// entries read after expiry but before the next reconcile cycle evicts them.
-			p.observeMempoolReconciliation("timeout")
-			p.observeMempoolTxResidence("timeout", storedTx.time)
+			// entries read after expiry but before the next reconcile cycle evicts them - but only
+			// if this read is the one that removed the entry, so a concurrent reconcile eviction of
+			// the same expired tx does not also count it.
+			if p.RemoveTransaction(txid) {
+				p.observeMempoolReconciliation("timeout")
+				p.observeMempoolTxResidence("timeout", storedTx.time)
+			}
 			return nil, false
 		}
 		return storedTx.tx, true
@@ -507,14 +514,19 @@ func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) 
 	p.metrics.EthAlternativeMempoolEvents.With(common.Labels{"action": action}).Inc()
 }
 
-// evictMempoolTx records a terminal reconcile decision and removes the cache entry. It counts the
-// decision and observes the entry's residence (how long it lived before this eviction reason fired),
-// so the eviction rate and the per-reason lifetime distribution stay consistent. Decisions that keep
-// an entry for a later cycle use observeMempoolReconciliation directly instead.
+// evictMempoolTx removes the cache entry and, only when this call actually removed it, records the
+// terminal reconcile decision: the event counter plus the entry's residence (how long it lived
+// before this eviction reason fired), so the eviction rate and the per-reason lifetime distribution
+// stay consistent. Gating on the removal is what keeps the count honest - reconcile works off a
+// snapshot taken cycle-start, so the read-path or a concurrent RBF eviction may already have removed
+// (and metered) the same entry; without the gate this call would double-count it under a second
+// action. Decisions that keep an entry for a later cycle use observeMempoolReconciliation directly.
 func (p *AlternativeSendTxProvider) evictMempoolTx(action, txid string, addedUnix uint32) {
+	if !p.removeMempoolTx(txid) {
+		return
+	}
 	p.observeMempoolReconciliation(action)
 	p.observeMempoolTxResidence(action, addedUnix)
-	p.removeMempoolTx(txid)
 }
 
 // observeMempoolTxResidence records the age of a cache entry (seconds since it was broadcast) at the
@@ -650,21 +662,30 @@ func (p *AlternativeSendTxProvider) getTransactionFromProviders(txid string) (*b
 	return nil, false, nil
 }
 
-func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) {
-	if p.removeTransactionFromMempool != nil {
+// removeMempoolTx evicts txid from the alternative-provider cache and, when a delegate is wired,
+// from the wrapped Blockbook mempool too. It returns whether the entry was actually present in the
+// provider cache. The provider-cache delete (RemoveTransaction) is the single point of truth for
+// that, so it runs first: concurrent reconcile / read-path / RBF evictions of the same txid then
+// see removed=false for all but the one that actually deleted it, letting callers meter the exit
+// exactly once. The delegate (which also clears the wrapped mempool's address index) is invoked
+// only on a real removal; it re-enters RemoveTransaction as a harmless no-op.
+func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) bool {
+	removed := p.RemoveTransaction(txid)
+	if removed && p.removeTransactionFromMempool != nil {
 		p.removeTransactionFromMempool(txid)
-		return
 	}
-	p.RemoveTransaction(txid)
+	return removed
 }
 
 // RemoveTransaction removes a transaction from alternative mempool cache. When the removed
 // transaction was the sender's last cached one, the sender's nonce-routing entry is released
 // as well (see releaseRecentSender) so address polling stops hitting the alternative provider
-// once nothing private remains pending.
-func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) {
+// once nothing private remains pending. It reports whether the entry was actually present, so
+// callers can attribute a lifecycle metric to the single goroutine that truly evicted it (see
+// evictMempoolTx / evictReplacedByNonce).
+func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) bool {
 	if !p.fetchMempoolTx {
-		return
+		return false
 	}
 
 	p.mempoolTxsMux.Lock()
@@ -687,6 +708,7 @@ func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) {
 	if senderSettled {
 		p.releaseRecentSender(sender, removedTx.gen)
 	}
+	return found
 }
 
 // UseOnlyAlternativeProvider returns true if only alternative providers should be used
