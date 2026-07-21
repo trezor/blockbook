@@ -484,7 +484,8 @@ span.btn-paging:hover {
     cursor: pointer;
 }
 
-.tx-io-toggle+.row+.tx-io-toggle {
+.tx-in > .tx-io-toggle,
+.tx-out > .tx-io-toggle {
     margin-bottom: 0;
     margin-top: 0.4rem;
 }
