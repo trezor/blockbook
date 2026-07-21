@@ -84,6 +84,7 @@ Special cases:
 - `mode=build` + `env=prod` + `coins=ALL` builds all configured coins with `BB_RUNNER_*` mappings on the `production-builder` runner
 - `mode=build` + `env=dev` fails if you explicitly request a coin whose `BB_RUNNER_*` is `production_builder`
 - `mode=deploy` is dev-only and fails fast if any selected coin is mapped to `production_builder`
+- a coin listed in the `BB_STAGING` repository variable is skipped where its `configs/coins/<coin>.json` is absent, so a work-in-progress coin's repo-wide `BB_*` variables don't fail builds/deploys on branches that lack its config yet
 
 ## Naming Matrix
 
