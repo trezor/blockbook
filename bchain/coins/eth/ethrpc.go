@@ -1986,6 +1986,9 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	// estimateFee endpoint does not burn the provider's rate-limit quota (#1629); a missing/empty
 	// `from` also takes the primary path. Unlike the nonce hint - which IS the answer and short-
 	// circuits the lookup - a declared estimate only selects the backend; Blockbook still simulates.
+	// The hint is an unauthenticated, per-request client signal: it can route only the caller's own
+	// request to the relay and never touches shared state, so it does not re-open the #1629 hot-path
+	// quota drain (accepted trust boundary, see docs/evm-send.md).
 	declaredPrivatePending := estimatePrivatePendingDeclared(params)
 	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
 		(declaredPrivatePending || b.alternativeSendTxProvider.useForNonces(msg.From)) {

@@ -3,6 +3,7 @@
 package eth
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -70,6 +71,54 @@ func TestEthereumTypeGetNonces_PrivatePendingHint_RaisesPrimaryFallback(t *testi
 	}
 }
 
+// TestEthereumTypeGetNonces_PrivatePendingHint_WithConfirmedNonce exercises the exact production
+// combination (api/worker.go passes WithConfirmedNonce together with PrivatePendingNonces...): the
+// declared floor must raise only the PENDING nonce and leave the confirmed (latest) nonce untouched.
+func TestEthereumTypeGetNonces_PrivatePendingHint_WithConfirmedNonce(t *testing.T) {
+	server := newNonceRPCServer(t, map[string]string{"pending": "0x9", "latest": "0x5"}, nil)
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4", "latest": "0x2"}}
+	// no recent senders → routed purely by the declared floor
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: newRecentSenderProvider(server)}
+
+	// declared nonce 42 → pending floor 43, above the provider's pending answer of 9
+	pending, confirmed, confirmedOK, err := b.EthereumTypeGetNonces(nonceTestAddr, true, 42)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 43 {
+		t.Errorf("pending = %d, want 43 (declared floor over the provider answer)", pending)
+	}
+	if confirmed != 5 || !confirmedOK {
+		t.Errorf("confirmed = (%d, ok=%v), want (5, true) — the floor must not touch the confirmed nonce", confirmed, confirmedOK)
+	}
+	if len(stub.queried) != 0 {
+		t.Errorf("primary RPC queried tags %v, want none once routed to the provider", stub.queried)
+	}
+}
+
+// TestEthereumTypeGetNonces_PrivatePendingHint_RoutesOnDeclaredZero confirms a declared nonce of 0
+// (a wallet's very first tx) still trips the routing guard (declaredFloor 1 > 0) and raises the
+// pending nonce to 1 — the boundary the routing tests above (nonce 42) do not exercise.
+func TestEthereumTypeGetNonces_PrivatePendingHint_RoutesOnDeclaredZero(t *testing.T) {
+	server := newNonceRPCServer(t, map[string]string{"pending": "0x0"}, nil)
+	stub := &nonceBatchStub{results: map[string]string{"pending": "0x0"}}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: newRecentSenderProvider(server)}
+
+	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pending != 1 {
+		t.Errorf("pending = %d, want 1 (declared nonce 0 → floor 1)", pending)
+	}
+	if got := server.callCount("pending"); got != 1 {
+		t.Errorf("alternative provider queried %d times, want 1 (declared 0 must still route)", got)
+	}
+	if len(stub.queried) != 0 {
+		t.Errorf("primary RPC queried tags %v, want none once routed to the provider", stub.queried)
+	}
+}
+
 // TestEthereumTypeGetNonces_PrivatePendingHint_IgnoredWithoutProvider confirms the hint is a
 // relay-deployment feature: with no alternative provider configured it is ignored and the primary
 // answer stands unchanged.
@@ -124,6 +173,11 @@ func TestDeclaredPendingFloor(t *testing.T) {
 		{[]uint64{0}, 1},
 		{[]uint64{5}, 6},
 		{[]uint64{5, 42, 7}, 43},
+		// n+1 wraps to 0 at MaxUint64; the entry is silently ignored (benign: the floor is only
+		// ever a max() operand, so a spurious 0 can never lower the reported nonce).
+		{[]uint64{math.MaxUint64}, 0},
+		// a physically-unreachable max value co-declared with a real nonce must not corrupt it.
+		{[]uint64{math.MaxUint64, 43}, 44},
 	}
 	for _, c := range cases {
 		if got := declaredPendingFloor(c.in); got != c.want {

@@ -684,7 +684,7 @@ export interface WsRes {
     data: any;
 }
 export interface WsPrivatePending {
-    /** Account nonces of the wallet's in-flight private transactions for this address. */
+    /** Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel); do not pad or default the array, as any entry raises the reported pending nonce to at least value+1. */
     nonces?: number[];
     /** Transaction hashes of the in-flight private transactions (reserved for future use). */
     txids?: string[];
@@ -821,7 +821,7 @@ export interface WsEstimateFeeReq {
     /** Block confirmations targets for which fees should be estimated. */
     blocks?: number[];
     /** Additional chain-specific parameters (e.g. for Ethereum). privatePending (Ethereum-like) declares the sender's in-flight private transactions so the gas estimate is routed to the alternative send-tx provider; see WsPrivatePending and docs/evm-send.md. */
-    specific?: {conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string; privatePending?: {nonces?: number[]; txids?: string[]};};
+    specific?: {conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string; privatePending?: WsPrivatePending;};
 }
 export interface Eip1559Fee {
     maxFeePerGas?: string;

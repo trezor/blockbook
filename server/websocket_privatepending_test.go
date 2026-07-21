@@ -95,3 +95,28 @@ func TestPrivatePendingJSONRoundTripsThroughWsReq(t *testing.T) {
 		t.Fatalf("privatePending = %+v, want nonces [5]", r.PrivatePending)
 	}
 }
+
+// TestEstimateFeePrivatePendingDecodesIntoSpecific confirms the estimate-side wire contract: a real
+// estimateFee envelope carrying specific.privatePending decodes so that r.Specific["privatePending"]
+// is the nested object EthereumTypeEstimateGas reads (nonces arriving as JSON float64). Unlike the
+// typed getAccountInfo field, the estimate path is an untyped map, so this is the only place the
+// nesting is pinned end-to-end.
+func TestEstimateFeePrivatePendingDecodesIntoSpecific(t *testing.T) {
+	var req WsReq
+	body := `{"id":"1","method":"estimateFee","params":{"blocks":[1],"specific":{"from":"0xabc","privatePending":{"nonces":[42],"txids":["0xdead"]}}}}`
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatalf("outer unmarshal error = %v", err)
+	}
+	var r WsEstimateFeeReq
+	if err := json.Unmarshal(req.Params, &r); err != nil {
+		t.Fatalf("params unmarshal error = %v", err)
+	}
+	pp, ok := r.Specific["privatePending"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("specific.privatePending = %#v, want a nested object", r.Specific["privatePending"])
+	}
+	nonces, ok := pp["nonces"].([]interface{})
+	if !ok || len(nonces) != 1 || nonces[0].(float64) != 42 {
+		t.Fatalf("specific.privatePending.nonces = %#v, want [42]", pp["nonces"])
+	}
+}
