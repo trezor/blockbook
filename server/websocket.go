@@ -992,13 +992,22 @@ func privatePendingNonces(p *WsPrivatePending) []uint64 {
 	if p == nil || len(p.Nonces) == 0 {
 		return nil
 	}
-	n := p.Nonces
-	if len(n) > maxPrivatePendingNonces {
-		n = n[:maxPrivatePendingNonces]
+	if len(p.Nonces) <= maxPrivatePendingNonces {
+		out := make([]uint64, len(p.Nonces))
+		copy(out, p.Nonces)
+		return out
 	}
-	out := make([]uint64, len(n))
-	copy(out, n)
-	return out
+	// More declared nonces than we carry downstream — a malformed or hostile request, since a
+	// real wallet has only a handful of sequential in-flight nonces. Only the highest matters
+	// for the pending floor, so collapse to it rather than positionally truncating (which would
+	// drop the true maximum for an unsorted array and under-compute the floor).
+	var highest uint64
+	for _, n := range p.Nonces {
+		if n > highest {
+			highest = n
+		}
+	}
+	return []uint64{highest}
 }
 
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {

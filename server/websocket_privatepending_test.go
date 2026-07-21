@@ -63,9 +63,20 @@ func TestPrivatePendingNonces(t *testing.T) {
 		t.Error("returned slice aliases the request's backing array")
 	}
 
+	// exactly at the cap: kept in full, no truncation
+	atCap := make([]uint64, maxPrivatePendingNonces)
+	if got := privatePendingNonces(&WsPrivatePending{Nonces: atCap}); len(got) != maxPrivatePendingNonces {
+		t.Errorf("at-cap length = %d, want %d (no truncation at the boundary)", len(got), maxPrivatePendingNonces)
+	}
+	// over the cap: collapses to the single highest nonce, so the pending floor is still correct
+	// even when the maximum is not at a positional index the old first-N truncation would keep.
 	over := make([]uint64, maxPrivatePendingNonces+10)
-	if capped := privatePendingNonces(&WsPrivatePending{Nonces: over}); len(capped) != maxPrivatePendingNonces {
-		t.Errorf("capped length = %d, want %d", len(capped), maxPrivatePendingNonces)
+	for i := range over {
+		over[i] = uint64(i) // ascending: the true max sits at the last index, beyond the cap
+	}
+	overResult := privatePendingNonces(&WsPrivatePending{Nonces: over})
+	if len(overResult) != 1 || overResult[0] != uint64(len(over)-1) {
+		t.Errorf("over-cap result = %v, want [%d] (highest nonce preserved)", overResult, len(over)-1)
 	}
 }
 

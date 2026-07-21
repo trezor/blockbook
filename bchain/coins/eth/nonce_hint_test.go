@@ -87,9 +87,9 @@ func TestEthereumTypeGetNonces_PrivatePendingHint_IgnoredWithoutProvider(t *test
 }
 
 // TestEthereumTypeGetNonces_PrivatePendingHint_FoldsCacheAndDeclaredFloor confirms the reported
-// nonce is raised to the maximum of the cache floor and the declared floor. Here the declared floor
-// (from nonce 9 → 10) is lower than the cache floor (from cached nonce 0x7 → 8)? No — declared wins:
-// cached nonce 0x7 → floor 8, declared nonce 9 → floor 10, so the answer is 10.
+// nonce is the maximum of the provider answer, the cache floor, and the declared floor. Here:
+// provider answer 2, cache floor 8 (cached nonce 0x7 + 1), declared floor 10 (declared nonce 9 + 1)
+// → the declared floor wins at 10.
 func TestEthereumTypeGetNonces_PrivatePendingHint_FoldsCacheAndDeclaredFloor(t *testing.T) {
 	server := newNonceRPCServer(t, map[string]string{"pending": "0x2"}, nil)
 	stub := &nonceBatchStub{results: map[string]string{"pending": "0x1"}}
