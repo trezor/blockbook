@@ -398,6 +398,34 @@ func TestEthereumClassicRPCAndBackendHTTPPortStayAligned(t *testing.T) {
 	}
 }
 
+func TestValidateRPCEnvVarsToleratesStagingCoin(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t, stagingEnvVar)
+	// An RPC override for a coin whose config lives only on a feature branch.
+	t.Setenv(devRPCURLHTTPPrefix+"robinhood_archive", "http://backend.example:8030")
+
+	if err := validateRPCEnvVars(configsDir); err == nil {
+		t.Fatal("expected unknown coin alias to be rejected without BB_STAGING")
+	}
+
+	t.Setenv(stagingEnvVar, "robinhood_archive")
+	if err := validateRPCEnvVars(configsDir); err != nil {
+		t.Fatalf("BB_STAGING should tolerate the orphan RPC var, got %v", err)
+	}
+}
+
+func TestStagingAliasesParsesListAndVariants(t *testing.T) {
+	t.Setenv(stagingEnvVar, "robinhood_archive, foo-bar")
+
+	got := stagingAliases()
+	for _, want := range []string{"robinhood_archive", "robinhood-archive", "foo-bar", "foo_bar"} {
+		if _, ok := got[want]; !ok {
+			t.Errorf("stagingAliases() missing %q", want)
+		}
+	}
+}
+
 func withTemporarilyUnsetEnv(t *testing.T, keys ...string) {
 	t.Helper()
 

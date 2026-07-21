@@ -146,18 +146,38 @@ func generateRPCAuth(user, pass string) (string, error) {
 	return out.String(), nil
 }
 
+const stagingEnvVar = "BB_STAGING"
+
 func validateRPCEnvVars(configsDir string) error {
 	// Use coin aliases as the source of truth so env naming matches coin config and deployment conventions.
 	validAliases, err := loadCoinAliases(configsDir)
 	if err != nil {
 		return err
 	}
+	// Tolerate BB_STAGING work-in-progress coins whose config lives only on a feature branch.
+	for alias := range stagingAliases() {
+		validAliases[alias] = struct{}{}
+	}
 	unknown := collectUnknownRPCEnvVars(validAliases, rpcEnvPrefixes())
 	if len(unknown) == 0 {
 		return nil
 	}
 	sort.Strings(unknown)
-	return fmt.Errorf("RPC env vars reference unknown coin aliases: %s", strings.Join(unknown, ", "))
+	return fmt.Errorf("RPC env vars reference unknown coin aliases: %s (add work-in-progress coins to BB_STAGING)", strings.Join(unknown, ", "))
+}
+
+// stagingAliases parses BB_STAGING (comma/space separated work-in-progress coins)
+// into an alias set with '-'/'_' variants so their RPC vars validate on branches
+// that do not yet carry the coin config.
+func stagingAliases() map[string]struct{} {
+	aliases := map[string]struct{}{}
+	for _, field := range strings.Fields(strings.ReplaceAll(os.Getenv(stagingEnvVar), ",", " ")) {
+		name := strings.ToLower(field)
+		aliases[name] = struct{}{}
+		aliases[strings.ReplaceAll(name, "-", "_")] = struct{}{}
+		aliases[strings.ReplaceAll(name, "_", "-")] = struct{}{}
+	}
+	return aliases
 }
 
 type coinAliasHolder struct {

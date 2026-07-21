@@ -15,6 +15,9 @@ GITCOMMIT ?= $(shell git describe --always --dirty 2>/dev/null)
 # (BB_BUILD_ENV is forwarded separately via -e BB_BUILD_ENV=... on each docker run.)
 BB_VAR_PREFIX_FILE := build/bb-build-var-prefixes.txt
 BB_RPC_ENV := $(shell env | awk -F= 'NR==FNR{line=$$0;gsub(/[[:space:]]/,"",line);if(substr(line,1,3)=="BB_")pfx[line]=1;next}{for(p in pfx){if(index($$1,p)==1){print "-e " $$1;next}}}' $(BB_VAR_PREFIX_FILE) -)
+# BB_STAGING is a standalone control var (no coin-alias suffix, like BB_BUILD_ENV):
+# forward it too so its config-absent coin exemption applies inside the container.
+BB_RPC_ENV := $(BB_RPC_ENV)$(if $(BB_STAGING), -e BB_STAGING)
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 
