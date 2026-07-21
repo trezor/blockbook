@@ -63,9 +63,27 @@ func TestPrivatePendingNonces(t *testing.T) {
 		t.Error("returned slice aliases the request's backing array")
 	}
 
+	// exactly at the cap: kept in full, no truncation
+	atCap := make([]uint64, maxPrivatePendingNonces)
+	if got := privatePendingNonces(&WsPrivatePending{Nonces: atCap}); len(got) != maxPrivatePendingNonces {
+		t.Errorf("at-cap length = %d, want %d (no truncation at the boundary)", len(got), maxPrivatePendingNonces)
+	}
+	// Over the cap: keep the LOWEST nonces. The pending nonce advances from the backend's answer
+	// across a contiguous run, so only the slots just above that answer can be consumed; the high
+	// end would strand whatever it contained. Declared descending, so positional truncation would
+	// keep exactly the wrong end and the sort is what makes the result order-independent.
 	over := make([]uint64, maxPrivatePendingNonces+10)
-	if capped := privatePendingNonces(&WsPrivatePending{Nonces: over}); len(capped) != maxPrivatePendingNonces {
-		t.Errorf("capped length = %d, want %d", len(capped), maxPrivatePendingNonces)
+	for i := range over {
+		over[i] = uint64(len(over) - 1 - i)
+	}
+	overResult := privatePendingNonces(&WsPrivatePending{Nonces: over})
+	if len(overResult) != maxPrivatePendingNonces {
+		t.Fatalf("over-cap length = %d, want %d", len(overResult), maxPrivatePendingNonces)
+	}
+	for i, n := range overResult {
+		if n != uint64(i) {
+			t.Fatalf("over-cap result[%d] = %d, want %d (the lowest nonces, sorted ascending)", i, n, i)
+		}
 	}
 }
 
