@@ -1954,8 +1954,6 @@ func GetStringFromMap(p string, params map[string]interface{}) (string, bool) {
 
 // EthereumTypeEstimateGas returns estimation of gas consumption for given transaction parameters
 func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
 	msg := ethereum.CallMsg{}
 	if s, ok := GetStringFromMap("from", params); ok && len(s) > 0 {
 		msg.From = ethcommon.HexToAddress(s)
@@ -2009,6 +2007,12 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		b.observeAlternativeEstimateGasRequest("error")
 		glog.Warningf("Alternative provider failed for eth_estimateGas: %v, falling back to primary RPC", err)
 	}
+	// Build the primary-RPC deadline here rather than at function entry: a slow or rate-limited
+	// alternative-provider round-trip above runs on its own independent context and can consume
+	// most of b.Timeout, so a context created at entry could already be expired by the time the
+	// fallback reaches the healthy primary backend (the exact #1629 slow-relay scenario).
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
 	return b.Client.EstimateGas(ctx, msg)
 }
 

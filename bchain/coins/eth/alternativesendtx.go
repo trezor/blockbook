@@ -121,22 +121,25 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		gen = p.registerSuccessfulSend(hex, acceptedURL)
 	}
 
-	if p.onlyAlternative && p.fetchMempoolTx {
-		if acceptedURL != "" {
-			// A successful relay acceptance of this (from, nonce) is positive, irreversible proof
-			// that any previously cached transaction with the same sender and nonce can no longer
-			// mine - it has been replaced or cancelled. Retire it now, from the raw hex, WITHOUT
-			// waiting for the relay to surface THIS transaction via eth_getTransactionByHash.
-			// Blink drop-mode cancels are never surfaced at all, and an accepted-but-unsurfaced
-			// RBF replacement never reached handleMempoolTransaction's own removal, so both cases
-			// previously left the predecessor showing "Unconfirmed" until the cache timeout (#1573).
-			// This is distinct from an empty getTransactionByHash probe, which is NOT authoritative
-			// (see reconcileMempoolTxs) - here the ACK of a same-nonce replacement is the fact.
-			if from, nonce, err := alternativeTxSenderAndNonce(hex); err != nil {
-				glog.Warningf("cannot decode sender/nonce of accepted transaction for RBF eviction: %v", err)
-			} else {
-				p.evictReplacedByNonce(from, nonce, txid)
-			}
+	// Gated on acceptedURL: with no relay acceptance txid is empty, so there is nothing to cache
+	// and nothing to reconcile. Running the cache path anyway made handleMempoolTransaction fan
+	// out eth_getTransactionByHash(0x0..0) to every provider and log a spurious "did not find
+	// txid" error on every rejected (underpriced / nonce-too-low) send, burning the very quota
+	// the #1629 gating protects.
+	if p.onlyAlternative && p.fetchMempoolTx && acceptedURL != "" {
+		// A successful relay acceptance of this (from, nonce) is positive, irreversible proof
+		// that any previously cached transaction with the same sender and nonce can no longer
+		// mine - it has been replaced or cancelled. Retire it now, from the raw hex, WITHOUT
+		// waiting for the relay to surface THIS transaction via eth_getTransactionByHash.
+		// Blink drop-mode cancels are never surfaced at all, and an accepted-but-unsurfaced
+		// RBF replacement never reached handleMempoolTransaction's own removal, so both cases
+		// previously left the predecessor showing "Unconfirmed" until the cache timeout (#1573).
+		// This is distinct from an empty getTransactionByHash probe, which is NOT authoritative
+		// (see reconcileMempoolTxs) - here the ACK of a same-nonce replacement is the fact.
+		if from, nonce, err := alternativeTxSenderAndNonce(hex); err != nil {
+			glog.Warningf("cannot decode sender/nonce of accepted transaction for RBF eviction: %v", err)
+		} else {
+			p.evictReplacedByNonce(from, nonce, txid)
 		}
 		p.handleMempoolTransaction(txid, gen)
 	}

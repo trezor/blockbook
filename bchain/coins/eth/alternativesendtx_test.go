@@ -1262,3 +1262,28 @@ func TestAlternativeSendTxProviderAcceptedSendKeepsDifferentNonce(t *testing.T) 
 		t.Fatal("different-nonce transaction was evicted, want kept")
 	}
 }
+
+// TestAlternativeSendTxProviderRejectedSendSkipsMempoolFetch verifies that when every relay rejects
+// the broadcast (no acceptedURL, empty txid) the provider does not run the mempool-cache path:
+// no eth_getTransactionByHash fan-out for the zero hash and no spurious error log (#1629 follow-up).
+func TestAlternativeSendTxProviderRejectedSendSkipsMempoolFetch(t *testing.T) {
+	rawTx, _ := signedTestTx(t)
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction": `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"nonce too low"}}`,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+	}
+
+	if _, err := provider.SendRawTransaction(rawTx); err == nil {
+		t.Fatal("SendRawTransaction() error = nil, want rejection error")
+	}
+	if got := server.callCount("eth_getTransactionByHash"); got != 0 {
+		t.Fatalf("eth_getTransactionByHash calls = %d, want 0 (rejected send must not touch the mempool cache path)", got)
+	}
+}
