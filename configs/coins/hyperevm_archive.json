@@ -1,0 +1,80 @@
+{
+    "coin": {
+        "name": "HyperEVM Archive",
+        "shortcut": "HYPE",
+        "network": "HYPE",
+        "label": "HyperEVM",
+        "alias": "hyperevm_archive"
+    },
+    "ports": {
+        "backend_rpc": 8214,
+        "backend_p2p": 38414,
+        "backend_http": 8314,
+        "blockbook_internal": 9214,
+        "blockbook_public": 9314
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendHttp}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-hyperevm-archive",
+        "package_revision": "satoshilabs-1",
+        "system_user": "hyperevm",
+        "version": "20260613",
+        "binary_url": "https://github.com/hl-archive-node/nanoreth/releases/download/nb-20260613/nanoreth-x86_64-unknown-linux-gnu.tar.gz",
+        "verification_type": "sha256",
+        "verification_source": "117ccf5a82fff8e28e7be82134cb81d02b85243fbc0cbc6e2af7e5430f4012d0",
+        "extract_command": "tar -C backend -xf",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/hyperevm_archive_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_script": "hyperevm_archive.sh",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-hyperevm-archive",
+        "system_user": "blockbook-hyperevm",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "-workers=16 -resyncindexdebounce=509",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 1000,
+            "additional_params": {
+                "averageBlockTimeMs": 1000,
+                "missingBlockRetry": {
+                    "retryDelayMs": 1000,
+                    "recheckThreshold": 10,
+                    "tipRecheckThreshold": 3,
+                    "maxStallMs": 60000
+                },
+                "address_aliases": true,
+                "eip1559Fees": true,
+                "mempoolTxTimeoutHours": 12,
+                "processInternalTransactions": true,
+                "trace_timeout": "10s",
+                "queryBackendOnMempoolResync": false,
+                "disableMempoolSync": true,
+                "fiat_rates": "coingecko",
+                "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+                "fiat_rates_params": "{\"coin\": \"hyperliquid\",\"platformIdentifier\": \"hyperevm\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}",
+                "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

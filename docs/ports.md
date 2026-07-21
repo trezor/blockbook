@@ -63,6 +63,7 @@
 | Base Archive                     | 9311             | 9211               | 8211        | 38411 p2p, 8311 http, 8411 authrpc                  |
 | Tron                             | 9312             | 9212               | 8545        | 1111 p2p, 5555                                      |
 | Robinhood Archive                | 9313             | 9213               | 8213        | 38413 p2p, 8313 http                                |
+| HyperEVM Archive                 | 9314             | 9214               | 8214        | 38414 p2p, 8314 http                                |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                               |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                               |
 | Bitcoin Testnet4                 | 19129            | 19029              | 18029       | 48329                                               |
