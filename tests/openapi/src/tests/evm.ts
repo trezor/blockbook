@@ -293,6 +293,17 @@ async function testGetTransactionFeeConsistencyEVM(ctx: TestContext) {
   if (!isObject(eth)) {
     throw new SkipTest(`GetTransactionFeeConsistencyEVM: ${txid} has no ethereumSpecific`);
   }
+  // gasUsed and l1Fee are exposed as JSON numbers. gasUsed is always well within range,
+  // but l1Fee (wei) can exceed JS safe-integer precision during L1 fee spikes; re-deriving
+  // the fee from a rounded number would diverge from the server's exact big-int result and
+  // flake. Skip such a tx (deterministic: correct code passes every tx we can represent
+  // exactly, so this never turns a good server red — it only declines to check).
+  if (typeof eth.gasUsed === "number" && !Number.isSafeInteger(eth.gasUsed)) {
+    throw new SkipTest(`GetTransactionFeeConsistencyEVM: ${txid} gasUsed=${eth.gasUsed} exceeds safe-integer precision`);
+  }
+  if (typeof eth.l1Fee === "number" && !Number.isSafeInteger(eth.l1Fee)) {
+    throw new SkipTest(`GetTransactionFeeConsistencyEVM: ${txid} l1Fee=${eth.l1Fee} exceeds safe-integer precision`);
+  }
   const gasUsed = optionalBigInt(eth.gasUsed, "GetTransactionFeeConsistencyEVM.gasUsed");
   const fees = optionalBigInt(tx.fees, "GetTransactionFeeConsistencyEVM.fees");
   // The fee is only defined for mined transactions (gasUsed known); skip pending or
