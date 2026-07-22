@@ -125,6 +125,12 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	https := &http.Server{
 		Addr:    addr,
 		Handler: handler,
+		// Slowloris protection
+		ReadHeaderTimeout: httpReadHeaderTimeout,
+		ReadTimeout:       httpReadTimeout,
+		WriteTimeout:      httpWriteTimeout,
+		IdleTimeout:       httpIdleTimeout,
+		MaxHeaderBytes:    httpMaxHeaderBytes,
 	}
 
 	s := &PublicServer{

@@ -187,6 +187,9 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		activeChannels:              make(map[*websocketChannel]struct{}),
 	}
 	s.upgrader = &websocket.Upgrader{
+		// Bound the handshake so a client that stalls mid-upgrade cannot pin the
+		// connection
+		HandshakeTimeout:  httpReadHeaderTimeout,
 		ReadBufferSize:    1024 * 32,
 		WriteBufferSize:   1024 * 32,
 		WriteBufferPool:   &sync.Pool{},
@@ -354,6 +357,11 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	// Upgrade inherits the HTTP server's read/write deadlines, which would break
+	// long-lived WebSocket streams.
+	// Clear them; outputLoop sets its own write deadlines.
+	_ = conn.SetReadDeadline(time.Time{})
+	_ = conn.SetWriteDeadline(time.Time{})
 	conn.SetReadLimit(maxWebsocketMessageBytes)
 	// a nil channel disables the per-connection pending request cap
 	var pendingRequests chan struct{}

@@ -63,8 +63,13 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
 	https := &http.Server{
-		Addr:    addr,
-		Handler: serveMux,
+		Addr:              addr,
+		Handler:           serveMux,
+		ReadHeaderTimeout: httpReadHeaderTimeout,
+		ReadTimeout:       httpReadTimeout,
+		WriteTimeout:      httpWriteTimeout,
+		IdleTimeout:       httpIdleTimeout,
+		MaxHeaderBytes:    httpMaxHeaderBytes,
 	}
 	s := &InternalServer{
 		htmlTemplates: htmlTemplates[InternalTemplateData]{
