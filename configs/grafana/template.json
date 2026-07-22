@@ -6329,11 +6329,6 @@
           },
           {
             "selected": false,
-            "text": "Ethereum Testnet  Holesky Archive",
-            "value": "Ethereum Testnet  Holesky Archive"
-          },
-          {
-            "selected": false,
             "text": "Ethereum Testnet  Sepolia Archive",
             "value": "Ethereum Testnet  Sepolia Archive"
           },
@@ -6348,7 +6343,7 @@
             "value": "Avalanche Archive"
           }
         ],
-        "query": "Bitcoin,Ethereum Archive,Polygon Archive,BNB Smart Chain Archive,Arbitrum Archive,Base Archive,Optimism Archive,Litecoin,Namecoin,Vertcoin,Zcash,Bgold,Bcash,Dash,DigiByte,Dogecoin,Ethereum Classic,Testnet,Ethereum Testnet  Holesky Archive,Ethereum Testnet  Sepolia Archive,Tron,Avalanche Archive",
+        "query": "Bitcoin,Ethereum Archive,Polygon Archive,BNB Smart Chain Archive,Arbitrum Archive,Base Archive,Optimism Archive,Litecoin,Namecoin,Vertcoin,Zcash,Bgold,Bcash,Dash,DigiByte,Dogecoin,Ethereum Classic,Testnet,Ethereum Testnet  Sepolia Archive,Tron,Avalanche Archive",
         "skipUrlSync": false,
         "type": "custom"
       }
