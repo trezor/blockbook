@@ -312,6 +312,107 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 	}
 }
 
+// TestGetEthereumFeesSat verifies the transaction fee is computed from the
+// receipt's effectiveGasPrice on L2 networks (issue #1227), while falling back
+// to the transaction gasPrice for older/legacy transactions, and that a
+// separately reported L1 data fee is added on top.
+func TestGetEthereumFeesSat(t *testing.T) {
+	bi := func(v int64) *big.Int { return big.NewInt(v) }
+	tests := []struct {
+		name    string
+		txData  *bchain.EthereumTxData
+		wantFee string
+	}{
+		{
+			name:    "L2 uses effectiveGasPrice, not the gasPrice bid",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			wantFee: "210000", // 21000 * 10, NOT 21000 * 1200
+		},
+		{
+			name:    "OP-stack adds l1Fee on top of the L2 execution fee",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10), L1Fee: bi(5000)},
+			wantFee: "215000", // 21000 * 10 + 5000
+		},
+		{
+			name:    "legacy tx without effectiveGasPrice falls back to gasPrice",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200)},
+			wantFee: "25200000", // 21000 * 1200
+		},
+		{
+			name:    "legacy fallback still adds l1Fee on top",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), L1Fee: bi(5000)},
+			wantFee: "25205000", // 21000 * 1200 + 5000 (nil effectiveGasPrice, l1Fee present)
+		},
+		{
+			name:    "zero effectiveGasPrice falls back to gasPrice",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(0)},
+			wantFee: "25200000",
+		},
+		{
+			name:    "mempool tx without gasUsed has no fee",
+			txData:  &bchain.EthereumTxData{GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			wantFee: "0",
+		},
+		{
+			// pins that the gasUsed==nil guard returns before l1Fee is added
+			name:    "mempool tx with l1Fee but no gasUsed still has no fee",
+			txData:  &bchain.EthereumTxData{GasPrice: bi(1200), EffectiveGasPrice: bi(10), L1Fee: bi(5000)},
+			wantFee: "0",
+		},
+		{
+			name:    "no gas price at all does not panic and yields zero",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000)},
+			wantFee: "0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getEthereumFeesSat(tt.txData).String(); got != tt.wantFee {
+				t.Errorf("getEthereumFeesSat() = %s, want %s", got, tt.wantFee)
+			}
+		})
+	}
+}
+
+// TestAddEthereumFeesToBalanceHistory pins the balance-history fee accounting:
+// the sent amount must include the effectiveGasPrice-based execution fee plus any
+// L1 data fee. Before the fix this path used the bid gasPrice and omitted l1Fee.
+func TestAddEthereumFeesToBalanceHistory(t *testing.T) {
+	bi := func(v int64) *big.Int { return big.NewInt(v) }
+	tests := []struct {
+		name        string
+		txData      *bchain.EthereumTxData
+		initialSent int64
+		wantSent    string
+	}{
+		{
+			name:     "L2 execution fee plus l1Fee is added to sent",
+			txData:   &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10), L1Fee: bi(5000)},
+			wantSent: "215000", // 21000 * 10 + 5000
+		},
+		{
+			name:        "fee accumulates onto an existing sent amount",
+			txData:      &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			initialSent: 1000,
+			wantSent:    "211000", // 1000 + 21000 * 10
+		},
+		{
+			name:     "mempool tx contributes no fee",
+			txData:   &bchain.EthereumTxData{GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			wantSent: "0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bh := &BalanceHistory{SentSat: (*Amount)(big.NewInt(tt.initialSent))}
+			addEthereumFeesToBalanceHistory(tt.txData, bh)
+			if got := (*big.Int)(bh.SentSat).String(); got != tt.wantSent {
+				t.Errorf("SentSat = %s, want %s", got, tt.wantSent)
+			}
+		})
+	}
+}
+
 // BenchmarkTxInputResolution measures GetTransactionFromBchainTx as a function of
 // a transaction's input fan-in, using the plain Bitcoin-testnet parser. Each input's
 // previous output is resolved from the database, so this tracks how per-transaction

@@ -29,6 +29,7 @@ message ProtoCompleteTransaction {
     optional bytes L1FeeScalar = 5;
     optional bytes L1GasPrice = 6;
     optional bytes L1GasUsed = 7;
+    optional bytes EffectiveGasPrice = 8;
   }
   uint32 BlockNumber = 1;
   uint64 BlockTime = 2;

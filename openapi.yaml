@@ -1454,6 +1454,7 @@ components:
           gasLimit: 550941
           gasUsed: 434686
           gasPrice: "44035608242"
+          effectiveGasPrice: "44035608242"
           maxPriorityFeePerGas: "44035608243"
           maxFeePerGas: "44035608244"
           baseFeePerGas: "2035608244"
@@ -2025,6 +2026,8 @@ components:
           type: integer
           format: int64
         gasPrice:
+          $ref: "#/components/schemas/AmountString"
+        effectiveGasPrice:
           $ref: "#/components/schemas/AmountString"
         maxPriorityFeePerGas:
           $ref: "#/components/schemas/AmountString"

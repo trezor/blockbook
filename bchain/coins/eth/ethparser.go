@@ -424,6 +424,11 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 				return nil, errors.Annotatef(err, "L1GasUsed %v", r.Receipt.L1GasUsed)
 			}
 		}
+		if r.Receipt.EffectiveGasPrice != "" {
+			if pt.Receipt.EffectiveGasPrice, err = hexDecodeBig(r.Receipt.EffectiveGasPrice); err != nil {
+				return nil, errors.Annotatef(err, "EffectiveGasPrice %v", r.Receipt.EffectiveGasPrice)
+			}
+		}
 	}
 	if len(r.ChainExtraData) > 0 {
 		pt.ChainExtraData = r.ChainExtraData
@@ -495,6 +500,9 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		}
 		if len(pt.Receipt.L1GasUsed) > 0 {
 			rr.L1GasUsed = hexEncodeBig(pt.Receipt.L1GasUsed)
+		}
+		if len(pt.Receipt.EffectiveGasPrice) > 0 {
+			rr.EffectiveGasPrice = hexEncodeBig(pt.Receipt.EffectiveGasPrice)
 		}
 	}
 	// TODO handle internal transactions
@@ -611,6 +619,7 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *bchain.Eth
 				etd.Status = bchain.TxStatusFailure
 			}
 			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
+			etd.EffectiveGasPrice, _ = hexutil.DecodeBig(csd.Receipt.EffectiveGasPrice)
 			etd.L1Fee, _ = hexutil.DecodeBig(csd.Receipt.L1Fee)
 			etd.L1GasPrice, _ = hexutil.DecodeBig(csd.Receipt.L1GasPrice)
 			etd.L1GasUsed, _ = hexutil.DecodeBig(csd.Receipt.L1GasUsed)
