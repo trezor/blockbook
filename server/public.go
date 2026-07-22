@@ -125,7 +125,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	https := &http.Server{
 		Addr:    addr,
 		Handler: handler,
-		// Slowloris protection
+		// Bound how long a slow or idle connection may stay open (see timeouts.go)
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 		ReadTimeout:       httpReadTimeout,
 		WriteTimeout:      httpWriteTimeout,

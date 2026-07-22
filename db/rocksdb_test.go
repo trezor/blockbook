@@ -1992,12 +1992,12 @@ func TestRepairRocksDB_NonexistentPath(t *testing.T) {
 	}
 }
 
-// TestGetAddrDescTransactions_ScanBound verifies that a truncated address
-// descriptor (such as the 2-byte "76a9" produced by
-// bchain.AddressDescriptorFromString("ad:76a9")) cannot drive an unbounded
-// scan of the addresses column family. A short descriptor is a prefix of every
-// P2PKH key (76 a9 14 ... 88 ac); those keys have the wrong length and are
-// skipped, but without a bound the iterator still visits all of them.
+// TestGetAddrDescTransactions_ScanBound verifies the fix for a bug where a
+// truncated address descriptor (such as the 2-byte "76a9" produced by
+// bchain.AddressDescriptorFromString("ad:76a9")) caused an unbounded scan of
+// the addresses column family. A short descriptor is a prefix of every P2PKH
+// key (76 a9 14 ... 88 ac); those keys have the wrong length and are skipped,
+// but without a bound the iterator still visits all of them.
 func TestGetAddrDescTransactions_ScanBound(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),
@@ -2051,7 +2051,7 @@ func TestGetAddrDescTransactions_ScanBound(t *testing.T) {
 	fill(10)
 	require.Equal(t, 1, countMatches(), "matching key must be reachable below the scan bound")
 
-	// Attack shape: with more foreign keys than the bound, the scan aborts before
+	// Bug shape: with more foreign keys than the bound, the scan aborts before
 	// reaching the matching key. Without the bound it would visit every foreign key.
 	d2 := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),

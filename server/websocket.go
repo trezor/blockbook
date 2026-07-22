@@ -187,8 +187,8 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		activeChannels:              make(map[*websocketChannel]struct{}),
 	}
 	s.upgrader = &websocket.Upgrader{
-		// Bound the handshake so a client that stalls mid-upgrade cannot pin the
-		// connection
+		// Bound the handshake so a client that stalls mid-upgrade releases the
+		// connection instead of holding it open indefinitely
 		HandshakeTimeout:  httpReadHeaderTimeout,
 		ReadBufferSize:    1024 * 32,
 		WriteBufferSize:   1024 * 32,

@@ -1489,12 +1489,13 @@ func (w *Worker) getAddrDescAndNormalizeAddress(address string) (bchain.AddressD
 		}
 		// The descriptor is arbitrary user-supplied hex of any length. A short
 		// descriptor such as ad:76a9 is a prefix of a large slice of the
-		// addresses column family and would drive a full-partition scan in
-		// GetAddrDescTransactions. Reject descriptors that do not resolve to a
-		// real address; complete descriptors (standard scripts, multisig, and
-		// account-based addresses) always resolve to at least one. On
-		// account-based chains every hex string resolves to an address, so
-		// those rely on the scan bound in db.GetAddrDescTransactions instead.
+		// addresses column family and would otherwise make
+		// GetAddrDescTransactions scan a large part of it. Reject descriptors
+		// that do not resolve to a real address; complete descriptors (standard
+		// scripts, multisig, and account-based addresses) always resolve to at
+		// least one. On account-based chains every hex string resolves to an
+		// address, so those rely on the scan bound in
+		// db.GetAddrDescTransactions instead.
 		if addrs, _, e := w.chainParser.GetAddressesFromAddrDesc(ad); e != nil || len(addrs) == 0 {
 			return nil, "", NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
 		}

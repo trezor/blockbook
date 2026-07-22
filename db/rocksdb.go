@@ -592,7 +592,8 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 			// keys of other lengths belong to different (longer) descriptors
 			// that merely share addrDesc as a prefix; a complete descriptor
 			// never hits this path. Abort if too many are skipped so a
-			// truncated descriptor cannot drive an unbounded partition scan.
+			// truncated descriptor does not turn into a long scan over
+			// unrelated keys.
 			nonMatching++
 			if nonMatching > maxAddrDescScanNonMatching {
 				glog.Warningf("rocksdb: addrDesc %s - aborting scan after %d non-matching keys, likely a partial address descriptor", hex.EncodeToString(addrDesc), nonMatching)
