@@ -39,8 +39,6 @@ const (
 	MainNet Network = 1
 	// TestNetSepolia is Sepolia test network
 	TestNetSepolia Network = 11155111
-	// TestNetHolesky is Holesky test network
-	TestNetHolesky Network = 17000
 	// TestNetHoodi is Hoodi test network
 	TestNetHoodi Network = 560048
 )
@@ -555,9 +553,6 @@ func (b *EthereumRPC) Initialize() error {
 	case TestNetSepolia:
 		b.Testnet = true
 		b.Network = "sepolia"
-	case TestNetHolesky:
-		b.Testnet = true
-		b.Network = "holesky"
 	case TestNetHoodi:
 		b.Testnet = true
 		b.Network = "hoodi"
@@ -2151,7 +2146,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			priorityFee /= rows
 		}
 		// A zero tip is a deliberate, accepted outcome on idle chains: when eth_feeHistory reports empty or
-		// all-zero reward percentiles (quiet testnets such as Sepolia/Holesky, or a backend that omits
+		// all-zero reward percentiles (quiet testnets such as Sepolia, or a backend that omits
 		// rewards) there is no priority competition to price, so maxPriorityFeePerGas is 0. maxFeePerGas
 		// still covers eip1559BaseFeeMultiplier*baseFee below, so the tx stays mineable.
 		tip := big.NewInt(priorityFee)

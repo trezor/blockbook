@@ -82,8 +82,6 @@
 | Koto Testnet                     | 19151            | 19051              | 18051       | 48351                                               |
 | Decred Testnet                   | 19161            | 19061              | 18061       | 48361                                               |
 | Flo Testnet                      | 19166            | 19066              | 18066       | 48366                                               |
-| Ethereum Testnet Holesky         | 19116            | 19016              | 18016       | 18116 http, 18516 authrpc, 48316 p2p                |
-| Ethereum Testnet Holesky Archive | 19136            | 19036              | 18036       | 18136 http, 18136 torrent, 18536 authrpc, 48336 p2p |
 | Ethereum Testnet Hoodi           | 19106            | 19006              | 18006       | 18106 http, 18506 authrpc, 48306 p2p                |
 | Ethereum Testnet Hoodi Archive   | 19126            | 19026              | 18026       | 18126 http, 18126 torrent, 18526 authrpc, 48326 p2p |
 | Ethereum Testnet Sepolia         | 19176            | 19076              | 18076       | 18176 http, 18576 authrpc, 48376 p2p                |
