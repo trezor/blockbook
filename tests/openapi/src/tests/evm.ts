@@ -18,6 +18,7 @@ import {
   encodePathSegment,
   equalFold,
   isObject,
+  optionalBigInt,
   positiveNumber,
   txIDsFromTransactions,
 } from "../support.js";
@@ -276,6 +277,46 @@ async function testGetTransactionEVMShape(ctx: TestContext) {
   );
 }
 
+// testGetTransactionFeeConsistencyEVM samples a mined transaction and checks that the
+// API's reported fee is derived from the receipt's effectiveGasPrice (the price actually
+// paid on L2 rollups) rather than the transaction's bid gasPrice — the fix for #1227.
+// It re-derives the fee from the exposed components and compares it to `fees`, mirroring
+// api/worker.go getEthereumFeesSat exactly, so a regression back to the bid gasPrice (which
+// differs from effectiveGasPrice on L2s) or a dropped l1Fee is caught end-to-end.
+async function testGetTransactionFeeConsistencyEVM(ctx: TestContext) {
+  const txid = await ctx.sampleEVMTxIDOrSkip();
+  const tx = await ctx.client.getJson(
+    "/api/v2/tx/{txid}",
+    `/api/v2/tx/${encodePathSegment(txid)}`,
+  );
+  const eth = tx.ethereumSpecific;
+  if (!isObject(eth)) {
+    throw new SkipTest(`GetTransactionFeeConsistencyEVM: ${txid} has no ethereumSpecific`);
+  }
+  const gasUsed = optionalBigInt(eth.gasUsed, "GetTransactionFeeConsistencyEVM.gasUsed");
+  const fees = optionalBigInt(tx.fees, "GetTransactionFeeConsistencyEVM.fees");
+  // The fee is only defined for mined transactions (gasUsed known); skip pending or
+  // zero-gas system transactions (e.g. the OP-stack L1-attributes deposit tx).
+  if (gasUsed === undefined || gasUsed === 0n || fees === undefined) {
+    throw new SkipTest(`GetTransactionFeeConsistencyEVM: ${txid} has no mined fee to verify`);
+  }
+  // Prefer the receipt effectiveGasPrice when present and positive, else the bid gasPrice,
+  // then add any separately reported L1 data fee (OP stack). Mirrors getEthereumFeesSat.
+  const effectiveGasPrice = optionalBigInt(eth.effectiveGasPrice, "GetTransactionFeeConsistencyEVM.effectiveGasPrice");
+  const gasPrice = optionalBigInt(eth.gasPrice, "GetTransactionFeeConsistencyEVM.gasPrice");
+  const perGas = effectiveGasPrice !== undefined && effectiveGasPrice > 0n ? effectiveGasPrice : (gasPrice ?? 0n);
+  const l1Fee = optionalBigInt(eth.l1Fee, "GetTransactionFeeConsistencyEVM.l1Fee") ?? 0n;
+  const expected = perGas * gasUsed + l1Fee;
+  if (fees !== expected) {
+    throw new Error(
+      `GetTransactionFeeConsistencyEVM: fee mismatch for ${txid}: api fees=${fees}, expected ` +
+        `(effectiveGasPrice||gasPrice)*gasUsed + l1Fee = ${expected} ` +
+        `[effectiveGasPrice=${eth.effectiveGasPrice ?? "none"}, gasPrice=${eth.gasPrice ?? "none"}, ` +
+        `gasUsed=${gasUsed}, l1Fee=${l1Fee}]`,
+    );
+  }
+}
+
 export async function assertErc4626FixturesInAccountInfo(
   ctx: TestContext,
   testName: string,
@@ -358,4 +399,5 @@ export const evmOnlyTests: Record<string, TestFunction> = {
   GetAddressTxsPaginationEVM: testGetAddressTxsPaginationEVM,
   GetAddressContractFilterEVM: testGetAddressContractFilterEVM,
   GetTransactionEVMShape: testGetTransactionEVMShape,
+  GetTransactionFeeConsistencyEVM: testGetTransactionFeeConsistencyEVM,
 };
