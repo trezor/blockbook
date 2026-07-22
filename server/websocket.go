@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"math/big"
 	"net/http"
 	"net/netip"
@@ -31,6 +32,7 @@ const outChannelSize = 500
 const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
+
 // defaultWsPendingRequestsLimit is the default per-connection cap on
 // concurrently executing requests; override with
 // <network>_WS_PENDING_REQUESTS_LIMIT (0 disables), see docs/env.md.
@@ -577,6 +579,24 @@ func (c *websocketChannel) finalize(res *WsRes) {
 	}
 }
 
+// readLimitedMessage is conn.ReadMessage with the decompressed payload bounded
+// to limit bytes.
+func readLimitedMessage(conn *websocket.Conn) (messageType int, p []byte, tooLarge bool, err error) {
+	messageType, r, err := conn.NextReader()
+	if err != nil {
+		return 0, nil, false, err
+	}
+	// +1 so an exactly-limit-sized payload passes but anything larger is caught.
+	p, err = io.ReadAll(io.LimitReader(r, maxWebsocketMessageBytes+1))
+	if err != nil {
+		return messageType, nil, false, err
+	}
+	if int64(len(p)) > maxWebsocketMessageBytes {
+		return messageType, nil, true, nil
+	}
+	return messageType, p, false, nil
+}
+
 func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -586,9 +606,14 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 		}
 	}()
 	for {
-		t, d, err := c.conn.ReadMessage()
+		t, d, tooLarge, err := readLimitedMessage(c.conn)
 		if err != nil {
 			s.closeChannel(c, "read_error")
+			return
+		}
+		if tooLarge {
+			glog.Warning("Websocket message from ", c.id, " (", c.ip, ") exceeds ", maxWebsocketMessageBytes, " bytes after decompression")
+			s.closeChannel(c, "message_too_large")
 			return
 		}
 		switch t {
