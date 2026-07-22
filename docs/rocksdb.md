@@ -53,6 +53,8 @@ Column families used only by **Ethereum type** coins:
 
   Blockbook is checking on startup these values and does not allow to run against wrong coin, data format version and in inconsistent state. The database must be recreated if the internal state does not match.
 
+  Recovery options differ by problem: `--repair` fixes physical SST/MANIFEST corruption (rebuilds the manifest from surviving SST files); `-fixutxo` recomputes the UTXO/balance index for Bitcoin-type coins; a database left in the _inconsistent_ dbState by an interrupted initial/bulk import cannot be recovered by `--repair` and must be re-imported (resynced from scratch) — `-forcerepair` only forces it back to an _open_ state at the risk of an incomplete index.
+
 - **height**
 
   Maps _block height_ to _block hash_ and additional data about block.

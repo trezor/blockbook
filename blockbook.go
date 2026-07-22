@@ -53,7 +53,8 @@ var (
 	rollbackHeight = flag.Int("rollback", -1, "rollback to the given height and quit")
 
 	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
-	repair      = flag.Bool("repair", false, "repair the database")
+	repair      = flag.Bool("repair", false, "repair physical RocksDB corruption and exit; does NOT recover an interrupted bulk import (use -fixutxo for UTXO index drift)")
+	forceRepair = flag.Bool("forcerepair", false, "with -repair, force a database left in inconsistent state (interrupted initial/bulk import) into open state; the index may be incomplete and a full resync is strongly advised")
 	fixUtxo     = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
@@ -169,7 +170,7 @@ func mainWithExitCode() int {
 	}
 
 	if *repair {
-		if err := db.RepairRocksDB(*dbPath); err != nil {
+		if err := db.RepairRocksDB(*dbPath, *forceRepair); err != nil {
 			glog.Errorf("RepairRocksDB %s: %v", *dbPath, err)
 			return exitCodeFatal
 		}
