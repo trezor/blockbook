@@ -1826,3 +1826,168 @@ func TestGetTxAddressesOutput(t *testing.T) {
 		})
 	}
 }
+
+func flushAllCFs(t *testing.T, d *RocksDB) {
+	fo := grocksdb.NewDefaultFlushOptions()
+	defer fo.Destroy()
+	if err := d.db.FlushCFs(d.cfh, fo); err != nil {
+		t.Fatalf("FlushCFs: %v", err)
+	}
+}
+
+// TestRepairRocksDB_HealthyClosed_KeepsDataAndUsable verifies that repairing a healthy,
+// gracefully closed multi-CF database preserves all populated column families and leaves
+// the database usable, with empty CFs dropped-and-recreated being harmless.
+func TestRepairRocksDB_HealthyClosed_KeepsDataAndUsable(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()})
+	path := d.path
+
+	bc, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// CRUCIAL: force per-CF SSTs so repair preserves populated CFs. Without this the tiny
+	// dataset stays in the WAL and RepairDb collapses everything to [default].
+	flushAllCFs(t, d)
+	// Open -> Closed, persisted.
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RepairRocksDB(path, false); err != nil {
+		t.Fatalf("RepairRocksDB: %v", err)
+	}
+
+	d2, err := NewRocksDB(path, 100000, -1, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, nil, false)
+	if err != nil {
+		t.Fatalf("NewRocksDB after repair: %v", err)
+	}
+	is, err := d2.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2.SetInternalState(is)
+	if is.DbState != common.DbStateClosed {
+		t.Fatalf("expected DbStateClosed, got %d", is.DbState)
+	}
+	verifyAfterBitcoinTypeBlock2(t, d2)
+
+	if err := d2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(path)
+}
+
+// TestRepairRocksDB_Inconsistent_Refuses verifies that repairing a database left in
+// inconsistent state (interrupted bulk import) does NOT falsely report success and does
+// not silently alter the persisted DbState.
+func TestRepairRocksDB_Inconsistent_Refuses(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()})
+	path := d.path
+
+	bc, err := d.InitBulkConnect() // -> DbStateInconsistent persisted
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), true); err != nil {
+		t.Fatal(err)
+	}
+	flushAllCFs(t, d)
+	// simulate crash: do NOT call bc.Close(); Close only stores state when Open, so
+	// Inconsistent stays persisted.
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = RepairRocksDB(path, false)
+	if err == nil {
+		t.Fatal("expected error repairing inconsistent DB, got nil")
+	}
+	if !strings.Contains(err.Error(), "re-imported") && !strings.Contains(err.Error(), "forcerepair") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	d2, err := NewRocksDB(path, 100000, -1, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, nil, false)
+	if err != nil {
+		t.Fatalf("NewRocksDB after repair: %v", err)
+	}
+	is, err := d2.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2.SetInternalState(is)
+	if is.DbState != common.DbStateInconsistent {
+		t.Fatalf("expected DbStateInconsistent preserved, got %d", is.DbState)
+	}
+
+	if err := d2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(path)
+}
+
+// TestRepairRocksDB_Inconsistent_ResetForcesOpen verifies that -forcerepair flips an
+// inconsistent database to DbStateOpen (not Closed) and leaves it reopenable.
+func TestRepairRocksDB_Inconsistent_ResetForcesOpen(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()})
+	path := d.path
+
+	bc, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), true); err != nil {
+		t.Fatal(err)
+	}
+	flushAllCFs(t, d)
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RepairRocksDB(path, true); err != nil {
+		t.Fatalf("RepairRocksDB with reset: %v", err)
+	}
+
+	d2, err := NewRocksDB(path, 100000, -1, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, nil, false)
+	if err != nil {
+		t.Fatalf("NewRocksDB after repair: %v", err)
+	}
+	is, err := d2.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2.SetInternalState(is)
+	if is.DbState != common.DbStateOpen {
+		t.Fatalf("expected DbStateOpen after reset, got %d", is.DbState)
+	}
+
+	if err := d2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(path)
+}
+
+func TestMissingColumnFamilies(t *testing.T) {
+	got := missingColumnFamilies([]string{"default", "height", "addresses"}, []string{"default", "height"})
+	if len(got) != 1 || got[0] != "addresses" {
+		t.Fatalf("expected [addresses], got %v", got)
+	}
+	if got := missingColumnFamilies(nil, []string{"default"}); got != nil {
+		t.Fatalf("expected nil, got %v", got)
+	}
+}
+
+func TestRepairRocksDB_NonexistentPath(t *testing.T) {
+	if err := RepairRocksDB("/no/such/db", false); err == nil {
+		t.Fatal("expected error for nonexistent path, got nil")
+	}
+}

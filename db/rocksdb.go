@@ -32,11 +32,214 @@ const maxAddrDescLen = 1024
 // when doing huge scan, it is better to close it and reopen from time to time to free the resources
 const refreshIterator = 5000000
 
-// RepairRocksDB calls RocksDb db repair function
-func RepairRocksDB(name string) error {
-	glog.Infof("rocksdb: repair")
+// RepairRocksDB performs a PHYSICAL repair of a corrupted RocksDB database and exits.
+//
+// What it does and its limitations:
+//
+//   - It rebuilds the MANIFEST/CURRENT from the surviving SST files (grocksdb.RepairDb).
+//     RepairDb takes a SINGLE Options for the whole database and no per-column-family
+//     descriptors, so the physical-repair phase cannot reproduce the per-CF tuning of
+//     normal operation (in openDB the "addresses" CF is opened WITHOUT a bloom filter and
+//     every other CF WITH one). The reopen performed afterwards by
+//     checkAndResetStateAfterRepair DOES mirror the production per-CF options.
+//   - RepairDb DROPS any column family that has no live SST files. Empty column families
+//     (commonly fiatRates/blockFilter/transactions and several Ethereum CFs) are dropped
+//     and recreated empty on the next normal open — this is benign. A dropped CF that
+//     actually held data is unrecoverable; this function detects that case (via the
+//     tracked column stats in the internal state) and fails instead of certifying loss.
+//   - An interrupted initial/bulk import (DbStateInconsistent) is UNRECOVERABLE by repair:
+//     the index is incomplete because writes were never issued, and bulk flushes do not
+//     align to block boundaries (see db/bulkconnect.go), so there is no consistent height
+//     to resume from. Such a database must be re-imported (resynced from scratch). By
+//     default this function refuses it; pass resetInconsistent=true (blockbook -forcerepair)
+//     to force it into open state with loud warnings — the index may be incomplete.
+//
+// In short: --repair fixes physical SST/MANIFEST corruption (this function); -fixutxo
+// recomputes the UTXO/balance index for Bitcoin-type coins; an interrupted bulk import
+// (DbStateInconsistent) requires a full re-import/resync.
+//
+// The *RocksDB methods (LoadInternalState/storeState/SetInconsistentState) cannot be used
+// here because they need a fully constructed *RocksDB with a chainParser and the populated
+// package-global cfNames, neither of which exists during --repair (it runs before the chain
+// is loaded, so cfNames is empty). Column families are therefore discovered from the DB
+// itself via ListColumnFamilies, and the internal-state primitives are reused directly.
+func RepairRocksDB(name string, resetInconsistent bool) error {
+	glog.Infof("rocksdb: repair %s", name)
+	start := time.Now()
+
+	// Best-effort pre-list so we can detect dropped column families. A corrupt/lost
+	// MANIFEST is exactly what --repair must fix, so a failure here must not neuter the
+	// tool: disable drop-detection and continue. The DbState gate below remains the
+	// safety backstop.
+	beforeCFs, listErr := repairListColumnFamilies(name)
+	if listErr != nil {
+		glog.Warningf("rocksdb: cannot list column families before repair, drop-detection disabled: %v", listErr)
+		beforeCFs = nil
+	}
+
+	// Physical repair: rebuild MANIFEST from surviving SSTs.
+	c := grocksdb.NewLRUCache(64 << 20)
+	opts := createAndSetDBOptions(10, c, 1000)
+	err := grocksdb.RepairDb(name, opts)
+	opts.Destroy()
+	c.Destroy()
+	if err != nil {
+		return errors.Annotatef(err, "RepairDb %s", name)
+	}
+	glog.Infof("rocksdb: physical repair completed, took %v", time.Since(start))
+
+	// A repaired DB that cannot be listed genuinely failed.
+	afterCFs, err := repairListColumnFamilies(name)
+	if err != nil {
+		return errors.Annotatef(err, "listing column families after repair of %s", name)
+	}
+
+	dropped := missingColumnFamilies(beforeCFs, afterCFs)
+	return checkAndResetStateAfterRepair(name, afterCFs, dropped, resetInconsistent)
+}
+
+// checkAndResetStateAfterRepair reopens the repaired database with all discovered column
+// families (mirroring openDB's per-CF options), reads the internal state from the default
+// CF and acts on DbState honestly. See RepairRocksDB for the full contract.
+func checkAndResetStateAfterRepair(name string, cfNames, dropped []string, resetInconsistent bool) error {
+	// Per-CF options mirroring openDB: bloom filter everywhere except the addresses CF.
+	c := grocksdb.NewLRUCache(64 << 20)
+	defer c.Destroy()
+	opts := createAndSetDBOptions(10, c, 1000)
+	defer opts.Destroy()
+	optsAddresses := createAndSetDBOptions(0, c, 1000)
+	defer optsAddresses.Destroy()
+
+	cfOpts := make([]*grocksdb.Options, len(cfNames))
+	defaultIdx := -1
+	for i, n := range cfNames {
+		if n == cfBaseNames[cfAddresses] {
+			cfOpts[i] = optsAddresses
+		} else {
+			cfOpts[i] = opts
+		}
+		if n == cfBaseNames[cfDefault] {
+			defaultIdx = i
+		}
+	}
+	if defaultIdx < 0 {
+		return errors.Errorf("repaired database %s has no default column family", name)
+	}
+
+	db, cfh, err := grocksdb.OpenDbColumnFamilies(opts, name, cfNames, cfOpts)
+	if err != nil {
+		return errors.Annotatef(err, "cannot reopen repaired database %s", name)
+	}
+	// Destroy CF handles then close the DB (matching closeDB), before the Options/Cache
+	// they reference are Destroyed by the defers above (LIFO).
+	defer func() {
+		for _, h := range cfh {
+			h.Destroy()
+		}
+		db.Close()
+	}()
+
+	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
+	val, err := db.GetCF(ro, cfh[defaultIdx], []byte(internalStateKey))
+	if err != nil {
+		return errors.Annotatef(err, "cannot read internal state of %s after repair", name)
+	}
+	defer val.Free()
+
+	if val.Size() == 0 {
+		for _, cf := range dropped {
+			glog.Warningf("rocksdb: repair dropped empty column family %q (recreated on next open)", cf)
+		}
+		glog.Info("rocksdb: repair complete; no internal state stored (never-synced database)")
+		return nil
+	}
+
+	is, err := common.UnpackInternalState(val.Data())
+	if err != nil {
+		return errors.Annotatef(err, "cannot unpack internal state of %s after repair", name)
+	}
+
+	// Data-loss cross-check on dropped CFs. is.DbColumns row counts are a reliable POSITIVE
+	// signal only (Rows>0 => the CF definitely held data at last stats computation), but an
+	// unreliable negative (only cfTransactions is tracked during normal sync; full per-CF
+	// stats need a prior --computedbstats run). So this catches genuine physical loss of a
+	// populated CF when stats exist and warns otherwise; the interrupted-bulk-import gutting
+	// scenario is caught independently by the DbStateInconsistent gate below.
+	var lost []string
+	for _, cf := range dropped {
+		if rows, ok := columnRows(is, cf); ok && rows > 0 {
+			lost = append(lost, fmt.Sprintf("%s(%d rows)", cf, rows))
+		} else {
+			glog.Warningf("rocksdb: repair dropped empty/untracked column family %q (recreated on next open)", cf)
+		}
+	}
+	if len(lost) > 0 {
+		return errors.Errorf("repair dropped populated column families %v; this data cannot be recovered by --repair and the database must be re-imported/resynced", lost)
+	}
+
+	switch is.DbState {
+	case common.DbStateInconsistent:
+		if !resetInconsistent {
+			return errors.Errorf("database is in inconsistent state: an initial/bulk import was interrupted, the index is incomplete and cannot be recovered by --repair; the database must be re-imported (resynced from scratch). Re-run with -forcerepair to force it into open state (data may be incomplete; a full resync is strongly advised)")
+		}
+		glog.Warning("rocksdb: -forcerepair: forcing inconsistent database into open state; the index may be INCOMPLETE, a full resync is strongly advised")
+		// DbStateOpen, not DbStateClosed — matches SetInconsistentState(false) semantics;
+		// Closed would falsely claim a graceful shutdown.
+		is.DbState = common.DbStateOpen
+		buf, err := is.Pack()
+		if err != nil {
+			return errors.Annotatef(err, "cannot pack internal state")
+		}
+		wo := grocksdb.NewDefaultWriteOptions()
+		wo.SetSync(true) // durable flip in the WAL without relying on Close-time flush ordering
+		defer wo.Destroy()
+		if err := db.PutCF(wo, cfh[defaultIdx], []byte(internalStateKey), buf); err != nil {
+			return errors.Annotatef(err, "cannot store internal state after reset")
+		}
+		glog.Warning("rocksdb: DbStateInconsistent reset to DbStateOpen; blockbook will resume normal sync on next start")
+	case common.DbStateOpen:
+		glog.Info("rocksdb: repair complete; database was left in open state (previous ungraceful shutdown), normal sync will recover it")
+	case common.DbStateClosed:
+		glog.Info("rocksdb: repair complete; database is in closed (healthy) state")
+	default:
+		return errors.Errorf("repair: unexpected DbState=%d; refusing to mark database usable", is.DbState)
+	}
+	return nil
+}
+
+// repairListColumnFamilies lists the column families of the database at name, owning and
+// freeing its Options.
+func repairListColumnFamilies(name string) ([]string, error) {
 	opts := grocksdb.NewDefaultOptions()
-	return grocksdb.RepairDb(name, opts)
+	defer opts.Destroy()
+	return grocksdb.ListColumnFamilies(opts, name)
+}
+
+// missingColumnFamilies returns the column families present in before but not in after.
+func missingColumnFamilies(before, after []string) []string {
+	present := make(map[string]struct{}, len(after))
+	for _, n := range after {
+		present[n] = struct{}{}
+	}
+	var dropped []string
+	for _, n := range before { // nil-safe: empty before => no drops reported
+		if _, ok := present[n]; !ok {
+			dropped = append(dropped, n)
+		}
+	}
+	return dropped
+}
+
+// columnRows returns the tracked row count for the named column family and whether it was
+// found in the internal state's column stats.
+func columnRows(is *common.InternalState, name string) (int64, bool) {
+	for i := range is.DbColumns {
+		if is.DbColumns[i].Name == name {
+			return is.DbColumns[i].Rows, true
+		}
+	}
+	return 0, false
 }
 
 type connectBlockStats struct {
