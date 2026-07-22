@@ -306,7 +306,8 @@ type EthereumSpecific struct {
 	Nonce                uint64                                 `json:"nonce" ts_doc:"Transaction nonce (sequential number from the sender)."`
 	GasLimit             *big.Int                               `json:"gasLimit" ts_doc:"Maximum gas allowed by the sender for this transaction."`
 	GasUsed              *big.Int                               `json:"gasUsed,omitempty" ts_doc:"Actual gas consumed by the transaction execution."`
-	GasPrice             *Amount                                `json:"gasPrice,omitempty" ts_doc:"Price (in Wei or base units) per gas unit."`
+	GasPrice             *Amount                                `json:"gasPrice,omitempty" ts_doc:"Price (in Wei or base units) per gas unit bid by the sender."`
+	EffectiveGasPrice    *Amount                                `json:"effectiveGasPrice,omitempty" ts_doc:"Actual gas price paid per gas unit; on L2 networks this differs from gasPrice and is used for the fee."`
 	MaxPriorityFeePerGas *Amount                                `json:"maxPriorityFeePerGas,omitempty"`
 	MaxFeePerGas         *Amount                                `json:"maxFeePerGas,omitempty"`
 	BaseFeePerGas        *Amount                                `json:"baseFeePerGas,omitempty"`

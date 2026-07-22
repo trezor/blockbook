@@ -489,19 +489,14 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 		parsedInputData := w.getParsedEthereumInputData(ethTxData.Data)
 
-		// mempool txs do not have fees yet
-		if ethTxData.GasUsed != nil {
-			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
-			if ethTxData.L1Fee != nil {
-				feesSat.Add(&feesSat, ethTxData.L1Fee)
-			}
-		}
+		feesSat = *getEthereumFeesSat(ethTxData)
 		if len(bchainTx.Vout) > 0 {
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
 		ethSpecific = &EthereumSpecific{
 			GasLimit:             ethTxData.GasLimit,
 			GasPrice:             (*Amount)(ethTxData.GasPrice),
+			EffectiveGasPrice:    (*Amount)(ethTxData.EffectiveGasPrice),
 			MaxPriorityFeePerGas: (*Amount)(ethTxData.MaxPriorityFeePerGas),
 			MaxFeePerGas:         (*Amount)(ethTxData.MaxFeePerGas),
 			BaseFeePerGas:        (*Amount)(ethTxData.BaseFeePerGas),
@@ -1831,13 +1826,32 @@ func (w *Worker) processInternalTransactionsForBalanceHistory(addrDesc bchain.Ad
 	return nil
 }
 
-func addEthereumFeesToBalanceHistory(ethTxData *bchain.EthereumTxData, bh *BalanceHistory) {
-	var feesSat big.Int
-	// mempool txs do not have fees yet
-	if ethTxData.GasUsed != nil && ethTxData.GasPrice != nil {
-		feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
+// getEthereumFeesSat computes the transaction fee actually paid, in the smallest
+// unit of the chain. On L2 networks (Arbitrum, Optimism, Base, ...) the transaction
+// gasPrice is only the bid price, while the receipt's effectiveGasPrice is the price
+// actually charged, so it is preferred when available. Rollups that report a separate
+// L1 data fee (l1Fee, e.g. the OP stack) have it added on top. Mempool transactions
+// have no gasUsed yet and therefore no fee.
+func getEthereumFeesSat(ethTxData *bchain.EthereumTxData) *big.Int {
+	feesSat := new(big.Int)
+	if ethTxData.GasUsed == nil {
+		return feesSat
 	}
-	(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
+	gasPrice := ethTxData.GasPrice
+	if ethTxData.EffectiveGasPrice != nil && ethTxData.EffectiveGasPrice.Sign() > 0 {
+		gasPrice = ethTxData.EffectiveGasPrice
+	}
+	if gasPrice != nil {
+		feesSat.Mul(gasPrice, ethTxData.GasUsed)
+	}
+	if ethTxData.L1Fee != nil {
+		feesSat.Add(feesSat, ethTxData.L1Fee)
+	}
+	return feesSat
+}
+
+func addEthereumFeesToBalanceHistory(ethTxData *bchain.EthereumTxData, bh *BalanceHistory) {
+	(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), getEthereumFeesSat(ethTxData))
 }
 
 func (w *Worker) processPrimaryVoutForBalanceHistory(
