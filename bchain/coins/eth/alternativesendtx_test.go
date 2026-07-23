@@ -1364,6 +1364,37 @@ func TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration(t *test
 			t.Fatal("older predecessor was not evicted by a newer replacement")
 		}
 	})
+
+	t.Run("unknown keeper generation keeps a generation-carrying replacement", func(t *testing.T) {
+		// A keeper whose own send order is unknown (keepGen 0 - raw-hex sender recovery failed at
+		// send time, though the fetched tx still decodes) must NOT evict a cached replacement that
+		// carries a real generation. Evicting it dropped the newer tx that will actually mine and
+		// surfaced the stale one (#1573 follow-up / finding #2).
+		provider := &AlternativeSendTxProvider{
+			fetchMempoolTx: true,
+			mempoolTxs:     map[string]storedTx{testAlternativeTxID: entry(testAlternativeTxID, 2)},
+		}
+		provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+		provider.evictReplacedByNonce(sender, 1, "0xunordered", 0)
+		if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
+			t.Fatal("generation-carrying replacement was evicted by an unknown-generation keeper")
+		}
+	})
+
+	t.Run("unknown keeper generation still evicts an unordered predecessor", func(t *testing.T) {
+		// When neither side carries a generation (both 0) the order is genuinely unknown; the keeper
+		// is the just-accepted replacement, so retiring the equally-unordered predecessor keeps the
+		// #1573 acceptance-time eviction working (and the rbf_replaced metric balanced) for that path.
+		provider := &AlternativeSendTxProvider{
+			fetchMempoolTx: true,
+			mempoolTxs:     map[string]storedTx{testAlternativeSecondTxID: entry(testAlternativeSecondTxID, 0)},
+		}
+		provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+		provider.evictReplacedByNonce(sender, 1, testAlternativeTxID, 0)
+		if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
+			t.Fatal("unordered predecessor was not evicted by an unknown-generation keeper")
+		}
+	})
 }
 
 // TestAlternativeSendTxProviderHandleMempoolTransactionSkipsStaleFetchBack verifies that a slow

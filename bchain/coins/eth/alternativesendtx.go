@@ -375,8 +375,11 @@ func newerGen(a, b uint64) bool {
 // counted as rbf_replaced and its residence observed, consistent with every other way an entry
 // leaves (so the lifecycle metrics stay balanced). Matching is by decoded address and numeric
 // nonce rather than raw strings, so provider differences in hex casing or zero-padding cannot hide
-// a predecessor. A cached entry from a strictly newer send (newerGen) is left intact: when an older
-// submission's slow fetch-back races a newer replacement, the older one must not evict the newer.
+// a predecessor. A cached entry from a strictly higher send generation is left intact: when an older
+// submission's slow fetch-back races a newer replacement, the older one must not evict the newer. A
+// keepGen of 0 means this replacement's own send order is unknown (raw-hex sender recovery failed at
+// send time), so it evicts only other unordered (generation-0) entries and never a
+// generation-carrying replacement that may still mine.
 func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address, nonce uint64, keepTxid string, keepGen uint64) {
 	p.mempoolTxsMux.Lock()
 	var rbfTxid string
@@ -389,7 +392,11 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 		if !ok || cachedFrom != from || cachedNonce != nonce {
 			continue
 		}
-		if newerGen(storedTx.gen, keepGen) {
+		// Keep any cached entry from a higher send generation. For keepGen>0 this equals newerGen;
+		// for keepGen==0 (this replacement's order is unknown) it still protects every
+		// generation-carrying replacement while evicting only other unordered (gen==0) predecessors,
+		// so an unknown-order keeper can no longer drop the newer tx that will actually mine.
+		if storedTx.gen > keepGen {
 			continue
 		}
 		rbfTxid = txid
