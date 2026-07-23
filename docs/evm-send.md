@@ -82,6 +82,60 @@ Key invariants:
   pending tx is gone on its next account re-fetch (the initiating device also removes it
   optimistically). The cache timeout is the backstop for anything the deterministic evictions miss.
 
+## Wallet-declared `privatePending` hint (nonce + gas routing)
+
+A private relay exposes no mempool, so a transaction pending only there is invisible to the public
+backend RPC. Blockbook otherwise *infers* "this sender has a private tx in flight" from the
+`recentSenders` map (populated by `registerSuccessfulSend`), which is fragile across restarts and
+across load-balanced replicas without request affinity. A wallet already knows this state with
+certainty, so it may **declare** it on its read requests via an optional `privatePending` field.
+Blockbook then routes deterministically from that declaration instead of guessing.
+
+The field appears in two places, matching the two consumers of the routing machinery:
+
+- **`getAccountInfo` → top-level `privatePending: {nonces, txids}`** drives the pending-**nonce**
+  lookup. A declared nonce *is* the answer: Blockbook routes the `eth_getTransactionCount` to the
+  relay and reports at least `max(nonces) + 1`, so the wallet can never reuse the nonce of a private
+  tx it has in flight — even for a tx this instance never cached (accepted by another replica, or
+  lost to a restart). The declared floor only ever *raises* the reported nonce; it never lowers a
+  higher provider/primary answer. The nonce list is capped (see `maxPrivatePendingNonces`) and, past
+  the cap, collapsed to its single highest entry — only the maximum matters for the floor.
+- **`estimateFee` → `specific.privatePending`** is a **routing signal only**. Unlike a nonce, the
+  wallet cannot compute gas itself, so Blockbook still simulates the call — the declaration only says
+  "estimate against the relay's pending-private state" (e.g. a privately-submitted `approve` a
+  following swap's gas depends on). Presence of a non-empty `nonces` array is all that is read; the
+  field is stripped before the `eth_estimateGas` call object is forwarded to the relay. URL selection
+  is best-effort: the estimate goes to the provider that accepted this sender's most recent send
+  (`nonceURL`), or `urls[0]` when this instance never saw a send from the address (another replica
+  accepted it, or a restart cleared `recentSenders`). Unlike the nonce floor, gas has no
+  client-supplied value to fall back on, so a declared-but-unknown sender simulates against `urls[0]`
+  and may miss a private predecessor held only by a different relay node — an accepted limit of a
+  multi-URL relay without sender affinity, not compensable the way the nonce floor is.
+
+Only `nonces` drives behavior today; `txids` is accepted for forward compatibility (future
+pending-tx correlation) and is not yet consumed on any path.
+
+The hint is **additive and backward-compatible**: absent the field, behavior is exactly as before
+(the `recentSenders` heuristic remains the fallback, and is still consulted when no hint is
+declared), and an older Blockbook simply ignores the unknown field. With no alternative provider
+configured the hint is a no-op (there is no private mempool to reconcile against).
+
+Note the deliberate trade-off versus pre-#1629 behavior: `estimateFee` is no longer routed to the
+relay for *every* sender, so a wallet that sent privately, omitted the hint, and is served by a
+different replica than the one that accepted the send has its estimate simulated on the primary RPC
+without the private predecessor. Declaring `privatePending` closes that gap deterministically;
+widening routing for hint-less senders is intentionally avoided because it is indistinguishable from
+the #1629 hot-path drain.
+
+**Trust boundary (accepted).** `privatePending` is an *unauthenticated client hint* — Blockbook does
+not verify the caller owns the address or that a private tx actually exists. This is safe because the
+declaration is per-request only: it is never written into `recentSenders` or the pending-tx cache, so
+a hostile client can distort only its **own** request's answer and cannot poison another client's
+view or any shared state. Its one outward effect is forcing the read to route to the relay; that is
+bounded by the relay's own rate-limit quota and the per-connection pending-requests limit, and — by
+design — does **not** re-introduce the #1629 hot-path quota drain, because a normal wallet declares
+the field only when it genuinely has a private tx in flight (rare), not on every keystroke.
+
 ## Observability
 
 Prometheus counters for the cache lifecycle:

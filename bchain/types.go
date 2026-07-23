@@ -352,7 +352,7 @@ type BlockChain interface {
 	GetChainParser() BlockChainParser
 	// EthereumType specific
 	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
-	EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error)
+	EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (pending uint64, confirmed uint64, confirmedOK bool, err error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetEip1559Fees() (*Eip1559Fees, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)

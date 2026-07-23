@@ -1975,21 +1975,27 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 
-	// Route eth_estimateGas through the alternative provider ONLY for a sender that recently
-	// sent a private transaction through it (see useForNonces) - that sender may have a pending
-	// private tx the primary RPC does not know about, so estimating against the provider's state
-	// is what the provider path exists for. Every other estimate (the overwhelming majority - the
-	// wallet calls estimateFee on every send-form keystroke, see trezor-suite
-	// sendFormEthereumThunks) goes straight to the primary backend, so the hot estimateFee
-	// endpoint no longer burns the provider's rate-limit quota (#1629). A missing/empty `from`
-	// also takes the primary path: without a sender the gate cannot apply and the primary is
-	// authoritative for gas estimation anyway.
+	// Route eth_estimateGas through the alternative provider when the request declares in-flight
+	// private transactions for the sender (privatePending), or - failing that - when our own
+	// heuristic says the sender recently sent privately (see useForNonces). Both mean the same
+	// thing: the estimate must run against the relay's pending-private state the primary RPC cannot
+	// see (e.g. a privately-submitted approve that a following swap's gas depends on). The declared
+	// signal is authoritative and does not depend on this instance having accepted the send, so it
+	// bypasses the recentSenders heuristic and its restart / load-balanced-replica gaps. Every other
+	// estimate (the overwhelming majority) goes straight to the primary backend, so the hot
+	// estimateFee endpoint does not burn the provider's rate-limit quota (#1629); a missing/empty
+	// `from` also takes the primary path. Unlike the nonce hint - which IS the answer and short-
+	// circuits the lookup - a declared estimate only selects the backend; Blockbook still simulates.
+	// The hint is an unauthenticated, per-request client signal: it can route only the caller's own
+	// request to the relay and never touches shared state, so it does not re-open the #1629 hot-path
+	// quota drain (accepted trust boundary, see docs/evm-send.md).
+	declaredPrivatePending := estimatePrivatePendingDeclared(params)
 	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
-		b.alternativeSendTxProvider.useForNonces(msg.From) {
+		(declaredPrivatePending || b.alternativeSendTxProvider.useForNonces(msg.From)) {
 		result, err := b.alternativeSendTxProvider.callHttpStringResult(
 			b.alternativeSendTxProvider.nonceURL(msg.From),
 			"eth_estimateGas",
-			params,
+			estimateParamsWithoutPrivatePending(params),
 		)
 		if err == nil {
 			// Count success only once the result decodes: a malformed hex quantity is a provider
@@ -2018,13 +2024,47 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 
 // observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
 // send-tx provider, labeled by result: success (provider answered) or error (provider failed and
-// the estimate fell back to the primary RPC). Only recent private senders are routed here (see
-// useForNonces), so this counts the gated subset rather than every estimateFee request.
+// the estimate fell back to the primary RPC). Only senders that declared private-pending state or
+// recently sent privately (see useForNonces) are routed here, so this counts the gated subset
+// rather than every estimateFee request.
 func (b *EthereumRPC) observeAlternativeEstimateGasRequest(result string) {
 	if b.metrics == nil || b.metrics.EthAlternativeEstimateGasRequests == nil {
 		return
 	}
 	b.metrics.EthAlternativeEstimateGasRequests.With(common.Labels{"result": result}).Inc()
+}
+
+// estimatePrivatePendingDeclared reports whether an estimateFee request declared in-flight private
+// transactions for the sender via privatePending.nonces in its specific params (see
+// server.WsPrivatePending). It is only a routing signal - unlike a nonce, the wallet cannot compute
+// gas itself, so Blockbook must still simulate the call; the declaration just says "estimate against
+// the relay's pending-private state". Only presence matters, not the values. params is a decoded
+// JSON object, so nested objects/arrays are map[string]interface{} / []interface{}.
+func estimatePrivatePendingDeclared(params map[string]interface{}) bool {
+	pp, ok := params["privatePending"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	nonces, ok := pp["nonces"].([]interface{})
+	return ok && len(nonces) > 0
+}
+
+// estimateParamsWithoutPrivatePending returns params with the privatePending key removed, so the
+// wallet's bookkeeping is not forwarded as part of the eth_estimateGas call object. It copies only
+// when the key is present, so the common (no-hint) path is zero-cost and never mutates the caller's
+// map.
+func estimateParamsWithoutPrivatePending(params map[string]interface{}) map[string]interface{} {
+	if _, ok := params["privatePending"]; !ok {
+		return params
+	}
+	out := make(map[string]interface{}, len(params))
+	for k, v := range params {
+		if k == "privatePending" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // bigIntToFloat converts a wei amount to float64 for gauge export. float64 holds integers
@@ -2305,21 +2345,32 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // lookup fails, the pending nonce is still returned with confirmedOK=false so the caller
 // can omit it rather than failing the whole request. When confirmedOK is false the returned
 // confirmed value is 0 and must be ignored.
-func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
+func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (uint64, uint64, bool, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
+	// The caller may declare the account nonces of its in-flight private transactions (see
+	// server.WsPrivatePending). declaredFloor is the lowest pending nonce consistent with them,
+	// or 0 when none were declared.
+	declaredFloor := declaredPendingFloor(privatePendingNonces)
 
-	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
-		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
-		if err == nil {
-			b.observeAlternativeNonceRequest("success")
-			// Even the provider's own answer can fall below Blockbook's advertised pending
-			// view: Blink-style relays stop counting a still-pending tx at the pending tag
-			// while Blockbook keeps exposing it until the cache timeout (see
-			// reconcileMempoolTxs).
-			return b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), confirmed, confirmedOK, nil
+	if b.alternativeSendTxProvider != nil {
+		// Route to the provider when the caller declared in-flight private txs (a deterministic
+		// short-circuit: the wallet knows this authoritatively) OR when our own heuristic says the
+		// sender recently sent privately through this instance. The declared hint bypasses the
+		// recentSenders guess and its restart / load-balanced-replica fragility (#1629 rationale).
+		if declaredFloor > 0 || b.alternativeSendTxProvider.useForNonces(ethAddress) {
+			pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
+			if err == nil {
+				b.observeAlternativeNonceRequest("success")
+				// Even the provider's own answer can fall below Blockbook's advertised pending
+				// view: Blink-style relays stop counting a still-pending tx at the pending tag
+				// while Blockbook keeps exposing it until the cache timeout (see
+				// reconcileMempoolTxs). The declared floor covers the same gap for a tx this
+				// instance never cached (accepted by another replica, or lost to a restart).
+				return max(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor), confirmed, confirmedOK, nil
+			}
+			b.observeAlternativeNonceRequest("error")
+			glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 		}
-		b.observeAlternativeNonceRequest("error")
-		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 	}
 
 	pending, confirmed, confirmedOK, err := b.getNoncesRPC(ethAddress, withConfirmed)
@@ -2333,10 +2384,23 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// until fetch-back time + timeout (plus reconcile granularity), and in that window a
 		// primary answer below the floor would contradict the pending tx Blockbook still
 		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
-		// the hot path.
-		pending = b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+		// the hot path. The caller-declared floor is folded in for the same reason.
+		pending = max(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor)
 	}
 	return pending, confirmed, confirmedOK, nil
+}
+
+// declaredPendingFloor returns the lowest pending nonce consistent with the caller-declared
+// in-flight private transactions (highest declared nonce + 1), or 0 when none were declared. The
+// wallet knows its own submitted nonces authoritatively, so honoring this keeps the reported
+// pending nonce from falling below a private transaction the wallet has in flight even when this
+// Blockbook instance never saw it (a different replica accepted it, or a restart cleared the cache).
+func declaredPendingFloor(nonces []uint64) uint64 {
+	var floor uint64
+	for _, n := range nonces {
+		floor = max(floor, n+1)
+	}
+	return floor
 }
 
 // getNoncesRPC fetches the pending account nonce from the primary RPC, plus the confirmed
