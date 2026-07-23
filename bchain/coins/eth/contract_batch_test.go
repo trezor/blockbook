@@ -499,3 +499,74 @@ func TestEthereumTypeGetErc20ContractBalancesPartialError(t *testing.T) {
 		t.Fatalf("expected balance[1] to be nil, got %v", balances[1])
 	}
 }
+
+// A deterministic per-element error (e.g. TRON's "Smart contract is not exist"
+// for a dead/fake TRC20 contract) must not trigger a single-call fallback: the
+// retry cannot succeed and only amplifies RPC load and log noise.
+func TestErc20BalancesBatchNonRetriableSkipsFallback(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+	contractAKey := hexutil.Encode(contractA.Bytes())
+	contractBKey := hexutil.Encode(contractB.Bytes())
+	callData := erc20BalanceOfCallData(bchain.AddressDescriptor(addr.Bytes()))
+	mock := &mockBatchCallRPC{
+		batchResults: map[string]string{
+			contractAKey: fmt.Sprintf("0x%064x", 1),
+		},
+		batchErrors: map[string]error{
+			contractBKey: errors.New("contract validate error : Smart contract is not exist."),
+		},
+		// Provide a would-be fallback result; the code must not reach it.
+		callResults: map[string]string{
+			contractBKey: fmt.Sprintf("0x%064x", 5),
+		},
+	}
+	rpcClient := &EthereumRPC{
+		RPC:     mock,
+		Timeout: time.Second,
+	}
+	balances, err := rpcClient.erc20BalancesBatch(mock, callData, []bchain.AddressDescriptor{
+		bchain.AddressDescriptor(contractA.Bytes()),
+		bchain.AddressDescriptor(contractB.Bytes()),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if balances[0] == nil || balances[0].Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("unexpected balance[0]: %v", balances[0])
+	}
+	if balances[1] != nil {
+		t.Fatalf("expected balance[1] to be nil (non-retriable), got %v", balances[1])
+	}
+	if len(mock.calls) != 0 {
+		t.Fatalf("expected no single-call fallback for non-retriable error, got %d", len(mock.calls))
+	}
+}
+
+func TestIsNonRetriableEthCallError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"execution reverted", errors.New("execution reverted"), true},
+		{"invalid opcode", errors.New("invalid opcode: INVALID"), true},
+		{"out of gas", errors.New("out of gas"), true},
+		{"stack underflow", errors.New("stack underflow"), true},
+		{"generic revert", errors.New("VM Exception: revert"), true},
+		{"tron smart contract not exist", errors.New("contract validate error : Smart contract is not exist."), true},
+		{"no contract", errors.New("no contract code at given address"), true},
+		{"not deployed", errors.New("contract not deployed"), true},
+		{"transient rpc", errors.New("connection reset by peer"), false},
+		{"timeout", errors.New("context deadline exceeded"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isNonRetriableEthCallError(tt.err); got != tt.want {
+				t.Fatalf("isNonRetriableEthCallError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}

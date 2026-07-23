@@ -663,7 +663,11 @@ func isNonRetriableEthCallError(err error) bool {
 		strings.Contains(msg, "invalid opcode") ||
 		strings.Contains(msg, "out of gas") ||
 		strings.Contains(msg, "stack underflow") ||
-		strings.Contains(msg, "revert")
+		strings.Contains(msg, "revert") ||
+		// Java-Tron throws these messages
+		strings.Contains(msg, "smart contract is not exist") ||
+		strings.Contains(msg, "no contract") ||
+		strings.Contains(msg, "not deployed")
 }
 
 // GetTokenURI returns URI of non fungible or multi token defined by token id
