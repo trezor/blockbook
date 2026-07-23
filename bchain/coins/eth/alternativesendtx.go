@@ -141,6 +141,10 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		return txid, retErr
 	}
 
+	// the sender was decoded once at the top of the send and is reused for both recent-sender
+	// registration and the RBF eviction below - a single ECDSA sender recovery instead of two.
+	// On decode failure gen stays 0 and no eviction runs, but the transaction is still handed
+	// to handleMempoolTransaction(txid, 0), exactly as before.
 	gen := p.registerSuccessfulSend(decoded, acceptedURL)
 	if p.onlyAlternative && p.fetchMempoolTx {
 		// A successful relay acceptance of this (from, nonce) is positive, irreversible proof
@@ -152,9 +156,7 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		// previously left the predecessor showing "Unconfirmed" until the cache timeout (#1573).
 		// This is distinct from an empty getTransactionByHash probe, which is NOT authoritative
 		// (see reconcileMempoolTxs) - here the ACK of a same-nonce replacement is the fact.
-		if decoded.err != nil {
-			glog.Warningf("cannot decode sender/nonce of accepted transaction for RBF eviction: %v", decoded.err)
-		} else {
+		if decoded.err == nil {
 			p.evictReplacedByNonce(decoded.sender, decoded.tx.Nonce(), txid, gen)
 		}
 		p.handleMempoolTransaction(txid, gen)
