@@ -11,6 +11,7 @@
 | Bitcoin Gold                     | 9135             | 9035               | 8035        | 38335                                               |
 | Ethereum                         | 9136             | 9036               | 8036        | 38336 p2p, 8136 http, 8536 authrpc                  |
 | Ethereum Classic                 | 9137             | 9037               | 8037        | 38337 p2p, 8137 http                                |
+| Ethereum PoW                     | 9163             | 9063               | 8063        | 38363 p2p, 8163 http                                |
 | Dogecoin                         | 9138             | 9038               | 8038        | 38338                                               |
 | Namecoin                         | 9139             | 9039               | 8039        | 38339                                               |
 | Vertcoin                         | 9140             | 9040               | 8040        | 38340                                               |
