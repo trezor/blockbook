@@ -1954,8 +1954,6 @@ func GetStringFromMap(p string, params map[string]interface{}) (string, bool) {
 
 // EthereumTypeEstimateGas returns estimation of gas consumption for given transaction parameters
 func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
 	msg := ethereum.CallMsg{}
 	if s, ok := GetStringFromMap("from", params); ok && len(s) > 0 {
 		msg.From = ethcommon.HexToAddress(s)
@@ -1977,17 +1975,56 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 
-	if b.alternativeSendTxProvider != nil {
+	// Route eth_estimateGas through the alternative provider ONLY for a sender that recently
+	// sent a private transaction through it (see useForNonces) - that sender may have a pending
+	// private tx the primary RPC does not know about, so estimating against the provider's state
+	// is what the provider path exists for. Every other estimate (the overwhelming majority - the
+	// wallet calls estimateFee on every send-form keystroke, see trezor-suite
+	// sendFormEthereumThunks) goes straight to the primary backend, so the hot estimateFee
+	// endpoint no longer burns the provider's rate-limit quota (#1629). A missing/empty `from`
+	// also takes the primary path: without a sender the gate cannot apply and the primary is
+	// authoritative for gas estimation anyway.
+	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
+		b.alternativeSendTxProvider.useForNonces(msg.From) {
 		result, err := b.alternativeSendTxProvider.callHttpStringResult(
-			b.alternativeSendTxProvider.urls[0],
+			b.alternativeSendTxProvider.nonceURL(msg.From),
 			"eth_estimateGas",
 			params,
 		)
 		if err == nil {
-			return hexutil.DecodeUint64(result)
+			// Count success only once the result decodes: a malformed hex quantity is a provider
+			// failure, so fall through to the primary RPC rather than returning the decode error
+			// to the caller (and keep the "success" label honest for the quota dashboard).
+			if gas, decErr := hexutil.DecodeUint64(result); decErr == nil {
+				b.observeAlternativeEstimateGasRequest("success")
+				return gas, nil
+			} else {
+				err = decErr
+			}
 		}
+		// Previously the provider error was swallowed silently, hiding quota exhaustion (#1629);
+		// log it and fall back to the primary RPC below.
+		b.observeAlternativeEstimateGasRequest("error")
+		glog.Warningf("Alternative provider failed for eth_estimateGas: %v, falling back to primary RPC", err)
 	}
+	// Build the primary-RPC deadline here rather than at function entry: a slow or rate-limited
+	// alternative-provider round-trip above runs on its own independent context and can consume
+	// most of b.Timeout, so a context created at entry could already be expired by the time the
+	// fallback reaches the healthy primary backend (the exact #1629 slow-relay scenario).
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
 	return b.Client.EstimateGas(ctx, msg)
+}
+
+// observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
+// send-tx provider, labeled by result: success (provider answered) or error (provider failed and
+// the estimate fell back to the primary RPC). Only recent private senders are routed here (see
+// useForNonces), so this counts the gated subset rather than every estimateFee request.
+func (b *EthereumRPC) observeAlternativeEstimateGasRequest(result string) {
+	if b.metrics == nil || b.metrics.EthAlternativeEstimateGasRequests == nil {
+		return
+	}
+	b.metrics.EthAlternativeEstimateGasRequests.With(common.Labels{"result": result}).Inc()
 }
 
 // bigIntToFloat converts a wei amount to float64 for gauge export. float64 holds integers

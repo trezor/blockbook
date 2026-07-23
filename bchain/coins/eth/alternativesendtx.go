@@ -118,24 +118,57 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// keyed on acceptedURL rather than retErr, so registration does not silently depend on
 	// callHttpStringResult never returning an empty result without an error
 	if acceptedURL != "" {
-		gen = p.registerSuccessfulSend(hex, acceptedURL)
-	}
+		// Decode the sender and nonce once from the accepted raw hex and reuse them for both
+		// recent-sender registration and the RBF eviction below - a single ECDSA sender recovery
+		// instead of two. On decode failure gen stays 0 and no eviction runs, but the transaction
+		// is still handed to handleMempoolTransaction(txid, 0), exactly as before.
+		from, nonce, decErr := alternativeTxSenderAndNonce(hex)
+		if decErr != nil {
+			glog.Warningf("cannot decode sender/nonce of accepted transaction: %v", decErr)
+		} else {
+			gen = p.registerSuccessfulSend(from, acceptedURL)
+		}
 
-	if p.onlyAlternative && p.fetchMempoolTx {
-		p.handleMempoolTransaction(txid, gen)
+		// Gated on onlyAlternative/fetchMempoolTx (already under acceptedURL != ""): without a relay
+		// acceptance txid is empty, so there is nothing to cache and nothing to reconcile. Running the
+		// cache path anyway made handleMempoolTransaction fan out eth_getTransactionByHash(0x0..0) to
+		// every provider and log a spurious "did not find txid" error on every rejected (underpriced /
+		// nonce-too-low) send, burning the very quota the #1629 gating protects.
+		if p.onlyAlternative && p.fetchMempoolTx {
+			// A successful relay acceptance of this (from, nonce) is positive, irreversible proof
+			// that any previously cached transaction with the same sender and nonce can no longer
+			// mine - it has been replaced or cancelled. Retire it now, from the decoded (from,
+			// nonce), WITHOUT waiting for the relay to surface THIS transaction via
+			// eth_getTransactionByHash. Blink drop-mode cancels are never surfaced at all, and an
+			// accepted-but-unsurfaced RBF replacement never reached handleMempoolTransaction's own
+			// removal, so both cases previously left the predecessor showing "Unconfirmed" until the
+			// cache timeout (#1573). This is distinct from an empty getTransactionByHash probe, which
+			// is NOT authoritative (see reconcileMempoolTxs) - here the ACK of a same-nonce
+			// replacement is the fact.
+			if decErr == nil {
+				p.evictReplacedByNonce(from, nonce, txid, gen)
+			}
+			p.handleMempoolTransaction(txid, gen)
+		}
 	}
 
 	return txid, retErr
 }
 
-// alternativeTxSender recovers the sender address from a raw transaction hex. The chain id
-// needed to derive the sender is taken from the transaction itself.
-func alternativeTxSender(rawTxHex string) (ethcommon.Address, error) {
+// alternativeTxSenderAndNonce recovers the sender address and account nonce from a raw
+// transaction hex. The chain id needed to derive the sender is taken from the transaction
+// itself. The nonce lets a successful send identify the (from, nonce) slot it fills, so any
+// cached predecessor for that slot can be retired at acceptance time (see evictReplacedByNonce).
+func alternativeTxSenderAndNonce(rawTxHex string) (ethcommon.Address, uint64, error) {
 	var tx types.Transaction
 	if err := tx.UnmarshalBinary(ethcommon.FromHex(rawTxHex)); err != nil {
-		return ethcommon.Address{}, err
+		return ethcommon.Address{}, 0, err
 	}
-	return types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
+	sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
+	if err != nil {
+		return ethcommon.Address{}, 0, err
+	}
+	return sender, tx.Nonce(), nil
 }
 
 // registerSuccessfulSend records the sender of a transaction accepted by an alternative
@@ -144,15 +177,10 @@ func alternativeTxSender(rawTxHex string) (ethcommon.Address, error) {
 // accepts it, so the accepting URL is recorded too - it is the one provider guaranteed to
 // know the transaction (see nonceURL). Expired entries are swept on the way; the map only
 // ever holds senders of the last mempoolTxsTimeout window, so the sweep is cheap.
-// It returns the send generation assigned to this submission (0 when the sender cannot be
-// decoded); the caller must carry that exact value to the cache entry it creates for the
+// It returns the send generation assigned to this submission; the caller (which has already
+// decoded the sender) must carry that exact value to the cache entry it creates for the
 // transaction, so that releaseRecentSender can order evictions against later sends.
-func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acceptedURL string) uint64 {
-	sender, err := alternativeTxSender(rawTxHex)
-	if err != nil {
-		glog.Warningf("cannot decode sender of transaction sent to alternative provider: %v", err)
-		return 0
-	}
+func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Address, acceptedURL string) uint64 {
 	now := time.Now()
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
@@ -269,36 +297,134 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 		return txid, bchain.ErrTxNotFound
 	}
 
+	from, nonce, decoded := txSenderAndNonce(tx)
+
 	p.mempoolTxsMux.Lock()
-	// remove potential RBF transactions - with equal from and nonce
-	var rbfTxid string
-	var rbfTime uint32
-	for rbf, storedTx := range p.mempoolTxs {
-		if storedTx.tx.From == tx.From && storedTx.tx.AccountNonce == tx.AccountNonce {
-			rbfTxid = rbf
-			rbfTime = storedTx.time
-			break
+	// Skip a stale fetch-back: the eth_getTransactionByHash round-trip above is slow enough that a
+	// concurrent, higher-generation send for the same (from, nonce) slot can already have cached
+	// its replacement. Inserting this older submission would surface a second pending tx for the
+	// same nonce and, worse, its eviction below would drop the newer replacement that will actually
+	// mine. The send generations exist to order exactly this; consult them here (#1573 follow-up).
+	obsolete := false
+	if decoded {
+		for otherTxid, st := range p.mempoolTxs {
+			if otherTxid == txid {
+				continue
+			}
+			if f, n, ok := txSenderAndNonce(st.tx); ok && f == from && n == nonce && newerGen(st.gen, gen) {
+				obsolete = true
+				break
+			}
 		}
 	}
-	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen}
+	if !obsolete {
+		p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen}
+	}
 	p.mempoolTxsMux.Unlock()
 
-	if rbfTxid != "" {
-		glog.Infof("eth_sendRawTransaction replacing txid %s by %s", rbfTxid, txid)
-		// the replaced entry leaves the cache by fee-replacement rather than reconciliation; record the
-		// exit reason and its residence so the lifecycle metrics account for every way an entry leaves.
-		p.observeMempoolReconciliation("rbf_replaced")
-		p.observeMempoolTxResidence("rbf_replaced", rbfTime)
-		if p.removeTransactionFromMempool != nil {
-			p.removeTransactionFromMempool(rbfTxid)
-		}
+	if obsolete {
+		// a newer replacement already occupies this nonce slot; do not cache or surface this one
+		return txid, nil
+	}
+
+	// Retire any cached predecessor sharing this tx's sender and nonce. The send path already
+	// does this from the raw hex the moment the relay accepts the replacement (see
+	// SendRawTransaction, #1573); repeating it here from the surfaced tx is a harmless no-op in
+	// that flow and keeps the removal correct when handleMempoolTransaction is reached directly.
+	if decoded {
+		p.evictReplacedByNonce(from, nonce, txid, gen)
 	}
 
 	if p.mempool != nil {
 		p.mempool.AddTransactionToMempool(txid)
+		// A concurrent higher-generation send for this same (from, nonce) can run its
+		// evictReplacedByNonce during the AddTransactionToMempool round-trip above, deleting txid
+		// from BOTH the provider cache and the wrapped mempool; the add then re-inserts it into the
+		// wrapped mempool only. reconcileMempoolTxs walks only the provider cache (the source of
+		// truth), so that orphan would linger as "Unconfirmed" until the 10-minute sweep (#1573). If
+		// txid is no longer cached, undo the add. The lock covers only the map read, never a network
+		// call, so it cannot serialize backend RPCs.
+		p.mempoolTxsMux.Lock()
+		_, stillCached := p.mempoolTxs[txid]
+		p.mempoolTxsMux.Unlock()
+		if !stillCached {
+			p.mempool.RemoveTransactionFromMempool(txid)
+		}
 	}
 
 	return txid, nil
+}
+
+// txSenderAndNonce decodes the sender address and account nonce of a cached RPC transaction,
+// reporting ok=false when either field is missing or unparsable so callers skip the entry rather
+// than act on a zero value.
+func txSenderAndNonce(tx *bchain.RpcTransaction) (ethcommon.Address, uint64, bool) {
+	if tx == nil || tx.From == "" || tx.AccountNonce == "" {
+		return ethcommon.Address{}, 0, false
+	}
+	nonce, err := hexutil.DecodeUint64(tx.AccountNonce)
+	if err != nil {
+		return ethcommon.Address{}, 0, false
+	}
+	return ethcommon.HexToAddress(tx.From), nonce, true
+}
+
+// newerGen reports whether send generation a is strictly newer than b. Generation 0 means the
+// order is unknown (the submission's sender could not be decoded, or a legacy/test entry carries
+// no generation), so it never wins a comparison - callers then fall back to generation-agnostic
+// behavior rather than acting on a guessed order.
+func newerGen(a, b uint64) bool {
+	return a > 0 && b > 0 && a > b
+}
+
+// evictReplacedByNonce removes any cached transaction that shares sender `from` and account
+// `nonce` with a newly accepted replacement identified by (keepTxid, keepGen), except that
+// replacement itself. Once a replacement for a nonce slot is accepted, the previously cached
+// transaction for that slot can never mine, so it leaves the cache by fee-replacement: the exit is
+// counted as rbf_replaced and its residence observed, consistent with every other way an entry
+// leaves (so the lifecycle metrics stay balanced). Matching is by decoded address and numeric
+// nonce rather than raw strings, so provider differences in hex casing or zero-padding cannot hide
+// a predecessor. A cached entry from a strictly higher send generation is left intact: when an older
+// submission's slow fetch-back races a newer replacement, the older one must not evict the newer. A
+// keepGen of 0 means this replacement's own send order is unknown (raw-hex sender recovery failed at
+// send time), so it evicts only other unordered (generation-0) entries and never a
+// generation-carrying replacement that may still mine.
+func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address, nonce uint64, keepTxid string, keepGen uint64) {
+	p.mempoolTxsMux.Lock()
+	var rbfTxid string
+	var rbfTime uint32
+	for txid, storedTx := range p.mempoolTxs {
+		if txid == keepTxid {
+			continue
+		}
+		cachedFrom, cachedNonce, ok := txSenderAndNonce(storedTx.tx)
+		if !ok || cachedFrom != from || cachedNonce != nonce {
+			continue
+		}
+		// Keep any cached entry from a higher send generation. For keepGen>0 this equals newerGen;
+		// for keepGen==0 (this replacement's order is unknown) it still protects every
+		// generation-carrying replacement while evicting only other unordered (gen==0) predecessors,
+		// so an unknown-order keeper can no longer drop the newer tx that will actually mine.
+		if storedTx.gen > keepGen {
+			continue
+		}
+		rbfTxid = txid
+		rbfTime = storedTx.time
+		break
+	}
+	p.mempoolTxsMux.Unlock()
+
+	if rbfTxid == "" {
+		return
+	}
+	glog.Infof("eth_sendRawTransaction replacing txid %s by %s", rbfTxid, keepTxid)
+	// Meter the fee-replacement exit only if this call is the one that removed the predecessor;
+	// the acceptance-time and handleMempoolTransaction passes can both target it, as can a
+	// concurrent reconcile eviction, so gating on the removal avoids double-counting rbf_replaced.
+	if p.removeMempoolTx(rbfTxid) {
+		p.observeMempoolReconciliation("rbf_replaced")
+		p.observeMempoolTxResidence("rbf_replaced", rbfTime)
+	}
 }
 
 // GetTransaction gets a transaction from alternative mempool cache
@@ -316,12 +442,17 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 
 	if found {
 		if time.Unix(int64(storedTx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
-			p.RemoveTransaction(txid)
 			// the same staleness timeout the reconcile loop applies, just reached on the read path
-			// first; record it so the timeout counter and residence histogram do not undercount
-			// entries read after expiry but before the next reconcile cycle evicts them.
-			p.observeMempoolReconciliation("timeout")
-			p.observeMempoolTxResidence("timeout", storedTx.time)
+			// first; route it through removeMempoolTx (not RemoveTransaction) so the wrapped
+			// Blockbook mempool's per-address index is cleared too - otherwise, when the caller's
+			// own primary-RPC lookup errors instead of returning null, the expired private tx keeps
+			// being listed as pending for the address until the 10-minute mempool sweep. Record the
+			// exit only if this read is the one that removed the entry, so a concurrent reconcile
+			// eviction of the same expired tx does not also count it.
+			if p.removeMempoolTx(txid) {
+				p.observeMempoolReconciliation("timeout")
+				p.observeMempoolTxResidence("timeout", storedTx.time)
+			}
 			return nil, false
 		}
 		return storedTx.tx, true
@@ -440,14 +571,19 @@ func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) 
 	p.metrics.EthAlternativeMempoolEvents.With(common.Labels{"action": action}).Inc()
 }
 
-// evictMempoolTx records a terminal reconcile decision and removes the cache entry. It counts the
-// decision and observes the entry's residence (how long it lived before this eviction reason fired),
-// so the eviction rate and the per-reason lifetime distribution stay consistent. Decisions that keep
-// an entry for a later cycle use observeMempoolReconciliation directly instead.
+// evictMempoolTx removes the cache entry and, only when this call actually removed it, records the
+// terminal reconcile decision: the event counter plus the entry's residence (how long it lived
+// before this eviction reason fired), so the eviction rate and the per-reason lifetime distribution
+// stay consistent. Gating on the removal is what keeps the count honest - reconcile works off a
+// snapshot taken cycle-start, so the read-path or a concurrent RBF eviction may already have removed
+// (and metered) the same entry; without the gate this call would double-count it under a second
+// action. Decisions that keep an entry for a later cycle use observeMempoolReconciliation directly.
 func (p *AlternativeSendTxProvider) evictMempoolTx(action, txid string, addedUnix uint32) {
+	if !p.removeMempoolTx(txid) {
+		return
+	}
 	p.observeMempoolReconciliation(action)
 	p.observeMempoolTxResidence(action, addedUnix)
-	p.removeMempoolTx(txid)
 }
 
 // observeMempoolTxResidence records the age of a cache entry (seconds since it was broadcast) at the
@@ -583,21 +719,30 @@ func (p *AlternativeSendTxProvider) getTransactionFromProviders(txid string) (*b
 	return nil, false, nil
 }
 
-func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) {
-	if p.removeTransactionFromMempool != nil {
+// removeMempoolTx evicts txid from the alternative-provider cache and, when a delegate is wired,
+// from the wrapped Blockbook mempool too. It returns whether the entry was actually present in the
+// provider cache. The provider-cache delete (RemoveTransaction) is the single point of truth for
+// that, so it runs first: concurrent reconcile / read-path / RBF evictions of the same txid then
+// see removed=false for all but the one that actually deleted it, letting callers meter the exit
+// exactly once. The delegate (which also clears the wrapped mempool's address index) is invoked
+// only on a real removal; it re-enters RemoveTransaction as a harmless no-op.
+func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) bool {
+	removed := p.RemoveTransaction(txid)
+	if removed && p.removeTransactionFromMempool != nil {
 		p.removeTransactionFromMempool(txid)
-		return
 	}
-	p.RemoveTransaction(txid)
+	return removed
 }
 
 // RemoveTransaction removes a transaction from alternative mempool cache. When the removed
 // transaction was the sender's last cached one, the sender's nonce-routing entry is released
 // as well (see releaseRecentSender) so address polling stops hitting the alternative provider
-// once nothing private remains pending.
-func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) {
+// once nothing private remains pending. It reports whether the entry was actually present, so
+// callers can attribute a lifecycle metric to the single goroutine that truly evicted it (see
+// evictMempoolTx / evictReplacedByNonce).
+func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) bool {
 	if !p.fetchMempoolTx {
-		return
+		return false
 	}
 
 	p.mempoolTxsMux.Lock()
@@ -620,6 +765,7 @@ func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) {
 	if senderSettled {
 		p.releaseRecentSender(sender, removedTx.gen)
 	}
+	return found
 }
 
 // UseOnlyAlternativeProvider returns true if only alternative providers should be used

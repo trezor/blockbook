@@ -244,6 +244,11 @@ metrics:
     type: counter_vec
     help: eth_getTransactionCount lookups actually routed to the alternative send-transaction provider, labeled by result - success (the provider answered and its pending nonce was served, raised to the mempool floor) or error (the provider failed and the lookup fell back to the primary RPC). Only addresses that recently sent a private transaction through the provider are routed here (see useForNonces), so this counts the small gated subset, not every address request - a low, mostly-success rate confirms the gating is keeping the hot eth_getTransactionCount endpoint off the provider's rate quota
     labels: [result]
+  eth_alternative_estimate_gas_requests_total:
+    name: blockbook_eth_alternative_estimate_gas_requests_total
+    type: counter_vec
+    help: eth_estimateGas calls actually routed to the alternative send-transaction provider, labeled by result - success (the provider answered and its estimate was served) or error (the provider failed and the estimate fell back to the primary RPC). Only addresses that recently sent a private transaction through the provider are routed here (see useForNonces), so this counts the small gated subset, not every estimateFee request - a low, mostly-success rate confirms the gating is keeping the hot estimateFee endpoint off the provider's rate quota
+    labels: [result]
   estimated_fee:
     name: blockbook_estimated_fee
     type: gauge_vec
