@@ -303,15 +303,11 @@ func (p *EthereumParser) ParseInputData(signatures *[]bchain.FourByteSignature, 
 	return &parsed
 }
 
-// maxEnsAliasNameLen caps the decoded ENS name length (in bytes) accepted as an
-// address alias, bounding storage and display abuse from an oversized log.
+// maxEnsAliasNameLen caps the decoded ENS name length (bytes) stored as an alias.
 const maxEnsAliasNameLen = 256
 
-// validEnsAliasName rejects names unsafe to store or render as an address alias:
-// empty, over the length cap, not valid UTF-8, or containing control characters
-// (NUL, newline, ANSI escapes) or bidirectional overrides (e.g. U+202E) that could
-// spoof or corrupt the displayed alias. Bidi_Control is used rather than the whole
-// Cf category so legitimate emoji names using the zero-width joiner still pass.
+// validEnsAliasName rejects alias names that are empty, over the length cap, not
+// UTF-8, or carry control chars / bidi overrides (emoji ZWJ is allowed).
 func validEnsAliasName(name string) bool {
 	if len(name) == 0 || len(name) > maxEnsAliasNameLen {
 		return false
@@ -327,15 +323,8 @@ func validEnsAliasName(name string) bool {
 	return true
 }
 
-// getEnsRecord processes a transaction log entry and tries to parse an ENS
-// address alias (a NameRegistered event) from it. Both the original 5-argument
-// event (old ETHRegistrarController) and the newer 6-argument event that split
-// cost into baseCost + premium are recognized. registrars is the set of contract
-// addresses (lower-cased, 0x-prefixed) trusted to emit these events: a log whose
-// emitter (l.Address) is not in the set is rejected, so an arbitrary contract
-// cannot forge an ENS alias for any address. An empty set therefore trusts no
-// one and records nothing; the special entry "*" accepts any emitter (legacy
-// behavior, for chains with a different name service).
+// getEnsRecord parses an ENS alias from a NameRegistered log (5- and 6-arg events).
+// Only emitters in registrars are accepted; empty records nothing, "*" accepts any.
 func getEnsRecord(l *rpcLogWithTxHash, registrars map[string]struct{}) *bchain.AddressAliasRecord {
 	if len(l.Topics) != 3 {
 		return nil
@@ -363,9 +352,8 @@ func getEnsRecord(l *rpcLogWithTxHash, registrars map[string]struct{}) *bchain.A
 	return &bchain.AddressAliasRecord{Address: address, Name: name}
 }
 
-// readHexWordAt reads one 32-byte EVM word starting at hexStart (an index into
-// the 0x-prefixed hex data string) as an int64, reporting false if the word is
-// out of range or does not fit in an int64.
+// readHexWordAt reads one 32-byte EVM word at hexStart as int64; false if out of
+// range or not representable.
 func readHexWordAt(data string, hexStart int) (int64, bool) {
 	if hexStart < 2 || hexStart+evmWordHex > len(data) {
 		return 0, false
@@ -377,13 +365,8 @@ func readHexWordAt(data string, hexStart int) (int64, bool) {
 	return v, true
 }
 
-// parseEnsNameFromLogData extracts the ABI-encoded `string name` (the first
-// non-indexed parameter of every NameRegistered variant) from a log's data. The
-// leading word holds the byte offset to the name's length word; the name bytes
-// follow. Reading via the offset - rather than a hardcoded position - keeps this
-// layout-agnostic, so the extra baseCost/premium word of the newer event is
-// handled without special-casing. Every index derives from attacker-controlled
-// input, so all bounds are checked and no slice expression can panic.
+// parseEnsNameFromLogData extracts the ABI `string name` via its offset word (so
+// both event layouts work); all indices are bounds-checked against untrusted input.
 func parseEnsNameFromLogData(data string) (string, bool) {
 	offset, ok := readHexWordAt(data, 2) // leading word: byte offset to the name length word
 	if !ok || offset < 0 || offset > int64(len(data)) {
@@ -391,8 +374,7 @@ func parseEnsNameFromLogData(data string) (string, bool) {
 	}
 	lenStart := 2 + int(offset)*2
 	length, ok := readHexWordAt(data, lenStart)
-	// Cap the length before using it as a slice bound: it both rejects absurd,
-	// overflow-prone values and enforces the alias length limit early.
+	// cap length before using it as a slice bound (rejects overflow, enforces limit)
 	if !ok || length < 0 || length > maxEnsAliasNameLen {
 		return "", false
 	}
