@@ -184,7 +184,13 @@ The field appears in two places, matching the two consumers of the routing machi
   wallet cannot compute gas itself, so Blockbook still simulates the call — the declaration only says
   "estimate against the relay's pending-private state" (e.g. a privately-submitted `approve` a
   following swap's gas depends on). Presence of a non-empty `nonces` array is all that is read; the
-  field is stripped before the `eth_estimateGas` call object is forwarded to the relay.
+  field is stripped before the `eth_estimateGas` call object is forwarded to the relay. URL selection
+  is best-effort: the estimate goes to the provider that accepted this sender's most recent send
+  (`nonceURL`), or `urls[0]` when this instance never saw a send from the address (another replica
+  accepted it, or a restart cleared `recentSenders`). Unlike the nonce floor, gas has no
+  client-supplied value to fall back on, so a declared-but-unknown sender simulates against `urls[0]`
+  and may miss a private predecessor held only by a different relay node — an accepted limit of a
+  multi-URL relay without sender affinity, not compensable the way the nonce floor is.
 
 Only `nonces` drives behavior today; `txids` is accepted for forward compatibility (future
 pending-tx correlation) and is not yet consumed on any path.
@@ -197,6 +203,13 @@ configured the hint is a no-op (there is no private mempool to reconcile against
 Declaring the field also outlives the routing window: `useForNonces` stops routing a sender 15 minutes
 after its send, but a wallet that keeps declaring an in-flight transaction keeps being routed to the
 relay for as long as it is actually pending.
+
+Note the deliberate trade-off against pre-#1629 behavior: `estimateFee` is no longer routed to the
+relay for *every* sender, so a wallet that sent privately, omitted the hint, and is served by a
+different replica than the one that accepted the send has its estimate simulated on the primary RPC
+without the private predecessor. Declaring `privatePending` closes that gap deterministically;
+widening routing for hint-less senders is avoided because it is indistinguishable from the #1629
+hot-path drain.
 
 **Trust boundary (accepted).** `privatePending` is an *unauthenticated client hint* — Blockbook does
 not verify the caller owns the address or that a private tx actually exists. This is safe because the
