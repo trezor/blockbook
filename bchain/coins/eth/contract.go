@@ -32,6 +32,10 @@ const nameRegisteredEventSignature = "0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621
 // keccak256("NameRegistered(string,bytes32,address,uint256,uint256,uint256)").
 const nameRegisteredWithPremiumEventSignature = "0x69e37f151eb98a09618ddaa80c8cfaf1ce5996867c489f45b555b412271ebf27"
 
+// Current 7-arg ETHRegistrarController (adds referrer), the live mainnet emitter:
+// keccak256("NameRegistered(string,bytes32,address,uint256,uint256,uint256,bytes32)").
+const nameRegisteredWithReferrerEventSignature = "0xc2240194853531f1ae318dcef227de79c6ad0fd9d1b0e4fe08568415be2e08a5"
+
 const contractNameSignature = "0x06fdde03"
 const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"
