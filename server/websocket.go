@@ -56,6 +56,7 @@ var (
 
 type websocketChannel struct {
 	id                           uint64
+	requests                     uint64 // total requests received on this connection, accessed atomically
 	conn                         *websocket.Conn
 	out                          chan *WsRes
 	pendingRequests              chan struct{}
@@ -182,8 +183,10 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	}
 	if s.metrics != nil {
 		s.metrics.WebsocketNewBlockTxsSubscriptions.Set(0)
+		s.metrics.WebsocketUniqueIPs.Set(0)
+		s.metrics.WebsocketMaxConnectionsPerIP.Set(0)
 	}
-	go s.websocketLimiter.runPeriodicCleanup(websocketConnectionLimiterCleanupInterval)
+	go s.runWebsocketLimiterMaintenance(websocketConnectionLimiterCleanupInterval)
 	return s, nil
 }
 
@@ -344,14 +347,39 @@ func (l *websocketConnectionLimiter) sweep(now time.Time) {
 	l.sweepLocked(now)
 }
 
-// runPeriodicCleanup ticks every interval and sweeps the limiter. It does not
-// terminate; it is started once per WebsocketServer at construction time and
-// runs for the lifetime of the process.
-func (l *websocketConnectionLimiter) runPeriodicCleanup(interval time.Duration) {
+// stats returns the number of distinct client IPs that currently hold at least
+// one active websocket connection and the largest per-IP connection count. The
+// snapshot is taken under the limiter lock; idle entries retained for the TTL
+// window are skipped so the numbers track live connections, not recent history.
+func (l *websocketConnectionLimiter) stats() (uniqueActiveIPs int, maxConnectionsPerIP int) {
+	l.mux.Lock()
+	defer l.mux.Unlock()
+	for _, client := range l.clients {
+		if client.active <= 0 {
+			continue
+		}
+		uniqueActiveIPs++
+		if client.active > maxConnectionsPerIP {
+			maxConnectionsPerIP = client.active
+		}
+	}
+	return uniqueActiveIPs, maxConnectionsPerIP
+}
+
+// runWebsocketLimiterMaintenance ticks every interval to sweep TTL-expired
+// entries from the connection limiter and to publish the per-IP clustering
+// gauges. It does not terminate; it is started once per WebsocketServer at
+// construction time and runs for the lifetime of the process.
+func (s *WebsocketServer) runWebsocketLimiterMaintenance(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for now := range ticker.C {
-		l.sweep(now)
+		s.websocketLimiter.sweep(now)
+		if s.metrics != nil {
+			uniqueIPs, maxConnectionsPerIP := s.websocketLimiter.stats()
+			s.metrics.WebsocketUniqueIPs.Set(float64(uniqueIPs))
+			s.metrics.WebsocketMaxConnectionsPerIP.Set(float64(maxConnectionsPerIP))
+		}
 	}
 }
 
@@ -458,6 +486,9 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.websocketLimiter != nil {
 		ok, reason := s.websocketLimiter.accept(ip, time.Now())
 		if !ok {
+			if s.metrics != nil {
+				s.metrics.WebsocketConnectionRejections.With(common.Labels{"reason": reason}).Inc()
+			}
 			glog.Warning("Websocket connection rejected, ", ip, ", ", reason)
 			http.Error(w, "Too many websocket connections", http.StatusTooManyRequests)
 			return
@@ -671,6 +702,7 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 				s.closeChannel(c, "protocol_error")
 				return
 			}
+			atomic.AddUint64(&c.requests, 1)
 			if !c.acquireRequestSlot() {
 				glog.Warning("Client ", c.id, " exceeded pending websocket request limit, ", c.ip)
 				s.closeChannel(c, "pending_requests_limit")
@@ -743,6 +775,7 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	}
 	s.unregisterChannel(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
+	s.metrics.WebsocketConnectionRequests.Observe(float64(atomic.LoadUint64(&c.requests)))
 	s.metrics.WebsocketClients.Dec()
 }
 

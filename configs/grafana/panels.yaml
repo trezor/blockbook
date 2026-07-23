@@ -1,0 +1,556 @@
+panels:
+  row.system:
+    title: System
+  system.resident_memory:
+    title: Resident memory bytes
+    description: Includes Go heap, native allocations and mmap-backed pages; compare with Go heap to spot non-Go memory growth.
+    queries:
+      resident:
+        promql: process_resident_memory_bytes{job="blockbook"}
+        legend: '{{instance}}'
+  system.virtual_memory:
+    title: Virtual memory bytes
+    description: Address space reserved by the process; high values are not necessarily resident RAM.
+    queries:
+      virtual:
+        promql: process_virtual_memory_bytes{job="blockbook"}
+        legend: vm-{{instance}}
+  system.go_alloc:
+    title: Go heap allocated bytes
+    description: Go runtime heap in use; compare with resident memory to separate heap growth from native or mmap growth.
+    queries:
+      allocated:
+        promql: go_memstats_alloc_bytes{job="blockbook"}
+        legend: '{{instance}}'
+  system.open_fds:
+    title: Open file descriptors
+    description: Sustained growth can indicate leaked sockets or files.
+    queries:
+      fds:
+        promql: process_open_fds{job="blockbook"}
+        legend: '{{instance}}'
+  system.node_load1:
+    title: Node load (1 minute)
+    description: Host-level load, not Blockbook-only; compare across instances before blaming one process.
+    queries:
+      load:
+        promql: node_load1
+        legend: '{{instance}}'
+  system.node_mem_available:
+    title: Node memory available
+    description: Host-level memory pressure signal from node_exporter.
+    queries:
+      available:
+        promql: node_memory_MemAvailable_bytes
+        legend: '{{instance}}'
+  row.rpc:
+    title: RPC
+  rpc.request_rate:
+    title: RPC request rate (per minute)
+    description: Calls Blockbook sends to coin backends, so increases here reflect backend load rather than public API traffic.
+    queries:
+      requests:
+        promql: sum(rate({{name:rpc_latency}}_count{job="blockbook", coin="$coin"}[1m])) by (coin, method) * 60
+        legend: '{{coin}} - {{method}}'
+  rpc.request_duration_p95:
+    title: 95% quantile of RPC request duration
+    description: Blockbook-to-backend round-trip time; high method-specific latency slows sync and request handlers using that backend method.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:rpc_latency}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, method, le))
+        legend: '{{coin}} - {{method}}'
+  rpc.fallback_calls:
+    title: RPC fallback calls per minute
+    description: Non-primary chain-data paths used when the preferred lookup cannot answer; sustained growth means normal RPC/index assumptions are being bypassed.
+    queries:
+      fallbacks:
+        promql: sum(rate({{name:rpc_fallback_calls_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (component, reason) * 60
+        legend: '{{component}} - {{reason}}'
+  rpc.eth_call_requests:
+    title: eth_call requests
+    description: Contract metadata, NFT URI, staking-pool and other EVM read paths; spikes translate into backend read load.
+    queries:
+      requests:
+        promql: rate({{name:eth_call_requests}}{job="blockbook", coin="$coin"}[5m])
+        legend: '{{instance}} {{mode}}/s'
+  rpc.eth_call_errors:
+    title: eth_call errors
+    description: Separates failures by call path and error class, useful for spotting provider limits or bad contract responses.
+    queries:
+      errors:
+        promql: rate({{name:eth_call_errors}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} {{mode}} {{type}}/min'
+  rpc.eth_call_batch_size:
+    title: eth_call batch size (avg)
+    description: Higher values mean more EVM reads are being coalesced into fewer backend requests.
+    queries:
+      avg:
+        promql: rate({{name:eth_call_batch_size}}_sum{job="blockbook", coin="$coin"}[5m]) / rate({{name:eth_call_batch_size}}_count{job="blockbook", coin="$coin"}[5m])
+        legend: '{{instance}} avg'
+  rpc.eth_call_token_uri:
+    title: eth_call token URI requests
+    description: NFT metadata enrichment path; spikes often follow NFT-heavy address or transaction requests.
+    queries:
+      requests:
+        promql: rate({{name:eth_call_token_uri_requests}}{job="blockbook", coin="$coin"}[5m])
+        legend: '{{instance}} {{method}}/s'
+  rpc.eth_call_staking_pool:
+    title: Staking pool field read calls
+    description: Used by staking-pool enrichment; field labels show which contract property is driving backend load.
+    queries:
+      requests:
+        promql: rate({{name:eth_call_staking_pool_requests}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} {{field}}/min'
+  rpc.eth_call_contract_info:
+    title: eth_call contract info requests
+    description: Contract metadata lookups such as name, symbol and decimals, split by requested field.
+    queries:
+      requests:
+        promql: rate({{name:eth_call_contract_info_requests}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} {{field}}/min'
+  rpc.eth_sync_errors:
+    title: Ethereum sync RPC errors per minute
+    description: Sync-path EVM backend failures only; timeout and HTTP-class labels help separate provider slowness from RPC errors.
+    queries:
+      errors:
+        promql: sum(rate({{name:eth_sync_rpc_errors}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (method, status) * 60
+        legend: '{{method}} - {{status}}'
+  row.sync:
+    title: Sync
+  sync.index_resync_duration_p95:
+    title: 95% quantile of index resync duration
+    description: High values mean resync rounds are taking longer before returning to the outer sync loop.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:index_resync_duration}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, le))
+        legend: '{{coin}}'
+  sync.index_resync_errors:
+    title: Index resync errors per minute
+    description: Counts index resync failures, including retryable per-block misses that may still recover within the same iteration.
+    queries:
+      errors:
+        promql: sum(rate({{name:index_resync_errors}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (error) * 60
+        legend: '{{error}}'
+  sync.index_block_not_found_retries:
+    title: Index block-not-found retries per minute
+    description: Usually points to backend routing skew or Blockbook asking for a block before every backend node can serve it.
+    queries:
+      retries:
+        promql: sum(rate({{name:index_block_not_found_retries}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (instance) * 60
+        legend: '{{coin}} - {{instance}}'
+  sync.index_reorg_events:
+    title: Index reorg events
+    description: Detection path distinguishes in-stream prevHash mismatches, resync-triggered missing hashes and local rollback disconnects.
+    queries:
+      events:
+        promql: sum(increase({{name:index_reorg_events}}{job="blockbook", coin="$coin"}[$__interval])) by (type)
+        legend: '{{type}}'
+  sync.index_sync_yields:
+    title: Index sync yields
+    description: The retry loop gave control back to outer resync because a deadline elapsed or chain-state probes kept failing.
+    queries:
+      yields:
+        promql: sum(increase({{name:index_sync_yields}}{job="blockbook", coin="$coin"}[$__interval])) by (reason)
+        legend: '{{reason}}'
+  sync.block_stats_tip:
+    title: Sync block stats (tip)
+    description: Shows what each newly connected tip block contained; UTXO chains expose vin/vout and EVM chains expose token/internal transfers.
+    queries:
+      stats:
+        promql: avg_over_time({{name:sync_block_stats}}{job="blockbook", coin="$coin", scope="tip"}[5m])
+        legend: '{{instance}} {{kind}}'
+  sync.block_stats_bulk:
+    title: Sync block stats (bulk interval)
+    description: Bulk-sync interval totals; useful for comparing batch shape and throughput across chain families.
+    queries:
+      stats:
+        promql: '{{name:sync_block_stats}}{job="blockbook", coin="$coin", scope="bulk"}'
+        legend: '{{instance}} {{kind}}'
+  sync.mempool_size:
+    title: Mempool size
+    description: Populated from the last successful backend mempool reload; sudden drops may reflect backend data loss, not an empty network mempool.
+    queries:
+      size:
+        promql: '{{name:mempool_size}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  sync.mempool_resync_throughput_p95:
+    title: 95% quantile of mempool resync throughput
+    description: Transactions returned by a mempool reload divided by reload duration; low values mean the backend or parser is feeding the mempool slowly.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:mempool_resync_throughput_txs_per_second}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, chain, status, le))
+        legend: '{{coin}} - {{chain}} - {{status}}'
+  sync.mempool_resync_duration_p95:
+    title: 95% quantile of mempool resync duration
+    description: Large values can point to slow backend mempool reads or expensive mempool processing.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:mempool_resync_duration}}_bucket{job="blockbook", coin="$coin"}[5m])) by (coin, le))
+        legend: '{{coin}}'
+  sync.hotness_stats_tip:
+    title: Hotness stats (tip)
+    description: 'EVM hot-address cache behavior while connecting tip blocks: eligible lookups, LRU hits, promotions and evictions.'
+    queries:
+      stats:
+        promql: '{{name:sync_hotness_stats}}{job="blockbook", coin="$coin", scope="tip"}'
+        legend: '{{instance}} {{kind}}'
+  sync.hotness_stats_bulk:
+    title: Hotness stats (bulk interval)
+    description: EVM hot-address cache behavior during bulk sync intervals, where poor hit rates can amplify RocksDB reads.
+    queries:
+      stats:
+        promql: '{{name:sync_hotness_stats}}{job="blockbook", coin="$coin", scope="bulk"}'
+        legend: '{{instance}} {{kind}}'
+  sync.addr_contracts_cache_entries:
+    title: AddrContracts cache entries
+    description: Entry count for the Ethereum-type addressContracts cache; sudden churn with low hit rates points to capacity pressure.
+    queries:
+      entries:
+        promql: '{{name:addr_contracts_cache_entries}}{job="blockbook", coin="$coin"}'
+        legend: '{{instance}}'
+  sync.addr_contracts_cache_bytes:
+    title: AddrContracts cache bytes
+    description: Memory footprint estimate for capacity planning; compare with resident memory when tuning the cache.
+    queries:
+      bytes:
+        promql: '{{name:addr_contracts_cache_bytes}}{job="blockbook", coin="$coin"}'
+        legend: '{{instance}}'
+  sync.addr_contracts_cache_activity:
+    title: AddrContracts cache activity
+    description: Hits avoid RocksDB reads, misses fall through to storage, and flushes show cap- or timer-driven cache resets.
+    queries:
+      hits:
+        promql: rate({{name:addr_contracts_cache_hits_total}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} hits/min'
+      misses:
+        promql: rate({{name:addr_contracts_cache_misses_total}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} misses/min'
+      flushes:
+        promql: rate({{name:addr_contracts_cache_flush_total}}{job="blockbook", coin="$coin"}[1h]) * 60
+        legend: '{{instance}} flushes {{reason}}/min'
+  sync.tip_feed_age:
+    title: Backend tip feed age
+    description: Measures notification silence for EVM newHeads or Tron ZeroMQ; healthy is low and flat, while sawtooth near the threshold means watchdog polling is carrying sync.
+    queries:
+      age:
+        promql: '{{name:backend_subscription_age_seconds}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+      threshold:
+        promql: clamp(30 * {{name:average_block_time_seconds}}{job="blockbook", coin="$coin"}, 30, 300)
+        legend: '{{coin}} stall threshold'
+  sync.tip_feed_watchdog:
+    title: Tip feed watchdog interventions /s
+    description: watchdog_stall = feed went silent past the threshold; watchdog_tip_advanced = the fallback poll found blocks the feed missed (strongest signal the push feed is broken).
+    queries:
+      stall:
+        promql: sum by (coin) (rate({{name:backend_subscription_events}}{job="blockbook", coin="$coin", event="watchdog_stall"}[5m]))
+        legend: '{{coin}} watchdog_stall'
+      tip_advanced:
+        promql: sum by (coin) (rate({{name:backend_subscription_events}}{job="blockbook", coin="$coin", event="watchdog_tip_advanced"}[5m]))
+        legend: '{{coin}} watchdog_tip_advanced'
+  sync.tip_feed_reconnect_failures:
+    title: Tip feed reconnect / resubscribe failures /s
+    description: Sustained non-zero values usually mean the backend notification transport cannot recover after the feed stalls.
+    queries:
+      failures:
+        promql: sum by (coin) (rate({{name:backend_subscription_events}}{job="blockbook", coin="$coin", event=~"watchdog_reconnect_failed|resubscribe_failed"}[5m]))
+        legend: '{{coin}} failures'
+  sync.tip_feed_events:
+    title: Tip feed lifecycle rate
+    description: Use event labels to distinguish subscription errors, resubscribe cycles and watchdog heartbeats; watchdog_tick rate == 0 while up means the watchdog stopped ticking.
+    queries:
+      events:
+        promql: sum by (subscription, event) (rate({{name:backend_subscription_events}}{job="blockbook", coin="$coin"}[5m]))
+        legend: '{{subscription}} - {{event}}'
+  row.websocket:
+    title: Websocket
+  websocket.clients:
+    title: Websocket connected clients
+    description: Tracks Suite fan-out and connection pressure against high-connection-count deployments.
+    queries:
+      clients:
+        promql: '{{name:websocket_clients}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  websocket.request_rate:
+    title: Websocket requests per minute
+    description: Method and status labels separate normal client traffic from failing or unsupported websocket calls.
+    queries:
+      requests:
+        promql: sum(rate({{name:websocket_requests}}{job="blockbook", coin="$coin"}[1m])) by (coin, method, status) * 60
+        legend: '{{coin}} - {{method}} - {{status}}'
+  websocket.subscriptions:
+    title: Websocket subscriptions
+    description: Long-lived fan-out by method; newBlockTxs is tracked separately because it triggers per-block address matching.
+    queries:
+      subscribes:
+        promql: '{{name:websocket_subscribes}}{job="blockbook", coin="$coin"}'
+        legend: Websocket {{method}} - {{instance}}
+      new_block_txs:
+        promql: '{{name:websocket_new_block_txs_subscriptions}}{job="blockbook", coin="$coin"}'
+        legend: newBlockTxs subscriptions - {{instance}}
+  websocket.request_duration_p95:
+    title: 95% quantile of websocket request duration
+    description: Handler latency after a websocket request is accepted; large values can hold a pending-request slot longer.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:websocket_req_duration}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, method, le))
+        legend: '{{coin}} - {{method}}'
+  websocket.new_block_txs_rate:
+    title: Websocket newBlockTxs events per minute
+    description: Counts the match, convert and publish stages used to notify address subscribers about confirmed block transactions.
+    queries:
+      events:
+        promql: sum(rate({{name:websocket_new_block_txs}}{job="blockbook", coin="$coin"}[1m])) by (coin, stage, status) * 60
+        legend: '{{coin}} - {{stage}} - {{status}}'
+  websocket.new_block_txs_duration_p95:
+    title: 95% quantile of websocket newBlockTxs stage duration
+    description: Stage timing for per-block address matching and transaction conversion before websocket publication.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:websocket_new_block_txs_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, stage, le))
+        legend: '{{coin}} - {{stage}}'
+  websocket.addr_notifications:
+    title: Websocket address notifications per minute
+    description: Source label distinguishes mempool notifications from confirmed-block newBlockTxs notifications.
+    queries:
+      notifications:
+        promql: sum(rate({{name:websocket_addr_notifications}}{job="blockbook", coin="$coin"}[1m])) by (coin, source) * 60
+        legend: '{{coin}} - {{source}}'
+  websocket.channel_closes_unknown:
+    title: Websocket channel closes / unknown methods per minute
+    description: Combines connection-close reasons with requests rejected before dispatch because the method name was unsupported.
+    queries:
+      closes:
+        promql: sum(rate({{name:websocket_channel_closes}}{job="blockbook", coin="$coin"}[1m])) by (coin, reason) * 60
+        legend: closes {{reason}} - {{coin}}
+      unknown:
+        promql: sum(rate({{name:websocket_unknown_methods}}{job="blockbook", coin="$coin"}[1m])) by (coin, method) * 60
+        legend: unknown {{method}} - {{coin}}
+  websocket.eth_receipt:
+    title: Websocket eth receipt outcomes
+    description: Tracks best-effort receipt loading for EVM newBlockTxs notifications; errors do not stop publication.
+    queries:
+      outcomes:
+        promql: sum(rate({{name:websocket_eth_receipt}}{job="blockbook", coin="$coin"}[5m])) by (coin, status) * 60
+        legend: '{{coin}} {{status}}/min'
+  websocket.connection_requests:
+    width: 12
+    title: Websocket requests per connection
+    description: Distribution of how many requests each connection handled before it closed; a p99 that towers over p50 flags a single connection flooding messages, the signal for whether per-connection message rate limiting is worth adding. Recorded when a connection closes, so long-lived sockets only show up at disconnect.
+    queries:
+      p50:
+        promql: histogram_quantile(0.50, sum(rate({{name:websocket_connection_requests}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, le))
+        legend: '{{coin}} - p50'
+      p99:
+        promql: histogram_quantile(0.99, sum(rate({{name:websocket_connection_requests}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, le))
+        legend: '{{coin}} - p99'
+  websocket.connection_rejections:
+    width: 12
+    title: Websocket connection rejections per minute
+    description: 'Connection attempts the per-IP limiter rejected before the websocket upgrade (HTTP 429): connection_limit is more than 128 concurrent connections from one IP, connection_attempt_limit is more than 64 attempts/minute. Sustained non-zero values mean connection-flood abuse is being actively blocked.'
+    queries:
+      rejections:
+        promql: sum(rate({{name:websocket_connection_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
+        legend: '{{coin}} - {{reason}}/min'
+  websocket.unique_ips:
+    width: 12
+    title: Websocket connections vs unique client IPs
+    description: Open connections plotted against the number of distinct client IPs holding them; the gap between the two lines is connection clustering. Across the many Suite users a healthy deployment serves, the lines should track closely at roughly one connection per IP. A connections line pulling well above unique IPs means connections are concentrated on few sources.
+    queries:
+      connections:
+        promql: sum({{name:websocket_clients}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - connections'
+      unique_ips:
+        promql: sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - unique IPs'
+  websocket.connections_per_ip:
+    width: 12
+    title: Websocket connections per client IP
+    description: 'Average connections per IP (connections / unique IPs) and the busiest single IP. An average near 1 is a healthy spread across users; a rising average, or a max approaching the per-IP cap of 128, points to one source clustering many connections, the abuse pattern the per-IP limiter guards against.'
+    queries:
+      avg:
+        # clamp the denominator to 1: websocket_unique_ips is 0 at idle and only
+        # refreshes once a minute, so an unclamped divide yields NaN (0/0) at idle
+        # or +Inf (n/0) in the first minute after traffic resumes
+        promql: sum({{name:websocket_clients}}{job="blockbook", coin="$coin"}) by (coin) / clamp_min(sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin), 1)
+        legend: '{{coin}} - avg per IP'
+      max:
+        promql: max({{name:websocket_max_connections_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - max per IP'
+  row.general:
+    title: General
+  general.synchronized:
+    title: Synchronized (all coins)
+    description: 1 = Blockbook reports itself in sync with the backend, 0 = not in sync (mirrors /api/status inSync). Shown across all coins.
+    queries:
+      synchronized:
+        promql: '{{name:synchronized}}{job="blockbook"}'
+        legend: '{{coin}}'
+  general.block_height:
+    title: Block height (Blockbook vs backend)
+    description: A persistent gap means indexing is behind the backend tip; compare with synchronized and tip-age panels before paging.
+    queries:
+      blockbook:
+        promql: '{{name:best_height}}{job="blockbook", coin="$coin"}'
+        legend: Blockbook {{coin}} - {{instance}}
+      backend:
+        promql: '{{name:backend_best_height}}{job="blockbook", coin="$coin"}'
+        legend: Backend {{coin}} - {{instance}}
+  general.tip_age:
+    title: Backend tip age
+    description: Grows when the backend tip stops advancing, even if Blockbook is still serving requests.
+    queries:
+      age:
+        promql: '{{name:tip_age_seconds}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  general.avg_block_period:
+    title: Moving average of the last 100 blocks mining period (seconds)
+    description: Observed chain pace; compare with configured average block time for stalled-tip heuristics.
+    queries:
+      period:
+        promql: '{{name:avg_block_period}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  general.avg_block_time:
+    title: Configured average block time
+    description: Static chain config value used by sync heuristics; 0 means unavailable.
+    queries:
+      block_time:
+        promql: '{{name:average_block_time_seconds}}{job="blockbook"}'
+        legend: __auto
+  general.versions:
+    title: Blockbook & backend versions
+    description: Values live in metric labels, so the table is mainly for comparing deployed build/backend versions across instances.
+    queries:
+      info:
+        promql: '{{name:app_info}}{job="blockbook", coin="$coin"}'
+        legend: __auto
+  general.index_db_size:
+    title: Index DB size
+    description: Whole RocksDB footprint; pair with DB column size to identify the column family driving growth.
+    queries:
+      size:
+        promql: '{{name:index_db_size}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  general.dbcolumn_size:
+    title: RocksDB column-family size
+    description: Helps identify whether transactions, addresses or auxiliary indexes dominate disk usage.
+    queries:
+      size:
+        promql: '{{name:dbcolumn_size}}{job="blockbook", coin="$coin"}'
+        legend: '{{column}}'
+  general.cached_transactions:
+    title: Number of cached transactions
+    description: Tracks the transaction column family row count, not a separate in-memory cache.
+    queries:
+      rows:
+        promql: '{{name:dbcolumn_rows}}{job="blockbook", column="transactions", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  general.txcache_hit_ratio:
+    title: txCache hit ratio %
+    description: Derived from hit and miss counters; low values mean transaction reads are bypassing the cache or churning it.
+    queries:
+      ratio:
+        promql: 100 * sum({{name:txcache_efficiency}}{job="blockbook", status="hit", coin="$coin"}) by (coin, instance) / sum({{name:txcache_efficiency}}{job="blockbook", coin="$coin"}) by (coin, instance)
+        legend: '{{coin}} - {{instance}}'
+  general.xpub_cache_size:
+    title: Xpub cache size
+    description: Populated only for UTXO coins; growth reflects active xpub scanning and lookup reuse.
+    queries:
+      size:
+        promql: '{{name:xpub_cache_size}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  general.explorer_views:
+    title: Explorer views in 1 minute
+    description: Action labels distinguish UI routes, public API endpoints and redirects sharing the same HTTP server.
+    queries:
+      views:
+        promql: sum(rate({{name:explorer_views}}{job="blockbook", coin="$coin"}[1m])) by (action) * 60
+        legend: '{{action}}'
+  general.explorer_pending_requests:
+    title: Explorer pending requests
+    description: In-flight HTTP handlers; high values can indicate slow handlers even when request rate is normal.
+    queries:
+      pending:
+        promql: sum({{name:explorer_pending_requests}}{job="blockbook", coin="$coin"}) by (coin, method)
+        legend: Explorer {{method}} - {{coin}}
+  general.pending_requests:
+    title: Pending requests - by method
+    description: Compares queued work across websocket and HTTP handlers to show which interface is tying up workers.
+    queries:
+      websocket:
+        promql: sum({{name:websocket_pending_requests}}{job="blockbook", coin="$coin"}) by (coin, method)
+        legend: Websocket {{method}} - {{coin}}
+      explorer:
+        promql: sum({{name:explorer_pending_requests}}{job="blockbook", coin="$coin"}) by (coin, method)
+        legend: Explorer {{method}} - {{coin}}
+  general.estimated_fee:
+    title: Estimated fee rate
+    description: Fee estimates for 1/3/5/8 block targets; units are chain-specific.
+    queries:
+      blocks_1:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="1"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_3:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="3"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_5:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="5"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_8:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="8"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+  general.coingecko_requests:
+    title: CoinGecko requests
+    description: Status separates successful calls, throttling and hard errors from the same endpoint.
+    queries:
+      per_server:
+        promql: '{{name:coingecko_requests}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}} - {{status}} - {{endpoint}}'
+      total:
+        promql: sum({{name:coingecko_requests}}{job="blockbook", coin="$coin"})
+        legend: '{{coin}} total across servers'
+  general.coingecko_range_requests:
+    title: CoinGecko historical range choices
+    description: Reveals whether downloads are full, capped, tip-only or skipped, which explains missing or stale fiat history.
+    queries:
+      per_server:
+        promql: '{{name:coingecko_range_requests}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}} - {{range}}'
+      total:
+        promql: sum({{name:coingecko_range_requests}}{job="blockbook", coin="$coin"})
+        legend: '{{coin}} total across servers'
+  general.alt_fee_provider_requests:
+    title: Alternative fee provider requests
+    description: External fee-source health by provider; status distinguishes HTTP, network and decode failures.
+    queries:
+      requests:
+        promql: rate({{name:alternative_fee_provider_requests}}{job="blockbook", coin="$coin"}[$__rate_interval])
+        legend: '{{instance}} - {{provider}} - {{status}}'
+  general.balance_history_fiat_duration_p95:
+    title: 95% quantile of balance history fiat stage duration
+    description: Separates batch lookup from per-point fallback, so slow fallback behavior is visible in address and xpub paths.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:balance_history_fiat_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, path, mode, status, le))
+        legend: '{{coin}} - {{path}} - {{mode}} - {{status}}'
+  general.balance_history_fiat_fallbacks:
+    title: Balance history fiat fallbacks per minute
+    description: Counts failed batch fiat lookups that had to fall back to per-point ticker queries.
+    queries:
+      fallbacks:
+        promql: sum(rate({{name:balance_history_fiat_fallback_total}}{job="blockbook", coin="$coin"}[1m])) by (coin, path, reason) * 60
+        legend: '{{coin}} - {{path}} - {{reason}}'
+  general.balance_history_points_p95:
+    title: 95% quantile of balance history output points
+    description: Response size proxy for balance-history endpoints; larger point counts make fiat enrichment more expensive.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:balance_history_points}}_bucket{job="blockbook", coin="$coin"}[1m])) by (coin, path, le))
+        legend: '{{coin}} - {{path}}'
+  general.fiat_update_duration_p95:
+    title: 95% quantile of fiat update stage duration
+    description: Stage labels distinguish current, hourly, five-minute, historical and token ticker download work.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(increase({{name:fiat_rates_update_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[1h])) by (coin, stage, status, le))
+        legend: '{{coin}} - {{stage}} - {{status}}'

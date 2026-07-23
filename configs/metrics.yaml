@@ -1,0 +1,310 @@
+prefix: blockbook_
+metrics:
+  websocket_requests:
+    name: blockbook_websocket_requests
+    type: counter_vec
+    help: Method calls accepted by the websocket API, labeled by method and success/failure status
+    labels: [method, status]
+  websocket_subscribes:
+    name: blockbook_websocket_subscribes
+    type: gauge_vec
+    help: Active websocket subscription gauges, one series per subscription method
+    labels: [method]
+  websocket_clients:
+    name: blockbook_websocket_clients
+    type: gauge
+    help: Open client connections to the websocket API
+  websocket_req_duration:
+    name: blockbook_websocket_req_duration
+    type: histogram_vec
+    help: Time spent handling each websocket request, in microseconds, labeled by method
+    labels: [method]
+    buckets: [10, 100, 1000, 10000, 100000, 1000000, 100000000]
+  websocket_channel_closes:
+    name: blockbook_websocket_channel_closes
+    type: counter_vec
+    help: Connection close events observed by the websocket handler, split by close reason
+    labels: [reason]
+  websocket_unknown_methods:
+    name: blockbook_websocket_unknown_methods
+    type: counter_vec
+    help: Websocket requests rejected because the method name is not supported
+    labels: [method]
+  websocket_addr_notifications:
+    name: blockbook_websocket_addr_notifications
+    type: counter_vec
+    help: Per-address transaction notifications sent over websockets, split by mempool or new-block source
+    labels: [source]
+  websocket_new_block_txs:
+    name: blockbook_websocket_new_block_txs
+    type: counter_vec
+    help: Outcomes while matching, converting and publishing confirmed block transactions for newBlockTxs subscribers
+    labels: [stage, status]
+  websocket_new_block_txs_duration_seconds:
+    name: blockbook_websocket_new_block_txs_duration_seconds
+    type: histogram_vec
+    help: Time spent in newBlockTxs processing stages such as address matching and transaction conversion
+    labels: [stage]
+    buckets: [0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10]
+  balance_history_fiat_duration_seconds:
+    name: blockbook_balance_history_fiat_duration_seconds
+    type: histogram_vec
+    help: Time spent attaching fiat rates to address or xpub history responses, split by endpoint path, batch/fallback mode and status
+    labels: [path, mode, status]
+    buckets: [0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20]
+  balance_history_fiat_fallback_total:
+    name: blockbook_balance_history_fiat_fallback_total
+    type: counter_vec
+    help: Batch fiat-rate lookup failures that fell back to per-point lookups, split by endpoint path and reason
+    labels: [path, reason]
+  balance_history_points:
+    name: blockbook_balance_history_points
+    type: histogram_vec
+    help: Output point count for address or xpub balance-history responses
+    labels: [path]
+    buckets: [1, 2, 5, 10, 20, 40, 80, 160, 320, 640, 1280]
+  websocket_eth_receipt:
+    name: blockbook_websocket_eth_receipt
+    type: counter_vec
+    help: Outcomes when enriching Ethereum newBlockTxs websocket notifications with transaction receipts
+    labels: [status]
+  websocket_new_block_txs_subscriptions:
+    name: blockbook_websocket_new_block_txs_subscriptions
+    type: gauge
+    help: Address subscriptions that opted into confirmed-block newBlockTxs notifications
+  websocket_connection_requests:
+    name: blockbook_websocket_connection_requests
+    type: histogram
+    help: Requests handled per websocket connection over its lifetime, recorded when the connection closes
+    buckets: [1, 10, 100, 1000, 10000, 100000, 1000000]
+  websocket_connection_rejections:
+    name: blockbook_websocket_connection_rejections
+    type: counter_vec
+    help: Websocket connection attempts rejected by the per-IP limiter before upgrade, split by reason
+    labels: [reason]
+  websocket_unique_ips:
+    name: blockbook_websocket_unique_ips
+    type: gauge
+    help: Distinct client IP addresses currently holding at least one websocket connection; websocket_clients divided by this is the average connections per IP
+  websocket_max_connections_per_ip:
+    name: blockbook_websocket_max_connections_per_ip
+    type: gauge
+    help: Largest number of concurrent websocket connections held by any single client IP, the size of the biggest connection cluster
+  index_resync_duration:
+    name: blockbook_index_resync_duration
+    type: histogram
+    help: Time for one successful index resync (a sync-loop iteration that connected blocks), including catch-up work, retry handling and reorg checks, in milliseconds
+    buckets: [10, 100, 500, 1000, 2000, 5000, 10000]
+  mempool_resync_duration:
+    name: blockbook_mempool_resync_duration
+    type: histogram
+    help: Time to reload the backend mempool and rebuild Blockbook's in-memory mempool snapshot, in milliseconds
+    buckets: [10, 100, 500, 1000, 2000, 5000, 10000]
+  mempool_resync_throughput_txs_per_second:
+    name: blockbook_mempool_resync_throughput_txs_per_second
+    type: histogram_vec
+    help: Transactions returned by a mempool reload divided by reload duration; failures are recorded with status=failure and throughput 0
+    labels: [chain, status]
+    buckets: [0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000]
+  txcache_efficiency:
+    name: blockbook_txcache_efficiency
+    type: counter_vec
+    help: txCache lookups by outcome (hit or miss)
+    labels: [status]
+  rpc_latency:
+    name: blockbook_rpc_latency
+    type: histogram_vec
+    help: Blockbook-to-backend round-trip time in milliseconds, labeled by method and whether the call failed
+    labels: [method, error]
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000]
+  rpc_fallback_calls_total:
+    name: blockbook_rpc_fallback_calls_total
+    type: counter_vec
+    help: Non-primary chain-data paths selected when preferred lookups cannot answer, labeled by component and reason
+    labels: [component, reason]
+  eth_call_requests:
+    name: blockbook_eth_call_requests
+    type: counter_vec
+    help: EVM read calls issued by contract metadata, NFT, staking and related enrichment paths, split by call mode
+    labels: [mode]
+  eth_call_errors:
+    name: blockbook_eth_call_errors
+    type: counter_vec
+    help: Failed EVM read calls, split by call mode and provider/error class
+    labels: [mode, type]
+  eth_call_batch_size:
+    name: blockbook_eth_call_batch_size
+    type: histogram
+    help: EVM read operations coalesced into one backend request
+    buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+  eth_call_contract_info_requests:
+    name: blockbook_eth_call_contract_info_requests
+    type: counter_vec
+    help: Contract metadata field lookups such as symbol, name or decimals
+    labels: [field]
+  eth_call_token_uri_requests:
+    name: blockbook_eth_call_token_uri_requests
+    type: counter_vec
+    help: NFT metadata lookups for tokenURI-style contract methods
+    labels: [method]
+  eth_call_staking_pool_requests:
+    name: blockbook_eth_call_staking_pool_requests
+    type: counter_vec
+    help: Contract field reads used by staking enrichment code
+    labels: [field]
+  index_resync_errors:
+    name: blockbook_index_resync_errors
+    type: counter_vec
+    help: Index resync loop failures, labeled by coarse error outcome
+    labels: [error]
+  index_block_not_found_retries:
+    name: blockbook_index_block_not_found_retries
+    type: counter
+    help: Number of transient ErrBlockNotFound responses from the backend during sync (load-balanced RPC routing skew, indexer ahead of backend, etc.)
+  index_reorg_events:
+    name: blockbook_index_reorg_events
+    type: counter_vec
+    help: 'Chain reorganization events detected during sync, by detection path (fork: in-stream prevHash mismatch; resync: missing block hash triggered sync restart; disconnect: local-best fork triggered DB rollback)'
+    labels: [type]
+  index_sync_yields:
+    name: blockbook_index_sync_yields
+    type: counter_vec
+    help: 'Number of times sync yielded to the outer resync machinery for non-reorg reasons (reason=deadline: MaxStallDuration elapsed in retry loop; reason=probe_failed: chain-state probe failed for the configured streak)'
+    labels: [reason]
+  index_db_size:
+    name: blockbook_index_db_size
+    type: gauge
+    help: Whole RocksDB footprint on disk, in bytes
+  explorer_views:
+    name: blockbook_explorer_views
+    type: counter_vec
+    help: Explorer UI and public API hits, labeled by route action
+    labels: [action]
+  mempool_size:
+    name: blockbook_mempool_size
+    type: gauge
+    help: Transactions retained from the last successful backend reload
+  estimated_fee:
+    name: blockbook_estimated_fee
+    type: gauge_vec
+    help: Fee estimator output by target block count and conservative mode, in chain-specific units
+    labels: [blocks, conservative]
+  avg_block_period:
+    name: blockbook_avg_block_period
+    type: gauge
+    help: Observed average spacing of the last 100 blocks' header timestamps, in seconds (chain pace, not indexing cadence)
+  sync_block_stats:
+    name: blockbook_sync_block_stats
+    type: gauge_vec
+    help: Block processing counters for bulk intervals and chain-tip blocks, labeled by scope and stat kind
+    labels: [scope, kind]
+  sync_hotness_stats:
+    name: blockbook_sync_hotness_stats
+    type: gauge_vec
+    help: Ethereum-type hot-address cache activity during bulk and tip processing, labeled by scope and stat kind
+    labels: [scope, kind]
+  addr_contracts_cache_entries:
+    name: blockbook_addr_contracts_cache_entries
+    type: gauge
+    help: Number of entries in the Ethereum-type addressContracts in-memory cache
+  addr_contracts_cache_bytes:
+    name: blockbook_addr_contracts_cache_bytes
+    type: gauge
+    help: Estimated memory used by the Ethereum-type addressContracts cache
+  addr_contracts_cache_hits_total:
+    name: blockbook_addr_contracts_cache_hits_total
+    type: counter
+    help: addressContracts cache lookups served from memory
+  addr_contracts_cache_misses_total:
+    name: blockbook_addr_contracts_cache_misses_total
+    type: counter
+    help: addressContracts cache lookups that had to read from RocksDB
+  addr_contracts_cache_flush_total:
+    name: blockbook_addr_contracts_cache_flush_total
+    type: counter_vec
+    help: addressContracts cache flushes by trigger reason
+    labels: [reason]
+  dbcolumn_rows:
+    name: blockbook_dbcolumn_rows
+    type: gauge_vec
+    help: Row count per RocksDB column family
+    labels: [column]
+  dbcolumn_size:
+    name: blockbook_dbcolumn_size
+    type: gauge_vec
+    help: Disk footprint per RocksDB column family, in bytes
+    labels: [column]
+  app_info:
+    name: blockbook_app_info
+    type: gauge_vec
+    help: Build and backend version information exported as labels with value 1
+    labels: [blockbook_version, blockbook_commit, blockbook_buildtime, backend_version, backend_subversion, backend_protocol_version]
+  best_height:
+    name: blockbook_best_height
+    type: gauge
+    help: Newest block height persisted in Blockbook's index
+  synchronized:
+    name: blockbook_synchronized
+    type: gauge
+    help: 1 when /api/status reports inSync, 0 otherwise; sustained 0 outside initial sync means the index is not keeping up with the tip, for example after a stalled tip feed
+  backend_best_height:
+    name: blockbook_backend_best_height
+    type: gauge
+    help: Current backend tip height as last observed by Blockbook
+  tip_age_seconds:
+    name: blockbook_tip_age_seconds
+    type: gauge
+    help: Seconds since polling last observed the backend best height advance
+  backend_subscription_age_seconds:
+    name: blockbook_backend_subscription_age_seconds
+    type: gauge
+    help: Seconds since the push tip feed last delivered a notification; high or growing values indicate a stalled feed
+  backend_subscription_events:
+    name: blockbook_backend_subscription_events
+    type: counter_vec
+    help: Push tip-feed lifecycle and watchdog events, labeled by subscription (newHeads, newPendingTransactions, rpc, or zeromq for Tron) and event (error, resubscribed, resubscribe_failed, watchdog_tick, watchdog_stall, watchdog_reconnect, watchdog_reconnect_failed, watchdog_tip_advanced, watchdog_tip_rollback); watchdog_tick is emitted once per watchdog evaluation
+    labels: [subscription, event]
+  average_block_time_seconds:
+    name: blockbook_average_block_time_seconds
+    type: gauge
+    help: Configured nominal block interval for the chain, in seconds; 0 means unavailable
+  explorer_pending_requests:
+    name: blockbook_explorer_pending_requests
+    type: gauge_vec
+    help: In-flight explorer HTTP handlers, labeled by handler method
+    labels: [method]
+  websocket_pending_requests:
+    name: blockbook_websocket_pending_requests
+    type: gauge_vec
+    help: In-flight websocket request handlers, labeled by websocket method
+    labels: [method]
+  xpub_cache_size:
+    name: blockbook_xpub_cache_size
+    type: gauge
+    help: UTXO-only population of in-memory extended public-key lookup entries
+  coingecko_requests:
+    name: blockbook_coingecko_requests
+    type: counter_vec
+    help: External market-data API calls split by endpoint and outcome status
+    labels: [endpoint, status]
+  coingecko_range_requests:
+    name: blockbook_coingecko_range_requests
+    type: counter_vec
+    help: Historical ticker download ranges chosen by the fiat updater
+    labels: [range]
+  fiat_rates_update_duration_seconds:
+    name: blockbook_fiat_rates_update_duration_seconds
+    type: histogram_vec
+    help: Time spent in fiat-rate downloader stages such as current, hourly, historical and token ticker updates
+    labels: [stage, status]
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300]
+  alternative_fee_provider_requests:
+    name: blockbook_alternative_fee_provider_requests
+    type: counter_vec
+    help: Requests to external fee providers, labeled by provider and outcome status
+    labels: [provider, status]
+  eth_sync_rpc_errors:
+    name: blockbook_eth_sync_rpc_errors
+    type: counter_vec
+    help: Ethereum sync RPC failures by method and error status such as timeout, HTTP class, RPC error or generic error
+    labels: [method, status]
