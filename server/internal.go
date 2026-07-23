@@ -9,7 +9,6 @@ import (
 	"html/template"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -187,7 +186,11 @@ func (s *InternalServer) requireAdminAuth(next http.HandlerFunc) http.HandlerFun
 		}
 		// Browsers replay cached Basic credentials cross-origin, so reject
 		// state-changing requests forged by a page the admin visits (CSRF).
-		if isStateChangingMethod(r.Method) && !sameOrigin(r) {
+		if isStateChangingMethod(r.Method) && !s.sameOrigin(r) {
+			// Logged so a Host-rewriting reverse proxy (which makes the Origin
+			// mismatch r.Host) is diagnosable rather than a silent 403.
+			glog.Warningf("admin: rejected cross-origin %s %s (Origin=%q Referer=%q Host=%q, client %s)",
+				r.Method, r.URL.Path, r.Header.Get("Origin"), r.Header.Get("Referer"), r.Host, r.RemoteAddr)
 			http.Error(w, "cross-origin request forbidden", http.StatusForbidden)
 			return
 		}
@@ -207,24 +210,21 @@ func isStateChangingMethod(method string) bool {
 
 // sameOrigin reports whether a state-changing request is same-origin. Browsers
 // send Origin/Referer cross-origin; clients that send neither (curl) are allowed.
-func sameOrigin(r *http.Request) bool {
-	if origin := r.Header.Get("Origin"); origin != "" {
-		return originHostMatches(origin, r.Host)
+func (s *InternalServer) sameOrigin(r *http.Request) bool {
+	raw := r.Header.Get("Origin")
+	if raw == "" {
+		raw = r.Header.Get("Referer")
 	}
-	if referer := r.Header.Get("Referer"); referer != "" {
-		return originHostMatches(referer, r.Host)
+	if raw == "" {
+		return true
 	}
-	return true
-}
-
-// originHostMatches reports whether the Origin/Referer URL's host equals the
-// request Host. A malformed or opaque ("null") origin has no host and never matches.
-func originHostMatches(rawURL, host string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Host == "" {
+	scheme, host, ok := parseOrigin(raw)
+	if !ok || !strings.EqualFold(host, r.Host) {
 		return false
 	}
-	return u.Host == host
+	// When this server terminates TLS, a same-host request must also be https, so a
+	// plaintext page an on-path attacker serves on the port cannot forge to it.
+	return s.certFiles == "" || scheme == "https"
 }
 
 // validBasicAuth reports whether the request carries the configured admin Basic
