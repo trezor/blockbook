@@ -201,6 +201,22 @@ func TestGetSecondaryTicker_PerformsLookupWithSecondaryCurrency(t *testing.T) {
 	}
 }
 
+func TestGetAddrDescAndNormalizeAddressPreservesNonStandardScript(t *testing.T) {
+	parser := btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{})
+	w := &Worker{chainParser: parser}
+	addrDesc := bchain.AddressDescriptor{0x51} // OP_TRUE is indexable but has no address representation
+
+	gotAddrDesc, gotAddress, err := w.getAddrDescAndNormalizeAddress(addrDesc.String())
+
+	require.NoError(t, err)
+	require.Equal(t, addrDesc, gotAddrDesc)
+	require.Equal(t, addrDesc.String(), gotAddress)
+	require.True(t, parser.IsAddrDescIndexable(addrDesc))
+	addresses, _, err := parser.GetAddressesFromAddrDesc(addrDesc)
+	require.NoError(t, err)
+	require.Empty(t, addresses)
+}
+
 func TestTronBalanceHistoryOverrides(t *testing.T) {
 	tests := []struct {
 		name              string
