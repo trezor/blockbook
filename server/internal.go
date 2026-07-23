@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -184,8 +185,46 @@ func (s *InternalServer) requireAdminAuth(next http.HandlerFunc) http.HandlerFun
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		// Browsers replay cached Basic credentials cross-origin, so reject
+		// state-changing requests forged by a page the admin visits (CSRF).
+		if isStateChangingMethod(r.Method) && !sameOrigin(r) {
+			http.Error(w, "cross-origin request forbidden", http.StatusForbidden)
+			return
+		}
 		next(w, r)
 	}
+}
+
+// isStateChangingMethod reports whether a method can mutate state and needs CSRF
+// protection; the safe GET/HEAD/OPTIONS methods only read and are exempt.
+func isStateChangingMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	return true
+}
+
+// sameOrigin reports whether a state-changing request is same-origin. Browsers
+// send Origin/Referer cross-origin; clients that send neither (curl) are allowed.
+func sameOrigin(r *http.Request) bool {
+	if origin := r.Header.Get("Origin"); origin != "" {
+		return originHostMatches(origin, r.Host)
+	}
+	if referer := r.Header.Get("Referer"); referer != "" {
+		return originHostMatches(referer, r.Host)
+	}
+	return true
+}
+
+// originHostMatches reports whether the Origin/Referer URL's host equals the
+// request Host. A malformed or opaque ("null") origin has no host and never matches.
+func originHostMatches(rawURL, host string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return u.Host == host
 }
 
 // validBasicAuth reports whether the request carries the configured admin Basic

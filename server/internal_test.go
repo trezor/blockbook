@@ -65,6 +65,61 @@ func TestRequireAdminAuth(t *testing.T) {
 	}
 }
 
+// TestRequireAdminAuthCSRF covers the same-origin gate on state-changing methods:
+// reject cross-origin browser mutations, allow same-origin and header-less clients.
+func TestRequireAdminAuthCSRF(t *testing.T) {
+	const user, pass = "admin", "s3cr3t-pass"
+	const host = "blockbook-internal:9130"
+	tests := []struct {
+		name       string
+		method     string
+		host       string
+		origin     string
+		referer    string
+		wantStatus int
+	}{
+		// Safe methods are never subject to the origin check.
+		{"GET cross-origin -> allowed", http.MethodGet, host, "http://evil.example", "", http.StatusOK},
+		{"HEAD cross-origin -> allowed", http.MethodHead, host, "http://evil.example", "", http.StatusOK},
+		// State-changing methods: same-origin passes, cross-origin is forbidden.
+		{"POST same-origin -> allowed", http.MethodPost, host, "http://" + host, "", http.StatusOK},
+		{"POST cross-origin -> forbidden", http.MethodPost, host, "http://evil.example", "", http.StatusForbidden},
+		{"PUT cross-origin -> forbidden", http.MethodPut, host, "https://evil.example", "", http.StatusForbidden},
+		{"DELETE cross-origin -> forbidden", http.MethodDelete, host, "http://evil.example", "", http.StatusForbidden},
+		// Opaque origin (sandboxed iframe / data: document) never matches.
+		{"POST null origin -> forbidden", http.MethodPost, host, "null", "", http.StatusForbidden},
+		// Origin is authoritative; a matching Origin passes even with a foreign Referer.
+		{"POST origin match beats foreign referer -> allowed", http.MethodPost, host, "http://" + host, "http://evil.example/x", http.StatusOK},
+		// Referer is the fallback only when Origin is absent.
+		{"POST referer same-origin, no origin -> allowed", http.MethodPost, host, "", "http://" + host + "/admin", http.StatusOK},
+		{"POST referer cross-origin, no origin -> forbidden", http.MethodPost, host, "", "http://evil.example/x", http.StatusForbidden},
+		// Non-browser client: neither header present -> allowed (curl/automation).
+		{"POST no origin/referer -> allowed", http.MethodPost, host, "", "", http.StatusOK},
+		// A garbage Origin does not parse to our host -> forbidden.
+		{"POST unparsable origin -> forbidden", http.MethodPost, host, "://::::", "", http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newAdminServer(user, pass)
+			h := s.requireAdminAuth(okHandler)
+			r := httptest.NewRequest(tt.method, "/admin/runtime-settings/ALLOWED_RPC_CALL_TO", nil)
+			r.Host = tt.host
+			r.SetBasicAuth(user, pass)
+			if tt.origin != "" {
+				r.Header.Set("Origin", tt.origin)
+			}
+			if tt.referer != "" {
+				r.Header.Set("Referer", tt.referer)
+			}
+			w := httptest.NewRecorder()
+			h(w, r)
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
 func Test_urlPathSegment(t *testing.T) {
 	tests := []struct {
 		path string
