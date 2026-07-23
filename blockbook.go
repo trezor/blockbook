@@ -169,6 +169,11 @@ func mainWithExitCode() int {
 		}()
 	}
 
+	if *forceRepair && !*repair {
+		glog.Error("-forcerepair has no effect without -repair; re-run with both flags to force an inconsistent database into open state")
+		return exitCodeFatal
+	}
+
 	if *repair {
 		if err := db.RepairRocksDB(*dbPath, *forceRepair); err != nil {
 			glog.Errorf("RepairRocksDB %s: %v", *dbPath, err)
