@@ -277,12 +277,22 @@ func (s *WebsocketServer) checkOrigin(r *http.Request) bool {
 	return ok
 }
 
-func normalizeOrigin(origin string) (string, bool) {
-	u, err := url.Parse(origin)
+// parseOrigin parses an Origin/Referer URL into its lowercased scheme and host,
+// rejecting malformed values and the opaque "null" origin (ok=false).
+func parseOrigin(raw string) (scheme, host string, ok bool) {
+	u, err := url.Parse(raw)
 	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", "", false
+	}
+	return strings.ToLower(u.Scheme), strings.ToLower(u.Host), true
+}
+
+func normalizeOrigin(origin string) (string, bool) {
+	scheme, host, ok := parseOrigin(origin)
+	if !ok {
 		return "", false
 	}
-	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host), true
+	return scheme + "://" + host, true
 }
 
 func getWebsocketPayloadPreview(d []byte) string {
