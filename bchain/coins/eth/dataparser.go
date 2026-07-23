@@ -303,9 +303,47 @@ func (p *EthereumParser) ParseInputData(signatures *[]bchain.FourByteSignature, 
 	return &parsed
 }
 
-// getEnsRecord processes transaction log entry and tries to parse ENS record from it
-func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
+// maxEnsAliasNameLen caps the decoded ENS name length (in bytes) accepted as an
+// address alias, bounding storage and display abuse from an oversized log.
+const maxEnsAliasNameLen = 256
+
+// validEnsAliasName rejects names unsafe to store or render as an address alias:
+// empty, over the length cap, not valid UTF-8, or containing control characters
+// (NUL, newline, ANSI escapes) or bidirectional overrides (e.g. U+202E) that could
+// spoof or corrupt the displayed alias. Bidi_Control is used rather than the whole
+// Cf category so legitimate emoji names using the zero-width joiner still pass.
+func validEnsAliasName(name string) bool {
+	if len(name) == 0 || len(name) > maxEnsAliasNameLen {
+		return false
+	}
+	if !utf8.ValidString(name) {
+		return false
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return false
+		}
+	}
+	return true
+}
+
+// getEnsRecord processes transaction log entry and tries to parse ENS record from it.
+// registrars is the set of contract addresses (lower-cased, 0x-prefixed) trusted to
+// emit NameRegistered events: a log whose emitter (l.Address) is not in the set is
+// rejected, so an arbitrary contract cannot forge an ENS alias for any address. An
+// empty set therefore trusts no one and records nothing; the special entry "*"
+// accepts any emitter (legacy behavior, for chains with a different name service).
+func getEnsRecord(l *rpcLogWithTxHash, registrars map[string]struct{}) *bchain.AddressAliasRecord {
 	if len(l.Topics) == 3 && l.Topics[0] == nameRegisteredEventSignature && len(l.Data) >= 322 {
+		if _, acceptAny := registrars[ensRegistrarWildcard]; !acceptAny {
+			emitter := strings.ToLower(l.Address)
+			if !strings.HasPrefix(emitter, "0x") {
+				emitter = "0x" + emitter
+			}
+			if _, ok := registrars[emitter]; !ok {
+				return nil
+			}
+		}
 		address, err := addressFromPaddedHex(l.Topics[2])
 		if err != nil {
 			return nil
@@ -329,7 +367,11 @@ func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
 		if err != nil {
 			return nil
 		}
-		return &bchain.AddressAliasRecord{Address: address, Name: string(b)}
+		name := string(b)
+		if !validEnsAliasName(name) {
+			return nil
+		}
+		return &bchain.AddressAliasRecord{Address: address, Name: name}
 	}
 	return nil
 }

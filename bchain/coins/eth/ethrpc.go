@@ -95,17 +95,24 @@ type Configuration struct {
 	AddressContractsCacheMaxBytes     int64  `json:"address_contracts_cache_max_bytes,omitempty"`
 	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
 	AddressAliases                    bool   `json:"address_aliases,omitempty"`
-	MempoolTxTimeoutHours             int    `json:"mempoolTxTimeoutHours"`
-	MempoolTxTimeout                  string `json:"mempoolTxTimeout,omitempty"`
-	AlternativeMempoolTxTimeout       string `json:"alternativeMempoolTxTimeout,omitempty"`
-	QueryBackendOnMempoolResync       bool   `json:"queryBackendOnMempoolResync"`
-	ProcessInternalTransactions       bool   `json:"processInternalTransactions"`
-	ProcessZeroInternalTransactions   bool   `json:"processZeroInternalTransactions"`
-	ConsensusNodeVersionURL           string `json:"consensusNodeVersion"`
-	DisableMempoolSync                bool   `json:"disableMempoolSync,omitempty"`
-	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
-	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
-	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
+	// EnsRegistrars lists the contract addresses trusted to emit ENS
+	// NameRegistered events that become address aliases. Absent or empty means
+	// trust none (no ENS aliases are recorded); a list of addresses restricts to
+	// those emitters (e.g. the mainnet ENS ETHRegistrarController); the special
+	// entry "*" accepts any emitter, restoring the legacy behavior for chains
+	// with a different name service (e.g. .bnb).
+	EnsRegistrars                   []string `json:"ens_registrars,omitempty"`
+	MempoolTxTimeoutHours           int      `json:"mempoolTxTimeoutHours"`
+	MempoolTxTimeout                string   `json:"mempoolTxTimeout,omitempty"`
+	AlternativeMempoolTxTimeout     string   `json:"alternativeMempoolTxTimeout,omitempty"`
+	QueryBackendOnMempoolResync     bool     `json:"queryBackendOnMempoolResync"`
+	ProcessInternalTransactions     bool     `json:"processInternalTransactions"`
+	ProcessZeroInternalTransactions bool     `json:"processZeroInternalTransactions"`
+	ConsensusNodeVersionURL         string   `json:"consensusNodeVersion"`
+	DisableMempoolSync              bool     `json:"disableMempoolSync,omitempty"`
+	Eip1559Fees                     bool     `json:"eip1559Fees,omitempty"`
+	AlternativeEstimateFee          string   `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams    string   `json:"alternative_estimate_fee_params,omitempty"`
 	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
 	// required for EVM coins (translates duration settings to block counts).
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
@@ -283,6 +290,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
 	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
 	parser.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
+	// Trust none by default: absent/empty records no ENS aliases, an address list
+	// restricts to those emitters, and ["*"] accepts any (see EnsRegistrars).
+	parser.SetEnsRegistrars(c.EnsRegistrars)
 	s.Parser = parser
 	if c.RPCTimeout <= 0 {
 		glog.Warningf("rpc_timeout=%d is invalid, using default %d seconds", c.RPCTimeout, defaultRPCTimeoutSeconds)
@@ -1426,10 +1436,11 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
+	ensRegistrars := b.Parser.GetEnsRegistrars()
 	for i := range logs {
 		l := &logs[i]
 		r[l.Hash] = append(r[l.Hash], &l.RpcLog)
-		ens := getEnsRecord(l)
+		ens := getEnsRecord(l, ensRegistrars)
 		if ens != nil {
 			ensRecords = append(ensRecords, *ens)
 		}
