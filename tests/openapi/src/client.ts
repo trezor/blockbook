@@ -61,7 +61,7 @@ export class OpenApiFetchClient {
       try {
         const response = await fetch(url, {
           method: "GET",
-          signal: AbortSignal.timeout(30_000),
+          signal: AbortSignal.timeout(15_000),
         });
         const body = await response.text();
         if (attempt < 2 && isRetryableHTTPStatus(response.status)) {

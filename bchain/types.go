@@ -352,7 +352,7 @@ type BlockChain interface {
 	GetChainParser() BlockChainParser
 	// EthereumType specific
 	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
-	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
+	EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetEip1559Fees() (*Eip1559Fees, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
@@ -447,4 +447,23 @@ type MissingBlockRetry struct {
 	// MaxStallMs is the wall-clock budget per stuck block before the retry loop
 	// yields errResync to the outer machinery.
 	MaxStallMs int `json:"maxStallMs,omitempty"`
+}
+
+// XpubConfig carries per-chain overrides for xpub address expansion and
+// caching. All fields are optional; zero / missing values fall back to the
+// api package's built-in defaults. Operators set this under
+// `additional_params.xpubConfig` in `configs/coins/*.json`.
+type XpubConfig struct {
+	// MaxCacheExpirationSeconds is the TTL for cached xpub-to-address
+	// derivations (seconds). Zero / missing uses the default (3600).
+	MaxCacheExpirationSeconds int `json:"maxCacheExpirationSeconds,omitempty"`
+	// MaxCacheEntries is the hard cap on the number of cached xpubs.
+	// Zero / missing uses the default (1024).
+	MaxCacheEntries int `json:"maxCacheEntries,omitempty"`
+	// DefaultAddressesGap is the default BIP44 gap limit when the
+	// caller does not supply one (zero / missing → 20).
+	DefaultAddressesGap int `json:"defaultAddressesGap,omitempty"`
+	// MaxAddressesGap is the maximum user-supplied gap value the
+	// server will accept (zero / missing → 10000).
+	MaxAddressesGap int `json:"maxAddressesGap,omitempty"`
 }

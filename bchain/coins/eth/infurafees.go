@@ -173,7 +173,7 @@ func (p *infuraFeeProvider) processData(data *infuraFeesResult) bool {
 	fees.BaseFeeTrend = data.BaseFeeTrend
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	p.lastSync = time.Now()
+	p.observeSync(time.Now())
 	p.eip1559Fees = &fees
 	return true
 }

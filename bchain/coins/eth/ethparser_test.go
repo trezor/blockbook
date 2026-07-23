@@ -425,6 +425,57 @@ func TestEthereumParser_PackUnpackChainExtraData(t *testing.T) {
 	}
 }
 
+// TestEthereumParser_PackUnpackEffectiveGasPrice verifies that the receipt
+// effectiveGasPrice (used to compute L2 fees, issue #1227) survives a
+// PackTx/UnpackTx round trip through the database representation and is exposed
+// by GetEthereumTxData.
+func TestEthereumParser_PackUnpackEffectiveGasPrice(t *testing.T) {
+	p := NewEthereumParser(1, false)
+	original := &bchain.Tx{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
+				AccountNonce:     "0x1",
+				GasPrice:         "0x430e23400",
+				GasLimit:         "0x5208",
+				To:               "0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f",
+				Value:            "0x0",
+				Payload:          "0x",
+				Hash:             "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
+				BlockNumber:      "0x41eee8",
+				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
+				TransactionIndex: "0x0",
+			},
+			Receipt: &bchain.RpcReceipt{
+				GasUsed:           "0x5208",
+				EffectiveGasPrice: "0x3b9aca00", // 1_000_000_000
+				Status:            "0x1",
+				Logs:              []*bchain.RpcLog{},
+			},
+		},
+	}
+
+	packed, err := p.PackTx(original, 4321000, 1534858022)
+	if err != nil {
+		t.Fatalf("PackTx error: %v", err)
+	}
+	unpacked, _, err := p.UnpackTx(packed)
+	if err != nil {
+		t.Fatalf("UnpackTx error: %v", err)
+	}
+	csd, ok := unpacked.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok {
+		t.Fatalf("unexpected CoinSpecificData type: %T", unpacked.CoinSpecificData)
+	}
+	if csd.Receipt.EffectiveGasPrice != "0x3b9aca00" {
+		t.Fatalf("EffectiveGasPrice mismatch, got %s, want 0x3b9aca00", csd.Receipt.EffectiveGasPrice)
+	}
+
+	etd := p.GetEthereumTxData(unpacked)
+	if etd.EffectiveGasPrice == nil || etd.EffectiveGasPrice.Int64() != 1000000000 {
+		t.Fatalf("GetEthereumTxData EffectiveGasPrice mismatch, got %v, want 1000000000", etd.EffectiveGasPrice)
+	}
+}
+
 func TestEthereumParser_GetEthereumTxData(t *testing.T) {
 	p := NewEthereumParser(1, false)
 	tests := []struct {

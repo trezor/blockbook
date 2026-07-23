@@ -118,5 +118,60 @@ class GrafanaLayoutTest(unittest.TestCase):
         self.assertEqual({"h": 8, "w": 12, "x": 0, "y": 8}, panels[2]["gridPos"])
 
 
+def _valid_rendered_dash():
+    ds = {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}
+    return {
+        "schemaVersion": 41,
+        "__inputs": [{"name": "DS_PROMETHEUS", "type": "datasource"}],
+        "templating": {"list": [{"name": "coin", "type": "custom"}]},
+        "panels": [
+            {"id": 1, "type": "row", "collapsed": False, "panels": [],
+             "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}},
+            {"id": 2, "type": "timeseries", "datasource": ds,
+             "gridPos": {"h": 8, "w": 8, "x": 0, "y": 1},
+             "targets": [{"refId": "A", "datasource": ds, "expr": 'up{coin="$coin"}'}]},
+            {"id": 3, "type": "timeseries", "datasource": ds,
+             "gridPos": {"h": 8, "w": 8, "x": 8, "y": 1},
+             "targets": [{"refId": "A", "datasource": ds, "expr": "up"}]},
+        ],
+    }
+
+
+class GrafanaImportValidityTest(unittest.TestCase):
+    def test_valid_dashboard_has_no_problems(self):
+        self.assertEqual([], render_grafana.validate_rendered(_valid_rendered_dash()))
+
+    def test_duplicate_panel_id_is_rejected(self):
+        dash = _valid_rendered_dash()
+        dash["panels"][2]["id"] = 2
+        self.assertTrue(any("shared by" in p for p in render_grafana.validate_rendered(dash)))
+
+    def test_overlapping_panels_are_rejected(self):
+        dash = _valid_rendered_dash()
+        dash["panels"][2]["gridPos"]["x"] = 0  # now sits on top of panel id 2
+        self.assertTrue(any("overlap" in p for p in render_grafana.validate_rendered(dash)))
+
+    def test_panel_past_the_grid_is_rejected(self):
+        dash = _valid_rendered_dash()
+        dash["panels"][2]["gridPos"]["x"] = 20  # 20 + 8 > 24
+        self.assertTrue(any("past the 24-column grid" in p for p in render_grafana.validate_rendered(dash)))
+
+    def test_target_without_datasource_is_rejected(self):
+        dash = _valid_rendered_dash()
+        dash["panels"][1]["targets"][0].pop("datasource")
+        problems = render_grafana.validate_rendered(dash)
+        self.assertTrue(any("target" in p and "datasource" in p for p in problems))
+
+    def test_undeclared_input_variable_is_rejected(self):
+        dash = _valid_rendered_dash()
+        dash["__inputs"] = []  # ${DS_PROMETHEUS} now resolves to nothing
+        self.assertTrue(any("DS_PROMETHEUS" in p for p in render_grafana.validate_rendered(dash)))
+
+    def test_row_without_panels_list_is_rejected(self):
+        dash = _valid_rendered_dash()
+        dash["panels"][0].pop("panels")
+        self.assertTrue(any("'panels' list" in p for p in render_grafana.validate_rendered(dash)))
+
+
 if __name__ == "__main__":
     unittest.main()

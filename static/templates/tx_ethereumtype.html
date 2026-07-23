@@ -52,6 +52,12 @@
             <td>Gas Price</td>
             <td>{{amountSpan $eth.GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $eth.GasPrice $data "copyable"}} Gwei)</span></td>
         </tr>
+        {{if $eth.EffectiveGasPrice}}
+        <tr>
+            <td>Effective Gas Price</td>
+            <td>{{amountSpan $eth.EffectiveGasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $eth.EffectiveGasPrice $data "copyable"}} Gwei)</span></td>
+        </tr>
+        {{end}}
         {{if $eth.MaxPriorityFeePerGas}}
         <tr>
             <td>Max Priority Fee Per Gas</td>

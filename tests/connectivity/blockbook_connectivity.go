@@ -99,6 +99,10 @@ func BlockbookWSIntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: connectivityTimeout,
 		TLSClientConfig:  &tls.Config{InsecureSkipVerify: true},
+		// Honor proxy env like the HTTP client above so the dial works from
+		// behind an egress proxy (where the Blockbook host is only reachable
+		// via the proxy); a no-op when no proxy is configured.
+		Proxy: http.ProxyFromEnvironment,
 	}
 
 	conn, _, err := dialer.Dial(wsURL, nil)

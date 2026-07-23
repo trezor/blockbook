@@ -53,7 +53,8 @@ var (
 	rollbackHeight = flag.Int("rollback", -1, "rollback to the given height and quit")
 
 	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
-	repair      = flag.Bool("repair", false, "repair the database")
+	repair      = flag.Bool("repair", false, "repair physical RocksDB corruption and exit; does NOT recover an interrupted bulk import (use -fixutxo for UTXO index drift)")
+	forceRepair = flag.Bool("forcerepair", false, "with -repair, force a database left in inconsistent state (interrupted initial/bulk import) into open state; the index may be incomplete and a full resync is strongly advised")
 	fixUtxo     = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
@@ -168,8 +169,13 @@ func mainWithExitCode() int {
 		}()
 	}
 
+	if *forceRepair && !*repair {
+		glog.Error("-forcerepair has no effect without -repair; re-run with both flags to force an inconsistent database into open state")
+		return exitCodeFatal
+	}
+
 	if *repair {
-		if err := db.RepairRocksDB(*dbPath); err != nil {
+		if err := db.RepairRocksDB(*dbPath, *forceRepair); err != nil {
 			glog.Errorf("RepairRocksDB %s: %v", *dbPath, err)
 			return exitCodeFatal
 		}
@@ -571,11 +577,54 @@ func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool)
 		is.Host = name
 	}
 
-	is.WsGetAccountInfoLimit, _ = strconv.Atoi(os.Getenv(strings.ToUpper(is.GetNetwork()) + "_WS_GETACCOUNTINFO_LIMIT"))
+	limitStr := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_WS_GETACCOUNTINFO_LIMIT")
+	if limitStr == "" {
+		is.WsGetAccountInfoLimit = 42
+	} else {
+		is.WsGetAccountInfoLimit, _ = strconv.Atoi(limitStr)
+	}
 	if is.WsGetAccountInfoLimit > 0 {
 		glog.Info("WsGetAccountInfoLimit enabled with limit ", is.WsGetAccountInfoLimit)
 		is.WsLimitExceedingIPs = make(map[string]int)
 	}
+
+	// Balance-history transaction cap, split by transport. The shared
+	// <NET>_BALANCE_HISTORY_MAX_TXS is a backward-compatible fallback that sets
+	// the default for both surfaces; the transport-specific
+	// <NET>_WS_BALANCE_HISTORY_MAX_TXS / <NET>_REST_BALANCE_HISTORY_MAX_TXS then
+	// override their respective surface.
+	netUpper := strings.ToUpper(is.GetNetwork())
+	parseMaxTxs := func(envVar string, def int) (int, error) {
+		if v, ok := os.LookupEnv(netUpper + envVar); ok {
+			n, err := strconv.Atoi(strings.TrimSpace(v))
+			if err != nil || n < 0 {
+				return 0, errors.Errorf("%s%s: invalid value %q (want a non-negative integer, 0 to disable)", netUpper, envVar, v)
+			}
+			return n, nil
+		}
+		return def, nil
+	}
+	wsDefault, restDefault := api.DefaultBalanceHistoryMaxTxsWS, api.DefaultBalanceHistoryMaxTxsREST
+	if shared, err := parseMaxTxs("_BALANCE_HISTORY_MAX_TXS", -1); err != nil {
+		return nil, err
+	} else if shared >= 0 {
+		wsDefault, restDefault = shared, shared
+	}
+	if is.BalanceHistoryMaxTxsWS, err = parseMaxTxs("_WS_BALANCE_HISTORY_MAX_TXS", wsDefault); err != nil {
+		return nil, err
+	}
+	if is.BalanceHistoryMaxTxsREST, err = parseMaxTxs("_REST_BALANCE_HISTORY_MAX_TXS", restDefault); err != nil {
+		return nil, err
+	}
+	logMaxTxs := func(surface string, n int) {
+		if n > 0 {
+			glog.Info("BalanceHistoryMaxTxs ", surface, " limit ", n, " transactions per request")
+		} else {
+			glog.Info("BalanceHistoryMaxTxs ", surface, " unlimited")
+		}
+	}
+	logMaxTxs("WS", is.BalanceHistoryMaxTxsWS)
+	logMaxTxs("REST", is.BalanceHistoryMaxTxsREST)
 	return is, nil
 }
 
@@ -763,8 +812,23 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
+// runStartupSelfHealing runs blocking, at-startup self-healing tasks once RocksDB is
+// initialized. It blocks until done so the rest of startup proceeds against a consistent DB.
+// Future self-healing tasks can be added here; today it reconciles missing historical fiat
+// rates before the periodic downloader loops start.
+func runStartupSelfHealing() {
+	if fiatRates != nil && fiatRates.Enabled {
+		// chanOsSignal is closed on shutdown, so a SIGTERM during a long reconciliation
+		// aborts it promptly instead of blocking startup-shutdown until the backfill ends.
+		fiatRates.ReconcileHistoricalRatesAtStartup(chanOsSignal)
+	}
+}
+
 func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, config *common.Config) {
 	if fiatRates.Enabled {
+		// Block on startup self-healing before the periodic loops begin, so historical gaps
+		// are repaired via the CDN without contending with the Free-tier tip loop.
+		runStartupSelfHealing()
 		go fiatRates.RunDownloader()
 	}
 

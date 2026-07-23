@@ -2,10 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"io"
 	"math/big"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -32,16 +32,26 @@ const outChannelSize = 500
 const defaultTimeout = 60 * time.Second
 const unknownMethodLabel = "unknown"
 const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
-const maxWebsocketPendingRequests = 48
+
+// defaultWsPendingRequestsLimit is the default per-connection cap on
+// concurrently executing requests; override with
+// <network>_WS_PENDING_REQUESTS_LIMIT (0 disables), see docs/env.md.
+const defaultWsPendingRequestsLimit = 48
+
+// maxWebsocketMempoolFiltersResponses caps per-connection getMempoolFilters
+// requests over their whole lifecycle: the slot is acquired before the handler
+// computes the (potentially large) response and released only after the
+// response is written to the websocket (or drained on close). The point is to
+// bound the peak memory held in computed-but-unwritten filter responses, so the
+// cap deliberately covers compute, queueing, and write together; a client that
+// pipelines more than this many requests, or reads slower than it requests,
+// gets a mempool_filters_limit error instead of queueing further responses.
+const maxWebsocketMempoolFiltersResponses = 4
 const maxWebsocketActiveRequests = 2048
-const maxWebsocketConnectionAttemptsPerIP = 64
-const maxWebsocketConnectionsPerIP = 128
 const maxWebsocketEstimateFeeBlocks = 32
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
-const websocketConnectionAttemptWindow = time.Minute
-const websocketConnectionLimiterTTL = 10 * time.Minute
-const websocketConnectionLimiterCleanupInterval = time.Minute
+const maxWebsocketSubscribeFiatRatesTokens = 1000
 const websocketLogPreviewBytes = 256
 
 // allRates is a special "currency" parameter that means all available currencies
@@ -54,13 +64,23 @@ var (
 	connectionCounter uint64
 )
 
+// websocketChannel is a single client connection. ipKey is the per-IP rate-limit
+// key (IPv6 aggregated to /64); blockKey is the IP-blocklist key (full /128) kept
+// narrower so a hard block does not take out a whole shared /64; blockable records
+// whether blockKey is safe to add to the blocklist; messageRate is the per-connection
+// message counter (nil when disabled). All are touched only by ServeHTTP/inputLoop.
 type websocketChannel struct {
 	id                           uint64
 	requests                     uint64 // total requests received on this connection, accessed atomically
 	conn                         *websocket.Conn
 	out                          chan *WsRes
 	pendingRequests              chan struct{}
+	mempoolFiltersSlots          chan struct{} // semaphore capping in-flight getMempoolFilters responses, see maxWebsocketMempoolFiltersResponses
 	ip                           string
+	ipKey                        string
+	blockKey                     string
+	blockable                    bool
+	messageRate                  *connMessageRate
 	requestHeader                http.Header
 	alive                        bool
 	aliveLock                    sync.Mutex
@@ -103,9 +123,31 @@ type WebsocketServer struct {
 	fiatRatesTokenSubscriptions  map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock   sync.Mutex
 	allowedOrigins               map[string]struct{}
-	allowedRpcCallTo             map[string]struct{}
 	trustedProxyPrefixes         []netip.Prefix
-	websocketLimiter             *websocketConnectionLimiter
+	// cloudflarePrefixes gates trust of the CF-Connecting-* headers: when
+	// non-empty, those headers are honored only when the TCP peer is inside one
+	// of these ranges (or a loopback/private proxy). Empty disables verification
+	// and falls back to the legacy "trust CF headers from any peer" behavior.
+	cloudflarePrefixes []netip.Prefix
+	// trustPseudoIPv6 honors the (otherwise client-spoofable) CF-Connecting-IPv6
+	// header; only safe with Cloudflare "Pseudo IPv4: Overwrite Headers" on.
+	trustPseudoIPv6 bool
+	// messageRateLimit / messageRateWindow bound how many messages a single
+	// connection may send in a trailing window before it is closed; 0 disables.
+	// ipBlockDuration is how long an offending client key is blocked from
+	// opening new connections; 0 disables blocking (the connection is still
+	// closed on breach).
+	messageRateLimit  int
+	messageRateWindow time.Duration
+	ipBlockDuration   time.Duration
+	// pendingRequestsLimit caps how many requests a single connection may have
+	// executing concurrently before it is closed; 0 disables the cap.
+	pendingRequestsLimit int
+	// ipBlockEnabled gates the whole IP blocklist: true only when the rate limit can
+	// produce breaches (messageRateLimit > 0) and blocking is configured
+	// (ipBlockDuration > 0). When false, all block checks/sweeps are skipped.
+	ipBlockEnabled   bool
+	websocketLimiter *websocketConnectionLimiter
 	// Shutdown coordination: protects shuttingDown + activeChannels and gates
 	// trackWork so RocksDB cannot be closed while a WS goroutine is mid-read.
 	shutdownMu     sync.Mutex
@@ -113,18 +155,6 @@ type WebsocketServer struct {
 	activeChannels map[*websocketChannel]struct{}
 	activeRequests int
 	requestWg      sync.WaitGroup
-}
-
-type websocketClientLimit struct {
-	active   int
-	attempts []time.Time
-	lastSeen time.Time
-}
-
-type websocketConnectionLimiter struct {
-	mux         sync.Mutex
-	clients     map[string]*websocketClientLimit
-	lastCleanup time.Time
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -157,34 +187,49 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		activeChannels:              make(map[*websocketChannel]struct{}),
 	}
 	s.upgrader = &websocket.Upgrader{
+		// Bound the handshake so a client that stalls mid-upgrade releases the
+		// connection instead of holding it open indefinitely
+		HandshakeTimeout:  httpReadHeaderTimeout,
 		ReadBufferSize:    1024 * 32,
 		WriteBufferSize:   1024 * 32,
+		WriteBufferPool:   &sync.Pool{},
 		CheckOrigin:       s.checkOrigin,
 		EnableCompression: true,
 	}
 	originEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_ALLOWED_ORIGINS"
 	s.allowedOrigins = parseAllowedOrigins(originEnvName, os.Getenv(originEnvName))
-	envRpcCall := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_ALLOWED_RPC_CALL_TO")
-	if envRpcCall != "" {
-		s.allowedRpcCallTo = make(map[string]struct{})
-		for _, c := range strings.Split(envRpcCall, ",") {
-			s.allowedRpcCallTo[strings.ToLower(c)] = struct{}{}
-		}
-		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
+	if err := initRpcCallAllowlists(db, is); err != nil {
+		return nil, err
 	}
-	trustedEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_TRUSTED_PROXIES"
-	prefixes, err := parseTrustedProxies(trustedEnvName, os.Getenv(trustedEnvName))
+	clientIPCfg, err := readClientIPConfig(is.GetNetwork())
 	if err != nil {
 		return nil, err
 	}
-	s.trustedProxyPrefixes = prefixes
-	if len(prefixes) > 0 {
-		glog.Info("Trusted proxy CIDRs: ", prefixes)
+	s.trustedProxyPrefixes = clientIPCfg.trustedProxies
+	if len(clientIPCfg.trustedProxies) > 0 {
+		glog.Info("Trusted proxy CIDRs (", clientIPCfg.trustedEnvName, "): ", clientIPCfg.trustedProxies)
+	}
+	s.cloudflarePrefixes = clientIPCfg.cloudflarePrefixes
+	if len(clientIPCfg.cloudflarePrefixes) > 0 {
+		glog.Info("Cloudflare peer verification enabled for CF-Connecting-* headers (", clientIPCfg.cloudflareEnvName, "; ", len(clientIPCfg.cloudflarePrefixes), " CIDRs)")
+	} else {
+		glog.Warning("Cloudflare peer verification disabled (", clientIPCfg.cloudflareEnvName, "=off); CF-Connecting-* headers are trusted from any peer")
+	}
+	s.trustPseudoIPv6 = clientIPCfg.trustPseudoIPv6
+	if clientIPCfg.trustPseudoIPv6 {
+		glog.Info("Cloudflare Pseudo-IPv4 mode enabled (", clientIPCfg.pseudoIPv6EnvName, "); CF-Connecting-IPv6 is honored as the client IP (requires Cloudflare \"Pseudo IPv4: Overwrite Headers\")")
+	}
+	if err := s.configureMessageRateLimit(is.GetNetwork()); err != nil {
+		return nil, err
+	}
+	if err := s.configurePendingRequestsLimit(is.GetNetwork()); err != nil {
+		return nil, err
 	}
 	if s.metrics != nil {
 		s.metrics.WebsocketNewBlockTxsSubscriptions.Set(0)
 		s.metrics.WebsocketUniqueIPs.Set(0)
 		s.metrics.WebsocketMaxConnectionsPerIP.Set(0)
+		s.metrics.WebsocketBlockedIPs.Set(0)
 	}
 	go s.runWebsocketLimiterMaintenance(websocketConnectionLimiterCleanupInterval)
 	return s, nil
@@ -216,42 +261,6 @@ func parseAllowedOrigins(originEnvName, envAllowedOrigins string) map[string]str
 	return allowedOrigins
 }
 
-// parseTrustedProxies parses a comma-separated list of CIDRs that augment the
-// loopback/RFC1918/link-local defaults for trusting X-Real-Ip. Any prefix
-// broad enough to cover meaningful chunks of the public internet is rejected
-// with an error so misconfiguration fails fast at startup rather than
-// silently turning X-Real-Ip into an IP-spoofing primitive.
-func parseTrustedProxies(envName, value string) ([]netip.Prefix, error) {
-	if strings.TrimSpace(value) == "" {
-		return nil, nil
-	}
-	const minIPv4Bits = 8
-	const minIPv6Bits = 16
-	var prefixes []netip.Prefix
-	for _, raw := range strings.Split(value, ",") {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		p, err := netip.ParsePrefix(raw)
-		if err != nil {
-			return nil, fmt.Errorf("%s: invalid CIDR %q: %w", envName, raw, err)
-		}
-		if p.Addr().Is4In6() {
-			return nil, fmt.Errorf("%s: refusing IPv4-mapped CIDR %q; use IPv4 CIDR notation", envName, raw)
-		}
-		bits := p.Bits()
-		if p.Addr().Is4() && bits < minIPv4Bits {
-			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv4)", envName, raw, bits, minIPv4Bits)
-		}
-		if p.Addr().Is6() && !p.Addr().Is4In6() && bits < minIPv6Bits {
-			return nil, fmt.Errorf("%s: refusing CIDR %q: prefix /%d is too broad (minimum /%d for IPv6)", envName, raw, bits, minIPv6Bits)
-		}
-		prefixes = append(prefixes, p.Masked())
-	}
-	return prefixes, nil
-}
-
 func (s *WebsocketServer) checkOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -276,191 +285,6 @@ func normalizeOrigin(origin string) (string, bool) {
 	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host), true
 }
 
-func newWebsocketConnectionLimiter() *websocketConnectionLimiter {
-	return &websocketConnectionLimiter{
-		clients: make(map[string]*websocketClientLimit),
-	}
-}
-
-func (l *websocketConnectionLimiter) accept(ip string, now time.Time) (bool, string) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-
-	l.cleanupLocked(now)
-	client := l.clients[ip]
-	if client == nil {
-		client = &websocketClientLimit{}
-		l.clients[ip] = client
-	}
-	client.lastSeen = now
-	client.trimAttempts(now)
-
-	if client.active >= maxWebsocketConnectionsPerIP {
-		return false, "connection_limit"
-	}
-	if len(client.attempts) >= maxWebsocketConnectionAttemptsPerIP {
-		return false, "connection_attempt_limit"
-	}
-
-	client.attempts = append(client.attempts, now)
-	client.active++
-	return true, ""
-}
-
-func (l *websocketConnectionLimiter) release(ip string, now time.Time) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-
-	client := l.clients[ip]
-	if client == nil {
-		return
-	}
-	if client.active > 0 {
-		client.active--
-	}
-	client.lastSeen = now
-	l.cleanupLocked(now)
-}
-
-func (l *websocketConnectionLimiter) cleanupLocked(now time.Time) {
-	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < websocketConnectionLimiterCleanupInterval {
-		return
-	}
-	l.sweepLocked(now)
-}
-
-func (l *websocketConnectionLimiter) sweepLocked(now time.Time) {
-	l.lastCleanup = now
-	for ip, client := range l.clients {
-		client.trimAttempts(now)
-		if client.active == 0 && now.Sub(client.lastSeen) > websocketConnectionLimiterTTL {
-			delete(l.clients, ip)
-		}
-	}
-}
-
-// sweep evicts TTL-expired idle entries unconditionally. Used by the
-// background ticker so that idle servers don't retain stale entries.
-func (l *websocketConnectionLimiter) sweep(now time.Time) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-	l.sweepLocked(now)
-}
-
-// stats returns the number of distinct client IPs that currently hold at least
-// one active websocket connection and the largest per-IP connection count. The
-// snapshot is taken under the limiter lock; idle entries retained for the TTL
-// window are skipped so the numbers track live connections, not recent history.
-func (l *websocketConnectionLimiter) stats() (uniqueActiveIPs int, maxConnectionsPerIP int) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-	for _, client := range l.clients {
-		if client.active <= 0 {
-			continue
-		}
-		uniqueActiveIPs++
-		if client.active > maxConnectionsPerIP {
-			maxConnectionsPerIP = client.active
-		}
-	}
-	return uniqueActiveIPs, maxConnectionsPerIP
-}
-
-// runWebsocketLimiterMaintenance ticks every interval to sweep TTL-expired
-// entries from the connection limiter and to publish the per-IP clustering
-// gauges. It does not terminate; it is started once per WebsocketServer at
-// construction time and runs for the lifetime of the process.
-func (s *WebsocketServer) runWebsocketLimiterMaintenance(interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for now := range ticker.C {
-		s.websocketLimiter.sweep(now)
-		if s.metrics != nil {
-			uniqueIPs, maxConnectionsPerIP := s.websocketLimiter.stats()
-			s.metrics.WebsocketUniqueIPs.Set(float64(uniqueIPs))
-			s.metrics.WebsocketMaxConnectionsPerIP.Set(float64(maxConnectionsPerIP))
-		}
-	}
-}
-
-func (client *websocketClientLimit) trimAttempts(now time.Time) {
-	cutoff := now.Add(-websocketConnectionAttemptWindow)
-	i := 0
-	for i < len(client.attempts) && client.attempts[i].Before(cutoff) {
-		i++
-	}
-	if i > 0 {
-		copy(client.attempts, client.attempts[i:])
-		client.attempts = client.attempts[:len(client.attempts)-i]
-	}
-}
-
-func getIP(r *http.Request, trustedProxies []netip.Prefix) string {
-	if len(trustedProxies) == 0 {
-		if ip, ok := parseIP(r.Header.Get("CF-Connecting-IPv6")); ok {
-			return ip
-		}
-		if ip, ok := parseIP(r.Header.Get("CF-Connecting-IP")); ok {
-			return ip
-		}
-	}
-
-	host := r.RemoteAddr
-	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		host = h
-	}
-	remote, remoteOK := parseAddr(host)
-
-	// Trust X-Real-Ip only when the TCP peer is on a private/loopback network
-	// (an upstream proxy on the same host or LAN) or in a configured trusted
-	// CIDR. For direct internet peers the header is attacker-controlled and
-	// would let any client spoof their IP past the per-IP rate limiter.
-	if remoteOK && isTrustedProxy(remote, trustedProxies) {
-		if ip, ok := parseIP(r.Header.Get("X-Real-Ip")); ok {
-			return ip
-		}
-	}
-
-	if remoteOK {
-		return remote.String()
-	}
-	return strings.TrimSpace(r.RemoteAddr)
-}
-
-func parseIP(value string) (string, bool) {
-	addr, ok := parseAddr(value)
-	if !ok {
-		return "", false
-	}
-	return addr.String(), true
-}
-
-func parseAddr(value string) (netip.Addr, bool) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return netip.Addr{}, false
-	}
-	addr, err := netip.ParseAddr(value)
-	if err != nil {
-		return netip.Addr{}, false
-	}
-	// Strip IPv6 zone identifier so that rate-limit keys are zone-free and
-	// netip.Prefix.Contains matches unzoned prefixes against link-local peers.
-	return addr.WithZone(""), true
-}
-
-func isTrustedProxy(addr netip.Addr, extras []netip.Prefix) bool {
-	if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() {
-		return true
-	}
-	for _, p := range extras {
-		if p.Contains(addr) {
-			return true
-		}
-	}
-	return false
-}
-
 func getWebsocketPayloadPreview(d []byte) string {
 	if len(d) <= websocketLogPreviewBytes {
 		return string(d)
@@ -481,10 +305,40 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server shutting down", http.StatusServiceUnavailable)
 		return
 	}
-	ip := getIP(r, s.trustedProxyPrefixes)
+	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes, s.trustPseudoIPv6)
+	ipKey := rateLimitKey(ip)
+	// blockKey/blockable are computed only when the IP blocklist is enabled (skips the
+	// O(prefixes) isBlockableKey scan otherwise). blockKey keeps IPv6 at the full /128
+	// so a block never takes out a shared /64 (ipKey still aggregates to /64).
+	bKey := ""
+	blockable := false
+	if s.ipBlockEnabled {
+		bKey = blockKey(ip)
+		blockable = blockSafe && isBlockableKey(ip, s.trustedProxyPrefixes, s.cloudflarePrefixes)
+	}
+
+	// Reject keys that are on the temporary IP blocklist before doing any
+	// upgrade work. Checked ahead of the connection limiter so a blocked client
+	// cannot keep consuming attempt slots.
+	if s.ipBlockEnabled {
+		if blocked, rejected := s.is.IsWsIPBlocked(bKey, time.Now()); blocked {
+			if s.metrics != nil {
+				s.metrics.WebsocketBlockedConnections.Inc()
+			}
+			// A blocked client may hammer reconnects for the whole block
+			// duration; log the first rejection and then every 1000th instead of
+			// one line per attempt.
+			if rejected == 1 || rejected%1000 == 0 {
+				glog.Warning("Websocket connection rejected, ", ip, ", ip_blocked (attempt ", rejected, ")")
+			}
+			http.Error(w, "Too many websocket connections", http.StatusTooManyRequests)
+			return
+		}
+	}
+
 	limited := false
 	if s.websocketLimiter != nil {
-		ok, reason := s.websocketLimiter.accept(ip, time.Now())
+		ok, reason := s.websocketLimiter.accept(ipKey, time.Now())
 		if !ok {
 			if s.metrics != nil {
 				s.metrics.WebsocketConnectionRejections.With(common.Labels{"reason": reason}).Inc()
@@ -498,20 +352,41 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		if limited {
-			s.websocketLimiter.release(ip, time.Now())
+			s.websocketLimiter.release(ipKey, time.Now())
 		}
 		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	// Upgrade inherits the HTTP server's read/write deadlines, which would break
+	// long-lived WebSocket streams.
+	// Clear them; outputLoop sets its own write deadlines.
+	_ = conn.SetReadDeadline(time.Time{})
+	_ = conn.SetWriteDeadline(time.Time{})
 	conn.SetReadLimit(maxWebsocketMessageBytes)
+	// a nil channel disables the per-connection pending request cap
+	var pendingRequests chan struct{}
+	if s.pendingRequestsLimit > 0 {
+		pendingRequests = make(chan struct{}, s.pendingRequestsLimit)
+	}
 	c := &websocketChannel{
-		id:              atomic.AddUint64(&connectionCounter, 1),
-		conn:            conn,
-		out:             make(chan *WsRes, outChannelSize),
-		pendingRequests: make(chan struct{}, maxWebsocketPendingRequests),
-		ip:              ip,
-		requestHeader:   r.Header,
-		alive:           true,
+		id:                  atomic.AddUint64(&connectionCounter, 1),
+		conn:                conn,
+		out:                 make(chan *WsRes, outChannelSize),
+		pendingRequests:     pendingRequests,
+		mempoolFiltersSlots: make(chan struct{}, maxWebsocketMempoolFiltersResponses),
+		ip:                  ip,
+		ipKey:               ipKey,
+		blockKey:            bKey,
+		blockable:           blockable,
+		requestHeader:       r.Header,
+		alive:               true,
+	}
+	if s.messageRateLimit > 0 {
+		c.messageRate = newConnMessageRate(s.messageRateWindow)
+		// count ping/pong control frames too; gorilla handles them inside
+		// ReadMessage so they never reach inputLoop and would otherwise be a
+		// free flood channel
+		s.installControlFrameRateLimit(c)
 	}
 	if s.is.WsGetAccountInfoLimit > 0 {
 		c.getAddressInfoDescriptors = make(map[string]struct{})
@@ -519,7 +394,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.registerChannel(c) {
 		conn.Close()
 		if limited {
-			s.websocketLimiter.release(ip, time.Now())
+			s.websocketLimiter.release(ipKey, time.Now())
 		}
 		return
 	}
@@ -641,7 +516,7 @@ func (c *websocketChannel) CloseOut(reason string) (bool, string) {
 		//clean out
 		close(c.out)
 		for len(c.out) > 0 {
-			<-c.out
+			c.finalize(<-c.out)
 		}
 		return true, closeReason
 	}
@@ -653,20 +528,29 @@ func (c *websocketChannel) DataOut(data *WsRes) {
 	defer c.aliveLock.Unlock()
 	if c.alive {
 		if len(c.out) < outChannelSize-1 {
+			// Enqueued: ownership passes to the out pipeline, which finalizes it
+			// once written (outputLoop) or drained (CloseOut).
 			c.out <- data
-		} else {
-			glog.Warning("Channel ", c.id, " overflow, closing")
-			if c.closeReason == "" {
-				c.closeReason = "overflow"
-			}
-			// close the connection but do not call CloseOut - would call duplicate c.aliveLock.Lock
-			// CloseOut will be called because the closed connection will cause break in the inputLoop
-			c.conn.Close()
+			return
 		}
+		glog.Warning("Channel ", c.id, " overflow, closing")
+		if c.closeReason == "" {
+			c.closeReason = "overflow"
+		}
+		// close the connection but do not call CloseOut - would call duplicate c.aliveLock.Lock
+		// CloseOut will be called because the closed connection will cause break in the inputLoop
+		c.conn.Close()
 	}
+	// Not enqueued (overflow or dead connection): the response never reaches the
+	// out pipeline, so release any slot it held here.
+	c.finalize(data)
 }
 
 func (c *websocketChannel) acquireRequestSlot() bool {
+	if c.pendingRequests == nil {
+		// pending request limit disabled
+		return true
+	}
 	select {
 	case c.pendingRequests <- struct{}{}:
 		return true
@@ -676,7 +560,49 @@ func (c *websocketChannel) acquireRequestSlot() bool {
 }
 
 func (c *websocketChannel) releaseRequestSlot() {
+	if c.pendingRequests == nil {
+		return
+	}
 	<-c.pendingRequests
+}
+
+func (c *websocketChannel) acquireMempoolFiltersSlot() bool {
+	select {
+	case c.mempoolFiltersSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *websocketChannel) releaseMempoolFiltersSlot() {
+	<-c.mempoolFiltersSlots
+}
+
+// finalize releases any resources a response held, exactly once
+func (c *websocketChannel) finalize(res *WsRes) {
+	if res != nil && res.release != nil {
+		res.release()
+		res.release = nil
+	}
+}
+
+// readLimitedMessage is conn.ReadMessage with the decompressed payload bounded
+// to limit bytes.
+func readLimitedMessage(conn *websocket.Conn) (messageType int, p []byte, tooLarge bool, err error) {
+	messageType, r, err := conn.NextReader()
+	if err != nil {
+		return 0, nil, false, err
+	}
+	// +1 so an exactly-limit-sized payload passes but anything larger is caught.
+	p, err = io.ReadAll(io.LimitReader(r, maxWebsocketMessageBytes+1))
+	if err != nil {
+		return messageType, nil, false, err
+	}
+	if int64(len(p)) > maxWebsocketMessageBytes {
+		return messageType, nil, true, nil
+	}
+	return messageType, p, false, nil
 }
 
 func (s *WebsocketServer) inputLoop(c *websocketChannel) {
@@ -688,9 +614,14 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 		}
 	}()
 	for {
-		t, d, err := c.conn.ReadMessage()
+		t, d, tooLarge, err := readLimitedMessage(c.conn)
 		if err != nil {
 			s.closeChannel(c, "read_error")
+			return
+		}
+		if tooLarge {
+			glog.Warning("Websocket message from ", c.id, " (", c.ip, ") exceeds ", maxWebsocketMessageBytes, " bytes after decompression")
+			s.closeChannel(c, "message_too_large")
 			return
 		}
 		switch t {
@@ -703,6 +634,15 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 				return
 			}
 			atomic.AddUint64(&c.requests, 1)
+			if c.messageRate != nil {
+				// Breach on the message that pushes the trailing-window count past
+				// the limit, so exactly messageRateLimit messages are allowed per
+				// window (matches the "sends more than" contract).
+				if count := c.messageRate.observe(time.Now()); count > s.messageRateLimit {
+					s.onMessageRateBreach(c, count)
+					return
+				}
+			}
 			if !c.acquireRequestSlot() {
 				glog.Warning("Client ", c.id, " exceeded pending websocket request limit, ", c.ip)
 				s.closeChannel(c, "pending_requests_limit")
@@ -731,14 +671,11 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 			glog.Error("Binary message received from ", c.id, ", ", c.ip)
 			s.closeChannel(c, "protocol_error")
 			return
-		case websocket.PingMessage:
-			c.conn.WriteControl(websocket.PongMessage, nil, time.Now().Add(defaultTimeout))
-		case websocket.CloseMessage:
-			s.closeChannel(c, "client_close")
-			return
-		case websocket.PongMessage:
-			// do nothing
 		}
+		// ReadMessage returns only data frames; ping/pong/close control frames
+		// are consumed inside gorilla and dispatched to the connection's
+		// handlers (see installControlFrameRateLimit), surfacing here only as a
+		// read error.
 	}
 }
 
@@ -752,6 +689,7 @@ func (s *WebsocketServer) outputLoop(c *websocketChannel) {
 	for m := range c.out {
 		c.conn.SetWriteDeadline(time.Now().Add(defaultTimeout))
 		err := c.conn.WriteJSON(m)
+		c.finalize(m)
 		if err != nil {
 			glog.Error("Error sending message to ", c.id, ", ", err)
 			s.closeChannel(c, "write_error")
@@ -771,7 +709,7 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeAddresses(c)
 	s.unsubscribeFiatRates(c)
 	if s.websocketLimiter != nil {
-		s.websocketLimiter.release(c.ip, time.Now())
+		s.websocketLimiter.release(c.ipKey, time.Now())
 	}
 	s.unregisterChannel(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
@@ -852,9 +790,13 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 			if r.GroupBy <= 0 {
 				r.GroupBy = 3600
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.Gap, r.GroupBy)
-			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.GroupBy)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.Gap, r.GroupBy, s.is.BalanceHistoryMaxTxsWS, api.BalanceHistoryTransportWS)
+			if apiErr, ok := err.(*api.APIError); ok && apiErr.Public {
+				// A public error from the xpub path (e.g. the range spans too many
+				// transactions) is definitive for a valid xpub; do not retry as an
+				// address, which would mask it with an address-parse error.
+			} else if err != nil {
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.GroupBy, s.is.BalanceHistoryMaxTxsWS, api.BalanceHistoryTransportWS)
 			}
 		}
 		return
@@ -950,6 +892,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		if err != nil {
 			return nil, err
 		}
+		if len(r.Tokens) > maxWebsocketSubscribeFiatRatesTokens {
+			return nil, api.NewAPIError("tokens max "+strconv.Itoa(maxWebsocketSubscribeFiatRatesTokens), true)
+		}
 		r.Currency = strings.ToLower(r.Currency)
 
 		return s.subscribeFiatRates(c, &r, req)
@@ -990,6 +935,8 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 	var err error
 	var data interface{}
+	// release is non-nil while this request holds a rate-capped endpoint slot.
+	var release func()
 	f, ok := requestHandlers[req.Method]
 	methodLabel := req.Method
 	if !ok {
@@ -1006,9 +953,14 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 		// nil data means no response
 		if data != nil {
 			c.DataOut(&WsRes{
-				ID:   req.ID,
-				Data: data,
+				ID:      req.ID,
+				Data:    data,
+				release: release,
 			})
+			release = nil // ownership handed to the response
+		}
+		if release != nil {
+			release() // no response was produced — free the slot now
 		}
 		s.metrics.WebsocketPendingRequests.With(common.Labels{"method": methodLabel}).Dec()
 	}()
@@ -1018,6 +970,17 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 		s.metrics.WebsocketReqDuration.With(common.Labels{"method": methodLabel}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	}()
 	if ok {
+		if req.Method == "getMempoolFilters" {
+			if !c.acquireMempoolFiltersSlot() {
+				e := resultError{}
+				e.Error.Message = "mempool_filters_limit"
+				data = e
+				s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
+				glog.Warning("Client ", c.id, " exceeded getMempoolFilters response limit, ", c.ip)
+				return
+			}
+			release = c.releaseMempoolFiltersSlot
+		}
 		data, err = f(s, c, req)
 		if err == nil {
 			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
@@ -1076,12 +1039,13 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		tokensToReturn = api.TokensToReturnDerived
 	}
 	filter := api.AddressFilter{
-		FromHeight:     uint32(req.FromHeight),
-		ToHeight:       uint32(req.ToHeight),
-		Contract:       req.ContractFilter,
-		Vout:           api.AddressFilterVoutOff,
-		TokensToReturn: tokensToReturn,
-		Protocols:      req.Protocols,
+		FromHeight:         uint32(req.FromHeight),
+		ToHeight:           uint32(req.ToHeight),
+		Contract:           req.ContractFilter,
+		Vout:               api.AddressFilterVoutOff,
+		TokensToReturn:     tokensToReturn,
+		Protocols:          req.Protocols,
+		WithConfirmedNonce: req.ConfirmedNonce,
 	}
 	req.Page, req.PageSize = sanitizeAccountPagingParams(req.Page, req.PageSize, txsOnPage, txsInAPI)
 	req.Gap = validateIntValue(req.Gap, 0, 0, maxGapValue)
@@ -1347,12 +1311,64 @@ func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res i
 	}, nil
 }
 
-func (s *WebsocketServer) rpcCall(r *WsRpcCallReq) (*WsRpcCallRes, error) {
-	if s.allowedRpcCallTo != nil {
-		_, ok := s.allowedRpcCallTo[strings.ToLower(r.To)]
-		if !ok {
-			return nil, errors.New("Not supported")
+// evmCallSelector extracts the 4-byte function selector from hex-encoded EVM
+// calldata as lowercase hex without the 0x prefix. It validates the full
+// calldata hex (odd length or non-hex characters fail closed) but decodes
+// only the first 4 bytes (8 hex chars) so that arbitrarily long calldata
+// does not cause a large allocation that is then discarded.
+func evmCallSelector(data string) (string, bool) {
+	if len(data) < 10 || data[0] != '0' || (data[1] != 'x' && data[1] != 'X') {
+		return "", false
+	}
+	s := data[2:]
+	if len(s)&1 == 1 {
+		return "", false
+	}
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] >= '0' && s[i] <= '9':
+		case s[i] >= 'a' && s[i] <= 'f':
+		case s[i] >= 'A' && s[i] <= 'F':
+		default:
+			return "", false
 		}
+	}
+	b, err := hex.DecodeString(s[:8])
+	if err != nil {
+		return "", false
+	}
+	return hex.EncodeToString(b), true
+}
+
+// rpcCallAllowed reports whether a rpcCall request passes the allowlists. With
+// no allowlist configured rpcCall is unrestricted; otherwise the call must
+// target an allowed address or invoke an allowed method selector. The snapshot
+// is nil only when initRpcCallAllowlists has not run (bare test servers);
+// NewWebsocketServer and NewInternalServer fail construction when they cannot
+// publish one.
+func (s *WebsocketServer) rpcCallAllowed(r *WsRpcCallReq) bool {
+	a := s.is.GetRpcCallAllowlists()
+	if a == nil || (a.To == nil && a.Methods == nil) {
+		return true
+	}
+	if a.To != nil {
+		if _, ok := a.To[strings.ToLower(r.To)]; ok {
+			return true
+		}
+	}
+	if a.Methods != nil {
+		if selector, ok := evmCallSelector(r.Data); ok {
+			if _, ok := a.Methods[selector]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *WebsocketServer) rpcCall(r *WsRpcCallReq) (*WsRpcCallRes, error) {
+	if !s.rpcCallAllowed(r) {
+		return nil, errors.New("Not supported")
 	}
 	data, err := s.chain.EthereumTypeRpcCall(r.Data, r.To, r.From)
 	if err != nil {
@@ -1557,23 +1573,60 @@ func (s *WebsocketServer) unsubscribeFiatRates(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
-func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
+// newBlockNotification builds the subscribeNewBlock payload for a connected block. For EVM chains it
+// attaches block-level gas data so subscribers can project the next EIP-1559 base fee; EVMData stays
+// nil (evmData: null) for non-EVM chains and pre-London blocks (BaseFeePerGas absent).
+func newBlockNotification(block *bchain.Block) *WsNewBlock {
+	data := &WsNewBlock{
+		Height: block.Height,
+		Hash:   block.Hash,
+	}
+	if bsd, ok := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData); ok && bsd != nil && bsd.BaseFeePerGas != nil {
+		data.EVMData = &EthereumGasData{
+			BaseFeePerGas: (*api.Amount)(bsd.BaseFeePerGas),
+			BlockGasUsed:  (*api.Amount)(bsd.GasUsed),
+			BlockGasLimit: (*api.Amount)(bsd.GasLimit),
+		}
+	}
+	return data
+}
+
+// observeNewBlockGas records push-path block-gas metrics from the most recently connected block.
+// It is called synchronously from OnNewBlock (which the single writeBlockWorker invokes in height
+// order) before the async broadcast, so the gauges advance monotonically without a mutex; the
+// per-block broadcast goroutines could otherwise reorder and let an older block clobber a newer
+// value. Last-value semantics: it sweeps catch-up blocks and settles on the tip. Non-EVM and
+// pre-London blocks (no EthereumBlockSpecificData with gas set) are skipped.
+func (s *WebsocketServer) observeNewBlockGas(block *bchain.Block) {
+	if s.metrics == nil {
+		return
+	}
+	bsd, ok := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+	if !ok || bsd == nil {
+		return
+	}
+	if s.metrics.EthBlockGasUsedRatio != nil && bsd.GasUsed != nil && bsd.GasLimit != nil && bsd.GasLimit.Sign() > 0 {
+		ratio, _ := new(big.Float).Quo(new(big.Float).SetInt(bsd.GasUsed), new(big.Float).SetInt(bsd.GasLimit)).Float64()
+		s.metrics.EthBlockGasUsedRatio.Set(ratio)
+	}
+	if s.metrics.EthBlockBaseFee != nil && bsd.BaseFeePerGas != nil {
+		baseFee, _ := new(big.Float).SetInt(bsd.BaseFeePerGas).Float64()
+		s.metrics.EthBlockBaseFee.Set(baseFee)
+	}
+}
+
+func (s *WebsocketServer) onNewBlockAsync(block *bchain.Block) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
-	data := struct {
-		Height uint32 `json:"height"`
-		Hash   string `json:"hash"`
-	}{
-		Height: height,
-		Hash:   hash,
-	}
+	data := newBlockNotification(block)
 	for c, id := range s.newBlockSubscriptions {
 		c.DataOut(&WsRes{
 			ID:   id,
-			Data: &data,
+			Data: data,
 		})
 	}
-	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
+	s.metrics.WebsocketNewBlockNotifications.Add(float64(len(s.newBlockSubscriptions)))
+	glog.V(2).Info("broadcasting new block ", block.Height, " ", block.Hash, " to ", len(s.newBlockSubscriptions), " channels")
 }
 
 // setConfirmedBlockTxMetadata normalizes parsed block transactions.
@@ -1727,9 +1780,12 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 
 // OnNewBlock is a callback that broadcasts info about new block to subscribed clients
 func (s *WebsocketServer) OnNewBlock(block *bchain.Block) {
+	// Synchronous and before the async dispatch: OnNewBlock is called in monotonic height order, so
+	// the push-path gas gauges never get an older block's value written after a newer one's.
+	s.observeNewBlockGas(block)
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
-	go s.onNewBlockAsync(block.Hash, block.Height)
+	go s.onNewBlockAsync(block)
 	if s.newBlockTxsSubscriptionCount > 0 {
 		// Skip per-tx address matching when nobody opted into newBlockTxs.
 		if ok, _ := s.trackWork(); ok {
@@ -1797,53 +1853,36 @@ func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *ap
 
 func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts []bchain.Vout, tokenTransfers bchain.TokenTransfers, internalTransfers []bchain.EthereumInternalTransfer, newBlockTxsOnly bool) map[string]struct{} {
 	// check if there is any subscription in inputs, outputs and transfers
-	s.addressSubscriptionsLock.Lock()
-	defer s.addressSubscriptionsLock.Unlock()
-	subscribed := make(map[string]struct{})
-	hasSubscription := func(sad string) bool {
-		as, ok := s.addressSubscriptions[sad]
-		if !ok || len(as) == 0 {
-			return false
+	candidates := make(map[string]struct{})
+	addAddrDesc := func(addrDesc bchain.AddressDescriptor) {
+		if len(addrDesc) > 0 {
+			candidates[string(addrDesc)] = struct{}{}
 		}
-		if !newBlockTxsOnly {
-			return true
-		}
-		for _, details := range as {
-			if details.publishNewBlockTxs {
-				return true
-			}
-		}
-		return false
 	}
 	processAddress := func(address string) {
 		if addrDesc, err := s.chainParser.GetAddrDescFromAddress(address); err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			if hasSubscription(sad) {
-				subscribed[sad] = struct{}{}
-			}
+			addAddrDesc(addrDesc)
 		}
 	}
 	processVout := func(vout bchain.Vout) {
 		if addrDesc, err := s.chainParser.GetAddrDescFromVout(&vout); err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			if hasSubscription(sad) {
-				subscribed[sad] = struct{}{}
-			}
+			addAddrDesc(addrDesc)
 		}
 	}
 	for i := range vins {
 		if sad := string(vins[i].AddrDesc); len(sad) > 0 {
-			if hasSubscription(sad) {
-				subscribed[sad] = struct{}{}
-			}
-		} else if s.chainParser.GetChainType() == bchain.ChainBitcoinType {
-			vout := int(vins[i].Vout)
-			if vout >= 0 && vout < len(vouts) {
-				processVout(vouts[vins[i].Vout])
-			}
-		} else if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-			if len(vins[i].Addresses) > 0 {
-				processAddress(vins[i].Addresses[0])
+			candidates[sad] = struct{}{}
+		} else {
+			switch s.chainParser.GetChainType() {
+			case bchain.ChainBitcoinType:
+				vout := int(vins[i].Vout)
+				if vout >= 0 && vout < len(vouts) {
+					processVout(vouts[vout])
+				}
+			case bchain.ChainEthereumType:
+				if len(vins[i].Addresses) > 0 {
+					processAddress(vins[i].Addresses[0])
+				}
 			}
 		}
 	}
@@ -1857,6 +1896,26 @@ func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts 
 	for i := range internalTransfers {
 		processAddress(internalTransfers[i].From)
 		processAddress(internalTransfers[i].To)
+	}
+
+	subscribed := make(map[string]struct{})
+	s.addressSubscriptionsLock.Lock()
+	defer s.addressSubscriptionsLock.Unlock()
+	for sad := range candidates {
+		as, ok := s.addressSubscriptions[sad]
+		if !ok || len(as) == 0 {
+			continue
+		}
+		if !newBlockTxsOnly {
+			subscribed[sad] = struct{}{}
+			continue
+		}
+		for _, details := range as {
+			if details.publishNewBlockTxs {
+				subscribed[sad] = struct{}{}
+				break
+			}
+		}
 	}
 	return subscribed
 }

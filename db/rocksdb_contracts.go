@@ -2,6 +2,7 @@ package db
 
 import (
 	vlq "github.com/bsm/go-vlq"
+	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 )
@@ -185,4 +186,103 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 		cachedContracts.delete(cacheKey)
 	}
 	return nil
+}
+
+// ListContractInfos returns up to limit stored contract records ordered by
+// address descriptor, starting at the optional from address (inclusive), and
+// the address to pass as from to fetch the next page ("" when the listing is
+// complete). A page limit is mandatory: the rows are sync-populated (every
+// contract creation when internal data processing is enabled), so the full
+// set can run into millions on a busy chain.
+func (d *RocksDB) ListContractInfos(from string, limit int) ([]bchain.ContractInfo, string, error) {
+	var start bchain.AddressDescriptor
+	if from != "" {
+		var err error
+		start, err = d.chainParser.GetAddrDescFromAddress(from)
+		if err != nil {
+			return nil, "", err
+		}
+		if start == nil {
+			return nil, "", errors.Errorf("invalid address %s", from)
+		}
+	}
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfContracts])
+	defer it.Close()
+	if start != nil {
+		it.Seek(start)
+	} else {
+		it.SeekToFirst()
+	}
+	contracts := make([]bchain.ContractInfo, 0, limit)
+	for ; it.Valid(); it.Next() {
+		// The key is the contract's address descriptor. A key that fails to
+		// decode to an address is a corrupt row: fail loudly (as the
+		// unpackContractInfo error below does) rather than fall through to
+		// return next="", which a caller cannot tell apart from a completed
+		// listing and which would silently drop the boundary row's cursor —
+		// or return an in-page record with an empty Contract.
+		addresses, _, err := d.chainParser.GetAddressesFromAddrDesc(it.Key().Data())
+		if err != nil {
+			return nil, "", err
+		}
+		if len(addresses) == 0 {
+			return nil, "", errors.Errorf("no address for contract descriptor %x", it.Key().Data())
+		}
+		if len(contracts) == limit {
+			// one more row exists — its address is the cursor of the next page
+			return contracts, addresses[0], nil
+		}
+		contractInfo, err := unpackContractInfo(it.Value().Data())
+		if err != nil {
+			return nil, "", err
+		}
+		contractInfo.Contract = addresses[0]
+		contracts = append(contracts, *contractInfo)
+	}
+	return contracts, "", nil
+}
+
+// DeleteContractInfoForAddress removes the stored contract metadata for the given
+// address (and its in-memory cache entry) so the next read re-fetches it from the
+// backend node. It returns the purged record (nil when no row was stored): the
+// whole row is discarded, including the sync-owned CreatedInBlock and
+// DestructedInBlock, which a backend re-fetch cannot restore — only a reindex or
+// storing the returned record back can. ERC-4626 protocol-detection rows in
+// cfErcProtocols are kept: they live in their own column family with their own
+// lifecycle and are merged on read.
+func (d *RocksDB) DeleteContractInfoForAddress(address string) (*bchain.ContractInfo, error) {
+	contract, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	if contract == nil {
+		return nil, errors.Errorf("invalid address %s", address)
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfContracts], contract)
+	if err != nil {
+		return nil, err
+	}
+	buf := val.Data()
+	var purged *bchain.ContractInfo
+	if len(buf) > 0 {
+		purged, _ = unpackContractInfo(buf)
+		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(contract)
+		if len(addresses) > 0 {
+			purged.Contract = addresses[0]
+		}
+	}
+	val.Free()
+	if purged == nil {
+		return nil, nil
+	}
+	if err := d.db.DeleteCF(d.wo, d.cfh[cfContracts], contract); err != nil {
+		return nil, err
+	}
+	// Bump before the cache delete: a concurrent GetContractInfo that already
+	// sampled the old protocolGen and is about to re-add the just-deleted row
+	// will mismatch on the next read and miss, even if its add lands after our
+	// delete clears the slot (same idiom as SetErcProtocol).
+	d.protocolGen.Add(1)
+	cachedContracts.delete(string(contract))
+	return purged, nil
 }

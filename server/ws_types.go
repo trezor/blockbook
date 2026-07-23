@@ -17,6 +17,8 @@ type WsReq struct {
 type WsRes struct {
 	ID   string      `json:"id" ts_doc:"Corresponding request identifier."`
 	Data interface{} `json:"data" ts_doc:"Payload of the response, structure depends on the request."`
+	// release, if non-nil, is invoked exactly once when this response leaves the out pipeline
+	release func()
 }
 
 type resultError struct {
@@ -38,6 +40,7 @@ type WsAccountInfoReq struct {
 	ContractFilter    string   `json:"contractFilter,omitempty" ts_doc:"Filter by specific contract address (for token data)."`
 	SecondaryCurrency string   `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
 	Gap               int      `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
+	ConfirmedNonce    bool     `json:"confirmedNonce,omitempty" ts_doc:"If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
 }
 
 // WsContractInfoReq carries parameters for the 'getContractInfo' method.
@@ -145,6 +148,21 @@ type WsEstimateFeeRes struct {
 	FeePerUnit string           `json:"feePerUnit,omitempty" ts_doc:"Estimated fee per unit (sat/byte, Wei/gas, etc.)."`
 	FeeLimit   string           `json:"feeLimit,omitempty" ts_doc:"Max fee limit for blockchains like Ethereum."`
 	Eip1559    *api.Eip1559Fees `json:"eip1559,omitempty"`
+}
+
+// EthereumGasData carries EVM block-level gas figures used by the frontend to deterministically
+// project the next block's EIP-1559 base fee. Decimal strings, omitted for pre-London blocks.
+type EthereumGasData struct {
+	BaseFeePerGas *api.Amount `json:"baseFeePerGas,omitempty" ts_doc:"Base fee per gas of the new block (post-London)."`
+	BlockGasUsed  *api.Amount `json:"blockGasUsed,omitempty" ts_doc:"Total gas used by the new block (decimal)."`
+	BlockGasLimit *api.Amount `json:"blockGasLimit,omitempty" ts_doc:"Gas limit of the new block (decimal)."`
+}
+
+// WsNewBlock is pushed to subscribeNewBlock subscribers when a new block is connected.
+type WsNewBlock struct {
+	Height  uint32           `json:"height" ts_doc:"Height of the new block."`
+	Hash    string           `json:"hash" ts_doc:"Hash of the new block."`
+	EVMData *EthereumGasData `json:"evmData" ts_doc:"EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains."`
 }
 
 // WsLongTermFeeRateRes is returned in response to a long term fee rate request.

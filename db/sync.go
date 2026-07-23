@@ -198,13 +198,16 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	switch err {
 	case nil:
 		d := time.Since(start)
-		glog.Info("resync: finished in ", d)
 		w.metrics.IndexResyncDuration.Observe(float64(d) / 1e6) // in milliseconds
 		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
-		bh, _, err := w.db.GetBestBlock()
+		bh, bhash, err := w.db.GetBestBlock()
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
+		// Single steady-state sync line: what we synced to and how long it took.
+		// The "is behind" trigger and the connectBlocks "synced at" line are
+		// intentionally not logged, as they fire every block on fast chains.
+		glog.Infof("resync: synced at %d %s in %s", bh, bhash, d)
 		w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
 		w.metrics.BlockbookBestHeight.Set(float64(bh))
 		return err
@@ -248,7 +251,6 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
 			return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
 		}
-		glog.Info("resync: local at ", localBestHeight, " is behind")
 		w.startHeight = localBestHeight + 1
 	} else {
 		// database is empty, start genesis
@@ -413,10 +415,6 @@ ConnectLoop:
 				return err
 			}
 		}
-	}
-
-	if lastRes.block != nil {
-		glog.Infof("resync: synced at %d %s", lastRes.block.Height, lastRes.block.Hash)
 	}
 
 	return nil

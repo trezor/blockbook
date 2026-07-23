@@ -57,6 +57,38 @@ export function firstAddressFromTxPreferVin(tx: TxResponse) {
   return "";
 }
 
+// candidateAddressesFromTx returns the distinct participant addresses of a transaction, ordered so
+// that a participant whose first page of history still contains this tx is found early. Recipients
+// come first: on account-based chains a token transfer's vin is the (often high-traffic) sender and
+// its vout is the token contract (huge history), while the token recipient - and the output of a
+// plain transfer - is usually low-traffic and reliably lists the tx on its first page.
+export function candidateAddressesFromTx(tx: TxResponse): string[] {
+  const ordered: string[] = [];
+  const add = (value?: string) => {
+    const trimmed = (value ?? "").trim();
+    if (trimmed && isAddressCandidate(trimmed)) {
+      ordered.push(trimmed);
+    }
+  };
+  for (const transfer of tx.tokenTransfers ?? []) {
+    add(transfer.to);
+  }
+  for (const output of tx.vout ?? []) {
+    for (const address of output.addresses ?? []) {
+      add(address);
+    }
+  }
+  for (const input of tx.vin ?? []) {
+    for (const address of input.addresses ?? []) {
+      add(address);
+    }
+  }
+  for (const transfer of tx.tokenTransfers ?? []) {
+    add(transfer.from);
+  }
+  return [...new Set(ordered)];
+}
+
 export function isAddressCandidate(address: string) {
   const trimmed = address.trim();
   if (!trimmed) {
@@ -157,6 +189,20 @@ export function assertEVMTokenListContractsMatch(tokens: TokenResponse[], contra
   });
 }
 
+// assertTokenDecimals enforces trezor/blockbook#1577: `decimals` must always be present on
+// Token and TokenTransfer payloads (it used to be dropped when 0, leaving clients unable to
+// tell a genuine 0-decimal token from missing metadata) and must be a non-negative integer.
+// This makes the expectation explicit on top of the schema's `required: decimals`, so it still
+// holds if the schema is ever relaxed, and adds the non-negativity check the schema does not.
+export function assertTokenDecimals(decimals: number | undefined, context: string) {
+  if (decimals === undefined) {
+    throw new Error(`${context}.decimals is missing; it must always be present (trezor/blockbook#1577)`);
+  }
+  if (!Number.isInteger(decimals) || decimals < 0) {
+    throw new Error(`${context}.decimals must be a non-negative integer, got ${String(decimals)}`);
+  }
+}
+
 export function assertErc4626Payload(context: string, shareContract: string, payload: NonNullable<ContractInfoResponse["protocols"]>["erc4626"]) {
   if (!payload) {
     throw new Error(`${context} missing payload`);
@@ -199,8 +245,44 @@ export function assertFiatTickerPayload(payload: FiatTickerResponse, context: st
   }
   for (const [currency, rate] of Object.entries(payload.rates)) {
     assertNonEmptyString(currency, `${context}.rates.currency`);
-    if (rate === 0) {
-      throw new Error(`${context} returned zero rate for currency ${currency}`);
+    if (!(rate > 0)) {
+      throw new Error(`${context} returned non-positive rate ${rate} for currency ${currency}`);
+    }
+  }
+}
+
+// assertFiatTickerFresh fails when the current ticker's timestamp is older than maxAgeSeconds,
+// flagging a stalled fiat-rates feed. Only meaningful for the live current ticker (no timestamp
+// query param) — do not apply to historical/multi-tickers queries.
+export function assertFiatTickerFresh(payload: FiatTickerResponse, context: string, maxAgeSeconds: number) {
+  if (!positiveNumber(payload.ts)) {
+    throw new Error(`${context} invalid timestamp: ${String(payload.ts)}`);
+  }
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const ageSeconds = nowSeconds - payload.ts; // ts is Unix seconds (api/types.go FiatTicker.ts)
+  if (ageSeconds > maxAgeSeconds) {
+    throw new Error(`${context} ticker is stale: ts=${payload.ts} is ${ageSeconds}s old (max ${maxAgeSeconds}s)`);
+  }
+  // tolerate small clock skew (5 minutes); flag only an egregiously future timestamp
+  const maxFutureSkewSeconds = Math.min(maxAgeSeconds, 300);
+  if (ageSeconds < -maxFutureSkewSeconds) {
+    throw new Error(`${context} ticker timestamp is in the future: ts=${payload.ts} (now=${nowSeconds})`);
+  }
+}
+
+// assertFiatTickerEquals asserts two tickers are identical (same timestamp and rate map).
+// Use only for immutable historical data (e.g. HTTP↔WS parity at a fixed timestamp), never
+// for current rates which can change between calls.
+export function assertFiatTickerEquals(got: FiatTickerResponse, want: FiatTickerResponse, context: string) {
+  if (got.ts !== want.ts) {
+    throw new Error(`${context} ts mismatch: got ${got.ts ?? 0}, want ${want.ts ?? 0}`);
+  }
+  const gotRates = got.rates ?? {};
+  const wantRates = want.rates ?? {};
+  assertStringSlicesEqual(Object.keys(gotRates).sort(), Object.keys(wantRates).sort(), `${context}.rates keys`);
+  for (const [currency, rate] of Object.entries(wantRates)) {
+    if (gotRates[currency] !== rate) {
+      throw new Error(`${context} rate mismatch for ${currency}: got ${gotRates[currency]}, want ${rate}`);
     }
   }
 }
@@ -295,6 +377,25 @@ export function assertUTXOListNonNegativeConfirmations(utxos: UtxoResponse[], co
       throw new Error(`${context} has negative confirmations for ${utxo.txid}`);
     }
   });
+}
+
+// assertGolombParams validates the shared P/M/zeroedKey header returned by the Golomb block-filter
+// surfaces — the HTTP /api/v2/block-filters endpoint and the ws getBlockFilter/getBlockFiltersBatch/
+// getMempoolFilters methods. P is cross-checked against the coin's configured block_golomb_filter_p
+// when known (golombP > 0).
+export function assertGolombParams(res: { P?: number; M?: number; zeroedKey?: boolean }, golombP: number, context: string) {
+  if (!Number.isInteger(res.P) || (res.P ?? 0) <= 0) {
+    throw new Error(`${context} invalid P: ${String(res.P)}`);
+  }
+  if (golombP > 0 && res.P !== golombP) {
+    throw new Error(`${context} P mismatch: got ${res.P}, want ${golombP}`);
+  }
+  if (!Number.isInteger(res.M) || (res.M ?? 0) <= 0) {
+    throw new Error(`${context} invalid M: ${String(res.M)}`);
+  }
+  if (typeof res.zeroedKey !== "boolean") {
+    throw new Error(`${context} invalid zeroedKey: ${String(res.zeroedKey)}`);
+  }
 }
 
 export function txIDsFromTransactions(txs: TxResponse[], context: string) {

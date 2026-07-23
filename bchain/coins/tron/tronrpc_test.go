@@ -541,14 +541,18 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
 		RespByPath: map[string]interface{}{
 			"/wallet/getaccountresource": tronGetAccountResourceResponse{
-				FreeNetLimit:   600,
-				FreeNetUsed:    100,
-				NetLimit:       400,
-				NetUsed:        250,
-				EnergyLimit:    9000,
-				EnergyUsed:     1234,
-				TronPowerUsed:  3,
-				TronPowerLimit: 10,
+				FreeNetLimit:      600,
+				FreeNetUsed:       100,
+				NetLimit:          400,
+				NetUsed:           250,
+				TotalNetLimit:     43200000000,
+				TotalNetWeight:    68292467803,
+				EnergyLimit:       9000,
+				EnergyUsed:        1234,
+				TotalEnergyLimit:  180000000000,
+				TotalEnergyWeight: 2363311832,
+				TronPowerUsed:     3,
+				TronPowerLimit:    10,
 			},
 			"/wallet/getaccount": map[string]any{
 				"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
@@ -573,6 +577,7 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 					"delegated_frozenV2_balance_for_energy": int64(3210000),
 				},
 				"delegated_frozenV2_balance_for_bandwidth": int64(654000),
+				"latest_withdraw_time":                     int64(1777000000000),
 			},
 			"/wallet/getReward": map[string]any{
 				"reward": int64(42767),
@@ -600,6 +605,10 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 		"totalFreeBandwidth":600,
 		"availableEnergy":7766,
 		"totalEnergy":9000,
+		"totalEnergyLimit":180000000000,
+		"totalEnergyWeight":2363311832,
+		"totalBandwidthLimit":43200000000,
+		"totalBandwidthWeight":68292467803,
 		"stakingInfo":{
 			"stakedBalance":"7000000",
 			"stakedBalanceEnergy":"5000000",
@@ -610,7 +619,8 @@ func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
 			"votes":[{"address":"TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M","voteCount":"20"}],
 			"unclaimedReward":"42767",
 			"delegatedBalanceEnergy":"3210000",
-			"delegatedBalanceBandwidth":"654000"
+			"delegatedBalanceBandwidth":"654000",
+			"latestWithdrawTime":1777000000
 		}
 	}`, string(payload))
 	paths, bodies := mockHTTP.SnapshotRequests()

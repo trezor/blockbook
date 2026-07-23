@@ -1,5 +1,10 @@
 name: Build / Deploy
 
+# Surface what the run actually does in the run list; without this every
+# dispatch shows only the generic workflow name. env context is not
+# available in run-name, so the ref fallback is inlined.
+run-name: "${{ inputs.mode }} ${{ inputs.coins }} (${{ inputs.mode == 'build' && inputs.env || 'dev' }}) @ ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}"
+
 on:
   workflow_dispatch:
     inputs:
@@ -39,27 +44,32 @@ on:
 permissions:
   contents: read
 
+env:
+  RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+
 jobs:
   prepare_build:
     name: Prepare Build Plan
     runs-on: ubuntu-latest
     if: ${{ inputs.mode == 'build' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
-      coins_csv: ${{ steps.plan.outputs.coins_csv }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Validate branch or tag
-        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+        env:
+          REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Build build plan
         id: plan
@@ -73,24 +83,26 @@ jobs:
     name: Prepare Deploy Plan
     runs-on: ubuntu-latest
     if: ${{ inputs.mode == 'deploy' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
-      coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout workflow code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Validate branch or tag
-        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+        env:
+          REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
 
       - name: Checkout requested branch or tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Build deploy/e2e plan
         id: plan
@@ -100,11 +112,12 @@ jobs:
         run: python3 ./.github/scripts/deploy_plan.py
 
   build:
-    name: Build (${{ matrix.runner }})
+    name: "Build (${{ matrix.runner }}: ${{ matrix.coins_csv }})"
     needs: prepare_build
     if: ${{ inputs.mode == 'build' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    # Generous ceilings so a hung step can't hold a self-hosted runner for
+    # the 360-minute default; sized well above normal runtimes.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -112,9 +125,10 @@ jobs:
     runs-on: ${{ fromJSON(matrix.labels_json) }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -126,14 +140,16 @@ jobs:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_PACKAGE_ROOT: /opt/blockbook-builds
           BB_BUILD_ENV: ${{ inputs.env }}
-        run: python3 ./.github/scripts/build_packages.py --backend-mode ${{ inputs.backend_mode }} ${{ join(matrix.coins, ' ') }}
+          BACKEND_MODE: ${{ inputs.backend_mode }}
+          # Space-separated, allowlisted coin aliases; intentionally word-split below.
+          COINS: ${{ join(matrix.coins, ' ') }}
+        run: python3 ./.github/scripts/build_packages.py --backend-mode "$BACKEND_MODE" $COINS
 
   deploy:
     name: Deploy (${{ matrix.coin }})
     needs: prepare_deploy
     if: ${{ inputs.mode == 'deploy' }}
-    env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -141,36 +157,55 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
 
+      - name: Materialize blockbook runtime env
+        env:
+          BB_ENV: ${{ secrets.BB_RUNTIME_ENV }}
+        run: |
+          if [ -z "$BB_ENV" ]; then
+            echo "BB_RUNTIME_ENV secret not set; leaving any existing /etc/blockbook/blockbook.env untouched"
+            exit 0
+          fi
+          sudo install -d -m 0755 -o root -g root /etc/blockbook
+          # Pre-create restricted so secrets are never briefly world-readable;
+          # tee truncates the existing file without changing its 0600 mode.
+          sudo install -m 0600 -o root -g root /dev/null /etc/blockbook/blockbook.env
+          printf '%s\n' "$BB_ENV" | sudo tee /etc/blockbook/blockbook.env >/dev/null
+
       - name: Deploy blockbook package
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_BUILD_ENV: dev
-        run: ./contrib/scripts/deploy-bb-and-backend.sh "${{ matrix.coin }}" --force-confnew
+          DEPLOY_COIN: ${{ matrix.coin }}
+        run: ./contrib/scripts/deploy-bb-and-backend.sh "$DEPLOY_COIN" --force-confnew
 
   wait-for-sync:
     name: Wait For Sync
     needs: [prepare_deploy, deploy]
-    if: ${{ needs.deploy.result == 'success' }}
+    # deploy is a fail-fast:false matrix: one failed coin must not skip sync
+    # verification for the coins that did deploy, so run on partial failure
+    # too. Only 'skipped' (mode=build) and cancellation keep this job off.
+    if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') }}
     runs-on: [self-hosted, bb-dev-selfhosted]
-    timeout-minutes: 31
+    timeout-minutes: 6
     env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       COINS_INPUT: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
-      SYNC_TIMEOUT_SECONDS: "1800"
+      SYNC_TIMEOUT_SECONDS: "300"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -185,16 +220,19 @@ jobs:
   e2e-tests:
     name: E2E Tests (post-deploy)
     needs: [prepare_deploy, deploy, wait-for-sync]
-    if: ${{ needs.deploy.result == 'success' && needs.wait-for-sync.result == 'success' }}
+    # Mirror wait-for-sync: partially failed deploys still get e2e coverage
+    # for the coins that deployed, as long as they reached sync.
+    if: ${{ !cancelled() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure') && needs.wait-for-sync.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 60
     env:
-      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       CONNECTIVITY_REGEX: ${{ needs.prepare_deploy.outputs.connectivity_regex }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -205,18 +243,31 @@ jobs:
         env:
           BB_BUILD_ENV: dev
           CONNECTIVITY_REGEX: ${{ env.CONNECTIVITY_REGEX }}
+          # The freshly deployed nodes are reachable here, so verify backend RPC
+          # connectivity in addition to Blockbook (local runs skip the node checks).
+          BB_TEST_BACKEND_CONNECTIVITY: "1"
         run: make test-connectivity ARGS="-v"
 
       - name: Setup Node.js for OpenAPI tests
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: tests/openapi/package-lock.json
+
+      - name: Ensure npm cache directory exists
+        run: mkdir -p .npm-cache
+
+      - name: Cache npm packages
+        id: openapi-npm-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .npm-cache
+          key: openapi-npm-cache-node22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/openapi/package-lock.json') }}
+          restore-keys: |
+            openapi-npm-cache-node22-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache OpenAPI test dependencies
         id: openapi-node-modules-cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: tests/openapi/node_modules
           key: openapi-node-modules-node22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/openapi/package-lock.json') }}
@@ -225,10 +276,37 @@ jobs:
 
       - name: Install OpenAPI test dependencies
         if: steps.openapi-node-modules-cache.outputs.cache-hit != 'true'
-        run: npm ci --prefix tests/openapi --prefer-offline --no-audit --no-fund
+        run: npm ci --prefix tests/openapi --cache .npm-cache --prefer-offline --no-audit --no-fund
 
       - name: Run OpenAPI API e2e tests
         env:
           BB_BUILD_ENV: dev
           OPENAPI_COINS: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
+          OPENAPI_JUNIT_PATH: ${{ github.workspace }}/tests/openapi/reports/junit.xml
         run: contrib/tests/run-openapi-tests.sh
+
+      # Upload even on failure: the runner writes the report before exiting non-zero, and a failed
+      # run is exactly when the per-test breakdown (which coin/test failed or skipped) is most useful.
+      - name: Upload OpenAPI e2e report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openapi-e2e-report
+          path: tests/openapi/reports/
+          if-no-files-found: warn
+
+      # Idempotent roundtrip of the internal-server admin API (runtime settings
+      # + contract info) against the deployed dev instance. The target URL is
+      # derived from the BB_DEV_API_URL_HTTP_<coin> repo variable (exported
+      # above) plus the coin config's internal port. The script skips itself —
+      # with a visible annotation — when the target coin is not part of this
+      # deploy run (DEPLOYED_COINS carries deploy config names, hence
+      # coins_csv, not test_coins_csv) or the BB_RUNTIME_ENV secret is not
+      # set; credentials are parsed inside the script from BB_ENV, which is
+      # intentionally not exported to other steps.
+      - name: Run admin API e2e tests
+        env:
+          BB_ENV: ${{ secrets.BB_RUNTIME_ENV }}
+          BB_ADMIN_E2E_COIN: base_archive
+          DEPLOYED_COINS: ${{ needs.prepare_deploy.outputs.coins_csv }}
+        run: python3 ./.github/scripts/admin_api_e2e.py

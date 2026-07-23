@@ -25,6 +25,8 @@
     "system_user": "divi",
     "version": "1.0.4",
     "binary_url": "https://github.com/DiviProject/Divi/releases/download/v1.0.4-core/divi_ubuntu.zip",
+    "verification_type": "sha256",
+    "verification_source": "daf30b2d51d0869c07917157bcd3ef770fe1a006ab1d1ee0887c5ba1063ae0b7",
     "extract_command": "unzip -j -d backend",
     "exclude_files": [
       "divi-cli",

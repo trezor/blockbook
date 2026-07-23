@@ -25,6 +25,8 @@
     "system_user": "deeponion",
     "version": "2.2.0",
     "binary_url": "https://github.com/deeponion/deeponion/releases/download/v2.2.0/DeepOnion-2.2.0-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "c4876ddf71cf489fdf1be6e048a732800d313b48ac1c5c058810ff29ee4b1b5b",
     "extract_command": "tar -C backend --strip 1 -xpf",
     "exclude_files": [
        "bin/DeepOnion-qt"

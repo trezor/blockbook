@@ -16,6 +16,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
@@ -1746,4 +1747,329 @@ func TestRocksDB_packTxIndexes_unpackTxIndexes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// setupRocksDBWithExtendedIndex is like setupRocksDB but lets the caller choose
+// the extendedIndex layout; used by TestGetTxAddressesOutput to cover both forms.
+func setupRocksDBWithExtendedIndex(t *testing.T, p bchain.BlockChainParser, extendedIndex bool) *RocksDB {
+	t.Helper()
+	tmp, err := os.MkdirTemp("", "testdb")
+	require.NoError(t, err)
+	d, err := NewRocksDB(tmp, 100000, -1, p, nil, extendedIndex)
+	require.NoError(t, err)
+	is, err := d.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	require.NoError(t, err)
+	d.SetInternalState(is)
+	return d
+}
+
+// TestGetTxAddressesOutput checks that GetTxAddressesOutput(txid, vout) returns the
+// same TxOutput as GetTxAddresses(txid).Outputs[vout]: the former skips over the
+// height, inputs and preceding outputs by length and unpacks only the target output,
+// while the latter unpacks the whole record. It runs with extendedIndex off and on
+// and uses a record with a coinbase input and both spent and unspent outputs, so
+// every length-skip case in packedTxInputLen/packedTxOutputLen is covered.
+func TestGetTxAddressesOutput(t *testing.T) {
+	for _, extendedIndex := range []bool{false, true} {
+		name := "basic"
+		if extendedIndex {
+			name = "extendedIndex"
+		}
+		t.Run(name, func(t *testing.T) {
+			d := setupRocksDBWithExtendedIndex(t, &testBitcoinParser{
+				BitcoinParser: bitcoinTestnetParser(),
+			}, extendedIndex)
+			defer closeAndDestroyRocksDB(t, d)
+
+			ta := &TxAddresses{
+				Height: 12345,
+				Inputs: []TxInput{
+					{ValueSat: *big.NewInt(0)}, // coinbase: empty AddrDesc, no Txid
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr1, d.chainParser), ValueSat: *big.NewInt(1000), Txid: strings.Repeat("b2", 32), Vout: 0},
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr2, d.chainParser), ValueSat: *big.NewInt(2000), Txid: strings.Repeat("c3", 32), Vout: 3},
+				},
+				Outputs: []TxOutput{
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr3, d.chainParser), ValueSat: *big.NewInt(3000)},
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr4, d.chainParser), ValueSat: *big.NewInt(4000), Spent: true, SpentTxid: strings.Repeat("d4", 32), SpentIndex: 5, SpentHeight: 12346},
+					{AddrDesc: addressToAddrDesc(dbtestdata.Addr5, d.chainParser), ValueSat: *big.NewInt(5000)},
+				},
+			}
+			txid := strings.Repeat("a1", 32)
+
+			btxID, err := d.chainParser.PackTxid(txid)
+			require.NoError(t, err)
+			wb := grocksdb.NewWriteBatch()
+			defer wb.Destroy()
+			require.NoError(t, d.storeTxAddresses(wb, map[string]*TxAddresses{string(btxID): ta}))
+			require.NoError(t, d.db.Write(d.wo, wb))
+
+			full, err := d.GetTxAddresses(txid)
+			require.NoError(t, err)
+			require.NotNil(t, full)
+
+			// Each output read singly must equal the full-record unpack.
+			for vout := range full.Outputs {
+				got, err := d.GetTxAddressesOutput(txid, uint32(vout))
+				require.NoErrorf(t, err, "vout %d", vout)
+				require.NotNilf(t, got, "vout %d", vout)
+				require.Equalf(t, full.Outputs[vout], *got, "vout %d", vout)
+			}
+
+			// Out-of-range vout and missing txid both return nil.
+			got, err := d.GetTxAddressesOutput(txid, uint32(len(full.Outputs)))
+			require.NoError(t, err)
+			require.Nil(t, got, "out-of-range vout")
+
+			got, err = d.GetTxAddressesOutput(strings.Repeat("ee", 32), 0)
+			require.NoError(t, err)
+			require.Nil(t, got, "missing txid")
+		})
+	}
+}
+
+func flushAllCFs(t *testing.T, d *RocksDB) {
+	fo := grocksdb.NewDefaultFlushOptions()
+	defer fo.Destroy()
+	if err := d.db.FlushCFs(d.cfh, fo); err != nil {
+		t.Fatalf("FlushCFs: %v", err)
+	}
+}
+
+// TestRepairRocksDB_HealthyClosed_KeepsDataAndUsable verifies that repairing a healthy,
+// gracefully closed multi-CF database preserves all populated column families and leaves
+// the database usable, with empty CFs dropped-and-recreated being harmless.
+func TestRepairRocksDB_HealthyClosed_KeepsDataAndUsable(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()})
+	path := d.path
+
+	bc, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// CRUCIAL: force per-CF SSTs so repair preserves populated CFs. Without this the tiny
+	// dataset stays in the WAL and RepairDb collapses everything to [default].
+	flushAllCFs(t, d)
+	// Open -> Closed, persisted.
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RepairRocksDB(path, false); err != nil {
+		t.Fatalf("RepairRocksDB: %v", err)
+	}
+
+	d2, err := NewRocksDB(path, 100000, -1, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, nil, false)
+	if err != nil {
+		t.Fatalf("NewRocksDB after repair: %v", err)
+	}
+	is, err := d2.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2.SetInternalState(is)
+	if is.DbState != common.DbStateClosed {
+		t.Fatalf("expected DbStateClosed, got %d", is.DbState)
+	}
+	verifyAfterBitcoinTypeBlock2(t, d2)
+
+	if err := d2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(path)
+}
+
+// TestRepairRocksDB_Inconsistent_Refuses verifies that repairing a database left in
+// inconsistent state (interrupted bulk import) does NOT falsely report success and does
+// not silently alter the persisted DbState.
+func TestRepairRocksDB_Inconsistent_Refuses(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()})
+	path := d.path
+
+	bc, err := d.InitBulkConnect() // -> DbStateInconsistent persisted
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), true); err != nil {
+		t.Fatal(err)
+	}
+	flushAllCFs(t, d)
+	// simulate crash: do NOT call bc.Close(); Close only stores state when Open, so
+	// Inconsistent stays persisted.
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = RepairRocksDB(path, false)
+	if err == nil {
+		t.Fatal("expected error repairing inconsistent DB, got nil")
+	}
+	if !strings.Contains(err.Error(), "re-imported") && !strings.Contains(err.Error(), "forcerepair") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	d2, err := NewRocksDB(path, 100000, -1, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, nil, false)
+	if err != nil {
+		t.Fatalf("NewRocksDB after repair: %v", err)
+	}
+	is, err := d2.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2.SetInternalState(is)
+	if is.DbState != common.DbStateInconsistent {
+		t.Fatalf("expected DbStateInconsistent preserved, got %d", is.DbState)
+	}
+
+	if err := d2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(path)
+}
+
+// TestRepairRocksDB_Inconsistent_ResetForcesOpen verifies that -forcerepair flips an
+// inconsistent database to DbStateOpen (not Closed) and leaves it reopenable.
+func TestRepairRocksDB_Inconsistent_ResetForcesOpen(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()})
+	path := d.path
+
+	bc, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), true); err != nil {
+		t.Fatal(err)
+	}
+	flushAllCFs(t, d)
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RepairRocksDB(path, true); err != nil {
+		t.Fatalf("RepairRocksDB with reset: %v", err)
+	}
+
+	d2, err := NewRocksDB(path, 100000, -1, &testBitcoinParser{BitcoinParser: bitcoinTestnetParser()}, nil, false)
+	if err != nil {
+		t.Fatalf("NewRocksDB after repair: %v", err)
+	}
+	is, err := d2.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2.SetInternalState(is)
+	if is.DbState != common.DbStateOpen {
+		t.Fatalf("expected DbStateOpen after reset, got %d", is.DbState)
+	}
+
+	if err := d2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(path)
+}
+
+func TestMissingColumnFamilies(t *testing.T) {
+	got := missingColumnFamilies([]string{"default", "height", "addresses"}, []string{"default", "height"})
+	if len(got) != 1 || got[0] != "addresses" {
+		t.Fatalf("expected [addresses], got %v", got)
+	}
+	if got := missingColumnFamilies(nil, []string{"default"}); got != nil {
+		t.Fatalf("expected nil, got %v", got)
+	}
+}
+
+func TestRepairRocksDB_NonexistentPath(t *testing.T) {
+	if err := RepairRocksDB("/no/such/db", false); err == nil {
+		t.Fatal("expected error for nonexistent path, got nil")
+	}
+}
+
+// TestGetAddrDescTransactions_ScanBound verifies the fix for a bug where a
+// truncated address descriptor (such as the 2-byte "76a9" produced by
+// bchain.AddressDescriptorFromString("ad:76a9")) caused an unbounded scan of
+// the addresses column family. A short descriptor is a prefix of every P2PKH
+// key (76 a9 14 ... 88 ac); those keys have the wrong length and are skipped,
+// but without a bound the iterator still visits all of them.
+func TestGetAddrDescTransactions_ScanBound(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	shortDesc := bchain.AddressDescriptor{0x76, 0xa9} // prefix of every P2PKH script
+
+	// A well-formed value for a matching key: packed txid + one terminated index.
+	btxid, err := d.chainParser.PackTxid(dbtestdata.TxidB1T1)
+	require.NoError(t, err)
+	idxBuf := make([]byte, vlq.MaxLen32)
+	l := packVarint32((0<<1)|1, idxBuf) // index 0, terminator bit set
+	matchingVal := append(append([]byte{}, btxid...), idxBuf[:l]...)
+
+	// The matching key for shortDesc is packAddressKey(shortDesc, 0) = 76a9FFFFFFFF.
+	// Its 3rd byte (0xFF) sorts it after every foreign P2PKH key (3rd byte 0x14),
+	// so it is only reached if the scan does not abort early.
+	matchingKey := packAddressKey(shortDesc, 0)
+
+	// foreignP2PKH builds a realistic 25-byte P2PKH script: 76 a9 14 <hash> 88 ac.
+	foreignP2PKH := func(i uint32) bchain.AddressDescriptor {
+		desc := make(bchain.AddressDescriptor, 25)
+		desc[0], desc[1], desc[2] = 0x76, 0xa9, 0x14
+		binary.BigEndian.PutUint32(desc[3:], i)
+		desc[23], desc[24] = 0x88, 0xac
+		return desc
+	}
+
+	fill := func(foreignCount int) {
+		wb := grocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		for i := 0; i < foreignCount; i++ {
+			wb.PutCF(d.cfh[cfAddresses], packAddressKey(foreignP2PKH(uint32(i)), 0), []byte{0x00})
+		}
+		wb.PutCF(d.cfh[cfAddresses], matchingKey, matchingVal)
+		require.NoError(t, d.WriteBatch(wb))
+	}
+
+	countMatches := func() int {
+		matches := 0
+		require.NoError(t, d.GetAddrDescTransactions(shortDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
+			matches++
+			return nil
+		}))
+		return matches
+	}
+
+	// Control: with fewer foreign keys than the bound, the matching key at the
+	// end of the range is reached - proving the key is well-formed and reachable.
+	fill(10)
+	require.Equal(t, 1, countMatches(), "matching key must be reachable below the scan bound")
+
+	// Bug shape: with more foreign keys than the bound, the scan aborts before
+	// reaching the matching key. Without the bound it would visit every foreign key.
+	d2 := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d2)
+	{
+		wb := grocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		for i := 0; i < maxAddrDescScanNonMatching+50; i++ {
+			wb.PutCF(d2.cfh[cfAddresses], packAddressKey(foreignP2PKH(uint32(i)), 0), []byte{0x00})
+		}
+		wb.PutCF(d2.cfh[cfAddresses], matchingKey, matchingVal)
+		require.NoError(t, d2.WriteBatch(wb))
+	}
+	matches := 0
+	require.NoError(t, d2.GetAddrDescTransactions(shortDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
+		matches++
+		return nil
+	}))
+	require.Equal(t, 0, matches, "scan must abort before reaching the trailing matching key")
 }

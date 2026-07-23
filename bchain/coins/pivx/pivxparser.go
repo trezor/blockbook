@@ -11,6 +11,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/blockchain"
+	"github.com/martinboehm/btcd/chaincfg/chainhash"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
@@ -106,7 +107,7 @@ func (p *PivXParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		r.Seek(32, io.SeekCurrent)
 	}
 
-	err = p.PivxDecodeTransactions(r, 0, &w)
+	rawTxs, err := p.PivxDecodeTransactions(r, 0, &w, b)
 	if err != nil {
 		return nil, errors.Annotatef(err, "DecodeTransactions")
 	}
@@ -114,6 +115,9 @@ func (p *PivXParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	txs := make([]bchain.Tx, len(w.Transactions))
 	for ti, t := range w.Transactions {
 		txs[ti] = p.TxFromMsgTx(t, false)
+		if int(t.Version)&0xffff >= 3 {
+			txs[ti].Txid = chainhash.DoubleHashH(rawTxs[ti]).String()
+		}
 	}
 
 	return &bchain.Block{
@@ -140,11 +144,29 @@ func (p *PivXParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 func (p *PivXParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	t := wire.MsgTx{}
 	r := bytes.NewReader(b)
-	if err := t.Deserialize(r); err != nil {
+
+	// read version and choose encoding (same logic as PivxDecodeTransactions)
+	var version uint32
+	if err := binary.Read(r, binary.LittleEndian, &version); err != nil {
+		return nil, err
+	}
+	if _, err := r.Seek(-4, io.SeekCurrent); err != nil {
+		return nil, err
+	}
+
+	enc := wire.WitnessEncoding
+	if int32(version)&0xffff >= 3 {
+		enc = wire.BaseEncoding
+	}
+
+	if err := t.BtcDecode(r, 0, enc); err != nil {
 		return nil, err
 	}
 	tx := p.TxFromMsgTx(&t, true)
 	tx.Hex = hex.EncodeToString(b)
+	if int(t.Version)&0xffff >= 3 {
+		tx.Txid = chainhash.DoubleHashH(b).String()
+	}
 	return &tx, nil
 }
 
@@ -262,12 +284,12 @@ func (p *PivXParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bchain
 	return s
 }
 
-func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *wire.MsgBlock) error {
+func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *wire.MsgBlock, blockBytes []byte) ([][]byte, error) {
 	maxTxPerBlock := uint64((wire.MaxBlockPayload / 10) + 1)
 
 	txCount, err := wire.ReadVarInt(r, pver)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Prevent more transactions than could possibly fit into a block.
@@ -276,20 +298,26 @@ func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *w
 	if txCount > maxTxPerBlock {
 		str := fmt.Sprintf("too many transactions to fit into a block "+
 			"[count %d, max %d]", txCount, maxTxPerBlock)
-		return &wire.MessageError{Func: "utils.decodeTransactions", Description: str}
+		return nil, &wire.MessageError{Func: "utils.decodeTransactions", Description: str}
 	}
 
 	blk.Transactions = make([]*wire.MsgTx, 0, txCount)
+	rawTxs := make([][]byte, 0, txCount)
 	for i := uint64(0); i < txCount; i++ {
 		tx := wire.MsgTx{}
+
+		txStart, err := r.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return nil, err
+		}
 
 		// read version & seek back to original state
 		var version uint32 = 0
 		if err = binary.Read(r, binary.LittleEndian, &version); err != nil {
-			return err
+			return nil, err
 		}
 		if _, err = r.Seek(-4, io.SeekCurrent); err != nil {
-			return err
+			return nil, err
 		}
 
 		txVersion := version & 0xffff
@@ -300,14 +328,19 @@ func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *w
 			enc = wire.BaseEncoding
 		}
 
-		err := p.PivxDecode(&tx, r, pver, enc)
+		err = p.PivxDecode(&tx, r, pver, enc)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		txEnd, err := r.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return nil, err
 		}
 		blk.Transactions = append(blk.Transactions, &tx)
+		rawTxs = append(rawTxs, blockBytes[txStart:txEnd])
 	}
 
-	return nil
+	return rawTxs, nil
 }
 
 func (p *PivXParser) PivxDecode(MsgTx *wire.MsgTx, r *bytes.Reader, pver uint32, enc wire.MessageEncoding) error {

@@ -173,6 +173,37 @@ panels:
       size:
         promql: '{{name:mempool_size}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
+  sync.eth_alternative_mempool_reconciliation:
+    title: Alternative mempool reconciliation
+    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry) and rbf_replaced remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh and kept retain a still-young or still-pending entry.
+    queries:
+      actions:
+        promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60
+        legend: '{{action}}/min'
+  sync.eth_alternative_mempool_cache_size:
+    title: Alternative mempool cache depth
+    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. It should track the number of in-flight unconfirmed sends; a steady climb means entries are added faster than they are mined or evicted.
+    queries:
+      size:
+        promql: '{{name:eth_alternative_mempool_cache_size}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  sync.eth_alternative_mempool_tx_residence:
+    title: Alternative mempool tx lifetime by eviction reason
+    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing and timeout sitting near the cache timeout is healthy; provider_missing collapsing toward ~1-2 min would surface the premature-eviction regression from #1573, while mined shows how quickly relays actually confirm.
+    queries:
+      p50:
+        promql: histogram_quantile(0.5, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
+        legend: '{{action}} p50'
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
+        legend: '{{action}} p95'
+  sync.eth_alternative_nonce_requests:
+    title: Alternative send-tx provider nonce requests (req/s)
+    description: 'eth_getTransactionCount lookups routed to the alternative send-tx provider, per second, split by result. Only addresses that recently sent a private transaction through the provider are routed here (see useForNonces / #1627); every other address is served by the primary RPC and never appears, so this is the small gated subset, not total nonce traffic. success = the provider answered and its pending nonce was served (raised to the mempool floor); error = the provider failed and the lookup fell back to the primary RPC. Expect a low total that tracks recent private-send activity - a sustained climb means the gating is not shedding load off the provider''s rate quota, and a rising error share means the relay is unhealthy (read alongside the Alternative mempool panels above).'
+    queries:
+      by_result:
+        promql: sum by (coin, result) (rate({{name:eth_alternative_nonce_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{result}}'
   sync.mempool_resync_throughput_p95:
     title: 95% quantile of mempool resync throughput
     description: Transactions returned by a mempool reload divided by reload duration; low values mean the backend or parser is feeding the mempool slowly.
@@ -262,6 +293,16 @@ panels:
       events:
         promql: sum by (subscription, event) (rate({{name:backend_subscription_events}}{job="blockbook", coin="$coin"}[5m]))
         legend: '{{subscription}} - {{event}}'
+  sync.rpc_sync_latency:
+    title: Sync RPC latency (p50/p95)
+    description: Round-trip time of successful sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.) that are not tracked by the general RPC latency panel; these directly affect block indexing speed. Typically sub-100ms; a sustained multi-second p95 means the backend is overloaded. Failed calls are excluded so timeout expiries (~10-15s) do not skew the quantiles; they show up in the Ethereum sync RPC errors panel instead.
+    queries:
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin", error=""}[1m])) by (coin, method, le))
+        legend: '{{coin}} - {{method}}'
+      p50:
+        promql: histogram_quantile(0.50, sum(rate({{name:rpc_sync_latency}}_bucket{job="blockbook", coin="$coin", error=""}[1m])) by (coin, method, le))
+        legend: '{{coin}} - {{method}}'
   row.websocket:
     title: Websocket
   websocket.clients:
@@ -288,6 +329,13 @@ panels:
       new_block_txs:
         promql: '{{name:websocket_new_block_txs_subscriptions}}{job="blockbook", coin="$coin"}'
         legend: newBlockTxs subscriptions - {{instance}}
+  websocket.new_block_notifications:
+    title: Websocket new block notifications per minute
+    description: Rate of new-block notifications delivered to subscribeNewBlock subscribers (each indexed block fans out to every subscribed client), replacing the former per-block "broadcasting new block" log line. This is block production times the subscriber count, so it stays at zero with no subscribers and scales with fan-out; a flatline while the chain advances and subscribers are connected means the broadcast path has stalled. Read alongside the subscriptions panel for the current subscriber count.
+    queries:
+      notifications:
+        promql: sum(rate({{name:websocket_new_block_notifications}}{job="blockbook", coin="$coin"}[1m])) by (coin) * 60
+        legend: '{{coin}} - notif/min'
   websocket.request_duration_p95:
     title: 95% quantile of websocket request duration
     description: Handler latency after a websocket request is accepted; large values can hold a pending-request slot longer.
@@ -334,7 +382,6 @@ panels:
         promql: sum(rate({{name:websocket_eth_receipt}}{job="blockbook", coin="$coin"}[5m])) by (coin, status) * 60
         legend: '{{coin}} {{status}}/min'
   websocket.connection_requests:
-    width: 12
     title: Websocket requests per connection
     description: Distribution of how many requests each connection handled before it closed; a p99 that towers over p50 flags a single connection flooding messages, the signal for whether per-connection message rate limiting is worth adding. Recorded when a connection closes, so long-lived sockets only show up at disconnect.
     queries:
@@ -345,7 +392,6 @@ panels:
         promql: histogram_quantile(0.99, sum(rate({{name:websocket_connection_requests}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, le))
         legend: '{{coin}} - p99'
   websocket.connection_rejections:
-    width: 12
     title: Websocket connection rejections per minute
     description: 'Connection attempts the per-IP limiter rejected before the websocket upgrade (HTTP 429): connection_limit is more than 128 concurrent connections from one IP, connection_attempt_limit is more than 64 attempts/minute. Sustained non-zero values mean connection-flood abuse is being actively blocked.'
     queries:
@@ -353,7 +399,6 @@ panels:
         promql: sum(rate({{name:websocket_connection_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
         legend: '{{coin}} - {{reason}}/min'
   websocket.unique_ips:
-    width: 12
     title: Websocket connections vs unique client IPs
     description: Open connections plotted against the number of distinct client IPs holding them; the gap between the two lines is connection clustering. Across the many Suite users a healthy deployment serves, the lines should track closely at roughly one connection per IP. A connections line pulling well above unique IPs means connections are concentrated on few sources.
     queries:
@@ -364,7 +409,6 @@ panels:
         promql: sum({{name:websocket_unique_ips}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - unique IPs'
   websocket.connections_per_ip:
-    width: 12
     title: Websocket connections per client IP
     description: 'Average connections per IP (connections / unique IPs) and the busiest single IP. An average near 1 is a healthy spread across users; a rising average, or a max approaching the per-IP cap of 128, points to one source clustering many connections, the abuse pattern the per-IP limiter guards against.'
     queries:
@@ -377,6 +421,86 @@ panels:
       max:
         promql: max({{name:websocket_max_connections_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - max per IP'
+  websocket.balance_history_txs:
+    title: WebSocket balance-history transactions per request (quantiles)
+    description: 'Distribution of how many transactions a single WebSocket getBalanceHistory call aggregates — the per-request DB work the cap bounds (one read per transaction). Trezor Suite is WebSocket-only and requests an account''s full history (no from/to) for its balance graph, so this is the signal for sizing the WS cap (default 1000000): if p99 sits far below the cap, the cap has ample headroom and never breaks a Suite graph; if it climbs toward the cap, heavy real accounts are getting close. Split by path (address vs xpub; xpub sums across derived addresses). Values are clamped at cap+1 when a request is rejected, so a flat line at the cap means requests are hitting it — read alongside the cap-rejections panel.'
+    queries:
+      p50:
+        promql: histogram_quantile(0.50, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p50'
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p95'
+      p99:
+        promql: histogram_quantile(0.99, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p99'
+  websocket.balance_history_cap_exceeded:
+    title: WebSocket balance-history cap rejections per minute
+    description: 'Rate of WebSocket getBalanceHistory requests rejected because the requested range spanned more transactions than the WS cap (default 1000000). For paying Suite customers this should stay at zero: a non-zero value means a real WS client (most likely a heavy Suite account asking for its full-history graph) is being turned away and that account''s graph is broken — the cue to raise <NET>_WS_BALANCE_HISTORY_MAX_TXS. Split by path (address vs xpub).'
+    queries:
+      by_path:
+        promql: sum(rate({{name:balance_history_cap_exceeded_total}}{job="blockbook", coin="$coin", transport="ws"}[$__rate_interval])) by (coin, path) * 60
+        legend: '{{coin}} - {{path}}/min'
+  row.rest_api:
+    title: REST API
+  rest_api.requests:
+    title: REST API requests per minute (by endpoint)
+    description: 'Rate of public REST API (/api/v2/...) calls, broken down by endpoint. Trezor Suite talks to Blockbook over WebSocket only, so REST traffic is non-Suite: explorer UI, third-party integrations, scrapers or bots. A sustained high rate, or one endpoint dominating, points to an automated client rather than wallet users. Counts only the JSON API actions, not WebSocket or HTML explorer views.'
+    queries:
+      by_action:
+        promql: sum(rate({{name:explorer_views}}{job="blockbook", coin="$coin", action=~"api-.*"}[$__rate_interval])) by (coin, action) * 60
+        legend: '{{coin}} - {{action}}/min'
+  rest_api.balance_history_requests:
+    title: REST API balance-history requests per minute
+    description: 'Rate of the balance-history endpoints (/api/v2/balancehistory and the xpub variant), the most expensive REST calls: each aggregates one DB read per transaction, so an unbounded request over a high-volume address or xpub is cheap to send and costly to serve. Requests past the per-request cap (default 250000 txs) are rejected with HTTP 400 asking to narrow the from/to range. A rising rate here, especially against large addresses, is the automated/DoS pattern that cap guards against.'
+    queries:
+      by_action:
+        promql: sum(rate({{name:explorer_views}}{job="blockbook", coin="$coin", action=~"api-.*balancehistory"}[$__rate_interval])) by (coin, action) * 60
+        legend: '{{coin}} - {{action}}/min'
+  rest_ui.rejections:
+    title: Public HTTP rate-limit rejections per minute
+    description: 'Public HTTP requests (explorer UI pages and REST API, sharing one per-client budget) the per-IP limiter rejected before any handler work (HTTP 429), by reason: request_rate is over the per-client request budget (default 180/min, burst 40), concurrent_requests is more than the per-client in-flight cap (default 12), ip_blocked is a client on the temporary blocklist (only when block duration is enabled; off by default). Sustained non-zero values mean abuse is being actively throttled.'
+    queries:
+      by_reason:
+        promql: sum(rate({{name:rest_ui_rate_limit_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
+        legend: '{{coin}} - {{reason}}/min'
+  rest_ui.active_ips:
+    title: Public HTTP active vs blocked client IPs
+    description: 'Distinct client keys (IPv4 address or IPv6 /64 prefix) with at least one in-flight public HTTP request (explorer UI or REST API), plotted against the number currently on the temporary blocklist. Active IPs is the breadth of concurrent callers; a single source pushing heavy traffic shows up not here but as a high busiest-client value. Blocked IPs stays at 0 unless block duration is configured, then it counts clients shut out after repeated rate/concurrency breaches.'
+    queries:
+      active:
+        promql: sum({{name:rest_ui_active_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - active IPs'
+      blocked:
+        promql: sum({{name:rest_ui_blocked_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - blocked IPs'
+  rest_ui.max_active_per_ip:
+    title: Public HTTP busiest client (in-flight requests)
+    description: 'Largest number of in-flight public HTTP requests (explorer UI or REST API) held by any single client key. A value climbing toward the per-client concurrency cap (default 12) while active IPs stays low means one source is holding many expensive handlers open at once, the per-client concurrency abuse the limiter guards against.'
+    queries:
+      max:
+        promql: max({{name:rest_ui_max_active_requests_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - max in-flight per IP'
+  rest_api.balance_history_txs:
+    title: REST API balance-history transactions per request (quantiles)
+    description: 'Distribution of how many transactions a single REST /api/v2/balancehistory call aggregates — the per-request DB work the cap bounds (one read per transaction). REST is the open, unauthenticated surface (non-Suite: explorer, integrations, bots), so this is where a cheap-to-send, expensive-to-serve request shows up; use it to judge whether the REST cap (default 250000) is sized right. Split by path (address vs xpub; xpub sums across derived addresses). Values are clamped at cap+1 when a request is rejected, so a flat line at the cap means requests are hitting it — read alongside the cap-rejections panel.'
+    queries:
+      p50:
+        promql: histogram_quantile(0.50, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p50'
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p95'
+      p99:
+        promql: histogram_quantile(0.99, sum(rate({{name:balance_history_txs}}_bucket{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path, le))
+        legend: '{{coin}} - {{path}} p99'
+  rest_api.balance_history_cap_exceeded:
+    title: REST API balance-history cap rejections per minute
+    description: 'Rate of REST balance-history requests rejected (HTTP 400) because the requested range spanned more transactions than the REST cap (default 250000). Unlike the WS side, non-zero here is expected and healthy — it is the open REST surface shedding the unbounded, high-volume-address scans the cap exists to block. A sustained climb, especially concentrated on the xpub path or one source, is the automated/DoS pattern; pair it with the REST rate-limit rejections and busiest-client panels. Split by path (address vs xpub).'
+    queries:
+      by_path:
+        promql: sum(rate({{name:balance_history_cap_exceeded_total}}{job="blockbook", coin="$coin", transport="rest"}[$__rate_interval])) by (coin, path) * 60
+        legend: '{{coin}} - {{path}}/min'
   row.general:
     title: General
   general.synchronized:
@@ -483,22 +607,6 @@ panels:
       explorer:
         promql: sum({{name:explorer_pending_requests}}{job="blockbook", coin="$coin"}) by (coin, method)
         legend: Explorer {{method}} - {{coin}}
-  general.estimated_fee:
-    title: Estimated fee rate
-    description: Fee estimates for 1/3/5/8 block targets; units are chain-specific.
-    queries:
-      blocks_1:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="1"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
-      blocks_3:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="3"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
-      blocks_5:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="5"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
-      blocks_8:
-        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="8"}/1000)
-        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
   general.coingecko_requests:
     title: CoinGecko requests
     description: Status separates successful calls, throttling and hard errors from the same endpoint.
@@ -519,13 +627,6 @@ panels:
       total:
         promql: sum({{name:coingecko_range_requests}}{job="blockbook", coin="$coin"})
         legend: '{{coin}} total across servers'
-  general.alt_fee_provider_requests:
-    title: Alternative fee provider requests
-    description: External fee-source health by provider; status distinguishes HTTP, network and decode failures.
-    queries:
-      requests:
-        promql: rate({{name:alternative_fee_provider_requests}}{job="blockbook", coin="$coin"}[$__rate_interval])
-        legend: '{{instance}} - {{provider}} - {{status}}'
   general.balance_history_fiat_duration_p95:
     title: 95% quantile of balance history fiat stage duration
     description: Separates batch lookup from per-point fallback, so slow fallback behavior is visible in address and xpub paths.
@@ -554,3 +655,125 @@ panels:
       p95:
         promql: histogram_quantile(0.95, sum(increase({{name:fiat_rates_update_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[1h])) by (coin, stage, status, le))
         legend: '{{coin}} - {{stage}} - {{status}}'
+  row.fees:
+    title: Fees
+  fees.estimated_fee:
+    title: Estimated fee rate (UTXO chains)
+    description: 'Fee estimates for 1/3/5/8 block targets; units are chain-specific. UTXO chains only - estimated_fee is not populated for EVM coins, which expose their fees in the EIP-1559 panels above, so this panel is empty when $coin is an EVM chain (expected, not an outage).'
+    queries:
+      blocks_1:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="1"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_3:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="3"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_5:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="5"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+      blocks_8:
+        promql: ({{name:estimated_fee}}{job="blockbook", coin="$coin", blocks="8"}/1000)
+        legend: '{{coin}} - {{instance}} - {{blocks}} blocks'
+  fees.alt_fee_provider_requests:
+    title: Alternative fee provider requests
+    description: External fee-source health by provider; status distinguishes HTTP, network and decode failures.
+    queries:
+      requests:
+        promql: rate({{name:alternative_fee_provider_requests}}{job="blockbook", coin="$coin"}[$__rate_interval])
+        legend: '{{instance}} - {{provider}} - {{status}}'
+  fees.eip1559_max_fee:
+    title: EIP-1559 maxFeePerGas by tier (Gwei)
+    description: The maxFeePerGas the pull path (estimateFee) serves per tier, in Gwei (raw wei / 1e9). This is what wallets such as Trezor Suite spend as the fee cap, so it is the headline panel for "fees too high". On provider-backed coins (e.g. Infura, 1inch) these are the provider's suggestions, remapped per-provider onto low/medium/high for comparable aggressiveness across providers; on on-chain coins they are 2x baseFee + tip. The instant tier exists only on the on-chain path, so an instant line on a provider-backed coin means the provider cache was stale and the on-chain fallback served the estimate. Compare with the base fee and the buffer-ratio panel to tell a busy chain from an estimator regression.
+    queries:
+      by_tier:
+        promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="max_fee"} / 1e9)
+        legend: '{{coin}} - {{instance}} - {{tier}}'
+  fees.eip1559_priority_fee:
+    title: EIP-1559 priority tip by tier (Gwei)
+    description: The maxPriorityFeePerGas (miner tip) served per tier, in Gwei (raw wei / 1e9), shown in a separate panel from maxFeePerGas because tips are an order of magnitude smaller. On the on-chain path tiers map to eth_feeHistory reward percentiles 20/70/90/99; a near-zero flat tip is normal on quiet or L2 chains. Read exact values from the legend table.
+    queries:
+      by_tier:
+        promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="priority_fee"} / 1e9)
+        legend: '{{coin}} - {{instance}} - {{tier}}'
+  fees.eip1559_buffer_ratio:
+    title: EIP-1559 buffer ratio (maxFeePerGas / baseFee)
+    description: 'Per-tier maxFeePerGas divided by the next-block base fee - the headroom over the base fee. The on-chain estimator targets 2x by design (eip1559BaseFeeMultiplier), shown as the dashed line; provider-backed coins return their own padded suggestions which may differ (e.g. Infura''s high tier sits ~2.5x), so a steady ratio above 2 there is expected, not an anomaly - the 2x line is the on-chain target only. How to read it: a ratio flat near its source''s normal level while absolute fees are high means the chain is congested (nothing to fix); a ratio climbing well above that level means over-buffering - the "fees too high" signature.'
+    queries:
+      ratio:
+        promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="max_fee"} / on(job, coin, instance) group_left {{name:eth_eip1559_base_fee}}{job="blockbook", coin="$coin"})
+        legend: '{{coin}} - {{instance}} - {{tier}}'
+      threshold:
+        promql: vector(2)
+        legend: target buffer (2x base fee)
+  fees.base_fee_push_vs_pull:
+    title: Base fee - mined block (push) vs next-block projection (pull) (Gwei)
+    description: 'Solid = base fee of the latest connected block (push path, eth_block_base_fee); dashed = the next-block base fee the pull-path estimate is built on (eth_eip1559_base_fee). On the on-chain path they should track within ~one block''s +/-12.5% step, so a persistent gap there means the eth_feeHistory projection is drifting from the chain. On provider-backed coins the projection is a cached value (up to the stale window old), so a larger, slowly-updating gap is expected cache lag - cross-check the cache-age and fee-source panels before calling it drift.'
+    queries:
+      mined:
+        promql: ({{name:eth_block_base_fee}}{job="blockbook", coin="$coin"} / 1e9)
+        legend: '{{coin}} - {{instance}} - mined (push)'
+      projected:
+        promql: ({{name:eth_eip1559_base_fee}}{job="blockbook", coin="$coin"} / 1e9)
+        legend: '{{coin}} - {{instance}} - projected (pull)'
+  fees.block_gas_used_ratio:
+    title: Latest block gas-used ratio (% of gas limit)
+    description: 'gasUsed / gasLimit of the most recently connected block, pushed on subscribeNewBlock. It is what moves the base fee: above the 50% balance point (dashed) the next block''s base fee rises up to +12.5%, below it falls. Read together with the base-fee and maxFeePerGas panels, this is the push-path explanation for "fees went up" - a sustained >50% ratio is real congestion, not an estimator issue.'
+    queries:
+      ratio:
+        promql: '{{name:eth_block_gas_used_ratio}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+      balance:
+        promql: vector(0.5)
+        legend: balance point (50%)
+  fees.alt_fee_provider_cache_age:
+    title: Alternative fee provider cache age
+    description: 'Age of the cached provider fees (time() - last successful refresh), per provider. The pull path keeps serving the cache until it crosses the provider''s stale window, after which estimateFee falls back to on-chain (visible as onchain_fallback in the fee-source panel). Both Infura and 1inch use a 30x stale window (e.g. 30 minutes for a 60s poll); the dashed line marks this default cutoff, so adjust it if a coin polls with a different period. A sawtooth that resets each poll is healthy; a line climbing past the cutoff is a wedged provider.'
+    queries:
+      age:
+        promql: (time() - {{name:alternative_fee_provider_last_sync_timestamp_seconds}}{job="blockbook", coin="$coin"})
+        legend: '{{coin}} - {{instance}} - {{provider}}'
+      cutoff:
+        promql: vector(1800)
+        legend: default stale cutoff (30x 60s = 30m)
+  fees.eip1559_fee_source:
+    title: EIP-1559 fee source (served estimates/s)
+    description: 'Where each served estimate came from, at the serve boundary: provider = alternative provider (Infura/1inch) cache hit; onchain_fallback = provider configured but its cache was stale/unready, so eth_feeHistory was used; onchain = no provider configured. Healthy state is provider dominating on provider-backed coins; a burst of onchain_fallback at startup is cold-cache warmup, not an incident (the cache-age panel disambiguates). Sustained onchain_fallback means the provider is wedged.'
+    queries:
+      by_source:
+        promql: sum by (coin, source) (rate({{name:eth_eip1559_fee_source_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{source}}'
+  row.fiat_rates:
+    title: Fiat Rates
+  fiatrates.tip_fetches:
+    title: Chain tip fetches (<=1 day, Free tier)
+    description: Daily fiat-rate points fetched for the chain tip (gap of one day), the only historical range still served from the rate-limited CoinGecko Free tier. Steady-state activity here is normal; sustained zero across a day means the tip update is failing.
+    queries:
+      units:
+        promql: sum(rate({{name:fiat_rates_fetched_units_total}}{job="blockbook", coin="$coin", phase="tip"}[$__rate_interval])) by (coin, instance) * 60
+        legend: '{{coin}} - {{instance}} tip points/min'
+  fiatrates.backfill_fetches:
+    title: Backfill fetches (>1 day, via CDN)
+    description: Higher-volume historical ranges routed to the Trezor CDN — multi-day downtime catch-up (backfill) and full-history population (bootstrap). units are daily points; tokens are token series. These should stay off the Free tier.
+    queries:
+      units:
+        promql: sum(rate({{name:fiat_rates_fetched_units_total}}{job="blockbook", coin="$coin", phase=~"backfill|bootstrap"}[$__rate_interval])) by (phase) * 60
+        legend: '{{coin}} - {{phase}} points/min'
+      tokens:
+        promql: sum(rate({{name:fiat_rates_fetched_tokens_total}}{job="blockbook", coin="$coin", phase=~"backfill|bootstrap"}[$__rate_interval])) by (phase) * 60
+        legend: '{{coin}} - {{phase}} tokens/min'
+  fiatrates.reconcile:
+    title: Startup reconciliation (self-healing)
+    description: Daily points and token series repaired by the blocking at-startup self-healing pass via the CDN. Bursts at process start are expected; recurring large bursts on every restart suggest persistent holes the provider cannot fill.
+    queries:
+      units:
+        promql: sum(increase({{name:fiat_rates_fetched_units_total}}{job="blockbook", coin="$coin", phase="reconcile"}[1h])) by (coin, instance)
+        legend: '{{coin}} - {{instance}} points repaired/h'
+      tokens:
+        promql: sum(increase({{name:fiat_rates_fetched_tokens_total}}{job="blockbook", coin="$coin", phase="reconcile"}[1h])) by (coin, instance)
+        legend: '{{coin}} - {{instance}} tokens repaired/h'
+  fiatrates.unable:
+    title: Unable to fetch (by reason)
+    description: Fiat-rate series that could not be fetched, split by phase and reason. gap_too_large flags series stale beyond the reconcile guard (probable bug); fetch_failed/provider_banned are transport failures; no_base_ticker is a token day lacking a base-currency ticker; budget_exhausted means the startup reconcile wall-clock budget elapsed before completion (remaining series retried next startup).
+    queries:
+      by_reason:
+        promql: sum(increase({{name:fiat_rates_unable_total}}{job="blockbook", coin="$coin"}[1h])) by (phase, reason)
+        legend: '{{coin}} - {{phase}} - {{reason}}'

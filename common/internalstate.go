@@ -105,6 +105,91 @@ type InternalState struct {
 	// allowed number of fetched accounts over websocket
 	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
 	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
+
+	// BalanceHistoryMaxTxsWS / BalanceHistoryMaxTxsREST cap how many transactions a
+	// single balance-history request (address or xpub) may aggregate; each costs a DB
+	// read, so this bounds a cheap-to-send DoS and errors past the cap (0 = unlimited).
+	// WS is generous (Trezor Suite's full-history graph); REST is tighter (open surface).
+	BalanceHistoryMaxTxsWS   int `json:"-" ts_doc:"Max transactions aggregated per WS balance-history request, 0 = unlimited (not exposed)."`
+	BalanceHistoryMaxTxsREST int `json:"-" ts_doc:"Max transactions aggregated per REST balance-history request, 0 = unlimited (not exposed)."`
+
+	// websocket IP blocklist: keys (IPv4 address or full IPv6 /128) blocked from
+	// opening new connections after flooding a single connection past the message-rate
+	// limit. Keyed on the /128 (not the limiter's /64) so a block cannot take out a
+	// shared /64. Guarded by its own mutex (consulted on every connection attempt).
+	wsBlockMux   sync.Mutex
+	wsBlockedIPs map[string]*WsBlockedIP
+
+	// rpcCallAllowlists is the effective websocket rpcCall allowlist snapshot,
+	// resolved from the DB runtime-setting overrides and the environment
+	// defaults (see server initRpcCallAllowlists). Unexported so it is never
+	// serialized by Pack; replaced wholesale via the accessors below, giving
+	// the rpcCall hot path a lock-free, consistent view.
+	rpcCallAllowlists atomic.Pointer[RpcCallAllowlists]
+}
+
+// Sources of a runtime setting value, reported by the /admin runtime-settings
+// interface.
+const (
+	RuntimeSettingSourceUnset = "unset"
+	RuntimeSettingSourceEnv   = "env"
+	RuntimeSettingSourceDB    = "db"
+)
+
+// RpcCallAllowlists is an immutable snapshot of the websocket rpcCall
+// allowlists. Readers must not mutate the maps; writers build a new snapshot
+// and replace it via SetRpcCallAllowlists.
+type RpcCallAllowlists struct {
+	// To and Methods are the parsed allowlists; a nil map means that dimension
+	// is unconfigured. With both nil, rpcCall is unrestricted.
+	//
+	// Each dimension's key format must match what the rpcCall check looks up
+	// (server rpcCallAllowed), and the two deliberately differ:
+	//   - To keys are the configured entries trimmed and lowercased verbatim —
+	//     in practice 0x-prefixed hex addresses, because they are matched
+	//     against the lowercased `to` field of the request as sent by clients.
+	//   - Methods keys are 4-byte selectors as 8 lowercase hex characters
+	//     without the 0x prefix, because they are matched against selectors
+	//     hex-decoded from the request calldata (server evmCallSelector).
+	// A future dimension should document its key format here and keep the
+	// parser (server runtimeSettingDefs) and the rpcCall lookup in lockstep.
+	To      map[string]struct{}
+	Methods map[string]struct{}
+	// Raw comma-separated values and their sources (unset/env/db), kept for
+	// the admin interface and logging.
+	ToValue       string
+	MethodsValue  string
+	ToSource      string
+	MethodsSource string
+}
+
+// GetRpcCallAllowlists returns the current rpcCall allowlist snapshot, nil
+// when not yet initialized.
+func (is *InternalState) GetRpcCallAllowlists() *RpcCallAllowlists {
+	return is.rpcCallAllowlists.Load()
+}
+
+// SetRpcCallAllowlists atomically replaces the rpcCall allowlist snapshot.
+func (is *InternalState) SetRpcCallAllowlists(a *RpcCallAllowlists) {
+	is.rpcCallAllowlists.Store(a)
+}
+
+// InitRpcCallAllowlists publishes the initial snapshot only when none exists
+// yet and reports whether it did. The compare-and-swap keeps a snapshot that
+// was already published — possibly updated by the admin interface in the
+// meantime — intact when several server constructors initialize in any order.
+func (is *InternalState) InitRpcCallAllowlists(a *RpcCallAllowlists) bool {
+	return is.rpcCallAllowlists.CompareAndSwap(nil, a)
+}
+
+// WsBlockedIP records a websocket client key (IPv4 address or full IPv6 /128)
+// that is temporarily blocked from opening new websocket connections.
+type WsBlockedIP struct {
+	Key       string    `ts_doc:"Blocked client key: an IPv4 address or a full IPv6 /128 address."`
+	BlockedAt time.Time `ts_doc:"Time the key was first blocked in the current block."`
+	Until     time.Time `ts_doc:"Time the block expires."`
+	Breaches  int       `ts_doc:"How many times this key tripped the per-connection message rate limit."`
+	Rejected  int       `ts_doc:"How many new connections were rejected while the key was blocked."`
 }
 
 // StartedSync signals start of synchronization
@@ -399,4 +484,97 @@ func (is *InternalState) ResetWsLimitExceedingIPs() {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.WsLimitExceedingIPs = make(map[string]int)
+}
+
+// WsLimitExceedingIPsSnapshot returns a copy of the limit-exceeding counters.
+// The map is mutated under is.mux by AddWsLimitExceedingIP, so readers (the
+// admin page) must not range over it directly.
+func (is *InternalState) WsLimitExceedingIPsSnapshot() map[string]int {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	out := make(map[string]int, len(is.WsLimitExceedingIPs))
+	for k, v := range is.WsLimitExceedingIPs {
+		out[k] = v
+	}
+	return out
+}
+
+// BlockWsIP flags a websocket client key (an IPv4 address or full IPv6 /128) as
+// blocked until the given time. If the key is already blocked the block is
+// extended to the later of the two expirations and the breach counter is
+// incremented; otherwise a new entry is created. now is passed in so callers can
+// inject a clock in tests.
+func (is *InternalState) BlockWsIP(key string, until, now time.Time) {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	if is.wsBlockedIPs == nil {
+		is.wsBlockedIPs = make(map[string]*WsBlockedIP)
+	}
+	e := is.wsBlockedIPs[key]
+	if e == nil || !now.Before(e.Until) {
+		// new block, or the previous one had already expired: reset the window
+		e = &WsBlockedIP{Key: key, BlockedAt: now}
+		is.wsBlockedIPs[key] = e
+	}
+	e.Breaches++
+	if until.After(e.Until) {
+		e.Until = until
+	}
+}
+
+// IsWsIPBlocked reports whether the key is currently blocked. When blocked it
+// records a rejected connection so the admin page can show how much traffic the
+// block is shedding, and returns the updated count so the caller can throttle
+// per-attempt logging. Expired entries are treated as not blocked (the periodic
+// SweepWsBlockedIPs removes them).
+func (is *InternalState) IsWsIPBlocked(key string, now time.Time) (bool, int) {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	e := is.wsBlockedIPs[key]
+	if e == nil || now.Before(e.BlockedAt) {
+		return false, 0
+	}
+	if !now.Before(e.Until) {
+		return false, 0
+	}
+	e.Rejected++
+	return true, e.Rejected
+}
+
+// SweepWsBlockedIPs removes expired entries and returns the number of keys that
+// remain blocked, for the websocket_blocked_ips gauge.
+func (is *InternalState) SweepWsBlockedIPs(now time.Time) int {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	for key, e := range is.wsBlockedIPs {
+		if !now.Before(e.Until) {
+			delete(is.wsBlockedIPs, key)
+		}
+	}
+	return len(is.wsBlockedIPs)
+}
+
+// WsBlockedIPsSnapshot returns a copy of the currently blocked entries, newest
+// expiry first, skipping any that have already expired.
+func (is *InternalState) WsBlockedIPsSnapshot(now time.Time) []WsBlockedIP {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	out := make([]WsBlockedIP, 0, len(is.wsBlockedIPs))
+	for _, e := range is.wsBlockedIPs {
+		if !now.Before(e.Until) {
+			continue
+		}
+		out = append(out, *e)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Until.After(out[j].Until)
+	})
+	return out
+}
+
+// ResetWsBlockedIPs clears the websocket IP blocklist.
+func (is *InternalState) ResetWsBlockedIPs() {
+	is.wsBlockMux.Lock()
+	defer is.wsBlockMux.Unlock()
+	is.wsBlockedIPs = make(map[string]*WsBlockedIP)
 }

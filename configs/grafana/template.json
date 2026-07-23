@@ -1547,6 +1547,252 @@
           },
           "custom": {
             "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 332,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "actions"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "sync.eth_alternative_mempool_reconciliation"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 338,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "size"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "sync.eth_alternative_mempool_cache_size"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "id": 339,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "p50"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "p95"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "sync.eth_alternative_mempool_tx_residence"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 349,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_result"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "sync.eth_alternative_nonce_requests"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
             "lineWidth": 1,
@@ -2251,6 +2497,72 @@
       "x-panel-key": "sync.tip_feed_events"
     },
     {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "id": 348,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "p95"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "p50"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "sync.rpc_sync_latency"
+    },
+    {
       "collapsed": false,
       "id": 315,
       "panels": [],
@@ -2443,6 +2755,67 @@
       ],
       "type": "timeseries",
       "x-panel-key": "websocket.subscriptions"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "notif / min",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 331,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "notifications"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "websocket.new_block_notifications"
     },
     {
       "fieldConfig": {
@@ -3072,6 +3445,590 @@
       ],
       "type": "timeseries",
       "x-panel-key": "websocket.connections_per_ip"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "transactions",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 327,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "p50"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "p95"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "C",
+          "x-query-key": "p99"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "websocket.balance_history_txs"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "rejections / min",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 328,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_path"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "websocket.balance_history_cap_exceeded"
+    },
+    {
+      "collapsed": false,
+      "id": 321,
+      "panels": [],
+      "type": "row",
+      "x-panel-key": "row.rest_api"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "requests / min",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 322,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_action"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "rest_api.requests"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "requests / min",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 323,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_action"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "rest_api.balance_history_requests"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "rejections / min",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 324,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_reason"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "rest_ui.rejections"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 325,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "active"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "blocked"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "rest_ui.active_ips"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 326,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "max"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "rest_ui.max_active_per_ip"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "transactions",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 329,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "p50"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "p95"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "C",
+          "x-query-key": "p99"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "rest_api.balance_history_txs"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "rejections / min",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 330,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_path"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "rest_api.balance_history_cap_exceeded"
     },
     {
       "collapsed": false,
@@ -3974,84 +4931,6 @@
         },
         "overrides": []
       },
-      "id": 45,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "A",
-          "x-query-key": "blocks_1"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "B",
-          "x-query-key": "blocks_3"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "C",
-          "x-query-key": "blocks_5"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "D",
-          "x-query-key": "blocks_8"
-        }
-      ],
-      "type": "timeseries",
-      "x-panel-key": "general.estimated_fee"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
       "id": 39,
       "options": {
         "legend": {
@@ -4152,66 +5031,6 @@
       ],
       "type": "timeseries",
       "x-panel-key": "general.coingecko_range_requests"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "id": 57,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "A",
-          "x-query-key": "requests"
-        }
-      ],
-      "type": "timeseries",
-      "x-panel-key": "general.alt_fee_provider_requests"
     },
     {
       "fieldConfig": {
@@ -4452,6 +5271,951 @@
       ],
       "type": "timeseries",
       "x-panel-key": "general.fiat_update_duration_p95"
+    },
+    {
+      "collapsed": false,
+      "id": 340,
+      "panels": [],
+      "type": "row",
+      "x-panel-key": "row.fees"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 341,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_tier"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.eip1559_max_fee"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 342,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_tier"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.eip1559_priority_fee"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*target.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "id": 343,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "ratio"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "threshold"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.eip1559_buffer_ratio"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 344,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_source"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.eip1559_fee_source"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*cutoff.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "id": 345,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "age"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "cutoff"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.alt_fee_provider_cache_age"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 57,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "requests"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.alt_fee_provider_requests"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*balance point.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "id": 346,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "ratio"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "balance"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.block_gas_used_ratio"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*projected.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "id": 347,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "mined"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "projected"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.base_fee_push_vs_pull"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 45,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "blocks_1"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "blocks_3"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "C",
+          "x-query-key": "blocks_5"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "D",
+          "x-query-key": "blocks_8"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fees.estimated_fee"
+    },
+    {
+      "collapsed": false,
+      "id": 333,
+      "panels": [],
+      "type": "row",
+      "x-panel-key": "row.fiat_rates"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 334,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "units"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fiatrates.tip_fetches"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 335,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "units"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "tokens"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fiatrates.backfill_fetches"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 336,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "units"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "B",
+          "x-query-key": "tokens"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fiatrates.reconcile"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 337,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "by_reason"
+        }
+      ],
+      "type": "timeseries",
+      "x-panel-key": "fiatrates.unable"
     }
   ],
   "preload": false,
@@ -4565,11 +6329,6 @@
           },
           {
             "selected": false,
-            "text": "Ethereum Testnet  Holesky Archive",
-            "value": "Ethereum Testnet  Holesky Archive"
-          },
-          {
-            "selected": false,
             "text": "Ethereum Testnet  Sepolia Archive",
             "value": "Ethereum Testnet  Sepolia Archive"
           },
@@ -4584,7 +6343,7 @@
             "value": "Avalanche Archive"
           }
         ],
-        "query": "Bitcoin,Ethereum Archive,Polygon Archive,BNB Smart Chain Archive,Arbitrum Archive,Base Archive,Optimism Archive,Litecoin,Namecoin,Vertcoin,Zcash,Bgold,Bcash,Dash,DigiByte,Dogecoin,Ethereum Classic,Testnet,Ethereum Testnet  Holesky Archive,Ethereum Testnet  Sepolia Archive,Tron,Avalanche Archive",
+        "query": "Bitcoin,Ethereum Archive,Polygon Archive,BNB Smart Chain Archive,Arbitrum Archive,Base Archive,Optimism Archive,Litecoin,Namecoin,Vertcoin,Zcash,Bgold,Bcash,Dash,DigiByte,Dogecoin,Ethereum Classic,Testnet,Ethereum Testnet  Sepolia Archive,Tron,Avalanche Archive",
         "skipUrlSync": false,
         "type": "custom"
       }

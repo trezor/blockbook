@@ -235,7 +235,7 @@ type Token struct {
 	Contract         string                   `json:"contract,omitempty" ts_doc:"Contract address on-chain."`
 	Transfers        int                      `json:"transfers" ts_doc:"Total number of token transfers for this address."`
 	Symbol           string                   `json:"symbol,omitempty" ts_doc:"Symbol for the token (e.g., 'ETH', 'USDT')."`
-	Decimals         int                      `json:"decimals,omitempty" ts_doc:"Number of decimals for this token."`
+	Decimals         int                      `json:"decimals" ts_doc:"Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable."`
 	BalanceSat       *Amount                  `json:"balance,omitempty" ts_doc:"Current token balance (in minimal base units)."`
 	BaseValue        float64                  `json:"baseValue,omitempty" ts_doc:"Value in the base currency (e.g. ETH for ERC20 tokens)."`
 	SecondaryValue   float64                  `json:"secondaryValue,omitempty" ts_doc:"Value in a secondary currency (e.g. fiat), if available."`
@@ -284,7 +284,7 @@ type TokenTransfer struct {
 	Contract         string                   `json:"contract" ts_doc:"Contract address of the token."`
 	Name             string                   `json:"name,omitempty" ts_doc:"Token name."`
 	Symbol           string                   `json:"symbol,omitempty" ts_doc:"Token symbol."`
-	Decimals         int                      `json:"decimals,omitempty" ts_doc:"Number of decimals for this token (if applicable)."`
+	Decimals         int                      `json:"decimals" ts_doc:"Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable."`
 	Value            *Amount                  `json:"value,omitempty" ts_doc:"Amount (in base units) of tokens transferred."`
 	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty" ts_doc:"List of multiple ID-value pairs for ERC1155 transfers."`
 }
@@ -306,7 +306,8 @@ type EthereumSpecific struct {
 	Nonce                uint64                                 `json:"nonce" ts_doc:"Transaction nonce (sequential number from the sender)."`
 	GasLimit             *big.Int                               `json:"gasLimit" ts_doc:"Maximum gas allowed by the sender for this transaction."`
 	GasUsed              *big.Int                               `json:"gasUsed,omitempty" ts_doc:"Actual gas consumed by the transaction execution."`
-	GasPrice             *Amount                                `json:"gasPrice,omitempty" ts_doc:"Price (in Wei or base units) per gas unit."`
+	GasPrice             *Amount                                `json:"gasPrice,omitempty" ts_doc:"Price (in Wei or base units) per gas unit bid by the sender."`
+	EffectiveGasPrice    *Amount                                `json:"effectiveGasPrice,omitempty" ts_doc:"Actual gas price paid per gas unit; on L2 networks this differs from gasPrice and is used for the fee."`
 	MaxPriorityFeePerGas *Amount                                `json:"maxPriorityFeePerGas,omitempty"`
 	MaxFeePerGas         *Amount                                `json:"maxFeePerGas,omitempty"`
 	BaseFeePerGas        *Amount                                `json:"baseFeePerGas,omitempty"`
@@ -401,6 +402,9 @@ type AddressFilter struct {
 	Protocols      []string       `ts_doc:"Optional protocol enrichments to include. Supported values currently include 'erc4626'."`
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool `ts_doc:"If true, ignores mempool (unconfirmed) transactions."`
+	// WithConfirmedNonce set to true makes the Ethereum-like address response include the confirmed nonce,
+	// which requires an extra eth_getTransactionCount("latest") backend call; off by default to avoid that cost.
+	WithConfirmedNonce bool `ts_doc:"If true, additionally fetch and return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
 }
 
 // StakingPool holds data about address participation in a staking pool contract
@@ -433,7 +437,8 @@ type Address struct {
 	InternalTxs           int                 `json:"internalTxs,omitempty" ts_doc:"Number of internal transactions (e.g., Ethereum calls)."`
 	Transactions          []*Tx               `json:"transactions,omitempty" ts_doc:"List of transaction details (if requested)."`
 	Txids                 []string            `json:"txids,omitempty" ts_doc:"List of transaction IDs (if detailed data is not requested)."`
-	Nonce                 string              `json:"nonce,omitempty" ts_doc:"Current transaction nonce for Ethereum-like addresses."`
+	Nonce                 string              `json:"nonce,omitempty" ts_doc:"Current (pending) transaction nonce for Ethereum-like addresses, including mempool transactions. This is the next nonce the account will use."`
+	ConfirmedNonce        string              `json:"confirmedNonce,omitempty" ts_doc:"Confirmed transaction nonce for Ethereum-like addresses, reflecting only mined transactions (eth_getTransactionCount at the latest block). Equals nonce when the account has no pending transactions."`
 	UsedTokens            int                 `json:"usedTokens,omitempty" ts_doc:"Number of tokens with any historical usage at this address."`
 	Tokens                Tokens              `json:"tokens,omitempty" ts_doc:"List of tokens associated with this address."`
 	SecondaryValue        float64             `json:"secondaryValue,omitempty" ts_doc:"Total value of the address in secondary currency (e.g. fiat)."`

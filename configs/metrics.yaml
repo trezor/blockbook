@@ -63,6 +63,17 @@ metrics:
     help: Output point count for address or xpub balance-history responses
     labels: [path]
     buckets: [1, 2, 5, 10, 20, 40, 80, 160, 320, 640, 1280]
+  balance_history_txs:
+    name: blockbook_balance_history_txs
+    type: histogram_vec
+    help: Transactions aggregated per balance-history request (the per-request DB work the cap bounds), split by transport and endpoint path; clamped at the configured cap+1 when the cap rejects the request
+    labels: [transport, path]
+    buckets: [1, 10, 100, 1000, 5000, 25000, 50000, 100000, 250000, 500000, 1000000, 2000000]
+  balance_history_cap_exceeded_total:
+    name: blockbook_balance_history_cap_exceeded_total
+    type: counter_vec
+    help: Balance-history requests rejected because the requested range spanned more transactions than the configured cap, split by transport and endpoint path
+    labels: [transport, path]
   websocket_eth_receipt:
     name: blockbook_websocket_eth_receipt
     type: counter_vec
@@ -72,6 +83,10 @@ metrics:
     name: blockbook_websocket_new_block_txs_subscriptions
     type: gauge
     help: Address subscriptions that opted into confirmed-block newBlockTxs notifications
+  websocket_new_block_notifications:
+    name: blockbook_websocket_new_block_notifications
+    type: counter
+    help: New block notifications delivered to subscribeNewBlock subscribers, incremented by the number of subscribed clients on every indexed block
   websocket_connection_requests:
     name: blockbook_websocket_connection_requests
     type: histogram
@@ -90,6 +105,31 @@ metrics:
     name: blockbook_websocket_max_connections_per_ip
     type: gauge
     help: Largest number of concurrent websocket connections held by any single client IP, the size of the biggest connection cluster
+  websocket_blocked_ips:
+    name: blockbook_websocket_blocked_ips
+    type: gauge
+    help: Distinct client keys (IPv4 address or IPv6 /64 prefix) currently blocked from opening websocket connections after tripping the per-connection message rate limit
+  websocket_blocked_connections:
+    name: blockbook_websocket_blocked_connections
+    type: counter
+    help: Websocket connection attempts rejected before upgrade because the client key was on the temporary IP blocklist
+  rest_ui_rate_limit_rejections:
+    name: blockbook_rest_ui_rate_limit_rejections
+    type: counter_vec
+    help: Public HTTP requests (explorer UI and REST API) rejected by the per-IP limiter before handler work
+    labels: [reason]
+  rest_ui_active_ips:
+    name: blockbook_rest_ui_active_ips
+    type: gauge
+    help: Distinct client keys with at least one in-flight public HTTP request (explorer UI or REST API)
+  rest_ui_max_active_requests_per_ip:
+    name: blockbook_rest_ui_max_active_requests_per_ip
+    type: gauge
+    help: Largest number of in-flight public HTTP requests (explorer UI or REST API) held by one client key
+  rest_ui_blocked_ips:
+    name: blockbook_rest_ui_blocked_ips
+    type: gauge
+    help: Distinct client keys currently blocked from public HTTP requests (explorer UI or REST API)
   index_resync_duration:
     name: blockbook_index_resync_duration
     type: histogram
@@ -184,6 +224,26 @@ metrics:
     name: blockbook_mempool_size
     type: gauge
     help: Transactions retained from the last successful backend reload
+  eth_alternative_mempool_reconciliation_events_total:
+    name: blockbook_eth_alternative_mempool_reconciliation_events_total
+    type: counter_vec
+    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action - skipped_fresh and kept retain an entry for the next cycle, provider_error and provider_missing_pending keep an unconfirmed entry pending retry, and mined, nonce_superseded, provider_missing, timeout (from the reconcile loop or a read-path expiry) and rbf_replaced (fee replacement) remove it
+    labels: [action]
+  eth_alternative_mempool_tx_residence_seconds:
+    name: blockbook_eth_alternative_mempool_tx_residence_seconds
+    type: histogram_vec
+    help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry at the moment it leaves the cache, labeled by the removing action (mined, nonce_superseded, provider_missing, timeout or rbf_replaced) - reveals how long unconfirmed txs actually survive before each exit reason fires
+    labels: [action]
+    buckets: [30, 60, 120, 180, 300, 450, 600, 900, 1200, 1800, 3600]
+  eth_alternative_mempool_cache_size:
+    name: blockbook_eth_alternative_mempool_cache_size
+    type: gauge
+    help: Transactions currently held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle
+  eth_alternative_nonce_requests_total:
+    name: blockbook_eth_alternative_nonce_requests_total
+    type: counter_vec
+    help: eth_getTransactionCount lookups actually routed to the alternative send-transaction provider, labeled by result - success (the provider answered and its pending nonce was served, raised to the mempool floor) or error (the provider failed and the lookup fell back to the primary RPC). Only addresses that recently sent a private transaction through the provider are routed here (see useForNonces), so this counts the small gated subset, not every address request - a low, mostly-success rate confirms the gating is keeping the hot eth_getTransactionCount endpoint off the provider's rate quota
+    labels: [result]
   estimated_fee:
     name: blockbook_estimated_fee
     type: gauge_vec
@@ -298,11 +358,59 @@ metrics:
     help: Time spent in fiat-rate downloader stages such as current, hourly, historical and token ticker updates
     labels: [stage, status]
     buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300]
+  fiat_rates_fetched_units_total:
+    name: blockbook_fiat_rates_fetched_units_total
+    type: counter_vec
+    help: Daily fiat-rate time-units fetched and persisted, split by fetch phase (tip, backfill, bootstrap, reconcile)
+    labels: [phase]
+  fiat_rates_fetched_tokens_total:
+    name: blockbook_fiat_rates_fetched_tokens_total
+    type: counter_vec
+    help: Token fiat-rate series fetched and persisted, split by fetch phase (backfill, bootstrap, reconcile)
+    labels: [phase]
+  fiat_rates_unable_total:
+    name: blockbook_fiat_rates_unable_total
+    type: counter_vec
+    help: Fiat-rate series that could not be fetched, split by phase and reason (gap_too_large, fetch_failed, provider_banned, no_base_ticker, budget_exhausted)
+    labels: [phase, reason]
   alternative_fee_provider_requests:
     name: blockbook_alternative_fee_provider_requests
     type: counter_vec
     help: Requests to external fee providers, labeled by provider and outcome status
     labels: [provider, status]
+  alternative_fee_provider_last_sync_timestamp_seconds:
+    name: blockbook_alternative_fee_provider_last_sync_timestamp_seconds
+    type: gauge_vec
+    help: Unix time of the last successful refresh of the cached EVM alternative-provider fees, labeled by provider (infura or 1inch). Plot time() - this for cache age; the pull path falls back to on-chain once the cache is older than the provider's stale window (for infura, 30x the poll period, e.g. 30m at a 60s poll). Exported as a timestamp rather than a computed *_age_seconds gauge on purpose - it is only written on a successful refresh, so age keeps rising when a provider wedges and it is restart-safe
+    labels: [provider]
+  eth_eip1559_fee:
+    name: blockbook_eth_eip1559_fee
+    type: gauge_vec
+    help: Most recent EIP-1559 fee tier served by the pull path (estimateFee / EthereumTypeGetEip1559Fees), in wei - divide by 1e9 for Gwei; labeled by tier (low/medium/high/instant) and kind (max_fee = maxFeePerGas, priority_fee = maxPriorityFeePerGas). EVM fees are otherwise invisible (estimated_fee is UTXO-only). Last-writer-wins per estimate, like estimated_fee
+    labels: [tier, kind]
+  eth_eip1559_base_fee:
+    name: blockbook_eth_eip1559_base_fee
+    type: gauge
+    help: Base fee underlying the most recent pull-path EIP-1559 estimate, in wei - divide by 1e9 for Gwei. The alternative provider's reported base fee when served from a provider, otherwise eth_feeHistory's last requested-window base fee (baseFeePerGas[blocks-1]); on backends that drop the extra projected element (e.g. Erigon) that is already the next-block projection, on others it is the most recent included block. Pair with eth_block_base_fee to see projection vs realized
+  eth_eip1559_fee_source_total:
+    name: blockbook_eth_eip1559_fee_source_total
+    type: counter_vec
+    help: Served EIP-1559 pull-path estimates by source observed at the serve boundary - provider (alternative provider cache hit), onchain_fallback (provider configured but cache stale/unready, served from eth_feeHistory) or onchain (no provider configured). Complements alternative_fee_provider_requests (background fetch) and alternative_fee_provider_last_sync_timestamp_seconds (cache age), which together explain why a fallback happened
+    labels: [source]
+  eth_block_gas_used_ratio:
+    name: blockbook_eth_block_gas_used_ratio
+    type: gauge
+    help: gasUsed / gasLimit of the most recently connected EVM block (0..1), the congestion signal that drives the next base fee - above 0.5 the next block's base fee rises (up to +12.5% per block), below 0.5 it falls. This is the push path's view of why fees move; updated once per connected block, so it sweeps catch-up blocks and settles on the tip
+  eth_block_base_fee:
+    name: blockbook_eth_block_base_fee
+    type: gauge
+    help: Base fee per gas of the most recently connected EVM block, in wei - divide by 1e9 for Gwei. The realized base fee from the block header (push path); compare with eth_eip1559_base_fee (the pull path's next-block projection) to see whether the projection tracks the chain. Updated once per connected block
+  rpc_sync_latency:
+    name: blockbook_rpc_sync_latency
+    type: histogram_vec
+    help: Blockbook-to-backend round-trip time for sync-internal RPC calls (eth_getBlockByHash, eth_getLogs, debug_traceBlockByHash, etc.), in milliseconds, labeled by method and whether the call failed. Typically sub-100ms; multi-second values mean an overloaded backend, and observations near 10-15s are trace_timeout/rpc_timeout expiries rather than real round trips
+    labels: [method, error]
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000]
   eth_sync_rpc_errors:
     name: blockbook_eth_sync_rpc_errors
     type: counter_vec

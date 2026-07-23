@@ -14,6 +14,7 @@ from runner import (
     parse_json_object,
     require_coin_config,
     resolve_deploy_selection,
+    write_step_summary,
 )
 
 
@@ -21,8 +22,25 @@ def matchable_name(coin: str) -> str:
     marker = "_testnet"
     idx = coin.find(marker)
     if idx != -1:
-        return coin[:idx] + "=test"
+        # Preserve the network suffix (e.g. "_sepolia", "_nile", "4") so distinct
+        # testnets of the same coin get distinct names instead of all collapsing to
+        # "<coin>=test". Keeps the mapping injective. Must stay in sync with
+        # getMatchableName() in tests/integration.go.
+        return coin[:idx] + "=test" + coin[idx + len(marker):]
     return coin + "=main"
+
+
+def build_connectivity_regex(names) -> str:
+    # Anchor each name so e.g. "bitcoin=test" cannot substring-match the
+    # "bitcoin=test4" subtest. Safe because matchable_name() is injective, so
+    # Go never appends a "#NN" disambiguator that an anchor would exclude.
+    if not names:
+        # Fail closed: an empty alternation "()" matches the empty string, so
+        # `go test -run` would select EVERY connectivity subtest — the opposite
+        # of "no coins". Callers must filter to a non-empty set first.
+        raise ValueError("build_connectivity_regex requires at least one name")
+    escaped = ["^" + re.escape(name) + "$" for name in names]
+    return "TestIntegration/(" + "|".join(escaped) + ")/connectivity"
 
 
 def main() -> None:
@@ -58,8 +76,7 @@ def main() -> None:
     if not unique_names:
         fail("no coins selected after validation")
     unique_test_coins = sorted(set(test_coins))
-    escaped = [re.escape(name) for name in unique_names]
-    connectivity_regex = "TestIntegration/(" + "|".join(escaped) + ")/connectivity"
+    connectivity_regex = build_connectivity_regex(unique_names)
 
     output_file = os.environ.get("GITHUB_OUTPUT")
     if not output_file:
@@ -73,6 +90,20 @@ def main() -> None:
 
     log("Selected coins: " + ", ".join(requested))
     log("Connectivity regex: " + connectivity_regex)
+
+    summary_lines = [
+        "### Deploy plan",
+        "",
+        "| Coin | Runner |",
+        "| --- | --- |",
+    ]
+    for item in runner_matrix:
+        summary_lines.append(f"| {item['coin']} | {item['runner']} |")
+    summary_lines += [
+        "",
+        "E2E test coins: " + ", ".join(unique_test_coins),
+    ]
+    write_step_summary("\n".join(summary_lines))
 
 
 if __name__ == "__main__":

@@ -466,6 +466,7 @@ paths:
         - $ref: "#/components/parameters/ContractFilter"
         - $ref: "#/components/parameters/Protocols"
         - $ref: "#/components/parameters/SecondaryCurrency"
+        - $ref: "#/components/parameters/ConfirmedNonce"
       responses:
         "200":
           description: Address/account details.
@@ -1270,6 +1271,15 @@ components:
         type: integer
         minimum: 0
         maximum: 10000
+    ConfirmedNonce:
+      name: confirmedNonce
+      in: query
+      description: |-
+        If true, additionally return the confirmed nonce for Ethereum-like
+        addresses (the confirmedNonce response field). This triggers an extra
+        eth_getTransactionCount("latest") backend call, so it is off by default.
+      schema:
+        type: boolean
 
   responses:
     Error:
@@ -1444,6 +1454,7 @@ components:
           gasLimit: 550941
           gasUsed: 434686
           gasPrice: "44035608242"
+          effectiveGasPrice: "44035608242"
           maxPriorityFeePerGas: "44035608243"
           maxFeePerGas: "44035608244"
           baseFeePerGas: "2035608244"
@@ -1859,7 +1870,7 @@ components:
 
     TokenTransfer:
       type: object
-      required: [type, standard, from, to, contract]
+      required: [type, standard, from, to, contract, decimals]
       properties:
         type:
           deprecated: true
@@ -2015,6 +2026,8 @@ components:
           type: integer
           format: int64
         gasPrice:
+          $ref: "#/components/schemas/AmountString"
+        effectiveGasPrice:
           $ref: "#/components/schemas/AmountString"
         maxPriorityFeePerGas:
           $ref: "#/components/schemas/AmountString"
@@ -2213,7 +2226,7 @@ components:
 
     Token:
       type: object
-      required: [type, standard, name, transfers]
+      required: [type, standard, name, transfers, decimals]
       properties:
         type:
           deprecated: true
@@ -2322,6 +2335,8 @@ components:
           items:
             type: string
         nonce:
+          type: string
+        confirmedNonce:
           type: string
         usedTokens:
           type: integer
@@ -2761,6 +2776,8 @@ components:
           type: string
         gap:
           type: integer
+        confirmedNonce:
+          type: boolean
 
     WsContractInfoReq:
       type: object
@@ -2950,6 +2967,35 @@ components:
         baseFeeTrend:
           type: string
           enum: [up, down]
+
+    EthereumGasData:
+      type: object
+      description: >
+        EVM block-level gas figures pushed with subscribeNewBlock notifications, used by the
+        frontend to deterministically project the next block's EIP-1559 base fee. Decimal strings,
+        omitted for pre-London blocks.
+      properties:
+        baseFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        blockGasUsed:
+          $ref: "#/components/schemas/AmountString"
+        blockGasLimit:
+          $ref: "#/components/schemas/AmountString"
+
+    WsNewBlock:
+      type: object
+      required: [height, hash, evmData]
+      description: Pushed to subscribeNewBlock subscribers when a new block is connected.
+      properties:
+        height:
+          type: number
+        hash:
+          type: string
+        evmData:
+          description: EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains.
+          oneOf:
+            - $ref: "#/components/schemas/EthereumGasData"
+            - type: "null"
 
     WsEstimateFeeRes:
       type: object

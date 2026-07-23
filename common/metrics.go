@@ -30,12 +30,21 @@ type Metrics struct {
 	BalanceHistoryFiatDuration        *prometheus.HistogramVec `metric:"balance_history_fiat_duration_seconds"`
 	BalanceHistoryFiatFallback        *prometheus.CounterVec   `metric:"balance_history_fiat_fallback_total"`
 	BalanceHistoryPoints              *prometheus.HistogramVec `metric:"balance_history_points"`
+	BalanceHistoryTxs                 *prometheus.HistogramVec `metric:"balance_history_txs"`
+	BalanceHistoryCapExceeded         *prometheus.CounterVec   `metric:"balance_history_cap_exceeded_total"`
 	WebsocketEthReceipt               *prometheus.CounterVec   `metric:"websocket_eth_receipt"`
 	WebsocketNewBlockTxsSubscriptions prometheus.Gauge         `metric:"websocket_new_block_txs_subscriptions"`
+	WebsocketNewBlockNotifications    prometheus.Counter       `metric:"websocket_new_block_notifications"`
 	WebsocketConnectionRequests       prometheus.Histogram     `metric:"websocket_connection_requests"`
 	WebsocketConnectionRejections     *prometheus.CounterVec   `metric:"websocket_connection_rejections"`
 	WebsocketUniqueIPs                prometheus.Gauge         `metric:"websocket_unique_ips"`
 	WebsocketMaxConnectionsPerIP      prometheus.Gauge         `metric:"websocket_max_connections_per_ip"`
+	WebsocketBlockedIPs               prometheus.Gauge         `metric:"websocket_blocked_ips"`
+	WebsocketBlockedConnections       prometheus.Counter       `metric:"websocket_blocked_connections"`
+	RestUIRateLimitRejections         *prometheus.CounterVec   `metric:"rest_ui_rate_limit_rejections"`
+	RestUIActiveIPs                   prometheus.Gauge         `metric:"rest_ui_active_ips"`
+	RestUIMaxActiveRequestsPerIP      prometheus.Gauge         `metric:"rest_ui_max_active_requests_per_ip"`
+	RestUIBlockedIPs                  prometheus.Gauge         `metric:"rest_ui_blocked_ips"`
 	IndexResyncDuration               prometheus.Histogram     `metric:"index_resync_duration"`
 	MempoolResyncDuration             prometheus.Histogram     `metric:"mempool_resync_duration"`
 	MempoolResyncThroughput           *prometheus.HistogramVec `metric:"mempool_resync_throughput_txs_per_second"`
@@ -55,6 +64,10 @@ type Metrics struct {
 	IndexDBSize                       prometheus.Gauge         `metric:"index_db_size"`
 	ExplorerViews                     *prometheus.CounterVec   `metric:"explorer_views"`
 	MempoolSize                       prometheus.Gauge         `metric:"mempool_size"`
+	EthAlternativeMempoolEvents       *prometheus.CounterVec   `metric:"eth_alternative_mempool_reconciliation_events_total"`
+	EthAlternativeMempoolTxResidence  *prometheus.HistogramVec `metric:"eth_alternative_mempool_tx_residence_seconds"`
+	EthAlternativeMempoolCacheSize    prometheus.Gauge         `metric:"eth_alternative_mempool_cache_size"`
+	EthAlternativeNonceRequests       *prometheus.CounterVec   `metric:"eth_alternative_nonce_requests_total"`
 	EstimatedFee                      *prometheus.GaugeVec     `metric:"estimated_fee"`
 	AvgBlockPeriod                    prometheus.Gauge         `metric:"avg_block_period"`
 	SyncBlockStats                    *prometheus.GaugeVec     `metric:"sync_block_stats"`
@@ -80,7 +93,17 @@ type Metrics struct {
 	CoingeckoRequests                 *prometheus.CounterVec   `metric:"coingecko_requests"`
 	CoingeckoRangeRequests            *prometheus.CounterVec   `metric:"coingecko_range_requests"`
 	FiatRatesUpdateDuration           *prometheus.HistogramVec `metric:"fiat_rates_update_duration_seconds"`
+	FiatRatesFetchedUnits             *prometheus.CounterVec   `metric:"fiat_rates_fetched_units_total"`
+	FiatRatesFetchedTokens            *prometheus.CounterVec   `metric:"fiat_rates_fetched_tokens_total"`
+	FiatRatesUnable                   *prometheus.CounterVec   `metric:"fiat_rates_unable_total"`
 	AlternativeFeeProviderRequests    *prometheus.CounterVec   `metric:"alternative_fee_provider_requests"`
+	AlternativeFeeProviderLastSync    *prometheus.GaugeVec     `metric:"alternative_fee_provider_last_sync_timestamp_seconds"`
+	EthEip1559Fee                     *prometheus.GaugeVec     `metric:"eth_eip1559_fee"`
+	EthEip1559BaseFee                 prometheus.Gauge         `metric:"eth_eip1559_base_fee"`
+	EthEip1559FeeSource               *prometheus.CounterVec   `metric:"eth_eip1559_fee_source_total"`
+	EthBlockGasUsedRatio              prometheus.Gauge         `metric:"eth_block_gas_used_ratio"`
+	EthBlockBaseFee                   prometheus.Gauge         `metric:"eth_block_base_fee"`
+	RPCSyncLatency                    *prometheus.HistogramVec `metric:"rpc_sync_latency"`
 	EthSyncRpcErrors                  *prometheus.CounterVec   `metric:"eth_sync_rpc_errors"`
 }
 

@@ -34,6 +34,7 @@ type Worker struct {
 	is                *common.InternalState
 	fiatRates         *fiat.FiatRates
 	metrics           *common.Metrics
+	xpubConfig        XpubConfig
 }
 
 var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
@@ -49,6 +50,17 @@ type contractInfoCache = map[string]*bchain.ContractInfo
 
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
+	// Resolve per-chain xpub config override, if any.
+	xpubCfg := DefaultXpubConfig()
+	if provider, ok := chain.(interface {
+		XpubConfigOverride() *bchain.XpubConfig
+	}); ok {
+		if override := provider.XpubConfigOverride(); override != nil {
+			xpubCfg = ApplyXpubConfig(override)
+			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
+				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
+		}
+	}
 	w := &Worker{
 		db:                db,
 		txCache:           txCache,
@@ -60,6 +72,7 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		is:                is,
 		fiatRates:         fiatRates,
 		metrics:           metrics,
+		xpubConfig:        xpubCfg,
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
@@ -140,7 +153,7 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	glog.Info("GetSpendingTxid ", txid, " ", n, ", ", time.Since(start))
+	glog.V(1).Info("GetSpendingTxid ", txid, " ", n, ", ", time.Since(start))
 	return tx.Vout[n].SpentTxID, nil
 }
 
@@ -361,12 +374,13 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
-				// load spending addresses from TxAddresses
-				tas, err := w.db.GetTxAddresses(bchainVin.Txid)
+				// load the spending address from TxAddresses; only the spent output
+				// is needed, so avoid unpacking the whole previous-tx record
+				output, err := w.db.GetTxAddressesOutput(bchainVin.Txid, vin.Vout)
 				if err != nil {
-					return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
+					return nil, errors.Annotatef(err, "GetTxAddressesOutput %v", bchainVin.Txid)
 				}
-				if tas == nil {
+				if output == nil {
 					// try to load from backend
 					otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 					if err != nil {
@@ -397,16 +411,13 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 					}
 				} else {
-					if len(tas.Outputs) > int(vin.Vout) {
-						output := &tas.Outputs[vin.Vout]
-						vin.ValueSat = (*Amount)(&output.ValueSat)
-						vin.AddrDesc = output.AddrDesc
-						vin.Addresses, vin.IsAddress, err = output.Addresses(w.chainParser)
-						if err != nil {
-							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
-						}
-						aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
+					vin.ValueSat = (*Amount)(&output.ValueSat)
+					vin.AddrDesc = output.AddrDesc
+					vin.Addresses, vin.IsAddress, err = output.Addresses(w.chainParser)
+					if err != nil {
+						glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 					}
+					aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
@@ -478,19 +489,14 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 		parsedInputData := w.getParsedEthereumInputData(ethTxData.Data)
 
-		// mempool txs do not have fees yet
-		if ethTxData.GasUsed != nil {
-			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
-			if ethTxData.L1Fee != nil {
-				feesSat.Add(&feesSat, ethTxData.L1Fee)
-			}
-		}
+		feesSat = *getEthereumFeesSat(ethTxData)
 		if len(bchainTx.Vout) > 0 {
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
 		ethSpecific = &EthereumSpecific{
 			GasLimit:             ethTxData.GasLimit,
 			GasPrice:             (*Amount)(ethTxData.GasPrice),
+			EffectiveGasPrice:    (*Amount)(ethTxData.EffectiveGasPrice),
 			MaxPriorityFeePerGas: (*Amount)(ethTxData.MaxPriorityFeePerGas),
 			MaxFeePerGas:         (*Amount)(ethTxData.MaxFeePerGas),
 			BaseFeePerGas:        (*Amount)(ethTxData.BaseFeePerGas),
@@ -743,6 +749,11 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 			}
 			if blockchainContractInfo != nil {
 				contractInfo.Decimals = blockchainContractInfo.Decimals
+			} else if contractInfo.Decimals == 0 && contractInfo.Standard == bchain.UnhandledTokenStandard {
+				// contract metadata could not be read on-chain; fall back to the coin's
+				// default decimals (18 for ERC-20) instead of persisting an ambiguous 0
+				// for a token whose true precision is simply unknown (trezor/blockbook#1577)
+				contractInfo.Decimals = w.chainParser.AmountDecimals()
 			}
 			if contractInfo.Standard == bchain.UnhandledTokenStandard {
 				glog.Infof("Contract %v %v [%s] handled", cd, standardFromContext, contractInfo.Name)
@@ -753,6 +764,13 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
 		}
+	}
+	// never surface an unresolved contract (still Unhandled because its metadata
+	// could not be fetched, e.g. a transient RPC error above) with a bare 0
+	// decimals; use the coin default instead. Genuinely 0-decimal tokens always
+	// carry a resolved (handled) standard, so they are unaffected (trezor/blockbook#1577)
+	if contractInfo.Decimals == 0 && contractInfo.Standard == bchain.UnhandledTokenStandard {
+		contractInfo.Decimals = w.chainParser.AmountDecimals()
 	}
 	return contractInfo, validContract, nil
 }
@@ -1076,7 +1094,13 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
 				if err != nil {
 					// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-					glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					if errors.Cause(err) == eth.ErrInvalidErc20Balance {
+						// Benign and high-volume: unparseable/empty balanceOf from a dead or non-ERC20-conforming
+						// token. Tracked via the "invalid" metric; logged at V(2) to avoid flooding logs.
+						glog.V(2).Infof("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					} else {
+						glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					}
 				}
 			}
 			if b != nil {
@@ -1144,7 +1168,11 @@ func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bch
 		b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, contract)
 		if err != nil {
 			// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-			glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
+			if errors.Cause(err) == eth.ErrInvalidErc20Balance {
+				glog.V(2).Infof("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
+			} else {
+				glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
+			}
 		}
 	} else {
 		b = nil
@@ -1192,6 +1220,7 @@ type ethereumTypeAddressData struct {
 	tokens               Tokens
 	contractInfo         *bchain.ContractInfo
 	nonce                string
+	confirmedNonce       string
 	nonContractTxs       int
 	internalTxs          int
 	totalResults         int
@@ -1211,7 +1240,8 @@ func (w *Worker) getSecondaryTicker(secondaryCoin string) *common.CurrencyRatesT
 
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
-	var n uint64
+	var nPending, nConfirmed uint64
+	var confirmedNonceOK bool
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
 	// Load cached contract list and totals from the index; this drives token lookups.
@@ -1240,9 +1270,9 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if b != nil {
 			ba.BalanceSat = *b
 		}
-		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
+		nPending, nConfirmed, confirmedNonceOK, err = w.chain.EthereumTypeGetNonces(addrDesc, filter.WithConfirmedNonce)
 		if err != nil {
-			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
+			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonces %v", addrDesc)
 		}
 		ticker := w.getSecondaryTicker(secondaryCoin)
 		var erc20Balances map[string]*big.Int
@@ -1346,9 +1376,20 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				BalanceSat: *b,
 			}
 		}
+		// A fresh address has no indexed data only because it has never sent a transaction (every
+		// sender is recorded in the index), so both its pending and confirmed nonce are 0 - the same
+		// value the indexed path would fetch, without a backend call. When the caller opted in,
+		// surface the confirmed nonce as "0" for symmetry with the indexed path; omitting it would be
+		// indistinguishable from the feature not being deployed. nPending/nConfirmed are already 0.
+		confirmedNonceOK = filter.WithConfirmedNonce
 	}
 	// returns 0 for unknown address
-	d.nonce = strconv.Itoa(int(n))
+	d.nonce = strconv.Itoa(int(nPending))
+	// confirmed nonce is gated and best-effort: surfaced only when the caller opted in
+	// and the backend lookup succeeded; otherwise it is left empty and omitted
+	if confirmedNonceOK {
+		d.confirmedNonce = strconv.Itoa(int(nConfirmed))
+	}
 	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
 	if len(d.tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
 		// Query the backend directly to return contract metadata/balance for filtered views.
@@ -1441,8 +1482,8 @@ func (w *Worker) txFromTxid(txid string, bestHeight uint32, option AccountDetail
 func (w *Worker) getAddrDescAndNormalizeAddress(address string) (bchain.AddressDescriptor, string, error) {
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		var errAd error
 		// try if the address is not address descriptor converted to string
+		var errAd error
 		addrDesc, errAd = bchain.AddressDescriptorFromString(address)
 		if errAd != nil {
 			return nil, "", NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
@@ -1710,6 +1751,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		TotalSecondaryValue:   totalSecondaryValue,
 		ContractInfo:          contractInfoResultFromBchain(ed.contractInfo, contractInfoBestHeight),
 		Nonce:                 ed.nonce,
+		ConfirmedNonce:        ed.confirmedNonce,
 		AddressAliases:        w.getAddressAliases(addresses),
 		StakingPools:          ed.stakingPools,
 		ChainExtraData:        accountChainExtraData,
@@ -1718,7 +1760,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	if ed.contractInfo != nil && ed.contractInfo.Standard == bchain.ERC20TokenStandard {
 		r.Erc20Contract = r.ContractInfo
 	}
-	glog.Info("GetAddress-", option, " ", address, ", ", time.Since(start))
+	glog.V(1).Info("GetAddress-", option, " ", address, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -1784,13 +1826,32 @@ func (w *Worker) processInternalTransactionsForBalanceHistory(addrDesc bchain.Ad
 	return nil
 }
 
-func addEthereumFeesToBalanceHistory(ethTxData *bchain.EthereumTxData, bh *BalanceHistory) {
-	var feesSat big.Int
-	// mempool txs do not have fees yet
-	if ethTxData.GasUsed != nil && ethTxData.GasPrice != nil {
-		feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
+// getEthereumFeesSat computes the transaction fee actually paid, in the smallest
+// unit of the chain. On L2 networks (Arbitrum, Optimism, Base, ...) the transaction
+// gasPrice is only the bid price, while the receipt's effectiveGasPrice is the price
+// actually charged, so it is preferred when available. Rollups that report a separate
+// L1 data fee (l1Fee, e.g. the OP stack) have it added on top. Mempool transactions
+// have no gasUsed yet and therefore no fee.
+func getEthereumFeesSat(ethTxData *bchain.EthereumTxData) *big.Int {
+	feesSat := new(big.Int)
+	if ethTxData.GasUsed == nil {
+		return feesSat
 	}
-	(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
+	gasPrice := ethTxData.GasPrice
+	if ethTxData.EffectiveGasPrice != nil && ethTxData.EffectiveGasPrice.Sign() > 0 {
+		gasPrice = ethTxData.EffectiveGasPrice
+	}
+	if gasPrice != nil {
+		feesSat.Mul(gasPrice, ethTxData.GasUsed)
+	}
+	if ethTxData.L1Fee != nil {
+		feesSat.Add(feesSat, ethTxData.L1Fee)
+	}
+	return feesSat
+}
+
+func addEthereumFeesToBalanceHistory(ethTxData *bchain.EthereumTxData, bh *BalanceHistory) {
+	(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), getEthereumFeesSat(ethTxData))
 }
 
 func (w *Worker) processPrimaryVoutForBalanceHistory(
@@ -1984,9 +2045,35 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
-// GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32) (BalanceHistories, error) {
-	currencies = removeEmpty(currencies)
+// DefaultBalanceHistoryMaxTxsREST / DefaultBalanceHistoryMaxTxsWS cap how many
+// transactions a single balance-history request may aggregate, split by transport.
+// The cap bounds per-request DB work (one read per aggregated transaction). REST is
+// tighter (open, unauthenticated surface); WS is generous because Trezor Suite
+// requests full account history over WS for its balance graph. Override or disable
+// (0) via <NET>_{WS,REST}_BALANCE_HISTORY_MAX_TXS (<NET>_BALANCE_HISTORY_MAX_TXS
+// sets both).
+const (
+	DefaultBalanceHistoryMaxTxsREST = 100000
+	DefaultBalanceHistoryMaxTxsWS   = 1000000
+)
+
+// Transport labels for the balance-history metrics, identifying which surface
+// served a request. Passed by the caller (the worker is transport-agnostic).
+const (
+	BalanceHistoryTransportWS   = "ws"
+	BalanceHistoryTransportREST = "rest"
+)
+
+// GetBalanceHistory returns history of balance for given address. maxTxs bounds
+// how many transactions in the requested range may be aggregated (0 = unlimited);
+// the caller supplies the transport-specific cap (WS vs REST). transport labels
+// the emitted metrics with the serving surface.
+func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32, maxTxs int, transport string) (BalanceHistories, error) {
+	var err error
+	currencies, err = normalizeFiatCurrencies(currencies)
+	if err != nil {
+		return nil, err
+	}
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
@@ -2008,9 +2095,26 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if fromHeight >= toHeight {
 		return bhs, nil
 	}
-	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}, maxInt)
+	// Bound the work: each transaction in the range costs a DB read below, so an
+	// unbounded scan over a heavy address is a cheap-to-send DoS. Fetch at most
+	// one more than the cap so the overflow is detectable, then reject rather
+	// than silently truncate (which would return a wrong balance history).
+	maxResults := maxInt
+	if maxTxs > 0 {
+		maxResults = maxTxs + 1
+	}
+	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}, maxResults)
 	if err != nil {
 		return nil, err
+	}
+	if w.metrics != nil {
+		w.metrics.BalanceHistoryTxs.With(common.Labels{"transport": transport, "path": "address"}).Observe(float64(len(txs)))
+	}
+	if maxTxs > 0 && len(txs) > maxTxs {
+		if w.metrics != nil {
+			w.metrics.BalanceHistoryCapExceeded.With(common.Labels{"transport": transport, "path": "address"}).Inc()
+		}
+		return nil, NewAPIError(fmt.Sprintf("balance history spans more than %d transactions in the requested range; narrow the from/to range", maxTxs), true)
 	}
 	selfAddrDesc := map[string]struct{}{string(addrDesc): {}}
 	for txi := len(txs) - 1; txi >= 0; txi-- {
@@ -2026,11 +2130,8 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if w.metrics != nil {
 		w.metrics.BalanceHistoryPoints.With(common.Labels{"path": "address"}).Observe(float64(len(bha)))
 	}
-	err = w.setFiatRateToBalanceHistories(bha, currencies, "address")
-	if err != nil {
-		return nil, err
-	}
-	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ", ", time.Since(start))
+	w.setFiatRateToBalanceHistories(bha, currencies, "address")
+	glog.V(1).Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ", ", time.Since(start))
 	return bha, nil
 }
 
@@ -2045,7 +2146,7 @@ func (w *Worker) waitForBackendSync() {
 	}
 }
 
-func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool) (Utxos, error) {
+func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool, knownBestHeight *uint32) (Utxos, error) {
 	w.waitForBackendSync()
 	var err error
 	utxos := make(Utxos, 0, 8)
@@ -2115,11 +2216,16 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 		}
 		// ba can be nil if the address is only in mempool!
 		if ba != nil && len(ba.Utxos) > 0 {
-			b, _, err := w.db.GetBestBlock()
-			if err != nil {
-				return nil, err
+			var bestheight int
+			if knownBestHeight != nil {
+				bestheight = int(*knownBestHeight)
+			} else {
+				b, _, err := w.db.GetBestBlock()
+				if err != nil {
+					return nil, err
+				}
+				bestheight = int(b)
 			}
-			bestheight := int(b)
 			var checksum big.Int
 			checksum.Set(&ba.BalanceSat)
 			// go backwards to get the newest first
@@ -2175,11 +2281,11 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
-	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
+	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false, nil)
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", time.Since(start))
+	glog.V(1).Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", time.Since(start))
 	return r, nil
 }
 
@@ -2209,7 +2315,7 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 		}
 		r.Blocks[i-from] = *bi
 	}
-	glog.Info("GetBlocks page ", page, ", ", time.Since(start))
+	glog.V(1).Info("GetBlocks page ", page, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -2336,7 +2442,7 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		}
 	}
 
-	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs), ", time.Since(start))
+	glog.V(1).Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs), ", time.Since(start))
 
 	return &FeeStats{
 		TxCount:         len(feesPerKb),
@@ -2389,7 +2495,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	}
 	txs = txs[:txi]
 	bi.Txids = nil
-	glog.Info("GetBlock ", bid, ", page ", page, ", ", time.Since(start))
+	glog.V(1).Info("GetBlock ", bid, ", page ", page, ", ", time.Since(start))
 	return &Block{
 		Paging: pg,
 		BlockInfo: BlockInfo{
@@ -2668,7 +2774,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Consensus:        ci.Consensus,
 	}
 	w.is.SetBackendInfo(backendInfo)
-	glog.Info("GetSystemInfo, ", time.Since(start))
+	glog.V(1).Info("GetSystemInfo, ", time.Since(start))
 	return &SystemInfo{blockbookInfo, backendInfo}, nil
 }
 

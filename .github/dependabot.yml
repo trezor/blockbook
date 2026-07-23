@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Keep third-party GitHub Actions (pinned to commit SHAs in the workflows)
+  # bumped deliberately via PRs instead of silently tracking a moving tag.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+
+  # Python tooling used by the CI workflows (.github/requirements.txt).
+  - package-ecosystem: "pip"
+    directory: "/.github"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

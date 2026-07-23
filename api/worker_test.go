@@ -4,13 +4,20 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
+	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
 func TestSystemInfoInSync(t *testing.T) {
@@ -194,6 +201,22 @@ func TestGetSecondaryTicker_PerformsLookupWithSecondaryCurrency(t *testing.T) {
 	}
 }
 
+func TestGetAddrDescAndNormalizeAddressPreservesNonStandardScript(t *testing.T) {
+	parser := btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{})
+	w := &Worker{chainParser: parser}
+	addrDesc := bchain.AddressDescriptor{0x51} // OP_TRUE is indexable but has no address representation
+
+	gotAddrDesc, gotAddress, err := w.getAddrDescAndNormalizeAddress(addrDesc.String())
+
+	require.NoError(t, err)
+	require.Equal(t, addrDesc, gotAddrDesc)
+	require.Equal(t, addrDesc.String(), gotAddress)
+	require.True(t, parser.IsAddrDescIndexable(addrDesc))
+	addresses, _, err := parser.GetAddressesFromAddrDesc(addrDesc)
+	require.NoError(t, err)
+	require.Empty(t, addresses)
+}
+
 func TestTronBalanceHistoryOverrides(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -304,3 +327,206 @@ func TestTronBalanceHistoryOverrides(t *testing.T) {
 		})
 	}
 }
+
+// TestGetEthereumFeesSat verifies the transaction fee is computed from the
+// receipt's effectiveGasPrice on L2 networks (issue #1227), while falling back
+// to the transaction gasPrice for older/legacy transactions, and that a
+// separately reported L1 data fee is added on top.
+func TestGetEthereumFeesSat(t *testing.T) {
+	bi := func(v int64) *big.Int { return big.NewInt(v) }
+	tests := []struct {
+		name    string
+		txData  *bchain.EthereumTxData
+		wantFee string
+	}{
+		{
+			name:    "L2 uses effectiveGasPrice, not the gasPrice bid",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			wantFee: "210000", // 21000 * 10, NOT 21000 * 1200
+		},
+		{
+			name:    "OP-stack adds l1Fee on top of the L2 execution fee",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10), L1Fee: bi(5000)},
+			wantFee: "215000", // 21000 * 10 + 5000
+		},
+		{
+			name:    "legacy tx without effectiveGasPrice falls back to gasPrice",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200)},
+			wantFee: "25200000", // 21000 * 1200
+		},
+		{
+			name:    "legacy fallback still adds l1Fee on top",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), L1Fee: bi(5000)},
+			wantFee: "25205000", // 21000 * 1200 + 5000 (nil effectiveGasPrice, l1Fee present)
+		},
+		{
+			name:    "zero effectiveGasPrice falls back to gasPrice",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(0)},
+			wantFee: "25200000",
+		},
+		{
+			name:    "mempool tx without gasUsed has no fee",
+			txData:  &bchain.EthereumTxData{GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			wantFee: "0",
+		},
+		{
+			// pins that the gasUsed==nil guard returns before l1Fee is added
+			name:    "mempool tx with l1Fee but no gasUsed still has no fee",
+			txData:  &bchain.EthereumTxData{GasPrice: bi(1200), EffectiveGasPrice: bi(10), L1Fee: bi(5000)},
+			wantFee: "0",
+		},
+		{
+			name:    "no gas price at all does not panic and yields zero",
+			txData:  &bchain.EthereumTxData{GasUsed: bi(21000)},
+			wantFee: "0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getEthereumFeesSat(tt.txData).String(); got != tt.wantFee {
+				t.Errorf("getEthereumFeesSat() = %s, want %s", got, tt.wantFee)
+			}
+		})
+	}
+}
+
+// TestAddEthereumFeesToBalanceHistory pins the balance-history fee accounting:
+// the sent amount must include the effectiveGasPrice-based execution fee plus any
+// L1 data fee. Before the fix this path used the bid gasPrice and omitted l1Fee.
+func TestAddEthereumFeesToBalanceHistory(t *testing.T) {
+	bi := func(v int64) *big.Int { return big.NewInt(v) }
+	tests := []struct {
+		name        string
+		txData      *bchain.EthereumTxData
+		initialSent int64
+		wantSent    string
+	}{
+		{
+			name:     "L2 execution fee plus l1Fee is added to sent",
+			txData:   &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10), L1Fee: bi(5000)},
+			wantSent: "215000", // 21000 * 10 + 5000
+		},
+		{
+			name:        "fee accumulates onto an existing sent amount",
+			txData:      &bchain.EthereumTxData{GasUsed: bi(21000), GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			initialSent: 1000,
+			wantSent:    "211000", // 1000 + 21000 * 10
+		},
+		{
+			name:     "mempool tx contributes no fee",
+			txData:   &bchain.EthereumTxData{GasPrice: bi(1200), EffectiveGasPrice: bi(10)},
+			wantSent: "0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bh := &BalanceHistory{SentSat: (*Amount)(big.NewInt(tt.initialSent))}
+			addEthereumFeesToBalanceHistory(tt.txData, bh)
+			if got := (*big.Int)(bh.SentSat).String(); got != tt.wantSent {
+				t.Errorf("SentSat = %s, want %s", got, tt.wantSent)
+			}
+		})
+	}
+}
+
+// BenchmarkTxInputResolution measures GetTransactionFromBchainTx as a function of
+// a transaction's input fan-in, using the plain Bitcoin-testnet parser. Each input's
+// previous output is resolved from the database, so this tracks how per-transaction
+// allocation and time scale with the input count. The fan-in values span a wide range
+// to make that scaling visible and to guard against regressions in input resolution.
+//
+//	go test -tags unittest -run x -bench TxInputResolution -benchmem ./api/
+func BenchmarkTxInputResolution(b *testing.B) {
+	for _, fanIn := range []int{8, 32, 128, 512, 2048} {
+		b.Run("fanIn="+strconv.Itoa(fanIn), func(b *testing.B) {
+			worker, subjectTx, cleanup := buildHighFanInWorker(b, fanIn)
+			defer cleanup()
+			addresses := make(map[string]struct{})
+
+			tx, err := worker.GetTransactionFromBchainTx(subjectTx, 2, false, false, addresses)
+			require.NoError(b, err)
+			require.Len(b, tx.Vin, fanIn)
+			require.True(b, tx.Vin[fanIn-1].IsAddress && tx.Vin[fanIn-1].ValueSat != nil)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := worker.GetTransactionFromBchainTx(subjectTx, 2, false, false, addresses); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// buildHighFanInWorker indexes a previous transaction with fanIn outputs and a
+// subject transaction whose fanIn inputs each spend one of them (all referencing the
+// same previous tx, concentrating resolution on a single large record), and returns
+// a Worker plus the subject tx. Only db + parser are needed: GetTransactionFromBchainTx
+// for a confirmed Bitcoin-type tx (specificJSON=false) does not touch the chain.
+func buildHighFanInWorker(tb testing.TB, fanIn int) (*Worker, *bchain.Tx, func()) {
+	tb.Helper()
+	parser := btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{BlockAddressesToKeep: 1})
+	script := dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, parser)
+
+	prevTxid := fanInHash(1)
+	prevOuts := make([]bchain.Vout, fanIn)
+	subjectIns := make([]bchain.Vin, fanIn)
+	for j := 0; j < fanIn; j++ {
+		prevOuts[j] = fanInVout(uint32(j), script)
+		subjectIns[j] = bchain.Vin{Txid: prevTxid, Vout: uint32(j), Sequence: 0xffffffff}
+	}
+	prevTx := fanInTx(prevTxid, 1, []bchain.Vin{{Coinbase: "01", Sequence: 0xffffffff}}, prevOuts)
+	subjectTx := fanInTx(fanInHash(2), 2, subjectIns, []bchain.Vout{fanInVout(0, script), fanInVout(1, script)})
+
+	blocks := []*bchain.Block{
+		{BlockHeader: bchain.BlockHeader{Hash: fanInHash(1_000_001), Height: 1, Time: 1_700_000_001}, Txs: []bchain.Tx{*prevTx}},
+		{BlockHeader: bchain.BlockHeader{Hash: fanInHash(1_000_002), Height: 2, Time: 1_700_000_002}, Txs: []bchain.Tx{*subjectTx}},
+	}
+
+	tmp, err := os.MkdirTemp("", "vin-resolution")
+	require.NoError(tb, err)
+	database, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, false)
+	require.NoError(tb, err)
+	cleanup := func() {
+		require.NoError(tb, database.Close())
+		require.NoError(tb, os.RemoveAll(tmp))
+	}
+
+	is, err := database.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	require.NoError(tb, err)
+	database.SetInternalState(is)
+
+	bulk, err := database.InitBulkConnect()
+	require.NoError(tb, err)
+	for i, block := range blocks {
+		require.NoError(tb, bulk.ConnectBlock(block, i == len(blocks)-1))
+	}
+	require.NoError(tb, bulk.Close())
+	is.FinishedSync(uint32(len(blocks)))
+
+	return &Worker{db: database, chainParser: parser, chainType: bchain.ChainBitcoinType, is: is}, subjectTx, cleanup
+}
+
+func fanInTx(txid string, height uint32, vin []bchain.Vin, vout []bchain.Vout) *bchain.Tx {
+	return &bchain.Tx{
+		Txid:          txid,
+		Version:       1,
+		Vin:           vin,
+		Vout:          vout,
+		BlockHeight:   height,
+		Confirmations: 1,
+		Time:          int64(1_700_000_000 + height),
+		Blocktime:     int64(1_700_000_000 + height),
+	}
+}
+
+func fanInVout(n uint32, scriptHex string) bchain.Vout {
+	return bchain.Vout{
+		ValueSat:     *big.NewInt(100000),
+		N:            n,
+		ScriptPubKey: bchain.ScriptPubKey{Hex: scriptHex, Addresses: []string{dbtestdata.Addr1}},
+	}
+}
+
+func fanInHash(n uint64) string { return fmt.Sprintf("%064x", n) }

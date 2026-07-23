@@ -51,6 +51,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/qtum"
 	"github.com/trezor/blockbook/bchain/coins/ravencoin"
 	"github.com/trezor/blockbook/bchain/coins/ritocoin"
+	"github.com/trezor/blockbook/bchain/coins/robinhood"
 	"github.com/trezor/blockbook/bchain/coins/snowgem"
 	"github.com/trezor/blockbook/bchain/coins/trezarcoin"
 	"github.com/trezor/blockbook/bchain/coins/tron"
@@ -80,8 +81,6 @@ func init() {
 	BlockChainFactories["Ethereum Classic"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Sepolia"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Sepolia Archive"] = eth.NewEthereumRPC
-	BlockChainFactories["Ethereum Testnet Holesky"] = eth.NewEthereumRPC
-	BlockChainFactories["Ethereum Testnet Holesky Archive"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Hoodi"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Hoodi Archive"] = eth.NewEthereumRPC
 	BlockChainFactories["Bcash"] = bch.NewBCashRPC
@@ -153,6 +152,8 @@ func init() {
 	BlockChainFactories["Arbitrum Nova Archive"] = arbitrum.NewArbitrumRPC
 	BlockChainFactories["Base"] = base.NewBaseRPC
 	BlockChainFactories["Base Archive"] = base.NewBaseRPC
+	BlockChainFactories["Robinhood Archive"] = robinhood.NewRobinhoodRPC
+	BlockChainFactories["Robinhood Testnet"] = robinhood.NewRobinhoodRPC
 	BlockChainFactories["Tron"] = tron.NewTronRPC
 	BlockChainFactories["Tron Testnet Nile"] = tron.NewTronRPC
 }
@@ -338,9 +339,9 @@ func (c *blockChainWithMetrics) EthereumTypeGetBalance(addrDesc bchain.AddressDe
 	return c.b.EthereumTypeGetBalance(addrDesc)
 }
 
-func (c *blockChainWithMetrics) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (v uint64, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonce", s, err) }(time.Now())
-	return c.b.EthereumTypeGetNonce(addrDesc)
+func (c *blockChainWithMetrics) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonces", s, err) }(time.Now())
+	return c.b.EthereumTypeGetNonces(addrDesc, withConfirmed)
 }
 
 func (c *blockChainWithMetrics) EthereumTypeEstimateGas(params map[string]interface{}) (v uint64, err error) {
@@ -532,6 +533,17 @@ func (c *blockChainWithMetrics) MissingBlockRetryOverride() *bchain.MissingBlock
 		MissingBlockRetryOverride() *bchain.MissingBlockRetry
 	}); ok {
 		return p.MissingBlockRetryOverride()
+	}
+	return nil
+}
+
+// XpubConfigOverride forwards the wrapped chain's per-chain xpub config
+// override through the metrics wrapper; nil when none is provided.
+func (c *blockChainWithMetrics) XpubConfigOverride() *bchain.XpubConfig {
+	if p, ok := c.b.(interface {
+		XpubConfigOverride() *bchain.XpubConfig
+	}); ok {
+		return p.XpubConfigOverride()
 	}
 	return nil
 }

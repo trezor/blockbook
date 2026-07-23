@@ -6,20 +6,34 @@ on:
   pull_request:
     branches: [ '**' ]
 
+permissions:
+  contents: read
+
+# Rapid pushes queue full unit->connectivity->integration chains for
+# already-superseded commits on the shared self-hosted pool. Cancel only
+# superseded PR runs; pushes to master/develop are never cancelled.
+concurrency:
+  group: testing-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   unit-tests:
     name: Unit Tests
     runs-on: [self-hosted, bb-dev-selfhosted]
+    # Generous ceilings so a hung step can't hold a self-hosted runner for
+    # the 360-minute default; sized well above normal runtimes.
+    timeout-minutes: 60
+    # Defense-in-depth: never run untrusted fork-PR code on the self-hosted
+    # runner. connectivity/integration already carry this guard; without it
+    # here, unit-tests relied solely on the repo "require approval for fork
+    # PR workflows" setting.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Validate Grafana dashboard sources
-        run: |
-          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --user --break-system-packages --disable-pip-version-check --quiet pyyaml
-          python3 contrib/scripts/render_grafana_test.py
-          python3 contrib/scripts/render_grafana.py --check
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Run unit tests
         env:
@@ -29,12 +43,15 @@ jobs:
   connectivity-tests:
     name: Connectivity Tests
     runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 30
     needs: unit-tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -44,17 +61,23 @@ jobs:
       - name: Run connectivity tests
         env:
           BB_BUILD_ENV: dev
+          # CI can reach the node RPC backends directly, so check them too; local
+          # runs default to Blockbook-only connectivity.
+          BB_TEST_BACKEND_CONNECTIVITY: "1"
         run: make test-connectivity
 
   integration-tests:
     name: Integration Tests (RPC + Sync)
     runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 180
     needs: connectivity-tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -65,3 +88,37 @@ jobs:
         env:
           BB_BUILD_ENV: dev
         run: make test-integration ARGS="-v"
+
+  lint:
+    name: Lint
+    # Pure static analysis of configs/ (Grafana dashboards + coin backend
+    # artifacts): no secrets, no backend access, safe to run for fork PRs on an
+    # ephemeral GitHub-hosted runner. Unlike unit-tests (self-hosted, skipped for
+    # fork PRs), this job runs for forks too, so dashboard/artifact regressions
+    # are caught on every PR. The only third-party dependency is the pinned
+    # PyYAML used by the Grafana renderer.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install Python dependencies
+        run: |
+          rm -rf .python-deps
+          python3 -c "import yaml" 2>/dev/null || python3 -m pip install --disable-pip-version-check --quiet --target .python-deps -r .github/requirements.txt
+
+      - name: Validate Grafana dashboard sources
+        run: |
+          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana_test.py
+          PYTHONPATH=.python-deps python3 contrib/scripts/render_grafana.py --check
+
+      - name: Validate backend artifact sources
+        run: python3 ./.github/scripts/validate_backend_artifacts.py
+
+      - name: Run CI pipeline script tests
+        # Stdlib-only unit tests for the build/deploy plan scripts; without
+        # this step a regression in .github/scripts ships with green CI.
+        run: python3 -m unittest discover -s .github/scripts -p '*_test.py'

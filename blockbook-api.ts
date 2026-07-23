@@ -49,6 +49,7 @@ export interface TronStakingInfo {
     unclaimedReward: string;
     delegatedBalanceEnergy: string;
     delegatedBalanceBandwidth: string;
+    latestWithdrawTime: number;
 }
 export interface TronAccountExtraData {
     availableStakedBandwidth: number;
@@ -57,6 +58,10 @@ export interface TronAccountExtraData {
     totalFreeBandwidth: number;
     availableEnergy: number;
     totalEnergy: number;
+    totalEnergyLimit: number;
+    totalEnergyWeight: number;
+    totalBandwidthLimit: number;
+    totalBandwidthWeight: number;
     stakingInfo?: TronStakingInfo;
 }
 export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
@@ -108,8 +113,10 @@ export interface EthereumSpecific {
     gasLimit?: number;
     /** Actual gas consumed by the transaction execution. */
     gasUsed?: number;
-    /** Price (in Wei or base units) per gas unit. */
+    /** Price (in Wei or base units) per gas unit bid by the sender. */
     gasPrice?: string;
+    /** Actual gas price paid per gas unit; on L2 networks this differs from gasPrice and is used for the fee. */
+    effectiveGasPrice?: string;
     maxPriorityFeePerGas?: string;
     maxFeePerGas?: string;
     baseFeePerGas?: string;
@@ -148,8 +155,8 @@ export interface TokenTransfer {
     name?: string;
     /** Token symbol. */
     symbol?: string;
-    /** Number of decimals for this token (if applicable). */
-    decimals?: number;
+    /** Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable. */
+    decimals: number;
     /** Amount (in base units) of tokens transferred. */
     value?: string;
     /** List of multiple ID-value pairs for ERC1155 transfers. */
@@ -325,8 +332,8 @@ export interface Token {
     transfers: number;
     /** Symbol for the token (e.g., 'ETH', 'USDT'). */
     symbol?: string;
-    /** Number of decimals for this token. */
-    decimals?: number;
+    /** Number of decimals for this token. Always present; defaults to the coin convention (18 for ERC-20) when the contract value is unavailable. */
+    decimals: number;
     /** Current token balance (in minimal base units). */
     balance?: string;
     /** Value in the base currency (e.g. ETH for ERC20 tokens). */
@@ -379,8 +386,10 @@ export interface Address {
     transactions?: Tx[];
     /** List of transaction IDs (if detailed data is not requested). */
     txids?: string[];
-    /** Current transaction nonce for Ethereum-like addresses. */
+    /** Current (pending) transaction nonce for Ethereum-like addresses, including mempool transactions. This is the next nonce the account will use. */
     nonce?: string;
+    /** Confirmed transaction nonce for Ethereum-like addresses, reflecting only mined transactions (eth_getTransactionCount at the latest block). Equals nonce when the account has no pending transactions. */
+    confirmedNonce?: string;
     /** Number of tokens with any historical usage at this address. */
     usedTokens?: number;
     /** List of tokens associated with this address. */
@@ -697,6 +706,8 @@ export interface WsAccountInfoReq {
     secondaryCurrency?: string;
     /** Gap limit for XPUB scanning, if relevant. */
     gap?: number;
+    /** If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call). */
+    confirmedNonce?: boolean;
 }
 export interface WsContractInfoReq {
     /** Contract address to query. */
@@ -837,6 +848,22 @@ export interface WsLongTermFeeRateRes {
     feePerUnit: string;
     /** Amount of blocks used for the long term fee rate estimation. */
     blocks: number;
+}
+export interface EthereumGasData {
+    /** Base fee per gas of the new block (post-London). */
+    baseFeePerGas?: string;
+    /** Total gas used by the new block (decimal). */
+    blockGasUsed?: string;
+    /** Gas limit of the new block (decimal). */
+    blockGasLimit?: string;
+}
+export interface WsNewBlock {
+    /** Height of the new block. */
+    height: number;
+    /** Hash of the new block. */
+    hash: string;
+    /** EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains. */
+    evmData: EthereumGasData | null;
 }
 export interface WsSendTransactionReq {
     /** Hex-encoded transaction data to broadcast (string format). */

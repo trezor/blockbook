@@ -37,10 +37,7 @@ func TestSetFiatRateToBalanceHistories_BatchesTickerLookup(t *testing.T) {
 		return &tickers, nil
 	}
 
-	err := w.setFiatRateToBalanceHistories(histories, []string{"USD", "eur", "cad"}, "address")
-	if err != nil {
-		t.Fatalf("setFiatRateToBalanceHistories returned error: %v", err)
-	}
+	w.setFiatRateToBalanceHistories(histories, []string{"usd", "eur", "cad"}, "address")
 	if calls != 1 {
 		t.Fatalf("expected 1 ticker lookup call, got %d", calls)
 	}
@@ -77,10 +74,7 @@ func TestSetFiatRateToBalanceHistories_AllRatesWhenCurrenciesNotSpecified(t *tes
 		return &tickers, nil
 	}
 
-	err := w.setFiatRateToBalanceHistories(histories, nil, "address")
-	if err != nil {
-		t.Fatalf("setFiatRateToBalanceHistories returned error: %v", err)
-	}
+	w.setFiatRateToBalanceHistories(histories, nil, "address")
 	if !reflect.DeepEqual(histories[0].FiatRates, map[string]float32{"usd": 11, "eur": 22}) {
 		t.Fatalf("unexpected rates for histories[0]: %v", histories[0].FiatRates)
 	}
@@ -127,10 +121,7 @@ func TestSetFiatRateToBalanceHistories_BatchFailureFallsBackToPerPoint(t *testin
 		}
 	}
 
-	err := w.setFiatRateToBalanceHistories(histories, []string{"usd"}, "address")
-	if err != nil {
-		t.Fatalf("setFiatRateToBalanceHistories returned error: %v", err)
-	}
+	w.setFiatRateToBalanceHistories(histories, []string{"usd"}, "address")
 	if calls != 4 {
 		t.Fatalf("expected 4 ticker lookup calls (1 batch + 3 point), got %d", calls)
 	}
@@ -170,10 +161,7 @@ func TestSetFiatRateToBalanceHistories_SkipsLookupForEmptyHistory(t *testing.T) 
 		return &tickers, nil
 	}
 
-	err := w.setFiatRateToBalanceHistories(BalanceHistories{}, []string{"usd"}, "address")
-	if err != nil {
-		t.Fatalf("setFiatRateToBalanceHistories returned error: %v", err)
-	}
+	w.setFiatRateToBalanceHistories(BalanceHistories{}, []string{"usd"}, "address")
 	if calls != 0 {
 		t.Fatalf("expected 0 ticker lookup calls, got %d", calls)
 	}
@@ -196,10 +184,7 @@ func TestSetFiatRateToBalanceHistories_SkipsLookupWhenFiatRatesDisabled(t *testi
 		return &tickers, nil
 	}
 
-	err := w.setFiatRateToBalanceHistories(histories, []string{"usd"}, "address")
-	if err != nil {
-		t.Fatalf("setFiatRateToBalanceHistories returned error: %v", err)
-	}
+	w.setFiatRateToBalanceHistories(histories, []string{"usd"}, "address")
 	if calls != 0 {
 		t.Fatalf("expected 0 ticker lookup calls when fiat rates are disabled, got %d", calls)
 	}

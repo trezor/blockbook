@@ -28,11 +28,65 @@ func requireAPIError(t *testing.T, err error, wantPublic bool) *APIError {
 	return apiErr
 }
 
-func TestRemoveEmpty(t *testing.T) {
-	got := removeEmpty([]string{"usd", "", "eur", "", ""})
+func TestNormalizeFiatCurrencies(t *testing.T) {
+	got, err := normalizeFiatCurrencies([]string{" usd ", "", "USD", "eur", " Eur "})
+	if err != nil {
+		t.Fatalf("normalizeFiatCurrencies returned error: %v", err)
+	}
 	want := []string{"usd", "eur"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected filtered currencies: got %v, want %v", got, want)
+		t.Fatalf("unexpected normalized currencies: got %v, want %v", got, want)
+	}
+}
+
+func TestNormalizeFiatCurrencies_LimitsCurrencyCount(t *testing.T) {
+	currencies := make([]string, MaxFiatRatesCurrencies+1)
+	for i := range currencies {
+		currencies[i] = fmt.Sprintf("c%03d", i)
+	}
+	_, err := normalizeFiatCurrencies(currencies)
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
+	}
+}
+
+func TestNormalizeFiatCurrencies_DeduplicatesWithinLimit(t *testing.T) {
+	currencies := make([]string, MaxFiatRatesCurrencies)
+	for i := range currencies {
+		currencies[i] = "USD"
+	}
+	got, err := normalizeFiatCurrencies(currencies)
+	if err != nil {
+		t.Fatalf("normalizeFiatCurrencies returned error: %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{"usd"}) {
+		t.Fatalf("unexpected normalized currencies: got %v", got)
+	}
+}
+
+func TestNormalizeFiatCurrencies_LimitAppliesToRawInputLength(t *testing.T) {
+	// The count cap bounds the raw input length, so even a list that would
+	// deduplicate to a single entry is rejected when it is too long.
+	currencies := make([]string, MaxFiatRatesCurrencies+1)
+	for i := range currencies {
+		currencies[i] = "USD"
+	}
+	_, err := normalizeFiatCurrencies(currencies)
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
+	}
+}
+
+func TestNormalizeFiatCurrencies_RejectsLongCode(t *testing.T) {
+	_, err := normalizeFiatCurrencies([]string{strings.Repeat("a", MaxFiatRatesCurrencyCodeLength+1)})
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("currency code too long, max %d", MaxFiatRatesCurrencyCodeLength)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
 	}
 }
 
@@ -57,7 +111,7 @@ func TestGetFiatRatesResult_NonTokenSelectedCurrencies(t *testing.T) {
 		},
 	}
 
-	got, err := w.getFiatRatesResult([]string{"USD", "gbp"}, ticker, "")
+	got, err := w.getFiatRatesResult([]string{"usd", "gbp"}, ticker, "")
 	if err != nil {
 		t.Fatalf("getFiatRatesResult returned error: %v", err)
 	}
@@ -111,7 +165,7 @@ func TestGetFiatRatesResult_TokenRates(t *testing.T) {
 		},
 	}
 
-	got, err := w.getFiatRatesResult([]string{"USD", "EUR", "JPY"}, ticker, "0xToken")
+	got, err := w.getFiatRatesResult([]string{"usd", "eur", "jpy"}, ticker, "0xToken")
 	if err != nil {
 		t.Fatalf("getFiatRatesResult returned error: %v", err)
 	}
@@ -153,8 +207,8 @@ func TestGetCurrentFiatRates_UsesGetterAndCurrencyFilter(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("expected one ticker call, got %d", calls)
 	}
-	if gotVsCurrency != "USD" {
-		t.Fatalf("unexpected vsCurrency: got %q, want %q", gotVsCurrency, "USD")
+	if gotVsCurrency != "usd" {
+		t.Fatalf("unexpected vsCurrency: got %q, want %q", gotVsCurrency, "usd")
 	}
 	if gotToken != "" {
 		t.Fatalf("unexpected token: got %q, want empty", gotToken)
@@ -200,6 +254,60 @@ func TestGetFiatRatesForTimestamps_LimitsInput(t *testing.T) {
 	want := fmt.Sprintf("too many timestamps, max %d", MaxFiatRatesTimestamps)
 	if apiErr.Text != want {
 		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
+	}
+}
+
+func TestGetFiatRatesForTimestamps_LimitsCurrenciesBeforeLookup(t *testing.T) {
+	w := &Worker{fiatRates: &fiat.FiatRates{}}
+	originalGetter := getTickersForTimestamps
+	defer func() {
+		getTickersForTimestamps = originalGetter
+	}()
+
+	calls := 0
+	getTickersForTimestamps = func(_ *fiat.FiatRates, _ []int64, _, _ string) (*[]*common.CurrencyRatesTicker, error) {
+		calls++
+		tickers := []*common.CurrencyRatesTicker{}
+		return &tickers, nil
+	}
+
+	currencies := make([]string, MaxFiatRatesCurrencies+1)
+	for i := range currencies {
+		currencies[i] = fmt.Sprintf("c%03d", i)
+	}
+	_, err := w.GetFiatRatesForTimestamps([]int64{1}, currencies, "")
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("too many currencies, max %d", MaxFiatRatesCurrencies)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
+	}
+	if calls != 0 {
+		t.Fatalf("expected ticker lookup not to be called, got %d calls", calls)
+	}
+}
+
+func TestGetFiatRatesForTimestamps_RejectsLongCurrencyBeforeLookup(t *testing.T) {
+	w := &Worker{fiatRates: &fiat.FiatRates{}}
+	originalGetter := getTickersForTimestamps
+	defer func() {
+		getTickersForTimestamps = originalGetter
+	}()
+
+	calls := 0
+	getTickersForTimestamps = func(_ *fiat.FiatRates, _ []int64, _, _ string) (*[]*common.CurrencyRatesTicker, error) {
+		calls++
+		tickers := []*common.CurrencyRatesTicker{}
+		return &tickers, nil
+	}
+
+	_, err := w.GetFiatRatesForTimestamps([]int64{1}, []string{strings.Repeat("a", MaxFiatRatesCurrencyCodeLength+1)}, "")
+	apiErr := requireAPIError(t, err, true)
+	want := fmt.Sprintf("currency code too long, max %d", MaxFiatRatesCurrencyCodeLength)
+	if apiErr.Text != want {
+		t.Fatalf("unexpected error text: got %q, want %q", apiErr.Text, want)
+	}
+	if calls != 0 {
+		t.Fatalf("expected ticker lookup not to be called, got %d calls", calls)
 	}
 }
 

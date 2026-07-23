@@ -156,7 +156,7 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		offset <<= 1
 		d = int(offset) + dataOffset
 		dynIndex := d >> 6
-		if d+64 > len(data) || d < 0 {
+		if d+64 > len(data) || d < 0 || d+64 < d {
 			return nil, 0, false
 		}
 		// get element count of dynamic type
@@ -169,8 +169,12 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		dynIndex++
 		if t.T == abi.StringTy || t.T == abi.BytesTy {
 			d += 64
+			// count<<1 can overflow and wrap below d (same class as the
+			// getEnsRecord bug); the lower bound must be the slice start d, not 0,
+			// so that d <= de <= len(data) and data[d:de] below can never panic.
+			// count==0 gives de==d, which is still accepted.
 			de := d + (count << 1)
-			if de > len(data) || de < 0 {
+			if de > len(data) || de < d {
 				return nil, 0, false
 			}
 			if count == 0 {
@@ -188,6 +192,13 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 				}
 				count = ((count - 1) >> 5) + 1
 				for i := 0; i < count; i++ {
+					// A dynamic field whose declared length runs past the data
+					// (malformed or non-32-byte-aligned input) would index beyond
+					// processed, which is sized len(data)/64; treat it as a
+					// non-matching signature instead of panicking.
+					if dynIndex >= len(processed) {
+						return nil, 0, false
+					}
 					processed[dynIndex] = true
 					dynIndex++
 				}
@@ -303,11 +314,18 @@ func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
 		if err != nil {
 			return nil
 		}
-		de := 194 + 64 + (int(c) << 1)
-		if de > len(l.Data) || de < 0 {
+		const nameStart = 194 + 64
+		// int(c)<<1 can overflow: c is attacker-controlled (up to 2^63-1) and Go's
+		// signed left shift wraps silently, so de can land anywhere in [0, 257]
+		// below nameStart. The lower bound must be the slice
+		// start index, not 0 — a de below the start makes l.Data[nameStart:de] a
+		// low>high slice expression that panics. Checking de < nameStart guarantees
+		// nameStart <= de <= len(l.Data), so the slice below can never panic.
+		de := nameStart + (int(c) << 1)
+		if de > len(l.Data) || de < nameStart {
 			return nil
 		}
-		b, err := hex.DecodeString(l.Data[194+64 : de])
+		b, err := hex.DecodeString(l.Data[nameStart:de])
 		if err != nil {
 			return nil
 		}

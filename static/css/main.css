@@ -469,6 +469,41 @@ span.btn-paging:hover {
     float: right !important;
 }
 
+.tx-io-toggle {
+    display: block;
+    width: 100%;
+    background-color: #f6f6f6;
+    border: 1px solid #e2e2e2;
+    border-radius: 0.5rem;
+    padding: 0.4rem 1.1rem;
+    margin-bottom: 0.4rem;
+    color: #757575;
+    font-size: 0.85em;
+    font-weight: bold;
+    text-align: center;
+    cursor: pointer;
+}
+
+.tx-in > .tx-io-toggle,
+.tx-out > .tx-io-toggle {
+    margin-bottom: 0;
+    margin-top: 0.4rem;
+}
+
+.tx-io-toggle:hover {
+    color: black;
+    background-color: #f6f6f6;
+    border-color: #e2e2e2;
+}
+
+.tx-io-toggle::after {
+    content: " \25BC";
+}
+
+.tx-io-toggle[aria-expanded="true"]::after {
+    content: " \25B2";
+}
+
 .spent {
     color: #dc3545 !important;
 }
