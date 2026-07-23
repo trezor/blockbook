@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -102,7 +103,8 @@ func (fd *FourByteSignaturesDownloader) getPageWithRetry(url string) (*signature
 func parseSignatureFromText(t string) *bchain.FourByteSignature {
 	s := strings.Index(t, "(")
 	e := strings.LastIndex(t, ")")
-	if s < 0 || e < 0 {
+	// need a non-empty name, '(', and ')' after it (e <= s also blocks "a)b(")
+	if s <= 0 || e <= s {
 		return nil
 	}
 	var signature bchain.FourByteSignature
@@ -129,6 +131,15 @@ func parseSignatureFromText(t string) *bchain.FourByteSignature {
 }
 
 func (fd *FourByteSignaturesDownloader) downloadSignatures() {
+	// Run() executes on its own goroutine, so a panic here escapes main()'s
+	// recover and kills the whole process. Recover as a last-resort safety net
+	// over the entire download/store pipeline so untrusted feed content can
+	// never crash the indexer; log the stack trace to keep it diagnosable.
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Errorf("FourByteSignaturesDownloader recovered from panic: %v\n%s", r, debug.Stack())
+		}
+	}()
 	period := time.Millisecond * 100
 	timer := time.NewTimer(period)
 	url := fd.url
@@ -146,19 +157,21 @@ func (fd *FourByteSignaturesDownloader) downloadSignatures() {
 		}
 		glog.Infof("FourByteSignaturesDownloader downloaded %s with %d results", url, len(page.Results))
 		if len(page.Results) > 0 {
-			fourBytes, err := strconv.ParseUint(page.Results[0].HexSignature, 0, 0)
+			// dedup anchor (results newest-first): break once already stored;
+			// a malformed anchor must not abort the download or skip the page
+			fourBytes, err := strconv.ParseUint(page.Results[0].HexSignature, 0, 32)
 			if err != nil {
 				glog.Errorf("Invalid 4byte signature %+v on page %s: %v", page.Results[0], url, err)
-				return
-			}
-			sig, err := fd.db.GetFourByteSignature(uint32(fourBytes), uint32(page.Results[0].Id))
-			if err != nil {
-				glog.Errorf("db.GetFourByteSignature error %+v on page %s: %v", page.Results[0], url, err)
-				return
-			}
-			// signature is already stored in db, break
-			if sig != nil {
-				break
+			} else {
+				sig, err := fd.db.GetFourByteSignature(uint32(fourBytes), uint32(page.Results[0].Id))
+				if err != nil {
+					glog.Errorf("db.GetFourByteSignature error %+v on page %s: %v", page.Results[0], url, err)
+					return
+				}
+				// signature is already stored in db, break
+				if sig != nil {
+					break
+				}
 			}
 			results = append(results, page.Results...)
 		}
@@ -178,10 +191,12 @@ func (fd *FourByteSignaturesDownloader) downloadSignatures() {
 
 		for i := range results {
 			r := &results[i]
-			fourBytes, err := strconv.ParseUint(r.HexSignature, 0, 0)
+			// bitSize 32: reject over-long values uint32() would mis-truncate
+			fourBytes, err := strconv.ParseUint(r.HexSignature, 0, 32)
 			if err != nil {
+				// skip only this entry so one bad hex cannot abort the batch
 				glog.Errorf("Invalid 4byte signature %+v: %v", r, err)
-				return
+				continue
 			}
 			fbs := parseSignatureFromText(r.TextSignature)
 			if fbs != nil {
