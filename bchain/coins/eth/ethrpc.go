@@ -99,8 +99,8 @@ type Configuration struct {
 	// NameRegistered events that become address aliases. Absent or empty means
 	// trust none (no ENS aliases are recorded); a list of addresses restricts to
 	// those emitters (e.g. the mainnet ENS ETHRegistrarController); the special
-	// entry "*" accepts any emitter, restoring the legacy behavior for chains
-	// with a different name service (e.g. .bnb).
+	// entry "*" accepts any emitter, restoring the legacy accept-any behavior for
+	// a chain with a different, self-hosted name service.
 	EnsRegistrars                   []string `json:"ens_registrars,omitempty"`
 	MempoolTxTimeoutHours           int      `json:"mempoolTxTimeoutHours"`
 	MempoolTxTimeout                string   `json:"mempoolTxTimeout,omitempty"`
