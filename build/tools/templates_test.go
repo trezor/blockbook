@@ -403,17 +403,17 @@ func TestValidateRPCEnvVarsToleratesStagingCoin(t *testing.T) {
 
 	withTemporarilyUnsetEnv(t, stagingEnvVar)
 	// An RPC override for a coin whose config lives only on a feature branch.
-	t.Setenv(devRPCURLHTTPPrefix+"robinhood_archive", "http://backend.example:8030")
+	t.Setenv(devRPCURLHTTPPrefix+"nonexistent_wip_coin", "http://backend.example:8030")
 
 	// Assert on this coin specifically, not on a globally-clean result: the env may
 	// carry other orphan overrides (the multi-WIP-coin case this feature targets).
-	if err := validateRPCEnvVars(configsDir); err == nil || !strings.Contains(err.Error(), "robinhood_archive") {
-		t.Fatalf("expected robinhood_archive to be rejected without BB_STAGING, got %v", err)
+	if err := validateRPCEnvVars(configsDir); err == nil || !strings.Contains(err.Error(), "nonexistent_wip_coin") {
+		t.Fatalf("expected nonexistent_wip_coin to be rejected without BB_STAGING, got %v", err)
 	}
 
-	t.Setenv(stagingEnvVar, "robinhood_archive")
-	if err := validateRPCEnvVars(configsDir); err != nil && strings.Contains(err.Error(), "robinhood_archive") {
-		t.Fatalf("BB_STAGING should tolerate robinhood_archive, got %v", err)
+	t.Setenv(stagingEnvVar, "nonexistent_wip_coin")
+	if err := validateRPCEnvVars(configsDir); err != nil && strings.Contains(err.Error(), "nonexistent_wip_coin") {
+		t.Fatalf("BB_STAGING should tolerate nonexistent_wip_coin, got %v", err)
 	}
 }
 

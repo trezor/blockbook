@@ -61,7 +61,8 @@
 | Arbitrum Nova Archive            | 9308             | 9208               | 8308        | 38408 p2p                                           |
 | Base                             | 9309             | 9209               | 8309        | 38409 p2p, 8209 http, 8409 authrpc                  |
 | Base Archive                     | 9311             | 9211               | 8211        | 38411 p2p, 8311 http, 8411 authrpc                  |
-| Tron                             | 9312             | 9212               | 8545        | 1111 p2p, 5555, 8090 http                           |
+| Tron                             | 9312             | 9212               | 8545        | 1111 p2p, 5555                                      |
+| Robinhood Archive                | 9313             | 9213               | 8213        | 38413 p2p, 8313 http                                |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                               |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                               |
 | Bitcoin Testnet4                 | 19129            | 19029              | 18029       | 48329                                               |
@@ -85,9 +86,10 @@
 | Ethereum Testnet Hoodi           | 19106            | 19006              | 18006       | 18106 http, 18506 authrpc, 48306 p2p                |
 | Ethereum Testnet Hoodi Archive   | 19126            | 19026              | 18026       | 18126 http, 18126 torrent, 18526 authrpc, 48326 p2p |
 | Ethereum Testnet Sepolia         | 19176            | 19076              | 18076       | 18176 http, 18576 authrpc, 48376 p2p                |
+| Robinhood Chain Testnet          | 19177            | 19077              | 18077       | 18177 http, 48377 p2p                               |
 | Ethereum Testnet Sepolia Archive | 19186            | 19086              | 18086       | 18186 http, 18186 torrent, 18586 authrpc, 48386 p2p |
 | Qtum Testnet                     | 19188            | 19088              | 18088       | 48388                                               |
 | Omotenashicoin Testnet           | 19189            | 19089              | 18089       | 48389                                               |
-| Tron Nile                        | 19190            | 19090              | 8545        | 18888 p2p, 5555, 8090 http                          |
+| Tron Nile                        | 19190            | 19090              | 8545        | 18888 p2p, 5555                                     |
 
 > NOTE: This document is generated from coin definitions in `configs/coins` using command `go run contrib/scripts/check-and-generate-port-registry.go -w`.

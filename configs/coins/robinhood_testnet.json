@@ -1,0 +1,76 @@
+{
+    "coin": {
+        "name": "Robinhood Testnet",
+        "shortcut": "tETH",
+        "network": "tRHC",
+        "label": "Robinhood Chain Testnet",
+        "alias": "robinhood_testnet"
+    },
+    "ports": {
+        "backend_rpc": 18077,
+        "backend_p2p": 48377,
+        "backend_http": 18177,
+        "blockbook_internal": 19077,
+        "blockbook_public": 19177
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-robinhood-testnet",
+        "package_revision": "satoshilabs-1",
+        "system_user": "robinhood",
+        "version": "3.11.2",
+        "docker_image": "offchainlabs/nitro-node:v3.11.2-3599aca",
+        "verification_type": "docker",
+        "verification_source": "ebc985e3b105980734630744981e1542001c22d74cba57509fe0d5ed8bb84c14",
+        "extract_command": "docker cp extract:/home/user/target backend/target; docker cp extract:/usr/local/bin/nitro backend/nitro",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/robinhood_testnet_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_script": "robinhood_testnet.sh",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "openssl rand -hex 32 > {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/jwtsecret",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": false,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-robinhood-testnet",
+        "system_user": "blockbook-robinhood",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "-workers=16 -resyncindexdebounce=509",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 1800,
+            "additional_params": {
+                "averageBlockTimeMs": 250,
+                "missingBlockRetry": {
+                    "retryDelayMs": 1000,
+                    "recheckThreshold": 10,
+                    "tipRecheckThreshold": 3,
+                    "maxStallMs": 60000
+                },
+                "eip1559Fees": true,
+                "mempoolTxTimeoutHours": 12,
+                "processInternalTransactions": true,
+                "trace_timeout": "10s",
+                "queryBackendOnMempoolResync": false,
+                "disableMempoolSync": true,
+                "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}
