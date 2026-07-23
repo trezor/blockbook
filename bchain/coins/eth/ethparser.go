@@ -41,12 +41,15 @@ type EthereumLikeParser interface {
 	bchain.BlockChainParser
 	EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
 	SetEnsSuffix(suffix string)
+	SetEnsRegistrars(addrs []string)
+	GetEnsRegistrars() map[string]struct{}
 }
 
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
 	EnsSuffix                      string
+	EnsRegistrars                  map[string]struct{}
 	HotAddressMinContracts         int
 	HotAddressLRUCacheSize         int
 	HotAddressMinHits              int
@@ -117,6 +120,49 @@ type rpcBlockTxids struct {
 
 func (p *EthereumParser) SetEnsSuffix(suffix string) {
 	p.EnsSuffix = suffix
+}
+
+// ensRegistrarWildcard, when present in the trusted set, disables the emitter
+// check so any contract's NameRegistered event is accepted (legacy behavior,
+// opt-in for chains with a different name service).
+const ensRegistrarWildcard = "*"
+
+// normalizeEnsRegistrar lower-cases an address and ensures the 0x prefix so it
+// can be compared directly against the (lower-cased, 0x-prefixed) address field
+// returned by eth_getLogs. The wildcard token is passed through unchanged.
+func normalizeEnsRegistrar(addr string) string {
+	a := strings.ToLower(strings.TrimSpace(addr))
+	if a == "" || a == ensRegistrarWildcard {
+		return a
+	}
+	if !strings.HasPrefix(a, "0x") {
+		a = "0x" + a
+	}
+	return a
+}
+
+// ensRegistrarSet builds a lookup set of trusted ENS registrar emitter addresses.
+func ensRegistrarSet(addrs []string) map[string]struct{} {
+	m := make(map[string]struct{}, len(addrs))
+	for _, a := range addrs {
+		if n := normalizeEnsRegistrar(a); n != "" {
+			m[n] = struct{}{}
+		}
+	}
+	return m
+}
+
+// SetEnsRegistrars replaces the set of contract addresses trusted to emit
+// NameRegistered events. An empty (or nil) list means trust none - no ENS
+// aliases are recorded. The special entry "*" accepts any emitter, restoring
+// the legacy behavior for chains with a different name service.
+func (p *EthereumParser) SetEnsRegistrars(addrs []string) {
+	p.EnsRegistrars = ensRegistrarSet(addrs)
+}
+
+// GetEnsRegistrars returns the set of trusted NameRegistered emitter addresses.
+func (p *EthereumParser) GetEnsRegistrars() map[string]struct{} {
+	return p.EnsRegistrars
 }
 
 func ethNumber(n string) (int64, error) {

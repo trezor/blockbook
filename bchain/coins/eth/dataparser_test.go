@@ -4,6 +4,7 @@ package eth
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/trezor/blockbook/bchain"
@@ -482,7 +483,10 @@ func Test_getEnsRecord(t *testing.T) {
 	tests := []struct {
 		name string
 		log  rpcLogWithTxHash
-		want *bchain.AddressAliasRecord
+		// registrars is the trusted-emitter set passed to getEnsRecord. nil means
+		// "use the built-in default"; an explicit (possibly empty) map overrides it.
+		registrars map[string]struct{}
+		want       *bchain.AddressAliasRecord
 	}{
 		{
 			name: "unraveled",
@@ -581,11 +585,114 @@ func Test_getEnsRecord(t *testing.T) {
 			},
 			want: nil,
 		},
+		{
+			// Security: a valid NameRegistered payload emitted by an untrusted
+			// contract must NOT be turned into an alias (ENS alias spoofing).
+			name: "forged emitter rejected",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000009756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			want: nil,
+		},
+		{
+			// An empty trusted set means trust none: even a well-formed event
+			// records nothing.
+			name: "empty registrar set records nothing",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000009756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			registrars: map[string]struct{}{},
+			want:       nil,
+		},
+		{
+			// The "*" wildcard accepts any emitter (opt-in legacy behavior).
+			name: "wildcard accepts untrusted emitter",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000009756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			registrars: ensRegistrarSet([]string{"*"}),
+			want:       &bchain.AddressAliasRecord{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"},
+		},
+		{
+			// Security: a name carrying a control character (here a newline, 0x0a)
+			// must be rejected so it cannot spoof or corrupt the displayed alias.
+			name: "control character in name rejected",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d00000000000000000000000000000000000000000000000000000000000000010a00000000000000000000000000000000000000000000000000000000000000",
+				},
+			},
+			want: nil,
+		},
+	}
+	// Cases with a nil registrars field default to trusting the mainnet ENS
+	// ETHRegistrarController, the emitter used in the fixtures above.
+	trusted := ensRegistrarSet([]string{"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5"})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registrars := tt.registrars
+			if registrars == nil {
+				registrars = trusted
+			}
+			if got := getEnsRecord(&tt.log, registrars); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getEnsRecord() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_validEnsAliasName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "plain", in: "unraveled", want: true},
+		{name: "unicode letters", in: "münchen", want: true},
+		{name: "emoji with zero-width joiner", in: "👨‍👩‍👧", want: true},
+		{name: "empty", in: "", want: false},
+		{name: "too long", in: strings.Repeat("a", maxEnsAliasNameLen+1), want: false},
+		{name: "at length cap", in: strings.Repeat("a", maxEnsAliasNameLen), want: true},
+		{name: "newline", in: "foo\nbar", want: false},
+		{name: "null byte", in: "foo\x00bar", want: false},
+		{name: "ansi escape", in: "foo\x1b[31mbar", want: false},
+		{name: "right-to-left override", in: "foo‮bar", want: false},
+		{name: "invalid utf8", in: "\xff\xfe", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getEnsRecord(&tt.log); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getEnsRecord() = %v, want %v", got, tt.want)
+			if got := validEnsAliasName(tt.in); got != tt.want {
+				t.Errorf("validEnsAliasName(%q) = %v, want %v", tt.in, got, tt.want)
 			}
 		})
 	}
