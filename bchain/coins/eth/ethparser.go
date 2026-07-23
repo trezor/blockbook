@@ -119,6 +119,48 @@ func (p *EthereumParser) SetEnsSuffix(suffix string) {
 	p.EnsSuffix = suffix
 }
 
+// ensRegistrarWildcard in the trusted set disables the emitter check (accept any).
+const ensRegistrarWildcard = "*"
+
+// normalizeEnsRegistrar lower-cases and 0x-prefixes an address to match
+// eth_getLogs output; the wildcard token passes through unchanged.
+func normalizeEnsRegistrar(addr string) string {
+	a := strings.ToLower(strings.TrimSpace(addr))
+	if a == "" || a == ensRegistrarWildcard {
+		return a
+	}
+	if !strings.HasPrefix(a, "0x") {
+		a = "0x" + a
+	}
+	return a
+}
+
+// isValidEnsRegistrar reports whether a normalized entry is the wildcard or a
+// well-formed 20-byte 0x address; malformed entries can never match a real
+// eth_getLogs emitter and are dropped from the set.
+func isValidEnsRegistrar(norm string) bool {
+	if norm == ensRegistrarWildcard {
+		return true
+	}
+	if !strings.HasPrefix(norm, "0x") {
+		return false
+	}
+	b, err := hex.DecodeString(norm[2:])
+	return err == nil && len(b) == 20
+}
+
+// ensRegistrarSet builds a lookup set of trusted ENS registrar emitters, skipping
+// malformed entries. Empty/nil trusts none (records nothing); "*" accepts any.
+func ensRegistrarSet(addrs []string) map[string]struct{} {
+	m := make(map[string]struct{}, len(addrs))
+	for _, a := range addrs {
+		if n := normalizeEnsRegistrar(a); isValidEnsRegistrar(n) {
+			m[n] = struct{}{}
+		}
+	}
+	return m
+}
+
 func ethNumber(n string) (int64, error) {
 	if len(n) > 2 {
 		return strconv.ParseInt(n[2:], 16, 64)

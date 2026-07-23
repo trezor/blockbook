@@ -303,33 +303,92 @@ func (p *EthereumParser) ParseInputData(signatures *[]bchain.FourByteSignature, 
 	return &parsed
 }
 
-// getEnsRecord processes transaction log entry and tries to parse ENS record from it
-func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
-	if len(l.Topics) == 3 && l.Topics[0] == nameRegisteredEventSignature && len(l.Data) >= 322 {
-		address, err := addressFromPaddedHex(l.Topics[2])
-		if err != nil {
-			return nil
-		}
-		c, err := strconv.ParseInt(l.Data[194:194+64], 16, 64)
-		if err != nil {
-			return nil
-		}
-		const nameStart = 194 + 64
-		// int(c)<<1 can overflow: c is attacker-controlled (up to 2^63-1) and Go's
-		// signed left shift wraps silently, so de can land anywhere in [0, 257]
-		// below nameStart. The lower bound must be the slice
-		// start index, not 0 — a de below the start makes l.Data[nameStart:de] a
-		// low>high slice expression that panics. Checking de < nameStart guarantees
-		// nameStart <= de <= len(l.Data), so the slice below can never panic.
-		de := nameStart + (int(c) << 1)
-		if de > len(l.Data) || de < nameStart {
-			return nil
-		}
-		b, err := hex.DecodeString(l.Data[nameStart:de])
-		if err != nil {
-			return nil
-		}
-		return &bchain.AddressAliasRecord{Address: address, Name: string(b)}
+// maxEnsAliasNameLen caps the decoded ENS name length (bytes) stored as an alias.
+const maxEnsAliasNameLen = 256
+
+// validEnsAliasName rejects alias names that are empty, over the length cap, not
+// UTF-8, or carry chars that could hide or spoof the displayed alias: controls,
+// bidi overrides, line/paragraph separators, and invisible format chars. ZWJ and
+// ZWNJ are allowed, as they occur in legitimate emoji and script names.
+func validEnsAliasName(name string) bool {
+	if len(name) == 0 || len(name) > maxEnsAliasNameLen {
+		return false
 	}
-	return nil
+	if !utf8.ValidString(name) {
+		return false
+	}
+	for _, r := range name {
+		// ZWJ (U+200D) and ZWNJ (U+200C) are legitimate in emoji and some scripts.
+		if r == 0x200D || r == 0x200C {
+			continue
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) ||
+			unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) {
+			return false
+		}
+	}
+	return true
+}
+
+// isTrustedNameRegisteredEvent reports whether topic0 is one of the ENS
+// NameRegistered event signatures getEnsRecord knows how to parse: the original
+// 5-arg, the 6-arg (baseCost+premium) and the current 7-arg (referrer) events.
+func isTrustedNameRegisteredEvent(topic0 string) bool {
+	return topic0 == nameRegisteredEventSignature ||
+		topic0 == nameRegisteredWithPremiumEventSignature ||
+		topic0 == nameRegisteredWithReferrerEventSignature
+}
+
+// getEnsRecord parses an ENS alias from a NameRegistered log (5-, 6- and 7-arg
+// events). Only emitters in registrars are accepted; empty records nothing, "*"
+// accepts any.
+func getEnsRecord(l *rpcLogWithTxHash, registrars map[string]struct{}) *bchain.AddressAliasRecord {
+	if len(l.Topics) != 3 || !isTrustedNameRegisteredEvent(l.Topics[0]) {
+		return nil
+	}
+	if _, acceptAny := registrars[ensRegistrarWildcard]; !acceptAny {
+		if _, ok := registrars[normalizeEnsRegistrar(l.Address)]; !ok {
+			return nil
+		}
+	}
+	address, err := addressFromPaddedHex(l.Topics[2])
+	if err != nil {
+		return nil
+	}
+	name, ok := parseEnsNameFromLogData(l.Data)
+	if !ok || !validEnsAliasName(name) {
+		return nil
+	}
+	return &bchain.AddressAliasRecord{Address: address, Name: name}
+}
+
+// parseEnsNameFromLogData extracts the ABI `string name` (the first dynamic
+// parameter of every NameRegistered variant) via its offset word, so all event
+// layouts work uniformly. All indices derive from untrusted input, so each word
+// read is bounds-checked (parseEVMLogWordUint64) and the length is capped before
+// use as a slice bound.
+func parseEnsNameFromLogData(data string) (string, bool) {
+	if has0xPrefix(data) {
+		data = data[2:]
+	}
+	// leading word: byte offset from data start to the name's length word
+	offsetBytes, err := parseEVMLogWordUint64(data, 0)
+	if err != nil || offsetBytes > uint64(len(data)) {
+		return "", false
+	}
+	lenStart := int(offsetBytes) * 2
+	length, err := parseEVMLogWordUint64(data, lenStart)
+	if err != nil || length > maxEnsAliasNameLen {
+		return "", false
+	}
+	nameStart := lenStart + evmWordHex
+	nameEnd := nameStart + int(length)*2
+	if nameEnd > len(data) {
+		return "", false
+	}
+	b, err := hex.DecodeString(data[nameStart:nameEnd])
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
 }

@@ -38,6 +38,10 @@ func NewBNBSmartChainRPC(config json.RawMessage, pushHandler func(bchain.Notific
 	s := &BNBSmartChainRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),
 	}
+	// New ENS-style aliases are no longer recorded on BSC (empty ens_registrars),
+	// but legacy records from earlier accept-any syncs remain in the DB; keep the
+	// .bnb suffix so they render with their original (Space ID) label rather than
+	// a misleading .eth one.
 	s.Parser.SetEnsSuffix(".bnb")
 
 	return s, nil
