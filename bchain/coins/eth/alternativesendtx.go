@@ -118,40 +118,41 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// keyed on acceptedURL rather than retErr, so registration does not silently depend on
 	// callHttpStringResult never returning an empty result without an error
 	if acceptedURL != "" {
-		gen = p.registerSuccessfulSend(hex, acceptedURL)
-	}
-
-	// Gated on acceptedURL: with no relay acceptance txid is empty, so there is nothing to cache
-	// and nothing to reconcile. Running the cache path anyway made handleMempoolTransaction fan
-	// out eth_getTransactionByHash(0x0..0) to every provider and log a spurious "did not find
-	// txid" error on every rejected (underpriced / nonce-too-low) send, burning the very quota
-	// the #1629 gating protects.
-	if p.onlyAlternative && p.fetchMempoolTx && acceptedURL != "" {
-		// A successful relay acceptance of this (from, nonce) is positive, irreversible proof
-		// that any previously cached transaction with the same sender and nonce can no longer
-		// mine - it has been replaced or cancelled. Retire it now, from the raw hex, WITHOUT
-		// waiting for the relay to surface THIS transaction via eth_getTransactionByHash.
-		// Blink drop-mode cancels are never surfaced at all, and an accepted-but-unsurfaced
-		// RBF replacement never reached handleMempoolTransaction's own removal, so both cases
-		// previously left the predecessor showing "Unconfirmed" until the cache timeout (#1573).
-		// This is distinct from an empty getTransactionByHash probe, which is NOT authoritative
-		// (see reconcileMempoolTxs) - here the ACK of a same-nonce replacement is the fact.
-		if from, nonce, err := alternativeTxSenderAndNonce(hex); err != nil {
-			glog.Warningf("cannot decode sender/nonce of accepted transaction for RBF eviction: %v", err)
+		// Decode the sender and nonce once from the accepted raw hex and reuse them for both
+		// recent-sender registration and the RBF eviction below - a single ECDSA sender recovery
+		// instead of two. On decode failure gen stays 0 and no eviction runs, but the transaction
+		// is still handed to handleMempoolTransaction(txid, 0), exactly as before.
+		from, nonce, decErr := alternativeTxSenderAndNonce(hex)
+		if decErr != nil {
+			glog.Warningf("cannot decode sender/nonce of accepted transaction: %v", decErr)
 		} else {
-			p.evictReplacedByNonce(from, nonce, txid, gen)
+			gen = p.registerSuccessfulSend(from, acceptedURL)
 		}
-		p.handleMempoolTransaction(txid, gen)
+
+		// Gated on onlyAlternative/fetchMempoolTx (already under acceptedURL != ""): without a relay
+		// acceptance txid is empty, so there is nothing to cache and nothing to reconcile. Running the
+		// cache path anyway made handleMempoolTransaction fan out eth_getTransactionByHash(0x0..0) to
+		// every provider and log a spurious "did not find txid" error on every rejected (underpriced /
+		// nonce-too-low) send, burning the very quota the #1629 gating protects.
+		if p.onlyAlternative && p.fetchMempoolTx {
+			// A successful relay acceptance of this (from, nonce) is positive, irreversible proof
+			// that any previously cached transaction with the same sender and nonce can no longer
+			// mine - it has been replaced or cancelled. Retire it now, from the decoded (from,
+			// nonce), WITHOUT waiting for the relay to surface THIS transaction via
+			// eth_getTransactionByHash. Blink drop-mode cancels are never surfaced at all, and an
+			// accepted-but-unsurfaced RBF replacement never reached handleMempoolTransaction's own
+			// removal, so both cases previously left the predecessor showing "Unconfirmed" until the
+			// cache timeout (#1573). This is distinct from an empty getTransactionByHash probe, which
+			// is NOT authoritative (see reconcileMempoolTxs) - here the ACK of a same-nonce
+			// replacement is the fact.
+			if decErr == nil {
+				p.evictReplacedByNonce(from, nonce, txid, gen)
+			}
+			p.handleMempoolTransaction(txid, gen)
+		}
 	}
 
 	return txid, retErr
-}
-
-// alternativeTxSender recovers the sender address from a raw transaction hex. The chain id
-// needed to derive the sender is taken from the transaction itself.
-func alternativeTxSender(rawTxHex string) (ethcommon.Address, error) {
-	sender, _, err := alternativeTxSenderAndNonce(rawTxHex)
-	return sender, err
 }
 
 // alternativeTxSenderAndNonce recovers the sender address and account nonce from a raw
@@ -176,15 +177,10 @@ func alternativeTxSenderAndNonce(rawTxHex string) (ethcommon.Address, uint64, er
 // accepts it, so the accepting URL is recorded too - it is the one provider guaranteed to
 // know the transaction (see nonceURL). Expired entries are swept on the way; the map only
 // ever holds senders of the last mempoolTxsTimeout window, so the sweep is cheap.
-// It returns the send generation assigned to this submission (0 when the sender cannot be
-// decoded); the caller must carry that exact value to the cache entry it creates for the
+// It returns the send generation assigned to this submission; the caller (which has already
+// decoded the sender) must carry that exact value to the cache entry it creates for the
 // transaction, so that releaseRecentSender can order evictions against later sends.
-func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acceptedURL string) uint64 {
-	sender, err := alternativeTxSender(rawTxHex)
-	if err != nil {
-		glog.Warningf("cannot decode sender of transaction sent to alternative provider: %v", err)
-		return 0
-	}
+func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Address, acceptedURL string) uint64 {
 	now := time.Now()
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
