@@ -67,7 +67,7 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 		Handler:           serveMux,
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 		ReadTimeout:       httpReadTimeout,
-		WriteTimeout:      httpWriteTimeout,
+		WriteTimeout:      httpInternalWriteTimeout,
 		IdleTimeout:       httpIdleTimeout,
 		MaxHeaderBytes:    httpMaxHeaderBytes,
 	}
