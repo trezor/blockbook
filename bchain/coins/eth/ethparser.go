@@ -41,15 +41,12 @@ type EthereumLikeParser interface {
 	bchain.BlockChainParser
 	EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
 	SetEnsSuffix(suffix string)
-	SetEnsRegistrars(addrs []string)
-	GetEnsRegistrars() map[string]struct{}
 }
 
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
 	EnsSuffix                      string
-	EnsRegistrars                  map[string]struct{}
 	HotAddressMinContracts         int
 	HotAddressLRUCacheSize         int
 	HotAddressMinHits              int
@@ -138,26 +135,30 @@ func normalizeEnsRegistrar(addr string) string {
 	return a
 }
 
-// ensRegistrarSet builds a lookup set of trusted ENS registrar emitter addresses.
+// isValidEnsRegistrar reports whether a normalized entry is the wildcard or a
+// well-formed 20-byte 0x address; malformed entries can never match a real
+// eth_getLogs emitter and are dropped from the set.
+func isValidEnsRegistrar(norm string) bool {
+	if norm == ensRegistrarWildcard {
+		return true
+	}
+	if !strings.HasPrefix(norm, "0x") {
+		return false
+	}
+	b, err := hex.DecodeString(norm[2:])
+	return err == nil && len(b) == 20
+}
+
+// ensRegistrarSet builds a lookup set of trusted ENS registrar emitters, skipping
+// malformed entries. Empty/nil trusts none (records nothing); "*" accepts any.
 func ensRegistrarSet(addrs []string) map[string]struct{} {
 	m := make(map[string]struct{}, len(addrs))
 	for _, a := range addrs {
-		if n := normalizeEnsRegistrar(a); n != "" {
+		if n := normalizeEnsRegistrar(a); isValidEnsRegistrar(n) {
 			m[n] = struct{}{}
 		}
 	}
 	return m
-}
-
-// SetEnsRegistrars sets the trusted NameRegistered emitters: empty/nil trusts
-// none (records nothing), "*" accepts any emitter.
-func (p *EthereumParser) SetEnsRegistrars(addrs []string) {
-	p.EnsRegistrars = ensRegistrarSet(addrs)
-}
-
-// GetEnsRegistrars returns the set of trusted NameRegistered emitter addresses.
-func (p *EthereumParser) GetEnsRegistrars() map[string]struct{} {
-	return p.EnsRegistrars
 }
 
 func ethNumber(n string) (int64, error) {
