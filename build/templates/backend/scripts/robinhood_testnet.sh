@@ -24,6 +24,7 @@ $NITRO_BIN \
   --init.empty \
   --init.download-path $DATA_DIR/tmp \
   --auth.jwtsecret $DATA_DIR/jwtsecret \
+  --persistent.global-config $DATA_DIR \
   --persistent.chain $DATA_DIR \
   --parent-chain.connection.url http://127.0.0.1:18176 \
   --parent-chain.blob-client.beacon-url http://127.0.0.1:17576 \
@@ -41,6 +42,8 @@ $NITRO_BIN \
   --file-logging.enable='false' \
   --node.staker.enable='false' \
   --execution.caching.archive \
+  --execution.caching.state-scheme path \
+  --execution.caching.state-history 0 \
   --execution.tx-indexer.tx-lookup-limit 0 \
   --validation.wasm.allowed-wasm-module-roots "$INSTALL_DIR/target/machines"
 
