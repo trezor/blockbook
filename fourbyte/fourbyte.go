@@ -103,9 +103,8 @@ func (fd *FourByteSignaturesDownloader) getPageWithRetry(url string) (*signature
 func parseSignatureFromText(t string) *bchain.FourByteSignature {
 	s := strings.Index(t, "(")
 	e := strings.LastIndex(t, ")")
-	// require '(' and a ')' after it; e <= s also covers a missing ')' (e == -1)
-	// and keeps t[s+1:e] from panicking on invalid bounds (e.g. "a)b(")
-	if s < 0 || e <= s {
+	// need a non-empty name, '(', and ')' after it (e <= s also blocks "a)b(")
+	if s <= 0 || e <= s {
 		return nil
 	}
 	var signature bchain.FourByteSignature
@@ -158,14 +157,8 @@ func (fd *FourByteSignaturesDownloader) downloadSignatures() {
 		}
 		glog.Infof("FourByteSignaturesDownloader downloaded %s with %d results", url, len(page.Results))
 		if len(page.Results) > 0 {
-			// Results come newest-first, so the first entry is used as a dedup
-			// anchor: once it is already in the db, the rest of this page and
-			// all older pages are known and we can stop. A malformed anchor
-			// must not abort the download or skip the page - log it and keep
-			// going (still appending every result) so no signature is lost; the
-			// bad entry itself is handled in the storing loop below. bitSize 32
-			// matches that loop so an over-long anchor is treated as malformed
-			// rather than truncated into a wrong lookup key.
+			// dedup anchor (results newest-first): break once already stored;
+			// a malformed anchor must not abort the download or skip the page
 			fourBytes, err := strconv.ParseUint(page.Results[0].HexSignature, 0, 32)
 			if err != nil {
 				glog.Errorf("Invalid 4byte signature %+v on page %s: %v", page.Results[0], url, err)
@@ -198,14 +191,10 @@ func (fd *FourByteSignaturesDownloader) downloadSignatures() {
 
 		for i := range results {
 			r := &results[i]
-			// bitSize 32: a 4-byte signature must fit in uint32, so reject an
-			// over-long value here instead of letting the uint32() cast below
-			// silently truncate it to a wrong key.
+			// bitSize 32: reject over-long values uint32() would mis-truncate
 			fourBytes, err := strconv.ParseUint(r.HexSignature, 0, 32)
 			if err != nil {
-				// skip just this entry (as the invalid text-signature branch
-				// below does) so one malformed entry from the untrusted feed
-				// cannot abort the whole batch and disable storage.
+				// skip only this entry so one bad hex cannot abort the batch
 				glog.Errorf("Invalid 4byte signature %+v: %v", r, err)
 				continue
 			}

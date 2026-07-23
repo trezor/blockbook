@@ -67,6 +67,8 @@ func Test_parseSignatureFromText_malformed(t *testing.T) {
 		{name: "close before open", signature: "a)b("},
 		{name: "reversed parens", signature: ")("},
 		{name: "empty", signature: ""},
+		{name: "empty name no params", signature: "()"},
+		{name: "empty name with params", signature: "(uint256)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
