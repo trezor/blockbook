@@ -102,7 +102,8 @@ func (fd *FourByteSignaturesDownloader) getPageWithRetry(url string) (*signature
 func parseSignatureFromText(t string) *bchain.FourByteSignature {
 	s := strings.Index(t, "(")
 	e := strings.LastIndex(t, ")")
-	if s < 0 || e < 0 {
+	// e <= s rejects malformed input
+	if s < 0 || e < 0 || e <= s {
 		return nil
 	}
 	var signature bchain.FourByteSignature
@@ -129,6 +130,12 @@ func parseSignatureFromText(t string) *bchain.FourByteSignature {
 }
 
 func (fd *FourByteSignaturesDownloader) downloadSignatures() {
+	// never let a single malformed signature to crash the process
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("FourByteSignaturesDownloader recovered from panic: ", r)
+		}
+	}()
 	period := time.Millisecond * 100
 	timer := time.NewTimer(period)
 	url := fd.url

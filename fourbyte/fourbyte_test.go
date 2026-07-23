@@ -53,3 +53,26 @@ func Test_parseSignatureFromText(t *testing.T) {
 		})
 	}
 }
+
+func Test_parseSignatureFromText_malformed(t *testing.T) {
+	// crowdsourced 4byte content is untrusted; malformed text must return nil
+	// rather than panic (see t[s+1:e] slicing with e <= s).
+	tests := []struct {
+		name      string
+		signature string
+	}{
+		{name: "no parentheses", signature: "notASignature"},
+		{name: "missing open", signature: "foo)"},
+		{name: "missing close", signature: "foo("},
+		{name: "close before open", signature: "a)b("},
+		{name: "reversed parens", signature: ")("},
+		{name: "empty", signature: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseSignatureFromText(tt.signature); got != nil {
+				t.Errorf("parseSignatureFromText(%q) = %v, want nil", tt.signature, *got)
+			}
+		})
+	}
+}
