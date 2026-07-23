@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -102,8 +103,9 @@ func (fd *FourByteSignaturesDownloader) getPageWithRetry(url string) (*signature
 func parseSignatureFromText(t string) *bchain.FourByteSignature {
 	s := strings.Index(t, "(")
 	e := strings.LastIndex(t, ")")
-	// e <= s rejects malformed input
-	if s < 0 || e < 0 || e <= s {
+	// require '(' and a ')' after it; e <= s also covers a missing ')' (e == -1)
+	// and keeps t[s+1:e] from panicking on invalid bounds (e.g. "a)b(")
+	if s < 0 || e <= s {
 		return nil
 	}
 	var signature bchain.FourByteSignature
@@ -130,10 +132,13 @@ func parseSignatureFromText(t string) *bchain.FourByteSignature {
 }
 
 func (fd *FourByteSignaturesDownloader) downloadSignatures() {
-	// never let a single malformed signature to crash the process
+	// Run() executes on its own goroutine, so a panic here escapes main()'s
+	// recover and kills the whole process. Recover as a last-resort safety net
+	// over the entire download/store pipeline so untrusted feed content can
+	// never crash the indexer; log the stack trace to keep it diagnosable.
 	defer func() {
 		if r := recover(); r != nil {
-			glog.Error("FourByteSignaturesDownloader recovered from panic: ", r)
+			glog.Errorf("FourByteSignaturesDownloader recovered from panic: %v\n%s", r, debug.Stack())
 		}
 	}()
 	period := time.Millisecond * 100
@@ -185,10 +190,16 @@ func (fd *FourByteSignaturesDownloader) downloadSignatures() {
 
 		for i := range results {
 			r := &results[i]
-			fourBytes, err := strconv.ParseUint(r.HexSignature, 0, 0)
+			// bitSize 32: a 4-byte signature must fit in uint32, so reject an
+			// over-long value here instead of letting the uint32() cast below
+			// silently truncate it to a wrong key.
+			fourBytes, err := strconv.ParseUint(r.HexSignature, 0, 32)
 			if err != nil {
+				// skip just this entry (as the invalid text-signature branch
+				// below does) so one malformed entry from the untrusted feed
+				// cannot abort the whole batch and disable storage.
 				glog.Errorf("Invalid 4byte signature %+v: %v", r, err)
-				return
+				continue
 			}
 			fbs := parseSignatureFromText(r.TextSignature)
 			if fbs != nil {
