@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -363,6 +364,29 @@ type ResGetBlockCount struct {
 	Result uint32           `json:"result"`
 }
 
+// coreWarnings decodes the "warnings" field of getblockchaininfo and
+// getnetworkinfo. Bitcoin Core 25.0+ returns it as an array of strings, while
+// older versions (and nodes started with -deprecatedrpc=warnings) return a
+// single string. Accepting either shape keeps blockbook compatible across Core
+// versions.
+type coreWarnings string
+
+func (w *coreWarnings) UnmarshalJSON(data []byte) error {
+	// Core 25.0+: array of warning strings.
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*w = coreWarnings(strings.Join(arr, " "))
+		return nil
+	}
+	// Pre-25.0 / -deprecatedrpc=warnings: a single string.
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*w = coreWarnings(s)
+	return nil
+}
+
 // getblockchaininfo
 
 type CmdGetBlockChainInfo struct {
@@ -378,7 +402,7 @@ type ResGetBlockChainInfo struct {
 		Bestblockhash string            `json:"bestblockhash"`
 		Difficulty    common.JSONNumber `json:"difficulty"`
 		SizeOnDisk    int64             `json:"size_on_disk"`
-		Warnings      string            `json:"warnings"`
+		Warnings      coreWarnings      `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -395,7 +419,7 @@ type ResGetNetworkInfo struct {
 		Subversion      common.JSONNumber `json:"subversion"`
 		ProtocolVersion common.JSONNumber `json:"protocolversion"`
 		Timeoffset      float64           `json:"timeoffset"`
-		Warnings        string            `json:"warnings"`
+		Warnings        coreWarnings      `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -620,10 +644,10 @@ func (b *BitcoinRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	rv.Version = string(resNi.Result.Version)
 	rv.ProtocolVersion = string(resNi.Result.ProtocolVersion)
 	if len(resCi.Result.Warnings) > 0 {
-		rv.Warnings = resCi.Result.Warnings + " "
+		rv.Warnings = string(resCi.Result.Warnings) + " "
 	}
 	if resCi.Result.Warnings != resNi.Result.Warnings {
-		rv.Warnings += resNi.Result.Warnings
+		rv.Warnings += string(resNi.Result.Warnings)
 	}
 	return rv, nil
 }
