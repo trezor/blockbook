@@ -327,51 +327,83 @@ func validEnsAliasName(name string) bool {
 	return true
 }
 
-// getEnsRecord processes transaction log entry and tries to parse ENS record from it.
-// registrars is the set of contract addresses (lower-cased, 0x-prefixed) trusted to
-// emit NameRegistered events: a log whose emitter (l.Address) is not in the set is
-// rejected, so an arbitrary contract cannot forge an ENS alias for any address. An
-// empty set therefore trusts no one and records nothing; the special entry "*"
-// accepts any emitter (legacy behavior, for chains with a different name service).
+// getEnsRecord processes a transaction log entry and tries to parse an ENS
+// address alias (a NameRegistered event) from it. Both the original 5-argument
+// event (old ETHRegistrarController) and the newer 6-argument event that split
+// cost into baseCost + premium are recognized. registrars is the set of contract
+// addresses (lower-cased, 0x-prefixed) trusted to emit these events: a log whose
+// emitter (l.Address) is not in the set is rejected, so an arbitrary contract
+// cannot forge an ENS alias for any address. An empty set therefore trusts no
+// one and records nothing; the special entry "*" accepts any emitter (legacy
+// behavior, for chains with a different name service).
 func getEnsRecord(l *rpcLogWithTxHash, registrars map[string]struct{}) *bchain.AddressAliasRecord {
-	if len(l.Topics) == 3 && l.Topics[0] == nameRegisteredEventSignature && len(l.Data) >= 322 {
-		if _, acceptAny := registrars[ensRegistrarWildcard]; !acceptAny {
-			emitter := strings.ToLower(l.Address)
-			if !strings.HasPrefix(emitter, "0x") {
-				emitter = "0x" + emitter
-			}
-			if _, ok := registrars[emitter]; !ok {
-				return nil
-			}
-		}
-		address, err := addressFromPaddedHex(l.Topics[2])
-		if err != nil {
-			return nil
-		}
-		c, err := strconv.ParseInt(l.Data[194:194+64], 16, 64)
-		if err != nil {
-			return nil
-		}
-		const nameStart = 194 + 64
-		// int(c)<<1 can overflow: c is attacker-controlled (up to 2^63-1) and Go's
-		// signed left shift wraps silently, so de can land anywhere in [0, 257]
-		// below nameStart. The lower bound must be the slice
-		// start index, not 0 — a de below the start makes l.Data[nameStart:de] a
-		// low>high slice expression that panics. Checking de < nameStart guarantees
-		// nameStart <= de <= len(l.Data), so the slice below can never panic.
-		de := nameStart + (int(c) << 1)
-		if de > len(l.Data) || de < nameStart {
-			return nil
-		}
-		b, err := hex.DecodeString(l.Data[nameStart:de])
-		if err != nil {
-			return nil
-		}
-		name := string(b)
-		if !validEnsAliasName(name) {
-			return nil
-		}
-		return &bchain.AddressAliasRecord{Address: address, Name: name}
+	if len(l.Topics) != 3 {
+		return nil
 	}
-	return nil
+	if l.Topics[0] != nameRegisteredEventSignature && l.Topics[0] != nameRegisteredWithPremiumEventSignature {
+		return nil
+	}
+	if _, acceptAny := registrars[ensRegistrarWildcard]; !acceptAny {
+		emitter := strings.ToLower(l.Address)
+		if !strings.HasPrefix(emitter, "0x") {
+			emitter = "0x" + emitter
+		}
+		if _, ok := registrars[emitter]; !ok {
+			return nil
+		}
+	}
+	address, err := addressFromPaddedHex(l.Topics[2])
+	if err != nil {
+		return nil
+	}
+	name, ok := parseEnsNameFromLogData(l.Data)
+	if !ok || !validEnsAliasName(name) {
+		return nil
+	}
+	return &bchain.AddressAliasRecord{Address: address, Name: name}
+}
+
+// readHexWordAt reads one 32-byte EVM word starting at hexStart (an index into
+// the 0x-prefixed hex data string) as an int64, reporting false if the word is
+// out of range or does not fit in an int64.
+func readHexWordAt(data string, hexStart int) (int64, bool) {
+	if hexStart < 2 || hexStart+evmWordHex > len(data) {
+		return 0, false
+	}
+	v, err := strconv.ParseInt(data[hexStart:hexStart+evmWordHex], 16, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+// parseEnsNameFromLogData extracts the ABI-encoded `string name` (the first
+// non-indexed parameter of every NameRegistered variant) from a log's data. The
+// leading word holds the byte offset to the name's length word; the name bytes
+// follow. Reading via the offset - rather than a hardcoded position - keeps this
+// layout-agnostic, so the extra baseCost/premium word of the newer event is
+// handled without special-casing. Every index derives from attacker-controlled
+// input, so all bounds are checked and no slice expression can panic.
+func parseEnsNameFromLogData(data string) (string, bool) {
+	offset, ok := readHexWordAt(data, 2) // leading word: byte offset to the name length word
+	if !ok || offset < 0 || offset > int64(len(data)) {
+		return "", false
+	}
+	lenStart := 2 + int(offset)*2
+	length, ok := readHexWordAt(data, lenStart)
+	// Cap the length before using it as a slice bound: it both rejects absurd,
+	// overflow-prone values and enforces the alias length limit early.
+	if !ok || length < 0 || length > maxEnsAliasNameLen {
+		return "", false
+	}
+	nameStart := lenStart + evmWordHex
+	nameEnd := nameStart + int(length)*2
+	if nameEnd > len(data) {
+		return "", false
+	}
+	b, err := hex.DecodeString(data[nameStart:nameEnd])
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
 }

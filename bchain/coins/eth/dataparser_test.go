@@ -654,10 +654,37 @@ func Test_getEnsRecord(t *testing.T) {
 			},
 			want: nil,
 		},
+		{
+			// Newer ETHRegistrarController: 6-argument event (topic0 0x69e37f15…)
+			// with an extra baseCost/premium word, so the name offset is 0x80 and
+			// the length word sits one slot later than the old layout.
+			name: "newer controller 6-arg event",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x253553366Da8546fC250F225fe3d25d0C782303b",
+					Topics: []string{
+						"0x69e37f151eb98a09618ddaa80c8cfaf1ce5996867c489f45b555b412271ebf27",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x0000000000000000000000000000000000000000000000000000000000000080" + // offset to name = 128
+						"0000000000000000000000000000000000000000000000000017629245f5a86f" + // baseCost
+						"0000000000000000000000000000000000000000000000000000000000000000" + // premium
+						"0000000000000000000000000000000000000000000000000000000069dbb21d" + // expires
+						"0000000000000000000000000000000000000000000000000000000000000009" + // name length = 9
+						"756e726176656c6564000000000000000000000000000000000000000000000000", // "unraveled" + padding
+				},
+			},
+			want: &bchain.AddressAliasRecord{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"},
+		},
 	}
 	// Cases with a nil registrars field default to trusting the mainnet ENS
-	// ETHRegistrarController, the emitter used in the fixtures above.
-	trusted := ensRegistrarSet([]string{"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5"})
+	// ETHRegistrarController versions used as emitters in the fixtures above.
+	trusted := ensRegistrarSet([]string{
+		"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5",
+		"0x253553366da8546fc250f225fe3d25d0c782303b",
+		"0x59e16fccd424cc24e280be16e11bcd56fb0ce547",
+	})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			registrars := tt.registrars
