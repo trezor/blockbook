@@ -50,9 +50,12 @@ const refreshIterator = 5000000
 //   - An interrupted initial/bulk import (DbStateInconsistent) is UNRECOVERABLE by repair:
 //     the index is incomplete because writes were never issued, and bulk flushes do not
 //     align to block boundaries (see db/bulkconnect.go), so there is no consistent height
-//     to resume from. Such a database must be re-imported (resynced from scratch). By
-//     default this function refuses it; pass resetInconsistent=true (blockbook -forcerepair)
-//     to force it into open state with loud warnings — the index may be incomplete.
+//     to resume from. Such a database must be recreated (deleted and re-imported from
+//     scratch). By default this function refuses it; pass resetInconsistent=true (blockbook
+//     -forcerepair) to force it into open state so blockbook can start, but the index may
+//     remain PERMANENTLY incomplete — normal sync only resumes forward from the stored best
+//     height and never backfills blocks below it, so -forcerepair is a startability escape
+//     hatch, not a recovery.
 //
 // In short: --repair fixes physical SST/MANIFEST corruption (this function); -fixutxo
 // recomputes the UTXO/balance index for Bitcoin-type coins; an interrupted bulk import
@@ -149,7 +152,7 @@ func checkAndResetStateAfterRepair(name string, cfNames, dropped []string, reset
 
 	if val.Size() == 0 {
 		for _, cf := range dropped {
-			glog.Warningf("rocksdb: repair dropped empty column family %q (recreated on next open)", cf)
+			glog.Infof("rocksdb: repair dropped empty column family %q (recreated on next open)", cf)
 		}
 		glog.Info("rocksdb: repair complete; no internal state stored (never-synced database)")
 		return nil
@@ -160,30 +163,39 @@ func checkAndResetStateAfterRepair(name string, cfNames, dropped []string, reset
 		return errors.Annotatef(err, "cannot unpack internal state of %s after repair", name)
 	}
 
-	// Data-loss cross-check on dropped CFs. is.DbColumns row counts are a reliable POSITIVE
-	// signal only (Rows>0 => the CF definitely held data at last stats computation), but an
-	// unreliable negative (only cfTransactions is tracked during normal sync; full per-CF
-	// stats need a prior --computedbstats run). So this catches genuine physical loss of a
-	// populated CF when stats exist and warns otherwise; the interrupted-bulk-import gutting
-	// scenario is caught independently by the DbStateInconsistent gate below.
-	var lost []string
+	// Report dropped column families. RepairDb only drops CFs that currently have no live
+	// SST files, so a dropped CF is empty *now* and is recreated (empty) on the next open —
+	// benign in the common case (fiatRates/blockFilter/transactions and several Ethereum CFs
+	// are routinely empty). is.DbColumns row counts can show a CF was populated in the past,
+	// but they are NOT authoritative: only cfTransactions is kept current during normal sync,
+	// every other count is set solely by --computedbstats and is never decremented, so a CF
+	// legitimately emptied by a later rollback/prune (then dropped by repair) can still report
+	// Rows>0. We therefore only WARN about a drop of a previously-populated CF rather than
+	// refusing repair — aborting here would force an unnecessary full resync of an otherwise
+	// repairable database (stale-stats false positive). The genuinely unrecoverable case, an
+	// interrupted bulk import, is caught authoritatively by the DbStateInconsistent gate below.
 	for _, cf := range dropped {
 		if rows, ok := columnRows(is, cf); ok && rows > 0 {
-			lost = append(lost, fmt.Sprintf("%s(%d rows)", cf, rows))
+			glog.Warningf("rocksdb: repair dropped column family %q which last reported %d rows; if this was not caused by a prior rollback/prune the index may be incomplete and a resync is advised", cf, rows)
 		} else {
-			glog.Warningf("rocksdb: repair dropped empty/untracked column family %q (recreated on next open)", cf)
+			glog.Infof("rocksdb: repair dropped empty column family %q (recreated on next open)", cf)
 		}
-	}
-	if len(lost) > 0 {
-		return errors.Errorf("repair dropped populated column families %v; this data cannot be recovered by --repair and the database must be re-imported/resynced", lost)
 	}
 
 	switch is.DbState {
 	case common.DbStateInconsistent:
 		if !resetInconsistent {
-			return errors.Errorf("database is in inconsistent state: an initial/bulk import was interrupted, the index is incomplete and cannot be recovered by --repair; the database must be re-imported (resynced from scratch). Re-run with -forcerepair to force it into open state (data may be incomplete; a full resync is strongly advised)")
+			return errors.Errorf("database is in inconsistent state: an initial/bulk import was interrupted, the index is incomplete and cannot be recovered by --repair; the database must be recreated (deleted and re-imported from scratch). Re-run with -forcerepair to force it into open state so blockbook can start, but note the index may be PERMANENTLY incomplete: normal sync resumes forward from the stored best height and never backfills blocks below it, so only a full recreate guarantees a complete index")
 		}
-		glog.Warning("rocksdb: -forcerepair: forcing inconsistent database into open state; the index may be INCOMPLETE, a full resync is strongly advised")
+		// -forcerepair is a startability escape hatch, NOT a recovery. Flipping to
+		// DbStateOpen lets the next start treat the DB as an ordinary ungraceful shutdown
+		// and resume forward from the persisted best height. But an interrupted bulk import
+		// can leave the best height ahead of the block/address data actually flushed (bulk
+		// flushes do not align to block boundaries), so ranges below the best height are
+		// never re-fetched and the index can keep permanent gaps. This is unavoidable
+		// without a full recreate; we make it loud rather than silent.
+		glog.Warning("rocksdb: -forcerepair: forcing inconsistent database into open state so blockbook can start")
+		glog.Warning("rocksdb: -forcerepair: the index may be PERMANENTLY INCOMPLETE - normal sync resumes forward from the stored best height and does NOT backfill blocks below it; recreate (delete + re-import) is the only way to guarantee a complete index")
 		// DbStateOpen, not DbStateClosed — matches SetInconsistentState(false) semantics;
 		// Closed would falsely claim a graceful shutdown.
 		is.DbState = common.DbStateOpen
@@ -197,7 +209,7 @@ func checkAndResetStateAfterRepair(name string, cfNames, dropped []string, reset
 		if err := db.PutCF(wo, cfh[defaultIdx], []byte(internalStateKey), buf); err != nil {
 			return errors.Annotatef(err, "cannot store internal state after reset")
 		}
-		glog.Warning("rocksdb: DbStateInconsistent reset to DbStateOpen; blockbook will resume normal sync on next start")
+		glog.Warning("rocksdb: DbStateInconsistent reset to DbStateOpen; blockbook will start and resume forward sync on next start (gaps below the best height, if any, will remain)")
 	case common.DbStateOpen:
 		glog.Info("rocksdb: repair complete; database was left in open state (previous ungraceful shutdown), normal sync will recover it")
 	case common.DbStateClosed:
