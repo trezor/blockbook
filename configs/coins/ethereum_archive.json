@@ -68,6 +68,7 @@
                 },
                 "consensusNodeVersion": "http://localhost:7516/eth/v1/node/version",
                 "address_aliases": true,
+                "ens_registrars": ["0x283af0b28c62c092c9727f1ee09c02ca627eb7f5"],
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "1inch",
                 "alternative_estimate_fee_params": "{\"url\": \"https://api.1inch.dev/gas-price/v1.5/1\", \"periodSeconds\": 60}",
