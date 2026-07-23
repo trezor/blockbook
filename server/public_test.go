@@ -1816,6 +1816,33 @@ func setupChain(t *testing.T) (bchain.BlockChainParser, bchain.BlockChain) {
 	return parser, chain
 }
 
+func TestHTTPServerTimeoutConfiguration(t *testing.T) {
+	parser, chain := setupChain(t)
+	public, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, public, dbpath)
+
+	if got := public.https.WriteTimeout; got != 0 {
+		t.Fatalf("public WriteTimeout = %v, want disabled", got)
+	}
+	if got := public.https.ReadHeaderTimeout; got != httpReadHeaderTimeout {
+		t.Errorf("public ReadHeaderTimeout = %v, want %v", got, httpReadHeaderTimeout)
+	}
+	if got := public.https.ReadTimeout; got != httpReadTimeout {
+		t.Errorf("public ReadTimeout = %v, want %v", got, httpReadTimeout)
+	}
+	if got := public.https.IdleTimeout; got != httpIdleTimeout {
+		t.Errorf("public IdleTimeout = %v, want %v", got, httpIdleTimeout)
+	}
+
+	internal, err := NewInternalServer("localhost:12346", "", public.db, public.chain, public.mempool, public.txCache, metrics, public.is, public.fiatRates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := internal.https.WriteTimeout; got != httpInternalWriteTimeout {
+		t.Errorf("internal WriteTimeout = %v, want %v", got, httpInternalWriteTimeout)
+	}
+}
+
 func Test_PublicServer_OpenAPIDocs(t *testing.T) {
 	parser, chain := setupChain(t)
 

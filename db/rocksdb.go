@@ -28,6 +28,10 @@ const dbVersion = 7
 const packedHeightBytes = 4
 const maxAddrDescLen = 1024
 
+// maxAddrDescScanNonMatching bounds how many non-matching keys
+// GetAddrDescTransactions is allowed to skip before it aborts the scan.
+const maxAddrDescScanNonMatching = 1000
+
 // iterator creates snapshot, which takes lots of resources
 // when doing huge scan, it is better to close it and reopen from time to time to free the resources
 const refreshIterator = 5000000
@@ -573,6 +577,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 	startKey := packAddressKey(addrDesc, higher)
 	stopKey := packAddressKey(addrDesc, lower)
 	indexes := make([]int32, 0, 16)
+	nonMatching := 0
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddresses])
 	defer it.Close()
 	for it.Seek(startKey); it.Valid(); it.Next() {
@@ -583,6 +588,16 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 		if len(key) != addrDescLen+packedHeightBytes {
 			if glog.V(2) {
 				glog.Warningf("rocksdb: addrDesc %s - mixed with %s", addrDesc, hex.EncodeToString(key))
+			}
+			// keys of other lengths belong to different (longer) descriptors
+			// that merely share addrDesc as a prefix; a complete descriptor
+			// never hits this path. Abort if too many are skipped so a
+			// truncated descriptor does not turn into a long scan over
+			// unrelated keys.
+			nonMatching++
+			if nonMatching > maxAddrDescScanNonMatching {
+				glog.Warningf("rocksdb: addrDesc %s - aborting scan after %d non-matching keys, likely a partial address descriptor", hex.EncodeToString(addrDesc), nonMatching)
+				break
 			}
 			continue
 		}

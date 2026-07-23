@@ -1991,3 +1991,85 @@ func TestRepairRocksDB_NonexistentPath(t *testing.T) {
 		t.Fatal("expected error for nonexistent path, got nil")
 	}
 }
+
+// TestGetAddrDescTransactions_ScanBound verifies the fix for a bug where a
+// truncated address descriptor (such as the 2-byte "76a9" produced by
+// bchain.AddressDescriptorFromString("ad:76a9")) caused an unbounded scan of
+// the addresses column family. A short descriptor is a prefix of every P2PKH
+// key (76 a9 14 ... 88 ac); those keys have the wrong length and are skipped,
+// but without a bound the iterator still visits all of them.
+func TestGetAddrDescTransactions_ScanBound(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	shortDesc := bchain.AddressDescriptor{0x76, 0xa9} // prefix of every P2PKH script
+
+	// A well-formed value for a matching key: packed txid + one terminated index.
+	btxid, err := d.chainParser.PackTxid(dbtestdata.TxidB1T1)
+	require.NoError(t, err)
+	idxBuf := make([]byte, vlq.MaxLen32)
+	l := packVarint32((0<<1)|1, idxBuf) // index 0, terminator bit set
+	matchingVal := append(append([]byte{}, btxid...), idxBuf[:l]...)
+
+	// The matching key for shortDesc is packAddressKey(shortDesc, 0) = 76a9FFFFFFFF.
+	// Its 3rd byte (0xFF) sorts it after every foreign P2PKH key (3rd byte 0x14),
+	// so it is only reached if the scan does not abort early.
+	matchingKey := packAddressKey(shortDesc, 0)
+
+	// foreignP2PKH builds a realistic 25-byte P2PKH script: 76 a9 14 <hash> 88 ac.
+	foreignP2PKH := func(i uint32) bchain.AddressDescriptor {
+		desc := make(bchain.AddressDescriptor, 25)
+		desc[0], desc[1], desc[2] = 0x76, 0xa9, 0x14
+		binary.BigEndian.PutUint32(desc[3:], i)
+		desc[23], desc[24] = 0x88, 0xac
+		return desc
+	}
+
+	fill := func(foreignCount int) {
+		wb := grocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		for i := 0; i < foreignCount; i++ {
+			wb.PutCF(d.cfh[cfAddresses], packAddressKey(foreignP2PKH(uint32(i)), 0), []byte{0x00})
+		}
+		wb.PutCF(d.cfh[cfAddresses], matchingKey, matchingVal)
+		require.NoError(t, d.WriteBatch(wb))
+	}
+
+	countMatches := func() int {
+		matches := 0
+		require.NoError(t, d.GetAddrDescTransactions(shortDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
+			matches++
+			return nil
+		}))
+		return matches
+	}
+
+	// Control: with fewer foreign keys than the bound, the matching key at the
+	// end of the range is reached - proving the key is well-formed and reachable.
+	fill(10)
+	require.Equal(t, 1, countMatches(), "matching key must be reachable below the scan bound")
+
+	// Bug shape: with more foreign keys than the bound, the scan aborts before
+	// reaching the matching key. Without the bound it would visit every foreign key.
+	d2 := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d2)
+	{
+		wb := grocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		for i := 0; i < maxAddrDescScanNonMatching+50; i++ {
+			wb.PutCF(d2.cfh[cfAddresses], packAddressKey(foreignP2PKH(uint32(i)), 0), []byte{0x00})
+		}
+		wb.PutCF(d2.cfh[cfAddresses], matchingKey, matchingVal)
+		require.NoError(t, d2.WriteBatch(wb))
+	}
+	matches := 0
+	require.NoError(t, d2.GetAddrDescTransactions(shortDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
+		matches++
+		return nil
+	}))
+	require.Equal(t, 0, matches, "scan must abort before reaching the trailing matching key")
+}
