@@ -2366,7 +2366,7 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 				// while Blockbook keeps exposing it until the cache timeout (see
 				// reconcileMempoolTxs). The declared floor covers the same gap for a tx this
 				// instance never cached (accepted by another replica, or lost to a restart).
-				return raiseToFloor(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor), confirmed, confirmedOK, nil
+				return max(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor), confirmed, confirmedOK, nil
 			}
 			b.observeAlternativeNonceRequest("error")
 			glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
@@ -2385,7 +2385,7 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// primary answer below the floor would contradict the pending tx Blockbook still
 		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
 		// the hot path. The caller-declared floor is folded in for the same reason.
-		pending = raiseToFloor(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor)
+		pending = max(b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), declaredFloor)
 	}
 	return pending, confirmed, confirmedOK, nil
 }
@@ -2398,19 +2398,9 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 func declaredPendingFloor(nonces []uint64) uint64 {
 	var floor uint64
 	for _, n := range nonces {
-		if n+1 > floor {
-			floor = n + 1
-		}
+		floor = max(floor, n+1)
 	}
 	return floor
-}
-
-// raiseToFloor returns the larger of pending and floor.
-func raiseToFloor(pending, floor uint64) uint64 {
-	if floor > pending {
-		return floor
-	}
-	return pending
 }
 
 // getNoncesRPC fetches the pending account nonce from the primary RPC, plus the confirmed
