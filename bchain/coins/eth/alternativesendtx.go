@@ -341,6 +341,19 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 
 	if p.mempool != nil {
 		p.mempool.AddTransactionToMempool(txid)
+		// A concurrent higher-generation send for this same (from, nonce) can run its
+		// evictReplacedByNonce during the AddTransactionToMempool round-trip above, deleting txid
+		// from BOTH the provider cache and the wrapped mempool; the add then re-inserts it into the
+		// wrapped mempool only. reconcileMempoolTxs walks only the provider cache (the source of
+		// truth), so that orphan would linger as "Unconfirmed" until the 10-minute sweep (#1573). If
+		// txid is no longer cached, undo the add. The lock covers only the map read, never a network
+		// call, so it cannot serialize backend RPCs.
+		p.mempoolTxsMux.Lock()
+		_, stillCached := p.mempoolTxs[txid]
+		p.mempoolTxsMux.Unlock()
+		if !stillCached {
+			p.mempool.RemoveTransactionFromMempool(txid)
+		}
 	}
 
 	return txid, nil
