@@ -95,12 +95,8 @@ type Configuration struct {
 	AddressContractsCacheMaxBytes     int64  `json:"address_contracts_cache_max_bytes,omitempty"`
 	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
 	AddressAliases                    bool   `json:"address_aliases,omitempty"`
-	// EnsRegistrars lists the contract addresses trusted to emit ENS
-	// NameRegistered events that become address aliases. Absent or empty means
-	// trust none (no ENS aliases are recorded); a list of addresses restricts to
-	// those emitters (e.g. the mainnet ENS ETHRegistrarController); the special
-	// entry "*" accepts any emitter, restoring the legacy accept-any behavior for
-	// a chain with a different, self-hosted name service.
+	// EnsRegistrars are the contracts trusted to emit ENS NameRegistered events.
+	// Absent/empty trusts none; "*" accepts any emitter (see SetEnsRegistrars).
 	EnsRegistrars                   []string `json:"ens_registrars,omitempty"`
 	MempoolTxTimeoutHours           int      `json:"mempoolTxTimeoutHours"`
 	MempoolTxTimeout                string   `json:"mempoolTxTimeout,omitempty"`
@@ -290,8 +286,6 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
 	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
 	parser.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
-	// Trust none by default: absent/empty records no ENS aliases, an address list
-	// restricts to those emitters, and ["*"] accepts any (see EnsRegistrars).
 	parser.SetEnsRegistrars(c.EnsRegistrars)
 	s.Parser = parser
 	if c.RPCTimeout <= 0 {

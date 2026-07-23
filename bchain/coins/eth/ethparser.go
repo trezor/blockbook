@@ -122,14 +122,11 @@ func (p *EthereumParser) SetEnsSuffix(suffix string) {
 	p.EnsSuffix = suffix
 }
 
-// ensRegistrarWildcard, when present in the trusted set, disables the emitter
-// check so any contract's NameRegistered event is accepted (legacy behavior,
-// opt-in for chains with a different name service).
+// ensRegistrarWildcard in the trusted set disables the emitter check (accept any).
 const ensRegistrarWildcard = "*"
 
-// normalizeEnsRegistrar lower-cases an address and ensures the 0x prefix so it
-// can be compared directly against the (lower-cased, 0x-prefixed) address field
-// returned by eth_getLogs. The wildcard token is passed through unchanged.
+// normalizeEnsRegistrar lower-cases and 0x-prefixes an address to match
+// eth_getLogs output; the wildcard token passes through unchanged.
 func normalizeEnsRegistrar(addr string) string {
 	a := strings.ToLower(strings.TrimSpace(addr))
 	if a == "" || a == ensRegistrarWildcard {
@@ -152,10 +149,8 @@ func ensRegistrarSet(addrs []string) map[string]struct{} {
 	return m
 }
 
-// SetEnsRegistrars replaces the set of contract addresses trusted to emit
-// NameRegistered events. An empty (or nil) list means trust none - no ENS
-// aliases are recorded. The special entry "*" accepts any emitter, restoring
-// the legacy behavior for chains with a different name service.
+// SetEnsRegistrars sets the trusted NameRegistered emitters: empty/nil trusts
+// none (records nothing), "*" accepts any emitter.
 func (p *EthereumParser) SetEnsRegistrars(addrs []string) {
 	p.EnsRegistrars = ensRegistrarSet(addrs)
 }

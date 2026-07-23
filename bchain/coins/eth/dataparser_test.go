@@ -586,9 +586,8 @@ func Test_getEnsRecord(t *testing.T) {
 			want: nil,
 		},
 		{
-			// Security: a valid NameRegistered payload emitted by an untrusted
-			// contract must NOT be turned into an alias (ENS alias spoofing).
-			name: "forged emitter rejected",
+			// A valid payload from an untrusted emitter must not become an alias.
+			name: "untrusted emitter rejected",
 			log: rpcLogWithTxHash{
 				RpcLog: bchain.RpcLog{
 					Address: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
@@ -603,8 +602,7 @@ func Test_getEnsRecord(t *testing.T) {
 			want: nil,
 		},
 		{
-			// An empty trusted set means trust none: even a well-formed event
-			// records nothing.
+			// Empty set trusts none: even a well-formed event records nothing.
 			name: "empty registrar set records nothing",
 			log: rpcLogWithTxHash{
 				RpcLog: bchain.RpcLog{
@@ -638,8 +636,7 @@ func Test_getEnsRecord(t *testing.T) {
 			want:       &bchain.AddressAliasRecord{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"},
 		},
 		{
-			// Security: a name carrying a control character (here a newline, 0x0a)
-			// must be rejected so it cannot spoof or corrupt the displayed alias.
+			// A name with a control character (newline 0x0a) must be rejected.
 			name: "control character in name rejected",
 			log: rpcLogWithTxHash{
 				RpcLog: bchain.RpcLog{
@@ -655,9 +652,8 @@ func Test_getEnsRecord(t *testing.T) {
 			want: nil,
 		},
 		{
-			// Newer ETHRegistrarController: 6-argument event (topic0 0x69e37f15…)
-			// with an extra baseCost/premium word, so the name offset is 0x80 and
-			// the length word sits one slot later than the old layout.
+			// Newer controller 6-arg event (topic0 0x69e37f15…): extra baseCost/premium
+			// word shifts the name offset to 0x80.
 			name: "newer controller 6-arg event",
 			log: rpcLogWithTxHash{
 				RpcLog: bchain.RpcLog{
@@ -678,8 +674,7 @@ func Test_getEnsRecord(t *testing.T) {
 			want: &bchain.AddressAliasRecord{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"},
 		},
 	}
-	// Cases with a nil registrars field default to trusting the mainnet ENS
-	// ETHRegistrarController versions used as emitters in the fixtures above.
+	// Default trusted set for cases with a nil registrars field.
 	trusted := ensRegistrarSet([]string{
 		"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5",
 		"0x253553366da8546fc250f225fe3d25d0c782303b",
