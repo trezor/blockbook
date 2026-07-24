@@ -49,21 +49,10 @@ type oneInchFeeFeesResult struct {
 	Instant oneInchFeeFeeResult `json:"instant"`
 }
 
-type oneInchFeeParams struct {
-	URL           string `json:"url"`
-	PeriodSeconds int    `json:"periodSeconds"`
-}
-
 type oneInchFeeProvider struct {
 	*alternativeFeeProvider
-	params oneInchFeeParams
+	params feeProviderParams
 	apiKey string
-}
-
-const oneInchFeeStalePeriods = 30
-
-func oneInchFeeStaleDuration(periodSeconds int) time.Duration {
-	return time.Duration(periodSeconds*oneInchFeeStalePeriods) * time.Second
 }
 
 // NewOneInchFeesProvider initializes https://api.1inch.dev provider
@@ -73,7 +62,7 @@ func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *com
 	if err != nil {
 		return nil, err
 	}
-	if p.params.URL == "" || p.params.PeriodSeconds == 0 {
+	if p.params.URL == "" || p.params.PeriodSeconds <= 0 {
 		return nil, errors.New("NewOneInchFeesProvider: missing config parameters 'url' or 'periodSeconds'.")
 	}
 	p.apiKey = os.Getenv("ONE_INCH_API_KEY")
@@ -81,7 +70,7 @@ func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *com
 		return nil, errors.New("NewOneInchFeesProvider: missing ONE_INCH_API_KEY env variable.")
 	}
 	p.chain = chain
-	p.staleSyncDuration = oneInchFeeStaleDuration(p.params.PeriodSeconds)
+	p.staleSyncDuration = feeStaleDuration(p.params.PeriodSeconds, p.params.StaleSeconds)
 	go p.FeeDownloader()
 	return p, nil
 }
@@ -142,7 +131,7 @@ func (p *oneInchFeeProvider) getData(res interface{}) error {
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", " Bearer "+p.apiKey)
-	httpRes, err := http.DefaultClient.Do(httpReq)
+	httpRes, err := feeHTTPClient.Do(httpReq)
 	if httpRes != nil {
 		defer httpRes.Body.Close()
 	}

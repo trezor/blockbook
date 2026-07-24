@@ -70,7 +70,7 @@
                 "address_aliases": true,
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "1inch",
-                "alternative_estimate_fee_params": "{\"url\": \"https://api.1inch.dev/gas-price/v1.5/1\", \"periodSeconds\": 60}",
+                "alternative_estimate_fee_params": "{\"url\": \"https://api.1inch.dev/gas-price/v1.5/1\", \"periodSeconds\": 10}",
                 "mempoolTxTimeoutHours": 48,
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,

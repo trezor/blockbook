@@ -726,14 +726,14 @@ panels:
         legend: balance point (50%)
   fees.alt_fee_provider_cache_age:
     title: Alternative fee provider cache age
-    description: 'Age of the cached provider fees (time() - last successful refresh), per provider. The pull path keeps serving the cache until it crosses the provider''s stale window, after which estimateFee falls back to on-chain (visible as onchain_fallback in the fee-source panel). Both Infura and 1inch use a 30x stale window (e.g. 30 minutes for a 60s poll); the dashed line marks this default cutoff, so adjust it if a coin polls with a different period. A sawtooth that resets each poll is healthy; a line climbing past the cutoff is a wedged provider.'
+    description: 'Age of the cached provider fees (time() - last successful refresh), per provider. The pull path keeps serving the cache until it crosses the provider''s stale window, after which estimateFee falls back to on-chain (visible as onchain_fallback in the fee-source panel). Both Infura and 1inch use a default stale window of 600s (10 minutes), configurable per coin via staleSeconds and independent of the poll cadence; the dashed line marks this default cutoff, so adjust it if a coin sets a different staleSeconds. A sawtooth that resets each poll is healthy; a line climbing past the cutoff is a wedged provider.'
     queries:
       age:
         promql: (time() - {{name:alternative_fee_provider_last_sync_timestamp_seconds}}{job="blockbook", coin="$coin"})
         legend: '{{coin}} - {{instance}} - {{provider}}'
       cutoff:
-        promql: vector(1800)
-        legend: default stale cutoff (30x 60s = 30m)
+        promql: vector(600)
+        legend: default stale cutoff (600s = 10m)
   fees.eip1559_fee_source:
     title: EIP-1559 fee source (served estimates/s)
     description: 'Where each served estimate came from, at the serve boundary: provider = alternative provider (Infura/1inch) cache hit; onchain_fallback = provider configured but its cache was stale/unready, so eth_feeHistory was used; onchain = no provider configured. Healthy state is provider dominating on provider-backed coins; a burst of onchain_fallback at startup is cold-cache warmup, not an incident (the cache-age panel disambiguates). Sustained onchain_fallback means the provider is wedged.'
