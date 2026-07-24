@@ -42,6 +42,19 @@ type alternativeFeeProviderInterface interface {
 	GetEip1559Fees() (*bchain.Eip1559Fees, error)
 }
 
+// defaultFeeStaleSeconds is the cached-estimate stale window (10 minutes) used
+// by the EVM alternative fee providers when the config omits "staleSeconds".
+const defaultFeeStaleSeconds = 600
+
+// feeStaleDuration returns the configured stale window, falling back to the
+// 10-minute default when staleSeconds is unset or non-positive.
+func feeStaleDuration(staleSeconds int) time.Duration {
+	if staleSeconds <= 0 {
+		staleSeconds = defaultFeeStaleSeconds
+	}
+	return time.Duration(staleSeconds) * time.Second
+}
+
 func (p *alternativeFeeProvider) GetEip1559Fees() (*bchain.Eip1559Fees, error) {
 	p.mux.Lock()
 	defer p.mux.Unlock()

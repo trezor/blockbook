@@ -52,18 +52,17 @@ type oneInchFeeFeesResult struct {
 type oneInchFeeParams struct {
 	URL           string `json:"url"`
 	PeriodSeconds int    `json:"periodSeconds"`
+	// StaleSeconds is how long a cached estimate stays usable after the last
+	// successful refresh before it is considered stale (falls back to node
+	// estimation). It is independent of the poll cadence. Optional; defaults to
+	// defaultFeeStaleSeconds when unset.
+	StaleSeconds int `json:"staleSeconds"`
 }
 
 type oneInchFeeProvider struct {
 	*alternativeFeeProvider
 	params oneInchFeeParams
 	apiKey string
-}
-
-const oneInchFeeStalePeriods = 30
-
-func oneInchFeeStaleDuration(periodSeconds int) time.Duration {
-	return time.Duration(periodSeconds*oneInchFeeStalePeriods) * time.Second
 }
 
 // NewOneInchFeesProvider initializes https://api.1inch.dev provider
@@ -81,7 +80,7 @@ func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *com
 		return nil, errors.New("NewOneInchFeesProvider: missing ONE_INCH_API_KEY env variable.")
 	}
 	p.chain = chain
-	p.staleSyncDuration = oneInchFeeStaleDuration(p.params.PeriodSeconds)
+	p.staleSyncDuration = feeStaleDuration(p.params.StaleSeconds)
 	go p.FeeDownloader()
 	return p, nil
 }

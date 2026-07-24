@@ -78,6 +78,11 @@ type infuraFeesResult struct {
 type infuraFeeParams struct {
 	URL           string `json:"url"`
 	PeriodSeconds int    `json:"periodSeconds"`
+	// StaleSeconds is how long a cached estimate stays usable after the last
+	// successful refresh before it is considered stale (falls back to node
+	// estimation). It is independent of the poll cadence. Optional; defaults to
+	// defaultFeeStaleSeconds when unset.
+	StaleSeconds int `json:"staleSeconds"`
 }
 
 type infuraFeeProvider struct {
@@ -85,8 +90,6 @@ type infuraFeeProvider struct {
 	params infuraFeeParams
 	apiKey string
 }
-
-const infuraFeeStalePeriods = 30
 
 // NewInfuraFeesProvider initializes https://gas.api.infura.io provider
 func NewInfuraFeesProvider(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
@@ -104,15 +107,11 @@ func NewInfuraFeesProvider(chain bchain.BlockChain, params string, metrics *comm
 	}
 	p.params.URL = strings.Replace(p.params.URL, "${api_key}", p.apiKey, -1)
 	p.chain = chain
-	// Keep cached Infura fees through throttling bursts.
-	// Current archive configs poll every 60s, which gives a 30-minute window.
-	p.staleSyncDuration = infuraFeeStaleDuration(p.params.PeriodSeconds)
+	// Keep cached Infura fees through throttling bursts for the configured stale
+	// window (defaults to 10 minutes), independent of the poll cadence.
+	p.staleSyncDuration = feeStaleDuration(p.params.StaleSeconds)
 	go p.FeeDownloader()
 	return p, nil
-}
-
-func infuraFeeStaleDuration(periodSeconds int) time.Duration {
-	return time.Duration(periodSeconds*infuraFeeStalePeriods) * time.Second
 }
 
 func (p *infuraFeeProvider) FeeDownloader() {
