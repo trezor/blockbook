@@ -103,8 +103,8 @@ Good examples of coin configuration are
           * Tron-specific endpoint configuration is documented in [Tron Config](/docs/tron-config.md).
           * Infura alternative EIP-1559 fee provider configuration:
             * `alternative_estimate_fee` – Set to `infura` to use Infura Gas API fee suggestions instead of native node fee estimation.
-            * `alternative_estimate_fee_params` – JSON string with `url` and `periodSeconds`. `periodSeconds` controls how often Blockbook polls Infura.
-              Cached Infura fees remain usable for 30 failed polling periods, so `periodSeconds: 60` keeps the last successful fees for up to 30 minutes before native fallback.
+            * `alternative_estimate_fee_params` – JSON string with `url`, `periodSeconds` and optional `staleSeconds`. `periodSeconds` controls how often Blockbook polls the provider.
+              `staleSeconds` is how long the last successfully fetched fees stay usable before native fallback, independent of the poll cadence; it defaults to 600 (10 minutes) when omitted.
           * Ethereum mempool timeout configuration:
             * `mempoolTxTimeoutHours` – Legacy Blockbook-side EVM mempool retention in whole hours. It is used when `mempoolTxTimeout` is not set and no alternative send transaction provider is enabled.
             * `mempoolTxTimeout` – Optional Blockbook-side EVM mempool retention as a Go duration string such as `"10m"`; `"0s"` preserves the legacy zero-retention setting. If omitted and an alternative send transaction provider is enabled, Blockbook uses **10 minutes** instead of the legacy hour-based value.

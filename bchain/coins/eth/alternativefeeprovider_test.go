@@ -7,8 +7,8 @@ import "testing"
 // var is missing, initialization fails fast instead of silently reverting to
 // default fee estimation. An unset provider stays a no-op.
 func TestInitAlternativeFeeProviderFailFast(t *testing.T) {
-	const infuraParams = `{"url":"https://gas.api.infura.io/v3/${api_key}/networks/1/suggestedGasFees","periodSeconds":60}`
-	const oneInchParams = `{"url":"https://api.1inch.dev/gas-price/v1.5/1","periodSeconds":60}`
+	const infuraParams = `{"url":"https://gas.api.infura.io/v3/${api_key}/networks/1/suggestedGasFees","periodSeconds":10}`
+	const oneInchParams = `{"url":"https://api.1inch.dev/gas-price/v1.5/1","periodSeconds":10}`
 
 	tests := []struct {
 		name        string
