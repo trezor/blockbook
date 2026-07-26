@@ -4,6 +4,7 @@ package eth
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	stdErrors "errors"
 	"testing"
@@ -11,7 +12,35 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/trezor/blockbook/bchain"
+	"golang.org/x/crypto/sha3"
 )
+
+func keccak256Selector(sig string) string {
+	h := sha3.NewLegacyKeccak256()
+	h.Write([]byte(sig))
+	return "0x" + hex.EncodeToString(h.Sum(nil)[:4])
+}
+
+// TestENSFunctionSelectors verifies that all ENS function selector constants
+// match the keccak256 hash of their documented Solidity signatures. A
+// mismatch means eth_call will revert against any real backend.
+func TestENSFunctionSelectors(t *testing.T) {
+	tests := []struct {
+		constant string
+		got      string
+		sig      string
+	}{
+		{"ENSResolverFunctionSelector", ENSResolverFunctionSelector, "resolver(bytes32)"},
+		{"ENSAddrFunctionSelector", ENSAddrFunctionSelector, "addr(bytes32)"},
+		{"ENSExpirationFunctionSelector", ENSExpirationFunctionSelector, "nameExpires(uint256)"},
+	}
+	for _, tc := range tests {
+		want := keccak256Selector(tc.sig)
+		if tc.got != want {
+			t.Errorf("%s = %q, want keccak256(%q)[:4] = %q", tc.constant, tc.got, tc.sig, want)
+		}
+	}
+}
 
 // recoveryStub is a method-aware bchain.EVMRPCClient fake for exercising the pruned-index
 // recovery path in recoverMinedTransaction / GetTransaction. It serves canned JSON per
