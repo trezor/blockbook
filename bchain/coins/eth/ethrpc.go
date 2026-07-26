@@ -69,8 +69,8 @@ const (
 	ENSResolverFunctionSelector = "0x0178b8bf"
 	// ENSAddrFunctionSelector is the function selector for the resolver's addr(bytes32) method
 	ENSAddrFunctionSelector = "0x3b3b57de"
-	// ENSExpirationFunctionSelector is the function selector for ENS registry's nameExpires(bytes32) method
-	ENSExpirationFunctionSelector = "0x1aa2e643"
+	// ENSExpirationFunctionSelector is the function selector for ENS Base Registrar's nameExpires(uint256) method
+	ENSExpirationFunctionSelector = "0xd6e4fa86"
 	// ENSBaseRegistrarAddress is needed for checking .eth domain expiration
 	ENSBaseRegistrarAddress = "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
 )
@@ -2541,19 +2541,31 @@ func (b *EthereumRPC) CheckENSExpiration(name string) (bool, error) {
 
 	result, err := b.callRpcStringResult("eth_call", callData, "latest")
 	if err != nil {
-		glog.Errorf("CheckENSExpiration: RPC call failed for %s: %v", name, err)
-		return false, err
+		// The eth_call can revert if the selector is wrong, the contract was
+		// upgraded with a different storage layout, or the backend lacks the
+		// state. Skip expiration and let ResolveENS decide the name's fate.
+		glog.Warningf("CheckENSExpiration: RPC call failed for %s, skipping expiration: %v", name, err)
+		return false, nil
 	}
 
 	// Parse the expiration timestamp from the result
 	if len(result) < 2 || result[:2] != "0x" {
-		return false, errors.New("invalid hex result")
+		glog.Warningf("CheckENSExpiration: invalid hex result for %s, skipping expiration: %s", name, result)
+		return false, nil
 	}
 
 	expiration, err := hexutil.DecodeBig(result)
 	if err != nil {
-		glog.Errorf("CheckENSExpiration: Failed to decode expiration for %s: %v", name, err)
-		return false, err
+		glog.Warningf("CheckENSExpiration: Failed to decode expiration for %s, skipping expiration: %v", name, err)
+		return false, nil
+	}
+
+	// If nameExpires returns 0 the label is not registered on the Base
+	// Registrar (unknown token). Skip expiration and let ResolveENS decide the
+	// name's fate rather than treating the zero as "expired".
+	if expiration.Sign() == 0 {
+		glog.Warningf("CheckENSExpiration: %s has zero expiration, skipping check", name)
+		return false, nil
 	}
 
 	// Check if expired (current timestamp > expiration timestamp)
