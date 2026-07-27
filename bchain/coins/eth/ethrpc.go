@@ -2541,9 +2541,9 @@ func (b *EthereumRPC) CheckENSExpiration(name string) (bool, error) {
 
 	result, err := b.callRpcStringResult("eth_call", callData, "latest")
 	if err != nil {
-		// The eth_call can revert if the selector is wrong, the contract was
-		// upgraded with a different storage layout, or the backend lacks the
-		// state. Skip expiration and let ResolveENS decide the name's fate.
+		// A revert or missing state is expected for unregistered names and on
+		// non-archive backends. Skip expiration and let ResolveENS decide the
+		// name's fate.
 		glog.Warningf("CheckENSExpiration: RPC call failed for %s, skipping expiration: %v", name, err)
 		return false, nil
 	}
@@ -2554,11 +2554,11 @@ func (b *EthereumRPC) CheckENSExpiration(name string) (bool, error) {
 		return false, nil
 	}
 
-	expiration, err := hexutil.DecodeBig(result)
-	if err != nil {
-		glog.Warningf("CheckENSExpiration: Failed to decode expiration for %s, skipping expiration: %v", name, err)
-		return false, nil
-	}
+	// nameExpires returns an ABI-encoded uint256: a 32-byte word, big-endian,
+	// left-padded with zeros. Parse it as raw bytes rather than as a hex
+	// quantity — hexutil.DecodeBig rejects the leading zeros of a padded word
+	// and would fail to decode every real result.
+	expiration := new(big.Int).SetBytes(ethcommon.FromHex(result))
 
 	// If nameExpires returns 0 the label is not registered on the Base
 	// Registrar (unknown token). Skip expiration and let ResolveENS decide the
