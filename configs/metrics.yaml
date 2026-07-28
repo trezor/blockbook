@@ -252,7 +252,7 @@ metrics:
     type: histogram_vec
     help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry at the moment it leaves the cache, labeled by the removing action (mined, nonce_superseded, provider_missing, timeout, rbf_replaced or sync_removed) - reveals how long unconfirmed txs actually survive before each exit reason fires
     labels: [action]
-    buckets: [30, 60, 120, 180, 300, 450, 600, 900, 1200, 1800, 3600]
+    buckets: [1, 2, 5, 10, 20, 30, 45, 60, 90, 120, 180, 240, 300, 360, 420]
   eth_alternative_mempool_cache_size:
     name: blockbook_eth_alternative_mempool_cache_size
     type: gauge
@@ -278,6 +278,20 @@ metrics:
     help: Wall-clock duration of an eth_sendRawTransaction call to an alternative provider, labeled by provider_host and status. Private relays sit on the wallet's critical path, so this is the user-visible cost of the alternative send path; errors piling up in the buckets at the configured <COIN>_RPC_TIMEOUT are timeouts rather than rejections
     labels: [provider_host, status]
     buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20, 30]
+  eth_alternative_mempool_oldest_age_seconds:
+    name: blockbook_eth_alternative_mempool_oldest_age_seconds
+    type: gauge
+    help: Age in seconds of the oldest transaction still held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle (0 when the cache is empty). The residence histogram records an entry's age only when it leaves, so a tx that is stuck but not yet evicted is invisible until it times out; this gauge exposes it live. A value climbing toward and pinning near the 5-min cache timeout at non-zero cache depth means cached private txs are timing out rather than mining or being superseded - the underpriced / hanging-transaction signal
+  eth_alternative_send_accepted_but_uncached_total:
+    name: blockbook_eth_alternative_send_accepted_but_uncached_total
+    type: counter_vec
+    help: Private sends a relay ACCEPTED but whose post-send fetch-back (eth_getTransactionByHash) failed to surface, so the transaction was cached in neither the provider cache nor the wrapped mempool, labeled by reason - not_found (relay returned null) or error (relay call failed). Such a tx is not exposed as pending and does not raise the pending-nonce floor, so a subsequent send can reuse its nonce; a sustained rate is the precursor to a nonce-reuse / hanging-transaction incident and usually means the relay node that accepted the send had not yet indexed it
+    labels: [reason]
+  eth_alternative_pending_floor_raised_total:
+    name: blockbook_eth_alternative_pending_floor_raised_total
+    type: counter_vec
+    help: eth_getTransactionCount answers where raiseToPendingFloor lifted the reported pending nonce above the backend's own answer because the alternative cache still holds a higher-nonce private tx for the sender, labeled by source - provider (the relay's own pending count had already dropped the still-cached tx, i.e. past its ~1-min pending window) or primary (the fallback primary RPC never knew the private tx). A sustained rate means a sender's next nonce is being pinned above a private nonce the relay may already have abandoned; if that tx is underpriced and never mines, the next send queues behind the dead nonce until the cache timeout clears it
+    labels: [source]
   eth_alternative_nonce_requests_total:
     name: blockbook_eth_alternative_nonce_requests_total
     type: counter_vec

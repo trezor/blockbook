@@ -415,10 +415,14 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 	// a failed fetch-back is not just a lost cache entry: the transaction is then never surfaced as
 	// pending, so the wallet that just broadcast it sees nothing - count both outcomes
 	if err != nil {
+		// The relay accepted the send but the fetch-back failed, so nothing is cached or indexed and
+		// the tx is exposed nowhere. Counting it makes the nonce-reuse precursor observable (#1638 review).
+		p.observeAcceptedButUncached("error")
 		glog.Errorf("eth_getTransactionByHash from alternative providers returned error for txid %s: %v", txid, err)
 		p.observeMempoolReconciliation("fetchback_error")
 		return txid, err
 	} else if !found {
+		p.observeAcceptedButUncached("not_found")
 		glog.Errorf("eth_getTransactionByHash from alternative providers did not find txid %s", txid)
 		p.observeMempoolReconciliation("fetchback_missing")
 		return txid, bchain.ErrTxNotFound
@@ -688,8 +692,15 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 
 	p.mempoolTxsMux.Lock()
 	size := len(p.mempoolTxs)
+	var oldest uint32
+	for _, st := range p.mempoolTxs {
+		if oldest == 0 || st.time < oldest {
+			oldest = st.time
+		}
+	}
 	p.mempoolTxsMux.Unlock()
 	p.setMempoolCacheSize(size)
+	p.setMempoolOldestAge(oldest)
 }
 
 func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) {
@@ -735,6 +746,32 @@ func (p *AlternativeSendTxProvider) setMempoolCacheSize(size int) {
 		return
 	}
 	p.metrics.EthAlternativeMempoolCacheSize.Set(float64(size))
+}
+
+// setMempoolOldestAge records how long the oldest cached entry has lived (seconds since broadcast),
+// or 0 when the cache is empty. Sampled once per reconcile cycle alongside the cache size. A value
+// climbing toward the cache timeout at non-zero depth is the live stuck-tx signal the exit-only
+// residence histogram cannot show until an entry finally times out.
+func (p *AlternativeSendTxProvider) setMempoolOldestAge(oldestUnix uint32) {
+	if p.metrics == nil || p.metrics.EthAlternativeMempoolOldestAge == nil {
+		return
+	}
+	var age float64
+	if oldestUnix != 0 {
+		if a := time.Since(time.Unix(int64(oldestUnix), 0)).Seconds(); a > 0 {
+			age = a
+		}
+	}
+	p.metrics.EthAlternativeMempoolOldestAge.Set(age)
+}
+
+// observeAcceptedButUncached counts a relay-accepted private send whose fetch-back failed to surface
+// it, so it was cached and indexed nowhere - the precursor to a nonce-reuse / hanging-tx incident.
+func (p *AlternativeSendTxProvider) observeAcceptedButUncached(reason string) {
+	if p.metrics == nil || p.metrics.EthAlternativeSendAcceptedUncached == nil {
+		return
+	}
+	p.metrics.EthAlternativeSendAcceptedUncached.With(common.Labels{"reason": reason}).Inc()
 }
 
 // transactionSupersededByNonce reports whether a different transaction has already consumed the

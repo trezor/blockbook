@@ -2136,6 +2136,18 @@ func (b *EthereumRPC) observeAlternativeNonceRequest(result string) {
 	b.metrics.EthAlternativeNonceRequests.With(common.Labels{"result": result}).Inc()
 }
 
+// observePendingFloorRaised records that raiseToPendingFloor lifted a getTransactionCount answer above
+// the backend's own pending nonce because the cache still holds a higher-nonce private tx, labeled by
+// source: provider (the relay's own pending count had already dropped the still-cached tx) or primary
+// (the fallback primary RPC never knew the private tx). A sustained rate is the precursor to the
+// queue-behind-a-dead-nonce hang (#1638 review).
+func (b *EthereumRPC) observePendingFloorRaised(source string) {
+	if b.metrics == nil || b.metrics.EthAlternativePendingFloorRaised == nil {
+		return
+	}
+	b.metrics.EthAlternativePendingFloorRaised.With(common.Labels{"source": source}).Inc()
+}
+
 // eip1559BaseFeeMultiplier is the headroom applied to the projected base fee when deriving
 // maxFeePerGas for the on-chain EIP-1559 estimate (maxFeePerGas = multiplier*baseFee + tip).
 // 2x is the EIP-1559-standard buffer: it keeps a transaction mineable across ~6 consecutive full
@@ -2393,7 +2405,11 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 			// view: Blink-style relays stop counting a still-pending tx at the pending tag
 			// while Blockbook keeps exposing it until the cache timeout (see
 			// reconcileMempoolTxs).
-			return b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), confirmed, confirmedOK, nil
+			raised := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+			if raised > pending {
+				b.observePendingFloorRaised("provider")
+			}
+			return raised, confirmed, confirmedOK, nil
 		}
 		b.observeAlternativeNonceRequest("error")
 		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
@@ -2411,7 +2427,11 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// primary answer below the floor would contradict the pending tx Blockbook still
 		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
 		// the hot path.
-		pending = b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+		raised := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+		if raised > pending {
+			b.observePendingFloorRaised("primary")
+		}
+		pending = raised
 	}
 	return pending, confirmed, confirmedOK, nil
 }

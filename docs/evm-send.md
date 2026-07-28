@@ -96,3 +96,20 @@ Prometheus counters for the cache lifecycle:
   each eviction reason fired (e.g. `provider_missing` clustering near the timeout rather than at
   ~1–2 min would flag a premature-eviction regression).
 - `blockbook_eth_alternative_mempool_cache_size` — current cache depth.
+
+Signals that reveal *hanging* private transactions (a tx stuck Unconfirmed, or a nonce pinned above
+a dead on-chain gap):
+
+- `blockbook_eth_alternative_mempool_oldest_age_seconds` — age of the oldest still-cached entry,
+  sampled per reconcile cycle. The residence histogram only records an age once an entry leaves, so a
+  stuck tx is invisible until it times out; this gauge exposes it live. Climbing toward the cache
+  timeout at non-zero depth means cached txs are dying underpriced rather than mining.
+- `blockbook_eth_alternative_send_accepted_but_uncached_total{reason}` — a relay-accepted send whose
+  fetch-back never surfaced (`not_found`/`error`), so it is cached and indexed nowhere and does not
+  raise the pending-nonce floor. A subsequent send can then reuse its nonce, so a sustained rate is
+  the precursor to a nonce-reuse incident.
+- `blockbook_eth_alternative_pending_floor_raised_total{source}` — `raiseToPendingFloor` lifted the
+  reported pending nonce above the backend's own answer (`provider`: the relay had already dropped
+  the still-cached tx past its ~1-min pending window; `primary`: the fallback RPC never knew it). A
+  sustained rate is the precursor to a wallet queueing its next send behind a nonce the relay has
+  abandoned.
