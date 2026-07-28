@@ -11,4 +11,5 @@
 * [API (Tron specifics)](/docs/api-tron.md) – Tron-specific behavior and data extensions for API V2
 * [Sync](/docs/sync.md) – Sync-loop architecture and the `missingBlockRetry` troubleshooting knobs
 * [EVM send](/docs/evm-send.md) – EVM transaction broadcast through the private send-tx relay and its pending-transaction cache
+* [EVM pending-transaction stores](/docs/evm-send-mempools.md) – Map of the two EVM pending stores: the Blockbook mempool and the private/MEV cache
 * [Testing](/docs/testing.md) – Description of tests used during Blockbook development
