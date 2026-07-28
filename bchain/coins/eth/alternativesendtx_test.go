@@ -1394,6 +1394,192 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsStaleFetchBack(t 
 	}
 }
 
+// TestAlternativeSendTxProviderSyncRemovalIsMetered verifies the removal path carrying no reconcile
+// decision - block sync or the read path, via EthereumRPC.removeTransactionFromMempool - records its
+// exit. evictMempoolTx meters only the goroutine whose delete removed the entry, and block sync
+// almost always beats the next reconcile probe, so this exit was counted nowhere.
+func TestAlternativeSendTxProviderSyncRemovalIsMetered(t *testing.T) {
+	added := uint32(time.Now().Add(-3 * time.Minute).Unix())
+	newProvider := func() *AlternativeSendTxProvider {
+		provider := &AlternativeSendTxProvider{
+			fetchMempoolTx:    true,
+			mempoolTxsTimeout: time.Hour,
+			mempoolTxs: map[string]storedTx{
+				testAlternativeTxID: {
+					tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x1"},
+					time: added,
+				},
+			},
+			metrics: newReconcileTestMetrics(),
+		}
+		provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+		return provider
+	}
+
+	t.Run("block sync removal is counted as sync_removed", func(t *testing.T) {
+		provider := newProvider()
+		if !provider.RemoveTransaction(testAlternativeTxID) {
+			t.Fatal("RemoveTransaction() = false, want true")
+		}
+		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "sync_removed"); got != 1 {
+			t.Errorf("sync_removed events = %v, want 1", got)
+		}
+		if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "sync_removed"); got != 1 {
+			t.Errorf("sync_removed residence samples = %d, want 1", got)
+		}
+		// a later reconcile off a stale snapshot must not re-count it
+		provider.evictMempoolTx("mined", testAlternativeTxID, added)
+		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 0 {
+			t.Errorf("mined events = %v, want 0 (entry already removed and metered)", got)
+		}
+	})
+
+	t.Run("a reconcile eviction is not also counted as sync_removed", func(t *testing.T) {
+		// removeMempoolTx deletes the entry, then the delegate re-enters RemoveTransaction, which must
+		// find nothing and meter nothing
+		provider := newProvider()
+		provider.evictMempoolTx("mined", testAlternativeTxID, added)
+		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 1 {
+			t.Errorf("mined events = %v, want 1", got)
+		}
+		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "sync_removed"); got != 0 {
+			t.Errorf("sync_removed events = %v, want 0 (reconcile exit must not be double-counted)", got)
+		}
+		if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "sync_removed"); got != 0 {
+			t.Errorf("sync_removed residence samples = %d, want 0", got)
+		}
+	})
+}
+
+// TestAlternativeSendTxProviderAcceptedSlotRetiresLateFetchBack verifies the acceptance-time
+// retirement survives a fetch-back that produces no cache entry: the relay ACK records the
+// (sender, nonce) slot, so a slower submission for that slot is dropped on arrival even though the
+// newer send left nothing cached to order it against (Blink drop mode, #1573).
+func TestAlternativeSendTxProviderAcceptedSlotRetiresLateFetchBack(t *testing.T) {
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	// getTransactionByHash surfaces the older submission A, sender+nonce 0x1
+	response := `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + testAlternativeTxID + `","from":"` + sender.Hex() + `","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`
+
+	newProvider := func(t *testing.T, slot nonceSlot, slotGen uint64) *AlternativeSendTxProvider {
+		t.Helper()
+		server := newAlternativeTxProviderTestServer(t, response)
+		provider := &AlternativeSendTxProvider{
+			urls:              []string{server.URL},
+			fetchMempoolTx:    true,
+			onlyAlternative:   true,
+			rpcTimeout:        time.Second,
+			mempoolTxsTimeout: time.Hour,
+			mempoolTxs:        map[string]storedTx{},
+			// a newer send was accepted for this slot but never produced a cache entry
+			acceptedSlots: map[nonceSlot]acceptedSlot{slot: {gen: slotGen, time: time.Now()}},
+		}
+		provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+		return provider
+	}
+
+	t.Run("drops a submission older than the accepted slot", func(t *testing.T) {
+		provider := newProvider(t, nonceSlot{addr: sender, nonce: 1}, 2)
+		if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 1); err != nil {
+			t.Fatalf("handleMempoolTransaction() error = %v", err)
+		}
+		if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+			t.Fatal("submission superseded by a newer accepted send was cached")
+		}
+	})
+
+	t.Run("caches the submission that owns the accepted slot", func(t *testing.T) {
+		// the slot generation is this submission's own - it must not retire itself
+		provider := newProvider(t, nonceSlot{addr: sender, nonce: 1}, 2)
+		if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 2); err != nil {
+			t.Fatalf("handleMempoolTransaction() error = %v", err)
+		}
+		if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
+			t.Fatal("submission owning the accepted slot was not cached")
+		}
+	})
+
+	t.Run("ignores an accepted slot for a different nonce", func(t *testing.T) {
+		provider := newProvider(t, nonceSlot{addr: sender, nonce: 2}, 2)
+		if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 1); err != nil {
+			t.Fatalf("handleMempoolTransaction() error = %v", err)
+		}
+		if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
+			t.Fatal("submission for an unrelated nonce slot was dropped")
+		}
+	})
+}
+
+// TestAlternativeSendTxProviderSendRecordsAcceptedSlot verifies SendRawTransaction records the
+// (sender, nonce) slot it filled even when the relay never surfaces the transaction.
+func TestAlternativeSendTxProviderSendRecordsAcceptedSlot(t *testing.T) {
+	rawTx, sender := signedTestTx(t) // nonce 1
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+	}
+	provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+
+	if _, err := provider.SendRawTransaction(rawTx); err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+
+	slot, found := provider.acceptedSlots[nonceSlot{addr: sender, nonce: 1}]
+	if !found {
+		t.Fatal("accepted (sender, nonce) slot was not recorded")
+	}
+	if slot.gen == 0 {
+		t.Error("accepted slot generation = 0, want the send generation")
+	}
+}
+
+// TestAlternativeSendTxProviderHandleMempoolTransactionUnorderedFetchBackSkipsItself verifies a
+// fetch-back of unknown send order (gen 0) skips itself when a generation-carrying entry holds the
+// nonce slot. evictReplacedByNonce protects that entry from a gen-0 keeper, so an asymmetric check
+// here left BOTH transactions cached for one slot.
+func TestAlternativeSendTxProviderHandleMempoolTransactionUnorderedFetchBackSkipsItself(t *testing.T) {
+	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	// getTransactionByHash surfaces A (testAlternativeTxID), same sender+nonce as the cached gen-2 B
+	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":{"hash":"`+testAlternativeTxID+`","from":"`+sender.Hex()+`","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs: map[string]storedTx{
+			testAlternativeSecondTxID: {
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeSecondTxID, From: sender.Hex(), AccountNonce: "0x1"},
+				time: uint32(time.Now().Unix()),
+				gen:  2,
+			},
+		},
+	}
+	provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+
+	// gen 0 - this submission's send order is unknown
+	if _, err := provider.handleMempoolTransaction(testAlternativeTxID, 0); err != nil {
+		t.Fatalf("handleMempoolTransaction() error = %v", err)
+	}
+
+	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+		t.Fatal("unordered fetch-back was cached alongside a generation-carrying entry for the same nonce slot")
+	}
+	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; !found {
+		t.Fatal("generation-carrying entry was evicted by an unordered fetch-back")
+	}
+	if len(provider.mempoolTxs) != 1 {
+		t.Fatalf("cached entries for one nonce slot = %d, want 1", len(provider.mempoolTxs))
+	}
+}
+
 // TestAlternativeSendTxProviderGetTransactionTimeoutCleansWrappedMempool verifies the read-path
 // staleness eviction routes through the removeTransactionFromMempool delegate (which clears the
 // wrapped Blockbook mempool's address index), not the cache-only RemoveTransaction. Before the fix

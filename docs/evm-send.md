@@ -87,8 +87,11 @@ Key invariants:
 Prometheus counters for the cache lifecycle:
 
 - `blockbook_eth_alternative_mempool_reconciliation_events_total{action}` — cache exits by reason
-  (`mined`, `nonce_superseded`, `provider_missing`, `timeout`, `rbf_replaced`, plus the kept
-  actions `skipped_fresh`, `provider_missing_pending`, `kept`, `provider_error`).
+  (`mined`, `nonce_superseded`, `provider_missing`, `timeout`, `rbf_replaced`, `sync_removed`, plus
+  the kept actions `skipped_fresh`, `provider_missing_pending`, `kept`, `provider_error`).
+  `sync_removed` covers the exits with no reconcile decision — block sync indexing the transaction's
+  block, or the read path finding it mined. Expect it to dominate and `mined` to be rare: block sync
+  clears a confirmed private tx well before the next reconcile probe would see it.
 - `blockbook_eth_alternative_mempool_tx_residence_seconds{action}` — how long an entry lived before
   each eviction reason fired (e.g. `provider_missing` clustering near the timeout rather than at
   ~1–2 min would flag a premature-eviction regression).

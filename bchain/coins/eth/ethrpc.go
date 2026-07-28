@@ -151,6 +151,15 @@ func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, er
 	return defaultAlternativeMempoolTxTimeout, nil
 }
 
+// mempoolRetentionInverted reports whether the alternative-provider cache is configured to outlive
+// the wrapped Blockbook mempool. Every cache exit clears the wrapped mempool too, but the mempool's
+// own timeout sweep is the one exit that does NOT clear the cache: inverted, that sweep drops a
+// private transaction's address index while the cache keeps serving its body as pending, and nothing
+// reconciles the two. Only an explicit timeout pair can invert it; the defaults cannot.
+func mempoolRetentionInverted(alternativeTimeout, mempoolTimeout time.Duration) bool {
+	return alternativeTimeout >= mempoolTimeout
+}
+
 // AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.
 func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
 	if c.AverageBlockTimeMs <= 0 {
@@ -738,6 +747,11 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
 		if b.alternativeSendTxProvider != nil {
+			// warned here, not in Validate: the effective mempool retention depends on the
+			// env-configured provider existing
+			if mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
+				glog.Warningf("alternativeMempoolTxTimeout=%s is not shorter than mempoolTxTimeout=%s: the wrapped mempool may drop a private transaction's address index while the provider cache still serves it as pending", b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout)
+			}
 			b.alternativeSendTxProvider.SetupMempool(b.Mempool, b.removeTransactionFromMempool)
 		}
 
