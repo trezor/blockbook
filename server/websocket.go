@@ -183,7 +183,6 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		addressSubscriptions:        make(map[string]map[*websocketChannel]*addressDetails),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
-		websocketLimiter:            newWebsocketConnectionLimiter(),
 		activeChannels:              make(map[*websocketChannel]struct{}),
 	}
 	s.upgrader = &websocket.Upgrader{
@@ -218,6 +217,9 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	s.trustPseudoIPv6 = clientIPCfg.trustPseudoIPv6
 	if clientIPCfg.trustPseudoIPv6 {
 		glog.Info("Cloudflare Pseudo-IPv4 mode enabled (", clientIPCfg.pseudoIPv6EnvName, "); CF-Connecting-IPv6 is honored as the client IP (requires Cloudflare \"Pseudo IPv4: Overwrite Headers\")")
+	}
+	if err := s.configureConnectionLimits(is.GetNetwork()); err != nil {
+		return nil, err
 	}
 	if err := s.configureMessageRateLimit(is.GetNetwork()); err != nil {
 		return nil, err
