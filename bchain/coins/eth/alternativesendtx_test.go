@@ -448,6 +448,10 @@ func newReconcileTestMetrics() *common.Metrics {
 			prometheus.HistogramOpts{Name: "test_alt_mempool_tx_residence_seconds", Buckets: []float64{30, 60, 120, 300, 600}}, []string{"action"}),
 		EthAlternativeMempoolCacheSize: prometheus.NewGauge(
 			prometheus.GaugeOpts{Name: "test_alt_mempool_cache_size"}),
+		EthAlternativeMempoolOldestAge: prometheus.NewGauge(
+			prometheus.GaugeOpts{Name: "test_alt_mempool_oldest_age_seconds"}),
+		EthAlternativeSendAcceptedUncached: prometheus.NewCounterVec(
+			prometheus.CounterOpts{Name: "test_alt_send_accepted_but_uncached_total"}, []string{"reason"}),
 	}
 }
 
@@ -478,6 +482,13 @@ func residenceSampleCount(t *testing.T, h *prometheus.HistogramVec, action strin
 func counterValue(t *testing.T, cv *prometheus.CounterVec, action string) float64 {
 	t.Helper()
 	return counterVecValue(t, cv, "action", action)
+}
+
+// labeledCounterValue reads the counter series carrying label==value (counterValue is fixed to
+// "action"); an alias of counterVecValue kept for the call sites this series added.
+func labeledCounterValue(t *testing.T, cv *prometheus.CounterVec, label, value string) float64 {
+	t.Helper()
+	return counterVecValue(t, cv, label, value)
 }
 
 // TestAlternativeSendTxProviderReconcileObservesMetrics asserts the reconcile flow feeds the two
@@ -1537,6 +1548,54 @@ func TestAlternativeSendTxProviderSendRecordsAcceptedSlot(t *testing.T) {
 	}
 	if slot.gen == 0 {
 		t.Error("accepted slot generation = 0, want the send generation")
+	}
+}
+
+// TestAlternativeSendTxProviderAcceptedButUncachedMetered verifies that a relay-accepted send whose
+// fetch-back never surfaces is counted under eth_alternative_send_accepted_but_uncached_total and
+// leaves the cache empty - the observable precursor to a nonce-reuse hang (#1638 review).
+func TestAlternativeSendTxProviderAcceptedButUncachedMetered(t *testing.T) {
+	rawTx, _ := signedTestTx(t)
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`, // accepted but never surfaced
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+	}
+	provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+
+	if _, err := provider.SendRawTransaction(rawTx); err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+
+	if got := counterVecValue(t, provider.metrics.EthAlternativeSendAcceptedUncached, "reason", "not_found"); got != 1 {
+		t.Errorf("accepted_but_uncached{reason=not_found} = %v, want 1", got)
+	}
+	if len(provider.mempoolTxs) != 0 {
+		t.Errorf("cache size = %d, want 0 (fetch-back missed, nothing cached)", len(provider.mempoolTxs))
+	}
+}
+
+// TestAlternativeSendTxProviderOldestAgeGauge verifies setMempoolOldestAge reports the age of the
+// oldest cached entry and zeroes on an empty cache - the live stuck-tx signal (#1638 review).
+func TestAlternativeSendTxProviderOldestAgeGauge(t *testing.T) {
+	provider := &AlternativeSendTxProvider{fetchMempoolTx: true, metrics: newReconcileTestMetrics()}
+
+	provider.setMempoolOldestAge(uint32(time.Now().Add(-120 * time.Second).Unix()))
+	if got := gaugeValue(t, provider.metrics.EthAlternativeMempoolOldestAge); got < 115 || got > 125 {
+		t.Errorf("oldest age gauge = %v, want ~120", got)
+	}
+
+	provider.setMempoolOldestAge(0) // empty cache
+	if got := gaugeValue(t, provider.metrics.EthAlternativeMempoolOldestAge); got != 0 {
+		t.Errorf("oldest age gauge on empty cache = %v, want 0", got)
 	}
 }
 
