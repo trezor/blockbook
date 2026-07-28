@@ -99,6 +99,50 @@ func TestConfigurationAlternativeMempoolTxTimeoutDuration(t *testing.T) {
 	}
 }
 
+// TestMempoolRetentionInverted covers the retention-order check: the provider cache must expire
+// before the wrapped mempool, whose timeout sweep is the only exit that does not clear the cache.
+func TestMempoolRetentionInverted(t *testing.T) {
+	tests := []struct {
+		name        string
+		alternative time.Duration
+		mempool     time.Duration
+		want        bool
+	}{
+		{
+			name:        "defaults are ordered correctly",
+			alternative: defaultAlternativeMempoolTxTimeout,
+			mempool:     defaultMempoolTxTimeoutWithAlternativeProvider,
+			want:        false,
+		},
+		{
+			name:        "cache outliving the mempool is inverted",
+			alternative: 30 * time.Minute,
+			mempool:     10 * time.Minute,
+			want:        true,
+		},
+		{
+			name:        "equal retentions are inverted",
+			alternative: 10 * time.Minute,
+			mempool:     10 * time.Minute,
+			want:        true,
+		},
+		{
+			name:        "a zero mempool retention is inverted",
+			alternative: 5 * time.Minute,
+			mempool:     0,
+			want:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mempoolRetentionInverted(tt.alternative, tt.mempool); got != tt.want {
+				t.Fatalf("mempoolRetentionInverted(%s, %s) = %v, want %v", tt.alternative, tt.mempool, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 	tests := []struct {
 		name   string
