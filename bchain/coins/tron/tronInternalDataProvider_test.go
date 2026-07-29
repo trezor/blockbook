@@ -70,6 +70,7 @@ func (m *MockTronHTTPClient) SnapshotRequests() ([]string, []interface{}) {
 
 func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
 	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() { bchain.ProcessInternalTransactions = false })
 
 	// fake transaction info returned from the Tron HTTP API
 	fake := []tronTxInfo{
@@ -129,10 +130,10 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		txs               []bchain.RpcTransaction
 		wantType          bchain.EthereumInternalTransactionType
 		wantTransfers     int
-		wantContracts     int
 		wantErrContains   string // error return from function
 		wantDataErrSubstr string // d.Error (EthereumInternalData.Error)
 		wantContract      string
+		wantContractAddrs []string // exact contract registry entries
 		wantFrom          string
 		wantTo            string
 		wantValue         int64
@@ -155,7 +156,7 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "SUCCESS"},
 				},
 			},
-			txs: []bchain.RpcTransaction{{Hash: "0xabcd1234"}},
+			txs: []bchain.RpcTransaction{{Hash: "0xabcd1234", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
 
 			wantType:      bchain.CALL,
 			wantTransfers: 1,
@@ -166,7 +167,50 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		},
 
 		{
-			name: "CREATE detected by internal note",
+			// regression for #1660: java-tron fills contract_address for ordinary
+			// TriggerSmartContract calls; they must not be treated as deployments
+			name: "TriggerSmartContract with contract_address stays CALL",
+			infos: []tronTxInfo{
+				{
+					ID:              "call1660",
+					ContractAddress: "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:              "63616c6c", // "call"
+							CallValueInfo: []tronCallValueInfo{
+								{CallValue: 13245012561},
+							},
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs: []bchain.RpcTransaction{{Hash: "0xcall1660", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
+
+			wantType:      bchain.CALL,
+			wantTransfers: 1,
+			wantValue:     13245012561,
+		},
+
+		{
+			name: "Deployment without internal transactions",
+			infos: []tronTxInfo{
+				{
+					ID:              "deploy1",
+					ContractAddress: "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+					Receipt:         tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:               []bchain.RpcTransaction{{Hash: "0xdeploy1"}},
+			wantType:          bchain.CREATE,
+			wantContract:      "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
+			wantContractAddrs: []string{"TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"},
+		},
+
+		{
+			name: "Deployment with constructor-created child contract",
 			infos: []tronTxInfo{
 				{
 					ID:              "0544ab15ada7051af68b57ca29d69c753b64e6701cfebe5cdbe53a2a9127a88d",
@@ -180,10 +224,36 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					},
 				},
 			},
-			txs:           []bchain.RpcTransaction{{Hash: "0x0544ab15ada7051af68b57ca29d69c753b64e6701cfebe5cdbe53a2a9127a88d"}},
-			wantType:      bchain.CREATE,
-			wantContracts: 1,
-			wantContract:  "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
+			txs:          []bchain.RpcTransaction{{Hash: "0x0544ab15ada7051af68b57ca29d69c753b64e6701cfebe5cdbe53a2a9127a88d"}},
+			wantType:     bchain.CREATE,
+			wantContract: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
+			wantContractAddrs: []string{
+				"TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", // deployed contract
+				"TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", // constructor-created child
+			},
+		},
+
+		{
+			// a call into a factory that internally deploys a contract stays a CALL,
+			// only the child is registered
+			name: "Factory call with nested create stays CALL",
+			infos: []tronTxInfo{
+				{
+					ID:              "factory1",
+					ContractAddress: "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+							TransferToAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:              "637265617465", // create
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:               []bchain.RpcTransaction{{Hash: "0xfactory1", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
+			wantType:          bchain.CALL,
+			wantContractAddrs: []string{"TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
 		},
 
 		{
@@ -196,8 +266,10 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					},
 				},
 			},
-			txs:      []bchain.RpcTransaction{{Hash: "0xdeadbeef"}},
-			wantType: bchain.SELFDESTRUCT,
+			txs:               []bchain.RpcTransaction{{Hash: "0xdeadbeef"}},
+			wantType:          bchain.SELFDESTRUCT,
+			wantContract:      "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
+			wantContractAddrs: []string{"TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"},
 		},
 
 		{
@@ -259,9 +331,8 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 
 			d := data[0]
 
-			if tt.wantType != 0 {
-				require.Equal(t, tt.wantType, d.Type)
-			}
+			require.Equal(t, tt.wantType, d.Type)
+			require.Equal(t, tt.wantContract, d.Contract)
 
 			require.Len(t, d.Transfers, tt.wantTransfers)
 
@@ -278,10 +349,14 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 				}
 			}
 
-			if tt.wantContracts > 0 {
-				require.Len(t, contracts, tt.wantContracts)
-				if tt.wantContract != "" {
-					require.Equal(t, tt.wantContract, d.Contract)
+			require.Len(t, contracts, len(tt.wantContractAddrs))
+			for i, want := range tt.wantContractAddrs {
+				require.Equal(t, want, contracts[i].Contract)
+				if contracts[i].DestructedInBlock != 0 {
+					require.Equal(t, uint32(12345), contracts[i].DestructedInBlock)
+				} else {
+					require.Equal(t, uint32(12345), contracts[i].CreatedInBlock)
+					require.Equal(t, bchain.UnhandledTokenStandard, contracts[i].Standard)
 				}
 			}
 
