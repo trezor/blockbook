@@ -149,32 +149,32 @@ func buildInternalDataFromTronInfos(
 
 		d := &data[i]
 
-		topType, contractAddr, err := detectTopType(info.InternalTransactions)
-		if err != nil {
-			return data, contracts, err
-		}
-
-		if topType == bchain.CALL && info.ContractAddress != "" {
-			topType = bchain.CREATE
-			contractAddr = ToTronAddressFromAddress(info.ContractAddress)
-		}
-
-		d.Type = topType
-		if contractAddr != "" {
-			d.Contract = contractAddr
-		}
-
-		if topType == bchain.CREATE && contractAddr != "" {
+		// A transaction deploys a contract only when its eth-style representation
+		// has no recipient (java-tron's JSON-RPC leaves `to` null solely for
+		// CreateSmartContract) AND the node reported the deployed address in the
+		// transaction info. contract_address alone is not a creation signal:
+		// java-tron fills it for ordinary TriggerSmartContract calls as well.
+		if tx.To == "" && info.ContractAddress != "" {
+			d.Type = bchain.CREATE
+			d.Contract = ToTronAddressFromAddress(info.ContractAddress)
 			contracts = append(contracts, bchain.ContractInfo{
-				Contract:       contractAddr,
+				Contract:       d.Contract,
 				CreatedInBlock: blockHeight,
 				Standard:       bchain.UnhandledTokenStandard,
 			})
-		} else if topType == bchain.SELFDESTRUCT {
-			contracts = append(contracts, bchain.ContractInfo{
-				Contract:          contractAddr,
-				DestructedInBlock: blockHeight,
-			})
+		} else {
+			destructed, err := detectSelfDestructedContract(info.InternalTransactions)
+			if err != nil {
+				return data, contracts, err
+			}
+			if destructed != "" {
+				d.Type = bchain.SELFDESTRUCT
+				d.Contract = destructed
+				contracts = append(contracts, bchain.ContractInfo{
+					Contract:          destructed,
+					DestructedInBlock: blockHeight,
+				})
+			}
 		}
 
 		for _, itx := range info.InternalTransactions {
@@ -186,6 +186,17 @@ func buildInternalDataFromTronInfos(
 
 			from := ToTronAddressFromAddress(itx.CallerAddress)
 			to := ToTronAddressFromAddress(itx.TransferToAddress)
+
+			// nested create frames register the child contract in the registry but
+			// do not change the top-level type (parity with eth processCallTrace) —
+			// factory calls remain CALLs
+			if t == bchain.CREATE && to != "" && to != d.Contract {
+				contracts = append(contracts, bchain.ContractInfo{
+					Contract:       to,
+					CreatedInBlock: blockHeight,
+					Standard:       bchain.UnhandledTokenStandard,
+				})
+			}
 
 			for _, cv := range itx.CallValueInfo {
 				// skip TRC-10
@@ -222,43 +233,19 @@ func buildInternalDataFromTronInfos(
 	return data, contracts, nil
 }
 
-// we need to figure out the root type of the transaction
-// CREATE > SELFDESTRUCT > CALL
-func detectTopType(internalTxs []tronInternalTransaction) (
-	bchain.EthereumInternalTransactionType,
-	string,
-	error,
-) {
-	var createdContract string
-	var destructedContract string
-
+// detectSelfDestructedContract returns the address of the first contract that an
+// internal transaction note reports as selfdestructed, or "" if there is none.
+// Tron internal transactions describe only nested frames, so unlike eth the
+// top-level SELFDESTRUCT type is inferred from them.
+func detectSelfDestructedContract(internalTxs []tronInternalTransaction) (string, error) {
 	for _, itx := range internalTxs {
 		t, err := tronNoteHexToInternalType(itx.Note)
 		if err != nil {
-			return bchain.CALL, "", err
+			return "", err
 		}
-
-		switch t {
-		case bchain.CALL:
-			continue
-		case bchain.CREATE:
-			if createdContract == "" {
-				createdContract = ToTronAddressFromAddress(itx.TransferToAddress)
-			}
-		case bchain.SELFDESTRUCT:
-			if destructedContract == "" {
-				destructedContract = ToTronAddressFromAddress(itx.CallerAddress)
-			}
-		default:
-			glog.Warningf("Unknown Tron internal transaction type %v", t)
+		if t == bchain.SELFDESTRUCT {
+			return ToTronAddressFromAddress(itx.CallerAddress), nil
 		}
 	}
-
-	if createdContract != "" {
-		return bchain.CREATE, createdContract, nil
-	}
-	if destructedContract != "" {
-		return bchain.SELFDESTRUCT, destructedContract, nil
-	}
-	return bchain.CALL, "", nil
+	return "", nil
 }
