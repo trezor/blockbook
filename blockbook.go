@@ -80,6 +80,9 @@ var (
 	computeFeeStatsFlag = flag.Bool("computefeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
 	dbStatsPeriodHours  = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
 
+	rebuildEnsAliases = flag.Bool("rebuildensaliases", false, "rebuild ENS address aliases from NameRegistered logs and exit (EthereumType coins only); optionally bounded by -blockheight/-blockuntil")
+	ensRebuildChunk   = flag.Int("ensrebuildchunk", 0, "block span per eth_getLogs request during -rebuildensaliases (0 = default); lower it for nodes that cap getLogs ranges")
+
 	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncIndexPeriodMs = flag.Int("resyncindexperiod", 935093, "resync index period in milliseconds")
 
@@ -285,6 +288,16 @@ func mainWithExitCode() int {
 			return exitCodeFatal
 		}
 		glog.Info("DB size on disk: ", index.DatabaseSizeOnDisk(), ", DB size as computed: ", internalState.DBSizeTotal())
+		return exitCodeOK
+	}
+
+	if *rebuildEnsAliases {
+		internalState.DbState = common.DbStateOpen
+		err = performEnsAliasRebuild(chanOsSignal)
+		if err != nil && err != db.ErrOperationInterrupted {
+			glog.Error("rebuildEnsAliases: ", err)
+			return exitCodeFatal
+		}
 		return exitCodeOK
 	}
 
@@ -524,6 +537,30 @@ func performRollback() error {
 		}
 	}
 	return nil
+}
+
+// performEnsAliasRebuild wipes and re-derives the ENS address-alias column
+// family from NameRegistered logs, an alias-only alternative to a full reindex.
+// The scan defaults to the whole chain (block 0 to the backend tip) and can be
+// bounded with -blockheight/-blockuntil.
+func performEnsAliasRebuild(stop chan os.Signal) error {
+	bestHeight, err := chain.GetBestBlockHeight()
+	if err != nil {
+		return errors.Annotatef(err, "GetBestBlockHeight")
+	}
+	from := uint32(0)
+	if *blockFrom >= 0 {
+		from = uint32(*blockFrom)
+	}
+	to := bestHeight
+	if *blockUntil >= 0 && uint32(*blockUntil) < to {
+		to = uint32(*blockUntil)
+	}
+	if from > to {
+		return errors.Errorf("rebuildEnsAliases: from block %d is above to block %d", from, to)
+	}
+	glog.Infof("rebuildEnsAliases: rebuilding ENS aliases for blocks [%d, %d]", from, to)
+	return index.RebuildEnsAliases(chain, from, to, *ensRebuildChunk, stop)
 }
 
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {

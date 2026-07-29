@@ -1953,3 +1953,46 @@ func (d *RocksDB) periodicStoreAddrContractsCache() {
 		d.storeAddrContractsCache()
 	}
 }
+
+// ensAliasRebuilder is implemented by EthereumType RPC backends that can rescan
+// ENS NameRegistered logs. It decouples RebuildEnsAliases from the concrete
+// EthereumRPC type so coins that embed it (e.g. BSC) qualify as well.
+type ensAliasRebuilder interface {
+	RebuildEnsAliases(fromBlock, toBlock uint32, chunkBlocks int, isInterrupted func() bool, store func([]bchain.AddressAliasRecord) error) error
+}
+
+// RebuildEnsAliases wipes the address-alias column family (purging aliases the
+// old accept-any parser wrote) and rebuilds it from the chain's NameRegistered
+// logs emitted by the trusted registrars, without a full reindex. It is a
+// one-shot maintenance operation backing the -rebuildensaliases flag and expects
+// to hold the DB exclusively; chain must be an EthereumType RPC. stop, if
+// non-nil, aborts the scan between chunks (returns ErrOperationInterrupted).
+func (d *RocksDB) RebuildEnsAliases(chain bchain.BlockChain, fromBlock, toBlock uint32, chunkBlocks int, stop chan os.Signal) error {
+	if !d.chainParser.UseAddressAliases() {
+		return errors.New("RebuildEnsAliases: address_aliases is disabled for this coin")
+	}
+	rebuilder, ok := chain.(ensAliasRebuilder)
+	if !ok {
+		return errors.New("RebuildEnsAliases: coin does not support ENS alias rebuild")
+	}
+	glog.Info("RebuildEnsAliases: wiping existing address aliases")
+	if err := d.deleteAllAddressAliases(); err != nil {
+		return errors.Annotatef(err, "deleteAllAddressAliases")
+	}
+	interrupted := func() bool {
+		if stop == nil {
+			return false
+		}
+		select {
+		case <-stop:
+			return true
+		default:
+			return false
+		}
+	}
+	err := rebuilder.RebuildEnsAliases(fromBlock, toBlock, chunkBlocks, interrupted, d.storeAddressAliasRecordsBatch)
+	if err == eth.ErrEnsRebuildInterrupted {
+		return ErrOperationInterrupted
+	}
+	return err
+}

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1443,6 +1444,109 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		}
 	}
 	return r, ensRecords, nil
+}
+
+// ErrEnsRebuildInterrupted is returned by RebuildEnsAliases when the caller
+// signals a shutdown between chunks.
+var ErrEnsRebuildInterrupted = stdErrors.New("ENS alias rebuild interrupted")
+
+// ensRebuildDefaultChunkBlocks is the default block span per eth_getLogs request
+// in RebuildEnsAliases. NameRegistered logs are filtered server-side by address
+// and topic, so a wide span still returns few rows; operators whose node caps
+// getLogs ranges (e.g. dev Erigon at 1000 blocks) can lower it.
+const ensRebuildDefaultChunkBlocks = 100000
+
+// ensRebuildProgressEvery throttles the per-chunk progress log so a small chunk
+// size over a long chain does not flood the log; a chunk that finds aliases is
+// always logged.
+const ensRebuildProgressEvery = 64
+
+// RebuildEnsAliases rescans ENS NameRegistered logs emitted by the trusted
+// registrars over [fromBlock, toBlock] in chunkBlocks-sized ranges and passes
+// each chunk's decoded alias records to store. It is a one-shot maintenance
+// operation backing the -rebuildensaliases flag; the caller is expected to have
+// wiped the existing aliases first. An empty trusted set records nothing (there
+// is nothing to trust); "*" scans every emitter. isInterrupted, if non-nil, is
+// polled between chunks and aborts the scan with ErrEnsRebuildInterrupted.
+func (b *EthereumRPC) RebuildEnsAliases(fromBlock, toBlock uint32, chunkBlocks int, isInterrupted func() bool, store func([]bchain.AddressAliasRecord) error) error {
+	if len(b.ensRegistrars) == 0 {
+		glog.Info("RebuildEnsAliases: ens_registrars is empty (trust none); nothing to backfill")
+		return nil
+	}
+	if chunkBlocks <= 0 {
+		chunkBlocks = ensRebuildDefaultChunkBlocks
+	}
+	// topic0 filter: the NameRegistered signatures getEnsRecord can parse (OR).
+	filter := map[string]interface{}{
+		"topics": []interface{}{[]string{
+			nameRegisteredEventSignature,
+			nameRegisteredWithPremiumEventSignature,
+			nameRegisteredWithReferrerEventSignature,
+		}},
+	}
+	// Unless the wildcard is set, restrict emitters to the trusted registrars so
+	// the node returns only their logs; the wildcard scans every emitter.
+	if _, acceptAny := b.ensRegistrars[ensRegistrarWildcard]; !acceptAny {
+		addrs := make([]string, 0, len(b.ensRegistrars))
+		for a := range b.ensRegistrars {
+			addrs = append(addrs, a)
+		}
+		sort.Strings(addrs)
+		filter["address"] = addrs
+	}
+	glog.Infof("RebuildEnsAliases: scanning blocks [%d, %d] in chunks of %d", fromBlock, toBlock, chunkBlocks)
+	step := uint64(chunkBlocks)
+	total, chunk := 0, 0
+	for from := uint64(fromBlock); from <= uint64(toBlock); from += step {
+		if isInterrupted != nil && isInterrupted() {
+			return ErrEnsRebuildInterrupted
+		}
+		to := from + step - 1
+		if to > uint64(toBlock) {
+			to = uint64(toBlock)
+		}
+		records, err := b.getEnsAliasLogs(filter, from, to)
+		if err != nil {
+			return errors.Annotatef(err, "eth_getLogs blocks [%d, %d]", from, to)
+		}
+		if len(records) > 0 {
+			if err := store(records); err != nil {
+				return errors.Annotatef(err, "store aliases for blocks [%d, %d]", from, to)
+			}
+			total += len(records)
+		}
+		chunk++
+		if len(records) > 0 || chunk%ensRebuildProgressEvery == 0 || to == uint64(toBlock) {
+			glog.Infof("RebuildEnsAliases: scanned up to block %d, %d aliases recorded", to, total)
+		}
+		if to == uint64(toBlock) {
+			break
+		}
+	}
+	glog.Infof("RebuildEnsAliases: finished, %d aliases recorded", total)
+	return nil
+}
+
+// getEnsAliasLogs runs one eth_getLogs call for [from, to] using the shared
+// NameRegistered filter and decodes the trusted logs it returns into alias
+// records. The filter map is reused across calls (this runs single-goroutine),
+// only its block bounds change.
+func (b *EthereumRPC) getEnsAliasLogs(filter map[string]interface{}, from, to uint64) ([]bchain.AddressAliasRecord, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	filter["fromBlock"] = "0x" + strconv.FormatUint(from, 16)
+	filter["toBlock"] = "0x" + strconv.FormatUint(to, 16)
+	var logs []rpcLogWithTxHash
+	if err := b.RPC.CallContext(ctx, &logs, "eth_getLogs", filter); err != nil {
+		return nil, err
+	}
+	var records []bchain.AddressAliasRecord
+	for i := range logs {
+		if ens := getEnsRecord(&logs[i], b.ensRegistrars); ens != nil {
+			records = append(records, *ens)
+		}
+	}
+	return records, nil
 }
 
 type rpcCallTrace struct {
