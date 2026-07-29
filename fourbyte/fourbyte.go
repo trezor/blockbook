@@ -157,21 +157,27 @@ func (fd *FourByteSignaturesDownloader) downloadSignatures() {
 		}
 		glog.Infof("FourByteSignaturesDownloader downloaded %s with %d results", url, len(page.Results))
 		if len(page.Results) > 0 {
-			// dedup anchor (results newest-first): break once already stored;
-			// a malformed anchor must not abort the download or skip the page
-			fourBytes, err := strconv.ParseUint(page.Results[0].HexSignature, 0, 32)
-			if err != nil {
-				glog.Errorf("Invalid 4byte signature %+v on page %s: %v", page.Results[0], url, err)
-			} else {
-				sig, err := fd.db.GetFourByteSignature(uint32(fourBytes), uint32(page.Results[0].Id))
+			// dedup anchor (results newest-first): break once we reach a
+			// signature already stored. Scan for the first parseable entry so a
+			// malformed newest item can't skip the check and force a full re-sync.
+			reachedStored := false
+			for i := range page.Results {
+				r := &page.Results[i]
+				fourBytes, err := strconv.ParseUint(r.HexSignature, 0, 32)
 				if err != nil {
-					glog.Errorf("db.GetFourByteSignature error %+v on page %s: %v", page.Results[0], url, err)
+					glog.Errorf("Invalid 4byte signature %+v on page %s: %v", *r, url, err)
+					continue
+				}
+				sig, err := fd.db.GetFourByteSignature(uint32(fourBytes), uint32(r.Id))
+				if err != nil {
+					glog.Errorf("db.GetFourByteSignature error %+v on page %s: %v", *r, url, err)
 					return
 				}
-				// signature is already stored in db, break
-				if sig != nil {
-					break
-				}
+				reachedStored = sig != nil
+				break
+			}
+			if reachedStored {
+				break
 			}
 			results = append(results, page.Results...)
 		}
