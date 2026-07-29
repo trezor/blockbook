@@ -495,11 +495,10 @@ func (b *EthereumRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*b
 	return b.fetchContractInfo(address)
 }
 
-// ErrInvalidErc20Balance is returned when a balanceOf eth_call succeeds but returns data that
-// cannot be parsed as a 32-byte integer (empty "0x" or non-conforming output). It is benign and
-// common for dead/self-destructed or non-ERC20-conforming tokens that linger in holders' contract
-// lists; callers should treat it as "no balance" and must not log it at warning level (it is already
-// tracked via the observeEthCallError "invalid" metric).
+// ErrInvalidErc20Balance means a balanceOf eth_call yielded no usable balance: either it returned
+// unparseable data (empty "0x" or non-32-byte output) or it reverted deterministically. Both are
+// benign and common for dead/non-conforming/rebasing tokens; callers treat it as "no balance" and
+// must not log it at warning level (tracked via the observeEthCallError "invalid"/"reverted" metrics).
 var ErrInvalidErc20Balance = errors.New("Invalid balance")
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
@@ -513,6 +512,12 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalanceAtBlock(addrDesc, contr
 	req := erc20BalanceOfCallData(addrDesc)
 	data, err := b.EthereumTypeRpcCallAtBlock(req, contract, "", blockNumber)
 	if err != nil {
+		// A deterministic revert (balanceOf reverts for this holder) is benign: no usable
+		// balance. Match the batch path and treat it as ErrInvalidErc20Balance
+		if isNonRetriableEthCallError(err) {
+			b.observeEthCallError("single", "reverted")
+			return nil, ErrInvalidErc20Balance
+		}
 		return nil, err
 	}
 	r := parseSimpleNumericProperty(data)

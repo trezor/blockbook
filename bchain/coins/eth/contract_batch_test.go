@@ -428,6 +428,70 @@ func TestEthereumTypeGetErc20ContractBalances(t *testing.T) {
 	}
 }
 
+func TestEthereumTypeGetErc20ContractBalanceReverted(t *testing.T) {
+	// A deterministic balanceOf revert must map to the benign ErrInvalidErc20Balance,
+	// matching the batch path, so callers log it at V(2) instead of warning.
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	for _, revertMsg := range []string{
+		"execution reverted: division or modulo by zero",
+		"execution reverted",
+		"invalid opcode: INVALID",
+		"out of gas",
+	} {
+		contract := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+		contractKey := hexutil.Encode(contract.Bytes())
+		mock := &mockBatchCallRPC{
+			callErrors: map[string]error{
+				contractKey: errors.New(revertMsg),
+			},
+		}
+		rpcClient := &EthereumRPC{
+			RPC:     mock,
+			Timeout: time.Second,
+		}
+		balance, err := rpcClient.EthereumTypeGetErc20ContractBalance(
+			bchain.AddressDescriptor(addr.Bytes()),
+			bchain.AddressDescriptor(contract.Bytes()),
+		)
+		if balance != nil {
+			t.Fatalf("%q: expected nil balance, got %v", revertMsg, balance)
+		}
+		if err != ErrInvalidErc20Balance {
+			t.Fatalf("%q: expected ErrInvalidErc20Balance, got %v", revertMsg, err)
+		}
+	}
+}
+
+func TestEthereumTypeGetErc20ContractBalanceRPCError(t *testing.T) {
+	// A genuine (non-revert) RPC error must surface unchanged so it stays visible at warning level.
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contract := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractKey := hexutil.Encode(contract.Bytes())
+	rpcErr := errors.New("connection refused")
+	mock := &mockBatchCallRPC{
+		callErrors: map[string]error{
+			contractKey: rpcErr,
+		},
+	}
+	rpcClient := &EthereumRPC{
+		RPC:     mock,
+		Timeout: time.Second,
+	}
+	balance, err := rpcClient.EthereumTypeGetErc20ContractBalance(
+		bchain.AddressDescriptor(addr.Bytes()),
+		bchain.AddressDescriptor(contract.Bytes()),
+	)
+	if balance != nil {
+		t.Fatalf("expected nil balance, got %v", balance)
+	}
+	if err != rpcErr {
+		t.Fatalf("expected raw RPC error to surface unchanged, got %v", err)
+	}
+	if err == ErrInvalidErc20Balance {
+		t.Fatalf("genuine RPC error must not be classified as ErrInvalidErc20Balance")
+	}
+}
+
 func TestEthereumTypeGetErc20ContractBalancesBatchSize(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
