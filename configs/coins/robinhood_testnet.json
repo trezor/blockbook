@@ -34,7 +34,7 @@
         "postinst_script_template": "openssl rand -hex 32 > {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/jwtsecret",
         "service_type": "simple",
         "service_additional_params_template": "",
-        "protect_memory": true,
+        "protect_memory": false,
         "mainnet": false,
         "server_config_file": "",
         "client_config_file": ""
