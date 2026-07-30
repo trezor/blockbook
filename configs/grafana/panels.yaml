@@ -400,11 +400,11 @@ panels:
         legend: '{{coin}} - {{reason}}/min'
   websocket.blocked_ips:
     title: Websocket IPs currently blocked
-    description: '{{help:websocket_blocked_ips}} Every connection attempt from a blocked key is rejected with HTTP 429 before the upgrade, so a sustained non-zero value means real clients are locked out right now; under CGNAT one blocked key can cover many users. Refreshed once per limiter maintenance tick (1 minute). The internal status page lists the blocked keys with expiry and allows resetting the blocklist.'
+    description: '{{help:websocket_blocked_ips}}. Every connection attempt from a blocked key is rejected with HTTP 429 before the upgrade, so a sustained non-zero value means real clients are locked out right now; under CGNAT one blocked key can cover many users. Refreshed once per limiter maintenance tick (1 minute). The internal status page lists the blocked keys with expiry and allows resetting the blocklist.'
     queries:
       blocked_ips:
-        promql: '{{name:websocket_blocked_ips}}{job="blockbook", coin="$coin"}'
-        legend: '{{coin}} - {{instance}}'
+        promql: sum({{name:websocket_blocked_ips}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - blocked IPs'
   websocket.blocked_connections:
     title: Websocket blocked-IP rejections per minute
     description: 'Connection attempts rejected because the client key is on the temporary message-rate blocklist (HTTP 429 before the upgrade). Enforcement counterpart of the blocked-IPs gauge: high values mean banned clients are hammering reconnects for the whole block duration. Distinct from connection rejections, which count the per-IP concurrent-connection and attempt-rate caps rather than the message-rate ban.'
