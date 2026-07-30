@@ -334,9 +334,12 @@ func validEnsAliasName(name string) bool {
 // NameRegistered event signatures getEnsRecord knows how to parse: the original
 // 5-arg, the 6-arg (baseCost+premium) and the current 7-arg (referrer) events.
 func isTrustedNameRegisteredEvent(topic0 string) bool {
-	return topic0 == nameRegisteredEventSignature ||
-		topic0 == nameRegisteredWithPremiumEventSignature ||
-		topic0 == nameRegisteredWithReferrerEventSignature
+	for _, sig := range nameRegisteredEventSignatures {
+		if topic0 == sig {
+			return true
+		}
+	}
+	return false
 }
 
 // getEnsRecord parses an ENS alias from a NameRegistered log (5-, 6- and 7-arg

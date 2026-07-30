@@ -36,6 +36,17 @@ const nameRegisteredWithPremiumEventSignature = "0x69e37f151eb98a09618ddaa80c8cf
 // keccak256("NameRegistered(string,bytes32,address,uint256,uint256,uint256,bytes32)").
 const nameRegisteredWithReferrerEventSignature = "0xc2240194853531f1ae318dcef227de79c6ad0fd9d1b0e4fe08568415be2e08a5"
 
+// nameRegisteredEventSignatures lists every NameRegistered topic0 getEnsRecord
+// can parse. It is the single source of truth shared by the live emitter check
+// (isTrustedNameRegisteredEvent) and the -rebuildensaliases eth_getLogs filter,
+// so the two can never drift: a controller version added here is picked up by
+// both live sync and backfill.
+var nameRegisteredEventSignatures = []string{
+	nameRegisteredEventSignature,
+	nameRegisteredWithPremiumEventSignature,
+	nameRegisteredWithReferrerEventSignature,
+}
+
 const contractNameSignature = "0x06fdde03"
 const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"

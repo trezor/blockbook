@@ -295,6 +295,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		}
 	}
 	s.ensRegistrars = ensRegistrarSet(c.EnsRegistrars)
+	if c.AddressAliases && len(s.ensRegistrars) == 0 {
+		glog.Warning("ens_registrars is empty while address_aliases is enabled: no ENS aliases will be recorded during sync (contract/token names are unaffected)")
+	}
 	if c.RPCTimeout <= 0 {
 		glog.Warningf("rpc_timeout=%d is invalid, using default %d seconds", c.RPCTimeout, defaultRPCTimeoutSeconds)
 		c.RPCTimeout = defaultRPCTimeoutSeconds
@@ -1464,10 +1467,10 @@ const ensRebuildProgressEvery = 64
 // RebuildEnsAliases rescans ENS NameRegistered logs emitted by the trusted
 // registrars over [fromBlock, toBlock] in chunkBlocks-sized ranges and passes
 // each chunk's decoded alias records to store. It is a one-shot maintenance
-// operation backing the -rebuildensaliases flag; the caller is expected to have
-// wiped the existing aliases first. An empty trusted set records nothing (there
-// is nothing to trust); "*" scans every emitter. isInterrupted, if non-nil, is
-// polled between chunks and aborts the scan with ErrEnsRebuildInterrupted.
+// operation backing the -rebuildensaliases flag. An empty trusted set records
+// nothing (there is nothing to trust); "*" scans every emitter. isInterrupted,
+// if non-nil, is polled between chunks and aborts the scan with
+// ErrEnsRebuildInterrupted.
 func (b *EthereumRPC) RebuildEnsAliases(fromBlock, toBlock uint32, chunkBlocks int, isInterrupted func() bool, store func([]bchain.AddressAliasRecord) error) error {
 	if len(b.ensRegistrars) == 0 {
 		glog.Info("RebuildEnsAliases: ens_registrars is empty (trust none); nothing to backfill")
@@ -1477,12 +1480,9 @@ func (b *EthereumRPC) RebuildEnsAliases(fromBlock, toBlock uint32, chunkBlocks i
 		chunkBlocks = ensRebuildDefaultChunkBlocks
 	}
 	// topic0 filter: the NameRegistered signatures getEnsRecord can parse (OR).
+	// Shared with the live emitter check so the two can never drift.
 	filter := map[string]interface{}{
-		"topics": []interface{}{[]string{
-			nameRegisteredEventSignature,
-			nameRegisteredWithPremiumEventSignature,
-			nameRegisteredWithReferrerEventSignature,
-		}},
+		"topics": []interface{}{nameRegisteredEventSignatures},
 	}
 	// Unless the wildcard is set, restrict emitters to the trusted registrars so
 	// the node returns only their logs; the wildcard scans every emitter.

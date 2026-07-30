@@ -1923,31 +1923,30 @@ func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bc
 	return nil
 }
 
-// deleteAllAddressAliases wipes the address-alias column family and clears the
-// in-memory alias cache. Used by the -rebuildensaliases maintenance path before
-// re-deriving aliases from NameRegistered logs. The column family is a pure
-// projection of those logs, so this loses no data that the rebuild cannot
-// reproduce (contract/token names live in a separate column family).
-func (d *RocksDB) deleteAllAddressAliases() error {
-	if err := d.db.DeleteRangeCF(d.wo, d.cfh[cfAddressAliases], []byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}); err != nil {
+// replaceAddressAliases atomically swaps the entire address-alias column family
+// for the given set in a single write batch: a range delete followed by the puts,
+// so keys absent from the new set (e.g. spoofed aliases) drop out while the rest
+// are (re)written. Within one batch the puts are sequenced after the range
+// tombstone and therefore win, so readers see either the old set or the complete
+// new one, never an empty or partial CF. The alias cache is cleared afterward so
+// stale formatted aliases are not served. Used by the -rebuildensaliases path.
+//
+// The column family is a pure projection of NameRegistered logs, so this loses no
+// data the rebuild cannot reproduce (contract/token names live in a separate CF).
+func (d *RocksDB) replaceAddressAliases(aliases map[string]string) error {
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.DeleteRangeCF(d.cfh[cfAddressAliases], []byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	for addr, name := range aliases {
+		if len(name) > 0 {
+			wb.PutCF(d.cfh[cfAddressAliases], []byte(addr), []byte(name))
+		}
+	}
+	if err := d.db.Write(d.wo, wb); err != nil {
 		return err
 	}
 	cachedAddressAliasRecords.purge()
 	return nil
-}
-
-// storeAddressAliasRecordsBatch writes a batch of address-alias records in a
-// single RocksDB write. Used by the -rebuildensaliases maintenance path.
-func (d *RocksDB) storeAddressAliasRecordsBatch(records []bchain.AddressAliasRecord) error {
-	if len(records) == 0 {
-		return nil
-	}
-	wb := grocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	if err := d.storeAddressAliasRecords(wb, records); err != nil {
-		return err
-	}
-	return d.db.Write(d.wo, wb)
 }
 
 // Disconnect blocks

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -294,10 +295,18 @@ func mainWithExitCode() int {
 	if *rebuildEnsAliases {
 		internalState.DbState = common.DbStateOpen
 		err = performEnsAliasRebuild(chanOsSignal)
-		if err != nil && err != db.ErrOperationInterrupted {
+		if err == db.ErrOperationInterrupted {
+			// The rebuild is atomic (nothing is committed until a full scan
+			// succeeds), so an interrupt leaves aliases unchanged — but exit
+			// non-zero so operators know it did not complete.
+			glog.Warning("rebuildEnsAliases: interrupted before completion — address aliases left UNCHANGED")
+			return exitCodeFatal
+		}
+		if err != nil {
 			glog.Error("rebuildEnsAliases: ", err)
 			return exitCodeFatal
 		}
+		glog.Info("rebuildEnsAliases: completed")
 		return exitCodeOK
 	}
 
@@ -544,6 +553,15 @@ func performRollback() error {
 // The scan defaults to the whole chain (block 0 to the backend tip) and can be
 // bounded with -blockheight/-blockuntil.
 func performEnsAliasRebuild(stop chan os.Signal) error {
+	rebuilder, ok := chain.(db.EnsAliasRebuilder)
+	if !ok {
+		return errors.New("rebuildEnsAliases: coin does not support ENS alias rebuild (EthereumType only)")
+	}
+	// -blockheight/-blockuntil are ints; reject values that would wrap on the
+	// uint32 cast below rather than silently scanning a wrong (small) range.
+	if int64(*blockFrom) > math.MaxUint32 || int64(*blockUntil) > math.MaxUint32 {
+		return errors.Errorf("rebuildEnsAliases: -blockheight/-blockuntil exceed max block height %d", math.MaxUint32)
+	}
 	bestHeight, err := chain.GetBestBlockHeight()
 	if err != nil {
 		return errors.Annotatef(err, "GetBestBlockHeight")
@@ -560,7 +578,7 @@ func performEnsAliasRebuild(stop chan os.Signal) error {
 		return errors.Errorf("rebuildEnsAliases: from block %d is above to block %d", from, to)
 	}
 	glog.Infof("rebuildEnsAliases: rebuilding ENS aliases for blocks [%d, %d]", from, to)
-	return index.RebuildEnsAliases(chain, from, to, *ensRebuildChunk, stop)
+	return index.RebuildEnsAliases(rebuilder, from, to, *ensRebuildChunk, stop)
 }
 
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
