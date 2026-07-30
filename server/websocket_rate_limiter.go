@@ -12,7 +12,7 @@ import (
 )
 
 const maxWebsocketConnectionAttemptsPerIP = 64
-const maxWebsocketConnectionsPerIP = 128
+const defaultWsMaxConnectionsPerIP = 128
 const websocketConnectionAttemptWindow = time.Minute
 const websocketConnectionLimiterTTL = 10 * time.Minute
 const websocketConnectionLimiterCleanupInterval = time.Minute
@@ -39,9 +39,10 @@ type websocketClientLimit struct {
 }
 
 type websocketConnectionLimiter struct {
-	mux         sync.Mutex
-	clients     map[string]*websocketClientLimit
-	lastCleanup time.Time
+	mux                 sync.Mutex
+	clients             map[string]*websocketClientLimit
+	maxConnectionsPerIP int
+	lastCleanup         time.Time
 }
 
 // configureMessageRateLimit reads the per-connection message-rate and IP-block
@@ -88,9 +89,33 @@ func (s *WebsocketServer) configurePendingRequestsLimit(network string) error {
 	return nil
 }
 
-func newWebsocketConnectionLimiter() *websocketConnectionLimiter {
+// configureConnectionLimits reads the per-IP cap on parallel websocket
+// connections from the environment, applying the default (see docs/env.md).
+// The value is stored directly in the connection limiter under its mutex so
+// it is safe for concurrent accept() / release() — and remains safe should
+// this method ever be called at runtime (e.g. SIGHUP) rather than only at
+// startup.
+func (s *WebsocketServer) configureConnectionLimits(network string) error {
+	prefix := strings.ToUpper(network)
+	limit, err := parseNonNegativeIntEnv(prefix+"_WS_MAX_CONNECTIONS_PER_IP", defaultWsMaxConnectionsPerIP)
+	if err != nil {
+		return err
+	}
+	s.websocketLimiter.mux.Lock()
+	s.websocketLimiter.maxConnectionsPerIP = limit
+	s.websocketLimiter.mux.Unlock()
+	if limit > 0 {
+		glog.Infof("Websocket per-IP max connections: %d", limit)
+	} else {
+		glog.Info("Websocket per-IP max connections disabled")
+	}
+	return nil
+}
+
+func newWebsocketConnectionLimiter(maxConnectionsPerIP int) *websocketConnectionLimiter {
 	return &websocketConnectionLimiter{
-		clients: make(map[string]*websocketClientLimit),
+		clients:             make(map[string]*websocketClientLimit),
+		maxConnectionsPerIP: maxConnectionsPerIP,
 	}
 }
 
@@ -107,7 +132,7 @@ func (l *websocketConnectionLimiter) accept(ip string, now time.Time) (bool, str
 	client.lastSeen = now
 	client.trimAttempts(now)
 
-	if client.active >= maxWebsocketConnectionsPerIP {
+	if l.maxConnectionsPerIP > 0 && client.active >= l.maxConnectionsPerIP {
 		return false, "connection_limit"
 	}
 	if len(client.attempts) >= maxWebsocketConnectionAttemptsPerIP {

@@ -185,7 +185,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		addressSubscriptions:        make(map[string]map[*websocketChannel]*addressDetails),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
-		websocketLimiter:            newWebsocketConnectionLimiter(),
+		websocketLimiter:            newWebsocketConnectionLimiter(defaultWsMaxConnectionsPerIP),
 		activeChannels:              make(map[*websocketChannel]struct{}),
 	}
 	s.upgrader = &websocket.Upgrader{
@@ -241,6 +241,9 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		return nil, err
 	}
 	if err := s.configurePendingRequestsLimit(is.GetNetwork()); err != nil {
+		return nil, err
+	}
+	if err := s.configureConnectionLimits(is.GetNetwork()); err != nil {
 		return nil, err
 	}
 	if s.metrics != nil {

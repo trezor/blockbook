@@ -945,7 +945,7 @@ func TestConnMessageRateClockSkew(t *testing.T) {
 }
 
 func TestWebsocketConnectionLimiterConnectionAttempts(t *testing.T) {
-	limiter := newWebsocketConnectionLimiter()
+	limiter := newWebsocketConnectionLimiter(defaultWsMaxConnectionsPerIP)
 	now := time.Unix(1700000000, 0)
 	ip := "192.0.2.10"
 
@@ -969,11 +969,11 @@ func TestWebsocketConnectionLimiterConnectionAttempts(t *testing.T) {
 }
 
 func TestWebsocketConnectionLimiterActiveConnections(t *testing.T) {
-	limiter := newWebsocketConnectionLimiter()
+	limiter := newWebsocketConnectionLimiter(defaultWsMaxConnectionsPerIP)
 	now := time.Unix(1700000000, 0)
 	ip := "192.0.2.20"
 
-	for i := 0; i < maxWebsocketConnectionsPerIP; i++ {
+	for i := 0; i < defaultWsMaxConnectionsPerIP; i++ {
 		if i > 0 && i%maxWebsocketConnectionAttemptsPerIP == 0 {
 			now = now.Add(websocketConnectionAttemptWindow + time.Second)
 		}
@@ -996,7 +996,7 @@ func TestWebsocketConnectionLimiterActiveConnections(t *testing.T) {
 }
 
 func TestWebsocketConnectionLimiterSweepEvictsIdleEntries(t *testing.T) {
-	limiter := newWebsocketConnectionLimiter()
+	limiter := newWebsocketConnectionLimiter(defaultWsMaxConnectionsPerIP)
 	now := time.Unix(1700000000, 0)
 	idle := "192.0.2.40"
 	active := "192.0.2.41"
@@ -1026,7 +1026,7 @@ func TestWebsocketConnectionLimiterSweepEvictsIdleEntries(t *testing.T) {
 }
 
 func TestWebsocketConnectionLimiterStats(t *testing.T) {
-	limiter := newWebsocketConnectionLimiter()
+	limiter := newWebsocketConnectionLimiter(defaultWsMaxConnectionsPerIP)
 	now := time.Unix(1700000000, 0)
 	a := "192.0.2.50"
 	b := "192.0.2.51"
@@ -1066,7 +1066,7 @@ func TestWebsocketConnectionLimiterStats(t *testing.T) {
 }
 
 func TestWebsocketConnectionLimiterCleanup(t *testing.T) {
-	limiter := newWebsocketConnectionLimiter()
+	limiter := newWebsocketConnectionLimiter(defaultWsMaxConnectionsPerIP)
 	now := time.Unix(1700000000, 0)
 	ip := "192.0.2.30"
 
