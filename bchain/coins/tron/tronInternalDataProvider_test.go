@@ -122,6 +122,13 @@ func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
 	require.Equal(t, "TVtFTiSQmeMkdpusjefUcPcEeTPtqnhz3D", d.Transfers[0].To)
 }
 
+// contractEvent describes one expected contract registry entry: a creation
+// (destroyed=false) or a destruction (destroyed=true), in emission order
+type contractEvent struct {
+	addr      string
+	destroyed bool
+}
+
 func TestBuildInternalDataFromTronInfos(t *testing.T) {
 
 	tests := []struct {
@@ -133,7 +140,7 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		wantErrContains   string // error return from function
 		wantDataErrSubstr string // d.Error (EthereumInternalData.Error)
 		wantContract      string
-		wantContractAddrs []string // exact contract registry entries
+		wantContracts     []contractEvent // exact contract registry entries in order
 		wantFrom          string
 		wantTo            string
 		wantValue         int64
@@ -203,10 +210,10 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt:         tronReceipt{Result: "SUCCESS"},
 				},
 			},
-			txs:               []bchain.RpcTransaction{{Hash: "0xdeploy1"}},
-			wantType:          bchain.CREATE,
-			wantContract:      "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
-			wantContractAddrs: []string{"TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"},
+			txs:           []bchain.RpcTransaction{{Hash: "0xdeploy1"}},
+			wantType:      bchain.CREATE,
+			wantContract:  "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
+			wantContracts: []contractEvent{{addr: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"}},
 		},
 
 		{
@@ -227,9 +234,9 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 			txs:          []bchain.RpcTransaction{{Hash: "0x0544ab15ada7051af68b57ca29d69c753b64e6701cfebe5cdbe53a2a9127a88d"}},
 			wantType:     bchain.CREATE,
 			wantContract: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
-			wantContractAddrs: []string{
-				"TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", // deployed contract
-				"TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", // constructor-created child
+			wantContracts: []contractEvent{
+				{addr: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"}, // deployed contract
+				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"}, // constructor-created child
 			},
 		},
 
@@ -251,9 +258,9 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "SUCCESS"},
 				},
 			},
-			txs:               []bchain.RpcTransaction{{Hash: "0xfactory1", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
-			wantType:          bchain.CALL,
-			wantContractAddrs: []string{"TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+			txs:           []bchain.RpcTransaction{{Hash: "0xfactory1", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
+			wantType:      bchain.CALL,
+			wantContracts: []contractEvent{{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"}},
 		},
 
 		{
@@ -266,10 +273,91 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					},
 				},
 			},
-			txs:               []bchain.RpcTransaction{{Hash: "0xdeadbeef"}},
-			wantType:          bchain.SELFDESTRUCT,
-			wantContract:      "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
-			wantContractAddrs: []string{"TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"},
+			txs:           []bchain.RpcTransaction{{Hash: "0xdeadbeef"}},
+			wantType:      bchain.SELFDESTRUCT,
+			wantContract:  "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
+			wantContracts: []contractEvent{{addr: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", destroyed: true}},
+		},
+
+		{
+			// an ephemeral (MEV-style) contract created, used and selfdestructed
+			// within one call must produce both registry events, creation first,
+			// so that the destruction merges into the stored creation
+			name: "Ephemeral contract created and destroyed in one call",
+			infos: []tronTxInfo{
+				{
+					ID:              "ephemeral1",
+					ContractAddress: "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:              "637265617465", // create
+						},
+						{
+							CallerAddress:     "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							TransferToAddress: "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							Note:              "73756963696465", // suicide - sweeps remaining balance
+							CallValueInfo: []tronCallValueInfo{
+								{CallValue: 5},
+							},
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:           []bchain.RpcTransaction{{Hash: "0xephemeral1", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType:      bchain.SELFDESTRUCT,
+			wantContract:  "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
+			wantTransfers: 1,
+			wantFrom:      "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
+			wantTo:        "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+			wantValue:     5,
+			wantContracts: []contractEvent{
+				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", destroyed: true},
+			},
+		},
+
+		{
+			// every destroyed contract must be registered, not just the first one
+			name: "Multiple ephemeral contracts register all creations and destructions",
+			infos: []tronTxInfo{
+				{
+					ID:              "ephemeral2",
+					ContractAddress: "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:              "637265617465", // create
+						},
+						{
+							CallerAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:          "73756963696465", // suicide
+						},
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:              "637265617465", // create
+						},
+						{
+							CallerAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:          "73756963696465", // suicide
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:          []bchain.RpcTransaction{{Hash: "0xephemeral2", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType:     bchain.SELFDESTRUCT,
+			wantContract: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
+			wantContracts: []contractEvent{
+				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", destroyed: true},
+				{addr: "TVtFTiSQmeMkdpusjefUcPcEeTPtqnhz3D"},
+				{addr: "TVtFTiSQmeMkdpusjefUcPcEeTPtqnhz3D", destroyed: true},
+			},
 		},
 
 		{
@@ -289,6 +377,71 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 			txs:               []bchain.RpcTransaction{{Hash: "0xfail01"}},
 			wantType:          bchain.CALL,
 			wantDataErrSubstr: "rejected",
+		},
+
+		{
+			// a failed transaction rejects its internal transactions; their call
+			// values did not move and must not be booked as transfers
+			name: "Rejected internal transfers are not booked",
+			infos: []tronTxInfo{
+				{
+					ID:              "fail02",
+					ContractAddress: "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:              "63616c6c", // call
+							Rejected:          true,
+							CallValueInfo: []tronCallValueInfo{
+								{CallValue: 457584},
+							},
+						},
+						{
+							CallerAddress:     "41da727d310b98700af4cec797e43991899668d6f3",
+							TransferToAddress: "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							Note:              "63616c6c", // call
+							Rejected:          true,
+							CallValueInfo: []tronCallValueInfo{
+								{CallValue: 457584},
+							},
+						},
+					},
+					Receipt: tronReceipt{Result: "OUT_OF_ENERGY"},
+				},
+			},
+			txs:               []bchain.RpcTransaction{{Hash: "0xfail02", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
+			wantType:          bchain.CALL,
+			wantTransfers:     0,
+			wantDataErrSubstr: "OUT_OF_ENERGY; internal transaction rejected",
+		},
+
+		{
+			// rejected frames deployed and destroyed nothing - no registry entries,
+			// no top-level SELFDESTRUCT inference
+			name: "Rejected create and suicide register nothing",
+			infos: []tronTxInfo{
+				{
+					ID: "fail03",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:              "637265617465", // create
+							Rejected:          true,
+						},
+						{
+							CallerAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:          "73756963696465", // suicide
+							Rejected:      true,
+						},
+					},
+					Receipt: tronReceipt{Result: "REVERT"},
+				},
+			},
+			txs:               []bchain.RpcTransaction{{Hash: "0xfail03", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType:          bchain.CALL,
+			wantDataErrSubstr: "REVERT; internal transaction rejected",
 		},
 
 		{
@@ -349,13 +502,15 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 				}
 			}
 
-			require.Len(t, contracts, len(tt.wantContractAddrs))
-			for i, want := range tt.wantContractAddrs {
-				require.Equal(t, want, contracts[i].Contract)
-				if contracts[i].DestructedInBlock != 0 {
+			require.Len(t, contracts, len(tt.wantContracts))
+			for i, want := range tt.wantContracts {
+				require.Equal(t, want.addr, contracts[i].Contract)
+				if want.destroyed {
 					require.Equal(t, uint32(12345), contracts[i].DestructedInBlock)
+					require.Equal(t, uint32(0), contracts[i].CreatedInBlock)
 				} else {
 					require.Equal(t, uint32(12345), contracts[i].CreatedInBlock)
+					require.Equal(t, uint32(0), contracts[i].DestructedInBlock)
 					require.Equal(t, bchain.UnhandledTokenStandard, contracts[i].Standard)
 				}
 			}

@@ -154,27 +154,16 @@ func buildInternalDataFromTronInfos(
 		// CreateSmartContract) AND the node reported the deployed address in the
 		// transaction info. contract_address alone is not a creation signal:
 		// java-tron fills it for ordinary TriggerSmartContract calls as well.
+		deployedContract := ""
 		if tx.To == "" && info.ContractAddress != "" {
+			deployedContract = ToTronAddressFromAddress(info.ContractAddress)
 			d.Type = bchain.CREATE
-			d.Contract = ToTronAddressFromAddress(info.ContractAddress)
+			d.Contract = deployedContract
 			contracts = append(contracts, bchain.ContractInfo{
-				Contract:       d.Contract,
+				Contract:       deployedContract,
 				CreatedInBlock: blockHeight,
 				Standard:       bchain.UnhandledTokenStandard,
 			})
-		} else {
-			destructed, err := detectSelfDestructedContract(info.InternalTransactions)
-			if err != nil {
-				return data, contracts, err
-			}
-			if destructed != "" {
-				d.Type = bchain.SELFDESTRUCT
-				d.Contract = destructed
-				contracts = append(contracts, bchain.ContractInfo{
-					Contract:          destructed,
-					DestructedInBlock: blockHeight,
-				})
-			}
 		}
 
 		for _, itx := range info.InternalTransactions {
@@ -184,18 +173,44 @@ func buildInternalDataFromTronInfos(
 				return data, contracts, err
 			}
 
+			// a rejected internal transaction did not execute - it moved no
+			// value, created no contract and destroyed none; it only flags
+			// the transaction error below
+			if itx.Rejected {
+				continue
+			}
+
 			from := ToTronAddressFromAddress(itx.CallerAddress)
 			to := ToTronAddressFromAddress(itx.TransferToAddress)
 
-			// nested create frames register the child contract in the registry but
-			// do not change the top-level type (parity with eth processCallTrace) —
-			// factory calls remain CALLs
-			if t == bchain.CREATE && to != "" && to != d.Contract {
-				contracts = append(contracts, bchain.ContractInfo{
-					Contract:       to,
-					CreatedInBlock: blockHeight,
-					Standard:       bchain.UnhandledTokenStandard,
-				})
+			// registry events are emitted in note order (parity with eth
+			// processCallTrace), so that an ephemeral contract's creation is
+			// stored before its destruction merges into it
+			switch t {
+			case bchain.CREATE:
+				// nested create frames register the child contract but do not
+				// change the top-level type - factory calls remain CALLs
+				if to != "" && to != deployedContract {
+					contracts = append(contracts, bchain.ContractInfo{
+						Contract:       to,
+						CreatedInBlock: blockHeight,
+						Standard:       bchain.UnhandledTokenStandard,
+					})
+				}
+			case bchain.SELFDESTRUCT:
+				if from != "" {
+					contracts = append(contracts, bchain.ContractInfo{
+						Contract:          from,
+						DestructedInBlock: blockHeight,
+					})
+					// Tron internal transactions describe only nested frames,
+					// so unlike eth the top-level SELFDESTRUCT type is
+					// inferred from the first destroyed contract
+					if d.Type == bchain.CALL {
+						d.Type = bchain.SELFDESTRUCT
+						d.Contract = from
+					}
+				}
 			}
 
 			for _, cv := range itx.CallValueInfo {
@@ -231,21 +246,4 @@ func buildInternalDataFromTronInfos(
 	}
 
 	return data, contracts, nil
-}
-
-// detectSelfDestructedContract returns the address of the first contract that an
-// internal transaction note reports as selfdestructed, or "" if there is none.
-// Tron internal transactions describe only nested frames, so unlike eth the
-// top-level SELFDESTRUCT type is inferred from them.
-func detectSelfDestructedContract(internalTxs []tronInternalTransaction) (string, error) {
-	for _, itx := range internalTxs {
-		t, err := tronNoteHexToInternalType(itx.Note)
-		if err != nil {
-			return "", err
-		}
-		if t == bchain.SELFDESTRUCT {
-			return ToTronAddressFromAddress(itx.CallerAddress), nil
-		}
-	}
-	return "", nil
 }
