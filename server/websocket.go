@@ -997,7 +997,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "success"}).Inc()
 		} else {
 			if apiErr, ok := err.(*api.APIError); !ok || !apiErr.Public {
-				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
+				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data len ", len(req.Params), ", preview ", getWebsocketPayloadPreview(req.Params))
 			}
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
 			e := resultError{}
@@ -1007,7 +1007,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 	} else {
 		s.metrics.WebsocketUnknownMethods.With(common.Labels{"method": methodLabel}).Inc()
 		s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
-		glog.V(1).Info("Client ", c.id, " onMessage ", req.Method, ": unknown method, data ", string(req.Params))
+		glog.V(1).Info("Client ", c.id, " onMessage ", getWebsocketPayloadPreview([]byte(req.Method)), ": unknown method, data len ", len(req.Params), ", preview ", getWebsocketPayloadPreview(req.Params))
 	}
 }
 
