@@ -334,6 +334,20 @@ func parseAddr(value string) (netip.Addr, bool) {
 	return addr.Unmap().WithZone(""), true
 }
 
+// isWhitelistedIP checks whether the given IP address falls inside any of the
+// configured whitelist prefixes. IPs in the whitelist bypass all rate limiting
+// (request-rate, concurrency, and automatic IP blocking) on the surface that
+// loaded the list, so operators can exclude their own office or monitoring
+// infrastructure from the per-client budget.
+func isWhitelistedIP(addr netip.Addr, prefixes []netip.Prefix) bool {
+	for _, p := range prefixes {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 // isTrustedProxy reports whether a forwarding header (X-Real-Ip, or CF-Connecting-*
 // in the default Cloudflare branch) may be trusted from this TCP peer. Loopback and
 // RFC1918/private peers are trusted implicitly (reverse proxy on the same host/LAN).

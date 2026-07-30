@@ -129,6 +129,7 @@ type WebsocketServer struct {
 	// of these ranges (or a loopback/private proxy). Empty disables verification
 	// and falls back to the legacy "trust CF headers from any peer" behavior.
 	cloudflarePrefixes []netip.Prefix
+	whitelistPrefixes  []netip.Prefix
 	// trustPseudoIPv6 honors the (otherwise client-spoofable) CF-Connecting-IPv6
 	// header; only safe with Cloudflare "Pseudo IPv4: Overwrite Headers" on.
 	trustPseudoIPv6 bool
@@ -218,6 +219,22 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	s.trustPseudoIPv6 = clientIPCfg.trustPseudoIPv6
 	if clientIPCfg.trustPseudoIPv6 {
 		glog.Info("Cloudflare Pseudo-IPv4 mode enabled (", clientIPCfg.pseudoIPv6EnvName, "); CF-Connecting-IPv6 is honored as the client IP (requires Cloudflare \"Pseudo IPv4: Overwrite Headers\")")
+	}
+	whitelistEnvNames := []string{
+		strings.ToUpper(is.GetNetwork()) + "_WS_WHITELIST_IPS",
+		"WS_WHITELIST_IPS",
+	}
+	for _, envName := range whitelistEnvNames {
+		whitelistValue := os.Getenv(envName)
+		if whitelistValue == "" {
+			continue
+		}
+		s.whitelistPrefixes, err = parseCIDRList(envName, splitCIDRList(whitelistValue))
+		if err != nil {
+			return nil, err
+		}
+		glog.Infof("Websocket whitelisted CIDRs (%s): %v", envName, s.whitelistPrefixes)
+		break
 	}
 	if err := s.configureMessageRateLimit(is.GetNetwork()); err != nil {
 		return nil, err
@@ -316,13 +333,19 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip, blockSafe, _ := resolveClientIP(r, s.trustedProxyPrefixes, s.cloudflarePrefixes, s.trustPseudoIPv6)
+	// Whitelisted IPs bypass all rate limiting (connection limiter, IP blocklist,
+	// and per-connection message rate tracking).
+	whitelisted := false
+	if addr, ok := parseAddr(ip); ok && len(s.whitelistPrefixes) > 0 {
+		whitelisted = isWhitelistedIP(addr, s.whitelistPrefixes)
+	}
 	ipKey := rateLimitKey(ip)
 	// blockKey/blockable are computed only when the IP blocklist is enabled (skips the
 	// O(prefixes) isBlockableKey scan otherwise). blockKey keeps IPv6 at the full /128
 	// so a block never takes out a shared /64 (ipKey still aggregates to /64).
 	bKey := ""
 	blockable := false
-	if s.ipBlockEnabled {
+	if s.ipBlockEnabled && !whitelisted {
 		bKey = blockKey(ip)
 		blockable = blockSafe && isBlockableKey(ip, s.trustedProxyPrefixes, s.cloudflarePrefixes)
 	}
@@ -330,7 +353,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Reject keys that are on the temporary IP blocklist before doing any
 	// upgrade work. Checked ahead of the connection limiter so a blocked client
 	// cannot keep consuming attempt slots.
-	if s.ipBlockEnabled {
+	if s.ipBlockEnabled && !whitelisted {
 		if blocked, rejected := s.is.IsWsIPBlocked(bKey, time.Now()); blocked {
 			if s.metrics != nil {
 				s.metrics.WebsocketBlockedConnections.Inc()
@@ -347,7 +370,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	limited := false
-	if s.websocketLimiter != nil {
+	if s.websocketLimiter != nil && !whitelisted {
 		ok, reason := s.websocketLimiter.accept(ipKey, time.Now())
 		if !ok {
 			if s.metrics != nil {
@@ -391,7 +414,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		requestHeader:       r.Header,
 		alive:               true,
 	}
-	if s.messageRateLimit > 0 {
+	if s.messageRateLimit > 0 && !whitelisted {
 		c.messageRate = newConnMessageRate(s.messageRateWindow)
 		// count ping/pong control frames too; gorilla handles them inside
 		// ReadMessage so they never reach inputLoop and would otherwise be a
