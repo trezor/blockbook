@@ -398,6 +398,20 @@ panels:
       rejections:
         promql: sum(rate({{name:websocket_connection_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
         legend: '{{coin}} - {{reason}}/min'
+  websocket.blocked_ips:
+    title: Websocket IPs currently blocked
+    description: '{{help:websocket_blocked_ips}} Every connection attempt from a blocked key is rejected with HTTP 429 before the upgrade, so a sustained non-zero value means real clients are locked out right now; under CGNAT one blocked key can cover many users. Refreshed once per limiter maintenance tick (1 minute). The internal status page lists the blocked keys with expiry and allows resetting the blocklist.'
+    queries:
+      blocked_ips:
+        promql: '{{name:websocket_blocked_ips}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  websocket.blocked_connections:
+    title: Websocket blocked-IP rejections per minute
+    description: 'Connection attempts rejected because the client key is on the temporary message-rate blocklist (HTTP 429 before the upgrade). Enforcement counterpart of the blocked-IPs gauge: high values mean banned clients are hammering reconnects for the whole block duration. Distinct from connection rejections, which count the per-IP concurrent-connection and attempt-rate caps rather than the message-rate ban.'
+    queries:
+      blocked_rejections:
+        promql: sum(rate({{name:websocket_blocked_connections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin) * 60
+        legend: '{{coin}} - rejected/min'
   websocket.unique_ips:
     title: Websocket connections vs unique client IPs
     description: Open connections plotted against the number of distinct client IPs holding them; the gap between the two lines is connection clustering. Across the many Suite users a healthy deployment serves, the lines should track closely at roughly one connection per IP. A connections line pulling well above unique IPs means connections are concentrated on few sources.
