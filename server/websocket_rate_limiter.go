@@ -19,9 +19,9 @@ const websocketConnectionLimiterCleanupInterval = time.Minute
 
 // Per-connection message rate limit defaults. A connection sending more than
 // defaultWsMessageRateLimit messages within a trailing defaultWsMessageRateWindow is
-// closed and its client key blocked for defaultWsIPBlockDuration. The 2500 / 10m
+// closed and its client key blocked for defaultWsIPBlockDuration. The 5000 / 10m
 // default sits well above any Trezor Suite burst, so it only trips abusive traffic.
-const defaultWsMessageRateLimit = 2500
+const defaultWsMessageRateLimit = 5000
 const defaultWsMessageRateWindow = 10 * time.Minute
 const defaultWsIPBlockDuration = 12 * time.Hour
 
