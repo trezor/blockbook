@@ -48,14 +48,14 @@ const (
 )
 
 type restUILimiterConfig struct {
-	rateLimit       int
-	rateWindow      time.Duration
-	burst           int
-	maxConcurrent   int
-	stateTTL        time.Duration
-	blockDuration   time.Duration
-	trustedProxies  []netip.Prefix
-	cloudflareCIDRs []netip.Prefix
+	rateLimit         int
+	rateWindow        time.Duration
+	burst             int
+	maxConcurrent     int
+	stateTTL          time.Duration
+	blockDuration     time.Duration
+	trustedProxies    []netip.Prefix
+	cloudflareCIDRs   []netip.Prefix
 	trustPseudoIPv6   bool
 	whitelistPrefixes []netip.Prefix
 }
@@ -129,7 +129,7 @@ func newRestUIRateLimiter(network string, metrics *common.Metrics) (*restUIRateL
 		trustedProxies:     cfg.trustedProxies,
 		cloudflarePrefixes: cfg.cloudflareCIDRs,
 		trustPseudoIPv6:    cfg.trustPseudoIPv6,
-			whitelistPrefixes:  cfg.whitelistPrefixes,
+		whitelistPrefixes:  cfg.whitelistPrefixes,
 	}
 	if metrics != nil {
 		metrics.RestUIActiveIPs.Set(0)
