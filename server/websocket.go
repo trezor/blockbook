@@ -80,6 +80,7 @@ type websocketChannel struct {
 	ipKey                        string
 	blockKey                     string
 	blockable                    bool
+	limited                      bool
 	messageRate                  *connMessageRate
 	requestHeader                http.Header
 	alive                        bool
@@ -336,8 +337,10 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Whitelisted IPs bypass all rate limiting (connection limiter, IP blocklist,
 	// and per-connection message rate tracking).
 	whitelisted := false
-	if addr, ok := parseAddr(ip); ok && len(s.whitelistPrefixes) > 0 {
-		whitelisted = isWhitelistedIP(addr, s.whitelistPrefixes)
+	if len(s.whitelistPrefixes) > 0 {
+		if addr, ok := parseAddr(ip); ok {
+			whitelisted = isWhitelistedIP(addr, s.whitelistPrefixes)
+		}
 	}
 	ipKey := rateLimitKey(ip)
 	// blockKey/blockable are computed only when the IP blocklist is enabled (skips the
@@ -411,6 +414,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ipKey:               ipKey,
 		blockKey:            bKey,
 		blockable:           blockable,
+		limited:             limited,
 		requestHeader:       r.Header,
 		alive:               true,
 	}
@@ -741,7 +745,7 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeNewTransaction(c)
 	s.unsubscribeAddresses(c)
 	s.unsubscribeFiatRates(c)
-	if s.websocketLimiter != nil {
+	if s.websocketLimiter != nil && c.limited {
 		s.websocketLimiter.release(c.ipKey, time.Now())
 	}
 	s.unregisterChannel(c)
