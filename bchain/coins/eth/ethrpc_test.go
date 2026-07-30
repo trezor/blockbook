@@ -4,14 +4,44 @@ package eth
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	stdErrors "errors"
+	"fmt"
 	"testing"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/trezor/blockbook/bchain"
+	"golang.org/x/crypto/sha3"
 )
+
+func keccak256Selector(sig string) string {
+	h := sha3.NewLegacyKeccak256()
+	h.Write([]byte(sig))
+	return "0x" + hex.EncodeToString(h.Sum(nil)[:4])
+}
+
+// TestENSFunctionSelectors verifies that all ENS function selector constants
+// match the keccak256 hash of their documented Solidity signatures. A
+// mismatch means eth_call will revert against any real backend.
+func TestENSFunctionSelectors(t *testing.T) {
+	tests := []struct {
+		constant string
+		got      string
+		sig      string
+	}{
+		{"ENSResolverFunctionSelector", ENSResolverFunctionSelector, "resolver(bytes32)"},
+		{"ENSAddrFunctionSelector", ENSAddrFunctionSelector, "addr(bytes32)"},
+		{"ENSExpirationFunctionSelector", ENSExpirationFunctionSelector, "nameExpires(uint256)"},
+	}
+	for _, tc := range tests {
+		want := keccak256Selector(tc.sig)
+		if tc.got != want {
+			t.Errorf("%s = %q, want keccak256(%q)[:4] = %q", tc.constant, tc.got, tc.sig, want)
+		}
+	}
+}
 
 // recoveryStub is a method-aware bchain.EVMRPCClient fake for exercising the pruned-index
 // recovery path in recoverMinedTransaction / GetTransaction. It serves canned JSON per
@@ -208,5 +238,83 @@ func TestGetTransaction_RecoveryReusesReceipt(t *testing.T) {
 	}
 	if got.Confirmations <= 0 {
 		t.Errorf("Confirmations = %d, want > 0", got.Confirmations)
+	}
+}
+
+// ensCallStub is a minimal bchain.EVMRPCClient fake that serves a single canned
+// eth_call result (or forces an error), for exercising CheckENSExpiration's
+// result-parsing path without a real backend.
+type ensCallStub struct {
+	result string // eth_call result string, e.g. an ABI-encoded uint256 word
+	err    error  // when set, CallContext returns it (simulates a revert)
+}
+
+func (s *ensCallStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
+	return nil, stdErrors.New("not implemented")
+}
+
+func (s *ensCallStub) Close() {}
+
+func (s *ensCallStub) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	if method != "eth_call" {
+		return stdErrors.New("unexpected method: " + method)
+	}
+	if s.err != nil {
+		return s.err
+	}
+	p, ok := result.(*json.RawMessage)
+	if !ok {
+		return stdErrors.New("unexpected result type")
+	}
+	encoded, err := json.Marshal(s.result)
+	if err != nil {
+		return err
+	}
+	*p = json.RawMessage(encoded)
+	return nil
+}
+
+// abiWord left-pads an unsigned integer into a full 32-byte ABI-encoded word,
+// mirroring how nameExpires(uint256) is returned on the wire.
+func abiWord(v int64) string { return "0x" + fmt.Sprintf("%064x", v) }
+
+// TestCheckENSExpiration_ParsesPaddedResult locks in the result-parsing path of
+// CheckENSExpiration — the exact place the historical bug lived. nameExpires
+// returns an ABI-encoded uint256 (a 32-byte word left-padded with zeros);
+// hexutil.DecodeBig rejects those leading zeros, so the parse must treat the
+// word as raw bytes. Without that fix every real lookup silently skips the
+// expiration check.
+func TestCheckENSExpiration_ParsesPaddedResult(t *testing.T) {
+	past := time.Now().Add(-24 * time.Hour).Unix()
+	future := time.Now().Add(24 * time.Hour).Unix()
+
+	tests := []struct {
+		name        string
+		result      string
+		callErr     error
+		wantExpired bool
+	}{
+		{"future expiration (registered, valid)", abiWord(future), nil, false},
+		{"past expiration (registered, expired)", abiWord(past), nil, true},
+		{"zero word (unregistered label)", abiWord(0), nil, false},
+		{"empty result", "0x", nil, false},
+		{"rpc revert", "", stdErrors.New("execution reverted"), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b := &EthereumRPC{
+				BaseChain:      &bchain.BaseChain{}, // Testnet defaults to false, so ensContracts resolves
+				RPC:            &ensCallStub{result: tc.result, err: tc.callErr},
+				Timeout:        time.Second,
+				MainNetChainID: MainNet,
+			}
+			expired, err := b.CheckENSExpiration("vitalik.eth")
+			if err != nil {
+				t.Fatalf("CheckENSExpiration returned error: %v", err)
+			}
+			if expired != tc.wantExpired {
+				t.Errorf("CheckENSExpiration(%q) expired = %v, want %v", tc.result, expired, tc.wantExpired)
+			}
+		})
 	}
 }

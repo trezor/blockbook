@@ -3,8 +3,8 @@
 package rpc
 
 import (
-	"encoding/hex"
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -35,6 +35,8 @@ var testMap = map[string]func(t *testing.T, th *TestHandler){
 	"GetBlockHeader":           testGetBlockHeader,
 	"EthCallBatch":             testEthCallBatch,
 	"EthCallErc4626":           testEthCallErc4626,
+	"EnsNameExpires":           testEnsNameExpires,
+	"EnsResolution":            testEnsResolution,
 }
 
 type TestHandler struct {
@@ -826,4 +828,64 @@ func containsTx(o []bchain.Outpoint, tx string) bool {
 		}
 	}
 	return false
+}
+
+// testEnsNameExpires verifies that nameExpires(uint256) on the ENS Base Registrar
+// returns a valid non-zero expiration when called with the correct selector
+// (0xd6e4fa86). The wrong selector reverts; a wrong tokenID returns 0. Asserting
+// a non-zero result guards both regressions.
+func testEnsNameExpires(t *testing.T, h *TestHandler) {
+	// keccak256("vitalik") as tokenID (the Base Registrar token for vitalik.eth)
+	tokenID := "0xaf2caa1c2ca1d027f1ac823b529d0a67cd144264b2789fa2ea4d63a67c7103cc"
+	// nameExpires(uint256) on the ENS Base Registrar. Using the production
+	// constants makes this guard the exact selector/address regression the fix
+	// addresses (a wrong constant would fail here, not silently pass).
+	result, err := h.Chain.EthereumTypeRpcCall(eth.ENSExpirationFunctionSelector+tokenID[2:], eth.ENSBaseRegistrarAddress, "")
+	if err != nil {
+		t.Fatalf("nameExpires eth_call failed (wrong selector?): %v", err)
+	}
+	if result == "0x" || result == "0x0" || result == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		t.Fatalf("nameExpires returned zero for vitalik.eth (wrong tokenID?): %s", result)
+	}
+	t.Logf("vitalik.eth nameExpires: %s", result)
+}
+
+// testEnsResolution verifies full ENS resolution: resolver + addr against real backend.
+func testEnsResolution(t *testing.T, h *TestHandler) {
+	// namehash("vitalik.eth") = 0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835
+	namehash := "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835"
+	// resolver(bytes32) on the ENS registry
+	resolverResult, err := h.Chain.EthereumTypeRpcCall(eth.ENSResolverFunctionSelector+namehash[2:], eth.ENSRegistryAddress, "")
+	if err != nil {
+		t.Fatalf("resolver eth_call failed: %v", err)
+	}
+	if resolverResult == "0x" || resolverResult == "0x0" || resolverResult == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		t.Fatal("resolver returned zero — vitalik.eth should have a resolver set")
+	}
+	t.Logf("vitalik.eth resolver: %s", resolverResult)
+
+	// addr(bytes32) on the resolver. Extract the resolver address from the
+	// ABI-encoded result (last 40 hex chars) and 0x-prefix it. Guard the slice
+	// against a short non-zero result that slips past the zero-checks above.
+	if len(resolverResult) < 42 {
+		t.Fatalf("unexpected resolver result: %s", resolverResult)
+	}
+	resolverAddr := "0x" + resolverResult[len(resolverResult)-40:]
+	addrResult, err := h.Chain.EthereumTypeRpcCall(eth.ENSAddrFunctionSelector+namehash[2:], resolverAddr, "")
+	if err != nil {
+		t.Fatalf("addr eth_call failed: %v", err)
+	}
+	if addrResult == "0x" || addrResult == "0x0" || addrResult == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		t.Fatal("addr returned zero — vitalik.eth should resolve to an address")
+	}
+	// Extract address (last 40 hex chars) and verify it matches Vitalik's known address.
+	// eth_call returns lowercase hex; use case-insensitive comparison.
+	if len(addrResult) < 42 {
+		t.Fatalf("unexpected addr result: %s", addrResult)
+	}
+	addr := "0x" + addrResult[len(addrResult)-40:]
+	if !strings.EqualFold(addr, "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045") {
+		t.Fatalf("vitalik.eth resolved to %s, want 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", addr)
+	}
+	t.Logf("vitalik.eth -> %s ✓", addr)
 }

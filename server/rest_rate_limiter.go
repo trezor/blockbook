@@ -48,15 +48,16 @@ const (
 )
 
 type restUILimiterConfig struct {
-	rateLimit       int
-	rateWindow      time.Duration
-	burst           int
-	maxConcurrent   int
-	stateTTL        time.Duration
-	blockDuration   time.Duration
-	trustedProxies  []netip.Prefix
-	cloudflareCIDRs []netip.Prefix
-	trustPseudoIPv6 bool
+	rateLimit         int
+	rateWindow        time.Duration
+	burst             int
+	maxConcurrent     int
+	stateTTL          time.Duration
+	blockDuration     time.Duration
+	trustedProxies    []netip.Prefix
+	cloudflareCIDRs   []netip.Prefix
+	trustPseudoIPv6   bool
+	whitelistPrefixes []netip.Prefix
 }
 
 type restUIRateLimiter struct {
@@ -74,6 +75,7 @@ type restUIRateLimiter struct {
 	trustedProxies     []netip.Prefix
 	cloudflarePrefixes []netip.Prefix
 	trustPseudoIPv6    bool
+	whitelistPrefixes  []netip.Prefix
 	localBypassWarn    sync.Once
 }
 
@@ -127,6 +129,7 @@ func newRestUIRateLimiter(network string, metrics *common.Metrics) (*restUIRateL
 		trustedProxies:     cfg.trustedProxies,
 		cloudflarePrefixes: cfg.cloudflareCIDRs,
 		trustPseudoIPv6:    cfg.trustPseudoIPv6,
+		whitelistPrefixes:  cfg.whitelistPrefixes,
 	}
 	if metrics != nil {
 		metrics.RestUIActiveIPs.Set(0)
@@ -194,6 +197,23 @@ func readRestUILimiterConfig(network string) (restUILimiterConfig, error) {
 	cfg.trustedProxies = clientIPCfg.trustedProxies
 	cfg.cloudflareCIDRs = clientIPCfg.cloudflarePrefixes
 	cfg.trustPseudoIPv6 = clientIPCfg.trustPseudoIPv6
+
+	whitelistEnvNames := []string{
+		prefix + "_REST_UI_WHITELIST_IPS",
+		"REST_UI_WHITELIST_IPS",
+	}
+	for _, envName := range whitelistEnvNames {
+		whitelistValue := os.Getenv(envName)
+		if whitelistValue == "" {
+			continue
+		}
+		cfg.whitelistPrefixes, err = parseCIDRList(envName, splitCIDRList(whitelistValue))
+		if err != nil {
+			return cfg, err
+		}
+		glog.Infof("REST/UI rate limiter whitelisted CIDRs (%s): %v", envName, cfg.whitelistPrefixes)
+		break
+	}
 	return cfg, nil
 }
 
@@ -250,6 +270,12 @@ func (l *restUIRateLimiter) wrapPublic(next http.Handler, basePath string) http.
 			})
 			next.ServeHTTP(w, r)
 			return
+		}
+		if len(l.whitelistPrefixes) > 0 {
+			if addr, ok := parseAddr(ip); ok && isWhitelistedIP(addr, l.whitelistPrefixes) {
+				next.ServeHTTP(w, r)
+				return
+			}
 		}
 		ipKey := rateLimitKey(ip)
 		// blockKey keeps IPv6 at the full /128 so a temporary block never takes
