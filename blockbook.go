@@ -250,6 +250,14 @@ func mainWithExitCode() int {
 	}
 
 	index.SetInternalState(internalState)
+
+	// resolve the internal-data healing watermark before the catch-up sync connects
+	// new blocks; once blocks with internal data are connected, an unset watermark
+	// could no longer be told apart from an always-processed chain
+	if *synchronize && chain.GetChainParser().GetChainType() == bchain.ChainEthereumType && bchain.ProcessInternalTransactions {
+		index.ResolveInternalDataFrom()
+	}
+
 	if *fixUtxo {
 		err = index.StoreInternalState(internalState)
 		if err != nil {

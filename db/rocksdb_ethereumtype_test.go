@@ -2076,3 +2076,38 @@ func Benchmark_contractIndexLookup(b *testing.B) {
 		})
 	}
 }
+
+func Test_internalDataFromHeight(t *testing.T) {
+	tests := []struct {
+		name            string
+		bestHeight      uint32
+		hasInternalData bool
+		want            uint32
+	}{
+		{
+			name:            "fresh database has nothing to heal",
+			bestHeight:      0,
+			hasInternalData: false,
+			want:            0,
+		},
+		{
+			name:            "chain that always processed internal data has nothing to heal",
+			bestHeight:      84_000_000,
+			hasInternalData: true,
+			want:            0,
+		},
+		{
+			name:            "index synced without internal data heals everything below the next block",
+			bestHeight:      84_000_000,
+			hasInternalData: false,
+			want:            84_000_001,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := internalDataFromHeight(tt.bestHeight, tt.hasInternalData); got != tt.want {
+				t.Errorf("internalDataFromHeight(%d, %v) = %d, want %d", tt.bestHeight, tt.hasInternalData, got, tt.want)
+			}
+		})
+	}
+}

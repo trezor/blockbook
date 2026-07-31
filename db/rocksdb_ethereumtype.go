@@ -960,6 +960,49 @@ func (d *RocksDB) GetEthereumInternalData(txid string) (*bchain.EthereumInternal
 	return d.getEthereumInternalData(btxID)
 }
 
+// HasAnyEthereumInternalData reports whether the internal data column family holds
+// at least one row, i.e. whether any synced block was processed with internal data
+// enabled. Empty rows are never stored, so a single existing row is a reliable signal.
+func (d *RocksDB) HasAnyEthereumInternalData() bool {
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfInternalData])
+	defer it.Close()
+	it.SeekToFirst()
+	return it.Valid()
+}
+
+// internalDataFromHeight decides the initial internal-data watermark for a database
+// that does not have one yet: an index with blocks but no internal data rows was
+// synced with the processing off, so everything below the next block needs healing;
+// otherwise (fresh database, or a chain that always processed internal data) there
+// is nothing to heal.
+func internalDataFromHeight(bestHeight uint32, hasInternalData bool) uint32 {
+	if bestHeight == 0 || hasInternalData {
+		return 0
+	}
+	return bestHeight + 1
+}
+
+// ResolveInternalDataFrom initializes the internal-data healing watermark in the
+// internal state. It must be called before the catch-up sync connects new blocks -
+// once blocks with internal data are connected, the column-family-emptiness
+// heuristic could no longer tell a migrated database from an always-processed one.
+func (d *RocksDB) ResolveInternalDataFrom() uint32 {
+	if from, ok := d.is.GetInternalDataFrom(); ok {
+		return from
+	}
+	bestHeight, _, err := d.GetBestBlock()
+	if err != nil {
+		glog.Error("ResolveInternalDataFrom: GetBestBlock: ", err)
+		bestHeight = 0
+	}
+	from := internalDataFromHeight(bestHeight, d.HasAnyEthereumInternalData())
+	d.is.SetInternalDataFrom(from)
+	if from > 0 {
+		glog.Infof("ResolveInternalDataFrom: index has no internal data below height %d, healing scheduled", from)
+	}
+	return from
+}
+
 func (d *RocksDB) getEthereumInternalData(btxID []byte) (*bchain.EthereumInternalData, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfInternalData], btxID)
 	if err != nil {
