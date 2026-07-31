@@ -129,6 +129,14 @@ type contractEvent struct {
 	destroyed bool
 }
 
+// transferEvent describes one expected internal transfer, in emission order
+type transferEvent struct {
+	typ   bchain.EthereumInternalTransactionType
+	from  string
+	to    string
+	value int64
+}
+
 func TestBuildInternalDataFromTronInfos(t *testing.T) {
 
 	tests := []struct {
@@ -141,6 +149,7 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		wantDataErrSubstr string // d.Error (EthereumInternalData.Error)
 		wantContract      string
 		wantContracts     []contractEvent // exact contract registry entries in order
+		wantTransferList  []transferEvent // exact transfers in order; overrides the wantTransfers/wantFrom/wantTo/wantValue shorthand
 		wantFrom          string
 		wantTo            string
 		wantValue         int64
@@ -238,6 +247,11 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 				{addr: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"}, // deployed contract
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"}, // constructor-created child
 			},
+			// the zero-value create emits a transfer so that the child's
+			// address history contains the deploying transaction
+			wantTransferList: []transferEvent{
+				{typ: bchain.CREATE, from: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", to: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+			},
 		},
 
 		{
@@ -261,6 +275,9 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 			txs:           []bchain.RpcTransaction{{Hash: "0xfactory1", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
 			wantType:      bchain.CALL,
 			wantContracts: []contractEvent{{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"}},
+			wantTransferList: []transferEvent{
+				{typ: bchain.CREATE, from: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", to: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+			},
 		},
 
 		{
@@ -277,6 +294,10 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 			wantType:      bchain.SELFDESTRUCT,
 			wantContract:  "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
 			wantContracts: []contractEvent{{addr: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", destroyed: true}},
+			// no beneficiary recorded - the destroyed contract is still indexed
+			wantTransferList: []transferEvent{
+				{typ: bchain.SELFDESTRUCT, from: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", to: ""},
+			},
 		},
 
 		{
@@ -306,16 +327,16 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "SUCCESS"},
 				},
 			},
-			txs:           []bchain.RpcTransaction{{Hash: "0xephemeral1", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
-			wantType:      bchain.SELFDESTRUCT,
-			wantContract:  "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
-			wantTransfers: 1,
-			wantFrom:      "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
-			wantTo:        "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
-			wantValue:     5,
+			txs:          []bchain.RpcTransaction{{Hash: "0xephemeral1", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType:     bchain.SELFDESTRUCT,
+			wantContract: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
 			wantContracts: []contractEvent{
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", destroyed: true},
+			},
+			wantTransferList: []transferEvent{
+				{typ: bchain.CREATE, from: "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", to: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+				{typ: bchain.SELFDESTRUCT, from: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", to: "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", value: 5},
 			},
 		},
 
@@ -357,6 +378,12 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", destroyed: true},
 				{addr: "TVtFTiSQmeMkdpusjefUcPcEeTPtqnhz3D"},
 				{addr: "TVtFTiSQmeMkdpusjefUcPcEeTPtqnhz3D", destroyed: true},
+			},
+			wantTransferList: []transferEvent{
+				{typ: bchain.CREATE, from: "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", to: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+				{typ: bchain.SELFDESTRUCT, from: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", to: ""},
+				{typ: bchain.CREATE, from: "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", to: "TVtFTiSQmeMkdpusjefUcPcEeTPtqnhz3D"},
+				{typ: bchain.SELFDESTRUCT, from: "TVtFTiSQmeMkdpusjefUcPcEeTPtqnhz3D", to: ""},
 			},
 		},
 
@@ -487,18 +514,29 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 			require.Equal(t, tt.wantType, d.Type)
 			require.Equal(t, tt.wantContract, d.Contract)
 
-			require.Len(t, d.Transfers, tt.wantTransfers)
-
-			if tt.wantTransfers > 0 {
-				tr := d.Transfers[0]
-
-				require.Equal(t, tt.wantValue, tr.Value.Int64())
-
-				if tt.wantFrom != "" {
-					require.Equal(t, tt.wantFrom, tr.From)
+			if tt.wantTransferList != nil {
+				require.Len(t, d.Transfers, len(tt.wantTransferList))
+				for i, want := range tt.wantTransferList {
+					tr := d.Transfers[i]
+					require.Equal(t, want.typ, tr.Type)
+					require.Equal(t, want.from, tr.From)
+					require.Equal(t, want.to, tr.To)
+					require.Equal(t, want.value, tr.Value.Int64())
 				}
-				if tt.wantTo != "" {
-					require.Equal(t, tt.wantTo, tr.To)
+			} else {
+				require.Len(t, d.Transfers, tt.wantTransfers)
+
+				if tt.wantTransfers > 0 {
+					tr := d.Transfers[0]
+
+					require.Equal(t, tt.wantValue, tr.Value.Int64())
+
+					if tt.wantFrom != "" {
+						require.Equal(t, tt.wantFrom, tr.From)
+					}
+					if tt.wantTo != "" {
+						require.Equal(t, tt.wantTo, tr.To)
+					}
 				}
 			}
 

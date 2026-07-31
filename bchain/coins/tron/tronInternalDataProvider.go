@@ -213,11 +213,13 @@ func buildInternalDataFromTronInfos(
 				}
 			}
 
+			transferEmitted := false
 			for _, cv := range itx.CallValueInfo {
 				// skip TRC-10
 				if cv.CallValue <= 0 || cv.TokenID != "" {
 					continue
 				}
+				transferEmitted = true
 
 				val := *big.NewInt(cv.CallValue)
 				d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
@@ -225,6 +227,18 @@ func buildInternalDataFromTronInfos(
 					From:  from,
 					To:    to,
 					Value: val,
+				})
+			}
+
+			// eth processCallTrace parity: create and suicide frames emit a
+			// transfer even when no TRX moved, so that the created/destroyed
+			// contract's own address history contains this transaction -
+			// plain zero-value calls stay skipped
+			if !transferEmitted && ((t == bchain.CREATE && to != "") || (t == bchain.SELFDESTRUCT && from != "")) {
+				d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
+					Type: t,
+					From: from,
+					To:   to,
 				})
 			}
 		}
