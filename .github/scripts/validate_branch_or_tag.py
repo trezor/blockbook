@@ -23,8 +23,8 @@ def fail(message: str) -> None:
 def ref_exists(repo: str, ref: str, kind: str) -> bool:
     remote = f"https://github.com/{repo}.git"
     try:
-        subprocess.run(
-            ["git", "ls-remote", "--exit-code", f"--{kind}", remote, ref],
+        result = subprocess.run(
+            ["git", "ls-remote", "--exit-code", f"--{kind}", remote, "--", ref],
             check=True,
             capture_output=True,
             text=True,
@@ -34,7 +34,15 @@ def ref_exists(repo: str, ref: str, kind: str) -> bool:
         raise AssertionError("unreachable") from exc
     except subprocess.CalledProcessError:
         return False
-    return True
+    # ls-remote patterns are tail-matching globs, so e.g. 'mas*' or 'master'
+    # can match a different ref than the one actions/checkout will later use;
+    # accept only an exact ref-name match.
+    expected = f"refs/{kind}/{ref}"
+    for line in result.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 2 and parts[1] == expected:
+            return True
+    return False
 
 
 def validate_branch_or_tag(repo: str, ref: str) -> str:

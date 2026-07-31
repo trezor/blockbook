@@ -41,6 +41,15 @@ def log(message: str) -> None:
     print(f"{LOG_PREFIX} {message}", flush=True)
 
 
+def write_step_summary(markdown: str) -> None:
+    # Renders on the workflow run's summary page; a no-op outside Actions.
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    with open(summary_path, "a", encoding="utf-8") as summary:
+        summary.write(markdown.rstrip("\n") + "\n")
+
+
 def parse_json_object(raw: str, description: str) -> dict:
     try:
         payload = json.loads(raw)
@@ -104,6 +113,34 @@ def load_runner_map(vars_map: dict) -> dict[str, str]:
     return mapping
 
 
+def load_staging_coins(vars_map: dict) -> set[str]:
+    # BB_STAGING lists work-in-progress coins (comma/space separated); include the
+    # '-'/'_' variants so it matches either coin-name spelling.
+    staging: set[str] = set()
+    for token in re.split(r"[\s,]+", str(vars_map.get("BB_STAGING") or "")):
+        name = token.strip().lower()
+        if name:
+            staging.update({name, name.replace("-", "_"), name.replace("_", "-")})
+    return staging
+
+
+def prune_staging_coins(
+    workspace: Path, runner_map: dict[str, str], staging: set[str]
+) -> dict[str, str]:
+    # Drop a staging coin only where its config is absent, so an unmerged coin's
+    # repo-wide variables don't break sibling branches while the feature branch that
+    # carries the config still builds and deploys it normally.
+    if not staging:
+        return runner_map
+    kept = {}
+    for coin, runner in runner_map.items():
+        if coin in staging and not coin_config_path(workspace, coin).exists():
+            log(f"BB_STAGING: skipping '{coin}' (no configs/coins/{coin}.json on this branch)")
+            continue
+        kept[coin] = runner
+    return kept
+
+
 def parse_coin_tokens(raw: str, *, allow_all: bool) -> tuple[bool, list[str]]:
     text = raw.strip()
     if not text:
@@ -164,6 +201,23 @@ def normalize_coin_name(workspace: Path, coin: str) -> str:
     return coin
 
 
+def canonical_coin_name(coin: str, known_coins) -> str:
+    """Resolve a requested coin to its canonical key, accepting '_' where the
+    canonical (configs/coins) name uses '-'.
+
+    Unlike normalize_coin_name this matches against the already-resolved coin
+    set instead of the filesystem, so build/deploy selection does not depend on
+    the process working directory (the context was built from the workspace).
+    """
+    if coin in known_coins:
+        return coin
+    if "_" in coin:
+        candidate = coin.replace("_", "-")
+        if candidate in known_coins:
+            return candidate
+    return coin
+
+
 def validate_runner_map_configs(workspace: Path, runner_map: dict[str, str]) -> None:
     missing = []
     for coin in sorted(runner_map):
@@ -175,6 +229,7 @@ def validate_runner_map_configs(workspace: Path, runner_map: dict[str, str]) -> 
         raise ValidationError(
             "BB_RUNNER_* entries without matching configs/coins/<coin>.json: "
             + ", ".join(missing)
+            + " (add a work-in-progress coin to the BB_STAGING variable if its config is on another branch)"
         )
 
 
@@ -259,6 +314,15 @@ def deployability_error(
             "which has no connectivity tests in tests/tests.json"
         )
 
+    # Keep the test definitions but never deploy a coin flagged disabled (e.g. its
+    # backend/Blockbook is temporarily not deployed). Stays in sync with the
+    # disabled handling in tests/integration.go and tests/openapi/src/config.ts.
+    if test_cfg.get("disabled") is True:
+        return (
+            f"coin '{coin}' maps to test coin '{lookup_coin}' "
+            "which is disabled in tests/tests.json"
+        )
+
     return None
 
 
@@ -272,6 +336,11 @@ def load_coin_context(
     runner_map = normalize_runner_map(workspace, runner_map)
     if not runner_map:
         raise ValidationError("no BB_RUNNER_* variables found")
+    runner_map = prune_staging_coins(workspace, runner_map, load_staging_coins(vars_map))
+    if not runner_map:
+        raise ValidationError(
+            "all BB_RUNNER_* coins are BB_STAGING work-in-progress without a config on this branch"
+        )
 
     validate_runner_map_configs(workspace, runner_map)
     all_coins = list_all_coins(workspace, runner_map)
@@ -324,7 +393,7 @@ def resolve_build_selection(
 
     requested_all, requested = parse_coin_tokens(raw, allow_all=True)
     if not requested_all:
-        requested = [normalize_coin_name(Path.cwd(), coin) for coin in requested]
+        requested = [canonical_coin_name(coin, context.all_coins) for coin in requested]
     selected = context.all_coins if requested_all else requested
 
     unknown = [coin for coin in selected if coin not in context.all_coins]
@@ -380,7 +449,7 @@ def resolve_deploy_selection(context: CoinContext, raw: str) -> list[str]:
             "deploy does not support ALL; "
             f"deployable coins: {','.join(context.deployable_coins)}"
         )
-    requested = [normalize_coin_name(Path.cwd(), coin) for coin in requested]
+    requested = [canonical_coin_name(coin, context.all_coins) for coin in requested]
 
     unknown = [coin for coin in requested if coin not in context.all_coins]
     if unknown:

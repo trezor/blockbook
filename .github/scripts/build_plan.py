@@ -13,6 +13,7 @@ from runner import (
     log,
     parse_json_object,
     resolve_build_selection,
+    write_step_summary,
 )
 
 
@@ -66,6 +67,22 @@ def main() -> None:
             f"Runner {item['runner']} labels={item['labels_json']}: "
             + ", ".join(item["coins"])
         )
+
+    summary_lines = [
+        f"### Build plan ({build_env})",
+        "",
+        "| Runner | Coins |",
+        "| --- | --- |",
+    ]
+    for item in runner_matrix:
+        summary_lines.append(f"| {item['runner']} | {', '.join(item['coins'])} |")
+    if selection.skipped_prod_only and selection.requested_all:
+        summary_lines += [
+            "",
+            "Skipped prod-only coins for env=dev: "
+            + ", ".join(selection.skipped_prod_only),
+        ]
+    write_step_summary("\n".join(summary_lines))
 
 
 if __name__ == "__main__":
