@@ -292,22 +292,40 @@ func mainWithExitCode() int {
 		return exitCodeOK
 	}
 
-	if *rebuildEnsAliases {
+	// Rebuild ENS address aliases when -rebuildensaliases is given, and self-heal
+	// at startup whenever the trusted registrar set changes (fingerprint mismatch)
+	// or on the first run after enabling it. Trust-none coins report an empty
+	// fingerprint and never auto-heal (never auto-wiped); the flag still forces a
+	// rebuild there. The auto path falls through and continues to serve; the
+	// explicit flag is a one-shot that exits.
+	ensFP := ensRegistrarsFingerprint(chain)
+	if *rebuildEnsAliases || (ensFP != "" && internalState.EnsRegistrarsFingerprint != ensFP) {
 		internalState.DbState = common.DbStateOpen
 		err = performEnsAliasRebuild(chanOsSignal)
 		if err == db.ErrOperationInterrupted {
 			// The rebuild is atomic (nothing is committed until a full scan
-			// succeeds), so an interrupt leaves aliases unchanged — but exit
-			// non-zero so operators know it did not complete.
+			// succeeds), so an interrupt leaves aliases unchanged and the
+			// fingerprint is left as-is, so the next start retries.
 			glog.Warning("rebuildEnsAliases: interrupted before completion — address aliases left UNCHANGED")
-			return exitCodeFatal
+			if *rebuildEnsAliases {
+				return exitCodeFatal // explicit one-shot: signal it did not complete
+			}
+			return exitCodeOK // auto self-heal during shutdown: clean stop, retries next boot
 		}
 		if err != nil {
 			glog.Error("rebuildEnsAliases: ", err)
 			return exitCodeFatal
 		}
+		internalState.EnsRegistrarsFingerprint = ensFP
+		if err = index.StoreInternalState(internalState); err != nil {
+			glog.Error("StoreInternalState: ", err)
+			return exitCodeFatal
+		}
 		glog.Info("rebuildEnsAliases: completed")
-		return exitCodeOK
+		if *rebuildEnsAliases {
+			return exitCodeOK // explicit flag: one-shot, exit
+		}
+		// auto self-heal: fall through and continue to normal startup
 	}
 
 	// Per-chain missing-block retry override, if any. Coin RPCs that opt in
@@ -552,6 +570,16 @@ func performRollback() error {
 // family from NameRegistered logs, an alias-only alternative to a full reindex.
 // The scan defaults to the whole chain (block 0 to the backend tip) and can be
 // bounded with -blockheight/-blockuntil.
+// ensRegistrarsFingerprint returns the chain's trusted ENS registrar fingerprint
+// (EthereumType coins), or "" for chains that don't expose one. A change in this
+// value across restarts drives the startup ENS alias self-heal.
+func ensRegistrarsFingerprint(chain bchain.BlockChain) string {
+	if p, ok := chain.(interface{ EnsRegistrarsFingerprint() string }); ok {
+		return p.EnsRegistrarsFingerprint()
+	}
+	return ""
+}
+
 func performEnsAliasRebuild(stop chan os.Signal) error {
 	rebuilder, ok := chain.(db.EnsAliasRebuilder)
 	if !ok {

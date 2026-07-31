@@ -550,6 +550,18 @@ func (c *blockChainWithMetrics) RebuildEnsAliases(fromBlock, toBlock uint32, chu
 	return errors.New("ENS alias rebuild not supported by underlying chain")
 }
 
+// EnsRegistrarsFingerprint forwards the wrapped chain's ENS registrar fingerprint
+// so the startup self-heal can detect a changed registrar set through the metrics
+// wrapper. Empty when the underlying chain doesn't expose one.
+func (c *blockChainWithMetrics) EnsRegistrarsFingerprint() string {
+	if p, ok := c.b.(interface {
+		EnsRegistrarsFingerprint() string
+	}); ok {
+		return p.EnsRegistrarsFingerprint()
+	}
+	return ""
+}
+
 // XpubConfigOverride forwards the wrapped chain's per-chain xpub config
 // override through the metrics wrapper; nil when none is provided.
 func (c *blockChainWithMetrics) XpubConfigOverride() *bchain.XpubConfig {

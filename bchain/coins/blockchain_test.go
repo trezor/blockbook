@@ -18,13 +18,16 @@ type ensRebuilderIface interface {
 
 type fakeEnsChain struct {
 	bchain.BlockChain
-	called bool
+	called      bool
+	fingerprint string
 }
 
 func (f *fakeEnsChain) RebuildEnsAliases(_, _ uint32, _ int, _ func() bool, _ func([]bchain.AddressAliasRecord) error) error {
 	f.called = true
 	return nil
 }
+
+func (f *fakeEnsChain) EnsRegistrarsFingerprint() string { return f.fingerprint }
 
 // Test_blockChainWithMetrics_ForwardsRebuildEnsAliases guards the regression
 // where the metrics wrapper hid the EthereumType RebuildEnsAliases method, so
@@ -43,5 +46,20 @@ func Test_blockChainWithMetrics_ForwardsRebuildEnsAliases(t *testing.T) {
 	}
 	if !inner.called {
 		t.Fatal("RebuildEnsAliases was not forwarded to the underlying chain")
+	}
+}
+
+// Test_blockChainWithMetrics_ForwardsEnsRegistrarsFingerprint guards that the
+// startup self-heal can read the registrar fingerprint through the wrapper.
+func Test_blockChainWithMetrics_ForwardsEnsRegistrarsFingerprint(t *testing.T) {
+	inner := &fakeEnsChain{fingerprint: "v1|0xabc"}
+	var chain bchain.BlockChain = &blockChainWithMetrics{b: inner}
+
+	fp, ok := chain.(interface{ EnsRegistrarsFingerprint() string })
+	if !ok {
+		t.Fatal("metrics wrapper does not expose EnsRegistrarsFingerprint")
+	}
+	if got := fp.EnsRegistrarsFingerprint(); got != "v1|0xabc" {
+		t.Fatalf("EnsRegistrarsFingerprint() = %q, want %q", got, "v1|0xabc")
 	}
 }

@@ -1464,6 +1464,31 @@ const ensRebuildDefaultChunkBlocks = 100000
 // always logged.
 const ensRebuildProgressEvery = 64
 
+// ensRebuildSchemaVersion is bumped when the ENS alias parsing or signature set
+// changes. It is part of the registrar fingerprint, so a deploy that improves
+// parsing re-heals stored aliases even when the configured registrars are
+// unchanged.
+const ensRebuildSchemaVersion = 1
+
+// EnsRegistrarsFingerprint returns a stable marker of the trusted ENS registrar
+// set (schema version + sorted, normalized registrars). It changes whenever the
+// operator edits ens_registrars or the parsing schema is bumped; the startup
+// self-heal compares it against the stored value to decide when to rebuild.
+// Empty when no registrars are configured, so trust-none coins never auto-heal
+// (and are therefore never auto-wiped) — the -rebuildensaliases flag still
+// forces a rebuild there.
+func (b *EthereumRPC) EnsRegistrarsFingerprint() string {
+	if len(b.ensRegistrars) == 0 {
+		return ""
+	}
+	addrs := make([]string, 0, len(b.ensRegistrars))
+	for a := range b.ensRegistrars {
+		addrs = append(addrs, a)
+	}
+	sort.Strings(addrs)
+	return fmt.Sprintf("v%d|%s", ensRebuildSchemaVersion, strings.Join(addrs, ","))
+}
+
 // RebuildEnsAliases rescans ENS NameRegistered logs emitted by the trusted
 // registrars over [fromBlock, toBlock] in chunkBlocks-sized ranges and passes
 // each chunk's decoded alias records to store. It is a one-shot maintenance

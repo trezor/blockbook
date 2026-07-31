@@ -96,6 +96,10 @@ type InternalState struct {
 	// database migrations
 	UtxoChecked            bool `json:"utxoChecked" ts_doc:"Indicates if UTXO consistency checks have been performed."`
 	SortedAddressContracts bool `json:"sortedAddressContracts" ts_doc:"Indicates if address/contract sorting has been completed."`
+	// EnsRegistrarsFingerprint records the trusted ENS registrar set the address
+	// aliases were last rebuilt against; a mismatch at startup triggers a one-time
+	// self-heal (EthereumType coins). Empty until the first rebuild.
+	EnsRegistrarsFingerprint string `json:"ensRegistrarsFingerprint,omitempty" ts_doc:"Fingerprint of the trusted ENS registrar set the address aliases were last rebuilt against."`
 
 	// golomb filter settings
 	BlockGolombFilterP      uint8  `json:"block_golomb_filter_p" ts_doc:"Parameter P for building Golomb-Rice filters for blocks."`

@@ -199,6 +199,32 @@ func Test_RebuildEnsAliases_WildcardScansAllEmitters(t *testing.T) {
 	}
 }
 
+func Test_EnsRegistrarsFingerprint(t *testing.T) {
+	fp := func(addrs []string) string {
+		return (&EthereumRPC{ensRegistrars: ensRegistrarSet(addrs)}).EnsRegistrarsFingerprint()
+	}
+	if got := fp(nil); got != "" {
+		t.Errorf("empty set fingerprint = %q, want empty (trust-none never auto-heals)", got)
+	}
+	// Order-independent: the same set in any order yields the same fingerprint.
+	a := fp([]string{"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5", "0x59e16fccd424cc24e280be16e11bcd56fb0ce547"})
+	b := fp([]string{"0x59e16fccd424cc24e280be16e11bcd56fb0ce547", "0x283af0b28c62c092c9727f1ee09c02ca627eb7f5"})
+	if a == "" {
+		t.Fatal("non-empty set produced empty fingerprint")
+	}
+	if a != b {
+		t.Errorf("fingerprint depends on order: %q vs %q", a, b)
+	}
+	// Changing a registrar address changes the fingerprint (drives the self-heal).
+	c := fp([]string{"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5", "0x0000000000000000000000000000000000000001"})
+	if c == a {
+		t.Errorf("fingerprint unchanged after a registrar address changed: %q", c)
+	}
+	if got := fp([]string{"*"}); got == "" {
+		t.Error("wildcard set produced empty fingerprint")
+	}
+}
+
 func Test_RebuildEnsAliases_Interrupted(t *testing.T) {
 	mock := &mockEnsLogsRPC{entries: []ensLogEntry{{block: 5, log: unraveledLog("0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5")}}}
 	b := &EthereumRPC{RPC: mock, Timeout: time.Second, ensRegistrars: ensRegistrarSet([]string{"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5"})}
