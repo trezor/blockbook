@@ -143,6 +143,9 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.Parser.AddrContractsCacheMinSize = ethChainConfig.AddressContractsCacheMinSize
 	tronRpc.Parser.AddrContractsCacheMaxBytes = ethChainConfig.AddressContractsCacheMaxBytes
 	tronRpc.Parser.AddrContractsCacheBulkMaxBytes = ethChainConfig.AddressContractsCacheBulkMaxBytes
+	// NewTronParser recreates the parser, so re-apply the ENS reverse opt-out that
+	// NewEthereumRPC set on the parser it built (otherwise Tron ignores the flag).
+	tronRpc.Parser.DisableEnsAliases = cfg.DisableEnsAliases
 
 	tronRpc.EthereumRPC.Parser = tronRpc.Parser
 	tronRpc.ChainConfig = &cfg

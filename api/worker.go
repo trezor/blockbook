@@ -63,9 +63,9 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
 		}
 	}
-	// default enabled for parsers that don't expose the per-chain toggle
+	// default enabled for non-EthereumType parsers, which have no ENS aliases
 	useEnsReverseAliases := true
-	if p, ok := chain.GetChainParser().(interface{ UseEnsReverseAliases() bool }); ok {
+	if p, ok := chain.GetChainParser().(eth.EthereumLikeParser); ok {
 		useEnsReverseAliases = p.UseEnsReverseAliases()
 	}
 	w := &Worker{

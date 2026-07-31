@@ -13,6 +13,21 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
+// TestTronParser_UseEnsReverseAliases guards that the ENS reverse opt-out is
+// honored through TronParser's embedded eth parser. NewTronRPC recreates the
+// parser, so it must re-apply DisableEnsAliases (regression: Tron ignored the
+// flag and kept serving ENS reverse labels).
+func TestTronParser_UseEnsReverseAliases(t *testing.T) {
+	p := NewTronParser(1, true) // address aliases enabled
+	if !p.UseEnsReverseAliases() {
+		t.Fatal("expected ENS reverse aliases enabled by default")
+	}
+	p.DisableEnsAliases = true
+	if p.UseEnsReverseAliases() {
+		t.Fatal("expected ENS reverse aliases disabled after DisableEnsAliases=true")
+	}
+}
+
 func TestTronParser_GetAddrDescFromAddress(t *testing.T) {
 	type args struct {
 		address string

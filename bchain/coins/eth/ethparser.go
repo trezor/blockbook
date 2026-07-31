@@ -56,8 +56,8 @@ type EthereumParser struct {
 	AddrContractsCacheBulkMaxBytes int64
 	FormatAddressFunc              func(addr string) string
 	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
-	// DisableEnsReverse turns off ENS reverse aliasing for this chain.
-	DisableEnsReverse bool
+	// DisableEnsAliases turns off ENS reverse aliasing for this chain.
+	DisableEnsAliases bool
 }
 
 // NewEthereumParser returns new EthereumParser instance

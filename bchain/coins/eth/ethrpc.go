@@ -268,7 +268,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 	// always create parser
 	parser := NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
-	parser.DisableEnsReverse = c.DisableEnsAliases
+	parser.DisableEnsAliases = c.DisableEnsAliases
 	parser.HotAddressMinContracts = c.HotAddressMinContracts
 	parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
 	parser.HotAddressMinHits = c.HotAddressMinHits

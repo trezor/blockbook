@@ -38,7 +38,7 @@ func (p *EthereumParser) SetEnsSuffix(suffix string) {
 
 // UseEnsReverseAliases reports whether ENS reverse aliases are recorded and served.
 func (p *EthereumParser) UseEnsReverseAliases() bool {
-	return p.AddressAliases && !p.DisableEnsReverse
+	return p.AddressAliases && !p.DisableEnsAliases
 }
 
 // WARNING: not production-ready, disabled by default (see UseEnsReverseAliases).
