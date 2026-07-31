@@ -418,9 +418,28 @@ func (is *InternalState) GetNetwork() string {
 // SetBackendInfo sets new BackendInfo and records the time when Blocks advances.
 // On the first observation the advance time is seeded to now so the
 // derived tip-age metric reads a meaningful value instead of "since epoch."
+//
+// A failed backend query is recorded as an error on top of the last known good
+// payload instead of replacing it with zeros. Callers construct BackendInfo from an
+// empty bchain.ChainInfo when GetChainInfo fails (see db.SyncWorker.updateBackendInfo
+// and api.Worker.GetSystemInfo), and storing that would:
+//   - drive blockbook_backend_best_height to 0, which the "backend stuck" alerts read
+//     as "the backend produced no blocks", and whose recovery jump back to the real
+//     height then blinds their delta() window;
+//   - reset BackendTipLastAdvance on the next successful query, because 0 -> real
+//     height counts as an advance below, masking a genuinely stalled tip;
+//   - blank the version/subversion fields that /api/ and the websocket getInfo report.
+//
+// The guard is deliberately narrow: it only applies when the caller reported an error
+// and carried no height at all, so a backend that answers with height 0 (a chain at
+// genesis) is still stored normally.
 func (is *InternalState) SetBackendInfo(bi *BackendInfo) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
+	if bi.BackendError != "" && bi.Blocks == 0 {
+		is.BackendInfo.BackendError = bi.BackendError
+		return
+	}
 	if bi.Blocks > is.BackendInfo.Blocks || is.BackendTipLastAdvance.IsZero() {
 		is.BackendTipLastAdvance = time.Now()
 	}
