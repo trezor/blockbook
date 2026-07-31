@@ -58,7 +58,7 @@ sequenceDiagram
         RPC-->>Fetch: block
         Fetch->>DB: ConnectBlock
     else non-retryable error
-        Fetch-->>Fetch: propagate, except worker mid-queue retries
+        Fetch-->>Fetch: propagate; worker mid-queue retries until the non-retryable budget, then aborts the round
     else retryable error
         Fetch-->>Fetch: onRetryableMiss and increment retries
         opt threshold reached
@@ -151,7 +151,7 @@ The retry policy is exposed per chain under `additional_params.missingBlockRetry
 | `RetryDelay`          | 1 s             | `getBlockWorker` (parallel) directly; `getBlockChain` clamps to ≤ 250 ms regardless | Sleep between successive `GetBlock` attempts for the same missing block |
 | `RecheckThreshold`    | 10              | `getBlockWorker` mid-queue                                                      | Retries before calling `shouldRestartSyncOnMissingBlock`              |
 | `TipRecheckThreshold` | 3               | both loops, at the tail                                                         | Retries before chain-state probe, when we're near the tip             |
-| `MaxStallDuration`    | 60 s            | both loops                                                                      | Wall-clock cap before yielding `errResync`                            |
+| `MaxStallDuration`    | 60 s            | both loops                                                                      | Wall-clock cap before yielding `errResync` on retryable errors; ×5 of it bounds unclassified errors |
 
 Example override (JSON keys are camelCase with the `Ms` suffix for durations):
 
@@ -171,7 +171,7 @@ When an override is applied, blockbook logs one `sync: missingBlockRetry overrid
 Related Prometheus counters for observing the budget at runtime:
 
 - `blockbook_index_block_not_found_retries` — every transient `ErrBlockNotFound` observed during sync.
-- `blockbook_index_sync_yields{reason="deadline"|"probe_failed"}` — wall-clock cap fired vs chain-state probe failed three times.
+- `blockbook_index_sync_yields{reason="deadline"|"probe_failed"|"nonretryable_deadline"}` — retryable wall-clock cap fired, chain-state probe failed three times, or a block kept failing with an unclassified error for the whole (5 × `MaxStallDuration`) budget.
 - `blockbook_index_reorg_events{type="fork"|"resync"|"disconnect"}` — real reorg signals (not stall yields).
 
 For the [tip feed](#tip-feed-and-the-stall-watchdog) (EVM and Tron only):

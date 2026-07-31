@@ -167,6 +167,13 @@ type getBlockChainTestChain struct {
 	blockErrors     map[uint32][]error
 	getBlockCalls   map[uint32]int
 	getBlockHashErr error
+	// stickyBlockErrors makes GetBlock fail with the same error on every call for a
+	// height, modelling a block the backend deterministically refuses to serve
+	// (unlike blockErrors, which is a queue that drains).
+	stickyBlockErrors map[uint32]error
+	// blockErrorFunc, when set, decides the error of every GetBlock call, so a test
+	// can model an error stream that changes class over time.
+	blockErrorFunc func(height uint32) error
 }
 
 func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
@@ -189,6 +196,14 @@ func (c *getBlockChainTestChain) GetBlockHash(height uint32) (string, error) {
 
 func (c *getBlockChainTestChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	c.getBlockCalls[height]++
+	if c.blockErrorFunc != nil {
+		if err := c.blockErrorFunc(height); err != nil {
+			return nil, err
+		}
+	}
+	if err := c.stickyBlockErrors[height]; err != nil {
+		return nil, err
+	}
 	if errs := c.blockErrors[height]; len(errs) > 0 {
 		err := errs[0]
 		c.blockErrors[height] = errs[1:]
@@ -559,4 +574,144 @@ func TestNewSyncWorkerClampsMaxStallDuration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A block the backend deterministically refuses to serve (for example eth_getLogs
+// rejecting it as "too many logs") produces a non-retryable error on every attempt.
+// Mid-range (hash queue still open) the worker keeps retrying such an error, so it must
+// give up once the per-block stall budget is spent - otherwise it spins forever, sync
+// silently stops progressing and nothing surfaces the cause.
+func TestGetBlockWorkerNonRetryableErrorAbortsAfterStallDeadline(t *testing.T) {
+	refuses := stdErrors.New("eth_getLogs blockNumber 0x1875fd0: query returns too many logs, narrow your filter: 20000")
+	chain := &getBlockChainTestChain{
+		bestHeight:        1,
+		hashes:            map[uint32]string{1: "h1"},
+		blocks:            map[uint32]*bchain.Block{},
+		blockErrors:       map[uint32][]error{},
+		stickyBlockErrors: map[uint32]error{1: refuses},
+		getBlockCalls:     map[uint32]int{},
+	}
+	w := &SyncWorker{
+		chain: chain,
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckThreshold:    10,
+			TipRecheckThreshold: 3,
+			RetryDelay:          time.Millisecond,
+			MaxStallDuration:    50 * time.Millisecond,
+		},
+		metrics: getTestMetrics(t),
+	}
+
+	const workers = 1
+	hch := make(chan hashHeight, workers)
+	bch := make([]chan *bchain.Block, workers)
+	for i := range bch {
+		bch[i] = make(chan *bchain.Block, 1)
+	}
+	var hchClosed atomic.Value
+	// false: we are mid-range, which is the case that used to retry without any bound
+	hchClosed.Store(false)
+	terminating := make(chan struct{})
+	abortCh := make(chan error, 1)
+	hch <- hashHeight{hash: "h1", height: 1}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	start := time.Now()
+	go w.getBlockWorker(0, workers, &wg, hch, bch, &hchClosed, terminating, abortCh)
+
+	select {
+	case err := <-abortCh:
+		if !stdErrors.Is(err, refuses) {
+			t.Fatalf("abortCh got %v, want %v", err, refuses)
+		}
+		if want := nonRetryableStallBudget(50 * time.Millisecond); time.Since(start) < want {
+			t.Fatalf("aborted after %v, want the non-retryable budget (%v) to be spent first", time.Since(start), want)
+		}
+	case <-time.After(2 * time.Second):
+		close(terminating)
+		t.Fatal("worker did not abort on a permanently failing block")
+	}
+
+	wg.Wait()
+	close(hch)
+	// the error is retried (it may be an unclassified transient condition), just not forever
+	if calls := chain.getBlockCalls[1]; calls < 2 {
+		t.Fatalf("GetBlock height 1 calls = %d, want at least 2 (retried before giving up)", calls)
+	}
+}
+
+func TestNonRetryableStallBudget(t *testing.T) {
+	// The unclassified-error budget must be strictly longer than the reorg deadline:
+	// a backend restart or provider rate limit routinely outlasts the latter.
+	if got := nonRetryableStallBudget(60 * time.Second); got <= 60*time.Second {
+		t.Errorf("budget for 60s = %v, want > 60s", got)
+	}
+	// A disabled deadline must stay disabled rather than becoming an instant abort.
+	for _, maxStall := range []time.Duration{0, -time.Second} {
+		if got := nonRetryableStallBudget(maxStall); got != 0 {
+			t.Errorf("budget for %v = %v, want 0 (disabled)", maxStall, got)
+		}
+	}
+}
+
+// A block failing with unclassified errors must not be aborted at the (short) reorg
+// deadline, and a preceding run of retryable errors must not eat its budget: backend
+// warm-up and provider rate limiting are unclassified, transient, and routinely last
+// longer than MaxStallDuration.
+func TestGetBlockWorkerNonRetryableBudgetNotConsumedByRetryableErrors(t *testing.T) {
+	const maxStall = 150 * time.Millisecond
+	start := time.Now()
+	chain := &getBlockChainTestChain{
+		bestHeight:    1,
+		hashes:        map[uint32]string{1: "h1"},
+		blocks:        map[uint32]*bchain.Block{},
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+		// retryable for the first stretch (staying under MaxStallDuration), then an
+		// unclassified error for the rest of the test
+		blockErrorFunc: func(uint32) error {
+			if time.Since(start) < maxStall/2 {
+				return context.DeadlineExceeded
+			}
+			return stdErrors.New("truncated response")
+		},
+	}
+	w := &SyncWorker{
+		chain: chain,
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckThreshold:    1_000_000, // keep the chain-state probe out of the way
+			TipRecheckThreshold: 1_000_000,
+			RetryDelay:          time.Millisecond,
+			MaxStallDuration:    maxStall,
+		},
+		metrics: getTestMetrics(t),
+	}
+
+	const workers = 1
+	hch := make(chan hashHeight, workers)
+	bch := []chan *bchain.Block{make(chan *bchain.Block, 1)}
+	var hchClosed atomic.Value
+	hchClosed.Store(false)
+	terminating := make(chan struct{})
+	abortCh := make(chan error, 1)
+	hch <- hashHeight{hash: "h1", height: 1}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go w.getBlockWorker(0, workers, &wg, hch, bch, &hchClosed, terminating, abortCh)
+
+	// well past MaxStallDuration, well short of the non-retryable budget
+	select {
+	case err := <-abortCh:
+		close(terminating)
+		wg.Wait()
+		t.Fatalf("aborted after %v with %v, want to still be retrying (MaxStallDuration %v, budget %v)",
+			time.Since(start), err, maxStall, nonRetryableStallBudget(maxStall))
+	case <-time.After(2 * maxStall):
+	}
+
+	close(terminating)
+	wg.Wait()
+	close(hch)
 }

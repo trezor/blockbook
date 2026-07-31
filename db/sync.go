@@ -51,6 +51,23 @@ type MissingBlockRetryConfig struct {
 	MaxStallDuration time.Duration
 }
 
+// nonRetryableStallMultiplier scales MaxStallDuration into the budget a block gets
+// while failing with errors isRetryableGetBlockError does not classify as transient.
+// Those two deadlines want opposite things: the retryable one triggers a reorg
+// re-check and should fire quickly, while an unclassified error is usually a backend
+// that is restarting, warming up or rate limiting and needs minutes, not seconds.
+const nonRetryableStallMultiplier = 5
+
+// nonRetryableStallBudget returns how long a single block may keep failing with a
+// non-retryable error before the sync round is aborted. A non-positive
+// MaxStallDuration disables the bound, matching the retryable deadline.
+func nonRetryableStallBudget(maxStall time.Duration) time.Duration {
+	if maxStall <= 0 {
+		return 0
+	}
+	return maxStall * nonRetryableStallMultiplier
+}
+
 // SyncWorkerConfig bundles optional tuning knobs for SyncWorker.
 type SyncWorkerConfig struct {
 	MissingBlockRetry MissingBlockRetryConfig
@@ -665,6 +682,10 @@ GetBlockLoop:
 		retries := 0
 		checkErrStreak := 0
 		loopStart := time.Now()
+		// Unclassified errors get their own budget, reset whenever a retryable error
+		// is seen, so the abort below always reflects one error class retrying for
+		// its full budget instead of inheriting elapsed time from the other branch.
+		nonRetryableStart := time.Now()
 		for {
 			// Allow global shutdown or an abort to stop the retry loop promptly.
 			select {
@@ -680,6 +701,7 @@ GetBlockLoop:
 					w.metrics.IndexBlockNotFoundRetries.Inc()
 				}
 				if isRetryableGetBlockError(err) {
+					nonRetryableStart = time.Now()
 					threshold := cfg.RecheckThreshold
 					// Once the hash queue is closed we are at the tail of the range; use
 					// a smaller threshold to avoid stalling on a missing tip block.
@@ -740,9 +762,30 @@ GetBlockLoop:
 						}
 						return
 					}
+					// A non-retryable error can still be worth retrying: the classifier
+					// only recognizes known-transient conditions, so unclassified but
+					// recoverable states (backend warm-up, provider rate limiting, a
+					// server-side timeout reported as an error string) land here too.
+					// The retrying must still be bounded, though: an error that is
+					// deterministic for this block - a backend refusing to serve it, a
+					// malformed block - otherwise spins here forever. Under the parallel
+					// and bulk writers that wedges the whole round, because the in-order
+					// writer waits for this height while its peers block on their sends.
+					// The budget is deliberately a multiple of MaxStallDuration: that
+					// deadline governs reorg detection and wants to be short, while an
+					// unclassified error wants to survive a minutes-long backend restart.
+					if budget := nonRetryableStallBudget(cfg.MaxStallDuration); budget > 0 && time.Since(nonRetryableStart) >= budget {
+						glog.Errorf("%s: block %d %s keeps failing with a non-retryable error for %s (last: %v); aborting sync round",
+							label, hh.height, hh.hash, budget, err)
+						w.metrics.IndexSyncYields.With(common.Labels{"reason": "nonretryable_deadline"}).Inc()
+						select {
+						case abortCh <- err:
+						default:
+						}
+						return
+					}
 					retries = 0
 					checkErrStreak = 0
-					loopStart = time.Now()
 					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
 				}
 				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
