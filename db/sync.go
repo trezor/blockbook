@@ -180,7 +180,9 @@ func (w *SyncWorker) updateBackendInfo() {
 	// Refresh tip-age on every resync outcome (nil/syncNotNeeded/error), not only on a
 	// successful connect: during a silent stall resyncIndex returns syncNotNeeded each
 	// run, so without this the gauge would only be refreshed by the ~15-minute app-info
-	// loop. A climbing blockbook_tip_age_seconds is the primary stall signal.
+	// loop. A climbing blockbook_tip_age_seconds means the BACKEND's height stopped
+	// changing; an indexer that has stalled behind a healthy backend keeps this near zero,
+	// and shows up in blockbook_best_height instead (refreshed just below).
 	w.metrics.BackendTipAgeSeconds.Set(time.Since(w.is.GetBackendTipLastAdvance()).Seconds())
 }
 
