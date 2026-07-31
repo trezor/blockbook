@@ -81,6 +81,7 @@ type Metrics struct {
 	DbColumnSize                      *prometheus.GaugeVec     `metric:"dbcolumn_size"`
 	BlockbookAppInfo                  *prometheus.GaugeVec     `metric:"app_info"`
 	BlockbookBestHeight               prometheus.Gauge         `metric:"best_height"`
+	InitialSync                       prometheus.Gauge         `metric:"initial_sync"`
 	Synchronized                      prometheus.Gauge         `metric:"synchronized"`
 	BackendBestHeight                 prometheus.Gauge         `metric:"backend_best_height"`
 	BackendTipAgeSeconds              prometheus.Gauge         `metric:"tip_age_seconds"`
