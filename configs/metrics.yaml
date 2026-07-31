@@ -257,7 +257,7 @@ metrics:
   avg_block_period:
     name: blockbook_avg_block_period
     type: gauge
-    help: Observed average spacing of the last 100 blocks' header timestamps, in seconds (chain pace, not indexing cadence)
+    help: Observed average spacing of the last 100 blocks' header timestamps, in fractional seconds (chain pace, not indexing cadence). 0 means "not yet computed" - fewer than 102 block times are loaded, which is the case early in an initial build or a reindex, and for a while after a restart until the block-time array is reloaded. A rule that gates on this being > 0 therefore switches itself off during exactly those windows; normalize by average_block_time_seconds instead, which comes from the coin's configuration and is stable across restarts
   sync_block_stats:
     name: blockbook_sync_block_stats
     type: gauge_vec

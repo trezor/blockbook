@@ -75,6 +75,9 @@ type InternalState struct {
 	LastSync       time.Time `json:"lastSync" ts_doc:"Timestamp of the last successful sync."`
 	BlockTimes     []uint32  `json:"-" ts_doc:"List of block timestamps (per height) for calculating historical stats (not exposed via JSON)."`
 	AvgBlockPeriod uint32    `json:"-" ts_doc:"Average time (in seconds) per block for the last 100 blocks (not exposed via JSON)."`
+	// AvgBlockPeriodSeconds is the same average in fractional seconds; the integer form
+	// above truncates to 0 on sub-second chains. See computeAvgBlockPeriod.
+	AvgBlockPeriodSeconds float64 `json:"-" ts_doc:"Average time (in fractional seconds) per block for the last 100 blocks (not exposed via JSON)."`
 
 	IsMempoolSynchronized bool      `json:"isMempoolSynchronized" ts_doc:"If true, mempool data is in sync."`
 	MempoolSize           int       `json:"mempoolSize" ts_doc:"Number of transactions in the current mempool."`
@@ -402,14 +405,34 @@ func (is *InternalState) GetAvgBlockPeriod() uint32 {
 	return is.AvgBlockPeriod
 }
 
-// computeAvgBlockPeriod returns computes average of the last 100 blocks in seconds
+// GetAvgBlockPeriodSeconds returns the same observed average as GetAvgBlockPeriod but in
+// fractional seconds. 0 means "not yet computed" - fewer than avgBlockPeriodSample+2
+// block times are loaded, which is the case early in an initial build or reindex.
+func (is *InternalState) GetAvgBlockPeriodSeconds() float64 {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	return is.AvgBlockPeriodSeconds
+}
+
+// computeAvgBlockPeriod computes the average spacing of the most recent block times, in
+// both the integer-seconds form kept for the sync-ETA estimate and a fractional-seconds
+// form for the metric.
+//
+// The integer form truncates, so every sub-second chain reports 0 - which silently
+// removed Arbitrum (0.24s), BNB Smart Chain (0.45s) and Robinhood (0.10s) from any alert
+// gated on "blockbook_avg_block_period > 0". The float form also divides by the real
+// number of intervals in the window; the integer form divides a span of
+// avgBlockPeriodSample+1 intervals by avgBlockPeriodSample, overstating the period by
+// about 1%, and is left as it is so the ETA it feeds does not change.
 func (is *InternalState) computeAvgBlockPeriod() {
 	last := len(is.BlockTimes) - 1
 	first := last - avgBlockPeriodSample - 1
 	if first < 0 {
 		return
 	}
-	is.AvgBlockPeriod = (is.BlockTimes[last] - is.BlockTimes[first]) / avgBlockPeriodSample
+	span := is.BlockTimes[last] - is.BlockTimes[first]
+	is.AvgBlockPeriod = span / avgBlockPeriodSample
+	is.AvgBlockPeriodSeconds = float64(span) / float64(last-first)
 }
 
 // GetNetwork returns network. If not set returns the same value as CoinShortcut

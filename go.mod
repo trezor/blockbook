@@ -26,6 +26,7 @@ require (
 	github.com/pirk/ecashaddr-converter v0.0.0-20220121162910-c6cb45163b29
 	github.com/pirk/ecashutil v0.0.0-20220124103933-d37f548d249e
 	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_model v0.6.2
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
 	github.com/stretchr/testify v1.11.1
 	github.com/tkrajina/typescriptify-golang-structs v0.1.11
@@ -71,7 +72,6 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.3 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
