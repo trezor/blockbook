@@ -363,7 +363,7 @@ func mainWithExitCode() int {
 	if *synchronize {
 		internalState.SyncMode = true
 		internalState.InitialSync = true
-		setInitialSyncMetric(metrics, true)
+		refreshSyncMetrics()
 		if err := syncWorker.ResyncIndex(nil, true); err != nil {
 			if err != db.ErrOperationInterrupted {
 				glog.Error("resyncIndex ", err)
@@ -390,7 +390,7 @@ func mainWithExitCode() int {
 		go syncIndexLoop()
 		go syncMempoolLoop()
 		internalState.InitialSync = false
-		setInitialSyncMetric(metrics, false)
+		refreshSyncMetrics()
 	}
 	go storeInternalStateLoop()
 
@@ -528,18 +528,15 @@ func performRollback() error {
 	return nil
 }
 
-// setInitialSyncMetric mirrors is.InitialSync into the blockbook_initial_sync gauge.
-// It is called at the two points the flag flips rather than left to the periodic
-// metrics refresh: blockbook_synchronized reads 0 for the whole of an initial build or
-// reindex (days on an EVM archive), so an alert on it has to be gated on this gauge, and
-// a gate that lags the flag by up to a metrics period would either page spuriously at the
-// start of a reindex or stay suppressed after one finished.
-func setInitialSyncMetric(metrics *common.Metrics, initialSync bool) {
-	initial := 0.0
-	if initialSync {
-		initial = 1
+// refreshSyncMetrics publishes the sync-state gauges (synchronized, initial_sync and both
+// heights) from internal state, with no backend round trip. It is called on every
+// storeInternalStateLoop tick (~60s), after every sync iteration, and at the two points
+// is.InitialSync flips, so none of these gauges depends on the ~15-minute app-info loop.
+func refreshSyncMetrics() {
+	if chain == nil {
+		return
 	}
-	metrics.InitialSync.Set(initial)
+	api.RefreshSyncMetrics(internalState, chain, chain.GetChainParser().GetChainType(), metrics)
 }
 
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
@@ -581,7 +578,6 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		synchronized = 1
 	}
 	metrics.Synchronized.Set(synchronized)
-	setInitialSyncMetric(metrics, si.Blockbook.InitialSync)
 	return nil
 }
 
@@ -658,6 +654,12 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, time.Duration(*resyncIndexDebounceMs)*time.Millisecond, chanSyncIndex, func() {
+		// Publish the sync-state gauges after every iteration whatever its outcome. The
+		// early returns below make a defer the only placement that covers all of them,
+		// and the interesting case is precisely the quiet one: during a silent stall
+		// resyncIndex keeps returning syncNotNeeded, so nothing else would move the
+		// gauges until the ~60s storeInternalStateLoop tick.
+		defer refreshSyncMetrics()
 		if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
 			if err == db.ErrOperationInterrupted || common.IsInShutdown() {
 				return
@@ -733,6 +735,13 @@ func storeInternalStateLoop() {
 		glog.Info("storeInternalStateLoop starting with db stats compute disabled")
 	}
 	common.TickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
+		// Republish the sync-state gauges on every tick (~60s). This is the guaranteed
+		// floor for their freshness: syncIndexLoop refreshes them as it runs, but a
+		// blockbook whose tip feed has gone quiet only wakes on the resyncindexperiod
+		// backstop (~15.6 min), which is how far behind blockbook_synchronized used to
+		// lag reality. RefreshSyncMetrics reads internal state only - no backend RPCs -
+		// so it is cheap enough to run unconditionally here.
+		refreshSyncMetrics()
 		if (*dbStatsPeriodHours) > 0 && !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
 			computeRunning = true
 			go func() {

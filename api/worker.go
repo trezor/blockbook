@@ -2687,25 +2687,74 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 	return inSync
 }
 
-// GetSystemInfo returns information about system
-func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
-	start := time.Now().UTC()
-	vi := common.GetVersionInfo()
-	inSync, bestHeight, lastBlockTime, startSync := w.is.GetSyncState()
-	blockPeriod := time.Duration(w.is.GetAvgBlockPeriod()) * time.Second
-	// Prefer the configured per-coin cadence (averageBlockTimeMs): it is stable,
-	// available before enough blocks are observed for GetAvgBlockPeriod to be
-	// computed (which otherwise returns 0 and disables the EVM sync checks below),
-	// and is the same value the tip watchdog uses. Using the duration directly also
-	// covers sub-second chains (e.g. Arbitrum at 250ms) that round to 0 seconds.
-	// Fall back to the runtime-observed average when the coin does not configure one.
-	if p, ok := w.chain.(interface {
+// syncBlockPeriod returns the block cadence the sync freshness checks normalize by.
+//
+// It prefers the configured per-coin cadence (averageBlockTimeMs): it is stable,
+// available before enough blocks are observed for GetAvgBlockPeriod to be computed
+// (which otherwise returns 0 and disables the EVM sync checks in systemInfoInSync),
+// and is the same value the tip watchdog uses. Using the duration directly also
+// covers sub-second chains (e.g. Arbitrum at 250ms) that round to 0 seconds.
+// It falls back to the runtime-observed average when the coin does not configure one.
+//
+// Shared by GetSystemInfo and RefreshSyncMetrics so the /api/ inSync field and the
+// blockbook_synchronized gauge cannot disagree about the cadence they normalize by.
+func syncBlockPeriod(chain bchain.BlockChain, is *common.InternalState) time.Duration {
+	blockPeriod := time.Duration(is.GetAvgBlockPeriod()) * time.Second
+	if p, ok := chain.(interface {
 		AverageBlockTimeDuration() (time.Duration, error)
 	}); ok {
 		if d, err := p.AverageBlockTimeDuration(); err == nil && d > 0 {
 			blockPeriod = d
 		}
 	}
+	return blockPeriod
+}
+
+// RefreshSyncMetrics publishes the sync-state gauges from internal state and the cached
+// backend info, without a single backend round trip, so callers can invoke it on a short
+// timer and after every sync iteration.
+//
+// It exists because these gauges used to be written only by blockbook's ~15-minute
+// app-info loop, which calls GetSystemInfo and therefore three backend RPCs. A stall was
+// consequently invisible for up to 16 minutes, and a "synchronized == 0 for 15m" alert
+// took up to 31 minutes to fire - the gap a 17-hour Tron outage fell through on
+// 2026-07-30. The inSync value is computed by the same systemInfoInSync as /api/, so the
+// metric and the API cannot drift apart.
+//
+// backend_best_height is only published once a backend height has actually been observed:
+// before the first successful GetChainInfo the cached height is 0, and publishing that
+// would make the "backend stuck" rules read "no blocks produced".
+func RefreshSyncMetrics(is *common.InternalState, chain bchain.BlockChain, chainType bchain.ChainType, metrics *common.Metrics) {
+	if is == nil || metrics == nil {
+		return
+	}
+	bi := is.GetBackendInfo()
+	inSync, bestHeight, lastBlockTime, startSync := is.GetSyncState()
+	inSync = systemInfoInSync(inSync, is.InitialSync, chainType, bestHeight, bi.Blocks,
+		lastBlockTime, startSync, time.Now().UTC(), syncBlockPeriod(chain, is))
+
+	metrics.BlockbookBestHeight.Set(float64(bestHeight))
+	if bi.Blocks > 0 {
+		metrics.BackendBestHeight.Set(float64(bi.Blocks))
+	}
+	synchronized := 0.0
+	if inSync {
+		synchronized = 1
+	}
+	metrics.Synchronized.Set(synchronized)
+	initialSync := 0.0
+	if is.InitialSync {
+		initialSync = 1
+	}
+	metrics.InitialSync.Set(initialSync)
+}
+
+// GetSystemInfo returns information about system
+func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
+	start := time.Now().UTC()
+	vi := common.GetVersionInfo()
+	inSync, bestHeight, lastBlockTime, startSync := w.is.GetSyncState()
+	blockPeriod := syncBlockPeriod(w.chain, w.is)
 	inSyncMempool, lastMempoolTime, mempoolSize := w.is.GetMempoolSyncState()
 	ci, err := w.chain.GetChainInfo()
 	var backendError string
