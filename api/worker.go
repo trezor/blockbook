@@ -2647,14 +2647,11 @@ func nonZeroTime(t time.Time) *time.Time {
 const (
 	systemInfoSyncStartGrace      = 5 * time.Second
 	systemInfoEthereumStaleBlocks = 12
-	// systemInfoEthereumMinStale floors the freshness window that
-	// systemInfoEthereumStaleBlocks derives from the chain's cadence. Twelve block times
-	// is 3s on Arbitrum (250ms blocks) and 1.2s on Robinhood (100ms) - shorter than
-	// ordinary RPC, GC and scheduling jitter, so a sub-second chain would report itself
-	// out of sync on any hiccup. The tip watchdog already clamps its analogous window the
-	// same way (eth.tipWatchdogMinStale), and the floor is what makes it safe to correct a
-	// fast chain's configured cadence downwards: without it, a more accurate (smaller)
-	// averageBlockTimeMs would tighten this window instead of only fixing the metric.
+	// systemInfoEthereumMinStale floors the window systemInfoEthereumStaleBlocks derives
+	// from the chain cadence. Twelve block times is 3s on Arbitrum and 1.2s on Robinhood,
+	// under ordinary RPC and GC jitter. eth.TipStaleThreshold clamps its analogous window
+	// the same way, and the floor is what lets a fast chain's configured cadence be
+	// corrected downwards without tightening this check.
 	systemInfoEthereumMinStale = 30 * time.Second
 	// systemInfoEthereumSyncedGap is how far the indexed height may trail the
 	// backend tip and still count as synchronized. It covers the one-block window
@@ -2700,16 +2697,10 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 }
 
 // syncBlockPeriod returns the block cadence the sync freshness checks normalize by.
-//
-// It prefers the configured per-coin cadence (averageBlockTimeMs): it is stable,
-// available before enough blocks are observed for GetAvgBlockPeriod to be computed
-// (which otherwise returns 0 and disables the EVM sync checks in systemInfoInSync),
-// and is the same value the tip watchdog uses. Using the duration directly also
-// covers sub-second chains (e.g. Arbitrum at 250ms) that round to 0 seconds.
-// It falls back to the runtime-observed average when the coin does not configure one.
-//
-// Shared by GetSystemInfo and RefreshSyncMetrics so the /api/ inSync field and the
-// blockbook_synchronized gauge cannot disagree about the cadence they normalize by.
+// It prefers the configured averageBlockTimeMs - stable, available before enough blocks
+// are observed, sub-second capable, and the same value the tip watchdog uses - and falls
+// back to the observed average. Shared by GetSystemInfo and RefreshSyncMetrics so the
+// /api/ inSync field and the blockbook_synchronized gauge cannot disagree.
 func syncBlockPeriod(chain bchain.BlockChain, is *common.InternalState) time.Duration {
 	blockPeriod := time.Duration(is.GetAvgBlockPeriod()) * time.Second
 	if p, ok := chain.(interface {
@@ -2723,19 +2714,10 @@ func syncBlockPeriod(chain bchain.BlockChain, is *common.InternalState) time.Dur
 }
 
 // RefreshSyncMetrics publishes the sync-state gauges from internal state and the cached
-// backend info, without a single backend round trip, so callers can invoke it on a short
-// timer and after every sync iteration.
-//
-// It exists because these gauges used to be written only by blockbook's ~15-minute
-// app-info loop, which calls GetSystemInfo and therefore three backend RPCs. A stall was
-// consequently invisible for up to 16 minutes, and a "synchronized == 0 for 15m" alert
-// took up to 31 minutes to fire - the gap a 17-hour Tron outage fell through on
-// 2026-07-30. The inSync value is computed by the same systemInfoInSync as /api/, so the
-// metric and the API cannot drift apart.
-//
-// backend_best_height is only published once a backend height has actually been observed:
-// before the first successful GetChainInfo the cached height is 0, and publishing that
-// would make the "backend stuck" rules read "no blocks produced".
+// backend info with no backend round trip, so it can run on a short timer. These gauges
+// used to be written only by the ~15-minute app-info loop, which needs three RPCs, so a
+// stall stayed invisible for up to 16 minutes. backend_best_height is held back until a
+// height has been observed, since a 0 reads as "no blocks produced" to the stuck rules.
 func RefreshSyncMetrics(is *common.InternalState, chain bchain.BlockChain, chainType bchain.ChainType, metrics *common.Metrics) {
 	if is == nil || metrics == nil {
 		return
@@ -2744,12 +2726,10 @@ func RefreshSyncMetrics(is *common.InternalState, chain bchain.BlockChain, chain
 	initialSync := is.GetInitialSync()
 	inSync, bestHeight, lastBlockTime, startSync := is.GetSyncState()
 	if bi.BackendError != "" {
-		// GetSystemInfo reports inSync=false whenever GetChainInfo fails, so the gauge has
-		// to do the same or the two disagree for exactly the outage class this metric
-		// exists for. The cached backend height is deliberately the last known good one,
-		// so without this systemInfoInSync could conclude "at the tip and fresh" against a
-		// dead backend. BackendError stays set until the next successful SetBackendInfo,
-		// which replaces the whole payload and so clears it.
+		// GetSystemInfo reports inSync=false whenever GetChainInfo fails, so the gauge must
+		// too or the two disagree for exactly the outage this metric exists for. The cached
+		// height is the last known good one, so systemInfoInSync would otherwise read "at
+		// the tip and fresh" against a dead backend. Cleared by the next SetBackendInfo.
 		inSync = false
 	} else {
 		inSync = systemInfoInSync(inSync, initialSync, chainType, bestHeight, bi.Blocks,
