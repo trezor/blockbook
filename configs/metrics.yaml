@@ -318,7 +318,7 @@ metrics:
   tip_age_seconds:
     name: blockbook_tip_age_seconds
     type: gauge
-    help: Seconds since polling last observed the backend best height advance
+    help: Seconds since the backend's reported block height was last observed to change. The reference timestamp is persisted, so the age survives a restart; any change counts, so a rollback or a replaced backend at a lower height cannot wedge it. This tracks the BACKEND, not the index - a stalled indexer sitting behind a healthy backend keeps this near zero, and was observed doing exactly that through a 17-hour outage. Use delta(blockbook_best_height) against delta(blockbook_backend_best_height) to detect a stalled indexer, and this gauge to detect a backend or tip feed that went quiet
   backend_subscription_age_seconds:
     name: blockbook_backend_subscription_age_seconds
     type: gauge

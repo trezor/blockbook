@@ -183,3 +183,52 @@ func TestSetBackendInfoStoresGenesisHeight(t *testing.T) {
 		t.Errorf("Version = %q, want %q", got, "genesis")
 	}
 }
+
+// TestBackendTipAdvanceSurvivesRestart covers the persisted tip-advance reference.
+// BackendInfo is not persisted, so comparing against it made every process start look
+// like a fresh advance - the reason blockbook_tip_age_seconds stayed pinned near zero
+// through a crash loop instead of climbing.
+func TestBackendTipAdvanceSurvivesRestart(t *testing.T) {
+	is := &InternalState{}
+	is.SetBackendInfo(&BackendInfo{Blocks: 500})
+	advance := is.GetBackendTipLastAdvance()
+
+	packed, err := is.Pack()
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+	restored, err := UnpackInternalState(packed)
+	if err != nil {
+		t.Fatalf("UnpackInternalState: %v", err)
+	}
+	if !restored.BackendTipLastAdvance.Equal(advance) {
+		t.Errorf("advance not persisted: %v -> %v", advance, restored.BackendTipLastAdvance)
+	}
+	if restored.BackendTipHeight != 500 {
+		t.Errorf("BackendTipHeight = %d, want 500", restored.BackendTipHeight)
+	}
+
+	// The backend is still at the same height after the restart: this is a stall, so the
+	// age must keep climbing from the original timestamp rather than restart at zero.
+	restored.SetBackendInfo(&BackendInfo{Blocks: 500})
+	if got := restored.GetBackendTipLastAdvance(); !got.Equal(advance) {
+		t.Errorf("restart reset the tip advance: %v -> %v", advance, got)
+	}
+}
+
+// TestBackendTipAdvanceOnRollback checks that a lower height still counts as the backend
+// being alive, so a reorg or a replaced backend cannot wedge the age at "climbing".
+func TestBackendTipAdvanceOnRollback(t *testing.T) {
+	is := &InternalState{}
+	is.SetBackendInfo(&BackendInfo{Blocks: 500})
+	advance := is.GetBackendTipLastAdvance()
+
+	is.SetBackendInfo(&BackendInfo{Blocks: 480})
+	got := is.GetBackendTipLastAdvance()
+	if !got.After(advance) {
+		t.Errorf("rollback did not refresh the tip advance: %v -> %v", advance, got)
+	}
+	if is.BackendTipHeight != 480 {
+		t.Errorf("BackendTipHeight = %d, want 480", is.BackendTipHeight)
+	}
+}

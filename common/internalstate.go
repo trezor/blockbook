@@ -91,7 +91,13 @@ type InternalState struct {
 
 	BackendInfo BackendInfo `json:"-" ts_doc:"Information about the connected blockchain backend (not exposed in JSON)."`
 
-	BackendTipLastAdvance time.Time `json:"-" ts_doc:"Wall-clock time when BackendInfo.Blocks was last observed to advance (not exposed in JSON)."`
+	// BackendTipLastAdvance and BackendTipHeight are persisted so the derived
+	// blockbook_tip_age_seconds gauge survives a restart. BackendInfo itself is not
+	// persisted, so comparing against it would have made every process start look like
+	// a fresh tip advance and reset the age to zero - which is exactly what happened
+	// during a crash loop, leaving the gauge pinned near zero for a 17-hour stall.
+	BackendTipLastAdvance time.Time `json:"backendTipLastAdvance,omitempty" ts_doc:"Wall-clock time when the backend's block height was last observed to change."`
+	BackendTipHeight      int       `json:"backendTipHeight,omitempty" ts_doc:"Backend block height observed at BackendTipLastAdvance."`
 
 	// database migrations
 	UtxoChecked            bool `json:"utxoChecked" ts_doc:"Indicates if UTXO consistency checks have been performed."`
@@ -440,8 +446,14 @@ func (is *InternalState) SetBackendInfo(bi *BackendInfo) {
 		is.BackendInfo.BackendError = bi.BackendError
 		return
 	}
-	if bi.Blocks > is.BackendInfo.Blocks || is.BackendTipLastAdvance.IsZero() {
+	// Any change of the reported height - not only an increase - means the backend is
+	// alive and answering, so a rollback or a replaced backend at a lower height cannot
+	// wedge the tip age at "climbing forever". The comparison is against the persisted
+	// BackendTipHeight rather than the in-memory BackendInfo, so a restart does not
+	// register as a fresh advance.
+	if is.BackendTipLastAdvance.IsZero() || bi.Blocks != is.BackendTipHeight {
 		is.BackendTipLastAdvance = time.Now()
+		is.BackendTipHeight = bi.Blocks
 	}
 	is.BackendInfo = *bi
 }
@@ -453,10 +465,11 @@ func (is *InternalState) GetBackendInfo() BackendInfo {
 	return is.BackendInfo
 }
 
-// GetBackendTipLastAdvance returns the wall-clock time when the backend's
-// Blocks height was last observed to advance. BackendTipLastAdvance is not
-// persisted, so on startup (before the first SetBackendInfo) it is zero; seed
-// it to now on first read so tip-age metrics don't report a bogus huge age.
+// GetBackendTipLastAdvance returns the wall-clock time when the backend's block
+// height was last observed to change. It is persisted, so it carries across a
+// restart; the zero seed below only covers a state that has never observed a
+// backend at all (a fresh database), where reporting an age "since epoch" would be
+// meaningless.
 func (is *InternalState) GetBackendTipLastAdvance() time.Time {
 	is.mux.Lock()
 	defer is.mux.Unlock()
