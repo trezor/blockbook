@@ -8,9 +8,12 @@ import (
 	"math/big"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
@@ -530,3 +533,90 @@ func fanInVout(n uint32, scriptHex string) bchain.Vout {
 }
 
 func fanInHash(n uint64) string { return fmt.Sprintf("%064x", n) }
+
+var (
+	refreshMetricsOnce sync.Once
+	refreshMetrics     *common.Metrics
+	refreshMetricsErr  error
+)
+
+func getRefreshTestMetrics(t *testing.T) *common.Metrics {
+	refreshMetricsOnce.Do(func() {
+		refreshMetrics, refreshMetricsErr = common.GetMetrics("api_refresh_sync_metrics_test")
+	})
+	if refreshMetricsErr != nil {
+		t.Fatalf("GetMetrics: %v", refreshMetricsErr)
+	}
+	return refreshMetrics
+}
+
+func gaugeValue(t *testing.T, g prometheus.Gauge) float64 {
+	t.Helper()
+	var m dto.Metric
+	if err := g.Write(&m); err != nil {
+		t.Fatalf("gauge Write: %v", err)
+	}
+	return m.GetGauge().GetValue()
+}
+
+// TestRefreshSyncMetrics covers the gauges an alert on blockbook's sync state reads. They
+// used to be written only by the ~15-minute app-info loop (which needs three backend
+// RPCs), so a stall was invisible for up to 16 minutes; RefreshSyncMetrics publishes them
+// from internal state alone and must agree with what /api/ reports.
+func TestRefreshSyncMetrics(t *testing.T) {
+	m := getRefreshTestMetrics(t)
+
+	is := &common.InternalState{}
+	is.SetBackendInfo(&common.BackendInfo{Blocks: 900})
+	is.FinishedSync(900)
+
+	// Bitcoin-type: inSync is the raw flag, so a synced state publishes 1.
+	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	if got := gaugeValue(t, m.Synchronized); got != 1 {
+		t.Errorf("synchronized = %v, want 1", got)
+	}
+	if got := gaugeValue(t, m.BlockbookBestHeight); got != 900 {
+		t.Errorf("best_height = %v, want 900", got)
+	}
+	if got := gaugeValue(t, m.BackendBestHeight); got != 900 {
+		t.Errorf("backend_best_height = %v, want 900", got)
+	}
+	if got := gaugeValue(t, m.InitialSync); got != 0 {
+		t.Errorf("initial_sync = %v, want 0", got)
+	}
+
+	// A stalled index: the flag is cleared while the backend keeps advancing. This is the
+	// 2026-07-30 Tron shape, and the gauge has to read 0 for an alert to see it. StartSync
+	// is pushed back past systemInfoSyncStartGrace, which otherwise reports the first few
+	// seconds of any sync as still-synced to avoid flapping.
+	is.StartedSync()
+	is.StartSync = time.Now().UTC().Add(-time.Minute)
+	is.SetBackendInfo(&common.BackendInfo{Blocks: 1000})
+	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	if got := gaugeValue(t, m.Synchronized); got != 0 {
+		t.Errorf("synchronized = %v, want 0 while the index is behind", got)
+	}
+	if got := gaugeValue(t, m.BackendBestHeight); got != 1000 {
+		t.Errorf("backend_best_height = %v, want 1000", got)
+	}
+
+	// A reindex must be distinguishable from that stall, or the alert has to be silenced.
+	is.InitialSync = true
+	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	if got := gaugeValue(t, m.InitialSync); got != 1 {
+		t.Errorf("initial_sync = %v, want 1 during a reindex", got)
+	}
+}
+
+// TestRefreshSyncMetricsSkipsUnobservedBackend guards the one case where publishing the
+// cached backend height would be wrong: before the first successful GetChainInfo it is 0,
+// and a 0 reads as "the backend produced no blocks" to the backend-stuck rules.
+func TestRefreshSyncMetricsSkipsUnobservedBackend(t *testing.T) {
+	m := getRefreshTestMetrics(t)
+	m.BackendBestHeight.Set(12345)
+
+	RefreshSyncMetrics(&common.InternalState{}, nil, bchain.ChainBitcoinType, m)
+	if got := gaugeValue(t, m.BackendBestHeight); got != 12345 {
+		t.Errorf("backend_best_height = %v, want the previous 12345 left untouched", got)
+	}
+}
