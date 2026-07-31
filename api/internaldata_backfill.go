@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 )
@@ -72,17 +71,7 @@ func (w *Worker) storeInternalDataError(height uint32, healErr error) {
 	if err != nil || hash == "" {
 		return
 	}
-	wb := grocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	if err := w.db.StoreBlockInternalDataErrorEthereumType(wb, &bchain.Block{
-		BlockHeader: bchain.BlockHeader{Hash: hash, Height: height},
-	}, healErr.Error(), 0); err != nil {
-		glog.Errorf("storeInternalDataError %d: %v", height, err)
-		return
-	}
-	if err := w.db.WriteBatch(wb); err != nil {
-		glog.Errorf("storeInternalDataError %d: %v", height, err)
-	}
+	w.storeBlockInternalDataError(hash, height, healErr.Error(), 0)
 }
 
 const internalDataErrorRetryPeriod = time.Hour
@@ -114,23 +103,14 @@ func (w *Worker) backfillBlockInternalData(height uint32) error {
 	if hash == "" {
 		return errors.New("block not found in index")
 	}
-	block, err := w.chain.GetBlock(hash, height)
-	var blockSpecificData *bchain.EthereumBlockSpecificData
-	if block != nil {
-		blockSpecificData, _ = block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+	block, err := w.getBlockRetryInternalData(hash, height)
+	if err != nil {
+		return err
 	}
-	if err != nil || block == nil || (blockSpecificData != nil && blockSpecificData.InternalDataError != "") {
-		// try for second time to fetch the data - as in RefetchInternalDataRoutine, the 2nd attempt
-		// has a much higher probability of success, probably because of backend caching
-		block, err = w.chain.GetBlock(hash, height)
-		if err != nil {
-			return err
-		}
-		if block == nil {
-			return errors.New("block not found on backend")
-		}
+	if block == nil {
+		return errors.New("block not found on backend")
 	}
-	blockSpecificData, _ = block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+	blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
 	if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
 		return errors.New(blockSpecificData.InternalDataError)
 	}
@@ -160,13 +140,12 @@ func (w *Worker) filterAlreadyReconnectedInternalData(block *bchain.Block) {
 		if !ok || eid.InternalData == nil {
 			continue
 		}
-		if emptyInternalData(eid.InternalData) {
-			eid.InternalData = nil
-			tx.CoinSpecificData = eid
-			continue
+		drop := emptyInternalData(eid.InternalData)
+		if !drop {
+			stored, err := w.db.GetEthereumInternalData(tx.Txid)
+			drop = err == nil && stored != nil && internalDataEqual(w.chainParser, stored, eid.InternalData)
 		}
-		stored, err := w.db.GetEthereumInternalData(tx.Txid)
-		if err == nil && stored != nil && internalDataEqual(w.chainParser, stored, eid.InternalData) {
+		if drop {
 			eid.InternalData = nil
 			tx.CoinSpecificData = eid
 		}
@@ -248,12 +227,15 @@ func isZeroAddress(parser bchain.BlockChainParser, a string) bool {
 // after sync is not overwritten. Destructions reuse the StoreContractInfo merge,
 // which is idempotent and a no-op for unknown contracts.
 func (w *Worker) storeBackfilledContracts(blockSpecificData *bchain.EthereumBlockSpecificData) {
+	store := func(ci *bchain.ContractInfo) {
+		if err := w.db.StoreContractInfo(ci); err != nil {
+			glog.Errorf("storeBackfilledContracts: StoreContractInfo %s: %v", ci.Contract, err)
+		}
+	}
 	for i := range blockSpecificData.Contracts {
 		ci := &blockSpecificData.Contracts[i]
 		if ci.CreatedInBlock == 0 && ci.DestructedInBlock != 0 {
-			if err := w.db.StoreContractInfo(ci); err != nil {
-				glog.Errorf("storeBackfilledContracts: StoreContractInfo %s: %v", ci.Contract, err)
-			}
+			store(ci)
 			continue
 		}
 		existing, err := w.db.GetContractInfoForAddress(ci.Contract)
@@ -262,9 +244,7 @@ func (w *Worker) storeBackfilledContracts(blockSpecificData *bchain.EthereumBloc
 			continue
 		}
 		if existing == nil {
-			if err := w.db.StoreContractInfo(ci); err != nil {
-				glog.Errorf("storeBackfilledContracts: StoreContractInfo %s: %v", ci.Contract, err)
-			}
+			store(ci)
 		}
 	}
 }

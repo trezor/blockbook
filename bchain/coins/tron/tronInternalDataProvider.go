@@ -166,6 +166,7 @@ func buildInternalDataFromTronInfos(
 			})
 		}
 
+		hasRejected := false
 		for _, itx := range info.InternalTransactions {
 
 			t, err := tronNoteHexToInternalType(itx.Note)
@@ -177,6 +178,7 @@ func buildInternalDataFromTronInfos(
 			// value, created no contract and destroyed none; it only flags
 			// the transaction error below
 			if itx.Rejected {
+				hasRejected = true
 				continue
 			}
 
@@ -247,14 +249,11 @@ func buildInternalDataFromTronInfos(
 			d.Error = info.Receipt.Result
 		}
 
-		for _, itx := range info.InternalTransactions {
-			if itx.Rejected {
-				if d.Error == "" {
-					d.Error = "Internal transaction rejected"
-				} else {
-					d.Error += "; internal transaction rejected"
-				}
-				break
+		if hasRejected {
+			if d.Error == "" {
+				d.Error = "Internal transaction rejected"
+			} else {
+				d.Error += "; internal transaction rejected"
 			}
 		}
 	}
