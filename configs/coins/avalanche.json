@@ -55,7 +55,7 @@
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 300,
             "additional_params": {
-                "averageBlockTimeMs": 2000,
+                "averageBlockTimeMs": 1000,
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "infura",
                 "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/43114/suggestedGasFees\", \"periodSeconds\": 15}",
