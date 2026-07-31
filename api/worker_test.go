@@ -620,3 +620,30 @@ func TestRefreshSyncMetricsSkipsUnobservedBackend(t *testing.T) {
 		t.Errorf("backend_best_height = %v, want the previous 12345 left untouched", got)
 	}
 }
+
+// TestRefreshSyncMetricsBackendError pins the gauge to what /api/ reports. GetSystemInfo
+// forces inSync=false when GetChainInfo fails; the gauge has to do the same, because the
+// cached backend height is deliberately the last known good one, so systemInfoInSync would
+// otherwise conclude "at the tip and fresh" against a dead backend.
+func TestRefreshSyncMetricsBackendError(t *testing.T) {
+	m := getRefreshTestMetrics(t)
+
+	is := &common.InternalState{}
+	is.SetBackendInfo(&common.BackendInfo{Blocks: 700})
+	is.FinishedSync(700)
+	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	if got := gaugeValue(t, m.Synchronized); got != 1 {
+		t.Fatalf("synchronized = %v, want 1 before the backend fails", got)
+	}
+
+	is.SetBackendInfo(&common.BackendInfo{BackendError: "GetChainInfo: connection refused"})
+	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	if got := gaugeValue(t, m.Synchronized); got != 0 {
+		t.Errorf("synchronized = %v, want 0 while the backend cannot be queried", got)
+	}
+	// The last known good height must still be published, so a flat series (rather than a
+	// drop to 0) is what the backend-stuck rules see.
+	if got := gaugeValue(t, m.BackendBestHeight); got != 700 {
+		t.Errorf("backend_best_height = %v, want the retained 700", got)
+	}
+}

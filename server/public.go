@@ -447,7 +447,7 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		CoinShortcut:          s.is.CoinShortcut,
 		CoinLabel:             s.is.CoinLabel,
 		ChainType:             s.chainParser.GetChainType(),
-		InternalExplorer:      s.internalExplorer && !s.is.InitialSync,
+		InternalExplorer:      s.internalExplorer && !s.is.GetInitialSync(),
 		TOSLink:               api.Text.TOSLink,
 		TxIOCollapseThreshold: txIOCollapseThresholdAggregate,
 	}
