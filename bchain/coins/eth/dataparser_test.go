@@ -4,6 +4,7 @@ package eth
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/trezor/blockbook/bchain"
@@ -482,7 +483,10 @@ func Test_getEnsRecord(t *testing.T) {
 	tests := []struct {
 		name string
 		log  rpcLogWithTxHash
-		want *bchain.AddressAliasRecord
+		// registrars is the trusted-emitter set passed to getEnsRecord. nil means
+		// "use the built-in default"; an explicit (possibly empty) map overrides it.
+		registrars map[string]struct{}
+		want       *bchain.AddressAliasRecord
 	}{
 		{
 			name: "unraveled",
@@ -581,11 +585,167 @@ func Test_getEnsRecord(t *testing.T) {
 			},
 			want: nil,
 		},
+		{
+			// A valid payload from an untrusted emitter must not become an alias.
+			name: "untrusted emitter rejected",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000009756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			want: nil,
+		},
+		{
+			// Empty set trusts none: even a well-formed event records nothing.
+			name: "empty registrar set records nothing",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000009756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			registrars: map[string]struct{}{},
+			want:       nil,
+		},
+		{
+			// The "*" wildcard accepts any emitter (opt-in legacy behavior).
+			name: "wildcard accepts untrusted emitter",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000009756e726176656c65640000000000000000000000000000000000000000000000",
+				},
+			},
+			registrars: ensRegistrarSet([]string{"*"}),
+			want:       &bchain.AddressAliasRecord{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"},
+		},
+		{
+			// A name with a control character (newline 0x0a) must be rejected.
+			name: "control character in name rejected",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5",
+					Topics: []string{
+						"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d00000000000000000000000000000000000000000000000000000000000000010a00000000000000000000000000000000000000000000000000000000000000",
+				},
+			},
+			want: nil,
+		},
+		{
+			// Newer controller 6-arg event (topic0 0x69e37f15…): extra baseCost/premium
+			// word shifts the name offset to 0x80.
+			name: "newer controller 6-arg event",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x253553366Da8546fC250F225fe3d25d0C782303b",
+					Topics: []string{
+						"0x69e37f151eb98a09618ddaa80c8cfaf1ce5996867c489f45b555b412271ebf27",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x0000000000000000000000000000000000000000000000000000000000000080" + // offset to name = 128
+						"0000000000000000000000000000000000000000000000000017629245f5a86f" + // baseCost
+						"0000000000000000000000000000000000000000000000000000000000000000" + // premium
+						"0000000000000000000000000000000000000000000000000000000069dbb21d" + // expires
+						"0000000000000000000000000000000000000000000000000000000000000009" + // name length = 9
+						"756e726176656c65640000000000000000000000000000000000000000000000", // "unraveled" + padding (32-byte word)
+				},
+			},
+			want: &bchain.AddressAliasRecord{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"},
+		},
+		{
+			// Current controller 7-arg event (topic0 0xc224…): adds a referrer word,
+			// shifting the name offset to 0xa0. This is the live mainnet emitter.
+			name: "current controller 7-arg event",
+			log: rpcLogWithTxHash{
+				RpcLog: bchain.RpcLog{
+					Address: "0x59E16fcCd424Cc24e280Be16E11Bcd56fb0CE547",
+					Topics: []string{
+						"0xc2240194853531f1ae318dcef227de79c6ad0fd9d1b0e4fe08568415be2e08a5",
+						"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+						"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c",
+					},
+					Data: "0x00000000000000000000000000000000000000000000000000000000000000a0" + // offset to name = 160
+						"0000000000000000000000000000000000000000000000000017629245f5a86f" + // baseCost
+						"0000000000000000000000000000000000000000000000000000000000000000" + // premium
+						"0000000000000000000000000000000000000000000000000000000069dbb21d" + // expires
+						"0000000000000000000000000000000000000000000000000000000000000000" + // referrer
+						"0000000000000000000000000000000000000000000000000000000000000009" + // name length = 9
+						"756e726176656c65640000000000000000000000000000000000000000000000", // "unraveled" + padding
+				},
+			},
+			want: &bchain.AddressAliasRecord{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"},
+		},
+	}
+	// Default trusted set for cases with a nil registrars field.
+	trusted := ensRegistrarSet([]string{
+		"0x283af0b28c62c092c9727f1ee09c02ca627eb7f5",
+		"0x253553366da8546fc250f225fe3d25d0c782303b",
+		"0x59e16fccd424cc24e280be16e11bcd56fb0ce547",
+	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registrars := tt.registrars
+			if registrars == nil {
+				registrars = trusted
+			}
+			if got := getEnsRecord(&tt.log, registrars); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getEnsRecord() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_validEnsAliasName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "plain", in: "unraveled", want: true},
+		{name: "unicode letters", in: "münchen", want: true},
+		{name: "emoji with zero-width joiner", in: "👨‍👩‍👧", want: true},
+		{name: "empty", in: "", want: false},
+		{name: "too long", in: strings.Repeat("a", maxEnsAliasNameLen+1), want: false},
+		{name: "at length cap", in: strings.Repeat("a", maxEnsAliasNameLen), want: true},
+		{name: "newline", in: "foo\nbar", want: false},
+		{name: "null byte", in: "foo\x00bar", want: false},
+		{name: "ansi escape", in: "foo\x1b[31mbar", want: false},
+		{name: "right-to-left override", in: "foo\u202ebar", want: false},
+		{name: "invalid utf8", in: "\xff\xfe", want: false},
+		{name: "zero-width space", in: "foo\u200bbar", want: false},
+		{name: "word joiner", in: "foo\u2060bar", want: false},
+		{name: "byte order mark", in: "foo\ufeffbar", want: false},
+		{name: "soft hyphen", in: "foo\u00adbar", want: false},
+		{name: "line separator", in: "foo\u2028bar", want: false},
+		{name: "paragraph separator", in: "foo\u2029bar", want: false},
+		{name: "tag character", in: "foo\U000e0041bar", want: false},
+		{name: "zero-width non-joiner allowed", in: "foo\u200cbar", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getEnsRecord(&tt.log); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getEnsRecord() = %v, want %v", got, tt.want)
+			if got := validEnsAliasName(tt.in); got != tt.want {
+				t.Errorf("validEnsAliasName(%q) = %v, want %v", tt.in, got, tt.want)
 			}
 		})
 	}

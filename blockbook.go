@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -79,6 +80,9 @@ var (
 	computeColumnStats  = flag.Bool("computedbstats", false, "compute column stats and exit")
 	computeFeeStatsFlag = flag.Bool("computefeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
 	dbStatsPeriodHours  = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
+
+	rebuildEnsAliases = flag.Bool("rebuildensaliases", false, "rebuild ENS address aliases from NameRegistered logs and exit (EthereumType coins only); optionally bounded by -blockheight/-blockuntil")
+	ensRebuildChunk   = flag.Int("ensrebuildchunk", 0, "block span per eth_getLogs request during -rebuildensaliases (0 = default); lower it for nodes that cap getLogs ranges")
 
 	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncIndexPeriodMs = flag.Int("resyncindexperiod", 935093, "resync index period in milliseconds")
@@ -286,6 +290,42 @@ func mainWithExitCode() int {
 		}
 		glog.Info("DB size on disk: ", index.DatabaseSizeOnDisk(), ", DB size as computed: ", internalState.DBSizeTotal())
 		return exitCodeOK
+	}
+
+	// Rebuild ENS address aliases when -rebuildensaliases is given, and self-heal
+	// at startup whenever the trusted registrar set changes (fingerprint mismatch)
+	// or on the first run after enabling it. Trust-none coins report an empty
+	// fingerprint and never auto-heal (never auto-wiped); the flag still forces a
+	// rebuild there. The auto path falls through and continues to serve; the
+	// explicit flag is a one-shot that exits.
+	ensFP := ensRegistrarsFingerprint(chain)
+	if *rebuildEnsAliases || (ensFP != "" && internalState.EnsRegistrarsFingerprint != ensFP) {
+		internalState.DbState = common.DbStateOpen
+		err = performEnsAliasRebuild(chanOsSignal)
+		if err == db.ErrOperationInterrupted {
+			// The rebuild is atomic (nothing is committed until a full scan
+			// succeeds), so an interrupt leaves aliases unchanged and the
+			// fingerprint is left as-is, so the next start retries.
+			glog.Warning("rebuildEnsAliases: interrupted before completion — address aliases left UNCHANGED")
+			if *rebuildEnsAliases {
+				return exitCodeFatal // explicit one-shot: signal it did not complete
+			}
+			return exitCodeOK // auto self-heal during shutdown: clean stop, retries next boot
+		}
+		if err != nil {
+			glog.Error("rebuildEnsAliases: ", err)
+			return exitCodeFatal
+		}
+		internalState.EnsRegistrarsFingerprint = ensFP
+		if err = index.StoreInternalState(internalState); err != nil {
+			glog.Error("StoreInternalState: ", err)
+			return exitCodeFatal
+		}
+		glog.Info("rebuildEnsAliases: completed")
+		if *rebuildEnsAliases {
+			return exitCodeOK // explicit flag: one-shot, exit
+		}
+		// auto self-heal: fall through and continue to normal startup
 	}
 
 	// Per-chain missing-block retry override, if any. Coin RPCs that opt in
@@ -524,6 +564,49 @@ func performRollback() error {
 		}
 	}
 	return nil
+}
+
+// performEnsAliasRebuild wipes and re-derives the ENS address-alias column
+// family from NameRegistered logs, an alias-only alternative to a full reindex.
+// The scan defaults to the whole chain (block 0 to the backend tip) and can be
+// bounded with -blockheight/-blockuntil.
+// ensRegistrarsFingerprint returns the chain's trusted ENS registrar fingerprint
+// (EthereumType coins), or "" for chains that don't expose one. A change in this
+// value across restarts drives the startup ENS alias self-heal.
+func ensRegistrarsFingerprint(chain bchain.BlockChain) string {
+	if p, ok := chain.(interface{ EnsRegistrarsFingerprint() string }); ok {
+		return p.EnsRegistrarsFingerprint()
+	}
+	return ""
+}
+
+func performEnsAliasRebuild(stop chan os.Signal) error {
+	rebuilder, ok := chain.(db.EnsAliasRebuilder)
+	if !ok {
+		return errors.New("rebuildEnsAliases: coin does not support ENS alias rebuild (EthereumType only)")
+	}
+	// -blockheight/-blockuntil are ints; reject values that would wrap on the
+	// uint32 cast below rather than silently scanning a wrong (small) range.
+	if int64(*blockFrom) > math.MaxUint32 || int64(*blockUntil) > math.MaxUint32 {
+		return errors.Errorf("rebuildEnsAliases: -blockheight/-blockuntil exceed max block height %d", math.MaxUint32)
+	}
+	bestHeight, err := chain.GetBestBlockHeight()
+	if err != nil {
+		return errors.Annotatef(err, "GetBestBlockHeight")
+	}
+	from := uint32(0)
+	if *blockFrom >= 0 {
+		from = uint32(*blockFrom)
+	}
+	to := bestHeight
+	if *blockUntil >= 0 && uint32(*blockUntil) < to {
+		to = uint32(*blockUntil)
+	}
+	if from > to {
+		return errors.Errorf("rebuildEnsAliases: from block %d is above to block %d", from, to)
+	}
+	glog.Infof("rebuildEnsAliases: rebuilding ENS aliases for blocks [%d, %d]", from, to)
+	return index.RebuildEnsAliases(rebuilder, from, to, *ensRebuildChunk, stop)
 }
 
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -93,17 +94,20 @@ type Configuration struct {
 	AddressContractsCacheMaxBytes     int64  `json:"address_contracts_cache_max_bytes,omitempty"`
 	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
 	AddressAliases                    bool   `json:"address_aliases,omitempty"`
-	MempoolTxTimeoutHours             int    `json:"mempoolTxTimeoutHours"`
-	MempoolTxTimeout                  string `json:"mempoolTxTimeout,omitempty"`
-	AlternativeMempoolTxTimeout       string `json:"alternativeMempoolTxTimeout,omitempty"`
-	QueryBackendOnMempoolResync       bool   `json:"queryBackendOnMempoolResync"`
-	ProcessInternalTransactions       bool   `json:"processInternalTransactions"`
-	ProcessZeroInternalTransactions   bool   `json:"processZeroInternalTransactions"`
-	ConsensusNodeVersionURL           string `json:"consensusNodeVersion"`
-	DisableMempoolSync                bool   `json:"disableMempoolSync,omitempty"`
-	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
-	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
-	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
+	// EnsRegistrars are the contracts trusted to emit ENS NameRegistered events.
+	// Absent/empty trusts none (records nothing); "*" accepts any emitter.
+	EnsRegistrars                   []string `json:"ens_registrars,omitempty"`
+	MempoolTxTimeoutHours           int      `json:"mempoolTxTimeoutHours"`
+	MempoolTxTimeout                string   `json:"mempoolTxTimeout,omitempty"`
+	AlternativeMempoolTxTimeout     string   `json:"alternativeMempoolTxTimeout,omitempty"`
+	QueryBackendOnMempoolResync     bool     `json:"queryBackendOnMempoolResync"`
+	ProcessInternalTransactions     bool     `json:"processInternalTransactions"`
+	ProcessZeroInternalTransactions bool     `json:"processZeroInternalTransactions"`
+	ConsensusNodeVersionURL         string   `json:"consensusNodeVersion"`
+	DisableMempoolSync              bool     `json:"disableMempoolSync,omitempty"`
+	Eip1559Fees                     bool     `json:"eip1559Fees,omitempty"`
+	AlternativeEstimateFee          string   `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams    string   `json:"alternative_estimate_fee_params,omitempty"`
 	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
 	// required for EVM coins (translates duration settings to block counts).
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
@@ -202,6 +206,9 @@ type EthereumRPC struct {
 	alternativeSendTxProvider *AlternativeSendTxProvider
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
+	// ensRegistrars is the set of contract addresses (lower-cased, 0x-prefixed)
+	// trusted to emit ENS NameRegistered events; empty trusts none, "*" any.
+	ensRegistrars map[string]struct{}
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
 	multicall3Probe   atomic.Int32
 	multicall3ProbeSF singleflight.Group
@@ -282,6 +289,15 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
 	parser.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
 	s.Parser = parser
+	for _, a := range c.EnsRegistrars {
+		if !isValidEnsRegistrar(normalizeEnsRegistrar(a)) {
+			glog.Warningf("ens_registrars: ignoring invalid entry %q (want 0x + 40 hex, or \"*\")", a)
+		}
+	}
+	s.ensRegistrars = ensRegistrarSet(c.EnsRegistrars)
+	if c.AddressAliases && len(s.ensRegistrars) == 0 {
+		glog.Warning("ens_registrars is empty while address_aliases is enabled: no ENS aliases will be recorded during sync (contract/token names are unaffected)")
+	}
 	if c.RPCTimeout <= 0 {
 		glog.Warningf("rpc_timeout=%d is invalid, using default %d seconds", c.RPCTimeout, defaultRPCTimeoutSeconds)
 		c.RPCTimeout = defaultRPCTimeoutSeconds
@@ -1421,15 +1437,141 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
+	ensRegistrars := b.ensRegistrars
 	for i := range logs {
 		l := &logs[i]
 		r[l.Hash] = append(r[l.Hash], &l.RpcLog)
-		ens := getEnsRecord(l)
+		ens := getEnsRecord(l, ensRegistrars)
 		if ens != nil {
 			ensRecords = append(ensRecords, *ens)
 		}
 	}
 	return r, ensRecords, nil
+}
+
+// ErrEnsRebuildInterrupted is returned by RebuildEnsAliases when the caller
+// signals a shutdown between chunks.
+var ErrEnsRebuildInterrupted = stdErrors.New("ENS alias rebuild interrupted")
+
+// ensRebuildDefaultChunkBlocks is the default block span per eth_getLogs request
+// in RebuildEnsAliases. NameRegistered logs are filtered server-side by address
+// and topic, so a wide span still returns few rows; operators whose node caps
+// getLogs ranges (e.g. dev Erigon at 1000 blocks) can lower it.
+const ensRebuildDefaultChunkBlocks = 100000
+
+// ensRebuildProgressEvery throttles the per-chunk progress log so a small chunk
+// size over a long chain does not flood the log; a chunk that finds aliases is
+// always logged.
+const ensRebuildProgressEvery = 64
+
+// ensRebuildSchemaVersion is bumped when the ENS alias parsing or signature set
+// changes. It is part of the registrar fingerprint, so a deploy that improves
+// parsing re-heals stored aliases even when the configured registrars are
+// unchanged.
+const ensRebuildSchemaVersion = 1
+
+// EnsRegistrarsFingerprint returns a stable marker of the trusted ENS registrar
+// set (schema version + sorted, normalized registrars). It changes whenever the
+// operator edits ens_registrars or the parsing schema is bumped; the startup
+// self-heal compares it against the stored value to decide when to rebuild.
+// Empty when no registrars are configured, so trust-none coins never auto-heal
+// (and are therefore never auto-wiped) — the -rebuildensaliases flag still
+// forces a rebuild there.
+func (b *EthereumRPC) EnsRegistrarsFingerprint() string {
+	if len(b.ensRegistrars) == 0 {
+		return ""
+	}
+	addrs := make([]string, 0, len(b.ensRegistrars))
+	for a := range b.ensRegistrars {
+		addrs = append(addrs, a)
+	}
+	sort.Strings(addrs)
+	return fmt.Sprintf("v%d|%s", ensRebuildSchemaVersion, strings.Join(addrs, ","))
+}
+
+// RebuildEnsAliases rescans ENS NameRegistered logs emitted by the trusted
+// registrars over [fromBlock, toBlock] in chunkBlocks-sized ranges and passes
+// each chunk's decoded alias records to store. It is a one-shot maintenance
+// operation backing the -rebuildensaliases flag. An empty trusted set records
+// nothing (there is nothing to trust); "*" scans every emitter. isInterrupted,
+// if non-nil, is polled between chunks and aborts the scan with
+// ErrEnsRebuildInterrupted.
+func (b *EthereumRPC) RebuildEnsAliases(fromBlock, toBlock uint32, chunkBlocks int, isInterrupted func() bool, store func([]bchain.AddressAliasRecord) error) error {
+	if len(b.ensRegistrars) == 0 {
+		glog.Info("RebuildEnsAliases: ens_registrars is empty (trust none); nothing to backfill")
+		return nil
+	}
+	if chunkBlocks <= 0 {
+		chunkBlocks = ensRebuildDefaultChunkBlocks
+	}
+	// topic0 filter: the NameRegistered signatures getEnsRecord can parse (OR).
+	// Shared with the live emitter check so the two can never drift.
+	filter := map[string]interface{}{
+		"topics": []interface{}{nameRegisteredEventSignatures},
+	}
+	// Unless the wildcard is set, restrict emitters to the trusted registrars so
+	// the node returns only their logs; the wildcard scans every emitter.
+	if _, acceptAny := b.ensRegistrars[ensRegistrarWildcard]; !acceptAny {
+		addrs := make([]string, 0, len(b.ensRegistrars))
+		for a := range b.ensRegistrars {
+			addrs = append(addrs, a)
+		}
+		sort.Strings(addrs)
+		filter["address"] = addrs
+	}
+	glog.Infof("RebuildEnsAliases: scanning blocks [%d, %d] in chunks of %d", fromBlock, toBlock, chunkBlocks)
+	step := uint64(chunkBlocks)
+	total, chunk := 0, 0
+	for from := uint64(fromBlock); from <= uint64(toBlock); from += step {
+		if isInterrupted != nil && isInterrupted() {
+			return ErrEnsRebuildInterrupted
+		}
+		to := from + step - 1
+		if to > uint64(toBlock) {
+			to = uint64(toBlock)
+		}
+		records, err := b.getEnsAliasLogs(filter, from, to)
+		if err != nil {
+			return errors.Annotatef(err, "eth_getLogs blocks [%d, %d]", from, to)
+		}
+		if len(records) > 0 {
+			if err := store(records); err != nil {
+				return errors.Annotatef(err, "store aliases for blocks [%d, %d]", from, to)
+			}
+			total += len(records)
+		}
+		chunk++
+		if len(records) > 0 || chunk%ensRebuildProgressEvery == 0 || to == uint64(toBlock) {
+			glog.Infof("RebuildEnsAliases: scanned up to block %d, %d aliases recorded", to, total)
+		}
+		if to == uint64(toBlock) {
+			break
+		}
+	}
+	glog.Infof("RebuildEnsAliases: finished, %d aliases recorded", total)
+	return nil
+}
+
+// getEnsAliasLogs runs one eth_getLogs call for [from, to] using the shared
+// NameRegistered filter and decodes the trusted logs it returns into alias
+// records. The filter map is reused across calls (this runs single-goroutine),
+// only its block bounds change.
+func (b *EthereumRPC) getEnsAliasLogs(filter map[string]interface{}, from, to uint64) ([]bchain.AddressAliasRecord, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	filter["fromBlock"] = "0x" + strconv.FormatUint(from, 16)
+	filter["toBlock"] = "0x" + strconv.FormatUint(to, 16)
+	var logs []rpcLogWithTxHash
+	if err := b.RPC.CallContext(ctx, &logs, "eth_getLogs", filter); err != nil {
+		return nil, err
+	}
+	var records []bchain.AddressAliasRecord
+	for i := range logs {
+		if ens := getEnsRecord(&logs[i], b.ensRegistrars); ens != nil {
+			records = append(records, *ens)
+		}
+	}
+	return records, nil
 }
 
 type rpcCallTrace struct {

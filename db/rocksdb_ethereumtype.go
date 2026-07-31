@@ -1953,3 +1953,65 @@ func (d *RocksDB) periodicStoreAddrContractsCache() {
 		d.storeAddrContractsCache()
 	}
 }
+
+// EnsAliasRebuilder is implemented by EthereumType RPC backends that can rescan
+// ENS NameRegistered logs. It decouples RebuildEnsAliases from the concrete
+// EthereumRPC type so coins that embed it (e.g. BSC) qualify as well.
+type EnsAliasRebuilder interface {
+	RebuildEnsAliases(fromBlock, toBlock uint32, chunkBlocks int, isInterrupted func() bool, store func([]bchain.AddressAliasRecord) error) error
+}
+
+// RebuildEnsAliases rebuilds the address-alias column family from the chain's
+// NameRegistered logs emitted by the trusted registrars, without a full reindex.
+// It is a one-shot maintenance operation backing the -rebuildensaliases flag and
+// expects to hold the DB exclusively.
+//
+// Running the flag intentionally replaces the whole CF: the freshly scanned set
+// is swapped in atomically (see replaceAddressAliases), purging spoofed aliases
+// the old accept-any parser wrote. When no ens_registrars are configured the scan
+// yields nothing and the CF is wiped — a deliberate purge, since the operator ran
+// the flag; the outcome is logged loudly. The swap is atomic, so a failed or
+// interrupted scan leaves the live CF untouched rather than half-wiped.
+//
+// stop, if non-nil, aborts the scan between chunks (returns ErrOperationInterrupted).
+func (d *RocksDB) RebuildEnsAliases(rebuilder EnsAliasRebuilder, fromBlock, toBlock uint32, chunkBlocks int, stop chan os.Signal) error {
+	if !d.chainParser.UseAddressAliases() {
+		return errors.New("RebuildEnsAliases: address_aliases is disabled for this coin")
+	}
+	interrupted := func() bool {
+		if stop == nil {
+			return false
+		}
+		select {
+		case <-stop:
+			return true
+		default:
+			return false
+		}
+	}
+	// Collect the whole new set before touching the CF, then swap atomically.
+	newAliases := make(map[string]string)
+	collect := func(records []bchain.AddressAliasRecord) error {
+		for i := range records {
+			if r := &records[i]; len(r.Name) > 0 {
+				newAliases[r.Address] = r.Name // ascending scan: last write wins
+			}
+		}
+		return nil
+	}
+	if err := rebuilder.RebuildEnsAliases(fromBlock, toBlock, chunkBlocks, interrupted, collect); err != nil {
+		if err == eth.ErrEnsRebuildInterrupted {
+			return ErrOperationInterrupted
+		}
+		return err
+	}
+	if err := d.replaceAddressAliases(newAliases); err != nil {
+		return errors.Annotatef(err, "replaceAddressAliases")
+	}
+	if len(newAliases) == 0 {
+		glog.Warning("RebuildEnsAliases: scan produced no aliases (no ens_registrars or none matched); address aliases were WIPED")
+	} else {
+		glog.Infof("RebuildEnsAliases: replaced address aliases with %d records", len(newAliases))
+	}
+	return nil
+}

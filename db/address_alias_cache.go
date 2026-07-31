@@ -69,3 +69,15 @@ func (c *addressAliasLRU) add(key, value string) {
 	c.order.Remove(oldest)
 	delete(c.items, oldest.Value.(*addressAliasLRUEntry).key)
 }
+
+// purge drops every entry from the cache. Used after the address-alias column
+// family is wiped so stale formatted aliases are not served from memory.
+func (c *addressAliasLRU) purge() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.order.Init()
+	c.items = make(map[string]*list.Element, c.capacity)
+}

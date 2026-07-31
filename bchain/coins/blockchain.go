@@ -537,6 +537,31 @@ func (c *blockChainWithMetrics) MissingBlockRetryOverride() *bchain.MissingBlock
 	return nil
 }
 
+// RebuildEnsAliases forwards the wrapped chain's ENS alias rebuild (EthereumType
+// coins) through the metrics wrapper so the -rebuildensaliases maintenance flag
+// reaches it; without this the duck-typed lookup only sees the wrapper. Returns
+// an error when the underlying chain doesn't support it.
+func (c *blockChainWithMetrics) RebuildEnsAliases(fromBlock, toBlock uint32, chunkBlocks int, isInterrupted func() bool, store func([]bchain.AddressAliasRecord) error) error {
+	if p, ok := c.b.(interface {
+		RebuildEnsAliases(uint32, uint32, int, func() bool, func([]bchain.AddressAliasRecord) error) error
+	}); ok {
+		return p.RebuildEnsAliases(fromBlock, toBlock, chunkBlocks, isInterrupted, store)
+	}
+	return errors.New("ENS alias rebuild not supported by underlying chain")
+}
+
+// EnsRegistrarsFingerprint forwards the wrapped chain's ENS registrar fingerprint
+// so the startup self-heal can detect a changed registrar set through the metrics
+// wrapper. Empty when the underlying chain doesn't expose one.
+func (c *blockChainWithMetrics) EnsRegistrarsFingerprint() string {
+	if p, ok := c.b.(interface {
+		EnsRegistrarsFingerprint() string
+	}); ok {
+		return p.EnsRegistrarsFingerprint()
+	}
+	return ""
+}
+
 // XpubConfigOverride forwards the wrapped chain's per-chain xpub config
 // override through the metrics wrapper; nil when none is provided.
 func (c *blockChainWithMetrics) XpubConfigOverride() *bchain.XpubConfig {

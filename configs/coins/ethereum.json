@@ -61,6 +61,7 @@
                 "averageBlockTimeMs": 12000,
                 "consensusNodeVersion": "http://localhost:7536/eth/v1/node/version",
                 "address_aliases": true,
+                "ens_registrars": ["0xf0ad5cad05e10572efceb849f6ff0c68f9700455", "0x283af0b28c62c092c9727f1ee09c02ca627eb7f5", "0x253553366da8546fc250f225fe3d25d0c782303b", "0x59e16fccd424cc24e280be16e11bcd56fb0ce547"],
                 "eip1559Fees": true,
                 "mempoolTxTimeoutHours": 48,
                 "queryBackendOnMempoolResync": false,
