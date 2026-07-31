@@ -303,7 +303,11 @@ func (p *EthereumParser) ParseInputData(signatures *[]bchain.FourByteSignature, 
 	return &parsed
 }
 
-// getEnsRecord processes transaction log entry and tries to parse ENS record from it
+// WARNING: not production-ready, disabled by default (see UseEnsReverseAliases).
+// Trusts any log emitter (spoofable labels), does not validate names, and ignores
+// expiry/ownership (stale/duplicate labels). Use forward ResolveENS instead.
+//
+// getEnsRecord parses an ENS record from a transaction log entry.
 func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
 	if len(l.Topics) == 3 && l.Topics[0] == nameRegisteredEventSignature && len(l.Data) >= 322 {
 		address, err := addressFromPaddedHex(l.Topics[2])
