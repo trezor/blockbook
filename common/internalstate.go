@@ -430,16 +430,11 @@ func (is *InternalState) GetAvgBlockPeriodSeconds() float64 {
 	return is.AvgBlockPeriodSeconds
 }
 
-// computeAvgBlockPeriod computes the average spacing of the most recent block times, in
-// both the integer-seconds form kept for the sync-ETA estimate and a fractional-seconds
-// form for the metric.
-//
-// The integer form truncates, so every sub-second chain reports 0 - which silently
-// removed Arbitrum (0.24s), BNB Smart Chain (0.45s) and Robinhood (0.10s) from any alert
-// gated on "blockbook_avg_block_period > 0". The float form also divides by the real
-// number of intervals in the window; the integer form divides a span of
-// avgBlockPeriodSample+1 intervals by avgBlockPeriodSample, overstating the period by
-// about 1%, and is left as it is so the ETA it feeds does not change.
+// computeAvgBlockPeriod averages the spacing of the most recent block times, as integer
+// seconds for the sync ETA and fractional seconds for the metric. The integer form
+// truncates, so sub-second chains report 0 and drop out of any rule gated on
+// blockbook_avg_block_period > 0; it also divides a span of avgBlockPeriodSample+1
+// intervals by avgBlockPeriodSample (~1% high) and is left alone so the ETA is unchanged.
 func (is *InternalState) computeAvgBlockPeriod() {
 	last := len(is.BlockTimes) - 1
 	first := last - avgBlockPeriodSample - 1
@@ -461,23 +456,10 @@ func (is *InternalState) GetNetwork() string {
 }
 
 // SetBackendInfo sets new BackendInfo and records the time when Blocks advances.
-// On the first observation the advance time is seeded to now so the
-// derived tip-age metric reads a meaningful value instead of "since epoch."
-//
-// A failed backend query is recorded as an error on top of the last known good
-// payload instead of replacing it with zeros. Callers construct BackendInfo from an
-// empty bchain.ChainInfo when GetChainInfo fails (see db.SyncWorker.updateBackendInfo
-// and api.Worker.GetSystemInfo), and storing that would:
-//   - drive blockbook_backend_best_height to 0, which the "backend stuck" alerts read
-//     as "the backend produced no blocks", and whose recovery jump back to the real
-//     height then blinds their delta() window;
-//   - reset BackendTipLastAdvance on the next successful query, because 0 -> real
-//     height counts as an advance below, masking a genuinely stalled tip;
-//   - blank the version/subversion fields that /api/ and the websocket getInfo report.
-//
-// The guard is deliberately narrow: it only applies when the caller reported an error
-// and carried no height at all, so a backend that answers with height 0 (a chain at
-// genesis) is still stored normally.
+// A failed query is recorded as an error on top of the last known good payload: callers
+// build BackendInfo from an empty ChainInfo on failure, and storing that would zero
+// blockbook_backend_best_height and reset the tip advance. The guard needs both an error
+// and no height, so a backend answering at genesis is still stored.
 func (is *InternalState) SetBackendInfo(bi *BackendInfo) {
 	is.mux.Lock()
 	defer is.mux.Unlock()

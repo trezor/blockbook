@@ -554,12 +554,11 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		subversion = si.Backend.ConsensusVersion
 	}
 
-	// GetSystemInfo substitutes an empty ChainInfo when the backend cannot be queried,
-	// so every Backend field of si is zero in that case. Publishing it would blank the
-	// app-info version labels and drive blockbook_backend_best_height to 0 - a value the
-	// "backend stuck" alerts read as "the backend produced no blocks", and whose recovery
-	// jump back to the real height then blinds their delta() window. The last published
-	// values stay in place instead; the locally derived gauges below are still refreshed.
+	// GetSystemInfo substitutes an empty ChainInfo when the backend cannot be queried, so
+	// every Backend field of si is zero then. Publishing it would blank the app-info
+	// version labels and drive blockbook_backend_best_height to 0, which the stuck rules
+	// read as "no blocks produced". Keep the last published values; the locally derived
+	// gauges below are still refreshed.
 	if si.Backend.BackendError == "" {
 		metrics.BlockbookAppInfo.Reset()
 		metrics.BlockbookAppInfo.With(common.Labels{
@@ -735,12 +734,11 @@ func storeInternalStateLoop() {
 		glog.Info("storeInternalStateLoop starting with db stats compute disabled")
 	}
 	common.TickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
-		// Republish the sync-state gauges on every tick (~60s). This is the guaranteed
-		// floor for their freshness: syncIndexLoop refreshes them as it runs, but a
-		// blockbook whose tip feed has gone quiet only wakes on the resyncindexperiod
-		// backstop (~15.6 min), which is how far behind blockbook_synchronized used to
-		// lag reality. RefreshSyncMetrics reads internal state only - no backend RPCs -
-		// so it is cheap enough to run unconditionally here.
+		// Republish the sync-state gauges every tick (~60s) - the guaranteed freshness
+		// floor. syncIndexLoop also refreshes them, but a blockbook whose tip feed went
+		// quiet only wakes on the resyncindexperiod backstop (~15.6 min), which is how far
+		// blockbook_synchronized used to lag reality. RefreshSyncMetrics reads internal
+		// state only, no backend RPCs, so it is cheap to run unconditionally.
 		refreshSyncMetrics()
 		if (*dbStatsPeriodHours) > 0 && !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
 			computeRunning = true
