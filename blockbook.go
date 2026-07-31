@@ -397,6 +397,17 @@ func mainWithExitCode() int {
 		go syncIndexLoop()
 		go syncMempoolLoop()
 		internalState.InitialSync = false
+
+		// heal internal data of blocks synced before processInternalTransactions
+		// was enabled; a no-op when the watermark is already at 0
+		if chain.GetChainParser().GetChainType() == bchain.ChainEthereumType && bchain.ProcessInternalTransactions {
+			healingWorker, err := api.NewWorker(index, chain, mempool, txCache, metrics, internalState, fiatRates)
+			if err != nil {
+				glog.Error("internalDataHealing: NewWorker: ", err)
+			} else {
+				go healingWorker.InternalDataHealingRoutine()
+			}
+		}
 	}
 	go storeInternalStateLoop()
 
