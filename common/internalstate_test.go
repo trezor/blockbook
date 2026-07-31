@@ -232,3 +232,56 @@ func TestBackendTipAdvanceOnRollback(t *testing.T) {
 		t.Errorf("BackendTipHeight = %d, want 480", is.BackendTipHeight)
 	}
 }
+
+// TestComputeAvgBlockPeriodSubSecond covers the reason the fractional average exists: the
+// integer form truncates, so a sub-second chain reports 0 - and both "backend stuck" rules
+// are gated on blockbook_avg_block_period > 0, which silently excluded Arbitrum (~0.24s),
+// BNB Smart Chain (~0.45s) and Robinhood (~0.10s) from either of them.
+func TestComputeAvgBlockPeriodSubSecond(t *testing.T) {
+	// 102 block times spaced 250ms apart, rounded into the uint32 seconds they are stored
+	// as: 101 intervals over ~25s.
+	is := &InternalState{}
+	times := make([]uint32, avgBlockPeriodSample+2)
+	for i := range times {
+		times[i] = uint32(i) / 4
+	}
+	is.SetBlockTimes(times)
+
+	if got := is.GetAvgBlockPeriod(); got != 0 {
+		t.Errorf("GetAvgBlockPeriod() = %d, want 0 (integer form truncates)", got)
+	}
+	got := is.GetAvgBlockPeriodSeconds()
+	if got < 0.2 || got > 0.3 {
+		t.Errorf("GetAvgBlockPeriodSeconds() = %v, want ~0.25", got)
+	}
+}
+
+// TestComputeAvgBlockPeriodNotEnoughBlocks pins the "not yet computed" case: early in an
+// initial build or reindex there are too few block times, and the metric reads 0.
+func TestComputeAvgBlockPeriodNotEnoughBlocks(t *testing.T) {
+	is := &InternalState{}
+	is.SetBlockTimes(make([]uint32, avgBlockPeriodSample))
+	if got := is.GetAvgBlockPeriodSeconds(); got != 0 {
+		t.Errorf("GetAvgBlockPeriodSeconds() = %v, want 0", got)
+	}
+}
+
+// TestComputeAvgBlockPeriodDividesByRealIntervalCount checks the float form divides the
+// span by the number of intervals it actually covers. The integer form divides a span of
+// avgBlockPeriodSample+1 intervals by avgBlockPeriodSample and so runs ~1% high; it is
+// left alone because it feeds the sync ETA.
+func TestComputeAvgBlockPeriodDividesByRealIntervalCount(t *testing.T) {
+	is := &InternalState{}
+	times := make([]uint32, avgBlockPeriodSample+2)
+	for i := range times {
+		times[i] = uint32(i) * 3
+	}
+	is.SetBlockTimes(times)
+
+	if got := is.GetAvgBlockPeriodSeconds(); got != 3 {
+		t.Errorf("GetAvgBlockPeriodSeconds() = %v, want exactly 3", got)
+	}
+	if got := is.GetAvgBlockPeriod(); got != 3 {
+		t.Errorf("GetAvgBlockPeriod() = %d, want 3 (3.03 truncated)", got)
+	}
+}
