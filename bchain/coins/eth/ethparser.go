@@ -41,6 +41,7 @@ type EthereumLikeParser interface {
 	bchain.BlockChainParser
 	EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
 	SetEnsSuffix(suffix string)
+	UseEnsReverseAliases() bool
 }
 
 // EthereumParser handle
@@ -55,6 +56,13 @@ type EthereumParser struct {
 	AddrContractsCacheBulkMaxBytes int64
 	FormatAddressFunc              func(addr string) string
 	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
+	// DisableEnsReverse turns off ENS reverse aliasing for this chain.
+	DisableEnsReverse bool
+}
+
+// UseEnsReverseAliases reports whether ENS reverse aliases are recorded and served.
+func (p *EthereumParser) UseEnsReverseAliases() bool {
+	return p.AddressAliases && !p.DisableEnsReverse
 }
 
 // NewEthereumParser returns new EthereumParser instance

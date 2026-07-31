@@ -93,17 +93,20 @@ type Configuration struct {
 	AddressContractsCacheMaxBytes     int64  `json:"address_contracts_cache_max_bytes,omitempty"`
 	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
 	AddressAliases                    bool   `json:"address_aliases,omitempty"`
-	MempoolTxTimeoutHours             int    `json:"mempoolTxTimeoutHours"`
-	MempoolTxTimeout                  string `json:"mempoolTxTimeout,omitempty"`
-	AlternativeMempoolTxTimeout       string `json:"alternativeMempoolTxTimeout,omitempty"`
-	QueryBackendOnMempoolResync       bool   `json:"queryBackendOnMempoolResync"`
-	ProcessInternalTransactions       bool   `json:"processInternalTransactions"`
-	ProcessZeroInternalTransactions   bool   `json:"processZeroInternalTransactions"`
-	ConsensusNodeVersionURL           string `json:"consensusNodeVersion"`
-	DisableMempoolSync                bool   `json:"disableMempoolSync,omitempty"`
-	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
-	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
-	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
+	// DisableEnsAliases turns off ENS reverse aliasing (address->name labels),
+	// keeping contract/token-name aliases; forward ResolveENS is unaffected.
+	DisableEnsAliases               bool   `json:"disable_ens_aliases,omitempty"`
+	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
+	MempoolTxTimeout                string `json:"mempoolTxTimeout,omitempty"`
+	AlternativeMempoolTxTimeout     string `json:"alternativeMempoolTxTimeout,omitempty"`
+	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
+	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
+	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
+	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
+	DisableMempoolSync              bool   `json:"disableMempoolSync,omitempty"`
+	Eip1559Fees                     bool   `json:"eip1559Fees,omitempty"`
+	AlternativeEstimateFee          string `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams    string `json:"alternative_estimate_fee_params,omitempty"`
 	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
 	// required for EVM coins (translates duration settings to block counts).
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
@@ -275,6 +278,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 	// always create parser
 	parser := NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
+	parser.DisableEnsReverse = c.DisableEnsAliases
 	parser.HotAddressMinContracts = c.HotAddressMinContracts
 	parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
 	parser.HotAddressMinHits = c.HotAddressMinHits
@@ -1421,12 +1425,15 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
+	recordEns := b.Parser.UseEnsReverseAliases()
 	for i := range logs {
 		l := &logs[i]
 		r[l.Hash] = append(r[l.Hash], &l.RpcLog)
-		ens := getEnsRecord(l)
-		if ens != nil {
-			ensRecords = append(ensRecords, *ens)
+		if recordEns {
+			ens := getEnsRecord(l)
+			if ens != nil {
+				ensRecords = append(ensRecords, *ens)
+			}
 		}
 	}
 	return r, ensRecords, nil
