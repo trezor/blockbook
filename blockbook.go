@@ -557,15 +557,23 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		subversion = si.Backend.ConsensusVersion
 	}
 
-	metrics.BlockbookAppInfo.Reset()
-	metrics.BlockbookAppInfo.With(common.Labels{
-		"blockbook_version":        si.Blockbook.Version,
-		"blockbook_commit":         si.Blockbook.GitCommit,
-		"blockbook_buildtime":      si.Blockbook.BuildTime,
-		"backend_version":          si.Backend.Version,
-		"backend_subversion":       subversion,
-		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
-	metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
+	// GetSystemInfo substitutes an empty ChainInfo when the backend cannot be queried,
+	// so every Backend field of si is zero in that case. Publishing it would blank the
+	// app-info version labels and drive blockbook_backend_best_height to 0 - a value the
+	// "backend stuck" alerts read as "the backend produced no blocks", and whose recovery
+	// jump back to the real height then blinds their delta() window. The last published
+	// values stay in place instead; the locally derived gauges below are still refreshed.
+	if si.Backend.BackendError == "" {
+		metrics.BlockbookAppInfo.Reset()
+		metrics.BlockbookAppInfo.With(common.Labels{
+			"blockbook_version":        si.Blockbook.Version,
+			"blockbook_commit":         si.Blockbook.GitCommit,
+			"blockbook_buildtime":      si.Blockbook.BuildTime,
+			"backend_version":          si.Backend.Version,
+			"backend_subversion":       subversion,
+			"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
+		metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
+	}
 	metrics.BackendTipAgeSeconds.Set(time.Since(is.GetBackendTipLastAdvance()).Seconds())
 	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
 	synchronized := 0.0

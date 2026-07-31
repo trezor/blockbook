@@ -138,3 +138,48 @@ func TestWsIPBlocklistSnapshotOrderAndReset(t *testing.T) {
 		t.Fatalf("after reset snapshot len = %d, want 0", got)
 	}
 }
+
+// TestSetBackendInfoKeepsLastGoodOnError covers the guard that stops a failed
+// GetChainInfo from zeroing the backend height: publishing 0 makes the "backend stuck"
+// alerts read "no blocks produced", and the recovery jump back to the real height then
+// blinds their delta() window and resets the tip-advance timestamp.
+func TestSetBackendInfoKeepsLastGoodOnError(t *testing.T) {
+	is := &InternalState{}
+	is.SetBackendInfo(&BackendInfo{Blocks: 100, Version: "v1", Subversion: "sub"})
+	advance := is.GetBackendTipLastAdvance()
+
+	is.SetBackendInfo(&BackendInfo{BackendError: "GetChainInfo: connection refused"})
+
+	bi := is.GetBackendInfo()
+	if bi.Blocks != 100 {
+		t.Errorf("Blocks = %d, want the last known good 100", bi.Blocks)
+	}
+	if bi.Version != "v1" || bi.Subversion != "sub" {
+		t.Errorf("version fields were blanked: %+v", bi)
+	}
+	if bi.BackendError == "" {
+		t.Error("BackendError was not recorded")
+	}
+	if got := is.GetBackendTipLastAdvance(); !got.Equal(advance) {
+		t.Errorf("tip advance moved on error: %v -> %v", advance, got)
+	}
+
+	// Recovery must not read as an advance just because the error left the height alone.
+	is.SetBackendInfo(&BackendInfo{Blocks: 100, Version: "v1"})
+	if got := is.GetBackendTipLastAdvance(); !got.Equal(advance) {
+		t.Errorf("tip advance moved on recovery without a new block: %v -> %v", advance, got)
+	}
+	if is.GetBackendInfo().BackendError != "" {
+		t.Error("BackendError was not cleared on recovery")
+	}
+}
+
+// TestSetBackendInfoStoresGenesisHeight guards the narrowness of the error path: a
+// backend that legitimately answers with height 0 must still be stored.
+func TestSetBackendInfoStoresGenesisHeight(t *testing.T) {
+	is := &InternalState{}
+	is.SetBackendInfo(&BackendInfo{Blocks: 0, Version: "genesis"})
+	if got := is.GetBackendInfo().Version; got != "genesis" {
+		t.Errorf("Version = %q, want %q", got, "genesis")
+	}
+}
