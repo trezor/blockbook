@@ -558,6 +558,11 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	hchClosed.Store(false)
 	writeBlockDone := make(chan struct{})
 	terminating := make(chan struct{})
+	// stopWorkers releases the workers and the writer. It must be idempotent: both
+	// the connect loop and the post-loop wait can need it, and closing an already
+	// closed channel panics.
+	var terminateOnce sync.Once
+	stopWorkers := func() { terminateOnce.Do(func() { close(terminating) }) }
 	// abortCh is used by workers to signal a resync-worthy reorg or a terminal worker error.
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
@@ -616,13 +621,13 @@ ConnectLoop:
 				glog.Error("sync: parallel connect aborted, worker error ", abortErr)
 			}
 			err = abortErr
-			close(terminating)
+			stopWorkers()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("connectBlocksParallel interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			stopWorkers()
 			break ConnectLoop
 		default:
 			hash, err = w.chain.GetBlockHash(h)
@@ -640,7 +645,7 @@ ConnectLoop:
 				} else {
 					glog.Error("sync: parallel connect aborted while queueing block hash, worker error ", err)
 				}
-				close(terminating)
+				stopWorkers()
 				break ConnectLoop
 			}
 			h++
@@ -650,7 +655,9 @@ ConnectLoop:
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
 	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	if lateErr := w.awaitWorkers(&wg, abortCh, stopWorkers); lateErr != nil && err == nil {
+		err = lateErr
+	}
 	// Hardening: a worker can report a terminal tail error after ConnectLoop has
 	// already ended (for example once hchClosed=true). Drain once so we return
 	// that error instead of silently succeeding.
@@ -666,6 +673,35 @@ ConnectLoop:
 	}
 	<-writeBlockDone
 	return err
+}
+
+// awaitWorkers waits for the block workers to finish while staying responsive to a
+// late abort or shutdown. A plain wg.Wait() here can hang forever: a worker that gives
+// up on a block (tail failure or stall deadline) returns while still holding that
+// height, so the in-order writer waits for a block nobody will deliver and the other
+// workers block on sends the writer never drains - and their sends only watch
+// terminating, which by then only this function can close. The round would hold the
+// sync loop indefinitely, unresponsive to SIGTERM, and under BulkConnectBlocks it would
+// also skip bulkconnect.Close() and leave the DB in the inconsistent bulk state.
+// Returns the error that ended the wait, if any.
+func (w *SyncWorker) awaitWorkers(wg *sync.WaitGroup, abortCh chan error, stopWorkers func()) error {
+	workersDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(workersDone)
+	}()
+	select {
+	case <-workersDone:
+		return nil
+	case abortErr := <-abortCh:
+		stopWorkers()
+		<-workersDone
+		return abortErr
+	case <-w.chanOsSignal:
+		stopWorkers()
+		<-workersDone
+		return ErrOperationInterrupted
+	}
 }
 
 func (w *SyncWorker) getBlockWorker(i int, syncWorkers uint32, wg *sync.WaitGroup, hch chan hashHeight, bch []chan *bchain.Block, hchClosed *atomic.Value, terminating chan struct{}, abortCh chan error) {
@@ -825,6 +861,11 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	hchClosed.Store(false)
 	writeBlockDone := make(chan struct{})
 	terminating := make(chan struct{})
+	// stopWorkers releases the workers and the writer. It must be idempotent: both
+	// the connect loop and the post-loop wait can need it, and closing an already
+	// closed channel panics.
+	var terminateOnce sync.Once
+	stopWorkers := func() { terminateOnce.Do(func() { close(terminating) }) }
 	// abortCh is used by workers to signal a resync-worthy reorg or a terminal worker error.
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
@@ -882,13 +923,13 @@ ConnectLoop:
 				glog.Error("sync: bulk connect aborted, worker error ", abortErr)
 			}
 			err = abortErr
-			close(terminating)
+			stopWorkers()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("BulkConnectBlocks interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			stopWorkers()
 			break ConnectLoop
 		default:
 			hash, err = w.chain.GetBlockHash(h)
@@ -906,7 +947,7 @@ ConnectLoop:
 				} else {
 					glog.Error("sync: bulk connect aborted while queueing block hash, worker error ", err)
 				}
-				close(terminating)
+				stopWorkers()
 				break ConnectLoop
 			}
 			if h > 0 && h%1000 == 0 {
@@ -928,7 +969,9 @@ ConnectLoop:
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
 	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	if lateErr := w.awaitWorkers(&wg, abortCh, stopWorkers); lateErr != nil && err == nil {
+		err = lateErr
+	}
 	// Hardening: capture a late worker error reported after the connect loop
 	// exits so the caller can retry instead of treating sync as successful.
 	select {

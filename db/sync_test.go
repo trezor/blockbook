@@ -159,6 +159,9 @@ func TestConnectBlocksHonorsClosedShutdownBeforeStart(t *testing.T) {
 
 type getBlockChainTestChain struct {
 	bchain.BlockChain
+	// mu guards the counters and queues below: with more than one sync worker,
+	// GetBlock is called concurrently.
+	mu              sync.Mutex
 	bestHeight      uint32
 	bestHeightErr   error
 	bestHeightCalls int
@@ -177,6 +180,8 @@ type getBlockChainTestChain struct {
 }
 
 func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.bestHeightCalls++
 	if c.bestHeightErr != nil {
 		return 0, c.bestHeightErr
@@ -195,6 +200,8 @@ func (c *getBlockChainTestChain) GetBlockHash(height uint32) (string, error) {
 }
 
 func (c *getBlockChainTestChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.getBlockCalls[height]++
 	if c.blockErrorFunc != nil {
 		if err := c.blockErrorFunc(height); err != nil {
@@ -214,6 +221,18 @@ func (c *getBlockChainTestChain) GetBlock(hash string, height uint32) (*bchain.B
 		return &copy, nil
 	}
 	return nil, bchain.ErrBlockNotFound
+}
+
+func (c *getBlockChainTestChain) blockCalls(height uint32) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.getBlockCalls[height]
+}
+
+func (c *getBlockChainTestChain) bestHeightCallCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.bestHeightCalls
 }
 
 func newGetBlockChainTestWorker(t *testing.T, chain *getBlockChainTestChain, startHash string, startHeight uint32) *SyncWorker {
@@ -264,7 +283,7 @@ func TestGetBlockChainRetriesSequentialTipBlock(t *testing.T) {
 	if results[0].block == nil || results[0].block.Hash != "h1" {
 		t.Fatalf("unexpected block: %+v", results[0].block)
 	}
-	if calls := chain.getBlockCalls[1]; calls != 3 {
+	if calls := chain.blockCalls(1); calls != 3 {
 		t.Fatalf("GetBlock height 1 calls = %d, want 3", calls)
 	}
 }
@@ -283,7 +302,7 @@ func TestGetBlockChainStopsAboveBestHeight(t *testing.T) {
 	if len(results) != 0 {
 		t.Fatalf("got %d results, want 0: %+v", len(results), results)
 	}
-	if calls := chain.getBlockCalls[1]; calls != 1 {
+	if calls := chain.blockCalls(1); calls != 1 {
 		t.Fatalf("GetBlock height 1 calls = %d, want 1", calls)
 	}
 }
@@ -312,7 +331,7 @@ func TestGetBlockChainRetriesKnownHashAboveObservedBestHeight(t *testing.T) {
 	if results[0].block == nil || results[0].block.Hash != "h1" {
 		t.Fatalf("unexpected block: %+v", results[0].block)
 	}
-	if calls := chain.getBlockCalls[1]; calls != 2 {
+	if calls := chain.blockCalls(1); calls != 2 {
 		t.Fatalf("GetBlock height 1 calls = %d, want 2", calls)
 	}
 }
@@ -334,7 +353,7 @@ func TestGetBlockChainMissingBlockChangedHashResyncs(t *testing.T) {
 	if !stdErrors.Is(results[0].err, errResync) {
 		t.Fatalf("error = %v, want errResync", results[0].err)
 	}
-	if calls := chain.getBlockCalls[1]; calls != 2 {
+	if calls := chain.blockCalls(1); calls != 2 {
 		t.Fatalf("GetBlock height 1 calls = %d, want 2", calls)
 	}
 }
@@ -391,7 +410,7 @@ func TestGetBlockChainNonRetryableErrorReturns(t *testing.T) {
 	if !stdErrors.Is(results[0].err, boom) {
 		t.Fatalf("error = %v, want %v", results[0].err, boom)
 	}
-	if calls := chain.getBlockCalls[1]; calls != 1 {
+	if calls := chain.blockCalls(1); calls != 1 {
 		t.Fatalf("GetBlock height 1 calls = %d, want 1", calls)
 	}
 }
@@ -435,7 +454,7 @@ func TestGetBlockChainWallClockCap(t *testing.T) {
 	if elapsed > 2*time.Second {
 		t.Fatalf("wall-clock cap took %v, expected to return shortly after 50ms", elapsed)
 	}
-	if calls := chain.getBlockCalls[1]; calls < 2 {
+	if calls := chain.blockCalls(1); calls < 2 {
 		t.Fatalf("GetBlock height 1 calls = %d, want at least 2", calls)
 	}
 }
@@ -493,7 +512,7 @@ func TestGetBlockWorkerCheckErrAbortsAfterStreak(t *testing.T) {
 	}
 
 	wg.Wait()
-	if chain.bestHeightCalls < 3 {
+	if chain.bestHeightCallCount() < 3 {
 		t.Fatalf("GetBestBlockHeight calls = %d, want at least 3", chain.bestHeightCalls)
 	}
 }
@@ -636,7 +655,7 @@ func TestGetBlockWorkerNonRetryableErrorAbortsAfterStallDeadline(t *testing.T) {
 	wg.Wait()
 	close(hch)
 	// the error is retried (it may be an unclassified transient condition), just not forever
-	if calls := chain.getBlockCalls[1]; calls < 2 {
+	if calls := chain.blockCalls(1); calls < 2 {
 		t.Fatalf("GetBlock height 1 calls = %d, want at least 2 (retried before giving up)", calls)
 	}
 }
@@ -714,4 +733,52 @@ func TestGetBlockWorkerNonRetryableBudgetNotConsumedByRetryableErrors(t *testing
 	close(terminating)
 	wg.Wait()
 	close(hch)
+}
+
+// A worker that gives up on a block returns while holding that height, so the in-order
+// writer waits for a block nobody will deliver and the remaining workers block on sends
+// the writer never drains. The coordinator must still return: before the abort-aware
+// wait it parked in wg.Wait() forever, wedging the sync loop with no way out but SIGKILL
+// (which, in the bulk writer, leaves the DB in the inconsistent bulk state).
+func TestParallelConnectBlocksReturnsWhenWorkerDropsHeldBlock(t *testing.T) {
+	refuses := stdErrors.New("query returns too many logs, narrow your filter: 20000")
+	chain := &getBlockChainTestChain{
+		bestHeight: 2,
+		hashes:     map[uint32]string{1: "h1", 2: "h2"},
+		blocks: map[uint32]*bchain.Block{
+			// height 2 is fetchable: its worker will block sending it because the writer
+			// is still waiting for height 1
+			2: {BlockHeader: bchain.BlockHeader{Hash: "h2", Height: 2}},
+		},
+		blockErrors:       map[uint32][]error{},
+		stickyBlockErrors: map[uint32]error{1: refuses},
+		getBlockCalls:     map[uint32]int{},
+	}
+	w := &SyncWorker{
+		chain: chain,
+		missingBlockRetry: MissingBlockRetryConfig{
+			RecheckThreshold:    1,
+			TipRecheckThreshold: 1,
+			RetryDelay:          time.Millisecond,
+			MaxStallDuration:    10 * time.Millisecond,
+		},
+		metrics: getTestMetrics(t),
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- w.ParallelConnectBlocks(nil, 1, 2, 2)
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("ParallelConnectBlocks returned nil, want the worker error (silent success hides missing blocks)")
+		}
+		if !stdErrors.Is(err, refuses) {
+			t.Fatalf("ParallelConnectBlocks error = %v, want %v", err, refuses)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ParallelConnectBlocks did not return: the round is wedged on a dropped block")
+	}
 }
