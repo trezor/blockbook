@@ -65,6 +65,7 @@
             "xpub_magic_segwit_native": 73342198,
             "slip44": 1,
             "additional_params": {
+                "averageBlockTimeMs": 600000,
                 "alternative_estimate_fee": "mempoolspace",
                 "alternative_estimate_fee_params": "{\"url\": \"https://mempool.space/testnet4/api/v1/fees/recommended\", \"periodSeconds\": 60}",
                 "block_golomb_filter_p": 20,

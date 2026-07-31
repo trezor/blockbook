@@ -64,7 +64,9 @@
             "xpub_magic_segwit_p2sh": 71979618,
             "xpub_magic_segwit_native": 73342198,
             "slip44": 1,
-            "additional_params": {}
+            "additional_params": {
+            	"averageBlockTimeMs": 600000
+            }
         }
     },
     "meta": {

@@ -65,6 +65,7 @@
             "xpub_magic_segwit_native": 73342198,
             "slip44": 1,
             "additional_params": {
+                "averageBlockTimeMs": 600000,
                 "block_golomb_filter_p": 20,
                 "block_filter_scripts": "taproot-noordinals",
                 "block_filter_use_zeroed_key": true,
