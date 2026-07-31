@@ -60,11 +60,6 @@ type EthereumParser struct {
 	DisableEnsReverse bool
 }
 
-// UseEnsReverseAliases reports whether ENS reverse aliases are recorded and served.
-func (p *EthereumParser) UseEnsReverseAliases() bool {
-	return p.AddressAliases && !p.DisableEnsReverse
-}
-
 // NewEthereumParser returns new EthereumParser instance
 func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 	return &EthereumParser{
@@ -121,10 +116,6 @@ type rpcBlockTransactions struct {
 
 type rpcBlockTxids struct {
 	Transactions []string `json:"transactions"`
-}
-
-func (p *EthereumParser) SetEnsSuffix(suffix string) {
-	p.EnsSuffix = suffix
 }
 
 func ethNumber(n string) (int64, error) {
