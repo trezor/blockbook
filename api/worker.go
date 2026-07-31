@@ -2647,6 +2647,15 @@ func nonZeroTime(t time.Time) *time.Time {
 const (
 	systemInfoSyncStartGrace      = 5 * time.Second
 	systemInfoEthereumStaleBlocks = 12
+	// systemInfoEthereumMinStale floors the freshness window that
+	// systemInfoEthereumStaleBlocks derives from the chain's cadence. Twelve block times
+	// is 3s on Arbitrum (250ms blocks) and 1.2s on Robinhood (100ms) - shorter than
+	// ordinary RPC, GC and scheduling jitter, so a sub-second chain would report itself
+	// out of sync on any hiccup. The tip watchdog already clamps its analogous window the
+	// same way (eth.tipWatchdogMinStale), and the floor is what makes it safe to correct a
+	// fast chain's configured cadence downwards: without it, a more accurate (smaller)
+	// averageBlockTimeMs would tighten this window instead of only fixing the metric.
+	systemInfoEthereumMinStale = 30 * time.Second
 	// systemInfoEthereumSyncedGap is how far the indexed height may trail the
 	// backend tip and still count as synchronized. It covers the one-block window
 	// between the feed tip advancing and that block being connected, which would
@@ -2668,6 +2677,9 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 	}
 
 	threshold := systemInfoEthereumStaleBlocks * blockPeriod
+	if threshold < systemInfoEthereumMinStale {
+		threshold = systemInfoEthereumMinStale
+	}
 	isFresh := !lastBlockTime.Add(threshold).Before(now)
 
 	// Long EVM archive syncs can stay inside ResyncIndex while new blocks keep
