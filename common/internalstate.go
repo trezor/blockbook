@@ -233,6 +233,22 @@ func (is *InternalState) FinishedSyncNoChange() {
 	is.IsSynchronized = true
 }
 
+// GetInitialSync reports whether the initial index build (or a full reindex) is running.
+// InitialSync is written from main while the sync loop and the metrics refresh read it, so
+// both sides go through the lock.
+func (is *InternalState) GetInitialSync() bool {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	return is.InitialSync
+}
+
+// SetInitialSync records whether the initial index build is running.
+func (is *InternalState) SetInitialSync(initialSync bool) {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	is.InitialSync = initialSync
+}
+
 // GetSyncState gets the state of synchronization
 func (is *InternalState) GetSyncState() (bool, uint32, time.Time, time.Time) {
 	is.mux.Lock()

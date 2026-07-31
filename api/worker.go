@@ -2729,9 +2729,20 @@ func RefreshSyncMetrics(is *common.InternalState, chain bchain.BlockChain, chain
 		return
 	}
 	bi := is.GetBackendInfo()
+	initialSync := is.GetInitialSync()
 	inSync, bestHeight, lastBlockTime, startSync := is.GetSyncState()
-	inSync = systemInfoInSync(inSync, is.InitialSync, chainType, bestHeight, bi.Blocks,
-		lastBlockTime, startSync, time.Now().UTC(), syncBlockPeriod(chain, is))
+	if bi.BackendError != "" {
+		// GetSystemInfo reports inSync=false whenever GetChainInfo fails, so the gauge has
+		// to do the same or the two disagree for exactly the outage class this metric
+		// exists for. The cached backend height is deliberately the last known good one,
+		// so without this systemInfoInSync could conclude "at the tip and fresh" against a
+		// dead backend. BackendError stays set until the next successful SetBackendInfo,
+		// which replaces the whole payload and so clears it.
+		inSync = false
+	} else {
+		inSync = systemInfoInSync(inSync, initialSync, chainType, bestHeight, bi.Blocks,
+			lastBlockTime, startSync, time.Now().UTC(), syncBlockPeriod(chain, is))
+	}
 
 	metrics.BlockbookBestHeight.Set(float64(bestHeight))
 	if bi.Blocks > 0 {
@@ -2742,11 +2753,11 @@ func RefreshSyncMetrics(is *common.InternalState, chain bchain.BlockChain, chain
 		synchronized = 1
 	}
 	metrics.Synchronized.Set(synchronized)
-	initialSync := 0.0
-	if is.InitialSync {
-		initialSync = 1
+	initial := 0.0
+	if initialSync {
+		initial = 1
 	}
-	metrics.InitialSync.Set(initialSync)
+	metrics.InitialSync.Set(initial)
 }
 
 // GetSystemInfo returns information about system
@@ -2766,7 +2777,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		inSync = false
 		inSyncMempool = false
 	} else {
-		inSync = systemInfoInSync(inSync, w.is.InitialSync, w.chainType, bestHeight, ci.Blocks, lastBlockTime, startSync, time.Now().UTC(), blockPeriod)
+		inSync = systemInfoInSync(inSync, w.is.GetInitialSync(), w.chainType, bestHeight, ci.Blocks, lastBlockTime, startSync, time.Now().UTC(), blockPeriod)
 	}
 	var columnStats []common.InternalStateColumn
 	var internalDBSize int64
@@ -2787,7 +2798,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		GitCommit:                    vi.GitCommit,
 		BuildTime:                    vi.BuildTime,
 		SyncMode:                     w.is.SyncMode,
-		InitialSync:                  w.is.InitialSync,
+		InitialSync:                  w.is.GetInitialSync(),
 		InSync:                       inSync,
 		BestHeight:                   bestHeight,
 		LastBlockTime:                lastBlockTime,

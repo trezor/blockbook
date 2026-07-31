@@ -362,7 +362,7 @@ func mainWithExitCode() int {
 
 	if *synchronize {
 		internalState.SyncMode = true
-		internalState.InitialSync = true
+		internalState.SetInitialSync(true)
 		refreshSyncMetrics()
 		if err := syncWorker.ResyncIndex(nil, true); err != nil {
 			if err != db.ErrOperationInterrupted {
@@ -389,7 +389,7 @@ func mainWithExitCode() int {
 		internalState.FinishedMempoolSync(mempoolCount)
 		go syncIndexLoop()
 		go syncMempoolLoop()
-		internalState.InitialSync = false
+		internalState.SetInitialSync(false)
 		refreshSyncMetrics()
 	}
 	go storeInternalStateLoop()
