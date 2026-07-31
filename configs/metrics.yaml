@@ -195,7 +195,7 @@ metrics:
   index_resync_errors:
     name: blockbook_index_resync_errors
     type: counter_vec
-    help: Index resync loop failures, labeled by coarse error outcome
+    help: 'Index resync loop failures, labeled by where the failure came from - get_block_hash and get_block mean the backend did not answer, connect_block means fetching or connecting a block failed inside a sync worker, and resync means the resync iteration returned an error that was not attributed further. Sustained get_block_hash or get_block is a backend problem; sustained connect_block is a Blockbook or database problem. Retryable per-block misses are counted here too and may still recover within the same iteration, so alert on a sustained rate rather than on any single increment'
     labels: [error]
   index_block_not_found_retries:
     name: blockbook_index_block_not_found_retries
