@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	stdErrors "errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -316,5 +317,301 @@ func TestCheckENSExpiration_ParsesPaddedResult(t *testing.T) {
 				t.Errorf("CheckENSExpiration(%q) expired = %v, want %v", tc.result, expired, tc.wantExpired)
 			}
 		})
+	}
+}
+
+// logCapStub is a bchain.EVMRPCClient fake for the eth_getLogs result-cap fallback: it can
+// fail eth_getLogs with an arbitrary error and serve canned eth_getBlockReceipts JSON,
+// recording per-method call counts and the arguments eth_getBlockReceipts was called with.
+type logCapStub struct {
+	logsJSON     string // eth_getLogs result when logsErr is nil
+	logsErr      error  // when set, eth_getLogs fails with this error
+	receiptsJSON string // eth_getBlockReceipts result ("null" => unknown block)
+	receiptsErr  error  // when set, eth_getBlockReceipts fails with this error
+	calls        map[string]int
+	receiptsArgs []interface{}
+}
+
+func newLogCapStub() *logCapStub { return &logCapStub{calls: map[string]int{}} }
+
+func (s *logCapStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
+	return nil, stdErrors.New("not implemented")
+}
+
+func (s *logCapStub) Close() {}
+
+func (s *logCapStub) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	s.calls[method]++
+	switch method {
+	case "eth_getLogs":
+		if s.logsErr != nil {
+			return s.logsErr
+		}
+		return json.Unmarshal([]byte(s.logsJSON), result)
+	case "eth_getBlockReceipts":
+		s.receiptsArgs = args
+		if s.receiptsErr != nil {
+			return s.receiptsErr
+		}
+		return json.Unmarshal([]byte(s.receiptsJSON), result)
+	default:
+		return stdErrors.New("unexpected method: " + method)
+	}
+}
+
+// erigonLogCapErr is the verbatim error Erigon >= 3.5.0 returns once a query would exceed
+// --rpc.logs.maxresults (default 20000).
+var erigonLogCapErr = stdErrors.New("query returns too many logs, narrow your filter: 20000")
+
+const (
+	capBlockHash = "0x5baa205d3a15364ff905e9cbb6cfea28c634c0cb48b6a9a9be2abafc6b83e764"
+	capTx1       = "0x1111111111111111111111111111111111111111111111111111111111111111"
+	capTx2       = "0x2222222222222222222222222222222222222222222222222222222222222222"
+	// two receipts, three logs; the last log omits transactionHash to exercise the
+	// attribution fallback to the receipt's own hash
+	capReceiptsJSON = `[
+		{"transactionHash":"` + capTx1 + `","logs":[
+			{"address":"0xaaaa000000000000000000000000000000000001","topics":["0xaa"],"data":"0x01","transactionHash":"` + capTx1 + `"},
+			{"address":"0xaaaa000000000000000000000000000000000002","topics":["0xbb"],"data":"0x02","transactionHash":"` + capTx1 + `"}]},
+		{"transactionHash":"` + capTx2 + `","logs":[
+			{"address":"0xaaaa000000000000000000000000000000000003","topics":["0xcc"],"data":"0x03"}]}]`
+)
+
+// A block whose log count exceeds the backend cap must still be indexable: eth_getLogs
+// fails with the cap error (retrying it can never succeed, so sync would stall forever),
+// and the logs are recovered from eth_getBlockReceipts with per-transaction attribution
+// and ordering preserved.
+func TestProcessEventsForBlock_FallsBackToBlockReceiptsOnLogCap(t *testing.T) {
+	stub := newLogCapStub()
+	stub.logsErr, stub.receiptsJSON = erigonLogCapErr, capReceiptsJSON
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	logs, ens, err := b.processEventsForBlock("0x1875fd0", capBlockHash, 2)
+	if err != nil {
+		t.Fatalf("processEventsForBlock returned error: %v", err)
+	}
+	if len(ens) != 0 {
+		t.Errorf("ens records = %v, want none", ens)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("logs map has %d transactions, want 2: %+v", len(logs), logs)
+	}
+	if got := len(logs[capTx1]); got != 2 {
+		t.Fatalf("tx1 has %d logs, want 2", got)
+	}
+	// order within a transaction must match eth_getLogs (log index order)
+	if logs[capTx1][0].Data != "0x01" || logs[capTx1][1].Data != "0x02" {
+		t.Errorf("tx1 logs out of order: %q, %q", logs[capTx1][0].Data, logs[capTx1][1].Data)
+	}
+	if got := len(logs[capTx2]); got != 1 {
+		t.Fatalf("tx2 has %d logs, want 1 (log without transactionHash must fall back to the receipt hash)", got)
+	}
+	if logs[capTx2][0].Address != "0xaaaa000000000000000000000000000000000003" {
+		t.Errorf("tx2 log = %+v, want the third log", logs[capTx2][0])
+	}
+	if _, ok := logs[""]; ok {
+		t.Error("logs attributed to the empty transaction id")
+	}
+	if got := stub.calls["eth_getBlockReceipts"]; got != 1 {
+		t.Errorf("eth_getBlockReceipts called %d times, want exactly 1", got)
+	}
+	// addressed by hash, not number: the body was already fetched by hash, so this keeps
+	// the two halves of the block consistent across a reorg
+	if len(stub.receiptsArgs) != 1 || stub.receiptsArgs[0] != capBlockHash {
+		t.Errorf("eth_getBlockReceipts args = %v, want [%s]", stub.receiptsArgs, capBlockHash)
+	}
+	// the refused query must not be repeated: it is deterministic and costly
+	if got := stub.calls["eth_getLogs"]; got != 1 {
+		t.Errorf("eth_getLogs called %d times, want exactly 1", got)
+	}
+}
+
+// Errors other than a result cap are transient (network/backend hiccups) and are retried by
+// the sync loop, so they must be returned as-is without spending an extra RPC round trip.
+func TestProcessEventsForBlock_NoFallbackOnOtherErrors(t *testing.T) {
+	stub := newLogCapStub()
+	stub.logsErr, stub.receiptsJSON = stdErrors.New("connection reset by peer"), capReceiptsJSON
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	if _, _, err := b.processEventsForBlock("0x1875fd0", capBlockHash, 2); err == nil {
+		t.Fatal("processEventsForBlock succeeded, want the eth_getLogs error")
+	} else if !strings.Contains(err.Error(), "connection reset by peer") {
+		t.Errorf("error = %v, want it to carry the eth_getLogs error", err)
+	}
+	if got := stub.calls["eth_getBlockReceipts"]; got != 0 {
+		t.Errorf("eth_getBlockReceipts called %d times, want 0", got)
+	}
+}
+
+// A null eth_getBlockReceipts result means the backend does not know the block. It must
+// never be treated as "block has no logs": that would commit a block with >= 20000 logs as
+// log-less, silently dropping every token transfer in it.
+func TestProcessEventsForBlock_NullReceiptsIsError(t *testing.T) {
+	stub := newLogCapStub()
+	stub.logsErr, stub.receiptsJSON = erigonLogCapErr, "null"
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	logs, _, err := b.processEventsForBlock("0x1875fd0", capBlockHash, 2)
+	if err == nil {
+		t.Fatalf("processEventsForBlock succeeded with logs %+v, want an error", logs)
+	}
+	if logs != nil {
+		t.Errorf("logs = %+v, want nil on error", logs)
+	}
+	if got := stub.calls["eth_getBlockReceipts"]; got != 1 {
+		t.Fatalf("eth_getBlockReceipts called %d times, want 1 (the fallback must have run)", got)
+	}
+	if !strings.Contains(err.Error(), "eth_getBlockReceipts") {
+		t.Errorf("error %q does not name the failing fallback", err)
+	}
+}
+
+// When the fallback itself fails (backend without eth_getBlockReceipts), the returned error
+// must name both failures so the cause is diagnosable from the log line alone.
+func TestProcessEventsForBlock_FallbackErrorMentionsBothCauses(t *testing.T) {
+	stub := newLogCapStub()
+	stub.logsErr, stub.receiptsErr = erigonLogCapErr, stdErrors.New("the method eth_getBlockReceipts does not exist")
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	_, _, err := b.processEventsForBlock("0x1875fd0", capBlockHash, 2)
+	if err == nil {
+		t.Fatal("processEventsForBlock succeeded, want an error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"eth_getBlockReceipts", "does not exist", "too many logs"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q does not mention %q", msg, want)
+		}
+	}
+}
+
+// A successful eth_getLogs must not touch the fallback path.
+func TestProcessEventsForBlock_NoFallbackOnSuccess(t *testing.T) {
+	stub := newLogCapStub()
+	stub.logsJSON = `[{"address":"0xaaaa000000000000000000000000000000000001","topics":["0xaa"],"data":"0x01","transactionHash":"` + capTx1 + `"}]`
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	logs, _, err := b.processEventsForBlock("0x1875fd0", capBlockHash, 1)
+	if err != nil {
+		t.Fatalf("processEventsForBlock returned error: %v", err)
+	}
+	if len(logs[capTx1]) != 1 {
+		t.Errorf("logs = %+v, want one log for tx1", logs)
+	}
+	if got := stub.calls["eth_getBlockReceipts"]; got != 0 {
+		t.Errorf("eth_getBlockReceipts called %d times, want 0", got)
+	}
+}
+
+func TestIsTooManyLogsError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"erigon cap", erigonLogCapErr, true},
+		{"geth more than results", stdErrors.New("query returned more than 10000 results"), true},
+		{"geth too many results", stdErrors.New("query returns too many results"), true},
+		{"reth max results", stdErrors.New("query exceeds max results 20000, retry with the range 0x1-0x2"), true},
+		{"provider response size", stdErrors.New("Log response size exceeded. Try with this block range"), true},
+		{"connection reset", stdErrors.New("connection reset by peer"), false},
+		{"block not found", stdErrors.New("block not found"), false},
+		{"range limit", stdErrors.New("query block range exceeds server limit, narrow your filter"), false},
+		{"context canceled", context.Canceled, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTooManyLogsError(tc.err); got != tc.want {
+				t.Errorf("isTooManyLogsError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// Every shape here is a response that contradicts the cap error that triggered the
+// fallback ("this block has >= 20000 logs"), so accepting any of them would commit the
+// block with no token transfers at all - silently, with no error and no retry. Erroring
+// stalls that block instead, which is loud and recoverable.
+func TestProcessEventsForBlock_RejectsUnderDeliveringReceipts(t *testing.T) {
+	tests := []struct {
+		name         string
+		receiptsJSON string
+		txCount      int
+		wantErr      string
+	}{
+		{"null", "null", 2, "no receipts"},
+		{"empty array", "[]", 2, "no receipts"},
+		{
+			name:         "fewer receipts than transactions",
+			receiptsJSON: `[{"transactionHash":"` + capTx1 + `","logs":[{"address":"0xaa","topics":[],"data":"0x","transactionHash":"` + capTx1 + `"}]}]`,
+			txCount:      2,
+			wantErr:      "1 receipts for 2 transactions",
+		},
+		{
+			name:         "receipts with empty logs",
+			receiptsJSON: `[{"transactionHash":"` + capTx1 + `","logs":[]},{"transactionHash":"` + capTx2 + `","logs":[]}]`,
+			txCount:      2,
+			wantErr:      "no logs",
+		},
+		{
+			name:         "receipts with null logs",
+			receiptsJSON: `[{"transactionHash":"` + capTx1 + `","logs":null},{"transactionHash":"` + capTx2 + `"}]`,
+			txCount:      2,
+			wantErr:      "no logs",
+		},
+		{
+			name:         "log with no attributable transaction hash",
+			receiptsJSON: `[{"logs":[{"address":"0xaa","topics":[],"data":"0x"}]},{"transactionHash":"` + capTx2 + `","logs":[]}]`,
+			txCount:      2,
+			wantErr:      "no transaction hash",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := newLogCapStub()
+			stub.logsErr, stub.receiptsJSON = erigonLogCapErr, tc.receiptsJSON
+			b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+			logs, _, err := b.processEventsForBlock("0x1875fd0", capBlockHash, tc.txCount)
+			if err == nil {
+				t.Fatalf("processEventsForBlock succeeded with logs %+v, want an error", logs)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error = %q, want it to mention %q", err, tc.wantErr)
+			}
+			if logs != nil {
+				t.Errorf("logs = %+v, want nil on error", logs)
+			}
+		})
+	}
+}
+
+// bor appends a state-sync pseudo-transaction receipt that has no counterpart in the
+// transaction list, so more receipts than transactions is legitimate and must be accepted.
+func TestProcessEventsForBlock_AcceptsMoreReceiptsThanTransactions(t *testing.T) {
+	stub := newLogCapStub()
+	stub.logsErr, stub.receiptsJSON = erigonLogCapErr, capReceiptsJSON
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second}
+
+	logs, _, err := b.processEventsForBlock("0x1875fd0", capBlockHash, 1)
+	if err != nil {
+		t.Fatalf("processEventsForBlock returned error: %v", err)
+	}
+	if len(logs) != 2 {
+		t.Errorf("logs map has %d transactions, want 2", len(logs))
+	}
+}
+
+// Providers capitalize their messages differently, so matching must be case-insensitive.
+func TestIsTooManyLogsErrorIgnoresCase(t *testing.T) {
+	for _, err := range []error{
+		stdErrors.New("Query Returns Too Many Logs, Narrow Your Filter: 20000"),
+		stdErrors.New("Log Response Size Exceeded. Try with this block range"),
+		stdErrors.New("Query Returned More Than 10000 Results"),
+	} {
+		if !isTooManyLogsError(err) {
+			t.Errorf("isTooManyLogsError(%q) = false, want true", err)
+		}
 	}
 }

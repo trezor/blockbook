@@ -1404,21 +1404,142 @@ func (b *EthereumRPC) GetBlockRawByHashOrHeight(hash string, height uint32, full
 	return b.getBlockRaw(hash, height, fullTxs)
 }
 
-func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
+// methodGetBlockReceipts returns all receipts of one block in a single call; used as the
+// fallback source of block logs when eth_getLogs is refused because of a result cap.
+const methodGetBlockReceipts = "eth_getBlockReceipts"
+
+// tooManyLogsMarkers are substrings of the errors EVM backends return when a log query
+// hit a server-side cap on the number of results. Erigon (>=3.5.0) enforces
+// --rpc.logs.maxresults (default 20000) and reth --rpc.max-logs-per-response (also
+// 20000); go-ethereum itself has no such cap, but hosted endpoints in front of it
+// (Infura, Alchemy, QuikNode) impose one and report it as a result count or a response
+// size. Matching is case-insensitive because providers capitalize differently.
+var tooManyLogsMarkers = []string{
+	"too many logs",      // erigon: query returns too many logs, narrow your filter: 20000
+	"max results",        // reth: query exceeds max results 20000, retry with the range ...
+	"too many results",   // hosted providers
+	"returned more than", // hosted providers: query returned more than 10000 results
+	"response size exceeded",
+}
+
+// isTooManyLogsError reports whether err is a backend refusal to return the full result
+// set of a log query because a result cap was hit. Such an error is not transient: it is
+// deterministic for the given filter, so retrying the same query can never succeed.
+func isTooManyLogsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, m := range tooManyLogsMarkers {
+		if strings.Contains(msg, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// logsFromBlockReceipts rebuilds the flat log list of a block from eth_getBlockReceipts.
+// Receipts are inherently scoped to one block, so backends apply no result cap to them.
+// Logs are returned in (transaction index, log index) order, matching eth_getLogs.
+//
+// The block is addressed by hash, not number: the block body was already fetched, so
+// hash-addressing keeps the two halves of the block consistent even if the chain reorgs
+// in between, which the eth_getLogs call this replaces cannot do.
+//
+// txCount is the number of transactions in the already-fetched body, used to reject an
+// under-delivering response. Every check here defends the same failure mode: this
+// function only runs because the backend said the block has at least a cap's worth of
+// logs, so a response with no logs - or fewer receipts than transactions - contradicts
+// that, and accepting it would commit the block as log-less and silently drop every
+// token transfer in it, with no error and no retry.
+func (b *EthereumRPC) logsFromBlockReceipts(ctx context.Context, blockHash string, txCount int) ([]rpcLogWithTxHash, error) {
+	var receipts []struct {
+		TxHash string             `json:"transactionHash"`
+		Logs   []rpcLogWithTxHash `json:"logs"`
+	}
+	start := time.Now()
+	err := b.RPC.CallContext(ctx, &receipts, methodGetBlockReceipts, blockHash)
+	b.observeSyncRPCLatency(methodGetBlockReceipts, start, err)
+	b.observeEthSyncRpcError(methodGetBlockReceipts, err)
+	if err != nil {
+		return nil, err
+	}
+	// nil covers a JSON null (block unknown to the backend); len 0 covers the empty array
+	// some proxies return for the same condition.
+	if len(receipts) == 0 {
+		return nil, errors.Errorf("%s returned no receipts", methodGetBlockReceipts)
+	}
+	// More receipts than transactions is legitimate (bor appends a state-sync receipt),
+	// fewer is a truncated response.
+	if len(receipts) < txCount {
+		return nil, errors.Errorf("%s returned %d receipts for %d transactions", methodGetBlockReceipts, len(receipts), txCount)
+	}
+	logs := make([]rpcLogWithTxHash, 0, len(receipts))
+	for i := range receipts {
+		for j := range receipts[i].Logs {
+			l := receipts[i].Logs[j]
+			if l.Hash == "" {
+				// Receipt logs normally carry transactionHash; fall back to the receipt's
+				// own hash. If that is empty too the log cannot be attributed to any
+				// transaction and would be dropped by the caller's map lookup, so refuse
+				// the whole response rather than lose it quietly.
+				if receipts[i].TxHash == "" {
+					return nil, errors.Errorf("%s returned a log with no transaction hash", methodGetBlockReceipts)
+				}
+				l.Hash = receipts[i].TxHash
+			}
+			logs = append(logs, l)
+		}
+	}
+	if len(logs) == 0 {
+		return nil, errors.Errorf("%s returned %d receipts with no logs", methodGetBlockReceipts, len(receipts))
+	}
+	return logs, nil
+}
+
+// getLogsForBlock returns all logs of a single block, falling back to the block receipts
+// when the backend refuses to serve the logs because of a result cap.
+func (b *EthereumRPC) getLogsForBlock(ctx context.Context, blockNumber, blockHash string, txCount int) ([]rpcLogWithTxHash, error) {
 	var logs []rpcLogWithTxHash
-	var ensRecords []bchain.AddressAliasRecord
-	var method = "eth_getLogs"
-	var err error
-	defer func(s time.Time) { b.observeSyncRPCLatency(method, s, err) }(time.Now())
-	err = b.RPC.CallContext(ctx, &logs, method, map[string]interface{}{
+	const method = "eth_getLogs"
+	start := time.Now()
+	err := b.RPC.CallContext(ctx, &logs, method, map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
 	})
+	b.observeSyncRPCLatency(method, start, err)
 	b.observeEthSyncRpcError(method, err)
+	if err == nil {
+		return logs, nil
+	}
+	if !isTooManyLogsError(err) {
+		return nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
+	}
+	// A single-block query is already the narrowest filter possible - there is no way to
+	// "narrow the filter" as the backend suggests, and retrying is futile. Read the same
+	// logs from the block receipts instead; without this, a block with more logs than the
+	// backend cap can never be indexed and sync stalls on it permanently.
+	glog.Warningf("processEventsForBlock %s: %s hit the backend log cap (%v), falling back to %s", blockNumber, method, err, methodGetBlockReceipts)
+	// A fresh deadline, not the remainder of the caller's: fetching every receipt of a
+	// block this large is heavier than the logs query that just failed, and inheriting an
+	// almost-expired budget would fail it spuriously.
+	fallbackCtx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	fallbackLogs, fallbackErr := b.logsFromBlockReceipts(fallbackCtx, blockHash, txCount)
+	if fallbackErr != nil {
+		// Report both failures: the cap error explains why the fallback was attempted.
+		return nil, errors.Annotatef(fallbackErr, "%s block %v, fallback after %s error (%v)", methodGetBlockReceipts, blockHash, method, err)
+	}
+	return fallbackLogs, nil
+}
+
+func (b *EthereumRPC) processEventsForBlock(blockNumber, blockHash string, txCount int) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	var ensRecords []bchain.AddressAliasRecord
+	logs, err := b.getLogsForBlock(ctx, blockNumber, blockHash, txCount)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
+		return nil, nil, err
 	}
 	r := make(map[string][]*bchain.RpcLog)
 	for i := range logs {
@@ -1634,7 +1755,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 				logsCh <- logsResult{err: fmt.Errorf("recovered from panic in processEventsForBlock: %v", r)}
 			}
 		}()
-		logs, ens, err := b.processEventsForBlock(head.Number)
+		logs, ens, err := b.processEventsForBlock(head.Number, head.Hash, len(body.Transactions))
 		logsCh <- logsResult{logs: logs, ens: ens, err: err} // Send result without shared state.
 	}()
 	go func() {
