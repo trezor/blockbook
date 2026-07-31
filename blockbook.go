@@ -363,6 +363,7 @@ func mainWithExitCode() int {
 	if *synchronize {
 		internalState.SyncMode = true
 		internalState.InitialSync = true
+		setInitialSyncMetric(metrics, true)
 		if err := syncWorker.ResyncIndex(nil, true); err != nil {
 			if err != db.ErrOperationInterrupted {
 				glog.Error("resyncIndex ", err)
@@ -389,6 +390,7 @@ func mainWithExitCode() int {
 		go syncIndexLoop()
 		go syncMempoolLoop()
 		internalState.InitialSync = false
+		setInitialSyncMetric(metrics, false)
 	}
 	go storeInternalStateLoop()
 
@@ -526,6 +528,20 @@ func performRollback() error {
 	return nil
 }
 
+// setInitialSyncMetric mirrors is.InitialSync into the blockbook_initial_sync gauge.
+// It is called at the two points the flag flips rather than left to the periodic
+// metrics refresh: blockbook_synchronized reads 0 for the whole of an initial build or
+// reindex (days on an EVM archive), so an alert on it has to be gated on this gauge, and
+// a gate that lags the flag by up to a metrics period would either page spuriously at the
+// start of a reindex or stay suppressed after one finished.
+func setInitialSyncMetric(metrics *common.Metrics, initialSync bool) {
+	initial := 0.0
+	if initialSync {
+		initial = 1
+	}
+	metrics.InitialSync.Set(initial)
+}
+
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
 	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
@@ -557,6 +573,7 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		synchronized = 1
 	}
 	metrics.Synchronized.Set(synchronized)
+	setInitialSyncMetric(metrics, si.Blockbook.InitialSync)
 	return nil
 }
 

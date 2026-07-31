@@ -303,10 +303,14 @@ metrics:
     name: blockbook_best_height
     type: gauge
     help: Newest block height persisted in Blockbook's index
+  initial_sync:
+    name: blockbook_initial_sync
+    type: gauge
+    help: 1 while the initial index build (or a full reindex) is running, 0 in steady state. Mirrors the initialSync field of /api/ and flips at the moment the flag does, not on the next periodic refresh. blockbook_synchronized is 0 for the whole of such a build - hours on a UTXO chain, days on an EVM archive - so a bare synchronized == 0 alert pages continuously through every planned resync and ends up silenced; gate it on this gauge instead (synchronized == 0 unless initial_sync == 1) so the alert only fires for an unplanned stall
   synchronized:
     name: blockbook_synchronized
     type: gauge
-    help: 1 when /api/status reports inSync, 0 otherwise; sustained 0 outside initial sync means the index is not keeping up with the tip, for example after a stalled tip feed
+    help: 1 when /api/status reports inSync, 0 otherwise; sustained 0 outside initial sync means the index is not keeping up with the tip, for example after a stalled tip feed. Refreshed on every sync-loop iteration, so a stall shows up within one resync rather than on the next periodic metrics tick; pair it with blockbook_initial_sync to exclude planned reindexes
   backend_best_height:
     name: blockbook_backend_best_height
     type: gauge
