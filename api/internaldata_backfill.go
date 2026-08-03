@@ -10,17 +10,17 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
-// InternalDataHealingRoutine keeps the internal data of the index complete without
-// operator action. It combines two mechanisms: a periodic retry of the internal
-// data error queue (blocks whose internal data fetch failed during sync or healing),
-// and a one-time downward sweep that backfills blocks synced before
-// processInternalTransactions was enabled, without a full reindex. The sweep range
-// comes from the internal state watermark resolved on startup (see
-// RocksDB.ResolveInternalDataFrom); sweeping downward heals the most recent history
-// first, moving the watermark after every block. Progress is persisted with the
-// periodic internal state store, so an interrupted run resumes after restart;
-// re-healing a block is safe - transactions whose stored internal data already
-// match the recomputed data are skipped.
+// InternalDataHealingRoutine keeps the internal data of the index complete. It
+// combines two mechanisms: a periodic, always-on retry of the internal data error
+// queue (blocks whose internal data fetch failed during sync or healing), and a
+// downward sweep that backfills blocks synced before processInternalTransactions was
+// enabled, without a full reindex. The sweep runs only when an operator seeded the
+// watermark (the -healinternaldata flag, see RocksDB.ResolveInternalDataFrom) or when
+// a previous sweep was interrupted; its range is the internal state watermark, and it
+// sweeps downward - healing the most recent history first and moving the watermark
+// after every block. Progress is persisted with the periodic internal state store, so
+// an interrupted run resumes after restart; re-healing a block is safe - transactions
+// whose stored internal data already match the recomputed data are skipped.
 func (w *Worker) InternalDataHealingRoutine() {
 	if w.chainType != bchain.ChainEthereumType || !bchain.ProcessInternalTransactions {
 		return
@@ -89,7 +89,9 @@ func (w *Worker) internalDataErrorRetryLoop() {
 		if common.IsInShutdown() {
 			return
 		}
-		if err := w.RefetchInternalData(); err != nil {
+		// periodic auto-retry keeps the retry cap so it never hammers a permanently
+		// unfetchable block; an operator can force a reset via the admin page
+		if err := w.RefetchInternalData(false); err != nil {
 			glog.Errorf("internalDataErrorRetryLoop: %v", err)
 		}
 	}

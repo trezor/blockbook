@@ -19,12 +19,18 @@ func (w *Worker) IsRefetchingInternalData() bool {
 	return refetchingInternalData
 }
 
-func (w *Worker) RefetchInternalData() error {
+// RefetchInternalData starts a background pass over the internal data error queue if
+// one is not already running. resetRetries requests that blocks which exhausted their
+// retry budget be given a fresh start: it is set for an operator-triggered refetch (the
+// admin "Retry fetch" button) so abandoned blocks are no longer permanently stuck, and
+// left false for the periodic auto-retry so it keeps the cap and cannot hammer a
+// permanently unfetchable block forever.
+func (w *Worker) RefetchInternalData(resetRetries bool) error {
 	refetchInternalDataMux.Lock()
 	defer refetchInternalDataMux.Unlock()
 	if !refetchingInternalData {
 		refetchingInternalData = true
-		go w.RefetchInternalDataRoutine()
+		go w.RefetchInternalDataRoutine(resetRetries)
 	}
 	return nil
 }
@@ -52,11 +58,17 @@ func (w *Worker) incrementRefetchInternalDataRetryCount(ie *db.BlockInternalData
 	w.storeBlockInternalDataError(ie.Hash, ie.Height, ie.ErrorMessage, ie.Retries+1)
 }
 
-func (w *Worker) RefetchInternalDataRoutine() {
+func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
 	internalErrors, err := w.db.GetBlockInternalDataErrorsEthereumType()
 	if err == nil {
 		for i := range internalErrors {
 			ie := &internalErrors[i]
+			// an operator-triggered refetch clears the retry count so a block that had
+			// exhausted its budget gets a full fresh set of attempts (via the periodic
+			// auto-retry too) instead of staying permanently abandoned
+			if resetRetries {
+				ie.Retries = 0
+			}
 			if ie.Retries >= maxNumberOfRetires {
 				glog.Infof("Refetching internal data for %d %s, retries exceeded", ie.Height, ie.Hash)
 				continue
