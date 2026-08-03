@@ -568,8 +568,26 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 		}
 		chunk := contractDescs[start:end]
 		// Preferred path: one aggregate3 eth_call for the whole chunk.
-		mcBalances, err := b.erc20BalancesMulticall3(callData, chunk, blockNumber)
+		mcBalances, failed, err := b.erc20BalancesMulticall3(callData, chunk, blockNumber)
 		if err == nil {
+			// aggregate3 shares one gas budget across all sub-calls, so a Success=false
+			// element can be a gas-starved (not truly empty) balance. Re-resolve those via
+			// the batch path, where each call gets the full node gas cap; a real revert
+			// stays nil. Without a batcher we can't, so leave them nil (best effort).
+			if len(failed) > 0 && hasBatcher {
+				sub := make([]bchain.AddressDescriptor, len(failed))
+				for j, idx := range failed {
+					sub[j] = chunk[idx]
+				}
+				b.ObserveChainDataFallback("erc20_multicall", "elem_fallback")
+				if subBalances, berr := b.erc20BalancesBatchAtBlock(batcher, callData, sub, blockNumber); berr == nil {
+					for j, idx := range failed {
+						mcBalances[idx] = subBalances[j]
+					}
+				} else {
+					glog.Warningf("erc20 multicall3 elem fallback failed for %d contract(s): %v", len(sub), berr)
+				}
+			}
 			copy(balances[start:end], mcBalances)
 			continue
 		}
@@ -592,9 +610,11 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 }
 
 // erc20BalancesMulticall3 fetches balanceOf for a chunk in one aggregate3 eth_call, pinned to
-// blockNumber. Returns nil per reverted/invalid element (like the batch path); any error signals
-// the caller to fall back to the JSON-RPC batch.
-func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, error) {
+// blockNumber. Success=true results are decoded (nil on unparseable data, as in the batch path).
+// The returned indices are the Success=false elements — reverted, or gas-starved under the single
+// shared aggregate3 gas budget — which the caller re-resolves via independent eth_calls so a real
+// balance is not silently lost. A non-nil error means fall back to the JSON-RPC batch entirely.
+func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, []int, error) {
 	calls := make([]bchain.EthereumMulticallCall, len(contractDescs))
 	for i, contractDesc := range contractDescs {
 		calls[i] = bchain.EthereumMulticallCall{
@@ -606,20 +626,22 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 	}
 	results, err := b.EthereumTypeMulticallAggregate3(calls, blockNumber)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(results) != len(calls) {
-		return nil, errors.Errorf("multicall3 erc20 balances: got %d results, want %d", len(results), len(calls))
+		return nil, nil, errors.Errorf("multicall3 erc20 balances: got %d results, want %d", len(results), len(calls))
 	}
 	balances := make([]*big.Int, len(contractDescs))
+	var failed []int
 	for i := range results {
 		if !results[i].Success {
-			continue // reverted -> nil (as in the batch path)
+			failed = append(failed, i)
+			continue
 		}
 		// nil on unparseable output (empty/short), matching the batch path
 		balances[i] = parseSimpleNumericProperty(results[i].Data)
 	}
-	return balances, nil
+	return balances, failed, nil
 }
 
 func (b *EthereumRPC) erc20BalancesBatch(batcher batchCaller, callData string, contractDescs []bchain.AddressDescriptor) ([]*big.Int, error) {
