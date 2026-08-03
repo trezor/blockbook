@@ -35,6 +35,16 @@ func TestResolveTronHTTPURL_InvalidRPCURL(t *testing.T) {
 	require.Error(t, err)
 }
 
+// NewTronRPC must set Tron's non-canonical Multicall3 address on the embedded eth
+// layer so ERC-20 balances use aggregate3 (Tron's runtime chain id can't select it).
+func TestNewTronRPC_SetsMulticall3AddressOverride(t *testing.T) {
+	cfg := json.RawMessage(`{"coin_name":"Tron","averageBlockTimeMs":3000,"rpc_url":"http://127.0.0.1:8545/jsonrpc"}`)
+	bc, err := NewTronRPC(cfg, func(bchain.NotificationType) {})
+	require.NoError(t, err)
+	tronRPC := bc.(*TronRPC)
+	require.Equal(t, tronMulticall3Address, tronRPC.EthereumRPC.Multicall3AddressOverride)
+}
+
 type tronTestMempool struct {
 	txTimes map[string]uint32
 }

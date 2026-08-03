@@ -30,6 +30,13 @@ const (
 	tronDefaultFullNodeHTTPPort = "8090"
 	tronDefaultSolidityHTTPPort = "8091"
 
+	// tronMulticall3Address is Tron mainnet's non-canonical Multicall3 deployment
+	// (base58 TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED). Tron's runtime net_version is
+	// not the real chain id, so this cannot be selected by chain-id detection; it
+	// is applied as the Tron default in NewTronRPC to enable the aggregate3 ERC-20
+	// balance path.
+	tronMulticall3Address = "0x32a4f47a74a6810bd0bf861cabab99656a75de9e"
+
 	TRC10TokenType   bchain.TokenStandardName = "TRC10"
 	TRC20TokenType   bchain.TokenStandardName = "TRC20"
 	TRC721TokenType  bchain.TokenStandardName = "TRC721"
@@ -136,6 +143,8 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 		newBlockNotifyCh: make(chan struct{}, 1),
 	}
 	ethChainConfig := tronRpc.EthereumRPC.ChainConfig
+
+	tronRpc.EthereumRPC.Multicall3AddressOverride = tronMulticall3Address
 
 	// NewTronParser discards the parser NewEthereumRPC configured, so the config has to be
 	// applied again here; ApplyToParser keeps that a single call instead of a per-field list
