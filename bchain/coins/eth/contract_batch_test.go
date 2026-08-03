@@ -710,6 +710,56 @@ func TestErc20BalancesMulticall3LengthMismatch(t *testing.T) {
 	}
 }
 
+// aggregate3 is chunked at multicall3MaxCallsPerAggregate (gas bound), independent of a larger
+// erc20_batch_size (which sizes the JSON-RPC batch by request count).
+func TestEthereumTypeGetErc20ContractBalancesMulticallChunkBounded(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	n := multicall3MaxCallsPerAggregate + 20 // spills into a second aggregate3 chunk
+	contracts := make([]bchain.AddressDescriptor, n)
+	for i := range contracts {
+		var a common.Address
+		a[19] = byte((i + 1) & 0xff)
+		a[18] = byte(((i + 1) >> 8) & 0xff)
+		contracts[i] = bchain.AddressDescriptor(a.Bytes())
+	}
+	// Return one Success=true result per call in the received aggregate3 (array length at
+	// byte selector(4)+outer-offset(32)), so each sub-chunk decodes cleanly.
+	mock := &mockMulticallRPC{
+		handler: func(callData string) (string, error) {
+			raw, err := hexutil.Decode(callData)
+			if err != nil {
+				return "", err
+			}
+			cnt := int(bigUintAt(raw, 4+evmWordBytes).Uint64())
+			res := make([]bchain.EthereumMulticallResult, cnt)
+			for i := range res {
+				res[i] = bchain.EthereumMulticallResult{Success: true, Data: fmt.Sprintf("0x%064x", 1)}
+			}
+			return fixtureAggregate3Result(res), nil
+		},
+	}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second, ChainConfig: &Configuration{Erc20BatchSize: n}}
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(balances) != n {
+		t.Fatalf("expected %d balances, got %d", n, len(balances))
+	}
+	for i, bal := range balances {
+		if bal == nil || bal.Sign() != 1 {
+			t.Fatalf("balance[%d]=%v, want 1", i, bal)
+		}
+	}
+	ethCall, getCode := mock.callCounts()
+	if getCode != 1 {
+		t.Fatalf("expected 1 probe, got %d", getCode)
+	}
+	if ethCall != 2 {
+		t.Fatalf("expected 2 aggregate3 calls (chunked at %d despite erc20_batch_size=%d), got %d", multicall3MaxCallsPerAggregate, n, ethCall)
+	}
+}
+
 // A Success=false aggregate3 element (e.g. gas-starved under the shared budget) must be
 // re-resolved via an independent eth_call, not silently reported as nil.
 func TestEthereumTypeGetErc20ContractBalancesReresolvesFailedElement(t *testing.T) {

@@ -28,9 +28,9 @@ const (
 	multicall3NotDeployed int32 = 2
 )
 
-// errMulticall3NotDeployed is returned on chains without the canonical
-// Multicall3 deployment; the answer is cached for the process lifetime.
-var errMulticall3NotDeployed = errors.New("multicall3 not deployed at canonical address on this chain")
+// errMulticall3NotDeployed is returned on chains where Multicall3 is not deployed
+// at the probed address (canonical, or a per-chain override); cached for the process lifetime.
+var errMulticall3NotDeployed = errors.New("multicall3 not deployed on this chain")
 
 // multicall3ContractAddress returns Multicall3AddressOverride when set (e.g. Tron's
 // non-canonical deployment), otherwise the canonical const.
@@ -62,9 +62,14 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	if err != nil {
 		return nil, fmt.Errorf("multicall3 encode: %w", err)
 	}
-	// mode="multicall" so aggregate3 volume is measurable separately from single calls.
-	resp, err := b.ethCallAtBlock(encoded, b.multicall3ContractAddress(), "", blockNumber, "multicall")
+	// Instrument like the JSON-RPC batch path — one request per sub-call read, plus the
+	// coalescing histogram — but under mode="multicall", so per-token read volume and
+	// batch-size percentiles stay continuous when a chain moves batches onto aggregate3.
+	b.observeEthCall("multicall", len(calls))
+	b.observeEthCallBatch(len(calls))
+	resp, err := b.ethCallAtBlock(encoded, b.multicall3ContractAddress(), "", blockNumber, "")
 	if err != nil {
+		b.observeEthCallError("multicall", "rpc")
 		return nil, err
 	}
 	return decodeAggregate3Result(resp)
