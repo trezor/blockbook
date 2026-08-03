@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	stdErrors "errors"
 	"math/big"
 	"strings"
 
@@ -542,32 +543,88 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalances(addrDesc bchain.Addre
 }
 
 // EthereumTypeGetErc20ContractBalancesAtBlock returns balances of multiple ERC20 contracts for given address at a specific block.
-// It uses RPC batch calls and returns nil entries for failed/invalid results.
+// On chains with Multicall3 it fetches each chunk with a single aggregate3 eth_call (one billable
+// call instead of N), pinning every balance to the same block; otherwise it falls back to the
+// JSON-RPC batch path. Both paths return nil entries for failed/invalid results, in input order.
 func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchain.AddressDescriptor, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, error) {
 	if len(contractDescs) == 0 {
 		return nil, nil
-	}
-	batcher, ok := b.RPC.(batchCaller)
-	if !ok {
-		// Some RPC clients do not support batching; caller will fall back to single calls.
-		return nil, errors.New("BatchCallContext not supported")
 	}
 	batchSize := b.erc20BatchSize()
 	// Same calldata for all balanceOf calls; only the contract address varies per element.
 	callData := erc20BalanceOfCallData(addrDesc)
 	balances := make([]*big.Int, len(contractDescs))
+	// Multicall3 does not need a batcher (it is a single eth_call); the batcher is
+	// only required for the fallback path.
+	batcher, hasBatcher := b.RPC.(batchCaller)
 	for start := 0; start < len(contractDescs); start += batchSize {
 		end := start + batchSize
 		if end > len(contractDescs) {
 			end = len(contractDescs)
 		}
-		// Process a bounded slice to keep batch RPC requests within size limits.
-		batchBalances, err := b.erc20BalancesBatchAtBlock(batcher, callData, contractDescs[start:end], blockNumber)
+		// Process a bounded slice to keep the aggregate3 / batch RPC request within size limits.
+		chunk := contractDescs[start:end]
+		// Preferred path: one aggregate3 eth_call for the whole chunk.
+		mcBalances, err := b.erc20BalancesMulticall3(callData, chunk, blockNumber)
+		if err == nil {
+			// Preserve original ordering when merging per-chunk results.
+			copy(balances[start:end], mcBalances)
+			continue
+		}
+		// Multicall3 unavailable or failed — fall back to the JSON-RPC batch path.
+		// errMulticall3NotDeployed is the expected steady state on non-multicall
+		// chains (already logged once by probeMulticall3), so don't count it as a
+		// fallback or log it here; only genuine transient/decode failures are.
+		if !stdErrors.Is(err, errMulticall3NotDeployed) {
+			b.ObserveChainDataFallback("erc20_multicall", "error")
+			glog.Warningf("erc20 multicall3 failed for chunk [%d:%d], falling back to batch: %v", start, end, err)
+		}
+		if !hasBatcher {
+			// Neither multicall nor batching available; caller will fall back to single calls.
+			return nil, errors.New("BatchCallContext not supported")
+		}
+		batchBalances, err := b.erc20BalancesBatchAtBlock(batcher, callData, chunk, blockNumber)
 		if err != nil {
 			return nil, err
 		}
-		// Preserve original ordering when merging per-batch results.
 		copy(balances[start:end], batchBalances)
+	}
+	return balances, nil
+}
+
+// erc20BalancesMulticall3 fetches balanceOf for a chunk of contracts in one Multicall3
+// aggregate3 eth_call, pinning all sub-calls to blockNumber. It returns a slice the same
+// length/order as contractDescs with nil entries for reverted or invalid results (matching
+// the JSON-RPC batch path's nil-on-failure contract). Any non-nil error (Multicall3 not
+// deployed, transient probe/RPC failure, decode error, or a result-count mismatch) signals
+// the caller to fall back to the JSON-RPC batch path.
+func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, error) {
+	calls := make([]bchain.EthereumMulticallCall, len(contractDescs))
+	for i, contractDesc := range contractDescs {
+		calls[i] = bchain.EthereumMulticallCall{
+			Target:   hexutil.Encode(contractDesc),
+			CallData: callData,
+			// A reverting balanceOf (dead/non-conforming token) must yield Success=false
+			// for that element instead of failing the whole aggregate3 call.
+			AllowFailure: true,
+		}
+	}
+	results, err := b.EthereumTypeMulticallAggregate3(calls, blockNumber)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) != len(calls) {
+		return nil, errors.Errorf("multicall3 erc20 balances: got %d results, want %d", len(results), len(calls))
+	}
+	balances := make([]*big.Int, len(contractDescs))
+	for i := range results {
+		if !results[i].Success {
+			// Reverted balanceOf -> nil, same as the batch path's revert handling.
+			continue
+		}
+		// Leave nil on parse failures (empty "0x" / non-32-byte output from dead or
+		// non-conforming tokens); matches parseSimpleNumericProperty's contract.
+		balances[i] = parseSimpleNumericProperty(results[i].Data)
 	}
 	return balances, nil
 }

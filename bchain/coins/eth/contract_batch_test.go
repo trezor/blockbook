@@ -27,6 +27,15 @@ func (m *mockBatchRPC) EthSubscribe(ctx context.Context, channel interface{}, ar
 }
 
 func (m *mockBatchRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	// Answer the Multicall3 deployment probe with "not deployed" so the ERC-20
+	// balance path deterministically (and quietly) falls back to the JSON-RPC
+	// batch these tests exercise; the probe caches this after the first chunk.
+	if method == "eth_getCode" {
+		if out, ok := result.(*string); ok {
+			*out = "0x"
+		}
+		return nil
+	}
 	return errors.New("not implemented")
 }
 
@@ -561,5 +570,145 @@ func TestEthereumTypeGetErc20ContractBalancesPartialError(t *testing.T) {
 	}
 	if balances[1] != nil {
 		t.Fatalf("expected balance[1] to be nil, got %v", balances[1])
+	}
+}
+
+// --- Multicall3 balance path ---
+
+// TestEthereumTypeGetErc20ContractBalancesViaMulticall3 verifies that on a chain
+// with Multicall3 deployed, balances are served by a single aggregate3 eth_call
+// (no JSON-RPC batch), preserving order and nil-on-failure semantics.
+func TestEthereumTypeGetErc20ContractBalancesViaMulticall3(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+	contractC := common.HexToAddress("0x00000000000000000000000000000000000000cc")
+	// A = 100, B reverted (Success=false -> nil), C succeeds but returns empty
+	// data (invalid -> nil), locking both failure mappings.
+	fixture := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
+		{Success: true, Data: fmt.Sprintf("0x%064x", 100)},
+		{Success: false, Data: "0x"},
+		{Success: true, Data: "0x"},
+	})
+	mock := &mockMulticallRPC{
+		handler: func(string) (string, error) { return fixture, nil },
+		// nil getCodeHandler -> default "deployed" stub bytecode.
+	}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(
+		bchain.AddressDescriptor(addr.Bytes()),
+		[]bchain.AddressDescriptor{
+			bchain.AddressDescriptor(contractA.Bytes()),
+			bchain.AddressDescriptor(contractB.Bytes()),
+			bchain.AddressDescriptor(contractC.Bytes()),
+		},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(balances) != 3 {
+		t.Fatalf("expected 3 balances, got %d", len(balances))
+	}
+	if balances[0] == nil || balances[0].Cmp(big.NewInt(100)) != 0 {
+		t.Fatalf("balance[0]=%v, want 100", balances[0])
+	}
+	if balances[1] != nil {
+		t.Fatalf("balance[1]=%v, want nil (reverted)", balances[1])
+	}
+	if balances[2] != nil {
+		t.Fatalf("balance[2]=%v, want nil (invalid data)", balances[2])
+	}
+	// Exactly one probe + one aggregate3 eth_call; no per-token calls.
+	ethCall, getCode := mock.callCounts()
+	if getCode != 1 {
+		t.Fatalf("expected 1 eth_getCode probe, got %d", getCode)
+	}
+	if ethCall != 1 {
+		t.Fatalf("expected 1 aggregate3 eth_call (all balances in one call), got %d", ethCall)
+	}
+}
+
+// mockMulticallThenBatchRPC answers the Multicall3 probe as deployed, fails the
+// aggregate3 eth_call (forcing the fallback), and serves the JSON-RPC batch
+// fallback via the embedded mockBatchRPC.
+type mockMulticallThenBatchRPC struct {
+	*mockBatchRPC
+	aggregate3Err error
+}
+
+func (m *mockMulticallThenBatchRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	switch method {
+	case "eth_getCode":
+		if out, ok := result.(*string); ok {
+			*out = "0x6080" // deployed
+		}
+		return nil
+	case "eth_call":
+		argMap, _ := args[0].(map[string]interface{})
+		to, _ := argMap["to"].(string)
+		if strings.EqualFold(to, multicall3Address) {
+			return m.aggregate3Err // fail aggregate3 -> fall back to batch
+		}
+		return fmt.Errorf("unexpected single eth_call to %s", to)
+	default:
+		return errors.New("unexpected method")
+	}
+}
+
+// TestEthereumTypeGetErc20ContractBalancesFallsBackToBatchOnMulticallError
+// verifies that a transient aggregate3 failure (not "not deployed") falls back
+// to the JSON-RPC batch path and still returns correct, ordered balances.
+func TestEthereumTypeGetErc20ContractBalancesFallsBackToBatchOnMulticallError(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+	inner := &mockBatchRPC{
+		results: map[string]string{
+			hexutil.Encode(contractA.Bytes()): fmt.Sprintf("0x%064x", 7),
+			hexutil.Encode(contractB.Bytes()): fmt.Sprintf("0x%064x", 9),
+		},
+	}
+	mock := &mockMulticallThenBatchRPC{mockBatchRPC: inner, aggregate3Err: errors.New("aggregate3 transport boom")}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(
+		bchain.AddressDescriptor(addr.Bytes()),
+		[]bchain.AddressDescriptor{
+			bchain.AddressDescriptor(contractA.Bytes()),
+			bchain.AddressDescriptor(contractB.Bytes()),
+		},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if balances[0] == nil || balances[0].Cmp(big.NewInt(7)) != 0 {
+		t.Fatalf("balance[0]=%v, want 7", balances[0])
+	}
+	if balances[1] == nil || balances[1].Cmp(big.NewInt(9)) != 0 {
+		t.Fatalf("balance[1]=%v, want 9", balances[1])
+	}
+	if len(inner.batchSizes) != 1 || inner.batchSizes[0] != 2 {
+		t.Fatalf("expected one JSON-RPC batch of size 2, got %v", inner.batchSizes)
+	}
+}
+
+// TestErc20BalancesMulticall3LengthMismatch verifies the result-count guard: an
+// aggregate3 response with the wrong number of results is a hard error so the
+// caller falls back rather than silently misaligning balances to contracts.
+func TestErc20BalancesMulticall3LengthMismatch(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+	// One result returned for two calls.
+	fixture := fixtureAggregate3Result([]bchain.EthereumMulticallResult{{Success: true, Data: "0x01"}})
+	mock := &mockMulticallRPC{
+		handler: func(string) (string, error) { return fixture, nil },
+	}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	callData := erc20BalanceOfCallData(bchain.AddressDescriptor(addr.Bytes()))
+	if _, err := rpcClient.erc20BalancesMulticall3(callData, []bchain.AddressDescriptor{
+		bchain.AddressDescriptor(contractA.Bytes()),
+		bchain.AddressDescriptor(contractB.Bytes()),
+	}, nil); err == nil {
+		t.Fatal("expected a length-mismatch error")
 	}
 }
