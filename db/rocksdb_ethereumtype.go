@@ -970,37 +970,42 @@ func (d *RocksDB) HasAnyEthereumInternalData() bool {
 	return it.Valid()
 }
 
-// internalDataFromHeight decides the initial internal-data watermark for a database
-// that does not have one yet: an index with blocks but no internal data rows was
-// synced with the processing off, so everything below the next block needs healing;
-// otherwise (fresh database, or a chain that always processed internal data) there
-// is nothing to heal.
-func internalDataFromHeight(bestHeight uint32, hasInternalData bool) uint32 {
-	if bestHeight == 0 || hasInternalData {
-		return 0
-	}
-	return bestHeight + 1
-}
-
-// ResolveInternalDataFrom initializes the internal-data healing watermark in the
-// internal state. It must be called before the catch-up sync connects new blocks -
-// once blocks with internal data are connected, the column-family-emptiness
-// heuristic could no longer tell a migrated database from an always-processed one.
-func (d *RocksDB) ResolveInternalDataFrom() uint32 {
-	if from, ok := d.is.GetInternalDataFrom(); ok {
-		return from
+// ResolveInternalDataFrom initializes the internal-data healing watermark on startup,
+// before the catch-up sync connects new blocks. The watermark is the height down to
+// which the downward healing sweep still has to backfill internal data; the sweep
+// persists it as it progresses, so an already-set watermark means a sweep is in
+// progress (or finished at 0) and is left untouched so it resumes.
+//
+// A watermark is seeded here only on an explicit operator request (the
+// -healinternaldata flag): it is set to bestHeight+1 so the sweep backfills the whole
+// index down to genesis. Seeding at the tip is safe because the sweep skips blocks
+// whose stored internal data already matches, so blocks synced after the flag was
+// enabled cost nothing. Without the flag no watermark is set and no sweep runs; if the
+// index nonetheless looks like it was synced before internal data processing was
+// enabled (blocks present, internal-data column family empty) an advisory is logged
+// pointing at the flag. The advisory never drives healing, so a stale emptiness signal
+// (index already synced past the point internal data was enabled) can at worst omit the
+// hint - it can never mismark a real gap as healed.
+func (d *RocksDB) ResolveInternalDataFrom(healRequested bool) {
+	if _, ok := d.is.GetInternalDataFrom(); ok {
+		return
 	}
 	bestHeight, _, err := d.GetBestBlock()
 	if err != nil {
 		glog.Error("ResolveInternalDataFrom: GetBestBlock: ", err)
-		bestHeight = 0
+		return
 	}
-	from := internalDataFromHeight(bestHeight, d.HasAnyEthereumInternalData())
-	d.is.SetInternalDataFrom(from)
-	if from > 0 {
-		glog.Infof("ResolveInternalDataFrom: index has no internal data below height %d, healing scheduled", from)
+	if bestHeight == 0 {
+		return
 	}
-	return from
+	if healRequested {
+		d.is.SetInternalDataFrom(bestHeight + 1)
+		glog.Infof("ResolveInternalDataFrom: internal data backfill requested, healing from height %d down to genesis", bestHeight)
+		return
+	}
+	if !d.HasAnyEthereumInternalData() {
+		glog.Warningf("ResolveInternalDataFrom: index holds blocks up to height %d but no internal data; run once with -healinternaldata to backfill history", bestHeight)
+	}
 }
 
 func (d *RocksDB) getEthereumInternalData(btxID []byte) (*bchain.EthereumInternalData, error) {

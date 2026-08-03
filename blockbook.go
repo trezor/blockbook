@@ -90,6 +90,8 @@ var (
 	resyncMempoolPeriodMs = flag.Int("resyncmempoolperiod", 60017, "resync mempool period in milliseconds")
 
 	extendedIndex = flag.Bool("extendedindex", false, "if true, create index of input txids and spending transactions")
+
+	healInternalData = flag.Bool("healinternaldata", false, "eth-type chains with processInternalTransactions: backfill internal data for blocks synced before it was enabled; seeds the healing watermark at the current tip and sweeps down to genesis (idempotent, safe to leave off once healed)")
 )
 
 var (
@@ -252,10 +254,11 @@ func mainWithExitCode() int {
 	index.SetInternalState(internalState)
 
 	// resolve the internal-data healing watermark before the catch-up sync connects
-	// new blocks; once blocks with internal data are connected, an unset watermark
-	// could no longer be told apart from an always-processed chain
+	// new blocks: an in-progress sweep resumes from its persisted watermark, a
+	// -healinternaldata request seeds a fresh sweep from the tip, and otherwise an
+	// advisory is logged if the index looks like it predates internal data processing
 	if *synchronize && chain.GetChainParser().GetChainType() == bchain.ChainEthereumType && bchain.ProcessInternalTransactions {
-		index.ResolveInternalDataFrom()
+		index.ResolveInternalDataFrom(*healInternalData)
 	}
 
 	if *fixUtxo {
