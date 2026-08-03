@@ -135,6 +135,63 @@ func TestRocksDB_DeleteContractInfoForAddress(t *testing.T) {
 	}
 }
 
+func TestRocksDB_BackfillContractInfo(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	// The healing sweep runs downward, so a contract's destruction is backfilled
+	// before its creation: the destruction must be recorded even though no row
+	// exists yet, and the later (lower) creation must merge into it, not be dropped.
+	destroyed := "0x" + dbtestdata.EthAddr20
+	if err := d.BackfillContractInfo(&bchain.ContractInfo{Contract: destroyed, DestructedInBlock: 2000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.GetContractInfoForAddress(destroyed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.DestructedInBlock != 2000 || got.CreatedInBlock != 0 {
+		t.Fatalf("after destruction backfill = %+v, want DestructedInBlock 2000, CreatedInBlock 0", got)
+	}
+	if err := d.BackfillContractInfo(&bchain.ContractInfo{Contract: destroyed, CreatedInBlock: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = d.GetContractInfoForAddress(destroyed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.CreatedInBlock != 1000 || got.DestructedInBlock != 2000 {
+		t.Fatalf("after creation backfill = %+v, want CreatedInBlock 1000, DestructedInBlock 2000", got)
+	}
+
+	// A creation backfill must fill CreatedInBlock into a row already enriched on
+	// demand (name/symbol/standard, CreatedInBlock 0) without discarding it.
+	enriched := "0x" + dbtestdata.EthAddr4b
+	if err := d.StoreContractInfo(&bchain.ContractInfo{
+		Standard: bchain.ERC20TokenStandard,
+		Type:     bchain.ERC20TokenStandard,
+		Contract: enriched,
+		Name:     "Enriched",
+		Symbol:   "ENR",
+		Decimals: 18,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.BackfillContractInfo(&bchain.ContractInfo{Contract: enriched, CreatedInBlock: 1500}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = d.GetContractInfoForAddress(enriched)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.CreatedInBlock != 1500 || got.Name != "Enriched" || got.Symbol != "ENR" ||
+		got.Standard != bchain.ERC20TokenStandard || got.Decimals != 18 {
+		t.Fatalf("after creation backfill of enriched row = %+v, want CreatedInBlock 1500 with enrichment preserved", got)
+	}
+}
+
 // packContractInfo only carries the sync-owned core fields. ERC4626 detection
 // data lives in the cfErcProtocols column family and is exercised
 // separately in rocksdb_protocols_test.go.

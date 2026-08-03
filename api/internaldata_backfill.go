@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"time"
 
 	"github.com/golang/glog"
@@ -46,12 +45,26 @@ func (w *Worker) InternalDataHealingRoutine() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		h--
-		if err := w.backfillBlockInternalData(h); err != nil {
-			errorCount++
-			glog.Errorf("internalDataHealing: height %d: %v", h, err)
-			w.storeInternalDataError(h, err)
+		height := h - 1
+		// resolve the hash up front: a real read error must not advance the watermark
+		// past a block we could neither heal nor enqueue - that would drop it from
+		// healing with no way to re-seed - so keep the watermark and retry the height
+		hash, err := w.db.GetBlockHash(height)
+		if err != nil {
+			glog.Errorf("internalDataHealing: height %d: GetBlockHash: %v", height, err)
+			time.Sleep(10 * time.Second)
+			continue
 		}
+		if hash != "" {
+			if err := w.backfillBlockInternalData(height, hash); err != nil {
+				errorCount++
+				glog.Errorf("internalDataHealing: height %d: %v", height, err)
+				// enqueue with the resolved hash so the periodic retry can heal it
+				// later, without a second lookup that could itself fail
+				w.storeBlockInternalDataError(hash, height, err.Error(), 0)
+			}
+		}
+		h = height
 		w.is.SetInternalDataFrom(h)
 		healed++
 		if healed%10000 == 0 {
@@ -60,18 +73,6 @@ func (w *Worker) InternalDataHealingRoutine() {
 		}
 	}
 	glog.Infof("internalDataHealing: finished, %d blocks healed in %v, %d errors", healed, time.Since(start), errorCount)
-}
-
-// storeInternalDataError puts a block that failed to heal into the same internal
-// data error queue that sync-time failures use, so it is retried by the periodic
-// refetch and visible on the internal data errors admin page. A successful
-// reconnect removes the entry from the queue.
-func (w *Worker) storeInternalDataError(height uint32, healErr error) {
-	hash, err := w.db.GetBlockHash(height)
-	if err != nil || hash == "" {
-		return
-	}
-	w.storeBlockInternalDataError(hash, height, healErr.Error(), 0)
 }
 
 const internalDataErrorRetryPeriod = time.Hour
@@ -97,14 +98,11 @@ func (w *Worker) internalDataErrorRetryLoop() {
 	}
 }
 
-func (w *Worker) backfillBlockInternalData(height uint32) error {
-	hash, err := w.db.GetBlockHash(height)
-	if err != nil {
-		return err
-	}
-	if hash == "" {
-		return errors.New("block not found in index")
-	}
+// backfillBlockInternalData fetches the internal data for the already-indexed block
+// at height (whose current hash the caller resolved) and reconnects it. The caller
+// passes the resolved hash so a failure can be enqueued without a second lookup that
+// could itself fail and lose the block.
+func (w *Worker) backfillBlockInternalData(height uint32, hash string) error {
 	block, err := w.getBlockRetryInternalData(hash, height)
 	if err != nil {
 		return err
@@ -120,7 +118,6 @@ func (w *Worker) backfillBlockInternalData(height uint32) error {
 	if currentHash, err := w.db.GetBlockHash(height); err != nil || currentHash != hash {
 		return errors.New("block hash changed, possible reorg, skipping")
 	}
-	w.filterAlreadyReconnectedInternalData(block)
 	if err := w.db.ReconnectInternalDataToBlockEthereumType(block); err != nil {
 		return err
 	}
@@ -130,123 +127,17 @@ func (w *Worker) backfillBlockInternalData(height uint32) error {
 	return nil
 }
 
-// filterAlreadyReconnectedInternalData clears the internal data of transactions that
-// need no backfill - either there is nothing to store or the DB already holds matching
-// data (from sync or a previous backfill run). ReconnectInternalDataToBlockEthereumType
-// skips transactions with nil internal data; without this filter a repeated run over
-// the same block would increment the contract transaction counters again.
-func (w *Worker) filterAlreadyReconnectedInternalData(block *bchain.Block) {
-	for i := range block.Txs {
-		tx := &block.Txs[i]
-		eid, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-		if !ok || eid.InternalData == nil {
-			continue
-		}
-		drop := emptyInternalData(eid.InternalData)
-		if !drop {
-			stored, err := w.db.GetEthereumInternalData(tx.Txid)
-			drop = err == nil && stored != nil && internalDataEqual(w.chainParser, stored, eid.InternalData)
-		}
-		if drop {
-			eid.InternalData = nil
-			tx.CoinSpecificData = eid
-		}
-	}
-}
-
-func emptyInternalData(id *bchain.EthereumInternalData) bool {
-	return id.Type == bchain.CALL && len(id.Transfers) == 0 && id.Error == ""
-}
-
-// internalDataEqual compares stored internal data with freshly computed data.
-// The stored form is lossy: the top-level type keeps only the CALL|CREATE bit
-// (SELFDESTRUCT unpacks as CALL) and the error message is transformed on unpack,
-// so only the CREATE distinction is compared and errors are ignored. Addresses
-// are compared as address descriptors - the stored side unpacks to the chain's
-// canonical form (EIP55 checksummed hex on eth) while the computed side may
-// keep the backend's casing (the trace's Contract is raw lowercase hex).
-func internalDataEqual(parser bchain.BlockChainParser, stored, computed *bchain.EthereumInternalData) bool {
-	if (stored.Type == bchain.CREATE) != (computed.Type == bchain.CREATE) {
-		return false
-	}
-	if stored.Type == bchain.CREATE && !addressesEqual(parser, stored.Contract, computed.Contract) {
-		return false
-	}
-	if len(stored.Transfers) != len(computed.Transfers) {
-		return false
-	}
-	for i := range stored.Transfers {
-		s, c := &stored.Transfers[i], &computed.Transfers[i]
-		if s.Type != c.Type || !addressesEqual(parser, s.From, c.From) || !addressesEqual(parser, s.To, c.To) || s.Value.Cmp(&c.Value) != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// addressesEqual reports whether two address strings denote the same address,
-// comparing their address descriptors when the strings differ. An address that
-// does not parse never equals anything but its exact string form. The packed
-// DB form stores a missing address as the zero address, so an empty address
-// equals the chain's representation of the zero address.
-func addressesEqual(parser bchain.BlockChainParser, a, b string) bool {
-	if a == b {
-		return true
-	}
-	if a == "" {
-		return isZeroAddress(parser, b)
-	}
-	if b == "" {
-		return isZeroAddress(parser, a)
-	}
-	da, err := parser.GetAddrDescFromAddress(a)
-	if err != nil {
-		return false
-	}
-	db, err := parser.GetAddrDescFromAddress(b)
-	if err != nil {
-		return false
-	}
-	return bytes.Equal(da, db)
-}
-
-func isZeroAddress(parser bchain.BlockChainParser, a string) bool {
-	d, err := parser.GetAddrDescFromAddress(a)
-	if err != nil {
-		return false
-	}
-	for _, b := range d {
-		if b != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// storeBackfilledContracts persists contract registry entries discovered during the
-// backfill; ReconnectInternalDataToBlockEthereumType does not store them. Creations
-// are stored only when the registry has no entry yet, so that contract info enriched
-// after sync is not overwritten. Destructions reuse the StoreContractInfo merge,
-// which is idempotent and a no-op for unknown contracts.
+// storeBackfilledContracts persists the contract lifecycle discovered during the
+// backfill (creations and destructions); ReconnectInternalDataToBlockEthereumType
+// does not store them. Because the sweep runs downward, a contract's destruction is
+// visited before its creation, so BackfillContractInfo records a destruction even
+// when no registry row exists yet and merges the creation height into it later,
+// preserving any name/symbol/standard enrichment fetched on demand after sync.
 func (w *Worker) storeBackfilledContracts(blockSpecificData *bchain.EthereumBlockSpecificData) {
-	store := func(ci *bchain.ContractInfo) {
-		if err := w.db.StoreContractInfo(ci); err != nil {
-			glog.Errorf("storeBackfilledContracts: StoreContractInfo %s: %v", ci.Contract, err)
-		}
-	}
 	for i := range blockSpecificData.Contracts {
 		ci := &blockSpecificData.Contracts[i]
-		if ci.CreatedInBlock == 0 && ci.DestructedInBlock != 0 {
-			store(ci)
-			continue
-		}
-		existing, err := w.db.GetContractInfoForAddress(ci.Contract)
-		if err != nil {
-			glog.Errorf("storeBackfilledContracts: GetContractInfoForAddress %s: %v", ci.Contract, err)
-			continue
-		}
-		if existing == nil {
-			store(ci)
+		if err := w.db.BackfillContractInfo(ci); err != nil {
+			glog.Errorf("storeBackfilledContracts: BackfillContractInfo %s: %v", ci.Contract, err)
 		}
 	}
 }

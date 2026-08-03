@@ -188,6 +188,49 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 	return nil
 }
 
+// BackfillContractInfo merges the contract lifecycle fields discovered by the
+// internal-data healing sweep (CreatedInBlock, DestructedInBlock) into the stored
+// contract row without discarding enrichment (name, symbol, standard, decimals) that
+// was fetched on demand after sync. Unlike StoreContractInfo it records a destruction
+// even when the creation has not been reindexed yet: the sweep runs downward and
+// reaches a contract's destruction before its creation, so it writes a row carrying
+// only DestructedInBlock and fills CreatedInBlock in when the earlier (lower) creation
+// block is later swept.
+func (d *RocksDB) BackfillContractInfo(contractInfo *bchain.ContractInfo) error {
+	if contractInfo.Contract == "" {
+		return nil
+	}
+	key, err := d.chainParser.GetAddrDescFromAddress(contractInfo.Contract)
+	if err != nil {
+		return err
+	}
+	if key == nil {
+		return nil
+	}
+	merged := contractInfo
+	stored, err := d.GetContractInfo(key, "")
+	if err != nil {
+		return err
+	}
+	if stored != nil {
+		// copy before mutating: GetContractInfo may return the shared cached entry.
+		// Overlay only the lifecycle fields we discovered; keep the enriched fields.
+		c := *stored
+		if contractInfo.CreatedInBlock != 0 {
+			c.CreatedInBlock = contractInfo.CreatedInBlock
+		}
+		if contractInfo.DestructedInBlock != 0 {
+			c.DestructedInBlock = contractInfo.DestructedInBlock
+		}
+		merged = &c
+	}
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.PutCF(d.cfh[cfContracts], key, packContractInfo(merged))
+	cachedContracts.delete(string(key))
+	return d.WriteBatch(wb)
+}
+
 // ListContractInfos returns up to limit stored contract records ordered by
 // address descriptor, starting at the optional from address (inclusive), and
 // the address to pass as from to fetch the next page ("" when the listing is

@@ -740,7 +740,104 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 	return blockTxs, nil
 }
 
-// ReconnectInternalDataToBlockEthereumType adds missing internal data to the block and stores them in db
+// emptyInternalData reports whether internal data carry nothing worth storing.
+func emptyInternalData(id *bchain.EthereumInternalData) bool {
+	return id.Type == bchain.CALL && len(id.Transfers) == 0 && id.Error == ""
+}
+
+// internalDataEqual compares stored internal data with freshly computed data.
+// The stored form is lossy: the top-level type keeps only the CALL|CREATE bit
+// (SELFDESTRUCT unpacks as CALL) and the error message is transformed on unpack,
+// so only the CREATE distinction is compared and errors are ignored. Addresses
+// are compared as address descriptors - the stored side unpacks to the chain's
+// canonical form (EIP55 checksummed hex on eth) while the computed side may keep
+// the backend's casing (the trace's Contract is raw lowercase hex).
+func internalDataEqual(parser bchain.BlockChainParser, stored, computed *bchain.EthereumInternalData) bool {
+	// the stored top-level type is demoted from CREATE to CALL when the contract
+	// address does not parse (see processInternalData); demote the computed side the
+	// same way, otherwise a failed contract creation reads as a mismatch and gets
+	// reconnected - and its transfers re-counted - on every sweep
+	computedType := computed.Type
+	if computedType == bchain.CREATE {
+		if _, err := parser.GetAddrDescFromAddress(computed.Contract); err != nil {
+			computedType = bchain.CALL
+		}
+	}
+	if (stored.Type == bchain.CREATE) != (computedType == bchain.CREATE) {
+		return false
+	}
+	if computedType == bchain.CREATE && !addressesEqual(parser, stored.Contract, computed.Contract) {
+		return false
+	}
+	if len(stored.Transfers) != len(computed.Transfers) {
+		return false
+	}
+	for i := range stored.Transfers {
+		s, c := &stored.Transfers[i], &computed.Transfers[i]
+		if s.Type != c.Type || !addressesEqual(parser, s.From, c.From) || !addressesEqual(parser, s.To, c.To) || s.Value.Cmp(&c.Value) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// addressesEqual reports whether two address strings denote the same address,
+// comparing their address descriptors when the strings differ. An address that
+// does not parse never equals anything but its exact string form. The packed DB
+// form stores a missing address as the zero address, so an empty address equals
+// the chain's representation of the zero address.
+func addressesEqual(parser bchain.BlockChainParser, a, b string) bool {
+	if a == b {
+		return true
+	}
+	if a == "" {
+		return addressStringIsZero(parser, b)
+	}
+	if b == "" {
+		return addressStringIsZero(parser, a)
+	}
+	da, err := parser.GetAddrDescFromAddress(a)
+	if err != nil {
+		return false
+	}
+	dbDesc, err := parser.GetAddrDescFromAddress(b)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(da, dbDesc)
+}
+
+// addressStringIsZero reports whether a parses to the zero address.
+func addressStringIsZero(parser bchain.BlockChainParser, a string) bool {
+	d, err := parser.GetAddrDescFromAddress(a)
+	if err != nil {
+		return false
+	}
+	return isZeroAddress(d)
+}
+
+// internalDataAlreadyStored reports whether a transaction's computed internal data
+// needs no (re)storing - either there is nothing to store, or the DB already holds
+// matching data from sync or an earlier reconnect. ReconnectInternalDataToBlockEthereumType
+// skips such transactions so a block reconnected more than once (the healing sweep
+// and the error-queue refetch can both target the same block) does not increment its
+// contract transaction counters twice. The check and the counter-incrementing write
+// share connectBlockMux, so a concurrent reconnect cannot pass this check before this
+// one commits.
+func (d *RocksDB) internalDataAlreadyStored(txid string, computed *bchain.EthereumInternalData) bool {
+	if emptyInternalData(computed) {
+		return true
+	}
+	stored, err := d.GetEthereumInternalData(txid)
+	return err == nil && stored != nil && internalDataEqual(d.chainParser, stored, computed)
+}
+
+// ReconnectInternalDataToBlockEthereumType adds internal data to an already-indexed
+// block whose internal data failed or was skipped during sync, and stores them. It is
+// idempotent: transactions whose stored internal data already match are skipped, so
+// calling it more than once for the same block (the healing sweep and the error-queue
+// refetch may both target it) does not double-count contract transactions. Runs under
+// connectBlockMux.
 func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) error {
 	d.connectBlockMux.Lock()
 	defer d.connectBlockMux.Unlock()
@@ -762,17 +859,23 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-		if eid.InternalData != nil {
-			btxID, err := d.chainParser.PackTxid(tx.Txid)
-			if err != nil {
-				return err
-			}
-			blockTx := &blockTxs[txi]
-			blockTx.btxID = btxID
-			tx.BlockHeight = block.Height
-			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, true); err != nil {
-				return err
-			}
+		// skip transactions whose internal data are already stored (or empty): this
+		// block may be reconnected more than once - the healing sweep and the
+		// error-queue refetch can both reach it - and reprocessing would count its
+		// contract transactions again. The check shares connectBlockMux with the
+		// write below, so a concurrent reconnect cannot race between them.
+		if eid.InternalData == nil || d.internalDataAlreadyStored(tx.Txid, eid.InternalData) {
+			continue
+		}
+		btxID, err := d.chainParser.PackTxid(tx.Txid)
+		if err != nil {
+			return err
+		}
+		blockTx := &blockTxs[txi]
+		blockTx.btxID = btxID
+		tx.BlockHeight = block.Height
+		if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, true); err != nil {
+			return err
 		}
 	}
 

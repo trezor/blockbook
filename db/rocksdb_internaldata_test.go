@@ -1,6 +1,6 @@
 //go:build unittest
 
-package api
+package db
 
 import (
 	"math/big"
@@ -79,6 +79,26 @@ func Test_internalDataEqual(t *testing.T) {
 			}},
 			computed: bchain.EthereumInternalData{Type: bchain.SELFDESTRUCT, Contract: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", Transfers: []bchain.EthereumInternalTransfer{
 				transfer(bchain.SELFDESTRUCT, "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", 5),
+			}},
+			want: true,
+		},
+		{
+			// a failed contract creation carries an empty/unparseable contract, which
+			// processInternalData demotes to CALL before packing; the computed CREATE
+			// must be demoted the same way, otherwise it looks unequal and is
+			// reconnected - and re-counted - on every sweep
+			name:     "computed failed CREATE with empty contract equals stored CALL",
+			stored:   bchain.EthereumInternalData{Type: bchain.CALL},
+			computed: bchain.EthereumInternalData{Type: bchain.CREATE, Contract: ""},
+			want:     true,
+		},
+		{
+			name: "computed failed CREATE with transfer equals stored demoted CALL",
+			stored: bchain.EthereumInternalData{Type: bchain.CALL, Transfers: []bchain.EthereumInternalTransfer{
+				transfer(bchain.CREATE, "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb", 5),
+			}},
+			computed: bchain.EthereumInternalData{Type: bchain.CREATE, Contract: "", Transfers: []bchain.EthereumInternalTransfer{
+				transfer(bchain.CREATE, "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", "", 5),
 			}},
 			want: true,
 		},
