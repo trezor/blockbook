@@ -216,6 +216,11 @@ type EthereumRPC struct {
 	alternativeSendTxProvider *AlternativeSendTxProvider
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
+	// Multicall3AddressOverride, when non-empty, replaces the canonical Multicall3
+	// address for chains that deploy it at a non-canonical address (e.g. Tron).
+	// Set once in code at construction (see tron.NewTronRPC), never from config;
+	// the resolver multicall3ContractAddress() reads it. See multicall.go.
+	Multicall3AddressOverride string
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
 	multicall3Probe   atomic.Int32
 	multicall3ProbeSF singleflight.Group

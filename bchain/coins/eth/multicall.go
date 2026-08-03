@@ -32,6 +32,16 @@ const (
 // Multicall3 deployment; the answer is cached for the process lifetime.
 var errMulticall3NotDeployed = errors.New("multicall3 not deployed at canonical address on this chain")
 
+// multicall3ContractAddress returns the Multicall3 address to probe and call on
+// this chain: the code-set Multicall3AddressOverride when non-empty (e.g. Tron's
+// non-canonical deployment), otherwise the canonical const.
+func (b *EthereumRPC) multicall3ContractAddress() string {
+	if b.Multicall3AddressOverride != "" {
+		return b.Multicall3AddressOverride
+	}
+	return multicall3Address
+}
+
 // EthereumTypeMulticallAggregate3 issues an aggregate3 batch as one eth_call,
 // observing all sub-calls at the same block (pinned to blockNumber, or
 // "latest" if nil). The first call probes deployment with one eth_getCode;
@@ -53,7 +63,7 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	if err != nil {
 		return nil, fmt.Errorf("multicall3 encode: %w", err)
 	}
-	resp, err := b.EthereumTypeRpcCallAtBlock(encoded, multicall3Address, "", blockNumber)
+	resp, err := b.EthereumTypeRpcCallAtBlock(encoded, b.multicall3ContractAddress(), "", blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -96,14 +106,17 @@ func (b *EthereumRPC) probeMulticall3() (bool, error) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 		defer cancel()
+		// Probe the same address aggregate3 will call, so the cached verdict is
+		// meaningful on chains with a non-canonical Multicall3 deployment.
+		addr := b.multicall3ContractAddress()
 		var code string
-		if err := b.RPC.CallContext(ctx, &code, "eth_getCode", multicall3Address, "latest"); err != nil {
-			glog.Warningf("multicall3 probe at %s failed: %v (will retry on next call)", multicall3Address, err)
+		if err := b.RPC.CallContext(ctx, &code, "eth_getCode", addr, "latest"); err != nil {
+			glog.Warningf("multicall3 probe at %s failed: %v (will retry on next call)", addr, err)
 			return probeResult{err: err}, nil
 		}
 		// "0x" means no code at the address.
 		if len(code) <= 2 {
-			glog.Infof("multicall3 not deployed at %s on this chain; multicall enrichments will be disabled", multicall3Address)
+			glog.Infof("multicall3 not deployed at %s on this chain; multicall enrichments will be disabled", addr)
 			b.multicall3Probe.Store(multicall3NotDeployed)
 			return probeResult{}, nil
 		}

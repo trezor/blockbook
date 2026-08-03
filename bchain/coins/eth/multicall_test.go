@@ -16,6 +16,11 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
+// tronMulticall3Address is a sample non-canonical Multicall3 address (Tron
+// mainnet's, base58 TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED) used to exercise the
+// Multicall3AddressOverride path.
+const tronMulticall3Address = "0x32a4f47a74a6810bd0bf861cabab99656a75de9e"
+
 // padHex32 left-pads `s` (a hex string without 0x) with zeros to 64 chars (32 bytes).
 func padHex32(s string) string {
 	if len(s) >= 64 {
@@ -335,6 +340,82 @@ func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, 
 		return nil
 	default:
 		return fmt.Errorf("unexpected method: %s", method)
+	}
+}
+
+// --- Per-chain Multicall3 address override ---
+
+func TestMulticall3ContractAddress(t *testing.T) {
+	// No override -> canonical const. This is the path the other multicall tests
+	// (which build EthereumRPC without an override) rely on.
+	if got := (&EthereumRPC{}).multicall3ContractAddress(); !strings.EqualFold(got, multicall3Address) {
+		t.Fatalf("no override: got %s, want canonical %s", got, multicall3Address)
+	}
+	// Non-empty override -> override (e.g. Tron's non-canonical deployment).
+	rpc := &EthereumRPC{Multicall3AddressOverride: tronMulticall3Address}
+	if got := rpc.multicall3ContractAddress(); !strings.EqualFold(got, tronMulticall3Address) {
+		t.Fatalf("override: got %s, want %s", got, tronMulticall3Address)
+	}
+}
+
+// mockMulticallTargetRPC asserts that both the deployment probe (eth_getCode)
+// and the aggregate3 call (eth_call) are issued to a specific target address,
+// locking the per-chain override wiring end-to-end.
+type mockMulticallTargetRPC struct {
+	expected string
+	code     string
+	callResp string
+}
+
+func (m *mockMulticallTargetRPC) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (m *mockMulticallTargetRPC) Close() {}
+func (m *mockMulticallTargetRPC) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
+	return errors.New("not implemented")
+}
+func (m *mockMulticallTargetRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	out, ok := result.(*string)
+	if !ok {
+		return errors.New("bad result type")
+	}
+	switch method {
+	case "eth_getCode":
+		addr, _ := args[0].(string)
+		if !strings.EqualFold(addr, m.expected) {
+			return fmt.Errorf("eth_getCode target %s != expected %s", addr, m.expected)
+		}
+		*out = m.code
+		return nil
+	case "eth_call":
+		argMap, _ := args[0].(map[string]interface{})
+		to, _ := argMap["to"].(string)
+		if !strings.EqualFold(to, m.expected) {
+			return fmt.Errorf("eth_call target %s != expected %s", to, m.expected)
+		}
+		*out = m.callResp
+		return nil
+	default:
+		return fmt.Errorf("unexpected method: %s", method)
+	}
+}
+
+func TestMulticallAggregate3_UsesConfiguredAddressOverride(t *testing.T) {
+	expected := []bchain.EthereumMulticallResult{{Success: true, Data: "0xdead"}}
+	mock := &mockMulticallTargetRPC{
+		expected: tronMulticall3Address,
+		code:     "0x6080",
+		callResp: fixtureAggregate3Result(expected),
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second, Multicall3AddressOverride: tronMulticall3Address}
+	got, err := rpc.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
+		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("aggregate3 error: %v", err)
+	}
+	if len(got) != 1 || !strings.EqualFold(got[0].Data, "0xdead") {
+		t.Fatalf("unexpected result: %+v", got)
 	}
 }
 
