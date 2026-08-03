@@ -351,6 +351,14 @@ func (b *EthereumRPC) EthereumTypeRpcCall(data, to, from string) (string, error)
 
 // EthereumTypeRpcCallAtBlock calls eth_call with given data and to address at a specific block.
 func (b *EthereumRPC) EthereumTypeRpcCallAtBlock(data, to, from string, blockNumber *big.Int) (string, error) {
+	return b.ethCallAtBlock(data, to, from, blockNumber, "single")
+}
+
+// ethCallAtBlock is the shared single-eth_call primitive. mode labels the caller
+// in the eth_call request/error metrics: "single" for direct reads and the batch
+// path's per-element retries, "multicall" for Multicall3 aggregate3 batches (so
+// the fast path's call volume can be measured separately).
+func (b *EthereumRPC) ethCallAtBlock(data, to, from string, blockNumber *big.Int, mode string) (string, error) {
 	args := map[string]interface{}{
 		"data": data,
 		"to":   to,
@@ -359,14 +367,14 @@ func (b *EthereumRPC) EthereumTypeRpcCallAtBlock(data, to, from string, blockNum
 		args["from"] = from
 	}
 
-	b.observeEthCall("single", 1)
+	b.observeEthCall(mode, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var r string
 	blockArg := bchain.ToBlockNumArg(blockNumber)
 	err := b.RPC.CallContext(ctx, &r, "eth_call", args, blockArg)
 	if err != nil {
-		b.observeEthCallError("single", "rpc")
+		b.observeEthCallError(mode, "rpc")
 		return "", err
 	}
 	return r, nil

@@ -63,7 +63,9 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	if err != nil {
 		return nil, fmt.Errorf("multicall3 encode: %w", err)
 	}
-	resp, err := b.EthereumTypeRpcCallAtBlock(encoded, b.multicall3ContractAddress(), "", blockNumber)
+	// Count aggregate3 as mode="multicall" (not "single") so the Multicall3 fast
+	// path's eth_call volume is measurable in the eth_call_requests metric.
+	resp, err := b.ethCallAtBlock(encoded, b.multicall3ContractAddress(), "", blockNumber, "multicall")
 	if err != nil {
 		return nil, err
 	}
