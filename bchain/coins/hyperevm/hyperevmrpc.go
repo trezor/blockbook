@@ -109,18 +109,6 @@ func (b *HyperevmRPC) GetBlockHash(height uint32) (string, error) {
 	return b.EthereumRPC.GetBlockHash(height)
 }
 
-// GetBlock returns the block of the given hash and height. Genesis is fetched by
-// number (empty hash routes getBlockRaw to eth_getBlockByNumber) because
-// GetBlockHash's caller passes go-ethereum's mis-derived genesis hash; fetching by
-// number sidesteps the eth_getBlockByHash lookup that would return null. All other
-// heights keep the hash-based path so reorg detection during sync stays intact.
-func (b *HyperevmRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	if height == 0 {
-		hash = ""
-	}
-	return b.EthereumRPC.GetBlock(hash, height)
-}
-
 func (b *HyperevmRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 	return b.EthereumRPC.ResolveENS(name)
 }
