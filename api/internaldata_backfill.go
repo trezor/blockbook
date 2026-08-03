@@ -34,7 +34,7 @@ func (w *Worker) InternalDataHealingRoutine() {
 	}
 	glog.Infof("internalDataHealing: index is missing internal data below height %d, backfilling from the backend", from)
 	start := time.Now()
-	var healed, errorCount uint64
+	var processed, errorCount, missing uint64
 	for h := from; h > 0; {
 		if common.IsInShutdown() {
 			glog.Infof("internalDataHealing: shutdown at height %d, healing resumes after restart", h)
@@ -55,24 +55,29 @@ func (w *Worker) InternalDataHealingRoutine() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		if hash != "" {
-			if err := w.backfillBlockInternalData(height, hash); err != nil {
-				errorCount++
-				glog.Errorf("internalDataHealing: height %d: %v", height, err)
-				// enqueue with the resolved hash so the periodic retry can heal it
-				// later, without a second lookup that could itself fail
-				w.storeBlockInternalDataError(hash, height, err.Error(), 0)
+		if hash == "" {
+			// no block indexed at this height: nothing to heal, but count it so a
+			// gappy index (a run of unindexed blocks) is not silently skipped
+			missing++
+			if missing == 1 {
+				glog.Warningf("internalDataHealing: no block indexed at height %d; the index has gaps in the healed range, missing blocks are skipped", height)
 			}
+		} else if err := w.backfillBlockInternalData(height, hash); err != nil {
+			errorCount++
+			glog.Errorf("internalDataHealing: height %d: %v", height, err)
+			// enqueue with the resolved hash so the periodic retry can heal it
+			// later, without a second lookup that could itself fail
+			w.storeBlockInternalDataError(hash, height, err.Error(), 0)
 		}
 		h = height
 		w.is.SetInternalDataFrom(h)
-		healed++
-		if healed%10000 == 0 {
-			rate := float64(healed) / time.Since(start).Seconds()
-			glog.Infof("internalDataHealing: %d blocks healed, at height %d, %.1f blocks/s, %d errors", healed, h, rate, errorCount)
+		processed++
+		if processed%10000 == 0 {
+			rate := float64(processed) / time.Since(start).Seconds()
+			glog.Infof("internalDataHealing: %d heights processed, at height %d, %.1f blocks/s, %d errors, %d missing from index", processed, h, rate, errorCount, missing)
 		}
 	}
-	glog.Infof("internalDataHealing: finished, %d blocks healed in %v, %d errors", healed, time.Since(start), errorCount)
+	glog.Infof("internalDataHealing: finished, %d heights processed in %v, %d errors, %d missing from index", processed, time.Since(start), errorCount, missing)
 }
 
 const internalDataErrorRetryPeriod = time.Hour
