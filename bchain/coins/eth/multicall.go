@@ -28,6 +28,11 @@ const (
 	multicall3NotDeployed int32 = 2
 )
 
+// multicall3MaxProbeFailures latches the probe to not-deployed after this many consecutive
+// transient eth_getCode errors, so a provider that permanently restricts eth_getCode does not
+// cost an extra probe on every balances request forever. The batch path still serves balances.
+const multicall3MaxProbeFailures = 5
+
 // errMulticall3NotDeployed is returned on chains where Multicall3 is not deployed
 // at the probed address (canonical, or a per-chain override); cached for the process lifetime.
 var errMulticall3NotDeployed = errors.New("multicall3 not deployed on this chain")
@@ -75,8 +80,8 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	return decodeAggregate3Result(resp)
 }
 
-// probeMulticall3 reports whether Multicall3 is deployed at the canonical
-// address. Three outcomes:
+// probeMulticall3 reports whether Multicall3 is deployed at the probed address
+// (canonical, or a per-chain override). Three outcomes:
 //
 //   - (true, nil)  — deployed; deterministic, cached for the process lifetime.
 //   - (false, nil) — not deployed; deterministic, cached.
@@ -113,8 +118,18 @@ func (b *EthereumRPC) probeMulticall3() (bool, error) {
 		defer cancel()
 		// probe the same address aggregate3 will call (override-aware)
 		addr := b.multicall3ContractAddress()
+		// Probe at "latest": deployment is checked once at the chain tip. A caller requesting a
+		// historical block below Multicall3's deployment finds a codeless address there, so
+		// aggregate3 returns "0x" and decodes as an error, safely falling back to the batch path.
 		var code string
 		if err := b.RPC.CallContext(ctx, &code, "eth_getCode", addr, "latest"); err != nil {
+			// Latch to not-deployed after repeated transient failures so a provider that
+			// restricts eth_getCode does not incur an extra probe on every request forever.
+			if b.multicall3ProbeFailures.Add(1) >= multicall3MaxProbeFailures {
+				glog.Warningf("multicall3 probe at %s failed %d times; disabling multicall, using JSON-RPC batch: %v", addr, multicall3MaxProbeFailures, err)
+				b.multicall3Probe.Store(multicall3NotDeployed)
+				return probeResult{}, nil
+			}
 			glog.Warningf("multicall3 probe at %s failed: %v (will retry on next call)", addr, err)
 			return probeResult{err: err}, nil
 		}

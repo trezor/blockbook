@@ -566,7 +566,12 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 
 	// Prefer Multicall3, but only when the cached probe reports it deployed — otherwise a
 	// non-multicall chain would build and hex-encode calls on every request just to discard them.
-	if deployed, _ := b.probeMulticall3(); deployed {
+	deployed, probeErr := b.probeMulticall3()
+	if probeErr != nil {
+		// Transient probe failure — visible so an eth_getCode-restricting provider is not silent.
+		b.ObserveChainDataFallback("erc20_multicall", "probe_error")
+	}
+	if deployed {
 		mcBalances, failed, err := b.erc20BalancesMulticall3(callData, contractDescs, blockNumber)
 		if err == nil {
 			// aggregate3 shares one gas budget, so a Success=false element can be a gas-starved
@@ -577,7 +582,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 				for j, idx := range failed {
 					sub[j] = contractDescs[idx]
 				}
-				b.ObserveChainDataFallback("erc20_multicall", "elem_fallback")
+				b.observeChainDataFallback("erc20_multicall", "elem_fallback", len(failed))
 				if subBalances, berr := b.erc20BalancesBatchChunked(batcher, callData, sub, blockNumber); berr == nil {
 					for j, idx := range failed {
 						mcBalances[idx] = subBalances[j]
@@ -628,9 +633,10 @@ const multicall3MaxCallsPerAggregate = 100
 
 // erc20BalancesMulticall3 fetches balanceOf for all contracts via aggregate3, sub-chunked to
 // bound each eth_call's gas. Success=true results are decoded (nil on unparseable data, as in
-// the batch path). The returned indices are the Success=false elements — reverted, or gas-starved
-// under the shared aggregate3 gas budget — which the caller re-resolves via independent eth_calls
-// so a real balance is not silently lost. A non-nil error means fall back to the JSON-RPC batch.
+// the batch path). The returned indices are the Success=false elements with empty returndata —
+// possibly gas-starved under the shared aggregate3 gas budget — which the caller re-resolves via
+// independent eth_calls so a real balance is not silently lost; genuine reverts (returndata
+// present) stay nil. A non-nil error means fall back to the JSON-RPC batch.
 func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, []int, error) {
 	size := b.erc20BatchSize()
 	if size > multicall3MaxCallsPerAggregate {
@@ -662,11 +668,20 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 		}
 		for i := range results {
 			if !results[i].Success {
-				failed = append(failed, start+i)
+				b.observeEthCallError("multicall", "elem")
+				// Non-empty returndata is a genuine revert (Error/Panic data), never an
+				// out-of-gas truncation, so leave it nil. Only empty returndata may be gas
+				// starvation under the shared budget — re-resolve those (see the caller).
+				if len(results[i].Data) <= 2 {
+					failed = append(failed, start+i)
+				}
 				continue
 			}
 			// nil on unparseable output (empty/short), matching the batch path
 			balances[start+i] = parseSimpleNumericProperty(results[i].Data)
+			if balances[start+i] == nil {
+				b.observeEthCallError("multicall", "invalid")
+			}
 		}
 	}
 	return balances, failed, nil

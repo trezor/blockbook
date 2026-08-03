@@ -662,6 +662,41 @@ func TestEthereumTypeMulticallAggregate3_TransientProbeError_PropagatesAndIsDist
 	}
 }
 
+// After multicall3MaxProbeFailures consecutive transient probe errors the probe latches to
+// not-deployed, so a provider that restricts eth_getCode stops paying a probe on every request.
+func TestProbeMulticall3_LatchesNotDeployedAfterRepeatedFailures(t *testing.T) {
+	mock := &mockMulticallRPC{
+		handler: func(string) (string, error) {
+			t.Fatal("eth_call must not be issued while probing fails")
+			return "", nil
+		},
+		getCodeHandler: func(string) (string, error) { return "", errors.New("rpc down") },
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	// The first K-1 attempts stay transient (unprobed, retry on next call).
+	for i := 1; i < multicall3MaxProbeFailures; i++ {
+		if deployed, err := rpc.probeMulticall3(); deployed || err == nil {
+			t.Fatalf("attempt %d: want transient (false, err), got (%v, %v)", i, deployed, err)
+		}
+		if state := rpc.multicall3Probe.Load(); state != multicall3Unprobed {
+			t.Fatalf("attempt %d: must not cache state yet, got %d", i, state)
+		}
+	}
+	// The K-th failure latches to not-deployed: (false, nil), cached.
+	if deployed, err := rpc.probeMulticall3(); deployed || err != nil {
+		t.Fatalf("latching attempt: want (false, nil), got (%v, %v)", deployed, err)
+	}
+	if state := rpc.multicall3Probe.Load(); state != multicall3NotDeployed {
+		t.Fatalf("want latched multicall3NotDeployed, got %d", state)
+	}
+	// Further calls are served from cache: no additional eth_getCode.
+	rpc.probeMulticall3()
+	if _, getCode := mock.callCounts(); getCode != multicall3MaxProbeFailures {
+		t.Fatalf("want exactly %d eth_getCode probes (latched after), got %d", multicall3MaxProbeFailures, getCode)
+	}
+}
+
 func TestEthereumTypeMulticallAggregate3_ProbesOnFirstCall(t *testing.T) {
 	// First call on a fresh EthereumRPC must probe via eth_getCode then
 	// proceed to eth_call. Subsequent calls must skip the probe.

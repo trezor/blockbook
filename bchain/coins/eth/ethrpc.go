@@ -220,8 +220,9 @@ type EthereumRPC struct {
 	// that deploy it at a non-canonical address (e.g. Tron). Set in code, not config.
 	Multicall3AddressOverride string
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
-	multicall3Probe   atomic.Int32
-	multicall3ProbeSF singleflight.Group
+	multicall3Probe         atomic.Int32
+	multicall3ProbeSF       singleflight.Group
+	multicall3ProbeFailures atomic.Int32
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -336,10 +337,16 @@ func (b *EthereumRPC) observeEthCall(mode string, count int) {
 
 // ObserveChainDataFallback increments a metric for chain-data fallback paths.
 func (b *EthereumRPC) ObserveChainDataFallback(component, reason string) {
-	if b.metrics == nil || component == "" || reason == "" {
+	b.observeChainDataFallback(component, reason, 1)
+}
+
+// observeChainDataFallback adds count to the chain-data fallback metric, so callers can
+// record how many elements took the fallback rather than just that one request did.
+func (b *EthereumRPC) observeChainDataFallback(component, reason string, count int) {
+	if b.metrics == nil || component == "" || reason == "" || count <= 0 {
 		return
 	}
-	b.metrics.ChainDataFallbacks.With(common.Labels{"component": component, "reason": reason}).Inc()
+	b.metrics.ChainDataFallbacks.With(common.Labels{"component": component, "reason": reason}).Add(float64(count))
 }
 
 func (b *EthereumRPC) observeEthCallError(mode, errType string) {
