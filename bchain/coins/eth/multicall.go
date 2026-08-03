@@ -32,8 +32,7 @@ const (
 // Multicall3 deployment; the answer is cached for the process lifetime.
 var errMulticall3NotDeployed = errors.New("multicall3 not deployed at canonical address on this chain")
 
-// multicall3ContractAddress returns the Multicall3 address to probe and call on
-// this chain: the code-set Multicall3AddressOverride when non-empty (e.g. Tron's
+// multicall3ContractAddress returns Multicall3AddressOverride when set (e.g. Tron's
 // non-canonical deployment), otherwise the canonical const.
 func (b *EthereumRPC) multicall3ContractAddress() string {
 	if b.Multicall3AddressOverride != "" {
@@ -63,8 +62,7 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	if err != nil {
 		return nil, fmt.Errorf("multicall3 encode: %w", err)
 	}
-	// Count aggregate3 as mode="multicall" (not "single") so the Multicall3 fast
-	// path's eth_call volume is measurable in the eth_call_requests metric.
+	// mode="multicall" so aggregate3 volume is measurable separately from single calls.
 	resp, err := b.ethCallAtBlock(encoded, b.multicall3ContractAddress(), "", blockNumber, "multicall")
 	if err != nil {
 		return nil, err
@@ -108,8 +106,7 @@ func (b *EthereumRPC) probeMulticall3() (bool, error) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 		defer cancel()
-		// Probe the same address aggregate3 will call, so the cached verdict is
-		// meaningful on chains with a non-canonical Multicall3 deployment.
+		// probe the same address aggregate3 will call (override-aware)
 		addr := b.multicall3ContractAddress()
 		var code string
 		if err := b.RPC.CallContext(ctx, &code, "eth_getCode", addr, "latest"); err != nil {

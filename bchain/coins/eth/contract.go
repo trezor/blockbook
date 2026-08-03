@@ -354,10 +354,8 @@ func (b *EthereumRPC) EthereumTypeRpcCallAtBlock(data, to, from string, blockNum
 	return b.ethCallAtBlock(data, to, from, blockNumber, "single")
 }
 
-// ethCallAtBlock is the shared single-eth_call primitive. mode labels the caller
-// in the eth_call request/error metrics: "single" for direct reads and the batch
-// path's per-element retries, "multicall" for Multicall3 aggregate3 batches (so
-// the fast path's call volume can be measured separately).
+// ethCallAtBlock is the shared single-eth_call primitive. mode ("single" or
+// "multicall") labels the call in the eth_call request/error metrics.
 func (b *EthereumRPC) ethCallAtBlock(data, to, from string, blockNumber *big.Int, mode string) (string, error) {
 	args := map[string]interface{}{
 		"data": data,
@@ -550,10 +548,9 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalances(addrDesc bchain.Addre
 	return b.EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc, contractDescs, nil)
 }
 
-// EthereumTypeGetErc20ContractBalancesAtBlock returns balances of multiple ERC20 contracts for given address at a specific block.
-// On chains with Multicall3 it fetches each chunk with a single aggregate3 eth_call (one billable
-// call instead of N), pinning every balance to the same block; otherwise it falls back to the
-// JSON-RPC batch path. Both paths return nil entries for failed/invalid results, in input order.
+// EthereumTypeGetErc20ContractBalancesAtBlock returns balances for multiple ERC20 contracts at a
+// block: one Multicall3 aggregate3 call per chunk when available, else the JSON-RPC batch. Both
+// return nil entries for failed/invalid results, in input order.
 func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchain.AddressDescriptor, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, error) {
 	if len(contractDescs) == 0 {
 		return nil, nil
@@ -562,33 +559,27 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 	// Same calldata for all balanceOf calls; only the contract address varies per element.
 	callData := erc20BalanceOfCallData(addrDesc)
 	balances := make([]*big.Int, len(contractDescs))
-	// Multicall3 does not need a batcher (it is a single eth_call); the batcher is
-	// only required for the fallback path.
+	// Multicall3 needs no batcher (single eth_call); the batcher is only for the fallback.
 	batcher, hasBatcher := b.RPC.(batchCaller)
 	for start := 0; start < len(contractDescs); start += batchSize {
 		end := start + batchSize
 		if end > len(contractDescs) {
 			end = len(contractDescs)
 		}
-		// Process a bounded slice to keep the aggregate3 / batch RPC request within size limits.
 		chunk := contractDescs[start:end]
 		// Preferred path: one aggregate3 eth_call for the whole chunk.
 		mcBalances, err := b.erc20BalancesMulticall3(callData, chunk, blockNumber)
 		if err == nil {
-			// Preserve original ordering when merging per-chunk results.
 			copy(balances[start:end], mcBalances)
 			continue
 		}
-		// Multicall3 unavailable or failed — fall back to the JSON-RPC batch path.
-		// errMulticall3NotDeployed is the expected steady state on non-multicall
-		// chains (already logged once by probeMulticall3), so don't count it as a
-		// fallback or log it here; only genuine transient/decode failures are.
+		// not-deployed is the steady state on non-multicall chains (logged once by
+		// probeMulticall3); only log/count genuine failures.
 		if !stdErrors.Is(err, errMulticall3NotDeployed) {
 			b.ObserveChainDataFallback("erc20_multicall", "error")
 			glog.Warningf("erc20 multicall3 failed for chunk [%d:%d], falling back to batch: %v", start, end, err)
 		}
 		if !hasBatcher {
-			// Neither multicall nor batching available; caller will fall back to single calls.
 			return nil, errors.New("BatchCallContext not supported")
 		}
 		batchBalances, err := b.erc20BalancesBatchAtBlock(batcher, callData, chunk, blockNumber)
@@ -600,20 +591,16 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 	return balances, nil
 }
 
-// erc20BalancesMulticall3 fetches balanceOf for a chunk of contracts in one Multicall3
-// aggregate3 eth_call, pinning all sub-calls to blockNumber. It returns a slice the same
-// length/order as contractDescs with nil entries for reverted or invalid results (matching
-// the JSON-RPC batch path's nil-on-failure contract). Any non-nil error (Multicall3 not
-// deployed, transient probe/RPC failure, decode error, or a result-count mismatch) signals
-// the caller to fall back to the JSON-RPC batch path.
+// erc20BalancesMulticall3 fetches balanceOf for a chunk in one aggregate3 eth_call, pinned to
+// blockNumber. Returns nil per reverted/invalid element (like the batch path); any error signals
+// the caller to fall back to the JSON-RPC batch.
 func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) ([]*big.Int, error) {
 	calls := make([]bchain.EthereumMulticallCall, len(contractDescs))
 	for i, contractDesc := range contractDescs {
 		calls[i] = bchain.EthereumMulticallCall{
 			Target:   hexutil.Encode(contractDesc),
 			CallData: callData,
-			// A reverting balanceOf (dead/non-conforming token) must yield Success=false
-			// for that element instead of failing the whole aggregate3 call.
+			// a reverting balanceOf yields Success=false, not a failed batch
 			AllowFailure: true,
 		}
 	}
@@ -627,11 +614,9 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 	balances := make([]*big.Int, len(contractDescs))
 	for i := range results {
 		if !results[i].Success {
-			// Reverted balanceOf -> nil, same as the batch path's revert handling.
-			continue
+			continue // reverted -> nil (as in the batch path)
 		}
-		// Leave nil on parse failures (empty "0x" / non-32-byte output from dead or
-		// non-conforming tokens); matches parseSimpleNumericProperty's contract.
+		// nil on unparseable output (empty/short), matching the batch path
 		balances[i] = parseSimpleNumericProperty(results[i].Data)
 	}
 	return balances, nil

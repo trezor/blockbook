@@ -31,10 +31,7 @@ const (
 	tronDefaultSolidityHTTPPort = "8091"
 
 	// tronMulticall3Address is Tron mainnet's non-canonical Multicall3 deployment
-	// (base58 TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED). Tron's runtime net_version is
-	// not the real chain id, so this cannot be selected by chain-id detection; it
-	// is applied as the Tron default in NewTronRPC to enable the aggregate3 ERC-20
-	// balance path.
+	// (base58 TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED); applied in NewTronRPC.
 	tronMulticall3Address = "0x32a4f47a74a6810bd0bf861cabab99656a75de9e"
 
 	TRC10TokenType   bchain.TokenStandardName = "TRC10"

@@ -27,9 +27,7 @@ func (m *mockBatchRPC) EthSubscribe(ctx context.Context, channel interface{}, ar
 }
 
 func (m *mockBatchRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	// Answer the Multicall3 deployment probe with "not deployed" so the ERC-20
-	// balance path deterministically (and quietly) falls back to the JSON-RPC
-	// batch these tests exercise; the probe caches this after the first chunk.
+	// Probe answers "not deployed" so these tests deterministically exercise the batch fallback.
 	if method == "eth_getCode" {
 		if out, ok := result.(*string); ok {
 			*out = "0x"
@@ -575,16 +573,13 @@ func TestEthereumTypeGetErc20ContractBalancesPartialError(t *testing.T) {
 
 // --- Multicall3 balance path ---
 
-// TestEthereumTypeGetErc20ContractBalancesViaMulticall3 verifies that on a chain
-// with Multicall3 deployed, balances are served by a single aggregate3 eth_call
-// (no JSON-RPC batch), preserving order and nil-on-failure semantics.
+// Multicall3 deployed -> balances served by one aggregate3 call, order + nil-on-failure preserved.
 func TestEthereumTypeGetErc20ContractBalancesViaMulticall3(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
 	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
 	contractC := common.HexToAddress("0x00000000000000000000000000000000000000cc")
-	// A = 100, B reverted (Success=false -> nil), C succeeds but returns empty
-	// data (invalid -> nil), locking both failure mappings.
+	// A=100; B reverted -> nil; C empty data -> nil.
 	fixture := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
 		{Success: true, Data: fmt.Sprintf("0x%064x", 100)},
 		{Success: false, Data: "0x"},
@@ -628,9 +623,8 @@ func TestEthereumTypeGetErc20ContractBalancesViaMulticall3(t *testing.T) {
 	}
 }
 
-// mockMulticallThenBatchRPC answers the Multicall3 probe as deployed, fails the
-// aggregate3 eth_call (forcing the fallback), and serves the JSON-RPC batch
-// fallback via the embedded mockBatchRPC.
+// mockMulticallThenBatchRPC: probe deployed, aggregate3 fails (forcing fallback),
+// batch served via the embedded mockBatchRPC.
 type mockMulticallThenBatchRPC struct {
 	*mockBatchRPC
 	aggregate3Err error
@@ -655,9 +649,7 @@ func (m *mockMulticallThenBatchRPC) CallContext(ctx context.Context, result inte
 	}
 }
 
-// TestEthereumTypeGetErc20ContractBalancesFallsBackToBatchOnMulticallError
-// verifies that a transient aggregate3 failure (not "not deployed") falls back
-// to the JSON-RPC batch path and still returns correct, ordered balances.
+// Transient aggregate3 failure -> JSON-RPC batch fallback, balances still correct + ordered.
 func TestEthereumTypeGetErc20ContractBalancesFallsBackToBatchOnMulticallError(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
@@ -691,9 +683,7 @@ func TestEthereumTypeGetErc20ContractBalancesFallsBackToBatchOnMulticallError(t 
 	}
 }
 
-// TestErc20BalancesMulticall3LengthMismatch verifies the result-count guard: an
-// aggregate3 response with the wrong number of results is a hard error so the
-// caller falls back rather than silently misaligning balances to contracts.
+// Wrong aggregate3 result count is a hard error (caller falls back), not a silent misalign.
 func TestErc20BalancesMulticall3LengthMismatch(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")

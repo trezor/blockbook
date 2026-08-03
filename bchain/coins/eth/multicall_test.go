@@ -16,9 +16,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// tronMulticall3Address is a sample non-canonical Multicall3 address (Tron
-// mainnet's, base58 TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED) used to exercise the
-// Multicall3AddressOverride path.
+// tronMulticall3Address is a sample non-canonical address for exercising Multicall3AddressOverride.
 const tronMulticall3Address = "0x32a4f47a74a6810bd0bf861cabab99656a75de9e"
 
 // padHex32 left-pads `s` (a hex string without 0x) with zeros to 64 chars (32 bytes).
@@ -346,21 +344,19 @@ func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, 
 // --- Per-chain Multicall3 address override ---
 
 func TestMulticall3ContractAddress(t *testing.T) {
-	// No override -> canonical const. This is the path the other multicall tests
-	// (which build EthereumRPC without an override) rely on.
+	// no override -> canonical const
 	if got := (&EthereumRPC{}).multicall3ContractAddress(); !strings.EqualFold(got, multicall3Address) {
 		t.Fatalf("no override: got %s, want canonical %s", got, multicall3Address)
 	}
-	// Non-empty override -> override (e.g. Tron's non-canonical deployment).
+	// override wins
 	rpc := &EthereumRPC{Multicall3AddressOverride: tronMulticall3Address}
 	if got := rpc.multicall3ContractAddress(); !strings.EqualFold(got, tronMulticall3Address) {
 		t.Fatalf("override: got %s, want %s", got, tronMulticall3Address)
 	}
 }
 
-// mockMulticallTargetRPC asserts that both the deployment probe (eth_getCode)
-// and the aggregate3 call (eth_call) are issued to a specific target address,
-// locking the per-chain override wiring end-to-end.
+// mockMulticallTargetRPC asserts the probe (eth_getCode) and aggregate3 call
+// both target a specific address, locking the override wiring.
 type mockMulticallTargetRPC struct {
 	expected string
 	code     string
