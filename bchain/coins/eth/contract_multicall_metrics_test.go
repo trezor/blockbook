@@ -2,15 +2,39 @@ package eth
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 )
+
+var prometheusRegistryMu sync.Mutex
+
+// useTestPrometheusRegistry swaps the global prometheus registry for a fresh one for the
+// duration of the test, so repeated in-binary runs (go test -count=2) do not hit
+// duplicate-registration errors from common.GetMetrics.
+func useTestPrometheusRegistry(t *testing.T) {
+	t.Helper()
+
+	prometheusRegistryMu.Lock()
+	oldRegisterer := prometheus.DefaultRegisterer
+	oldGatherer := prometheus.DefaultGatherer
+	registry := prometheus.NewRegistry()
+	prometheus.DefaultRegisterer = registry
+	prometheus.DefaultGatherer = registry
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = oldRegisterer
+		prometheus.DefaultGatherer = oldGatherer
+		prometheusRegistryMu.Unlock()
+	})
+}
 
 // erc20MulticallFallbackCount reads one reason of the erc20_multicall fallback counter.
 func erc20MulticallFallbackCount(t *testing.T, metrics *common.Metrics, reason string) float64 {
@@ -28,6 +52,7 @@ func erc20MulticallFallbackCount(t *testing.T, metrics *common.Metrics, reason s
 // hiding the extra round trip from cost dashboards. The error counter must stay one event per
 // request that abandoned multicall, not one per failing chunk.
 func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountEveryContract(t *testing.T) {
+	useTestPrometheusRegistry(t)
 	metrics, err := common.GetMetrics("Erc20MulticallFallbackTest")
 	if err != nil {
 		t.Fatalf("metrics: %v", err)
@@ -58,6 +83,7 @@ func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountEveryContract(t
 // A systemic aggregate3 failure must emit exactly one request-level fallback event, not one per
 // chunk the loop would otherwise have attempted.
 func TestEthereumTypeGetErc20ContractBalancesSystemicFailureEmitsOneFallbackEvent(t *testing.T) {
+	useTestPrometheusRegistry(t)
 	metrics, err := common.GetMetrics("Erc20MulticallSystemicFallbackTest")
 	if err != nil {
 		t.Fatalf("metrics: %v", err)
