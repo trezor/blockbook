@@ -2,10 +2,12 @@ package api
 
 import (
 	"sync"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
 
@@ -17,6 +19,34 @@ func (w *Worker) IsRefetchingInternalData() bool {
 	refetchInternalDataMux.Lock()
 	defer refetchInternalDataMux.Unlock()
 	return refetchingInternalData
+}
+
+const internalDataErrorRetryPeriod = time.Hour
+
+// InternalDataErrorRetryLoop keeps the internal data of the index complete without
+// operator action: blocks whose internal data could not be fetched while they were
+// synced wait in the internal data error queue, and this loop periodically retries
+// them. The underlying refetch routine runs at most once at a time, is a no-op on an
+// empty queue and gives up on a block after its retry limit, so the periodic trigger
+// is safe. The first pass runs shortly after startup to pick up failures from the
+// previous run while the backend cache is warm.
+func (w *Worker) InternalDataErrorRetryLoop() {
+	if w.chainType != bchain.ChainEthereumType || !bchain.ProcessInternalTransactions {
+		return
+	}
+	period := time.Minute
+	for {
+		time.Sleep(period)
+		period = internalDataErrorRetryPeriod
+		if common.IsInShutdown() {
+			return
+		}
+		// periodic auto-retry keeps the retry cap so it never hammers a permanently
+		// unfetchable block; an operator can force a reset via the admin page
+		if err := w.RefetchInternalData(false); err != nil {
+			glog.Errorf("InternalDataErrorRetryLoop: %v", err)
+		}
+	}
 }
 
 // RefetchInternalData starts a background pass over the internal data error queue if

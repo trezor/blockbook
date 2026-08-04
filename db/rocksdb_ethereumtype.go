@@ -819,11 +819,10 @@ func addressStringIsZero(parser bchain.BlockChainParser, a string) bool {
 // internalDataAlreadyStored reports whether a transaction's computed internal data
 // needs no (re)storing - either there is nothing to store, or the DB already holds
 // matching data from sync or an earlier reconnect. ReconnectInternalDataToBlockEthereumType
-// skips such transactions so a block reconnected more than once (the healing sweep
-// and the error-queue refetch can both target the same block) does not increment its
-// contract transaction counters twice. The check and the counter-incrementing write
-// share connectBlockMux, so a concurrent reconnect cannot pass this check before this
-// one commits.
+// skips such transactions so that reconnecting the same block more than once does not
+// increment its contract transaction counters twice. The check and the
+// counter-incrementing write share connectBlockMux, so a concurrent reconnect cannot
+// pass this check before this one commits.
 func (d *RocksDB) internalDataAlreadyStored(txid string, computed *bchain.EthereumInternalData) bool {
 	if emptyInternalData(computed) {
 		return true
@@ -835,9 +834,8 @@ func (d *RocksDB) internalDataAlreadyStored(txid string, computed *bchain.Ethere
 // ReconnectInternalDataToBlockEthereumType adds internal data to an already-indexed
 // block whose internal data failed or was skipped during sync, and stores them. It is
 // idempotent: transactions whose stored internal data already match are skipped, so
-// calling it more than once for the same block (the healing sweep and the error-queue
-// refetch may both target it) does not double-count contract transactions. Runs under
-// connectBlockMux.
+// calling it more than once for the same block does not double-count contract
+// transactions. Runs under connectBlockMux.
 func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) error {
 	d.connectBlockMux.Lock()
 	defer d.connectBlockMux.Unlock()
@@ -860,8 +858,7 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 		tx := &block.Txs[txi]
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 		// skip transactions whose internal data are already stored (or empty): this
-		// block may be reconnected more than once - the healing sweep and the
-		// error-queue refetch can both reach it - and reprocessing would count its
+		// block may be reconnected more than once and reprocessing would count its
 		// contract transactions again. The check shares connectBlockMux with the
 		// write below, so a concurrent reconnect cannot race between them.
 		if eid.InternalData == nil || d.internalDataAlreadyStored(tx.Txid, eid.InternalData) {
@@ -1061,54 +1058,6 @@ func (d *RocksDB) GetEthereumInternalData(txid string) (*bchain.EthereumInternal
 		return nil, err
 	}
 	return d.getEthereumInternalData(btxID)
-}
-
-// HasAnyEthereumInternalData reports whether the internal data column family holds
-// at least one row, i.e. whether any synced block was processed with internal data
-// enabled. Empty rows are never stored, so a single existing row is a reliable signal.
-func (d *RocksDB) HasAnyEthereumInternalData() bool {
-	it := d.db.NewIteratorCF(d.ro, d.cfh[cfInternalData])
-	defer it.Close()
-	it.SeekToFirst()
-	return it.Valid()
-}
-
-// ResolveInternalDataFrom initializes the internal-data healing watermark on startup,
-// before the catch-up sync connects new blocks. The watermark is the height down to
-// which the downward healing sweep still has to backfill internal data; the sweep
-// persists it as it progresses, so an already-set watermark means a sweep is in
-// progress (or finished at 0) and is left untouched so it resumes.
-//
-// A watermark is seeded here only on an explicit operator request (the
-// -healinternaldata flag): it is set to bestHeight+1 so the sweep backfills the whole
-// index down to genesis. Seeding at the tip is safe because the sweep skips blocks
-// whose stored internal data already matches, so blocks synced after the flag was
-// enabled cost nothing. Without the flag no watermark is set and no sweep runs; if the
-// index nonetheless looks like it was synced before internal data processing was
-// enabled (blocks present, internal-data column family empty) an advisory is logged
-// pointing at the flag. The advisory never drives healing, so a stale emptiness signal
-// (index already synced past the point internal data was enabled) can at worst omit the
-// hint - it can never mismark a real gap as healed.
-func (d *RocksDB) ResolveInternalDataFrom(healRequested bool) {
-	if _, ok := d.is.GetInternalDataFrom(); ok {
-		return
-	}
-	bestHeight, _, err := d.GetBestBlock()
-	if err != nil {
-		glog.Error("ResolveInternalDataFrom: GetBestBlock: ", err)
-		return
-	}
-	if bestHeight == 0 {
-		return
-	}
-	if healRequested {
-		d.is.SetInternalDataFrom(bestHeight + 1)
-		glog.Infof("ResolveInternalDataFrom: internal data backfill requested, healing from height %d down to genesis", bestHeight)
-		return
-	}
-	if !d.HasAnyEthereumInternalData() {
-		glog.Warningf("ResolveInternalDataFrom: index holds blocks up to height %d but no internal data; run once with -healinternaldata to backfill history", bestHeight)
-	}
 }
 
 func (d *RocksDB) getEthereumInternalData(btxID []byte) (*bchain.EthereumInternalData, error) {

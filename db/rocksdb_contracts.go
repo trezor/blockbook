@@ -188,14 +188,12 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 	return nil
 }
 
-// BackfillContractInfo merges the contract lifecycle fields discovered by the
-// internal-data healing sweep (CreatedInBlock, DestructedInBlock) into the stored
-// contract row without discarding enrichment (name, symbol, standard, decimals) that
-// was fetched on demand after sync. Unlike StoreContractInfo it records a destruction
-// even when the creation has not been reindexed yet: the sweep runs downward and
-// reaches a contract's destruction before its creation, so it writes a row carrying
-// only DestructedInBlock and fills CreatedInBlock in when the earlier (lower) creation
-// block is later swept.
+// BackfillContractInfo merges the contract lifecycle fields discovered when a block's
+// internal data is healed (CreatedInBlock, DestructedInBlock) into the stored contract
+// row without discarding enrichment (name, symbol, standard, decimals) that was fetched
+// on demand after sync. Unlike StoreContractInfo it records a destruction even when the
+// creation was never indexed, writing a row carrying only DestructedInBlock and filling
+// CreatedInBlock in if the creation block is healed later.
 func (d *RocksDB) BackfillContractInfo(contractInfo *bchain.ContractInfo) error {
 	if contractInfo.Contract == "" {
 		return nil

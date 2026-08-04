@@ -97,13 +97,6 @@ type InternalState struct {
 	UtxoChecked            bool `json:"utxoChecked" ts_doc:"Indicates if UTXO consistency checks have been performed."`
 	SortedAddressContracts bool `json:"sortedAddressContracts" ts_doc:"Indicates if address/contract sorting has been completed."`
 
-	// InternalDataFrom is the height from which the index is known to hold internal
-	// data (Ethereum-type chains with processInternalTransactions only). Blocks below
-	// it were synced before internal data processing was enabled; the healing routine
-	// backfills them from the backend and moves the watermark down until it reaches 0.
-	// nil = not yet resolved (legacy database, resolved on startup).
-	InternalDataFrom *uint32 `json:"internalDataFrom,omitempty" ts_doc:"Height from which the index holds internal data; blocks below are being healed."`
-
 	// golomb filter settings
 	BlockGolombFilterP      uint8  `json:"block_golomb_filter_p" ts_doc:"Parameter P for building Golomb-Rice filters for blocks."`
 	BlockFilterScripts      string `json:"block_filter_scripts" ts_doc:"Scripts included in block filters (e.g., 'p2pkh,p2sh')."`
@@ -236,24 +229,6 @@ func (is *InternalState) GetSyncState() (bool, uint32, time.Time, time.Time) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	return is.IsSynchronized, is.BestHeight, is.LastSync, is.StartSync
-}
-
-// GetInternalDataFrom returns the internal-data watermark and whether it was resolved
-func (is *InternalState) GetInternalDataFrom() (uint32, bool) {
-	is.mux.Lock()
-	defer is.mux.Unlock()
-	if is.InternalDataFrom == nil {
-		return 0, false
-	}
-	return *is.InternalDataFrom, true
-}
-
-// SetInternalDataFrom sets the internal-data watermark; it is persisted with the
-// periodic internal state store
-func (is *InternalState) SetInternalDataFrom(height uint32) {
-	is.mux.Lock()
-	defer is.mux.Unlock()
-	is.InternalDataFrom = &height
 }
 
 // StartedMempoolSync signals start of mempool synchronization
