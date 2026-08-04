@@ -16,8 +16,9 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// tronMulticall3Address is a sample non-canonical address for exercising Multicall3AddressOverride.
-const tronMulticall3Address = "0x32a4f47a74a6810bd0bf861cabab99656a75de9e"
+// testMulticall3OverrideAddress is an arbitrary non-canonical address exercising the
+// Multicall3AddressOverride mechanism; it deliberately matches no real deployment.
+const testMulticall3OverrideAddress = "0x00000000000000000000000000000000000000fe"
 
 // padHex32 left-pads `s` (a hex string without 0x) with zeros to 64 chars (32 bytes).
 func padHex32(s string) string {
@@ -349,9 +350,9 @@ func TestMulticall3ContractAddress(t *testing.T) {
 		t.Fatalf("no override: got %s, want canonical %s", got, multicall3Address)
 	}
 	// override wins
-	rpc := &EthereumRPC{Multicall3AddressOverride: tronMulticall3Address}
-	if got := rpc.multicall3ContractAddress(); !strings.EqualFold(got, tronMulticall3Address) {
-		t.Fatalf("override: got %s, want %s", got, tronMulticall3Address)
+	rpc := &EthereumRPC{Multicall3AddressOverride: testMulticall3OverrideAddress}
+	if got := rpc.multicall3ContractAddress(); !strings.EqualFold(got, testMulticall3OverrideAddress) {
+		t.Fatalf("override: got %s, want %s", got, testMulticall3OverrideAddress)
 	}
 }
 
@@ -399,11 +400,11 @@ func (m *mockMulticallTargetRPC) CallContext(ctx context.Context, result interfa
 func TestMulticallAggregate3_UsesConfiguredAddressOverride(t *testing.T) {
 	expected := []bchain.EthereumMulticallResult{{Success: true, Data: "0xdead"}}
 	mock := &mockMulticallTargetRPC{
-		expected: tronMulticall3Address,
+		expected: testMulticall3OverrideAddress,
 		code:     "0x6080",
 		callResp: fixtureAggregate3Result(expected),
 	}
-	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second, Multicall3AddressOverride: tronMulticall3Address}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second, Multicall3AddressOverride: testMulticall3OverrideAddress}
 	got, err := rpc.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
 		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
 	}, nil)
