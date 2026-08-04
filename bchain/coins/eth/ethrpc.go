@@ -223,12 +223,9 @@ type EthereumRPC struct {
 	multicall3Probe         atomic.Int32
 	multicall3ProbeSF       singleflight.Group
 	multicall3ProbeFailures atomic.Int32
-	// Unix nanos until which probing is paused after repeated transient eth_getCode
-	// failures; probing resumes once the deadline passes. See multicall.go.
+	// unix nanos until which probing is paused; see multicall.go
 	multicall3ProbeSuspendedUntil atomic.Int64
-	// erc20 balances multicall breaker: consecutive requests in which aggregate3
-	// resolved nothing, and the unix-nanos deadline until which the multicall
-	// balance path is suspended once the threshold is hit. See contract.go.
+	// erc20 multicall breaker: failure streak and suspension deadline (unix nanos); see contract.go
 	erc20MulticallFailures       atomic.Int32
 	erc20MulticallSuspendedUntil atomic.Int64
 }
@@ -348,8 +345,7 @@ func (b *EthereumRPC) ObserveChainDataFallback(component, reason string) {
 	b.observeChainDataFallback(component, reason, 1)
 }
 
-// observeChainDataFallback adds count to the chain-data fallback metric, so callers can
-// record how many elements took the fallback rather than just that one request did.
+// observeChainDataFallback adds count to the fallback metric (per-element, not just per-request).
 func (b *EthereumRPC) observeChainDataFallback(component, reason string, count int) {
 	if b.metrics == nil || component == "" || reason == "" || count <= 0 {
 		return
@@ -371,9 +367,8 @@ func (b *EthereumRPC) observeEthCallBatch(size int) {
 	b.metrics.EthCallBatchSize.Observe(float64(size))
 }
 
-// observeEthCallMulticallRequest counts one physical aggregate3 eth_call. The mode-labeled
-// request counter reports per-sub-call volume, so this is the only metric from which the
-// backend-request reduction (many sub-calls per one metered eth_call) is visible.
+// observeEthCallMulticallRequest counts one physical aggregate3 eth_call; the mode-labeled
+// counter reports per-sub-call volume.
 func (b *EthereumRPC) observeEthCallMulticallRequest() {
 	if b.metrics == nil {
 		return

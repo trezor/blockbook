@@ -16,8 +16,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// testMulticall3OverrideAddress is an arbitrary non-canonical address exercising the
-// Multicall3AddressOverride mechanism; it deliberately matches no real deployment.
+// testMulticall3OverrideAddress is an arbitrary override address matching no real deployment.
 const testMulticall3OverrideAddress = "0x00000000000000000000000000000000000000fe"
 
 // padHex32 left-pads `s` (a hex string without 0x) with zeros to 64 chars (32 bytes).
@@ -668,10 +667,8 @@ func TestEthereumTypeMulticallAggregate3_TransientProbeError_PropagatesAndIsDist
 	}
 }
 
-// After multicall3MaxProbeFailures consecutive transient probe errors, probing is suspended
-// for multicall3ProbeSuspendInterval instead of latching not-deployed, so a provider that
-// restricts eth_getCode stops paying a probe on every request while a node that is merely
-// down at startup does not lose multicall for the process lifetime.
+// Repeated transient probe errors suspend probing (never latch not-deployed);
+// probing resumes once the window elapses.
 func TestProbeMulticall3_SuspendsAfterRepeatedFailures(t *testing.T) {
 	var failing atomic.Bool
 	failing.Store(true)

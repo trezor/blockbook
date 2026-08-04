@@ -623,10 +623,8 @@ func TestEthereumTypeGetErc20ContractBalancesViaMulticall3(t *testing.T) {
 	}
 }
 
-// mockMulticallThenBatchRPC: probe deployed; the aggregate3 eth_call returns
-// aggregate3Resp when set (a successful batch, possibly with Success=false
-// elements) else aggregate3Err (forcing a whole-chunk fallback). The re-resolve
-// / fallback JSON-RPC batch is served by the embedded mockBatchRPC.
+// mockMulticallThenBatchRPC: probe deployed; aggregate3 returns aggregate3Resp when set, else
+// aggregate3Err. Re-resolve/fallback batch served by the embedded mockBatchRPC.
 type mockMulticallThenBatchRPC struct {
 	*mockBatchRPC
 	aggregate3Err  error
@@ -807,9 +805,8 @@ func TestEthereumTypeGetErc20ContractBalancesReresolvesFailedElement(t *testing.
 	}
 }
 
-// A Success=false element carrying revert returndata (e.g. Solidity Panic) is a genuine revert,
-// never gas starvation, so it stays nil and is NOT re-resolved; only the empty-returndata
-// failure is re-resolved.
+// A Success=false element carrying revert returndata is a genuine revert: it stays nil and is
+// not re-resolved; only empty-returndata failures are.
 func TestEthereumTypeGetErc20ContractBalancesGenuineRevertNotReresolved(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
@@ -853,9 +850,8 @@ func TestEthereumTypeGetErc20ContractBalancesGenuineRevertNotReresolved(t *testi
 	}
 }
 
-// mockMulticallNoBatchRPC answers the probe (deployed), one aggregate3 eth_call and plain single
-// balanceOf eth_calls (from callResults/callErrors, keyed by target contract), but does NOT
-// implement batchCaller, so re-resolve holes can only be settled with individual calls.
+// mockMulticallNoBatchRPC: probe deployed; serves one aggregate3 response and single eth_calls
+// (callResults/callErrors by target contract); implements no batchCaller.
 type mockMulticallNoBatchRPC struct {
 	aggregate3Resp string
 	callResults    map[string]string
@@ -899,9 +895,8 @@ func (m *mockMulticallNoBatchRPC) CallContext(ctx context.Context, result interf
 	}
 }
 
-// Without a batcher, a potentially gas-starved (empty-returndata) Success=false element is
-// settled with an individual eth_call — single calls need no batcher — instead of being
-// silently reported as an authoritative nil.
+// Without a batcher, an empty-returndata Success=false element is settled with an individual
+// eth_call instead of being reported as an authoritative nil.
 func TestEthereumTypeGetErc20ContractBalancesEmptyRevertWithoutBatcherRecoveredViaSingleCall(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
@@ -941,8 +936,7 @@ func TestEthereumTypeGetErc20ContractBalancesEmptyRevertWithoutBatcherRecoveredV
 	}
 }
 
-// Companion: when the individual re-resolve call itself errors, the element stays nil — the same
-// exhaustion behavior as the batch path's single-call fallback — and the rest is kept.
+// If the single re-resolve call errors too, the element stays nil and the rest is kept.
 func TestEthereumTypeGetErc20ContractBalancesEmptyRevertWithoutBatcherSingleCallErrorStaysNil(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
@@ -974,9 +968,8 @@ func TestEthereumTypeGetErc20ContractBalancesEmptyRevertWithoutBatcherSingleCall
 	}
 }
 
-// mockMulticallChunkFailRPC: probe deployed; the first failAfter aggregate3 eth_calls succeed with
-// one Success=true result per sub-call, and every later one fails. The fallback JSON-RPC batch is
-// served by the embedded mockBatchRPC.
+// mockMulticallChunkFailRPC: probe deployed; the first failAfter aggregate3 calls succeed,
+// later ones fail. Fallback batch served by the embedded mockBatchRPC.
 type mockMulticallChunkFailRPC struct {
 	*mockBatchRPC
 	failAfter int
@@ -1021,9 +1014,7 @@ func (m *mockMulticallChunkFailRPC) CallContext(ctx context.Context, result inte
 	}
 }
 
-// One failed aggregate3 chunk must not discard the chunks that succeeded: only the failed chunk's
-// contracts go to the JSON-RPC batch fallback, never the whole list (which would cost more metered
-// calls than never using multicall at all).
+// Only the failed chunk's contracts fall back to the batch; successful chunks keep their balances.
 func TestEthereumTypeGetErc20ContractBalancesPartialChunkFailureFallsBackForThatChunkOnly(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	n := multicall3MaxCallsPerAggregate + 20 // chunk 1 = 100 contracts, chunk 2 = 20
@@ -1034,8 +1025,7 @@ func TestEthereumTypeGetErc20ContractBalancesPartialChunkFailureFallsBackForThat
 		a[18] = byte(((i + 1) >> 8) & 0xff)
 		contracts[i] = bchain.AddressDescriptor(a.Bytes())
 	}
-	// Only the second chunk's contracts are resolvable via the batch, so a whole-list fallback
-	// would leave the first chunk nil instead of keeping its aggregate3 balances.
+	// only the failed chunk is resolvable via batch: a whole-list fallback would show as nils
 	inner := &mockBatchRPC{results: map[string]string{}}
 	for _, c := range contracts[multicall3MaxCallsPerAggregate:] {
 		inner.results[hexutil.Encode(c)] = fmt.Sprintf("0x%064x", 5)
@@ -1115,11 +1105,9 @@ func TestEthereumTypeGetErc20ContractBalancesSystemicChunkFailureStopsAtFirstChu
 	}
 }
 
-// mockMulticallMixedRPC: probe deployed. aggregate3 calls are served in input order from a running
-// offset, each element carrying a value derived from its global index so a mis-mapped write-back
-// shows up as a wrong balance. The element at holeAt comes back Success=false with empty returndata
-// (a reresolve candidate) and the chunk starting at failFrom fails outright, so one request yields
-// both a reresolve and an unresolved index set. The fallback batch is served by mockBatchRPC.
+// mockMulticallMixedRPC: probe deployed; aggregate3 answers carry per-global-index values (a
+// mis-mapped write-back shows as a wrong balance), holeAt returns Success=false with empty
+// returndata, and the chunk from failFrom on fails. Fallback batch served by mockBatchRPC.
 type mockMulticallMixedRPC struct {
 	*mockBatchRPC
 	holeAt   int
@@ -1261,9 +1249,8 @@ func (m *mockMulticallNoBatchChunkFailRPC) CallContext(ctx context.Context, resu
 	}
 }
 
-// A failed chunk with no batcher to fill the holes must surface an error so the caller falls back
-// to single calls. Returning the partial result would report unknown balances as nil, and callers
-// treat a present entry as authoritative.
+// A failed chunk with no batcher must surface an error: callers treat a present entry as
+// authoritative, so unknown balances must not be returned as nil.
 func TestEthereumTypeGetErc20ContractBalancesChunkFailureWithoutBatcherErrors(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	n := multicall3MaxCallsPerAggregate + 20 // chunk 1 succeeds, chunk 2 fails
@@ -1282,10 +1269,8 @@ func TestEthereumTypeGetErc20ContractBalancesChunkFailureWithoutBatcherErrors(t 
 	}
 }
 
-// A malformed (non-20-byte) contract descriptor must not poison aggregate3 for the whole request:
-// it is excluded up front and stays nil (as in the batch path, where a bogus `to` yields an
-// element error and thus nil), while the valid contracts resolve in one aggregate3 call with no
-// batch fallback.
+// A malformed descriptor is excluded up front and stays nil (as in the batch path); the valid
+// contracts still resolve in one aggregate3 call with no batch fallback.
 func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
@@ -1332,8 +1317,7 @@ func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *test
 	if balances[2] == nil || balances[2].Cmp(big.NewInt(200)) != 0 {
 		t.Fatalf("balance[2]=%v, want 200 (second valid contract)", balances[2])
 	}
-	// Exactly one aggregate3 covering only the two valid contracts; no batch fallback (which
-	// would show up as extra eth_calls against this mock).
+	// one aggregate3 covering only the valid contracts; no fallback
 	if len(subCallCounts) != 1 || subCallCounts[0] != 2 {
 		t.Fatalf("expected one aggregate3 with 2 sub-calls (the valid contracts), got %v", subCallCounts)
 	}
@@ -1345,8 +1329,7 @@ func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *test
 
 // --- erc20 multicall circuit breaker ---
 
-// While the breaker is open, no aggregate3 eth_call is issued: the request goes straight to the
-// JSON-RPC batch path.
+// Breaker open: no aggregate3 is issued, the request goes straight to the batch path.
 func TestEthereumTypeGetErc20ContractBalancesSuspendedGoesStraightToBatch(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contracts := erc20TestContracts(3)
@@ -1374,8 +1357,7 @@ func TestEthereumTypeGetErc20ContractBalancesSuspendedGoesStraightToBatch(t *tes
 	}
 }
 
-// After erc20MulticallMaxConsecutiveFailures requests in which aggregate3 resolved nothing, the
-// suspension deadline is set (counter reset) and the next request issues no aggregate3 call.
+// Enough nothing-resolved requests set the suspension deadline; the next request skips aggregate3.
 func TestEthereumTypeGetErc20ContractBalancesBreakerSuspendsAfterConsecutiveFailures(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contracts := erc20TestContracts(3)
@@ -1409,8 +1391,7 @@ func TestEthereumTypeGetErc20ContractBalancesBreakerSuspendsAfterConsecutiveFail
 	}
 }
 
-// A request in which aggregate3 resolves anything closes the breaker again: the consecutive
-// failure counter goes back to 0.
+// Any resolving request resets the consecutive failure counter.
 func TestEthereumTypeGetErc20ContractBalancesBreakerResetsOnSuccess(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	contracts := erc20TestContracts(2)

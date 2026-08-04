@@ -29,14 +29,11 @@ const (
 	multicall3NotDeployed int32 = 2
 )
 
-// multicall3MaxProbeFailures suspends probing for multicall3ProbeSuspendInterval after this many
-// consecutive transient eth_getCode errors. The batch path still serves balances meanwhile.
+// multicall3MaxProbeFailures is the consecutive transient probe failures before probing pauses.
 const multicall3MaxProbeFailures = 5
 
-// multicall3ProbeSuspendInterval pauses probing after multicall3MaxProbeFailures consecutive
-// transient failures, so a provider that permanently restricts eth_getCode does not cost an
-// extra probe on every balances request, while a node that is merely down (e.g. at startup)
-// does not disable multicall for the process lifetime — probing resumes after the window.
+// multicall3ProbeSuspendInterval is the probing pause: no per-request probes on a restricted
+// provider, yet multicall is never disabled for good.
 const multicall3ProbeSuspendInterval = 10 * time.Minute
 
 // errMulticall3NotDeployed is returned on chains where Multicall3 is not deployed
@@ -73,11 +70,8 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	if err != nil {
 		return nil, fmt.Errorf("multicall3 encode: %w", err)
 	}
-	// Instrument like the JSON-RPC batch path — one request per sub-call read, plus the
-	// coalescing histogram — but under mode="multicall", so per-token read volume and
-	// batch-size percentiles stay continuous when a chain moves batches onto aggregate3.
-	// The physical-request counter records the single metered eth_call carrying them all,
-	// making the sub-calls-per-request reduction visible.
+	// Per-sub-call instrumentation as in the batch path (mode="multicall"), plus one count
+	// of the single metered eth_call carrying the whole batch.
 	b.observeEthCall("multicall", len(calls))
 	b.observeEthCallBatch(len(calls))
 	b.observeEthCallMulticallRequest()
@@ -101,8 +95,7 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 //
 //   - (true, nil)  — deployed; deterministic, cached for the process lifetime.
 //   - (false, nil) — not deployed; deterministic, cached. Also returned while
-//     probing is suspended after multicall3MaxProbeFailures consecutive
-//     transient failures; probing resumes once the suspension window elapses.
+//     probing is suspended after repeated transient failures.
 //   - (false, err) — transient probe failure (RPC down, timeout). NOT cached;
 //     the next call retries. Returned to callers so they can distinguish
 //     "this chain has no Multicall3" from "RPC is having a moment."
@@ -122,8 +115,7 @@ func (b *EthereumRPC) probeMulticall3() (bool, error) {
 		return false, nil
 	}
 
-	// Probing is suspended after repeated transient failures; report unavailable
-	// (not an error) until the window elapses, then the next call retries.
+	// while suspended, report unavailable (not an error); retried after the window
 	if until := b.multicall3ProbeSuspendedUntil.Load(); until != 0 && time.Now().UnixNano() < until {
 		return false, nil
 	}
@@ -142,14 +134,11 @@ func (b *EthereumRPC) probeMulticall3() (bool, error) {
 		defer cancel()
 		// probe the same address aggregate3 will call (override-aware)
 		addr := b.multicall3ContractAddress()
-		// Probe at "latest": deployment is checked once at the chain tip. A caller requesting a
-		// historical block below Multicall3's deployment finds a codeless address there, so
-		// aggregate3 returns "0x" and decodes as an error, safely falling back to the batch path.
+		// Probe at "latest": below the deployment height aggregate3 returns "0x", which
+		// decodes as an error and falls back safely.
 		var code string
 		if err := b.RPC.CallContext(ctx, &code, "eth_getCode", addr, "latest"); err != nil {
-			// Suspend probing after repeated transient failures so a provider that
-			// restricts eth_getCode does not incur an extra probe on every request,
-			// while a temporarily-down node does not disable multicall forever.
+			// repeated failures: pause probing for a while instead of disabling multicall for good
 			if b.multicall3ProbeFailures.Add(1) >= multicall3MaxProbeFailures {
 				glog.Warningf("multicall3 probe at %s failed %d times; suspending probing for %s, using JSON-RPC batch: %v", addr, multicall3MaxProbeFailures, multicall3ProbeSuspendInterval, err)
 				b.multicall3ProbeSuspendedUntil.Store(time.Now().Add(multicall3ProbeSuspendInterval).UnixNano())
@@ -286,10 +275,8 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 		return nil, fmt.Errorf("multicall3 unexpected outer offset: %s", v)
 	}
 	headsStart := 64
-	// Every offset/length word below is bounded by len(raw) before narrowing to int:
-	// anything larger cannot address data inside the response (n elements need n*32
-	// bytes of heads, so len(raw) is a safe coarse bound for the count too), and a
-	// word ≥ 2^63 would wrap negative in int, defeating the later bounds checks.
+	// Every word below is bounded by len(raw) before narrowing to int: a word ≥ 2^63
+	// would wrap negative and defeat the later bounds checks.
 	length := bigUintAt(raw, 32)
 	if !length.IsUint64() || length.Uint64() > uint64(len(raw)) {
 		return nil, fmt.Errorf("multicall3 array length out of range")

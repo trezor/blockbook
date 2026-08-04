@@ -47,10 +47,8 @@ func erc20MulticallFallbackCount(t *testing.T, metrics *common.Metrics, reason s
 	return m.GetCounter().GetValue()
 }
 
-// The elem_fallback counter must cover every contract the fallback batch re-fetched, whichever
-// kind of hole put it there. Counting only reresolve records zero for a chunk-failure fallback,
-// hiding the extra round trip from cost dashboards. The error counter must stay one event per
-// request that abandoned multicall, not one per failing chunk.
+// elem_fallback must count every contract the fallback re-fetched, whichever hole put it
+// there; the error counter stays one event per request, not one per failing chunk.
 func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountEveryContract(t *testing.T) {
 	useTestPrometheusRegistry(t)
 	metrics, err := common.GetMetrics("Erc20MulticallFallbackTest")
@@ -80,8 +78,7 @@ func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountEveryContract(t
 	}
 }
 
-// A systemic aggregate3 failure must emit exactly one request-level fallback event, not one per
-// chunk the loop would otherwise have attempted.
+// A systemic aggregate3 failure emits exactly one request-level fallback event.
 func TestEthereumTypeGetErc20ContractBalancesSystemicFailureEmitsOneFallbackEvent(t *testing.T) {
 	useTestPrometheusRegistry(t)
 	metrics, err := common.GetMetrics("Erc20MulticallSystemicFallbackTest")
