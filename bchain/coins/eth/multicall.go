@@ -94,12 +94,9 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	if err != nil {
 		return nil, err
 	}
-	results, err := decodeAggregate3Result(resp)
+	results, err := decodeAggregate3Result(resp, len(calls))
 	if err != nil {
 		return nil, err
-	}
-	if len(results) != len(calls) {
-		return nil, fmt.Errorf("multicall3 returned %d results for %d calls", len(results), len(calls))
 	}
 	return results, nil
 }
@@ -258,7 +255,10 @@ func encodeAggregate3(calls []bchain.EthereumMulticallCall) (string, error) {
 //	N                                   <- array length
 //	headOff[0..N-1]                     <- offsets to tuples, relative to heads start
 //	tail[0..N-1]                        <- per-tuple (bool, bytes-offset, bytesLen, bytesData)
-func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, error) {
+//
+// expectedCalls is the number of sub-calls sent; a response claiming any other count is
+// rejected before any returndata is materialized.
+func decodeAggregate3Result(data string, expectedCalls int) ([]bchain.EthereumMulticallResult, error) {
 	raw, err := hexToBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("decode hex: %w", err)
@@ -275,17 +275,19 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 	if !ok {
 		return nil, fmt.Errorf("multicall3 array length out of range")
 	}
-	if n == 0 {
-		// Degenerate: encoder short-circuits empty input upstream, so a
-		// well-formed n==0 response can only arise from a malformed batch
-		// or unusual node behavior. nil matches encodeAggregate3's empty
-		// case and the caller's nil-means-no-results contract.
-		return nil, nil
+	// Checked before the tail loop: a response is otherwise free to claim len(raw)/32
+	// elements and have every one of them decode a large tuple.
+	if n != expectedCalls {
+		return nil, fmt.Errorf("multicall3 returned %d results for %d calls", n, expectedCalls)
 	}
 	if len(raw) < headsStart+n*32 {
 		return nil, fmt.Errorf("multicall3 response truncated in heads")
 	}
 
+	// Head offsets may alias, so the per-element bounds below do not limit the total.
+	// A canonical response lays the tuples out disjointly, so their returndata can never
+	// sum past the response itself; that keeps the decode linear in len(raw).
+	decoded := 0
 	results := make([]bchain.EthereumMulticallResult, n)
 	for i := 0; i < n; i++ {
 		offset, ok := wordAsIndex(raw, headsStart+i*32)
@@ -314,6 +316,10 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 		}
 		if len(raw) < bytesPos+32+bl {
 			return nil, fmt.Errorf("multicall3 element %d truncated at bytes data", i)
+		}
+		decoded += bl
+		if decoded > len(raw) {
+			return nil, fmt.Errorf("multicall3 returndata exceeds the response at element %d", i)
 		}
 		results[i].Data = hexutil.Encode(raw[bytesPos+32 : bytesPos+32+bl])
 	}

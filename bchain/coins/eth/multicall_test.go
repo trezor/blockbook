@@ -216,7 +216,7 @@ func TestDecodeAggregate3RoundTripFixture(t *testing.T) {
 		{Success: false, Data: "0x"},
 		{Success: true, Data: "0x" + strings.Repeat("ab", 64)}, // 64 bytes, exactly two padded words
 	}
-	got, err := decodeAggregate3Result(fixtureAggregate3Result(expected))
+	got, err := decodeAggregate3Result(fixtureAggregate3Result(expected), len(expected))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -235,22 +235,38 @@ func TestDecodeAggregate3RoundTripFixture(t *testing.T) {
 
 func TestDecodeAggregate3Rejects(t *testing.T) {
 	cases := []struct {
-		name string
-		hex  string
+		name  string
+		hex   string
+		calls int // sub-calls the request carried, so each case reaches its own guard
 	}{
-		{"empty", "0x"},
-		{"too short for header", "0x" + padHex32("20")},
-		{"bad outer offset", "0x" + padHex32("21") + padHex32("0")},
-		{"truncated heads", "0x" + padHex32("20") + padHex32("2") + padHex32("40")}, // declares 2 elements but only 1 head word
+		{"empty", "0x", 1},
+		{"too short for header", "0x" + padHex32("20"), 1},
+		{"bad outer offset", "0x" + padHex32("21") + padHex32("0"), 1},
+		{"truncated heads", "0x" + padHex32("20") + padHex32("2") + padHex32("40"), 2}, // declares 2 elements but only 1 head word
 		// Words ≥ 2^63 wrap negative when narrowed to int; each must be rejected, never sliced with.
-		{"array length 2^63", "0x" + padHex32("20") + padHex32("8000000000000000")},
-		{"head offset 2^63", "0x" + padHex32("20") + padHex32("1") + padHex32("8000000000000000")},
+		{"array length 2^63", "0x" + padHex32("20") + padHex32("8000000000000000"), 1},
+		{"head offset 2^63", "0x" + padHex32("20") + padHex32("1") + padHex32("8000000000000000"), 1},
 		{"bytes length 2^64-1", "0x" + padHex32("20") + padHex32("1") + padHex32("20") + // 1 element at heads+0x20
-			padHex32("1") + padHex32("40") + padHex32("ffffffffffffffff")}, // bool, bytes offset, absurd bytes length
+			padHex32("1") + padHex32("40") + padHex32("ffffffffffffffff"), 1}, // bool, bytes offset, absurd bytes length
+		// A count other than the one we sent must be refused before any returndata is built,
+		// or the response alone decides how many elements to allocate.
+		{"more results than calls", fixtureAggregate3Result([]bchain.EthereumMulticallResult{
+			{Success: true, Data: "0x01"}, {Success: true, Data: "0x02"},
+		}), 1},
+		{"fewer results than calls", fixtureAggregate3Result([]bchain.EthereumMulticallResult{
+			{Success: true, Data: "0x01"},
+		}), 2},
+		{"empty array for a non-empty request", "0x" + padHex32("20") + padHex32("0"), 1},
+		// Two heads aliasing one 256-byte tuple: each element passes its own bounds check
+		// (data ends exactly at the response end) but together they decode 512 of 480 bytes.
+		// Left unbounded, N aliased heads amplify one response into N copies of the tuple.
+		{"aliased heads exceed the response", "0x" +
+			padHex32("20") + padHex32("2") + padHex32("40") + padHex32("40") +
+			padHex32("1") + padHex32("40") + padHex32("100") + strings.Repeat("00", 256), 2},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := decodeAggregate3Result(tc.hex); err == nil {
+			if _, err := decodeAggregate3Result(tc.hex, tc.calls); err == nil {
 				t.Fatalf("expected error for %q", tc.name)
 			}
 		})
