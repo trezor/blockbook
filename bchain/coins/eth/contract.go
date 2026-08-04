@@ -673,9 +673,6 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 			}
 		}
 		results, err := b.EthereumTypeMulticallAggregate3(calls, blockNumber)
-		if err == nil && len(results) != len(calls) {
-			err = errors.Errorf("got %d results, want %d", len(results), len(calls))
-		}
 		if err != nil {
 			// A chunk failure is usually systemic (eth_call gas cap, decode, transport), so stop
 			// at the first one instead of paying a doomed aggregate3 for every chunk left: mark

@@ -77,7 +77,14 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 		b.observeEthCallError("multicall", "rpc")
 		return nil, err
 	}
-	return decodeAggregate3Result(resp)
+	results, err := decodeAggregate3Result(resp)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) != len(calls) {
+		return nil, fmt.Errorf("multicall3 returned %d results for %d calls", len(results), len(calls))
+	}
+	return results, nil
 }
 
 // probeMulticall3 reports whether Multicall3 is deployed at the probed address
