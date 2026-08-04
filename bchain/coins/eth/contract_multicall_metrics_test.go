@@ -47,11 +47,44 @@ func erc20MulticallFallbackCount(t *testing.T, metrics *common.Metrics, reason s
 	return m.GetCounter().GetValue()
 }
 
-// elem_fallback must count every contract the fallback re-fetched, whichever hole put it
-// there; the error counter stays one event per request, not one per failing chunk.
-func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountEveryContract(t *testing.T) {
+// elem_fallback counts the elements aggregate3 could not settle, not the requests that hit
+// one: two holes in a single request must move the counter by two.
+func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountElements(t *testing.T) {
 	useTestPrometheusRegistry(t)
 	metrics, err := common.GetMetrics("Erc20MulticallFallbackTest")
+	if err != nil {
+		t.Fatalf("metrics: %v", err)
+	}
+	addr := ethcommon.HexToAddress("0x0000000000000000000000000000000000000011")
+	contracts := erc20TestContracts(3)
+	// A resolves; B and C come back Success=false with empty returndata (possibly gas-starved).
+	agg := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
+		{Success: true, Data: fmt.Sprintf("0x%064x", erc20MulticallTestValue(0))},
+		{Success: false, Data: "0x"},
+		{Success: false, Data: "0x"},
+	})
+	inner := &mockBatchRPC{results: map[string]string{
+		hexutil.Encode(contracts[1]): fmt.Sprintf("0x%064x", erc20BatchTestValue(1)),
+		hexutil.Encode(contracts[2]): fmt.Sprintf("0x%064x", erc20BatchTestValue(2)),
+	}}
+	mock := &mockMulticallThenBatchRPC{mockBatchRPC: inner, aggregate3Resp: agg}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second, metrics: metrics}
+	if _, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := erc20MulticallFallbackCount(t, metrics, "elem_fallback"); got != 2 {
+		t.Fatalf("elem_fallback = %v, want 2 (one per unsettled element, not one per request)", got)
+	}
+	if got := erc20MulticallFallbackCount(t, metrics, "error"); got != 0 {
+		t.Fatalf("error fallback = %v, want 0 (aggregate3 itself did not fail)", got)
+	}
+}
+
+// A failing chunk is one request-level "error" event; only element-level holes reach
+// elem_fallback, so the two reasons never count the same failure twice.
+func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsSeparateChunkErrorsFromHoles(t *testing.T) {
+	useTestPrometheusRegistry(t)
+	metrics, err := common.GetMetrics("Erc20MulticallMixedFallbackTest")
 	if err != nil {
 		t.Fatalf("metrics: %v", err)
 	}
@@ -70,8 +103,8 @@ func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountEveryContract(t
 	if _, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if want, got := float64(1+n-multicall3MaxCallsPerAggregate), erc20MulticallFallbackCount(t, metrics, "elem_fallback"); got != want {
-		t.Fatalf("elem_fallback = %v, want %v (the reresolve hole plus every contract of the failed chunk)", got, want)
+	if got := erc20MulticallFallbackCount(t, metrics, "elem_fallback"); got != 1 {
+		t.Fatalf("elem_fallback = %v, want 1 (the element hole only; the failed chunk is one error event)", got)
 	}
 	if got := erc20MulticallFallbackCount(t, metrics, "error"); got != 1 {
 		t.Fatalf("error fallback = %v, want 1 per request that abandoned multicall", got)

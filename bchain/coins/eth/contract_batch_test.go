@@ -701,12 +701,12 @@ func TestErc20BalancesMulticall3LengthMismatch(t *testing.T) {
 	}
 	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
 	callData := erc20BalanceOfCallData(bchain.AddressDescriptor(addr.Bytes()))
-	_, _, unresolved := rpcClient.erc20BalancesMulticall3(callData, []bchain.AddressDescriptor{
+	_, holes := rpcClient.erc20BalancesMulticall3(callData, []bchain.AddressDescriptor{
 		bchain.AddressDescriptor(contractA.Bytes()),
 		bchain.AddressDescriptor(contractB.Bytes()),
 	}, nil)
-	if len(unresolved) != 2 || unresolved[0] != 0 || unresolved[1] != 1 {
-		t.Fatalf("expected both elements unresolved on length mismatch, got %v", unresolved)
+	if len(holes) != 2 || holes[0] != 0 || holes[1] != 1 {
+		t.Fatalf("expected both elements unresolved on length mismatch, got %v", holes)
 	}
 }
 
@@ -847,124 +847,6 @@ func TestEthereumTypeGetErc20ContractBalancesGenuineRevertNotReresolved(t *testi
 	// Only B is re-resolved: one batch of size 1, not 2.
 	if len(inner.batchSizes) != 1 || inner.batchSizes[0] != 1 {
 		t.Fatalf("expected one re-resolve batch of size 1 (only the empty-revert element), got %v", inner.batchSizes)
-	}
-}
-
-// mockMulticallNoBatchRPC: probe deployed; serves one aggregate3 response and single eth_calls
-// (callResults/callErrors by target contract); implements no batchCaller.
-type mockMulticallNoBatchRPC struct {
-	aggregate3Resp string
-	callResults    map[string]string
-	callErrors     map[string]error
-	singleCalls    []rpcCall
-}
-
-func (m *mockMulticallNoBatchRPC) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
-	return nil, errors.New("not implemented")
-}
-func (m *mockMulticallNoBatchRPC) Close() {}
-func (m *mockMulticallNoBatchRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	out, ok := result.(*string)
-	if !ok {
-		return errors.New("bad result type")
-	}
-	switch method {
-	case "eth_getCode":
-		*out = "0x6080" // deployed
-		return nil
-	case "eth_call":
-		argMap, _ := args[0].(map[string]interface{})
-		to, _ := argMap["to"].(string)
-		if strings.EqualFold(to, multicall3Address) {
-			*out = m.aggregate3Resp
-			return nil
-		}
-		data, _ := argMap["data"].(string)
-		m.singleCalls = append(m.singleCalls, rpcCall{to: to, data: data})
-		if err, ok := m.callErrors[to]; ok {
-			return err
-		}
-		res, ok := m.callResults[to]
-		if !ok {
-			return fmt.Errorf("unexpected single eth_call to %s (no batcher available)", to)
-		}
-		*out = res
-		return nil
-	default:
-		return errors.New("unexpected method")
-	}
-}
-
-// Without a batcher, an empty-returndata Success=false element is settled with an individual
-// eth_call instead of being reported as an authoritative nil.
-func TestEthereumTypeGetErc20ContractBalancesEmptyRevertWithoutBatcherRecoveredViaSingleCall(t *testing.T) {
-	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
-	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
-	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
-	contractBKey := hexutil.Encode(contractB.Bytes())
-	agg := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
-		{Success: true, Data: fmt.Sprintf("0x%064x", 50)},
-		{Success: false, Data: "0x"},
-	})
-	mock := &mockMulticallNoBatchRPC{
-		aggregate3Resp: agg,
-		callResults:    map[string]string{contractBKey: fmt.Sprintf("0x%064x", 77)},
-	}
-	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
-	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(
-		bchain.AddressDescriptor(addr.Bytes()),
-		[]bchain.AddressDescriptor{
-			bchain.AddressDescriptor(contractA.Bytes()),
-			bchain.AddressDescriptor(contractB.Bytes()),
-		},
-	)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if balances[0] == nil || balances[0].Cmp(big.NewInt(50)) != 0 {
-		t.Fatalf("balance[0]=%v, want 50", balances[0])
-	}
-	if balances[1] == nil || balances[1].Cmp(big.NewInt(77)) != 0 {
-		t.Fatalf("balance[1]=%v, want 77 (recovered via single eth_call without a batcher)", balances[1])
-	}
-	// Only the empty-revert element is re-resolved, with the balanceOf calldata.
-	if len(mock.singleCalls) != 1 || mock.singleCalls[0].to != contractBKey {
-		t.Fatalf("expected 1 single re-resolve call to %s, got %+v", contractBKey, mock.singleCalls)
-	}
-	if callData := erc20BalanceOfCallData(bchain.AddressDescriptor(addr.Bytes())); mock.singleCalls[0].data != callData {
-		t.Fatalf("expected single call data %q, got %q", callData, mock.singleCalls[0].data)
-	}
-}
-
-// If the single re-resolve call errors too, the element stays nil and the rest is kept.
-func TestEthereumTypeGetErc20ContractBalancesEmptyRevertWithoutBatcherSingleCallErrorStaysNil(t *testing.T) {
-	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
-	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
-	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
-	agg := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
-		{Success: true, Data: fmt.Sprintf("0x%064x", 50)},
-		{Success: false, Data: "0x"},
-	})
-	mock := &mockMulticallNoBatchRPC{
-		aggregate3Resp: agg,
-		callErrors:     map[string]error{hexutil.Encode(contractB.Bytes()): errors.New("still broken")},
-	}
-	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
-	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(
-		bchain.AddressDescriptor(addr.Bytes()),
-		[]bchain.AddressDescriptor{
-			bchain.AddressDescriptor(contractA.Bytes()),
-			bchain.AddressDescriptor(contractB.Bytes()),
-		},
-	)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if balances[0] == nil || balances[0].Cmp(big.NewInt(50)) != 0 {
-		t.Fatalf("balance[0]=%v, want 50", balances[0])
-	}
-	if balances[1] != nil {
-		t.Fatalf("balance[1]=%v, want nil (single re-resolve call failed)", balances[1])
 	}
 }
 
@@ -1157,9 +1039,9 @@ func (m *mockMulticallMixedRPC) CallContext(ctx context.Context, result interfac
 	}
 }
 
-// A request carrying both a reresolve hole and a failed chunk must merge the two index sets into
-// one fallback batch and write every result back to its own contract.
-func TestEthereumTypeGetErc20ContractBalancesMixedReresolveAndUnresolved(t *testing.T) {
+// A request carrying both an empty-revert hole and a failed chunk must settle both in one
+// fallback batch and write every result back to its own contract.
+func TestEthereumTypeGetErc20ContractBalancesMixedHolesSettledInOneBatch(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	n := multicall3MaxCallsPerAggregate + 20 // chunk 1 succeeds with a hole, chunk 2 fails
 	holeAt := 3
@@ -1191,81 +1073,12 @@ func TestEthereumTypeGetErc20ContractBalancesMixedReresolveAndUnresolved(t *test
 			t.Fatalf("balance[%d]=%v, want %d from the %s", i, balances[i], want, source)
 		}
 	}
-	// One batch covering the reresolve hole plus the failed chunk, nothing else.
+	// One batch covering the empty-revert hole plus the failed chunk, nothing else.
 	if want := 1 + n - multicall3MaxCallsPerAggregate; len(inner.batchSizes) != 1 || inner.batchSizes[0] != want {
 		t.Fatalf("expected one fallback batch of %d (hole + failed chunk), got %v", want, inner.batchSizes)
 	}
 	if mock.ethCalls != 2 {
 		t.Fatalf("expected 2 aggregate3 calls, got %d", mock.ethCalls)
-	}
-}
-
-// mockMulticallNoBatchChunkFailRPC: probe deployed, the first aggregate3 chunk succeeds and the
-// next fails, and the client does NOT implement batchCaller, so unresolved holes cannot be filled.
-type mockMulticallNoBatchChunkFailRPC struct {
-	offset   int
-	failFrom int
-	ethCalls int
-}
-
-func (m *mockMulticallNoBatchChunkFailRPC) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
-	return nil, errors.New("not implemented")
-}
-func (m *mockMulticallNoBatchChunkFailRPC) Close() {}
-func (m *mockMulticallNoBatchChunkFailRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	out, ok := result.(*string)
-	if !ok {
-		return errors.New("bad result type")
-	}
-	switch method {
-	case "eth_getCode":
-		*out = "0x6080" // deployed
-		return nil
-	case "eth_call":
-		argMap, _ := args[0].(map[string]interface{})
-		to, _ := argMap["to"].(string)
-		if !strings.EqualFold(to, multicall3Address) {
-			return fmt.Errorf("unexpected single eth_call to %s (no batcher available)", to)
-		}
-		m.ethCalls++
-		if m.offset >= m.failFrom {
-			return errors.New("aggregate3 chunk out of gas")
-		}
-		data, _ := argMap["data"].(string)
-		raw, err := hexutil.Decode(data)
-		if err != nil {
-			return err
-		}
-		cnt := int(bigUintAt(raw, 4+evmWordBytes).Uint64())
-		res := make([]bchain.EthereumMulticallResult, cnt)
-		for i := range res {
-			res[i] = bchain.EthereumMulticallResult{Success: true, Data: fmt.Sprintf("0x%064x", erc20MulticallTestValue(m.offset+i))}
-		}
-		m.offset += cnt
-		*out = fixtureAggregate3Result(res)
-		return nil
-	default:
-		return errors.New("unexpected method")
-	}
-}
-
-// A failed chunk with no batcher must surface an error: callers treat a present entry as
-// authoritative, so unknown balances must not be returned as nil.
-func TestEthereumTypeGetErc20ContractBalancesChunkFailureWithoutBatcherErrors(t *testing.T) {
-	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
-	n := multicall3MaxCallsPerAggregate + 20 // chunk 1 succeeds, chunk 2 fails
-	contracts := erc20TestContracts(n)
-	mock := &mockMulticallNoBatchChunkFailRPC{failFrom: multicall3MaxCallsPerAggregate}
-	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
-	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
-	if err == nil {
-		t.Fatalf("expected an error so the caller uses single calls, got %d balances", len(balances))
-	}
-	if balances != nil {
-		t.Fatalf("expected nil balances: unknown holes must not be returned as nil entries, got %d", len(balances))
-	}
-	if mock.ethCalls != 2 {
-		t.Fatalf("expected 2 aggregate3 calls (second fails), got %d", mock.ethCalls)
 	}
 }
 
@@ -1324,93 +1137,5 @@ func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *test
 	ethCall, _ := mock.callCounts()
 	if ethCall != 1 {
 		t.Fatalf("expected 1 aggregate3 eth_call and no fallback, got %d", ethCall)
-	}
-}
-
-// --- erc20 multicall circuit breaker ---
-
-// Breaker open: no aggregate3 is issued, the request goes straight to the batch path.
-func TestEthereumTypeGetErc20ContractBalancesSuspendedGoesStraightToBatch(t *testing.T) {
-	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
-	contracts := erc20TestContracts(3)
-	inner := &mockBatchRPC{results: map[string]string{}}
-	for i, c := range contracts {
-		inner.results[hexutil.Encode(c)] = fmt.Sprintf("0x%064x", erc20BatchTestValue(i))
-	}
-	mock := &mockMulticallChunkFailRPC{mockBatchRPC: inner, failAfter: 0}
-	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
-	rpcClient.erc20MulticallSuspendedUntil.Store(time.Now().Add(time.Hour).UnixNano())
-	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	for i := range contracts {
-		if balances[i] == nil || balances[i].Cmp(big.NewInt(erc20BatchTestValue(i))) != 0 {
-			t.Fatalf("balance[%d]=%v, want %d from the batch path", i, balances[i], erc20BatchTestValue(i))
-		}
-	}
-	if mock.ethCalls != 0 {
-		t.Fatalf("expected 0 aggregate3 calls while suspended, got %d", mock.ethCalls)
-	}
-	if len(inner.batchSizes) != 1 {
-		t.Fatalf("expected one JSON-RPC batch, got %v", inner.batchSizes)
-	}
-}
-
-// Enough nothing-resolved requests set the suspension deadline; the next request skips aggregate3.
-func TestEthereumTypeGetErc20ContractBalancesBreakerSuspendsAfterConsecutiveFailures(t *testing.T) {
-	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
-	contracts := erc20TestContracts(3)
-	inner := &mockBatchRPC{results: map[string]string{}}
-	for i, c := range contracts {
-		inner.results[hexutil.Encode(c)] = fmt.Sprintf("0x%064x", erc20BatchTestValue(i))
-	}
-	// failAfter 0: every aggregate3 call fails, as on a chain whose eth_call gas cap is too low.
-	mock := &mockMulticallChunkFailRPC{mockBatchRPC: inner, failAfter: 0}
-	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
-	for r := 0; r < erc20MulticallMaxConsecutiveFailures; r++ {
-		if _, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts); err != nil {
-			t.Fatalf("request %d: unexpected error: %v", r, err)
-		}
-	}
-	if mock.ethCalls != erc20MulticallMaxConsecutiveFailures {
-		t.Fatalf("expected %d doomed aggregate3 calls (one per request), got %d", erc20MulticallMaxConsecutiveFailures, mock.ethCalls)
-	}
-	if until := rpcClient.erc20MulticallSuspendedUntil.Load(); until == 0 || until <= time.Now().UnixNano() {
-		t.Fatalf("expected a suspension deadline in the future, got %d", until)
-	}
-	if got := rpcClient.erc20MulticallFailures.Load(); got != 0 {
-		t.Fatalf("expected failure counter reset to 0 on suspension, got %d", got)
-	}
-	// The next request must not pay another doomed aggregate3.
-	if _, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts); err != nil {
-		t.Fatalf("suspended request: unexpected error: %v", err)
-	}
-	if mock.ethCalls != erc20MulticallMaxConsecutiveFailures {
-		t.Fatalf("expected no aggregate3 call while suspended, got %d total", mock.ethCalls)
-	}
-}
-
-// Any resolving request resets the consecutive failure counter.
-func TestEthereumTypeGetErc20ContractBalancesBreakerResetsOnSuccess(t *testing.T) {
-	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
-	contracts := erc20TestContracts(2)
-	mock := &mockMulticallChunkFailRPC{mockBatchRPC: &mockBatchRPC{}, failAfter: 1000, value: 9}
-	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
-	rpcClient.erc20MulticallFailures.Store(erc20MulticallMaxConsecutiveFailures - 1)
-	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	for i := range contracts {
-		if balances[i] == nil || balances[i].Cmp(big.NewInt(9)) != 0 {
-			t.Fatalf("balance[%d]=%v, want 9 from aggregate3", i, balances[i])
-		}
-	}
-	if got := rpcClient.erc20MulticallFailures.Load(); got != 0 {
-		t.Fatalf("expected failure counter reset to 0 after a resolving request, got %d", got)
-	}
-	if until := rpcClient.erc20MulticallSuspendedUntil.Load(); until != 0 {
-		t.Fatalf("expected no suspension deadline, got %d", until)
 	}
 }
