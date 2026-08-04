@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
@@ -135,23 +134,12 @@ func internalDataRefetchStopping() bool {
 
 const maxNumberOfRetires = 25
 
-// storeBlockInternalDataError enqueues a block for retry, or updates its retry count.
-func (w *Worker) storeBlockInternalDataError(hash string, height uint32, message string, retries uint8) {
-	wb := grocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	if err := w.db.StoreBlockInternalDataErrorEthereumType(wb, &bchain.Block{
-		BlockHeader: bchain.BlockHeader{Hash: hash, Height: height},
-	}, message, retries); err != nil {
-		glog.Errorf("StoreBlockInternalDataErrorEthereumType %d %s, error %v", height, hash, err)
-		return
+// incrementRefetchInternalDataRetryCount charges the block one retry and records the
+// failure that caused it. The update is dropped if the queue no longer holds this block.
+func (w *Worker) incrementRefetchInternalDataRetryCount(ie *db.BlockInternalDataError, message string) {
+	if err := w.db.UpdateBlockInternalDataErrorEthereumType(ie.Height, ie.Hash, message, ie.Retries+1); err != nil {
+		glog.Errorf("UpdateBlockInternalDataErrorEthereumType %d %s, error %v", ie.Height, ie.Hash, err)
 	}
-	if err := w.db.WriteBatch(wb); err != nil {
-		glog.Errorf("WriteBatch internal data error %d %s, error %v", height, hash, err)
-	}
-}
-
-func (w *Worker) incrementRefetchInternalDataRetryCount(ie *db.BlockInternalDataError) {
-	w.storeBlockInternalDataError(ie.Hash, ie.Height, ie.ErrorMessage, ie.Retries+1)
 }
 
 func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
@@ -201,14 +189,14 @@ func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
 			// error here (transport, eth_getLogs) is backend-wide and usually transient,
 			// and must not spend the budget of every queued block during an outage.
 			if errors.Is(err, bchain.ErrBlockNotFound) {
-				w.incrementRefetchInternalDataRetryCount(ie)
+				w.incrementRefetchInternalDataRetryCount(ie, err.Error())
 			}
 			continue
 		}
 		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
 		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
 			glog.Errorf("Refetching internal data for %d %s, internal data error %v", ie.Height, ie.Hash, blockSpecificData.InternalDataError)
-			w.incrementRefetchInternalDataRetryCount(ie)
+			w.incrementRefetchInternalDataRetryCount(ie, blockSpecificData.InternalDataError)
 		} else if err = w.db.ReconnectInternalDataToBlockEthereumType(block); err != nil {
 			// a reconnect failure is local - rocksdb or the disk - rather than a property
 			// of the block, so retrying it is right and it does not consume the budget

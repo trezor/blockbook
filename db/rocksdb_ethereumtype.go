@@ -1136,6 +1136,42 @@ func (d *RocksDB) StoreBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatc
 	return nil
 }
 
+// UpdateBlockInternalDataErrorEthereumType rewrites the queued error of the block at
+// height with a new retry count and message, but only while the queue still holds an
+// entry for hash. A healing pass works from a snapshot of the queue taken before it
+// started, so by the time it reports a failure the entry may have been removed by a
+// rollback or replaced by a different block at the same height; a plain put would
+// resurrect or overwrite it. Runs under connectBlockMux, like every other writer of the
+// column family.
+func (d *RocksDB) UpdateBlockInternalDataErrorEthereumType(height uint32, hash string, message string, retryCount uint8) error {
+	if hash == "" {
+		return nil
+	}
+	d.connectBlockMux.Lock()
+	defer d.connectBlockMux.Unlock()
+	val, err := d.db.GetCF(d.ro, d.cfh[cfBlockInternalDataErrors], packUint(height))
+	if err != nil {
+		return err
+	}
+	defer val.Free()
+	storedHash, _, _, err := d.unpackBlockInternalDataError(val.Data())
+	if err != nil {
+		return err
+	}
+	if storedHash != hash {
+		glog.Infof("UpdateBlockInternalDataErrorEthereumType %d %s: no longer queued, update skipped", height, hash)
+		return nil
+	}
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.StoreBlockInternalDataErrorEthereumType(wb, &bchain.Block{
+		BlockHeader: bchain.BlockHeader{Hash: hash, Height: height},
+	}, message, retryCount); err != nil {
+		return err
+	}
+	return d.WriteBatch(wb)
+}
+
 type BlockInternalDataError struct {
 	Height       uint32
 	Hash         string
