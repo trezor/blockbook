@@ -1106,8 +1106,12 @@ func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *grocksdb.WriteBatch, bl
 				return err
 			}
 		}
+		// registry events of one block may create and destroy the same
+		// (ephemeral) contract - the in-batch map lets the destruction merge
+		// into the creation written a moment ago
+		inBatch := make(map[string]*bchain.ContractInfo)
 		for i := range blockSpecificData.Contracts {
-			if err := d.storeContractInfo(wb, &blockSpecificData.Contracts[i]); err != nil {
+			if err := d.storeContractInfo(wb, &blockSpecificData.Contracts[i], inBatch); err != nil {
 				return err
 			}
 		}
@@ -1308,7 +1312,42 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 	return nil
 }
 
-func (d *RocksDB) disconnectInternalData(btxID []byte, addresses map[string]map[string]struct{}, contracts map[string]*unpackedAddrContracts) error {
+// rollbackContractRegistryRow reverts the cfContracts row of a contract whose
+// creation or destruction happened in the disconnected block. rollback carries
+// the pending row states of the whole disconnected range (nil = delete row), so
+// a destruction reset in a later block composes with the creation removal in an
+// earlier one.
+func (d *RocksDB) rollbackContractRegistryRow(addrDesc bchain.AddressDescriptor, height uint32, destroyed bool, rollback map[string]*bchain.ContractInfo) error {
+	key := string(addrDesc)
+	ci, pending := rollback[key]
+	if !pending {
+		stored, err := d.GetContractInfo(addrDesc, "")
+		if err != nil {
+			return err
+		}
+		if stored == nil {
+			return nil
+		}
+		// copy - the shared cached value must not change before the batch commits
+		ciCopy := *stored
+		ci = &ciCopy
+	}
+	if ci == nil {
+		// already deleted by a creation rollback
+		return nil
+	}
+	if destroyed {
+		if ci.DestructedInBlock == height {
+			ci.DestructedInBlock = 0
+			rollback[key] = ci
+		}
+	} else if ci.CreatedInBlock == height {
+		rollback[key] = nil
+	}
+	return nil
+}
+
+func (d *RocksDB) disconnectInternalData(btxID []byte, height uint32, addresses map[string]map[string]struct{}, contracts map[string]*unpackedAddrContracts, registryRollback map[string]*bchain.ContractInfo) error {
 	internalData, err := d.getEthereumInternalData(btxID)
 	if err != nil {
 		return err
@@ -1320,6 +1359,9 @@ func (d *RocksDB) disconnectInternalData(btxID []byte, addresses map[string]map[
 				return err
 			}
 			if err := d.disconnectAddress(btxID, true, contract, nil, addresses, contracts); err != nil {
+				return err
+			}
+			if err := d.rollbackContractRegistryRow(contract, height, false, registryRollback); err != nil {
 				return err
 			}
 		}
@@ -1342,12 +1384,22 @@ func (d *RocksDB) disconnectInternalData(btxID []byte, addresses map[string]map[
 					return err
 				}
 			}
+			// revert the registry events emitted by nested creates and suicides
+			if t.Type == bchain.CREATE {
+				if err := d.rollbackContractRegistryRow(to, height, false, registryRollback); err != nil {
+					return err
+				}
+			} else if t.Type == bchain.SELFDESTRUCT {
+				if err := d.rollbackContractRegistryRow(from, height, true, registryRollback); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
 }
 
-func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*unpackedAddrContracts) error {
+func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*unpackedAddrContracts, registryRollback map[string]*bchain.ContractInfo) error {
 	glog.Info("Disconnecting block ", height, " containing ", len(blockTxs), " transactions")
 	addresses := make(map[string]map[string]struct{})
 	for i := range blockTxs {
@@ -1362,7 +1414,7 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height
 			}
 		}
 		// internal data
-		err := d.disconnectInternalData(blockTx.btxID, addresses, contracts)
+		err := d.disconnectInternalData(blockTx.btxID, height, addresses, contracts, registryRollback)
 		if err != nil {
 			return err
 
@@ -1412,8 +1464,9 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	contracts := make(map[string]*unpackedAddrContracts)
+	registryRollback := make(map[string]*bchain.ContractInfo)
 	for height := higher; height >= lower; height-- {
-		if err := d.disconnectBlockTxsEthereumType(wb, height, blocks[height-lower], contracts); err != nil {
+		if err := d.disconnectBlockTxsEthereumType(wb, height, blocks[height-lower], contracts, registryRollback); err != nil {
 			return err
 		}
 		key := packUint(height)
@@ -1422,6 +1475,15 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], key)
 	}
 	d.storeUnpackedAddressContracts(wb, contracts)
+	// Revert contract registry rows whose creation or destruction was
+	// disconnected; the reorgGen bump below invalidates their cache entries.
+	for key, ci := range registryRollback {
+		if ci == nil {
+			wb.DeleteCF(d.cfh[cfContracts], []byte(key))
+		} else {
+			wb.PutCF(d.cfh[cfContracts], []byte(key), packContractInfo(ci))
+		}
+	}
 	// Revert protocol rows whose persistHeight fell into [lower,higher].
 	if err := d.disconnectErcProtocols(wb, lower, higher); err != nil {
 		return err
