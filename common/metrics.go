@@ -54,6 +54,7 @@ type Metrics struct {
 	EthCallRequests                   *prometheus.CounterVec   `metric:"eth_call_requests"`
 	EthCallErrors                     *prometheus.CounterVec   `metric:"eth_call_errors"`
 	EthCallBatchSize                  prometheus.Histogram     `metric:"eth_call_batch_size"`
+	EthCallMulticallRequests          prometheus.Counter       `metric:"eth_call_multicall_requests"`
 	EthCallContractInfo               *prometheus.CounterVec   `metric:"eth_call_contract_info_requests"`
 	EthCallTokenURI                   *prometheus.CounterVec   `metric:"eth_call_token_uri_requests"`
 	EthCallStakingPool                *prometheus.CounterVec   `metric:"eth_call_staking_pool_requests"`

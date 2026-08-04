@@ -76,8 +76,11 @@ func (b *EthereumRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMul
 	// Instrument like the JSON-RPC batch path — one request per sub-call read, plus the
 	// coalescing histogram — but under mode="multicall", so per-token read volume and
 	// batch-size percentiles stay continuous when a chain moves batches onto aggregate3.
+	// The physical-request counter records the single metered eth_call carrying them all,
+	// making the sub-calls-per-request reduction visible.
 	b.observeEthCall("multicall", len(calls))
 	b.observeEthCallBatch(len(calls))
+	b.observeEthCallMulticallRequest()
 	resp, err := b.ethCallAtBlock(encoded, b.multicall3ContractAddress(), "", blockNumber, "")
 	if err != nil {
 		b.observeEthCallError("multicall", "rpc")

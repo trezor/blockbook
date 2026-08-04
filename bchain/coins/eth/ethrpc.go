@@ -366,6 +366,16 @@ func (b *EthereumRPC) observeEthCallBatch(size int) {
 	b.metrics.EthCallBatchSize.Observe(float64(size))
 }
 
+// observeEthCallMulticallRequest counts one physical aggregate3 eth_call. The mode-labeled
+// request counter reports per-sub-call volume, so this is the only metric from which the
+// backend-request reduction (many sub-calls per one metered eth_call) is visible.
+func (b *EthereumRPC) observeEthCallMulticallRequest() {
+	if b.metrics == nil {
+		return
+	}
+	b.metrics.EthCallMulticallRequests.Inc()
+}
+
 func (b *EthereumRPC) observeEthCallContractInfo(field string) {
 	if b.metrics == nil {
 		return
