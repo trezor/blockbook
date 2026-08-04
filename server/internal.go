@@ -374,8 +374,7 @@ func (s *InternalServer) adminIndex(w http.ResponseWriter, r *http.Request) (tpl
 
 func (s *InternalServer) internalDataErrors(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {
 	if r.Method == http.MethodPost {
-		// operator-triggered refetch: reset retry counts so blocks that exhausted
-		// their retry budget are attempted again instead of staying stuck
+		// operator-triggered: reset retry counts so exhausted blocks are attempted again
 		err := s.api.RefetchInternalData(true)
 		if err != nil {
 			return errorTpl, nil, err

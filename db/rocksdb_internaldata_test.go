@@ -71,8 +71,7 @@ func Test_internalDataEqual(t *testing.T) {
 			want: true,
 		},
 		{
-			// the top-level type is packed as a single CALL|CREATE bit, so a
-			// SELFDESTRUCT computed from the backend unpacks from the DB as CALL
+			// the type is packed as a single CALL|CREATE bit, so SELFDESTRUCT unpacks as CALL
 			name: "stored lossy CALL equals computed SELFDESTRUCT",
 			stored: bchain.EthereumInternalData{Type: bchain.CALL, Transfers: []bchain.EthereumInternalTransfer{
 				transfer(bchain.SELFDESTRUCT, "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", 5),
@@ -83,10 +82,8 @@ func Test_internalDataEqual(t *testing.T) {
 			want: true,
 		},
 		{
-			// a failed contract creation carries an empty/unparseable contract, which
-			// processInternalData demotes to CALL before packing; the computed CREATE
-			// must be demoted the same way, otherwise it looks unequal and is
-			// reconnected - and re-counted - on every sweep
+			// processInternalData demotes CREATE to CALL when the contract does not
+			// parse; the computed side must demote too, or it is re-counted every retry
 			name:     "computed failed CREATE with empty contract equals stored CALL",
 			stored:   bchain.EthereumInternalData{Type: bchain.CALL},
 			computed: bchain.EthereumInternalData{Type: bchain.CREATE, Contract: ""},
@@ -139,16 +136,15 @@ func Test_internalDataEqual(t *testing.T) {
 			want: false,
 		},
 		{
-			// the stored error message is transformed on unpack, comparing it
-			// would cause endless reprocessing of failed transactions
+			// the stored message is transformed on unpack; comparing it would
+			// reprocess failed transactions forever
 			name:     "error is ignored",
 			stored:   bchain.EthereumInternalData{Type: bchain.CALL, Error: "Error(REVERT)", Transfers: []bchain.EthereumInternalTransfer{transfer(bchain.CALL, "a", "b", 1)}},
 			computed: bchain.EthereumInternalData{Type: bchain.CALL, Error: "REVERT", Transfers: []bchain.EthereumInternalTransfer{transfer(bchain.CALL, "a", "b", 1)}},
 			want:     true,
 		},
 		{
-			// stored contract unpacks EIP55 checksummed, the computed one comes
-			// lowercase from the trace - same address must compare equal
+			// stored unpacks EIP55 checksummed, the trace returns lowercase
 			name:     "eth CREATE contract differing only in case",
 			parser:   ethParser,
 			stored:   bchain.EthereumInternalData{Type: bchain.CREATE, Contract: "0x5C43B1eD97e52d009611D89b74fA829FE4ac56b1"},
@@ -174,16 +170,14 @@ func Test_internalDataEqual(t *testing.T) {
 			want:     false,
 		},
 		{
-			// the tron parser accepts both the base58 and the raw hex form,
-			// mixed representations of the same address compare equal
+			// the tron parser accepts both the base58 and the raw hex form
 			name:     "tron CREATE contract in mixed base58 and hex form",
 			stored:   bchain.EthereumInternalData{Type: bchain.CREATE, Contract: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"},
 			computed: bchain.EthereumInternalData{Type: bchain.CREATE, Contract: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"},
 			want:     true,
 		},
 		{
-			// the packed DB form stores a missing transfer address as the zero
-			// address, so the unpacked zero address equals an empty computed one
+			// the packed form stores a missing transfer address as the zero address
 			name:   "eth stored zero address equals computed empty address",
 			parser: ethParser,
 			stored: bchain.EthereumInternalData{Type: bchain.CALL, Transfers: []bchain.EthereumInternalTransfer{

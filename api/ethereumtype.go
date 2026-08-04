@@ -23,13 +23,10 @@ func (w *Worker) IsRefetchingInternalData() bool {
 
 const internalDataErrorRetryPeriod = time.Hour
 
-// InternalDataErrorRetryLoop keeps the internal data of the index complete without
-// operator action: blocks whose internal data could not be fetched while they were
-// synced wait in the internal data error queue, and this loop periodically retries
-// them. The underlying refetch routine runs at most once at a time, is a no-op on an
-// empty queue and gives up on a block after its retry limit, so the periodic trigger
-// is safe. The first pass runs shortly after startup to pick up failures from the
-// previous run while the backend cache is warm.
+// InternalDataErrorRetryLoop drains the internal data error queue without operator
+// action. The first pass runs shortly after startup, while the backend cache is still
+// warm from the failed sync fetches, then hourly. RefetchInternalData is a no-op while
+// a pass is already running or the queue is empty.
 func (w *Worker) InternalDataErrorRetryLoop() {
 	if w.chainType != bchain.ChainEthereumType || !bchain.ProcessInternalTransactions {
 		return
@@ -41,20 +38,17 @@ func (w *Worker) InternalDataErrorRetryLoop() {
 		if common.IsInShutdown() {
 			return
 		}
-		// periodic auto-retry keeps the retry cap so it never hammers a permanently
-		// unfetchable block; an operator can force a reset via the admin page
+		// keep the retry cap here so a permanently unfetchable block is not hammered
+		// forever; only the operator's admin button resets it
 		if err := w.RefetchInternalData(false); err != nil {
 			glog.Errorf("InternalDataErrorRetryLoop: %v", err)
 		}
 	}
 }
 
-// RefetchInternalData starts a background pass over the internal data error queue if
-// one is not already running. resetRetries requests that blocks which exhausted their
-// retry budget be given a fresh start: it is set for an operator-triggered refetch (the
-// admin "Retry fetch" button) so abandoned blocks are no longer permanently stuck, and
-// left false for the periodic auto-retry so it keeps the cap and cannot hammer a
-// permanently unfetchable block forever.
+// RefetchInternalData starts a pass over the internal data error queue unless one is
+// already running. resetRetries clears exhausted retry counts - set by the admin
+// "Retry fetch" button so abandoned blocks can be revived, false for the auto-retry.
 func (w *Worker) RefetchInternalData(resetRetries bool) error {
 	refetchInternalDataMux.Lock()
 	defer refetchInternalDataMux.Unlock()
@@ -67,9 +61,7 @@ func (w *Worker) RefetchInternalData(resetRetries bool) error {
 
 const maxNumberOfRetires = 25
 
-// storeBlockInternalDataError enqueues (or updates the retry count of) a block in
-// the internal data error table, so it is retried by RefetchInternalDataRoutine and
-// shown on the internal data errors admin page.
+// storeBlockInternalDataError enqueues a block for retry, or updates its retry count.
 func (w *Worker) storeBlockInternalDataError(hash string, height uint32, message string, retries uint8) {
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
@@ -129,15 +121,9 @@ func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
 }
 
 // storeHealedContracts registers the contracts a healed block created or destroyed.
-// Neither the sync nor the reconnect stores them for such a block: the contracts are a
-// product of the internal data fetch, so when that fetch failed during sync
-// storeBlockSpecificDataEthereumType had an empty list, and
-// ReconnectInternalDataToBlockEthereumType stores internal data only. Without this the
-// block would regain its internal data but its contracts would stay unregistered.
-//
-// BackfillContractInfo merges into an existing registry row rather than overwriting it,
-// so re-registering a contract cannot clobber the name/symbol/standard enrichment that
-// is fetched on demand after sync.
+// The failed fetch is what produced them, so sync stored none, and the reconnect stores
+// internal data only - without this the block regains its internal data but its
+// contracts stay unregistered.
 func (w *Worker) storeHealedContracts(contracts []bchain.ContractInfo) {
 	for i := range contracts {
 		ci := &contracts[i]
@@ -147,12 +133,10 @@ func (w *Worker) storeHealedContracts(contracts []bchain.ContractInfo) {
 	}
 }
 
-// getBlockRetryInternalData fetches a block together with its internal data,
-// retrying the backend fetch once when the first attempt fails or returns an
-// internal data error. The second attempt has a much higher probability of
-// success, probably because the first (failed) request preloads the data into
-// the backend cache. The returned block may still carry an InternalDataError -
-// the caller decides how to handle that.
+// getBlockRetryInternalData fetches a block, retrying once when the internal data are
+// missing or errored - the second attempt usually succeeds, apparently because the
+// first warms the backend cache. The returned block may still carry an
+// InternalDataError; the caller decides how to handle that.
 func (w *Worker) getBlockRetryInternalData(hash string, height uint32) (*bchain.Block, error) {
 	block, err := w.chain.GetBlock(hash, height)
 	if err == nil && block != nil {

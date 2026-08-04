@@ -188,12 +188,11 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 	return nil
 }
 
-// BackfillContractInfo merges the contract lifecycle fields discovered when a block's
-// internal data is healed (CreatedInBlock, DestructedInBlock) into the stored contract
-// row without discarding enrichment (name, symbol, standard, decimals) that was fetched
-// on demand after sync. Unlike StoreContractInfo it records a destruction even when the
-// creation was never indexed, writing a row carrying only DestructedInBlock and filling
-// CreatedInBlock in if the creation block is healed later.
+// BackfillContractInfo merges the lifecycle fields discovered when a block's internal
+// data is healed (CreatedInBlock, DestructedInBlock) into the stored row, keeping the
+// name/symbol/standard/decimals enrichment fetched on demand after sync. Unlike
+// StoreContractInfo it records a destruction even when the creation was never indexed,
+// filling CreatedInBlock in if that block is healed later.
 func (d *RocksDB) BackfillContractInfo(contractInfo *bchain.ContractInfo) error {
 	if contractInfo.Contract == "" {
 		return nil
@@ -205,13 +204,10 @@ func (d *RocksDB) BackfillContractInfo(contractInfo *bchain.ContractInfo) error 
 	if key == nil {
 		return nil
 	}
-	// The read (GetContractInfo) and write (PutCF) below form a read-modify-write of
-	// the contract row. Healing runs in its own goroutine alongside the live sync, so
-	// a block connect can write the same row concurrently and the two overlays would
-	// clobber each other. connectBlockMux is the lock the block-connect path already
-	// holds while mutating contract rows, so taking it here serializes against it.
-	// No caller holds it: storeHealedContracts runs only after
-	// ReconnectInternalDataToBlockEthereumType has released the mux.
+	// the read and write below are a read-modify-write, and healing runs alongside the
+	// live sync, so take the lock the block-connect path already holds for contract
+	// rows or a concurrent connect clobbers one of the two overlays. Safe to take here:
+	// storeHealedContracts runs after the reconnect released it.
 	d.connectBlockMux.Lock()
 	defer d.connectBlockMux.Unlock()
 	merged := contractInfo

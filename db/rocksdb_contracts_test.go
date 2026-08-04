@@ -141,9 +141,8 @@ func TestRocksDB_BackfillContractInfo(t *testing.T) {
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
-	// A block healed from the error queue can carry a destruction whose creation was
-	// never indexed: the destruction must be recorded even though no row exists yet,
-	// and a creation healed afterwards must merge into it, not be dropped.
+	// a healed block can carry a destruction whose creation was never indexed: record it
+	// with no row present, then merge a later creation into it rather than dropping it
 	destroyed := "0x" + dbtestdata.EthAddr20
 	if err := d.BackfillContractInfo(&bchain.ContractInfo{Contract: destroyed, DestructedInBlock: 2000}); err != nil {
 		t.Fatal(err)

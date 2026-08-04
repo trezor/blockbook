@@ -391,8 +391,7 @@ func mainWithExitCode() int {
 		go syncMempoolLoop()
 		internalState.InitialSync = false
 
-		// periodically retry blocks whose internal data could not be fetched while
-		// they were synced, so the index heals without operator action
+		// heal blocks whose internal data could not be fetched during sync
 		if chain.GetChainParser().GetChainType() == bchain.ChainEthereumType && bchain.ProcessInternalTransactions {
 			retryWorker, err := api.NewWorker(index, chain, mempool, txCache, metrics, internalState, fiatRates)
 			if err != nil {
