@@ -191,6 +191,76 @@ func TestStoreContractInfo_MergesSameBatchCreateAndDestroy(t *testing.T) {
 	}
 }
 
+func TestRocksDB_storeHealedContractInfos(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	healContracts := func(contracts ...bchain.ContractInfo) {
+		t.Helper()
+		wb := grocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		if err := d.storeHealedContractInfos(wb, contracts); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.WriteBatch(wb); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A creation must fill CreatedInBlock into a row already enriched on demand - sync
+	// stores no name/symbol, so overwriting the row would strip a contract that a client
+	// queried before its creating block was healed.
+	enriched := "0x" + dbtestdata.EthAddr4b
+	if err := d.StoreContractInfo(&bchain.ContractInfo{
+		Standard: bchain.ERC20TokenStandard,
+		Type:     bchain.ERC20TokenStandard,
+		Contract: enriched,
+		Name:     "Enriched",
+		Symbol:   "ENR",
+		Decimals: 18,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	healContracts(bchain.ContractInfo{Contract: enriched, CreatedInBlock: 1500})
+	got, err := d.GetContractInfoForAddress(enriched)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.CreatedInBlock != 1500 || got.Name != "Enriched" || got.Symbol != "ENR" ||
+		got.Standard != bchain.ERC20TokenStandard || got.Decimals != 18 {
+		t.Fatalf("healed enriched row = %+v, want CreatedInBlock 1500 with the enrichment preserved", got)
+	}
+
+	// A healed block can carry a destruction whose creation was never indexed; recording
+	// it keeps the contract from looking alive forever.
+	destroyed := "0x" + dbtestdata.EthAddr20
+	healContracts(bchain.ContractInfo{Contract: destroyed, DestructedInBlock: 2000})
+	got, err = d.GetContractInfoForAddress(destroyed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.DestructedInBlock != 2000 || got.CreatedInBlock != 0 {
+		t.Fatalf("healed destruction = %+v, want DestructedInBlock 2000 and CreatedInBlock 0", got)
+	}
+
+	// One block can create and destroy the same contract. The records are merged before
+	// the write, so the second does not win over the first.
+	shortLived := "0x" + dbtestdata.EthAddr55
+	healContracts(
+		bchain.ContractInfo{Contract: shortLived, CreatedInBlock: 3000},
+		bchain.ContractInfo{Contract: shortLived, DestructedInBlock: 3000},
+	)
+	got, err = d.GetContractInfoForAddress(shortLived)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.CreatedInBlock != 3000 || got.DestructedInBlock != 3000 {
+		t.Fatalf("healed create+destruct = %+v, want both heights 3000", got)
+	}
+}
+
 // packContractInfo only carries the sync-owned core fields. ERC4626 detection
 // data lives in the cfErcProtocols column family and is exercised
 // separately in rocksdb_protocols_test.go.

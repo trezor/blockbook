@@ -37,6 +37,11 @@ const debounceResyncMempoolMs = 1009
 // store internal state about once every minute
 const storeInternalStatePeriodMs = 59699
 
+// the first internal data healing pass runs soon after the initial sync, while the backend
+// cache is still warm from the fetches that failed during the previous run, then hourly
+const healInternalDataStartupDelay = time.Minute
+const healInternalDataPeriod = time.Hour
+
 // exit codes from the main function
 const exitCodeOK = 0
 const exitCodeFatal = 255
@@ -103,6 +108,7 @@ var (
 	chanSyncIndexDone             = make(chan struct{})
 	chanSyncMempoolDone           = make(chan struct{})
 	chanStoreInternalStateDone    = make(chan struct{})
+	chanHealInternalDataDone      = make(chan struct{})
 	chain                         bchain.BlockChain
 	mempool                       bchain.Mempool
 	index                         *db.RocksDB
@@ -409,6 +415,7 @@ func mainWithExitCode() int {
 		internalState.FinishedMempoolSync(mempoolCount)
 		go syncIndexLoop()
 		go syncMempoolLoop()
+		go healInternalDataLoop()
 		internalState.SetInitialSync(false)
 		refreshSyncMetrics()
 	}
@@ -453,6 +460,9 @@ func mainWithExitCode() int {
 		close(chanSyncMempool)
 		<-chanSyncIndexDone
 		<-chanSyncMempoolDone
+		// a healing pass writes to rocksdb from its own goroutine, so it has to be joined
+		// here, before the deferred index.Close destroys the column family handles
+		<-chanHealInternalDataDone
 	}
 	<-chanStoreInternalStateDone
 	return exitCodeOK
@@ -746,6 +756,39 @@ func syncMempoolLoop() {
 		}
 	})
 	glog.Info("syncMempoolLoop stopped")
+}
+
+// healInternalDataLoop drains the internal data error queue without operator action:
+// blocks whose internal data failed during sync are refetched and reconnected to the
+// index. It returns on shutdown; the caller joins it before the database is closed.
+func healInternalDataLoop() {
+	defer close(chanHealInternalDataDone)
+	// nothing can be queued unless internal data are processed on an ethereum-type chain
+	if chain.GetChainParser().GetChainType() != bchain.ChainEthereumType || !bchain.ProcessInternalTransactions {
+		return
+	}
+	w, err := api.NewWorker(index, chain, mempool, txCache, metrics, internalState, fiatRates)
+	if err != nil {
+		glog.Error("healInternalDataLoop: NewWorker ", err)
+		return
+	}
+	glog.Info("healInternalDataLoop starting")
+	defer glog.Info("healInternalDataLoop stopped")
+	timer := time.NewTimer(healInternalDataStartupDelay)
+	defer timer.Stop()
+	for pass := uint64(0); ; pass++ {
+		select {
+		// closed on shutdown, so this is a broadcast to every waiting loop
+		case <-chanOsSignal:
+			return
+		case <-timer.C:
+		}
+		timer.Reset(healInternalDataPeriod)
+		if common.IsInShutdown() {
+			return
+		}
+		w.HealInternalData(pass)
+	}
 }
 
 func storeInternalStateLoop() {

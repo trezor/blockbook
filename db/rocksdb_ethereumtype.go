@@ -740,7 +740,9 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 	return blockTxs, nil
 }
 
-// ReconnectInternalDataToBlockEthereumType adds missing internal data to the block and stores them in db
+// ReconnectInternalDataToBlockEthereumType adds internal data to an already indexed block
+// whose internal data failed during sync, and stores them together with the contracts the
+// block created or destroyed.
 func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) error {
 	d.connectBlockMux.Lock()
 	defer d.connectBlockMux.Unlock()
@@ -749,6 +751,18 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	defer wb.Destroy()
 	if d.chainParser.GetChainType() != bchain.ChainEthereumType {
 		return errors.New("Unsupported chain type")
+	}
+	// The caller resolved this block from a snapshot of the error queue and then fetched
+	// it by hash, so a reorg in between can leave it orphaned - its transactions are no
+	// longer indexed and their internal data must not be written back. Checking here
+	// rather than in the caller makes it exact: connect, disconnect and this reconnect all
+	// hold connectBlockMux, so no reorg can land between the check and the write below.
+	indexedHash, err := d.GetBlockHash(block.Height)
+	if err != nil {
+		return err
+	}
+	if indexedHash != block.Hash {
+		return errors.Errorf("block %d hash changed from %s to %s, possible reorg, skipping", block.Height, block.Hash, indexedHash)
 	}
 	if d.hotAddrTracker != nil {
 		d.hotAddrTracker.BeginBlock()
@@ -762,17 +776,30 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-		if eid.InternalData != nil {
-			btxID, err := d.chainParser.PackTxid(tx.Txid)
-			if err != nil {
-				return err
-			}
-			blockTx := &blockTxs[txi]
-			blockTx.btxID = btxID
-			tx.BlockHeight = block.Height
-			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, true); err != nil {
-				return err
-			}
+		if eid.InternalData == nil {
+			continue
+		}
+		btxID, err := d.chainParser.PackTxid(tx.Txid)
+		if err != nil {
+			return err
+		}
+		// addToAddressesAndContractsEthereumType increments InternalTxs and NonContractTxs
+		// unconditionally - only TotalTxs is deduplicated - so storing internal data that
+		// are already indexed would inflate the counters permanently, while a later
+		// disconnect decrements them only once. A queued block never holds internal data,
+		// but skipping the transactions that do makes that invariant hold by construction.
+		stored, err := d.hasEthereumInternalData(btxID)
+		if err != nil {
+			return err
+		}
+		if stored {
+			continue
+		}
+		blockTx := &blockTxs[txi]
+		blockTx.btxID = btxID
+		tx.BlockHeight = block.Height
+		if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, true); err != nil {
+			return err
 		}
 	}
 
@@ -784,6 +811,15 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	}
 	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 		return err
+	}
+	// The contracts are a product of the internal data fetch, so the failed sync stored
+	// none of them. The block's address aliases are deliberately left alone: they come
+	// from the logs, which succeeded, so sync already stored them, and rewriting them now
+	// would replace the names of that time with whatever they resolve to today.
+	if blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData); blockSpecificData != nil {
+		if err := d.storeHealedContractInfos(wb, blockSpecificData.Contracts); err != nil {
+			return err
+		}
 	}
 	// remove the block from the internal errors table
 	wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], packUint(block.Height))
@@ -960,6 +996,16 @@ func (d *RocksDB) GetEthereumInternalData(txid string) (*bchain.EthereumInternal
 	return d.getEthereumInternalData(btxID)
 }
 
+// hasEthereumInternalData reports whether internal data are already stored for the tx.
+func (d *RocksDB) hasEthereumInternalData(btxID []byte) (bool, error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfInternalData], btxID)
+	if err != nil {
+		return false, err
+	}
+	defer val.Free()
+	return len(val.Data()) > 0, nil
+}
+
 func (d *RocksDB) getEthereumInternalData(btxID []byte) (*bchain.EthereumInternalData, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfInternalData], btxID)
 	if err != nil {
@@ -1042,6 +1088,40 @@ func (d *RocksDB) StoreBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatc
 	buf = append(buf, m...)
 	wb.PutCF(d.cfh[cfBlockInternalDataErrors], key, buf)
 	return nil
+}
+
+// UpdateBlockInternalDataErrorEthereumType rewrites the queued error of the block at
+// height with a new failure count and message, but only while the queue still holds an
+// entry for hash. A healing pass reports from a snapshot taken before it started, so by
+// the time it charges a failure the entry may have been removed by a rollback or replaced
+// by a different block at the same height; a plain put would resurrect or overwrite it.
+func (d *RocksDB) UpdateBlockInternalDataErrorEthereumType(height uint32, hash string, message string, retryCount uint8) error {
+	if hash == "" {
+		return nil
+	}
+	d.connectBlockMux.Lock()
+	defer d.connectBlockMux.Unlock()
+	val, err := d.db.GetCF(d.ro, d.cfh[cfBlockInternalDataErrors], packUint(height))
+	if err != nil {
+		return err
+	}
+	defer val.Free()
+	storedHash, _, _, err := d.unpackBlockInternalDataError(val.Data())
+	if err != nil {
+		return err
+	}
+	if storedHash != hash {
+		glog.Infof("UpdateBlockInternalDataErrorEthereumType %d %s: no longer queued, update skipped", height, hash)
+		return nil
+	}
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.StoreBlockInternalDataErrorEthereumType(wb, &bchain.Block{
+		BlockHeader: bchain.BlockHeader{Hash: hash, Height: height},
+	}, message, retryCount); err != nil {
+		return err
+	}
+	return d.WriteBatch(wb)
 }
 
 type BlockInternalDataError struct {

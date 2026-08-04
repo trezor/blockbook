@@ -200,6 +200,78 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 	return nil
 }
 
+// storeHealedContractInfos records the contracts a healed block created or destroyed. The
+// failed internal data fetch is what would have produced them, so sync stored none of
+// them. Only the lifecycle fields are overlaid on the stored row: sync never fills in
+// name/symbol/standard, so a plain put would strip the metadata of a contract that a
+// client already queried and enriched. The records are merged per contract first, so a
+// contract created and destroyed in the same block ends up with both heights - the
+// destruct branch of storeContractInfo reads committed state only and drops that case.
+func (d *RocksDB) storeHealedContractInfos(wb *grocksdb.WriteBatch, contracts []bchain.ContractInfo) error {
+	type lifecycle struct {
+		created, destructed uint32
+	}
+	merged := make(map[string]*lifecycle, len(contracts))
+	order := make([]string, 0, len(contracts))
+	for i := range contracts {
+		ci := &contracts[i]
+		if ci.Contract == "" {
+			continue
+		}
+		key, err := d.chainParser.GetAddrDescFromAddress(ci.Contract)
+		if err != nil {
+			return err
+		}
+		if len(key) == 0 {
+			continue
+		}
+		l, found := merged[string(key)]
+		if !found {
+			l = &lifecycle{}
+			merged[string(key)] = l
+			order = append(order, string(key))
+		}
+		if ci.CreatedInBlock != 0 {
+			l.created = ci.CreatedInBlock
+		}
+		if ci.DestructedInBlock != 0 {
+			l.destructed = ci.DestructedInBlock
+		}
+	}
+	for _, key := range order {
+		l := merged[key]
+		addrDesc := bchain.AddressDescriptor(key)
+		stored, err := d.GetContractInfo(addrDesc, "")
+		if err != nil {
+			return err
+		}
+		var contractInfo bchain.ContractInfo
+		if stored != nil {
+			// copy before mutating, GetContractInfo may return the shared cached entry
+			contractInfo = *stored
+		} else {
+			// a creation that was never indexed leaves no row to enrich; record what the
+			// trace knows, the same stub sync would have stored
+			contractInfo = bchain.ContractInfo{
+				Standard: bchain.UnhandledTokenStandard,
+				Type:     bchain.UnhandledTokenStandard,
+			}
+			if addresses, _, err := d.chainParser.GetAddressesFromAddrDesc(addrDesc); err == nil && len(addresses) > 0 {
+				contractInfo.Contract = addresses[0]
+			}
+		}
+		if l.created != 0 {
+			contractInfo.CreatedInBlock = l.created
+		}
+		if l.destructed != 0 {
+			contractInfo.DestructedInBlock = l.destructed
+		}
+		wb.PutCF(d.cfh[cfContracts], addrDesc, packContractInfo(&contractInfo))
+		cachedContracts.delete(key)
+	}
+	return nil
+}
+
 // ListContractInfos returns up to limit stored contract records ordered by
 // address descriptor, starting at the optional from address (inclusive), and
 // the address to pass as from to fetch the next page ("" when the listing is
