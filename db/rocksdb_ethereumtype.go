@@ -745,91 +745,15 @@ func emptyInternalData(id *bchain.EthereumInternalData) bool {
 	return id.Type == bchain.CALL && len(id.Transfers) == 0 && id.Error == ""
 }
 
-// internalDataEqual compares stored internal data with freshly computed data. The
-// stored form is lossy - SELFDESTRUCT unpacks as CALL and the error message is
-// transformed - so only the CREATE distinction is compared and errors are ignored.
-// Addresses go through descriptors: the stored side unpacks canonical (EIP55 on eth),
-// the computed side keeps the backend's casing.
-func internalDataEqual(parser bchain.BlockChainParser, stored, computed *bchain.EthereumInternalData) bool {
-	// processInternalData demotes CREATE to CALL when the contract address does not
-	// parse; demote the computed side the same way, or a failed creation reads as a
-	// mismatch and gets re-counted on every retry
-	computedType := computed.Type
-	if computedType == bchain.CREATE {
-		if _, err := parser.GetAddrDescFromAddress(computed.Contract); err != nil {
-			computedType = bchain.CALL
-		}
-	}
-	if (stored.Type == bchain.CREATE) != (computedType == bchain.CREATE) {
-		return false
-	}
-	if computedType == bchain.CREATE && !addressesEqual(parser, stored.Contract, computed.Contract) {
-		return false
-	}
-	if len(stored.Transfers) != len(computed.Transfers) {
-		return false
-	}
-	for i := range stored.Transfers {
-		s, c := &stored.Transfers[i], &computed.Transfers[i]
-		if s.Type != c.Type || !addressesEqual(parser, s.From, c.From) || !addressesEqual(parser, s.To, c.To) || s.Value.Cmp(&c.Value) != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// addressesEqual reports whether two address strings denote the same address, comparing
-// descriptors when the strings differ. An address that does not parse equals only its
-// exact string form. The packed DB form stores a missing address as the zero address,
-// so an empty address equals the chain's zero address.
-func addressesEqual(parser bchain.BlockChainParser, a, b string) bool {
-	if a == b {
-		return true
-	}
-	if a == "" {
-		return addressStringIsZero(parser, b)
-	}
-	if b == "" {
-		return addressStringIsZero(parser, a)
-	}
-	da, err := parser.GetAddrDescFromAddress(a)
-	if err != nil {
-		return false
-	}
-	dbDesc, err := parser.GetAddrDescFromAddress(b)
-	if err != nil {
-		return false
-	}
-	return bytes.Equal(da, dbDesc)
-}
-
-// addressStringIsZero reports whether a parses to the zero address.
-func addressStringIsZero(parser bchain.BlockChainParser, a string) bool {
-	d, err := parser.GetAddrDescFromAddress(a)
-	if err != nil {
-		return false
-	}
-	return isZeroAddress(d)
-}
-
-// internalDataAlreadyStored reports whether a transaction's computed internal data need
-// no storing - nothing worth storing, or the DB already holds matching data. This is
-// what makes reconnecting a block twice safe: without it the second pass would increment
-// the contract transaction counters again. Shares connectBlockMux with the write it
-// guards, so a concurrent reconnect cannot pass the check before this one commits.
-func (d *RocksDB) internalDataAlreadyStored(txid string, computed *bchain.EthereumInternalData) bool {
-	if emptyInternalData(computed) {
-		return true
-	}
-	stored, err := d.GetEthereumInternalData(txid)
-	return err == nil && stored != nil && internalDataEqual(d.chainParser, stored, computed)
-}
-
 // ReconnectInternalDataToBlockEthereumType adds internal data to an already-indexed
-// block whose internal data failed or was skipped during sync, and stores them. It is
-// idempotent: transactions whose stored internal data already match are skipped, so
-// calling it more than once for the same block does not double-count contract
-// transactions. Runs under connectBlockMux.
+// block whose internal data failed during sync, and stores them. Runs under
+// connectBlockMux.
+//
+// It must not be called for a block that already holds internal data: the address
+// counters it updates are cumulative, so a second pass would inflate them with no way
+// to repair it. The caller is the internal data error queue, which only holds blocks
+// whose data was never stored - a successful reconnect drops the block from the queue
+// in the write batch below, and a rollback drops it in DisconnectBlockRangeEthereumType.
 func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) error {
 	d.connectBlockMux.Lock()
 	defer d.connectBlockMux.Unlock()
@@ -851,9 +775,8 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-		// a block may be reconnected more than once; reprocessing would count its
-		// contract transactions again
-		if eid.InternalData == nil || d.internalDataAlreadyStored(tx.Txid, eid.InternalData) {
+		// storing empty data would count a plain call as a contract transaction
+		if eid.InternalData == nil || emptyInternalData(eid.InternalData) {
 			continue
 		}
 		btxID, err := d.chainParser.PackTxid(tx.Txid)
