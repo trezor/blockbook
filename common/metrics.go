@@ -64,7 +64,7 @@ type Metrics struct {
 	IndexDBSize                       prometheus.Gauge         `metric:"index_db_size"`
 	ExplorerViews                     *prometheus.CounterVec   `metric:"explorer_views"`
 	MempoolSize                       prometheus.Gauge         `metric:"mempool_size"`
-	MempoolLastSync                   prometheus.Gauge         `metric:"mempool_last_sync_timestamp_seconds"`
+	MempoolLastSync                   *prometheus.GaugeVec     `metric:"mempool_last_sync_timestamp_seconds"`
 	EthAlternativeMempoolEvents       *prometheus.CounterVec   `metric:"eth_alternative_mempool_reconciliation_events_total"`
 	EthAlternativeMempoolTxResidence  *prometheus.HistogramVec `metric:"eth_alternative_mempool_tx_residence_seconds"`
 	EthAlternativeMempoolCacheSize    prometheus.Gauge         `metric:"eth_alternative_mempool_cache_size"`
