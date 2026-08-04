@@ -574,38 +574,73 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 	}
 	if deployed {
 		mcBalances, reresolve, unresolved := b.erc20BalancesMulticall3(callData, contractDescs, blockNumber)
-		// Keep what aggregate3 resolved unless every chunk failed (then the plain batch path
-		// below is the same work with a propagatable error), or holes remain that no batcher
-		// can fill — a nil entry for an unknown balance reads as "no balance" to callers that
-		// treat a present entry as authoritative, so let them fall back to single calls.
 		anyResolved := len(unresolved) < len(contractDescs)
+		// Keep what aggregate3 resolved unless every chunk failed (then the plain batch path
+		// below is the same work with a propagatable error), or chunk-failure holes remain that
+		// no batcher can fill — a nil entry for an unknown balance reads as "no balance" to
+		// callers that treat a present entry as authoritative, so let them fall back to single
+		// calls. Reresolve holes never block: single eth_calls settle them without a batcher.
 		canFillHoles := len(unresolved) == 0 || hasBatcher
 		if anyResolved && canFillHoles {
 			// aggregate3 shares one gas budget, so a Success=false element can be a gas-starved
 			// (not truly empty) balance, and a failed chunk leaves its elements unknown. Settle
-			// both with independent eth_calls (full gas cap each) in one batch; a real revert
-			// stays nil. Without a batcher we can't, so leave them nil (best effort).
-			if pending := len(reresolve) + len(unresolved); pending > 0 && hasBatcher {
+			// both with independent eth_calls (full gas cap each): one JSON-RPC batch when the
+			// client supports it, else individual calls (canFillHoles guarantees only reresolve
+			// holes remain then). A real revert stays nil.
+			if pending := len(reresolve) + len(unresolved); pending > 0 {
 				idx := make([]int, 0, pending)
 				idx = append(idx, reresolve...)
 				idx = append(idx, unresolved...)
-				sub := make([]bchain.AddressDescriptor, len(idx))
-				for j, i := range idx {
-					sub[j] = contractDescs[i]
-				}
-				// Count every contract this fallback batch covers, whichever hole put it there;
-				// counting only reresolve would report zero for a chunk failure that re-fetched
-				// contracts, hiding the extra round trip from cost dashboards.
+				// Count every contract settled by independent calls, whichever transport and
+				// whichever hole put it there; counting only reresolve would report zero for a
+				// chunk failure that re-fetched contracts, hiding the extra round trip from
+				// cost dashboards.
 				b.observeChainDataFallback("erc20_multicall", "elem_fallback", len(idx))
-				if subBalances, berr := b.erc20BalancesBatchChunked(batcher, callData, sub, blockNumber); berr == nil {
+				if hasBatcher {
+					sub := make([]bchain.AddressDescriptor, len(idx))
 					for j, i := range idx {
-						mcBalances[i] = subBalances[j]
+						sub[j] = contractDescs[i]
+					}
+					if subBalances, berr := b.erc20BalancesBatchChunked(batcher, callData, sub, blockNumber); berr == nil {
+						for j, i := range idx {
+							mcBalances[i] = subBalances[j]
+						}
+					} else if len(unresolved) > 0 {
+						// Chunk-failure holes are unknown balances; returning them as nil would
+						// read as authoritative "no balance", so propagate the error and let the
+						// caller fall back to single calls. (Unreachable today —
+						// erc20BalancesBatchChunked settles element failures internally — but
+						// kept so a future error path cannot leak unknowns as nil.)
+						return nil, berr
+					} else {
+						// Only best-effort reresolve holes remain: keep what aggregate3 resolved.
+						glog.Warningf("erc20 multicall3 fallback failed for %d contract(s): %v", len(idx), berr)
 					}
 				} else {
-					glog.Warningf("erc20 multicall3 fallback failed for %d contract(s): %v", len(sub), berr)
+					for _, i := range idx {
+						contract := hexutil.Encode(contractDescs[i])
+						data, cerr := b.EthereumTypeRpcCallAtBlock(callData, contract, "", blockNumber)
+						if cerr != nil {
+							glog.Warningf("erc20 single eth_call fallback failed for %s: %v", contract, cerr)
+							continue
+						}
+						mcBalances[i] = parseSimpleNumericProperty(data)
+						if mcBalances[i] == nil {
+							b.observeEthCallError("single", "invalid")
+							// Benign and high-volume: see erc20BalancesBatchAtBlock's single-call
+							// fallback, which this mirrors.
+							glog.V(2).Infof("erc20 single eth_call invalid result for %s: %q", contract, data)
+						}
+					}
 				}
 			}
 			return mcBalances, nil
+		}
+		if !hasBatcher && len(unresolved) > 0 {
+			// Multicall3 is deployed but aggregate3 left holes nothing here can fill. Name the
+			// real failure instead of the generic no-batcher error below; the caller only logs
+			// the message and falls back to single calls either way.
+			return nil, errors.Errorf("multicall3 left %d of %d balances unresolved and BatchCallContext not supported", len(unresolved), len(contractDescs))
 		}
 	}
 	if !hasBatcher {
