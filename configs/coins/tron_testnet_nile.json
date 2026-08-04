@@ -20,7 +20,7 @@
     },
     "backend": {
         "package_name": "backend-tron-testnet-nile",
-        "package_revision": "latest",
+        "package_revision": "satoshilabs-1",
         "system_user": "tron",
         "version": "4.8.2-pq1-build1",
         "binary_url": "https://github.com/tron-nile-testnet/nile-testnet/releases/download/GreatVoyage-Nile-v4.8.2-PQ1-build1/FullNode-Nile-x64-4.8.2-pq1-build1.jar",
