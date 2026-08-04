@@ -226,6 +226,22 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		},
 
 		{
+			// java-tron precomputes contract_address even when the deployment
+			// failed - nothing was created, nothing may be registered
+			name: "Failed deployment registers no contract",
+			infos: []tronTxInfo{
+				{
+					ID:              "deployfail",
+					ContractAddress: "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+					Receipt:         tronReceipt{Result: "OUT_OF_ENERGY"},
+				},
+			},
+			txs:         []bchain.RpcTransaction{{Hash: "0xdeployfail"}},
+			wantType:    bchain.CALL,
+			wantDataErr: "OUT_OF_ENERGY",
+		},
+
+		{
 			name: "Deployment with constructor-created child contract",
 			infos: []tronTxInfo{
 				{

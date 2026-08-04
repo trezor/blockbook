@@ -159,9 +159,11 @@ func buildInternalDataFromTronInfos(
 		// signal alone discriminates: java-tron fills contract_address for
 		// ordinary TriggerSmartContract calls too, and `to` is null also for
 		// native non-VM operations (FreezeBalance, WithdrawBalance, ...), which
-		// have an empty contract_address.
+		// have an empty contract_address. A failed deployment created nothing -
+		// java-tron precomputes contract_address even for those.
 		deployedContract := ""
-		if tx.To == "" && info.ContractAddress != "" {
+		deploySucceeded := info.Receipt.Result == "" || info.Receipt.Result == "SUCCESS"
+		if tx.To == "" && info.ContractAddress != "" && deploySucceeded {
 			deployedContract = ToTronAddressFromAddress(info.ContractAddress)
 			d.Type = bchain.CREATE
 			d.Contract = deployedContract
