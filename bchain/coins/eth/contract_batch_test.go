@@ -1222,3 +1222,64 @@ func TestEthereumTypeGetErc20ContractBalancesChunkFailureWithoutBatcherErrors(t 
 		t.Fatalf("expected 2 aggregate3 calls (second fails), got %d", mock.ethCalls)
 	}
 }
+
+// A malformed (non-20-byte) contract descriptor must not poison aggregate3 for the whole request:
+// it is excluded up front and stays nil (as in the batch path, where a bogus `to` yields an
+// element error and thus nil), while the valid contracts resolve in one aggregate3 call with no
+// batch fallback.
+func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractC := common.HexToAddress("0x00000000000000000000000000000000000000cc")
+	badDesc := make(bchain.AddressDescriptor, 21) // 21 bytes: not an address
+	var subCallCounts []int
+	mock := &mockMulticallRPC{
+		handler: func(callData string) (string, error) {
+			raw, err := hexutil.Decode(callData)
+			if err != nil {
+				return "", err
+			}
+			// Array length sits at selector(4) + outer-offset(1 word).
+			cnt := int(bigUintAt(raw, 4+evmWordBytes).Uint64())
+			subCallCounts = append(subCallCounts, cnt)
+			res := make([]bchain.EthereumMulticallResult, cnt)
+			for i := range res {
+				res[i] = bchain.EthereumMulticallResult{Success: true, Data: fmt.Sprintf("0x%064x", 100*(i+1))}
+			}
+			return fixtureAggregate3Result(res), nil
+		},
+	}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(
+		bchain.AddressDescriptor(addr.Bytes()),
+		[]bchain.AddressDescriptor{
+			bchain.AddressDescriptor(contractA.Bytes()),
+			badDesc,
+			bchain.AddressDescriptor(contractC.Bytes()),
+		},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(balances) != 3 {
+		t.Fatalf("expected 3 balances, got %d", len(balances))
+	}
+	if balances[0] == nil || balances[0].Cmp(big.NewInt(100)) != 0 {
+		t.Fatalf("balance[0]=%v, want 100 (first valid contract)", balances[0])
+	}
+	if balances[1] != nil {
+		t.Fatalf("balance[1]=%v, want nil (malformed descriptor)", balances[1])
+	}
+	if balances[2] == nil || balances[2].Cmp(big.NewInt(200)) != 0 {
+		t.Fatalf("balance[2]=%v, want 200 (second valid contract)", balances[2])
+	}
+	// Exactly one aggregate3 covering only the two valid contracts; no batch fallback (which
+	// would show up as extra eth_calls against this mock).
+	if len(subCallCounts) != 1 || subCallCounts[0] != 2 {
+		t.Fatalf("expected one aggregate3 with 2 sub-calls (the valid contracts), got %v", subCallCounts)
+	}
+	ethCall, _ := mock.callCounts()
+	if ethCall != 1 {
+		t.Fatalf("expected 1 aggregate3 eth_call and no fallback, got %d", ethCall)
+	}
+}

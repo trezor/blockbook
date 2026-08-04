@@ -642,8 +642,11 @@ func (b *EthereumRPC) erc20BalancesBatchChunked(batcher batchCaller, callData st
 const multicall3MaxCallsPerAggregate = 100
 
 // erc20BalancesMulticall3 fetches balanceOf for all contracts via aggregate3, sub-chunked to
-// bound each eth_call's gas. Success=true results are decoded (nil on unparseable data, as in
-// the batch path). It returns two index sets the caller settles with independent eth_calls:
+// bound each eth_call's gas. Malformed (non-address) descriptors are excluded up front and stay
+// nil — matching the batch path, where a bogus `to` yields an element error and thus nil — so one
+// bad element cannot fail its whole chunk's encoding. Success=true results are decoded (nil on
+// unparseable data, as in the batch path). It returns two index sets the caller settles with
+// independent eth_calls:
 //
 //   - reresolve: Success=false with empty returndata, possibly gas-starved under the shared
 //     aggregate3 gas budget, so a real balance must not be silently lost. Genuine reverts
@@ -653,16 +656,25 @@ const multicall3MaxCallsPerAggregate = 100
 //     the whole list; the loop stops there because chunk failures are usually systemic.
 func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) (balances []*big.Int, reresolve []int, unresolved []int) {
 	balances = make([]*big.Int, len(contractDescs))
-	for start := 0; start < len(contractDescs); start += multicall3MaxCallsPerAggregate {
-		end := start + multicall3MaxCallsPerAggregate
-		if end > len(contractDescs) {
-			end = len(contractDescs)
+	valid := make([]int, 0, len(contractDescs))
+	for i := range contractDescs {
+		if len(contractDescs[i]) == ethcommon.AddressLength {
+			valid = append(valid, i)
 		}
-		sub := contractDescs[start:end]
-		calls := make([]bchain.EthereumMulticallCall, len(sub))
-		for i, contractDesc := range sub {
-			calls[i] = bchain.EthereumMulticallCall{
-				Target:   hexutil.Encode(contractDesc),
+	}
+	if skipped := len(contractDescs) - len(valid); skipped > 0 {
+		glog.V(2).Infof("erc20 balances multicall3: excluding %d malformed contract descriptor(s)", skipped)
+	}
+	for start := 0; start < len(valid); start += multicall3MaxCallsPerAggregate {
+		end := start + multicall3MaxCallsPerAggregate
+		if end > len(valid) {
+			end = len(valid)
+		}
+		chunk := valid[start:end]
+		calls := make([]bchain.EthereumMulticallCall, len(chunk))
+		for j, i := range chunk {
+			calls[j] = bchain.EthereumMulticallCall{
+				Target:   hexutil.Encode(contractDescs[i]),
 				CallData: callData,
 				// a reverting balanceOf yields Success=false, not a failed batch
 				AllowFailure: true,
@@ -672,30 +684,29 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 		if err != nil {
 			// A chunk failure is usually systemic (eth_call gas cap, decode, transport), so stop
 			// at the first one instead of paying a doomed aggregate3 for every chunk left: mark
-			// this chunk and the rest unresolved for the caller to settle. Chunks already decoded
-			// are kept, so the failure costs only the remainder. Breaking also keeps this one
-			// fallback event and one log line per request.
-			for i := start; i < len(contractDescs); i++ {
-				unresolved = append(unresolved, i)
-			}
+			// this chunk and the remaining valid elements unresolved for the caller to settle.
+			// Chunks already decoded are kept, so the failure costs only the remainder. Breaking
+			// also keeps this one fallback event and one log line per request.
+			unresolved = append(unresolved, valid[start:]...)
 			b.ObserveChainDataFallback("erc20_multicall", "error")
-			glog.Warningf("erc20 balances multicall3 failed at chunk [%d:%d), falling back for %d contract(s): %v", start, end, len(contractDescs)-start, err)
+			glog.Warningf("erc20 balances multicall3 failed at chunk [%d:%d), falling back for %d contract(s): %v", start, end, len(valid)-start, err)
 			break
 		}
-		for i := range results {
-			if !results[i].Success {
+		for j := range results {
+			i := chunk[j]
+			if !results[j].Success {
 				b.observeEthCallError("multicall", "elem")
 				// Non-empty returndata is a genuine revert (Error/Panic data), never an
 				// out-of-gas truncation, so leave it nil. Only empty returndata may be gas
 				// starvation under the shared budget — re-resolve those (see the caller).
-				if len(results[i].Data) <= 2 {
-					reresolve = append(reresolve, start+i)
+				if len(results[j].Data) <= 2 {
+					reresolve = append(reresolve, i)
 				}
 				continue
 			}
 			// nil on unparseable output (empty/short), matching the batch path
-			balances[start+i] = parseSimpleNumericProperty(results[i].Data)
-			if balances[start+i] == nil {
+			balances[i] = parseSimpleNumericProperty(results[j].Data)
+			if balances[i] == nil {
 				b.observeEthCallError("multicall", "invalid")
 			}
 		}
