@@ -244,6 +244,11 @@ func TestDecodeAggregate3Rejects(t *testing.T) {
 		{"too short for header", "0x" + padHex32("20")},
 		{"bad outer offset", "0x" + padHex32("21") + padHex32("0")},
 		{"truncated heads", "0x" + padHex32("20") + padHex32("2") + padHex32("40")}, // declares 2 elements but only 1 head word
+		// Words ≥ 2^63 wrap negative when narrowed to int; each must be rejected, never sliced with.
+		{"array length 2^63", "0x" + padHex32("20") + padHex32("8000000000000000")},
+		{"head offset 2^63", "0x" + padHex32("20") + padHex32("1") + padHex32("8000000000000000")},
+		{"bytes length 2^64-1", "0x" + padHex32("20") + padHex32("1") + padHex32("20") + // 1 element at heads+0x20
+			padHex32("1") + padHex32("40") + padHex32("ffffffffffffffff")}, // bool, bytes offset, absurd bytes length
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

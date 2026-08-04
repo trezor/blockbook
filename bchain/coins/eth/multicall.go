@@ -260,8 +260,12 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 		return nil, fmt.Errorf("multicall3 unexpected outer offset: %s", v)
 	}
 	headsStart := 64
+	// Every offset/length word below is bounded by len(raw) before narrowing to int:
+	// anything larger cannot address data inside the response (n elements need n*32
+	// bytes of heads, so len(raw) is a safe coarse bound for the count too), and a
+	// word ≥ 2^63 would wrap negative in int, defeating the later bounds checks.
 	length := bigUintAt(raw, 32)
-	if !length.IsUint64() {
+	if !length.IsUint64() || length.Uint64() > uint64(len(raw)) {
 		return nil, fmt.Errorf("multicall3 array length out of range")
 	}
 	n := int(length.Uint64())
@@ -279,7 +283,7 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 	results := make([]bchain.EthereumMulticallResult, n)
 	for i := 0; i < n; i++ {
 		offset := bigUintAt(raw, headsStart+i*32)
-		if !offset.IsUint64() {
+		if !offset.IsUint64() || offset.Uint64() > uint64(len(raw)) {
 			return nil, fmt.Errorf("multicall3 element %d offset out of range", i)
 		}
 		tupleStart := headsStart + int(offset.Uint64())
@@ -292,7 +296,7 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 		results[i].Success = successWord[31] == 1
 
 		bytesOffset := bigUintAt(raw, tupleStart+32)
-		if !bytesOffset.IsUint64() {
+		if !bytesOffset.IsUint64() || bytesOffset.Uint64() > uint64(len(raw)) {
 			return nil, fmt.Errorf("multicall3 element %d bytes offset out of range", i)
 		}
 		bytesPos := tupleStart + int(bytesOffset.Uint64())
@@ -300,7 +304,7 @@ func decodeAggregate3Result(data string) ([]bchain.EthereumMulticallResult, erro
 			return nil, fmt.Errorf("multicall3 element %d truncated at bytes length", i)
 		}
 		bytesLen := bigUintAt(raw, bytesPos)
-		if !bytesLen.IsUint64() {
+		if !bytesLen.IsUint64() || bytesLen.Uint64() > uint64(len(raw)) {
 			return nil, fmt.Errorf("multicall3 element %d bytes length out of range", i)
 		}
 		bl := int(bytesLen.Uint64())
