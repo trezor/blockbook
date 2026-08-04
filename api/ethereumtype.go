@@ -116,6 +116,9 @@ func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
 			} else if err = w.db.ReconnectInternalDataToBlockEthereumType(block); err != nil {
 				glog.Errorf("ReconnectInternalDataToBlockEthereumType %d %s, error %v", ie.Height, ie.Hash, err)
 			} else {
+				if blockSpecificData != nil {
+					w.storeHealedContracts(blockSpecificData.Contracts)
+				}
 				glog.Infof("Refetching internal data for %d %s, success", ie.Height, ie.Hash)
 			}
 		}
@@ -123,6 +126,25 @@ func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
 	refetchInternalDataMux.Lock()
 	refetchingInternalData = false
 	refetchInternalDataMux.Unlock()
+}
+
+// storeHealedContracts registers the contracts a healed block created or destroyed.
+// Neither the sync nor the reconnect stores them for such a block: the contracts are a
+// product of the internal data fetch, so when that fetch failed during sync
+// storeBlockSpecificDataEthereumType had an empty list, and
+// ReconnectInternalDataToBlockEthereumType stores internal data only. Without this the
+// block would regain its internal data but its contracts would stay unregistered.
+//
+// BackfillContractInfo merges into an existing registry row rather than overwriting it,
+// so re-registering a contract cannot clobber the name/symbol/standard enrichment that
+// is fetched on demand after sync.
+func (w *Worker) storeHealedContracts(contracts []bchain.ContractInfo) {
+	for i := range contracts {
+		ci := &contracts[i]
+		if err := w.db.BackfillContractInfo(ci); err != nil {
+			glog.Errorf("storeHealedContracts: BackfillContractInfo %s: %v", ci.Contract, err)
+		}
+	}
 }
 
 // getBlockRetryInternalData fetches a block together with its internal data,

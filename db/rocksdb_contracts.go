@@ -205,6 +205,15 @@ func (d *RocksDB) BackfillContractInfo(contractInfo *bchain.ContractInfo) error 
 	if key == nil {
 		return nil
 	}
+	// The read (GetContractInfo) and write (PutCF) below form a read-modify-write of
+	// the contract row. Healing runs in its own goroutine alongside the live sync, so
+	// a block connect can write the same row concurrently and the two overlays would
+	// clobber each other. connectBlockMux is the lock the block-connect path already
+	// holds while mutating contract rows, so taking it here serializes against it.
+	// No caller holds it: storeHealedContracts runs only after
+	// ReconnectInternalDataToBlockEthereumType has released the mux.
+	d.connectBlockMux.Lock()
+	defer d.connectBlockMux.Unlock()
 	merged := contractInfo
 	stored, err := d.GetContractInfo(key, "")
 	if err != nil {
