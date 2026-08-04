@@ -19,7 +19,7 @@
     },
     "backend": {
         "package_name": "backend-tron",
-        "package_revision": "latest",
+        "package_revision": "satoshilabs-1",
         "system_user": "tron",
         "version": "4.8.2.1",
         "binary_url": "https://github.com/tronprotocol/java-tron/releases/download/GreatVoyage-v4.8.2.1/FullNode.jar",
