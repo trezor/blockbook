@@ -140,19 +140,19 @@ type transferEvent struct {
 func TestBuildInternalDataFromTronInfos(t *testing.T) {
 
 	tests := []struct {
-		name              string
-		infos             []tronTxInfo
-		txs               []bchain.RpcTransaction
-		wantType          bchain.EthereumInternalTransactionType
-		wantTransfers     int
-		wantErrContains   string // error return from function
-		wantDataErrSubstr string // d.Error (EthereumInternalData.Error)
-		wantContract      string
-		wantContracts     []contractEvent // exact contract registry entries in order
-		wantTransferList  []transferEvent // exact transfers in order; overrides the wantTransfers/wantFrom/wantTo/wantValue shorthand
-		wantFrom          string
-		wantTo            string
-		wantValue         int64
+		name             string
+		infos            []tronTxInfo
+		txs              []bchain.RpcTransaction
+		wantType         bchain.EthereumInternalTransactionType
+		wantTransfers    int
+		wantErrContains  string // error return from function
+		wantDataErr      string // exact d.Error (EthereumInternalData.Error)
+		wantContract     string
+		wantContracts    []contractEvent // exact contract registry entries in order
+		wantTransferList []transferEvent // exact transfers in order; overrides the wantTransfers/wantFrom/wantTo/wantValue shorthand
+		wantFrom         string
+		wantTo           string
+		wantValue        int64
 	}{
 		{
 			name: "CALL with TRX transfer",
@@ -281,7 +281,9 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		},
 
 		{
-			name: "SELFDESTRUCT detected",
+			// the top-level type stays CALL: only its low bit survives packing,
+			// so a top-level SELFDESTRUCT could never round-trip through the DB
+			name: "Suicide frame registers destruction, top-level type stays CALL",
 			infos: []tronTxInfo{
 				{
 					ID: "deadbeef",
@@ -291,10 +293,10 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 				},
 			},
 			txs:           []bchain.RpcTransaction{{Hash: "0xdeadbeef"}},
-			wantType:      bchain.SELFDESTRUCT,
-			wantContract:  "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
+			wantType:      bchain.CALL,
 			wantContracts: []contractEvent{{addr: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", destroyed: true}},
-			// no beneficiary recorded - the destroyed contract is still indexed
+			// a missing beneficiary is not a shape java-tron emits, but the
+			// destroyed contract must stay indexed even then
 			wantTransferList: []transferEvent{
 				{typ: bchain.SELFDESTRUCT, from: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U", to: ""},
 			},
@@ -302,8 +304,8 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 
 		{
 			// an ephemeral (MEV-style) contract created, used and selfdestructed
-			// within one call must produce both registry events, creation first,
-			// so that the destruction merges into the stored creation
+			// within one call must produce both registry events, creation first -
+			// storeContractInfo merges the destruction into the same-batch creation
 			name: "Ephemeral contract created and destroyed in one call",
 			infos: []tronTxInfo{
 				{
@@ -327,9 +329,8 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "SUCCESS"},
 				},
 			},
-			txs:          []bchain.RpcTransaction{{Hash: "0xephemeral1", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
-			wantType:     bchain.SELFDESTRUCT,
-			wantContract: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
+			txs:      []bchain.RpcTransaction{{Hash: "0xephemeral1", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType: bchain.CALL,
 			wantContracts: []contractEvent{
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", destroyed: true},
@@ -370,9 +371,8 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "SUCCESS"},
 				},
 			},
-			txs:          []bchain.RpcTransaction{{Hash: "0xephemeral2", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
-			wantType:     bchain.SELFDESTRUCT,
-			wantContract: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn",
+			txs:      []bchain.RpcTransaction{{Hash: "0xephemeral2", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType: bchain.CALL,
 			wantContracts: []contractEvent{
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
 				{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn", destroyed: true},
@@ -388,7 +388,9 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		},
 
 		{
-			name: "Rejected internal call",
+			// java-tron rejects single frames inside transactions that succeed
+			// (a nested call reverted); the tx must not carry an error
+			name: "Rejected internal call in a successful tx sets no error",
 			infos: []tronTxInfo{
 				{
 					ID: "fail01",
@@ -401,9 +403,9 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "SUCCESS"},
 				},
 			},
-			txs:               []bchain.RpcTransaction{{Hash: "0xfail01"}},
-			wantType:          bchain.CALL,
-			wantDataErrSubstr: "rejected",
+			txs:         []bchain.RpcTransaction{{Hash: "0xfail01"}},
+			wantType:    bchain.CALL,
+			wantDataErr: "",
 		},
 
 		{
@@ -437,15 +439,14 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "OUT_OF_ENERGY"},
 				},
 			},
-			txs:               []bchain.RpcTransaction{{Hash: "0xfail02", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
-			wantType:          bchain.CALL,
-			wantTransfers:     0,
-			wantDataErrSubstr: "OUT_OF_ENERGY; internal transaction rejected",
+			txs:           []bchain.RpcTransaction{{Hash: "0xfail02", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
+			wantType:      bchain.CALL,
+			wantTransfers: 0,
+			wantDataErr:   "OUT_OF_ENERGY",
 		},
 
 		{
-			// rejected frames deployed and destroyed nothing - no registry entries,
-			// no top-level SELFDESTRUCT inference
+			// rejected frames deployed and destroyed nothing - no registry entries
 			name: "Rejected create and suicide register nothing",
 			infos: []tronTxInfo{
 				{
@@ -466,9 +467,86 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					Receipt: tronReceipt{Result: "REVERT"},
 				},
 			},
-			txs:               []bchain.RpcTransaction{{Hash: "0xfail03", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
-			wantType:          bchain.CALL,
-			wantDataErrSubstr: "REVERT; internal transaction rejected",
+			txs:         []bchain.RpcTransaction{{Hash: "0xfail03", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType:    bchain.CALL,
+			wantDataErr: "REVERT",
+		},
+
+		{
+			// featured internal txs (node ran with vm.saveFeaturedInternalTx) put
+			// the staked/delegated amount into callValue although no TRX moves -
+			// they must not be booked as transfers
+			name: "Featured internal transaction is ignored",
+			infos: []tronTxInfo{
+				{
+					ID: "featured1",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41c64e69acde1c7b16c2a3efcdbbdaa96c3644c2b3",
+							TransferToAddress: "41c9b586fec130cea232371d7ceecde6ad0d3c2991",
+							Note:              "64656c65676174655265736f757263654f66456e65726779", // delegateResourceOfEnergy
+							CallValueInfo: []tronCallValueInfo{
+								{CallValue: 1255110000000},
+							},
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:      []bchain.RpcTransaction{{Hash: "0xfeatured1", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
+			wantType: bchain.CALL,
+		},
+
+		{
+			// callValueInfo with a tokenId is a TRC-10 transfer, not TRX
+			name: "TRC-10 call frame books no transfer",
+			infos: []tronTxInfo{
+				{
+					ID: "trc10call",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:              "63616c6c", // call
+							CallValueInfo: []tronCallValueInfo{
+								{},
+								{CallValue: 57753367, TokenID: "1002000"},
+							},
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:      []bchain.RpcTransaction{{Hash: "0xtrc10call", To: "0x39dd12a54e2bab7c82aa14a1e158b34263d2d510"}},
+			wantType: bchain.CALL,
+		},
+
+		{
+			// a create frame carrying only TRC-10 value still emits the
+			// zero-value transfer that links the child's address history
+			name: "TRC-10-only create frame emits zero-value CREATE transfer",
+			infos: []tronTxInfo{
+				{
+					ID: "trc10create",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:              "637265617465", // create
+							CallValueInfo: []tronCallValueInfo{
+								{CallValue: 57753367, TokenID: "1002000"},
+							},
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:           []bchain.RpcTransaction{{Hash: "0xtrc10create", To: "0x734c2f23ab41c52308d1206c4eb5fe8e124e6898"}},
+			wantType:      bchain.CALL,
+			wantContracts: []contractEvent{{addr: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"}},
+			wantTransferList: []transferEvent{
+				{typ: bchain.CREATE, from: "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe", to: "TXc9FMgWcKK7zGApKj9rArxDb49QkJZWXn"},
+			},
 		},
 
 		{
@@ -553,9 +631,7 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 				}
 			}
 
-			if tt.wantDataErrSubstr != "" {
-				require.Contains(t, d.Error, tt.wantDataErrSubstr)
-			}
+			require.Equal(t, tt.wantDataErr, d.Error)
 		})
 	}
 }

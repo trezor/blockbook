@@ -49,6 +49,9 @@ func NewTronInternalDataProvider(solidityNodeHTTP TronHTTP, timeout time.Duratio
 	}
 }
 
+// GetInternalDataForBlock is not used in production: TronRPC.GetBlock shadows
+// EthereumRPC.GetBlock and calls buildInternalDataFromTronInfos directly with
+// the tx infos it already fetched for fees/receipts.
 func (p *TronInternalDataProvider) GetInternalDataForBlock(
 	blockHash string,
 	blockHeight uint32,
@@ -70,7 +73,9 @@ func (p *TronInternalDataProvider) GetInternalDataForBlock(
 	responses, err := p.GetTransactionInfoByBlockNum(ctx, blockHeight)
 	if err != nil {
 		glog.Errorf("GetInternalDataForBlock: error calling gettransactioninfobyblocknum: %v", err)
-		return nil, nil, err
+		// the caller indexes into data even on error (eth contract), so the
+		// slice must keep the size of transactions
+		return data, contracts, err
 	}
 	infos := tronTxInfosFromResponses(responses)
 
@@ -150,10 +155,11 @@ func buildInternalDataFromTronInfos(
 		d := &data[i]
 
 		// A transaction deploys a contract only when its eth-style representation
-		// has no recipient (java-tron's JSON-RPC leaves `to` null solely for
-		// CreateSmartContract) AND the node reported the deployed address in the
-		// transaction info. contract_address alone is not a creation signal:
-		// java-tron fills it for ordinary TriggerSmartContract calls as well.
+		// has no recipient AND the node reported the deployed address. Neither
+		// signal alone discriminates: java-tron fills contract_address for
+		// ordinary TriggerSmartContract calls too, and `to` is null also for
+		// native non-VM operations (FreezeBalance, WithdrawBalance, ...), which
+		// have an empty contract_address.
 		deployedContract := ""
 		if tx.To == "" && info.ContractAddress != "" {
 			deployedContract = ToTronAddressFromAddress(info.ContractAddress)
@@ -168,24 +174,31 @@ func buildInternalDataFromTronInfos(
 
 		for _, itx := range info.InternalTransactions {
 
-			t, err := tronNoteHexToInternalType(itx.Note)
+			note, err := decodeNoteHex(itx.Note)
 			if err != nil {
 				return data, contracts, err
 			}
 
 			// a rejected internal transaction did not execute - it moved no
-			// value, created no contract and destroyed none; it only flags
-			// the transaction error below
+			// value, created no contract and destroyed none
 			if itx.Rejected {
+				continue
+			}
+
+			t, handled := tronNoteToInternalType(note)
+			if !handled {
+				// featured frames carry the staked/delegated amount in
+				// callValue although no TRX moves - never book them
+				glog.V(1).Infof("Tron: skipping internal transaction note %q in tx %s", note, info.ID)
 				continue
 			}
 
 			from := ToTronAddressFromAddress(itx.CallerAddress)
 			to := ToTronAddressFromAddress(itx.TransferToAddress)
 
-			// registry events are emitted in note order (parity with eth
-			// processCallTrace), so that an ephemeral contract's creation is
-			// stored before its destruction merges into it
+			// registry events are emitted in execution order (parity with eth
+			// processCallTrace); storeContractInfo merges an ephemeral
+			// contract's destruction into its same-block creation
 			switch t {
 			case bchain.CREATE:
 				// nested create frames register the child contract but do not
@@ -203,16 +216,11 @@ func buildInternalDataFromTronInfos(
 						Contract:          from,
 						DestructedInBlock: blockHeight,
 					})
-					// Tron internal transactions describe only nested frames,
-					// so unlike eth the top-level SELFDESTRUCT type is
-					// inferred from the first destroyed contract
-					if d.Type == bchain.CALL {
-						d.Type = bchain.SELFDESTRUCT
-						d.Contract = from
-					}
 				}
 			}
 
+			// java-tron puts at most one TRX entry in callValueInfo (extras
+			// are TRC-10), so like eth this emits one transfer per frame
 			transferEmitted := false
 			for _, cv := range itx.CallValueInfo {
 				// skip TRC-10
@@ -232,9 +240,10 @@ func buildInternalDataFromTronInfos(
 
 			// eth processCallTrace parity: create and suicide frames emit a
 			// transfer even when no TRX moved, so that the created/destroyed
-			// contract's own address history contains this transaction -
-			// plain zero-value calls stay skipped
-			if !transferEmitted && ((t == bchain.CREATE && to != "") || (t == bchain.SELFDESTRUCT && from != "")) {
+			// contract's own address history contains this transaction - plain
+			// zero-value calls stay skipped, and the root deployment is already
+			// indexed through d.Contract
+			if !transferEmitted && ((t == bchain.CREATE && to != "" && to != deployedContract) || (t == bchain.SELFDESTRUCT && from != "")) {
 				d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 					Type: t,
 					From: from,
@@ -245,17 +254,6 @@ func buildInternalDataFromTronInfos(
 
 		if info.Receipt.Result != "" && info.Receipt.Result != "SUCCESS" {
 			d.Error = info.Receipt.Result
-		}
-
-		for _, itx := range info.InternalTransactions {
-			if itx.Rejected {
-				if d.Error == "" {
-					d.Error = "Internal transaction rejected"
-				} else {
-					d.Error += "; internal transaction rejected"
-				}
-				break
-			}
 		}
 	}
 

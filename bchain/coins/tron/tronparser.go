@@ -54,6 +54,12 @@ func (p *TronParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDes
 func (p *TronParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
 	address = strip0xPrefix(address)
 
+	// empty address is a normal shape (e.g. contract creation), handled
+	// quietly by callers - do not log it below
+	if len(address) == 0 {
+		return nil, bchain.ErrAddressMissing
+	}
+
 	if len(address) == TronAddressLen {
 		decoded := base58.Decode(address)
 		if len(decoded) != 25 || decoded[0] != 0x41 {
@@ -332,22 +338,20 @@ func SanitizeHexUint64String(s string) string {
 	return s
 }
 
-func tronNoteHexToInternalType(noteHex string) (bchain.EthereumInternalTransactionType, error) {
-	note, err := decodeNoteHex(noteHex)
-	if err != nil {
-		return bchain.CALL, err
-	}
-
+// tronNoteToInternalType maps an internal transaction note to the eth internal
+// transaction type. handled=false marks frames that are no value transfers -
+// featured notes (delegateResourceOfEnergy, freezeBalanceV2ForBandwidth, ...)
+// report the staked/delegated amount in callValue although no TRX moves.
+func tronNoteToInternalType(note string) (t bchain.EthereumInternalTransactionType, handled bool) {
 	switch note {
 	case "create":
-		return bchain.CREATE, nil
+		return bchain.CREATE, true
 	case "suicide":
-		return bchain.SELFDESTRUCT, nil
+		return bchain.SELFDESTRUCT, true
 	case "call":
-		return bchain.CALL, nil
+		return bchain.CALL, true
 	default:
-		// add others
-		return bchain.CALL, nil
+		return bchain.CALL, false
 	}
 }
 
