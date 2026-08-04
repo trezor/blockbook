@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"os"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -31,7 +30,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		name          string
 		inSync        bool
 		initialSync   bool
-		chainType     bchain.ChainType
 		bestHeight    uint32
 		backendBlocks int
 		lastBlockTime time.Time
@@ -41,7 +39,6 @@ func TestSystemInfoInSync(t *testing.T) {
 	}{
 		{
 			name:          "reports evm synced when active sync loop is already at backend tip",
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -51,7 +48,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "does not hide stale evm tip when heights match",
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-45 * time.Second),
@@ -60,7 +56,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "does not report synced while local height is behind",
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    90,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -69,7 +64,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "reports evm synced within one block of a fresh tip",
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    99,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -79,7 +73,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "reports evm synced on a sub-second chain at the tip",
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-1 * time.Second),
@@ -90,7 +83,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		{
 			name:          "keeps sub-second chain synced inside the freshness floor",
 			inSync:        true,
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			// 12 x 250ms is 3s; without the floor this would already read stale.
@@ -102,7 +94,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		{
 			name:          "marks sub-second chain stale past the freshness floor",
 			inSync:        true,
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-45 * time.Second),
@@ -111,7 +102,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "does not report synced more than one block behind tip",
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    98,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -121,7 +111,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		{
 			name:          "does not report synced during initial sync",
 			initialSync:   true,
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -130,7 +119,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "keeps startup grace for fresh regular sync",
-			chainType:     bchain.ChainBitcoinType,
 			backendBlocks: 100,
 			startSync:     now.Add(-2 * time.Second),
 			want:          true,
@@ -138,7 +126,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		{
 			name:          "marks already synced evm stale",
 			inSync:        true,
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-45 * time.Second),
@@ -148,7 +135,6 @@ func TestSystemInfoInSync(t *testing.T) {
 		{
 			name:          "keeps already synced evm fresh",
 			inSync:        true,
-			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -157,19 +143,31 @@ func TestSystemInfoInSync(t *testing.T) {
 			want:          true,
 		},
 		{
-			name:          "does not extend tip equality rescue to bitcoin",
-			chainType:     bchain.ChainBitcoinType,
+			// The tip/freshness rescue applies to any chain with a configured cadence, not
+			// only EVM: a UTXO chain at the tip mid-resync-iteration must not read stale.
+			name:          "reports synced at a fresh tip for a non-evm chain",
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
 			startSync:     oldStart,
 			blockPeriod:   2 * time.Second,
+			want:          true,
+		},
+		{
+			// No configured cadence (blockPeriod <= 0): fall back to the raw flag, no
+			// freshness rescue or demotion.
+			name:          "keeps the raw out-of-sync flag without a configured cadence",
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := systemInfoInSync(tt.inSync, tt.initialSync, tt.chainType, tt.bestHeight, tt.backendBlocks, tt.lastBlockTime, tt.startSync, now, tt.blockPeriod)
+			got := systemInfoInSync(tt.inSync, tt.initialSync, tt.bestHeight, tt.backendBlocks, tt.lastBlockTime, tt.startSync, now, tt.blockPeriod)
 			if got != tt.want {
 				t.Fatalf("systemInfoInSync() = %v, want %v", got, tt.want)
 			}
@@ -556,20 +554,25 @@ func fanInVout(n uint32, scriptHex string) bchain.Vout {
 
 func fanInHash(n uint64) string { return fmt.Sprintf("%064x", n) }
 
-var (
-	refreshMetricsOnce sync.Once
-	refreshMetrics     *common.Metrics
-	refreshMetricsErr  error
-)
-
-func getRefreshTestMetrics(t *testing.T) *common.Metrics {
-	refreshMetricsOnce.Do(func() {
-		refreshMetrics, refreshMetricsErr = common.GetMetrics("api_refresh_sync_metrics_test")
+// newRefreshTestMetrics returns a fresh Metrics for one test, registered on a private
+// registry swapped in for the duration. This keeps each test from sharing gauge state with
+// the others (which made them order-dependent under -shuffle) and from registering ~60
+// Blockbook collectors on the process-wide prometheus.DefaultRegisterer.
+func newRefreshTestMetrics(t *testing.T) *common.Metrics {
+	t.Helper()
+	oldReg, oldGath := prometheus.DefaultRegisterer, prometheus.DefaultGatherer
+	registry := prometheus.NewRegistry()
+	prometheus.DefaultRegisterer = registry
+	prometheus.DefaultGatherer = registry
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = oldReg
+		prometheus.DefaultGatherer = oldGath
 	})
-	if refreshMetricsErr != nil {
-		t.Fatalf("GetMetrics: %v", refreshMetricsErr)
+	m, err := common.GetMetrics("api_refresh_sync_metrics_test")
+	if err != nil {
+		t.Fatalf("GetMetrics: %v", err)
 	}
-	return refreshMetrics
+	return m
 }
 
 func gaugeValue(t *testing.T, g prometheus.Gauge) float64 {
@@ -586,14 +589,14 @@ func gaugeValue(t *testing.T, g prometheus.Gauge) float64 {
 // RPCs), so a stall was invisible for up to 16 minutes; RefreshSyncMetrics publishes them
 // from internal state alone and must agree with what /api/ reports.
 func TestRefreshSyncMetrics(t *testing.T) {
-	m := getRefreshTestMetrics(t)
+	m := newRefreshTestMetrics(t)
 
 	is := &common.InternalState{}
 	is.SetBackendInfo(&common.BackendInfo{Blocks: 900})
 	is.FinishedSync(900)
 
 	// Bitcoin-type: inSync is the raw flag, so a synced state publishes 1.
-	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	RefreshSyncMetrics(is, nil, m)
 	if got := gaugeValue(t, m.Synchronized); got != 1 {
 		t.Errorf("synchronized = %v, want 1", got)
 	}
@@ -614,7 +617,7 @@ func TestRefreshSyncMetrics(t *testing.T) {
 	is.StartedSync()
 	is.StartSync = time.Now().UTC().Add(-time.Minute)
 	is.SetBackendInfo(&common.BackendInfo{Blocks: 1000})
-	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	RefreshSyncMetrics(is, nil, m)
 	if got := gaugeValue(t, m.Synchronized); got != 0 {
 		t.Errorf("synchronized = %v, want 0 while the index is behind", got)
 	}
@@ -624,7 +627,7 @@ func TestRefreshSyncMetrics(t *testing.T) {
 
 	// A reindex must be distinguishable from that stall, or the alert has to be silenced.
 	is.InitialSync = true
-	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	RefreshSyncMetrics(is, nil, m)
 	if got := gaugeValue(t, m.InitialSync); got != 1 {
 		t.Errorf("initial_sync = %v, want 1 during a reindex", got)
 	}
@@ -634,37 +637,36 @@ func TestRefreshSyncMetrics(t *testing.T) {
 // cached backend height would be wrong: before the first successful GetChainInfo it is 0,
 // and a 0 reads as "the backend produced no blocks" to the backend-stuck rules.
 func TestRefreshSyncMetricsSkipsUnobservedBackend(t *testing.T) {
-	m := getRefreshTestMetrics(t)
+	m := newRefreshTestMetrics(t)
 	m.BackendBestHeight.Set(12345)
 
-	RefreshSyncMetrics(&common.InternalState{}, nil, bchain.ChainBitcoinType, m)
+	RefreshSyncMetrics(&common.InternalState{}, nil, m)
 	if got := gaugeValue(t, m.BackendBestHeight); got != 12345 {
 		t.Errorf("backend_best_height = %v, want the previous 12345 left untouched", got)
 	}
 }
 
-// TestRefreshSyncMetricsBackendError pins the gauge to what /api/ reports. GetSystemInfo
-// forces inSync=false when GetChainInfo fails; the gauge has to do the same, because the
-// cached backend height is deliberately the last known good one, so systemInfoInSync would
-// otherwise conclude "at the tip and fresh" against a dead backend.
-func TestRefreshSyncMetricsBackendError(t *testing.T) {
-	m := getRefreshTestMetrics(t)
+// TestRefreshSyncMetricsKeepsLastGoodOnBackendError checks that a cached BackendError does
+// NOT force the gauge to 0. bi is only refreshed at the end of a resync iteration, so a
+// force would stay 0 for up to a full resync period after the backend recovered and would
+// disagree with /api, which re-queries live. The last known good backend height is still
+// published, so the backend-stuck rules see a flat series rather than a drop to 0.
+func TestRefreshSyncMetricsKeepsLastGoodOnBackendError(t *testing.T) {
+	m := newRefreshTestMetrics(t)
 
 	is := &common.InternalState{}
 	is.SetBackendInfo(&common.BackendInfo{Blocks: 700})
 	is.FinishedSync(700)
-	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
+	RefreshSyncMetrics(is, nil, m)
 	if got := gaugeValue(t, m.Synchronized); got != 1 {
 		t.Fatalf("synchronized = %v, want 1 before the backend fails", got)
 	}
 
 	is.SetBackendInfo(&common.BackendInfo{BackendError: "GetChainInfo: connection refused"})
-	RefreshSyncMetrics(is, nil, bchain.ChainBitcoinType, m)
-	if got := gaugeValue(t, m.Synchronized); got != 0 {
-		t.Errorf("synchronized = %v, want 0 while the backend cannot be queried", got)
+	RefreshSyncMetrics(is, nil, m)
+	if got := gaugeValue(t, m.Synchronized); got != 1 {
+		t.Errorf("synchronized = %v, want it to hold the last computed value, not be forced to 0 by a cached error", got)
 	}
-	// The last known good height must still be published, so a flat series (rather than a
-	// drop to 0) is what the backend-stuck rules see.
 	if got := gaugeValue(t, m.BackendBestHeight); got != 700 {
 		t.Errorf("backend_best_height = %v, want the retained 700", got)
 	}
