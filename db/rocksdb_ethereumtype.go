@@ -763,6 +763,18 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	if d.chainParser.GetChainType() != bchain.ChainEthereumType {
 		return errors.New("Unsupported chain type")
 	}
+	// The caller resolved this block from a queue snapshot and then fetched it by hash,
+	// so a reorg in between can leave it orphaned - its transactions are no longer in
+	// the index and their internal data must not be written back. Checking here rather
+	// than in the caller makes it exact: connect, disconnect and this reconnect all hold
+	// connectBlockMux, so no reorg can land between the check and the write below.
+	indexedHash, err := d.GetBlockHash(block.Height)
+	if err != nil {
+		return err
+	}
+	if indexedHash != block.Hash {
+		return errors.Errorf("block %d hash changed from %s to %s, possible reorg, skipping", block.Height, block.Hash, indexedHash)
+	}
 	if d.hotAddrTracker != nil {
 		d.hotAddrTracker.BeginBlock()
 	}

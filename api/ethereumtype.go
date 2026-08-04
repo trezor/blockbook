@@ -142,6 +142,8 @@ func (w *Worker) incrementRefetchInternalDataRetryCount(ie *db.BlockInternalData
 	}
 }
 
+// RefetchInternalDataRoutine walks the internal data error queue once. Start it through
+// RefetchInternalData, which registers the pass with the shutdown barrier.
 func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
 	defer func() {
 		refetchInternalDataMux.Lock()

@@ -3,11 +3,44 @@
 package db
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/tests/dbtestdata"
 )
+
+func TestRocksDB_ReconnectInternalDataToBlockEthereumType_ReorgGuard(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	block := dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)
+	if err := d.ConnectBlock(block); err != nil {
+		t.Fatal(err)
+	}
+
+	// the height still holds this hash, so the reconnect proceeds. Without this case a
+	// hash compared in the wrong format would reject every heal and silently disable
+	// healing altogether, while the reorg case below would still pass.
+	if err := d.ReconnectInternalDataToBlockEthereumType(block); err != nil {
+		t.Fatalf("reconnect with the indexed hash: %v", err)
+	}
+
+	// a reorg replaced the block at this height: the orphan's transactions are no longer
+	// indexed, so its internal data must not be written back
+	orphan := dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)
+	orphan.Hash = "0x" + strings.Repeat("ab", 32)
+	err := d.ReconnectInternalDataToBlockEthereumType(orphan)
+	if err == nil {
+		t.Fatal("reconnect of an orphaned block succeeded, want an error")
+	}
+	if !strings.Contains(err.Error(), "possible reorg") {
+		t.Fatalf("reconnect of an orphaned block: %v, want a reorg error", err)
+	}
+}
 
 func Test_emptyInternalData(t *testing.T) {
 	tests := []struct {
