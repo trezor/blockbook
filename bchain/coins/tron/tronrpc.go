@@ -675,6 +675,11 @@ func (b *TronRPC) computeBlockConfirmations(blockNumber uint64) (uint32, error) 
 }
 
 func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData, keepReceipt bool) (*bchain.Tx, error) {
+	// eth parity (EthTxToTx): drop empty internal data so that no useless
+	// cfInternalData row is stored for every plain transaction
+	if internalData != nil && internalData.Type == bchain.CALL && len(internalData.Transfers) == 0 && internalData.Error == "" {
+		internalData = nil
+	}
 	csd := tronBuildEthereumSpecificData(txByID, txInfo)
 	csd.InternalData = internalData
 
