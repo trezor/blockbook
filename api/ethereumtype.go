@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -81,43 +82,64 @@ func (w *Worker) incrementRefetchInternalDataRetryCount(ie *db.BlockInternalData
 }
 
 func (w *Worker) RefetchInternalDataRoutine(resetRetries bool) {
+	defer func() {
+		refetchInternalDataMux.Lock()
+		refetchingInternalData = false
+		refetchInternalDataMux.Unlock()
+	}()
 	internalErrors, err := w.db.GetBlockInternalDataErrorsEthereumType()
-	if err == nil {
-		for i := range internalErrors {
-			ie := &internalErrors[i]
-			// an operator-triggered refetch clears the retry count so a block that had
-			// exhausted its budget gets a full fresh set of attempts (via the periodic
-			// auto-retry too) instead of staying permanently abandoned
-			if resetRetries {
-				ie.Retries = 0
-			}
-			if ie.Retries >= maxNumberOfRetires {
-				glog.Infof("Refetching internal data for %d %s, retries exceeded", ie.Height, ie.Hash)
-				continue
-			}
-			glog.Infof("Refetching internal data for %d %s, retries %d", ie.Height, ie.Hash, ie.Retries)
-			block, err := w.getBlockRetryInternalData(ie.Hash, ie.Height)
-			if err != nil || block == nil {
-				glog.Errorf("Refetching internal data for %d %s, error %v", ie.Height, ie.Hash, err)
-				continue
-			}
-			blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
-			if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
-				glog.Errorf("Refetching internal data for %d %s, internal data error %v", ie.Height, ie.Hash, blockSpecificData.InternalDataError)
+	if err != nil {
+		glog.Errorf("GetBlockInternalDataErrorsEthereumType, error %v", err)
+		return
+	}
+	exceeded := 0
+	for i := range internalErrors {
+		ie := &internalErrors[i]
+		// an operator-triggered refetch revives only the blocks that already burned
+		// their budget; entries still under the cap keep their real count, so the
+		// periodic auto-retry can still give up on them and the admin table keeps
+		// reporting how many attempts a block has actually cost
+		if resetRetries && ie.Retries >= maxNumberOfRetires {
+			ie.Retries = 0
+		}
+		if ie.Retries >= maxNumberOfRetires {
+			exceeded++
+			continue
+		}
+		glog.Infof("Refetching internal data for %d %s, retries %d", ie.Height, ie.Hash, ie.Retries)
+		block, err := w.getBlockRetryInternalData(ie.Hash, ie.Height)
+		if err != nil || block == nil {
+			glog.Errorf("Refetching internal data for %d %s, error %v", ie.Height, ie.Hash, err)
+			// a backend that does not have the block has given a definitive answer about
+			// this block, so charge a retry - otherwise the entry never reaches
+			// maxNumberOfRetires and the hourly loop refetches it forever. Every other
+			// error here (transport, eth_getLogs) is backend-wide and usually transient,
+			// and must not spend the budget of every queued block during an outage.
+			if errors.Is(err, bchain.ErrBlockNotFound) {
 				w.incrementRefetchInternalDataRetryCount(ie)
-			} else if err = w.db.ReconnectInternalDataToBlockEthereumType(block); err != nil {
-				glog.Errorf("ReconnectInternalDataToBlockEthereumType %d %s, error %v", ie.Height, ie.Hash, err)
-			} else {
-				if blockSpecificData != nil {
-					w.storeHealedContracts(blockSpecificData.Contracts)
-				}
-				glog.Infof("Refetching internal data for %d %s, success", ie.Height, ie.Hash)
 			}
+			continue
+		}
+		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
+			glog.Errorf("Refetching internal data for %d %s, internal data error %v", ie.Height, ie.Hash, blockSpecificData.InternalDataError)
+			w.incrementRefetchInternalDataRetryCount(ie)
+		} else if err = w.db.ReconnectInternalDataToBlockEthereumType(block); err != nil {
+			// a reconnect failure is local - rocksdb or the disk - rather than a property
+			// of the block, so retrying it is right and it does not consume the budget
+			glog.Errorf("ReconnectInternalDataToBlockEthereumType %d %s, error %v", ie.Height, ie.Hash, err)
+		} else {
+			if blockSpecificData != nil {
+				w.storeHealedContracts(blockSpecificData.Contracts)
+			}
+			glog.Infof("Refetching internal data for %d %s, success", ie.Height, ie.Hash)
 		}
 	}
-	refetchInternalDataMux.Lock()
-	refetchingInternalData = false
-	refetchInternalDataMux.Unlock()
+	// one line per pass - the blocks that ran out of budget stay queued, and the admin
+	// page lists them with their retry counts
+	if exceeded > 0 {
+		glog.Infof("Refetching internal data, %d blocks skipped with retries exceeded", exceeded)
+	}
 }
 
 // storeHealedContracts registers the contracts a healed block created or destroyed.
@@ -135,14 +157,19 @@ func (w *Worker) storeHealedContracts(contracts []bchain.ContractInfo) {
 
 // getBlockRetryInternalData fetches a block, retrying once when the internal data are
 // missing or errored - the second attempt usually succeeds, apparently because the
-// first warms the backend cache. The returned block may still carry an
-// InternalDataError; the caller decides how to handle that.
+// first warms the backend cache. A block the backend does not have is reported straight
+// away, since warming its cache cannot conjure one up. The returned block may still
+// carry an InternalDataError; the caller decides how to handle that.
 func (w *Worker) getBlockRetryInternalData(hash string, height uint32) (*bchain.Block, error) {
 	block, err := w.chain.GetBlock(hash, height)
 	if err == nil && block != nil {
 		if bsd, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData); bsd == nil || bsd.InternalDataError == "" {
 			return block, nil
 		}
+	}
+	if errors.Is(err, bchain.ErrBlockNotFound) {
+		// the backend does not have the block at all; a second attempt cannot change that
+		return nil, err
 	}
 	glog.Errorf("getBlockRetryInternalData %d %s, first attempt failed (error %v), retrying", height, hash, err)
 	return w.chain.GetBlock(hash, height)
