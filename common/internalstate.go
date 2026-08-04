@@ -68,7 +68,12 @@ type InternalState struct {
 	// true if application is with flag --sync
 	SyncMode bool `json:"syncMode" ts_doc:"Flag indicating if the node is in sync mode."`
 
-	InitialSync    bool      `json:"initialSync" ts_doc:"If true, the system is in the initial sync phase."`
+	// InitialSync is a runtime flag, deliberately not persisted (json:"-"). A SIGTERM
+	// during the initial build would otherwise store initialSync=true, and a subsequent
+	// start without --sync never clears it, latching blockbook_initial_sync at 1 and
+	// permanently gating off any alert that excludes reindexes. A --sync run always sets
+	// it explicitly on startup, so nothing of value is lost by not persisting it.
+	InitialSync    bool      `json:"-" ts_doc:"If true, the system is in the initial sync phase (not persisted)."`
 	IsSynchronized bool      `json:"isSynchronized" ts_doc:"If true, the main index is fully synced to BestHeight."`
 	BestHeight     uint32    `json:"bestHeight" ts_doc:"Current best block height known to the indexer."`
 	StartSync      time.Time `json:"-" ts_doc:"Timestamp when sync started (not exposed via JSON)."`
@@ -256,6 +261,17 @@ func (is *InternalState) GetSyncState() (bool, uint32, time.Time, time.Time) {
 	return is.IsSynchronized, is.BestHeight, is.LastSync, is.StartSync
 }
 
+// GetSyncMetricsSnapshot returns every value RefreshSyncMetrics needs under a single lock
+// acquisition. Taking BackendInfo, InitialSync and the sync state through three separate
+// locked accessors let a concurrent updateBackendInfo()/FinishedSync() land between them,
+// so the gap between a pre-resync backend height and a post-resync indexed height could
+// tear and flip the published gauge for one sample.
+func (is *InternalState) GetSyncMetricsSnapshot() (backendInfo BackendInfo, initialSync, isSynchronized bool, bestHeight uint32, lastSync, startSync time.Time) {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	return is.BackendInfo, is.InitialSync, is.IsSynchronized, is.BestHeight, is.LastSync, is.StartSync
+}
+
 // StartedMempoolSync signals start of mempool synchronization
 func (is *InternalState) StartedMempoolSync() {
 	is.mux.Lock()
@@ -349,8 +365,11 @@ func (is *InternalState) GetLastBlockTime() uint32 {
 	return 0
 }
 
-// SetBlockTimes initializes BlockTimes array, returns AvgBlockPeriod
-func (is *InternalState) SetBlockTimes(blockTimes []uint32) uint32 {
+// SetBlockTimes initializes BlockTimes array and returns the average block period in
+// fractional seconds (the value the metric uses); the integer form truncates sub-second
+// chains to 0. Returning it here keeps the single lock acquisition instead of forcing the
+// caller to re-enter GetAvgBlockPeriodSeconds.
+func (is *InternalState) SetBlockTimes(blockTimes []uint32) float64 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	if len(is.BlockTimes) < len(blockTimes) {
@@ -361,11 +380,14 @@ func (is *InternalState) SetBlockTimes(blockTimes []uint32) uint32 {
 	}
 	is.computeAvgBlockPeriod()
 	glog.Info("set ", len(is.BlockTimes), " block times, average block period ", is.AvgBlockPeriod, "s")
-	return is.AvgBlockPeriod
+	return is.AvgBlockPeriodSeconds
 }
 
-// SetBlockTime sets block time to BlockTimes, allocating the slice as necessary, returns AvgBlockPeriod
-func (is *InternalState) SetBlockTime(height uint32, time uint32) uint32 {
+// SetBlockTime sets block time to BlockTimes, allocating the slice as necessary, and
+// returns the average block period in fractional seconds (see SetBlockTimes). This is the
+// hottest write path, so it computes and returns the value under the same lock the write
+// already holds rather than making the caller take the lock a second time.
+func (is *InternalState) SetBlockTime(height uint32, time uint32) float64 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	if int(height) >= len(is.BlockTimes) {
@@ -377,7 +399,7 @@ func (is *InternalState) SetBlockTime(height uint32, time uint32) uint32 {
 		is.BlockTimes[height] = time
 	}
 	is.computeAvgBlockPeriod()
-	return is.AvgBlockPeriod
+	return is.AvgBlockPeriodSeconds
 }
 
 // RemoveLastBlockTimes removes last times from BlockTimes
@@ -439,6 +461,14 @@ func (is *InternalState) computeAvgBlockPeriod() {
 	last := len(is.BlockTimes) - 1
 	first := last - avgBlockPeriodSample - 1
 	if first < 0 {
+		return
+	}
+	// Header timestamps are not guaranteed monotonic (see GetBlockHeightOfTime), and
+	// RemoveLastBlockTimes re-runs this on a truncated array after a disconnect. A
+	// uint32 subtraction with BlockTimes[last] < BlockTimes[first] would wrap to ~4.29e9,
+	// spiking both the ETA and the blockbook_avg_block_period gauge. Leave the previous
+	// averages in place for such a window rather than publishing a wrapped value.
+	if is.BlockTimes[last] <= is.BlockTimes[first] {
 		return
 	}
 	span := is.BlockTimes[last] - is.BlockTimes[first]
