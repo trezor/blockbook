@@ -76,37 +76,27 @@ func (b *HyperevmRPC) Initialize() error {
 	return nil
 }
 
-// GetBlockHash returns the hash of the block at the given height.
-//
-// For every height except genesis this defers to the base implementation, which
-// derives the hash via go-ethereum's HeaderByNumber().Hash() — i.e. it RLP-hashes
-// the header fields rather than trusting the node's "hash" field. That works for
-// blocks >= 1, but for the HyperEVM genesis go-ethereum recomputes 0x0466…8f8bd5,
-// which does NOT match reth-hl's canonical genesis hash 0xd8fcc13b…895f0 (the
-// genesis header carries zero-valued Prague/Cancun fields that reth-hl folded into
-// the canonical hash under different rules). Sync then asks the backend for a block
-// by that mis-derived hash, gets null, and wedges at height 0 forever.
-//
-// Return the hash the backend actually reports for the genesis header instead, so
-// the stored genesis and every subsequent tip/reorg comparison stay consistent.
+// GetBlockHash returns the hash reported by the backend, not go-ethereum's RLP
+// recomputation of the header used by the base implementation. The two disagree at the
+// HyperEVM genesis, which wedged sync at height 0. Blocks are stored under the reported
+// hash, so read that field at every height to keep the comparisons consistent.
 func (b *HyperevmRPC) GetBlockHash(height uint32) (string, error) {
-	if height == 0 {
-		raw, err := b.GetBlockRawByHashOrHeight("", 0, false)
-		if err != nil {
-			return "", errors.Annotate(err, "genesis")
-		}
-		var h struct {
-			Hash string `json:"hash"`
-		}
-		if err := json.Unmarshal(raw, &h); err != nil {
-			return "", errors.Annotate(err, "genesis")
-		}
-		if h.Hash == "" {
-			return "", bchain.ErrBlockNotFound
-		}
-		return h.Hash, nil
+	raw, err := b.GetBlockRawByHashOrHeight("", height, false)
+	if err != nil {
+		// Not annotated: callers match bchain.ErrBlockNotFound with errors.Is and the
+		// pinned juju/errors has no Unwrap.
+		return "", err
 	}
-	return b.EthereumRPC.GetBlockHash(height)
+	var h struct {
+		Hash string `json:"hash"`
+	}
+	if err := json.Unmarshal(raw, &h); err != nil {
+		return "", errors.Annotatef(err, "height %v", height)
+	}
+	if h.Hash == "" {
+		return "", bchain.ErrBlockNotFound
+	}
+	return h.Hash, nil
 }
 
 func (b *HyperevmRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
