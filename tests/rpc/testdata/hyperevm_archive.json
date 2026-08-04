@@ -1,0 +1,48 @@
+{
+    "blockHeight": 42176091,
+    "blockHash": "0x14e51adc4102d5f50f46e71f5268c2134a42f7a11103f3769917451d20405217",
+    "blockTime": 1785740657,
+    "blockSize": 4251,
+    "blockTxs": [
+        "0xec9e0382c1dd6c748e4187405bc3064e7ea2a73808e1a705c15f2b9e095a54e4",
+        "0x98e344ebf02aee64e387b250e30e11975e4d65aa63b0f6286e517f7b85cb436c",
+        "0x8c5b3cc5bcb88563f1d8b1a5691c81400009160ae941441d3bf1f4dc62c5d73f",
+        "0x41a890bfc45f31dba4d70d616d2479939a1be3b933a04e32496664fc1602b452",
+        "0xde011d6d8124f1769f2197e12ef526c239a65d0f269fefd4747b708cc55bbee4",
+        "0xc023c9a60b9a26c5626a1d3e786610be62697f8f56821ad0f4d1bfe50c2d56ea",
+        "0xae5b160693bad41b9869cddc92958c7a6c527c65a207f9e2c4f78ce1cd539f83"
+    ],
+    "ethCallBatch": {
+        "address": "0xd2be32dbf454ad8ff57851e9762cac12536ebee4",
+        "contracts": [
+            "0x5555555555555555555555555555555555555555",
+            "0xb88339cb7199b77e23db6e890353e22632ba630f",
+            "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb",
+            "0x9fdbda0a5e284c32744d2f17ee5c74b284993463"
+        ]
+    },
+    "txDetails": {
+        "0xec9e0382c1dd6c748e4187405bc3064e7ea2a73808e1a705c15f2b9e095a54e4": {
+            "txid": "0xec9e0382c1dd6c748e4187405bc3064e7ea2a73808e1a705c15f2b9e095a54e4",
+            "blockTime": 1785740657,
+            "time": 1785740657,
+            "vin": [
+                {
+                    "addresses": [
+                        "0x2b2dcd4b52b959c8c2bdd7b9f7bf35fe1a16aace"
+                    ]
+                }
+            ],
+            "vout": [
+                {
+                    "value": "0",
+                    "scriptPubKey": {
+                        "addresses": [
+                            "0x8549fd7ffc092f8366e416e129a622ec060104ea"
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}
