@@ -216,6 +216,11 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 	defer func() {
+		// must precede the close: an internal data healing pass reads and writes rocksdb
+		// from its own goroutine and nothing else awaits it, so closing under it would
+		// mean using destroyed column family handles. Called here rather than as a
+		// separate defer so program order, not defer ordering, guarantees it.
+		api.StopInternalDataRefetch()
 		glog.Info("shutdown: rocksdb close start")
 		if err := index.Close(); err != nil {
 			glog.Error("shutdown: rocksdb close error: ", err)
@@ -397,7 +402,7 @@ func mainWithExitCode() int {
 			if err != nil {
 				glog.Error("internalDataErrorRetry: NewWorker: ", err)
 			} else {
-				go retryWorker.InternalDataErrorRetryLoop()
+				go retryWorker.InternalDataErrorRetryLoop(chanOsSignal)
 			}
 		}
 	}
