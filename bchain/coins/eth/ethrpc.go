@@ -223,6 +223,9 @@ type EthereumRPC struct {
 	multicall3Probe         atomic.Int32
 	multicall3ProbeSF       singleflight.Group
 	multicall3ProbeFailures atomic.Int32
+	// Unix nanos until which probing is paused after repeated transient eth_getCode
+	// failures; probing resumes once the deadline passes. See multicall.go.
+	multicall3ProbeSuspendedUntil atomic.Int64
 }
 
 // NewEthereumRPC returns new EthRPC instance.

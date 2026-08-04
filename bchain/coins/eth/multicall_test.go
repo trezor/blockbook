@@ -668,15 +668,24 @@ func TestEthereumTypeMulticallAggregate3_TransientProbeError_PropagatesAndIsDist
 	}
 }
 
-// After multicall3MaxProbeFailures consecutive transient probe errors the probe latches to
-// not-deployed, so a provider that restricts eth_getCode stops paying a probe on every request.
-func TestProbeMulticall3_LatchesNotDeployedAfterRepeatedFailures(t *testing.T) {
+// After multicall3MaxProbeFailures consecutive transient probe errors, probing is suspended
+// for multicall3ProbeSuspendInterval instead of latching not-deployed, so a provider that
+// restricts eth_getCode stops paying a probe on every request while a node that is merely
+// down at startup does not lose multicall for the process lifetime.
+func TestProbeMulticall3_SuspendsAfterRepeatedFailures(t *testing.T) {
+	var failing atomic.Bool
+	failing.Store(true)
 	mock := &mockMulticallRPC{
 		handler: func(string) (string, error) {
 			t.Fatal("eth_call must not be issued while probing fails")
 			return "", nil
 		},
-		getCodeHandler: func(string) (string, error) { return "", errors.New("rpc down") },
+		getCodeHandler: func(string) (string, error) {
+			if failing.Load() {
+				return "", errors.New("rpc down")
+			}
+			return "0x6080604052", nil
+		},
 	}
 	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
 
@@ -689,17 +698,34 @@ func TestProbeMulticall3_LatchesNotDeployedAfterRepeatedFailures(t *testing.T) {
 			t.Fatalf("attempt %d: must not cache state yet, got %d", i, state)
 		}
 	}
-	// The K-th failure latches to not-deployed: (false, nil), cached.
+	// The K-th failure suspends probing: (false, nil), no deployment verdict cached.
 	if deployed, err := rpc.probeMulticall3(); deployed || err != nil {
-		t.Fatalf("latching attempt: want (false, nil), got (%v, %v)", deployed, err)
+		t.Fatalf("suspending attempt: want (false, nil), got (%v, %v)", deployed, err)
 	}
-	if state := rpc.multicall3Probe.Load(); state != multicall3NotDeployed {
-		t.Fatalf("want latched multicall3NotDeployed, got %d", state)
+	if state := rpc.multicall3Probe.Load(); state != multicall3Unprobed {
+		t.Fatalf("suspension must not cache a deployment verdict, got %d", state)
 	}
-	// Further calls are served from cache: no additional eth_getCode.
-	rpc.probeMulticall3()
+	if rpc.multicall3ProbeSuspendedUntil.Load() <= 0 {
+		t.Fatal("want a suspension deadline stored")
+	}
+	// While suspended, further calls report unavailable without any eth_getCode.
+	if deployed, err := rpc.probeMulticall3(); deployed || err != nil {
+		t.Fatalf("suspended probe: want (false, nil), got (%v, %v)", deployed, err)
+	}
 	if _, getCode := mock.callCounts(); getCode != multicall3MaxProbeFailures {
-		t.Fatalf("want exactly %d eth_getCode probes (latched after), got %d", multicall3MaxProbeFailures, getCode)
+		t.Fatalf("want exactly %d eth_getCode probes (suspended after), got %d", multicall3MaxProbeFailures, getCode)
+	}
+	// Once the window elapses and the node recovers, the next probe retries and caches Deployed.
+	rpc.multicall3ProbeSuspendedUntil.Store(time.Now().Add(-time.Second).UnixNano())
+	failing.Store(false)
+	if deployed, err := rpc.probeMulticall3(); !deployed || err != nil {
+		t.Fatalf("post-suspension probe: want (true, nil), got (%v, %v)", deployed, err)
+	}
+	if _, getCode := mock.callCounts(); getCode != multicall3MaxProbeFailures+1 {
+		t.Fatalf("want %d eth_getCode probes after the window elapses, got %d", multicall3MaxProbeFailures+1, getCode)
+	}
+	if state := rpc.multicall3Probe.Load(); state != multicall3Deployed {
+		t.Fatalf("want cached multicall3Deployed after recovery, got %d", state)
 	}
 }
 
