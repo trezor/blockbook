@@ -26,6 +26,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
+	"golang.org/x/crypto/sha3"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -220,11 +221,7 @@ type EthereumRPC struct {
 	// that deploy it at a non-canonical address (e.g. Tron). Set in code, not config.
 	Multicall3AddressOverride string
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
-	multicall3Probe         atomic.Int32
-	multicall3ProbeSF       singleflight.Group
-	multicall3ProbeFailures atomic.Int32
-	// unix nanos until which probing is paused; see multicall.go
-	multicall3ProbeSuspendedUntil atomic.Int64
+	multicall3 multicall3Gate
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -351,10 +348,16 @@ func (b *EthereumRPC) observeChainDataFallback(component, reason string, count i
 }
 
 func (b *EthereumRPC) observeEthCallError(mode, errType string) {
-	if b.metrics == nil {
+	b.observeEthCallErrors(mode, errType, 1)
+}
+
+// observeEthCallErrors adds count at once; per-element loops tally locally and emit here, as
+// With() builds a label map and resolves the child counter on every call.
+func (b *EthereumRPC) observeEthCallErrors(mode, errType string, count int) {
+	if b.metrics == nil || count <= 0 {
 		return
 	}
-	b.metrics.EthCallErrors.With(common.Labels{"mode": mode, "type": errType}).Inc()
+	b.metrics.EthCallErrors.With(common.Labels{"mode": mode, "type": errType}).Add(float64(count))
 }
 
 func (b *EthereumRPC) observeEthCallBatch(size int) {

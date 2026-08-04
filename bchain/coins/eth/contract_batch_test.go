@@ -715,22 +715,15 @@ func TestErc20BalancesMulticall3LengthMismatch(t *testing.T) {
 func TestEthereumTypeGetErc20ContractBalancesMulticallChunkBounded(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	n := multicall3MaxCallsPerAggregate + 20 // spills into a second aggregate3 chunk
-	contracts := make([]bchain.AddressDescriptor, n)
-	for i := range contracts {
-		var a common.Address
-		a[19] = byte((i + 1) & 0xff)
-		a[18] = byte(((i + 1) >> 8) & 0xff)
-		contracts[i] = bchain.AddressDescriptor(a.Bytes())
-	}
-	// Return one Success=true result per call in the received aggregate3 (array length at
-	// byte selector(4)+outer-offset(32)), so each sub-chunk decodes cleanly.
+	contracts := erc20TestContracts(n)
+	// Return one Success=true result per call in the received aggregate3, so each sub-chunk
+	// decodes cleanly.
 	mock := &mockMulticallRPC{
 		handler: func(callData string) (string, error) {
-			raw, err := hexutil.Decode(callData)
+			cnt, err := aggregate3SubCallCount(callData)
 			if err != nil {
 				return "", err
 			}
-			cnt := int(bigUintAt(raw, 4+evmWordBytes).Uint64())
 			res := make([]bchain.EthereumMulticallResult, cnt)
 			for i := range res {
 				res[i] = bchain.EthereumMulticallResult{Success: true, Data: fmt.Sprintf("0x%064x", 1)}
@@ -850,69 +843,17 @@ func TestEthereumTypeGetErc20ContractBalancesGenuineRevertNotReresolved(t *testi
 	}
 }
 
-// mockMulticallChunkFailRPC: probe deployed; the first failAfter aggregate3 calls succeed,
-// later ones fail. Fallback batch served by the embedded mockBatchRPC.
-type mockMulticallChunkFailRPC struct {
-	*mockBatchRPC
-	failAfter int
-	value     int64
-	ethCalls  int
-}
-
-func (m *mockMulticallChunkFailRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	out, ok := result.(*string)
-	if !ok {
-		return errors.New("bad result type")
-	}
-	switch method {
-	case "eth_getCode":
-		*out = "0x6080" // deployed
-		return nil
-	case "eth_call":
-		argMap, _ := args[0].(map[string]interface{})
-		to, _ := argMap["to"].(string)
-		if !strings.EqualFold(to, multicall3Address) {
-			return fmt.Errorf("unexpected single eth_call to %s", to)
-		}
-		m.ethCalls++
-		if m.ethCalls > m.failAfter {
-			return errors.New("aggregate3 chunk out of gas")
-		}
-		data, _ := argMap["data"].(string)
-		raw, err := hexutil.Decode(data)
-		if err != nil {
-			return err
-		}
-		// Array length sits at selector(4) + outer-offset(1 word).
-		cnt := int(bigUintAt(raw, 4+evmWordBytes).Uint64())
-		res := make([]bchain.EthereumMulticallResult, cnt)
-		for i := range res {
-			res[i] = bchain.EthereumMulticallResult{Success: true, Data: fmt.Sprintf("0x%064x", m.value)}
-		}
-		*out = fixtureAggregate3Result(res)
-		return nil
-	default:
-		return errors.New("unexpected method")
-	}
-}
-
 // Only the failed chunk's contracts fall back to the batch; successful chunks keep their balances.
 func TestEthereumTypeGetErc20ContractBalancesPartialChunkFailureFallsBackForThatChunkOnly(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
 	n := multicall3MaxCallsPerAggregate + 20 // chunk 1 = 100 contracts, chunk 2 = 20
-	contracts := make([]bchain.AddressDescriptor, n)
-	for i := range contracts {
-		var a common.Address
-		a[19] = byte((i + 1) & 0xff)
-		a[18] = byte(((i + 1) >> 8) & 0xff)
-		contracts[i] = bchain.AddressDescriptor(a.Bytes())
-	}
+	contracts := erc20TestContracts(n)
 	// only the failed chunk is resolvable via batch: a whole-list fallback would show as nils
 	inner := &mockBatchRPC{results: map[string]string{}}
-	for _, c := range contracts[multicall3MaxCallsPerAggregate:] {
-		inner.results[hexutil.Encode(c)] = fmt.Sprintf("0x%064x", 5)
+	for i := multicall3MaxCallsPerAggregate; i < n; i++ {
+		inner.results[hexutil.Encode(contracts[i])] = fmt.Sprintf("0x%064x", erc20BatchTestValue(i))
 	}
-	mock := &mockMulticallChunkFailRPC{mockBatchRPC: inner, failAfter: 1, value: 1}
+	mock := &mockMulticallMixedRPC{mockBatchRPC: inner, holeAt: -1, failFrom: multicall3MaxCallsPerAggregate}
 	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
 	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
 	if err != nil {
@@ -923,14 +864,14 @@ func TestEthereumTypeGetErc20ContractBalancesPartialChunkFailureFallsBackForThat
 	}
 	// The successful chunk keeps its aggregate3 results.
 	for i := 0; i < multicall3MaxCallsPerAggregate; i++ {
-		if balances[i] == nil || balances[i].Cmp(big.NewInt(1)) != 0 {
-			t.Fatalf("balance[%d]=%v, want 1 from the successful aggregate3 chunk", i, balances[i])
+		if balances[i] == nil || balances[i].Cmp(big.NewInt(erc20MulticallTestValue(i))) != 0 {
+			t.Fatalf("balance[%d]=%v, want %d from the successful aggregate3 chunk", i, balances[i], erc20MulticallTestValue(i))
 		}
 	}
 	// The failed chunk is recovered through the batch.
 	for i := multicall3MaxCallsPerAggregate; i < n; i++ {
-		if balances[i] == nil || balances[i].Cmp(big.NewInt(5)) != 0 {
-			t.Fatalf("balance[%d]=%v, want 5 from the batch fallback", i, balances[i])
+		if balances[i] == nil || balances[i].Cmp(big.NewInt(erc20BatchTestValue(i))) != 0 {
+			t.Fatalf("balance[%d]=%v, want %d from the batch fallback", i, balances[i], erc20BatchTestValue(i))
 		}
 	}
 	if want := n - multicall3MaxCallsPerAggregate; len(inner.batchSizes) != 1 || inner.batchSizes[0] != want {
@@ -956,6 +897,20 @@ func erc20TestContracts(n int) []bchain.AddressDescriptor {
 	return contracts
 }
 
+// aggregate3SubCallCount reads how many sub-calls an aggregate3 request carries: the array
+// length sits at selector(4) + outer-offset(1 word).
+func aggregate3SubCallCount(callData string) (int, error) {
+	raw, err := hexutil.Decode(callData)
+	if err != nil {
+		return 0, err
+	}
+	cnt, ok := wordAsIndex(raw, 4+evmWordBytes)
+	if !ok {
+		return 0, fmt.Errorf("aggregate3 sub-call count out of range")
+	}
+	return cnt, nil
+}
+
 // A systemic aggregate3 failure must cost one doomed eth_call, not one per remaining chunk.
 func TestEthereumTypeGetErc20ContractBalancesSystemicChunkFailureStopsAtFirstChunk(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
@@ -965,8 +920,8 @@ func TestEthereumTypeGetErc20ContractBalancesSystemicChunkFailureStopsAtFirstChu
 	for i, c := range contracts {
 		inner.results[hexutil.Encode(c)] = fmt.Sprintf("0x%064x", erc20BatchTestValue(i))
 	}
-	// failAfter 0: every aggregate3 call fails, as on a chain whose eth_call gas cap is too low.
-	mock := &mockMulticallChunkFailRPC{mockBatchRPC: inner, failAfter: 0}
+	// failFrom 0: every aggregate3 call fails, as on a chain whose eth_call gas cap is too low.
+	mock := &mockMulticallMixedRPC{mockBatchRPC: inner, holeAt: -1, failFrom: 0}
 	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
 	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
 	if err != nil {
@@ -988,8 +943,9 @@ func TestEthereumTypeGetErc20ContractBalancesSystemicChunkFailureStopsAtFirstChu
 }
 
 // mockMulticallMixedRPC: probe deployed; aggregate3 answers carry per-global-index values (a
-// mis-mapped write-back shows as a wrong balance), holeAt returns Success=false with empty
-// returndata, and the chunk from failFrom on fails. Fallback batch served by mockBatchRPC.
+// mis-mapped write-back shows as a wrong balance), the element at holeAt returns Success=false
+// with empty returndata (-1 for none), and the chunk covering failFrom on fails. Fallback batch
+// served by mockBatchRPC.
 type mockMulticallMixedRPC struct {
 	*mockBatchRPC
 	holeAt   int
@@ -1018,11 +974,10 @@ func (m *mockMulticallMixedRPC) CallContext(ctx context.Context, result interfac
 			return errors.New("aggregate3 chunk out of gas")
 		}
 		data, _ := argMap["data"].(string)
-		raw, err := hexutil.Decode(data)
+		cnt, err := aggregate3SubCallCount(data)
 		if err != nil {
 			return err
 		}
-		cnt := int(bigUintAt(raw, 4+evmWordBytes).Uint64())
 		res := make([]bchain.EthereumMulticallResult, cnt)
 		for i := range res {
 			if g := m.offset + i; g == m.holeAt {
@@ -1092,12 +1047,10 @@ func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *test
 	var subCallCounts []int
 	mock := &mockMulticallRPC{
 		handler: func(callData string) (string, error) {
-			raw, err := hexutil.Decode(callData)
+			cnt, err := aggregate3SubCallCount(callData)
 			if err != nil {
 				return "", err
 			}
-			// Array length sits at selector(4) + outer-offset(1 word).
-			cnt := int(bigUintAt(raw, 4+evmWordBytes).Uint64())
 			subCallCounts = append(subCallCounts, cnt)
 			res := make([]bchain.EthereumMulticallResult, cnt)
 			for i := range res {
