@@ -471,7 +471,9 @@ func (c *mempoolWithMetrics) Resync() (count int, err error) {
 	}).Observe(throughput)
 	if err == nil {
 		c.m.MempoolSize.Set(float64(count))
-		c.m.MempoolLastSync.Set(float64(time.Now().Unix()))
+		// GaugeVec, not a plain gauge, so the series stays absent until this first
+		// successful reload instead of reading 0 from process start.
+		c.m.MempoolLastSync.With(common.Labels{"chain": c.chainTypeLabel()}).Set(float64(time.Now().Unix()))
 	}
 	return count, err
 }

@@ -226,8 +226,9 @@ metrics:
     help: Transactions retained from the last successful backend reload. Only written on success, so it freezes at the last good value when the reload loop breaks rather than signalling the failure - use mempool_last_sync_timestamp_seconds for that. Healthy magnitudes differ by orders of magnitude between chains (a Bitcoin peak near 1.6e5 against a Polygon peak above 5e6), so any threshold on it has to be per-coin or relative to the coin's own recent average
   mempool_last_sync_timestamp_seconds:
     name: blockbook_mempool_last_sync_timestamp_seconds
-    type: gauge
-    help: Unix time of the last SUCCESSFUL mempool reload. Plot time() - this for reload staleness; a value climbing past a few multiples of resyncmempoolperiod (default ~60s) means the reload loop is failing or wedged. Exported as a timestamp rather than a computed *_age_seconds gauge on purpose - it is only written on success, so the age keeps rising while reloads fail, and it is restart-safe. This is the metric to alert on, in preference to the /api/ inSyncMempool flag - that flag is cleared at the START of every reload, so it reads "not syncing" for a large fraction of samples on a healthy node and cannot carry an alert
+    type: gauge_vec
+    labels: [chain]
+    help: Unix time of the last SUCCESSFUL mempool reload. Plot time() - this for reload staleness; a value climbing past a few multiples of resyncmempoolperiod (default ~60s) means the reload loop is failing or wedged. A gauge_vec rather than a plain gauge so the series is ABSENT until the first successful reload - a plain gauge would read 0 from process start and make time() - it page for the whole initial sync, before any reload has run. Exported as a timestamp rather than a computed *_age_seconds gauge on purpose - it is only written on success, so the age keeps rising while reloads fail, and it is restart-safe. This is the metric to alert on, in preference to the /api/ inSyncMempool flag - that flag is cleared at the START of every reload, so it reads "not syncing" for a large fraction of samples on a healthy node and cannot carry an alert
 
   eth_alternative_mempool_reconciliation_events_total:
     name: blockbook_eth_alternative_mempool_reconciliation_events_total
