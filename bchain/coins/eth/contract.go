@@ -634,11 +634,11 @@ func (b *EthereumRPC) erc20BalancesBatchChunked(batcher batchCaller, callData st
 	return balances, nil
 }
 
-// multicall3MaxCallsPerAggregate bounds how many balanceOf sub-calls go into one aggregate3
-// eth_call. aggregate3 shares a single gas budget, unlike a JSON-RPC batch whose size
-// (erc20BatchSize) is limited by request count, not gas — so the multicall chunk is
-// min(erc20BatchSize, this), keeping aggregate3 within the node's eth_call gas cap even if
-// erc20_batch_size is raised for the batch path.
+// multicall3MaxCallsPerAggregate is the aggregate3 chunk size: how many balanceOf sub-calls go
+// into one aggregate3 eth_call. Unlike a JSON-RPC batch, whose size (erc20BatchSize) is bounded
+// by provider request-count limits, aggregate3 is a single request whose only constraint is the
+// node's eth_call gas budget shared by all sub-calls — hence a bound of its own, independent of
+// erc20_batch_size.
 const multicall3MaxCallsPerAggregate = 100
 
 // erc20BalancesMulticall3 fetches balanceOf for all contracts via aggregate3, sub-chunked to
@@ -652,13 +652,9 @@ const multicall3MaxCallsPerAggregate = 100
 //     is known. Chunks decoded before it are kept, so one bad chunk never costs a re-fetch of
 //     the whole list; the loop stops there because chunk failures are usually systemic.
 func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) (balances []*big.Int, reresolve []int, unresolved []int) {
-	size := b.erc20BatchSize()
-	if size > multicall3MaxCallsPerAggregate {
-		size = multicall3MaxCallsPerAggregate
-	}
 	balances = make([]*big.Int, len(contractDescs))
-	for start := 0; start < len(contractDescs); start += size {
-		end := start + size
+	for start := 0; start < len(contractDescs); start += multicall3MaxCallsPerAggregate {
+		end := start + multicall3MaxCallsPerAggregate
 		if end > len(contractDescs) {
 			end = len(contractDescs)
 		}
