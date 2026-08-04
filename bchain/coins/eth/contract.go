@@ -593,7 +593,10 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 				for j, i := range idx {
 					sub[j] = contractDescs[i]
 				}
-				b.observeChainDataFallback("erc20_multicall", "elem_fallback", len(reresolve))
+				// Count every contract this fallback batch covers, whichever hole put it there;
+				// counting only reresolve would report zero for a chunk failure that re-fetched
+				// contracts, hiding the extra round trip from cost dashboards.
+				b.observeChainDataFallback("erc20_multicall", "elem_fallback", len(idx))
 				if subBalances, berr := b.erc20BalancesBatchChunked(batcher, callData, sub, blockNumber); berr == nil {
 					for j, i := range idx {
 						mcBalances[i] = subBalances[j]
@@ -645,9 +648,9 @@ const multicall3MaxCallsPerAggregate = 100
 //   - reresolve: Success=false with empty returndata, possibly gas-starved under the shared
 //     aggregate3 gas budget, so a real balance must not be silently lost. Genuine reverts
 //     (returndata present) stay nil and are not listed.
-//   - unresolved: elements whose own aggregate3 chunk failed, so nothing is known about them.
-//     Only the failing chunk is given up — balances decoded from the other chunks are kept, so
-//     one bad chunk never costs a re-fetch of the whole list.
+//   - unresolved: elements from the first failing aggregate3 chunk onwards, about which nothing
+//     is known. Chunks decoded before it are kept, so one bad chunk never costs a re-fetch of
+//     the whole list; the loop stops there because chunk failures are usually systemic.
 func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) (balances []*big.Int, reresolve []int, unresolved []int) {
 	size := b.erc20BatchSize()
 	if size > multicall3MaxCallsPerAggregate {
@@ -674,15 +677,17 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 			err = errors.Errorf("got %d results, want %d", len(results), len(calls))
 		}
 		if err != nil {
-			// Give up on this chunk alone (gas/decode/transient): the other chunks stay
-			// resolved and the caller falls back for just these indices, so a late chunk
-			// failure does not re-fetch balances aggregate3 already returned.
-			b.ObserveChainDataFallback("erc20_multicall", "error")
-			glog.Warningf("erc20 balances multicall3 chunk [%d:%d) failed, falling back for those contracts: %v", start, end, err)
-			for i := range sub {
-				unresolved = append(unresolved, start+i)
+			// A chunk failure is usually systemic (eth_call gas cap, decode, transport), so stop
+			// at the first one instead of paying a doomed aggregate3 for every chunk left: mark
+			// this chunk and the rest unresolved for the caller to settle. Chunks already decoded
+			// are kept, so the failure costs only the remainder. Breaking also keeps this one
+			// fallback event and one log line per request.
+			for i := start; i < len(contractDescs); i++ {
+				unresolved = append(unresolved, i)
 			}
-			continue
+			b.ObserveChainDataFallback("erc20_multicall", "error")
+			glog.Warningf("erc20 balances multicall3 failed at chunk [%d:%d), falling back for %d contract(s): %v", start, end, len(contractDescs)-start, err)
+			break
 		}
 		for i := range results {
 			if !results[i].Success {
