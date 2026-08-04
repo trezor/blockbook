@@ -226,6 +226,11 @@ type EthereumRPC struct {
 	// Unix nanos until which probing is paused after repeated transient eth_getCode
 	// failures; probing resumes once the deadline passes. See multicall.go.
 	multicall3ProbeSuspendedUntil atomic.Int64
+	// erc20 balances multicall breaker: consecutive requests in which aggregate3
+	// resolved nothing, and the unix-nanos deadline until which the multicall
+	// balance path is suspended once the threshold is hit. See contract.go.
+	erc20MulticallFailures       atomic.Int32
+	erc20MulticallSuspendedUntil atomic.Int64
 }
 
 // NewEthereumRPC returns new EthRPC instance.

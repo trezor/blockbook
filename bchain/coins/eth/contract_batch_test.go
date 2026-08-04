@@ -1342,3 +1342,94 @@ func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *test
 		t.Fatalf("expected 1 aggregate3 eth_call and no fallback, got %d", ethCall)
 	}
 }
+
+// --- erc20 multicall circuit breaker ---
+
+// While the breaker is open, no aggregate3 eth_call is issued: the request goes straight to the
+// JSON-RPC batch path.
+func TestEthereumTypeGetErc20ContractBalancesSuspendedGoesStraightToBatch(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contracts := erc20TestContracts(3)
+	inner := &mockBatchRPC{results: map[string]string{}}
+	for i, c := range contracts {
+		inner.results[hexutil.Encode(c)] = fmt.Sprintf("0x%064x", erc20BatchTestValue(i))
+	}
+	mock := &mockMulticallChunkFailRPC{mockBatchRPC: inner, failAfter: 0}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	rpcClient.erc20MulticallSuspendedUntil.Store(time.Now().Add(time.Hour).UnixNano())
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for i := range contracts {
+		if balances[i] == nil || balances[i].Cmp(big.NewInt(erc20BatchTestValue(i))) != 0 {
+			t.Fatalf("balance[%d]=%v, want %d from the batch path", i, balances[i], erc20BatchTestValue(i))
+		}
+	}
+	if mock.ethCalls != 0 {
+		t.Fatalf("expected 0 aggregate3 calls while suspended, got %d", mock.ethCalls)
+	}
+	if len(inner.batchSizes) != 1 {
+		t.Fatalf("expected one JSON-RPC batch, got %v", inner.batchSizes)
+	}
+}
+
+// After erc20MulticallMaxConsecutiveFailures requests in which aggregate3 resolved nothing, the
+// suspension deadline is set (counter reset) and the next request issues no aggregate3 call.
+func TestEthereumTypeGetErc20ContractBalancesBreakerSuspendsAfterConsecutiveFailures(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contracts := erc20TestContracts(3)
+	inner := &mockBatchRPC{results: map[string]string{}}
+	for i, c := range contracts {
+		inner.results[hexutil.Encode(c)] = fmt.Sprintf("0x%064x", erc20BatchTestValue(i))
+	}
+	// failAfter 0: every aggregate3 call fails, as on a chain whose eth_call gas cap is too low.
+	mock := &mockMulticallChunkFailRPC{mockBatchRPC: inner, failAfter: 0}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	for r := 0; r < erc20MulticallMaxConsecutiveFailures; r++ {
+		if _, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts); err != nil {
+			t.Fatalf("request %d: unexpected error: %v", r, err)
+		}
+	}
+	if mock.ethCalls != erc20MulticallMaxConsecutiveFailures {
+		t.Fatalf("expected %d doomed aggregate3 calls (one per request), got %d", erc20MulticallMaxConsecutiveFailures, mock.ethCalls)
+	}
+	if until := rpcClient.erc20MulticallSuspendedUntil.Load(); until == 0 || until <= time.Now().UnixNano() {
+		t.Fatalf("expected a suspension deadline in the future, got %d", until)
+	}
+	if got := rpcClient.erc20MulticallFailures.Load(); got != 0 {
+		t.Fatalf("expected failure counter reset to 0 on suspension, got %d", got)
+	}
+	// The next request must not pay another doomed aggregate3.
+	if _, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts); err != nil {
+		t.Fatalf("suspended request: unexpected error: %v", err)
+	}
+	if mock.ethCalls != erc20MulticallMaxConsecutiveFailures {
+		t.Fatalf("expected no aggregate3 call while suspended, got %d total", mock.ethCalls)
+	}
+}
+
+// A request in which aggregate3 resolves anything closes the breaker again: the consecutive
+// failure counter goes back to 0.
+func TestEthereumTypeGetErc20ContractBalancesBreakerResetsOnSuccess(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contracts := erc20TestContracts(2)
+	mock := &mockMulticallChunkFailRPC{mockBatchRPC: &mockBatchRPC{}, failAfter: 1000, value: 9}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	rpcClient.erc20MulticallFailures.Store(erc20MulticallMaxConsecutiveFailures - 1)
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for i := range contracts {
+		if balances[i] == nil || balances[i].Cmp(big.NewInt(9)) != 0 {
+			t.Fatalf("balance[%d]=%v, want 9 from aggregate3", i, balances[i])
+		}
+	}
+	if got := rpcClient.erc20MulticallFailures.Load(); got != 0 {
+		t.Fatalf("expected failure counter reset to 0 after a resolving request, got %d", got)
+	}
+	if until := rpcClient.erc20MulticallSuspendedUntil.Load(); until != 0 {
+		t.Fatalf("expected no suspension deadline, got %d", until)
+	}
+}

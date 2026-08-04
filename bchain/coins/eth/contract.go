@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 	"strings"
+	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -572,9 +573,27 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalancesAtBlock(addrDesc bchai
 		// Transient probe failure — visible so an eth_getCode-restricting provider is not silent.
 		b.ObserveChainDataFallback("erc20_multicall", "probe_error")
 	}
-	if deployed {
+	useMulticall := deployed
+	if useMulticall {
+		// Breaker open: aggregate3 resolved nothing on the last erc20MulticallMaxConsecutiveFailures
+		// requests, so skip the doomed eth_call for a while; the batch path below serves balances.
+		if until := b.erc20MulticallSuspendedUntil.Load(); until != 0 && time.Now().UnixNano() < until {
+			b.ObserveChainDataFallback("erc20_multicall", "suspended")
+			useMulticall = false
+		}
+	}
+	if useMulticall {
 		mcBalances, reresolve, unresolved := b.erc20BalancesMulticall3(callData, contractDescs, blockNumber)
 		anyResolved := len(unresolved) < len(contractDescs)
+		// Breaker bookkeeping: a request in which aggregate3 resolved nothing (its first chunk
+		// failed) counts toward suspension; anything resolved closes the breaker again.
+		if anyResolved {
+			b.erc20MulticallFailures.Store(0)
+		} else if b.erc20MulticallFailures.Add(1) >= erc20MulticallMaxConsecutiveFailures {
+			b.erc20MulticallFailures.Store(0)
+			b.erc20MulticallSuspendedUntil.Store(time.Now().Add(erc20MulticallSuspendInterval).UnixNano())
+			glog.Warningf("erc20 multicall3 balance path suspended for %v after %d consecutive requests in which aggregate3 resolved nothing", erc20MulticallSuspendInterval, erc20MulticallMaxConsecutiveFailures)
+		}
 		// Keep what aggregate3 resolved unless every chunk failed (then the plain batch path
 		// below is the same work with a propagatable error), or chunk-failure holes remain that
 		// no batcher can fill — a nil entry for an unknown balance reads as "no balance" to
@@ -675,6 +694,15 @@ func (b *EthereumRPC) erc20BalancesBatchChunked(batcher batchCaller, callData st
 // node's eth_call gas budget shared by all sub-calls — hence a bound of its own, independent of
 // erc20_batch_size.
 const multicall3MaxCallsPerAggregate = 100
+
+// Breaker for the erc20 balance multicall path only: after erc20MulticallMaxConsecutiveFailures
+// consecutive requests in which aggregate3 resolved nothing (deployed Multicall3 whose aggregate3
+// always fails — eth_call gas cap, node quirks), the path is suspended for
+// erc20MulticallSuspendInterval so requests stop paying a doomed eth_call plus a warning each.
+// Deliberately narrower than the deployment probe: neither the probe result nor other Multicall3
+// users (e.g. ERC-4626 enrichment) are touched.
+const erc20MulticallMaxConsecutiveFailures = 5
+const erc20MulticallSuspendInterval = 10 * time.Minute
 
 // erc20BalancesMulticall3 fetches balanceOf for all contracts via aggregate3, sub-chunked to
 // bound each eth_call's gas. Malformed (non-address) descriptors are excluded up front and stay
