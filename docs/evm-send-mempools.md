@@ -24,7 +24,8 @@ Two couplings between the stores are load-bearing:
   `GetTransaction`, which reads the cache first. A private transaction must therefore be cached
   *before* it is added to the wrapped mempool, or it cannot be indexed at all. The body comes from
   the send's own signed bytes, so this holds even when the relay never surfaces the transaction; the
-  fetch-back only refreshes it.
+  fetch-back only updates an entry that is still there, so it cannot re-index a transaction that has
+  meanwhile mined and been cleared by block sync.
 - The cache must expire **before** the wrapped mempool. Every cache exit clears the wrapped mempool
   too, but the mempool's own timeout sweep does not clear the cache; inverted, a private transaction
   loses its address index while still being served as pending. The defaults are ordered correctly
@@ -45,7 +46,7 @@ flowchart TD
     reg["registerSuccessfulSend<br/>sender + accepting URL + nonce slot<br/>assign send generation"]
     ackevict["evictReplacedByNonce<br/>retire same from+nonce predecessor<br/>on ACK, generation-ordered"]
     cache["cacheMempoolTransaction<br/>body decoded from the signed bytes<br/>skipped if a newer send holds the slot"]
-    handle["handleMempoolTransaction (background)<br/>fetch-back eth_getTransactionByHash<br/>refreshes the body with the relay's view"]
+    handle["refreshCachedTransaction (background)<br/>fetch-back eth_getTransactionByHash<br/>updates the body of a still-cached entry;<br/>a mined answer evicts it"]
 
     ws["eth_subscribe newPendingTransactions<br/>skipped when disableMempoolSync"]
     snap["startup and Resync snapshot<br/>eth_getBlockByNumber pending<br/>only when queryBackendOnMempoolResync"]
@@ -73,7 +74,7 @@ flowchart TD
     ackevict -. "predecessor" .-> altrm
     cache -- "1. cache the body" --> alt
     cache -- "2. AddTransactionToMempool,<br/>index built by reading the cache,<br/>then push NewTx" --> pub
-    handle -. "refresh the cached body" .-> alt
+    handle -. "update the cached body,<br/>never re-create it" .-> alt
     primary -. "only when disableMempoolSync" .-> pub
     ws --> pub
     snap --> pub

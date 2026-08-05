@@ -2315,7 +2315,7 @@
         }
       ],
       "type": "timeseries",
-      "x-panel-key": "sync.eth_alternative_send_accepted_but_uncached"
+      "x-panel-key": "sync.eth_alternative_send_not_surfaced"
     },
     {
       "fieldConfig": {
