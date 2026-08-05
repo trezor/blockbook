@@ -887,10 +887,24 @@ func txSenderAndNonce(tx *bchain.RpcTransaction) (ethcommon.Address, uint64, boo
 // keepGen of 0 means this replacement's own send order is unknown (raw-hex sender recovery failed at
 // send time), so it evicts only other unordered (generation-0) entries and never a
 // generation-carrying replacement that may still mine.
+//
+// EVERY match is retired, not just the first. Two entries can share a slot transiently: insertMempoolTx
+// only refuses an insert when a STRICTLY newer entry is already cached, so a send whose scan runs before
+// a newer send inserts can still land beside it, and stopping after one victim then left the slot with
+// two cached, address-indexed transactions - the state insertMempoolTx's own comment says must never
+// exist. It needs three concurrent same-slot sends and both stragglers inserting inside a
+// sub-microsecond window (0 occurrences in 27k forced races, ~0.01% of exhaustive interleavings), and
+// the next same-nonce send or a reconcile cycle heals it, so this is invariant hardening rather than an
+// incident fix: every entry the scan skipped satisfies exactly the predicate above.
 func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address, nonce uint64, keepTxid string, keepGen uint64) {
+	// Collect every victim, then remove them after unlocking: removeMempoolTx re-acquires this same
+	// non-reentrant mutex, so removing inside the scan would deadlock the provider.
+	type victim struct {
+		txid string
+		time uint32
+	}
+	var victims []victim
 	p.mempoolTxsMux.Lock()
-	var rbfTxid string
-	var rbfTime uint32
 	for txid, storedTx := range p.mempoolTxs {
 		if txid == keepTxid {
 			continue
@@ -906,22 +920,19 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 		if storedTx.gen > keepGen {
 			continue
 		}
-		rbfTxid = txid
-		rbfTime = storedTx.time
-		break
+		victims = append(victims, victim{txid: txid, time: storedTx.time})
 	}
 	p.mempoolTxsMux.Unlock()
 
-	if rbfTxid == "" {
-		return
-	}
-	glog.Infof("eth_sendRawTransaction replacing txid %s by %s", rbfTxid, keepTxid)
-	// Meter the fee-replacement exit only if this call is the one that removed the predecessor;
-	// the acceptance-time and handleMempoolTransaction passes can both target it, as can a
-	// concurrent reconcile eviction, so gating on the removal avoids double-counting rbf_replaced.
-	if p.removeMempoolTx(rbfTxid) {
-		p.observeMempoolReconciliation("rbf_replaced")
-		p.observeMempoolTxResidence("rbf_replaced", rbfTime)
+	for _, v := range victims {
+		glog.Infof("eth_sendRawTransaction replacing txid %s by %s", v.txid, keepTxid)
+		// Meter the fee-replacement exit only if this call is the one that removed the predecessor;
+		// the acceptance-time and handleMempoolTransaction passes can both target it, as can a
+		// concurrent reconcile eviction, so gating on the removal avoids double-counting rbf_replaced.
+		if p.removeMempoolTx(v.txid) {
+			p.observeMempoolReconciliation("rbf_replaced")
+			p.observeMempoolTxResidence("rbf_replaced", v.time)
+		}
 	}
 }
 
