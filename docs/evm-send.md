@@ -29,7 +29,7 @@ flowchart TD
     reg["registerSuccessfulSend<br/>(record sender + URL, assign gen)"]
     evict["evictReplacedByNonce<br/>retire same-(from,nonce) predecessor<br/>on ACK (RBF / cancel), gen-ordered"]
     cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → AddTransactionToMempool → notify"]
-    handle["handleMempoolTransaction (background)<br/>fetch-back → refresh the cached body<br/>with the relay's own view"]
+    handle["probeSentTransaction (background)<br/>fetch-back → report whether the relay<br/>surfaces what it accepted; writes nothing<br/>(undecodable hex → handleMempoolTransaction caches)"]
 
     subgraph rec ["reconcileMempoolTxs (every minute, per cached tx)"]
         mined["mined → evict"]
@@ -81,12 +81,14 @@ Key invariants:
   with no relay configured at all. The add is skipped when the send itself failed, since there is then
   no txid to index.
 - **An accepted send is cached from its own signed bytes, before the relay is asked about it.**
-  Everything a pending `RpcTransaction` carries is in the signed transaction, so the fetch-back only
-  *updates* that entry with the relay's own view of it — it never creates one, because by the time it
-  answers the transaction may have mined and block sync may have cleared it. A relay that accepts a
-  transaction and then does not surface it (or is briefly unreachable) therefore no longer leaves the
-  send exposed nowhere at all — not served as pending, not in the address index, not raising the
-  pending-nonce floor, so its nonce free for the next send to reuse. The txid is the hash of the
+  Everything a pending `RpcTransaction` carries is in the signed transaction, so the fetch-back does
+  not write the cache at all — it only reports whether the relay surfaces what it accepted. It must
+  not: by the time it answers the transaction may have mined and block sync may have cleared it, and
+  the relay's own view can name a different hash, `to` or `value` than the bytes Blockbook was given.
+  A relay that accepts a transaction and then does not surface it (or is briefly unreachable)
+  therefore no longer leaves the send exposed nowhere at all. It used to be neither served as pending,
+  nor present in the address index, nor raising the pending-nonce floor, leaving its nonce free for
+  the next send to reuse. The txid is the hash of the
   signed bytes rather than the relay's echo, so the cache, the address index and the answer to the
   wallet all name what the chain will show. The one exception is a raw transaction Blockbook cannot
   decode: nothing can be derived from it, so there the fetch-back is still the only thing that can

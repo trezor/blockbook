@@ -1135,8 +1135,12 @@ func (p *AlternativeSendTxProvider) setMempoolOldestAge(oldestUnix uint32) {
 	p.metrics.EthAlternativeMempoolOldestAge.Set(age)
 }
 
-// observeSendNotSurfaced counts a relay-accepted private send whose fetch-back failed to surface
-// it, so it was cached and indexed nowhere - the precursor to a nonce-reuse / hanging-tx incident.
+// observeSendNotSurfaced counts a relay-accepted private send whose post-send fetch-back did not
+// surface it. For not_found and error the transaction is still cached and indexed from its own signed
+// bytes, so this is no longer the nonce-reuse precursor - it means the relay does not report back what
+// it accepted, so the entry can only be retired by the cache timeout. The dropped reason is the
+// exception: it is counted only where the raw hex did not decode and the refused fetch-back was the
+// one thing that could have exposed the send, so there it really is exposed nowhere.
 func (p *AlternativeSendTxProvider) observeSendNotSurfaced(reason string) {
 	if p.metrics == nil || p.metrics.EthAlternativeSendNotSurfaced == nil {
 		return
