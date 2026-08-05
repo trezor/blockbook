@@ -245,8 +245,8 @@ func TestRocksDB_storeHealedContractInfos(t *testing.T) {
 		t.Fatalf("healed destruction = %+v, want DestructedInBlock 2000 and CreatedInBlock 0", got)
 	}
 
-	// One block can create and destroy the same contract. The records are merged before
-	// the write, so the second does not win over the first.
+	// One block can create and destroy the same contract. The records are applied in order,
+	// so the second does not undo the first.
 	shortLived := "0x" + dbtestdata.EthAddr55
 	healContracts(
 		bchain.ContractInfo{Contract: shortLived, CreatedInBlock: 3000},
@@ -258,6 +258,179 @@ func TestRocksDB_storeHealedContractInfos(t *testing.T) {
 	}
 	if got == nil || got.CreatedInBlock != 3000 || got.DestructedInBlock != 3000 {
 		t.Fatalf("healed create+destruct = %+v, want both heights 3000", got)
+	}
+}
+
+// Healing runs out of block order - the queue is drained after the blocks around it are
+// already indexed, and the backoff can even invert the order of two queued blocks - so a
+// reused address (SELFDESTRUCT followed by CREATE2) must not have its lifecycle rewound.
+// Every case states what a sequential sync leaves behind, which is what healing must match.
+func TestRocksDB_storeHealedContractInfos_ReusedAddress(t *testing.T) {
+	tests := []struct {
+		name           string
+		stored         *bchain.ContractInfo
+		healed         []bchain.ContractInfo
+		wantCreated    uint32
+		wantDestructed uint32
+	}{
+		{
+			// sync: the creation in block 200 overwrote the row, so block 100 is history
+			name:        "a creation older than the stored one is dropped",
+			stored:      &bchain.ContractInfo{CreatedInBlock: 200},
+			healed:      []bchain.ContractInfo{{CreatedInBlock: 100}},
+			wantCreated: 200,
+		},
+		{
+			// sync: the destruction of the previous incarnation was wiped by the creation
+			// in block 200; storing it would destruct the contract before it was created
+			name:        "a destruction older than the stored creation is dropped",
+			stored:      &bchain.ContractInfo{CreatedInBlock: 200},
+			healed:      []bchain.ContractInfo{{DestructedInBlock: 150}},
+			wantCreated: 200,
+		},
+		{
+			name:           "a destruction older than the stored destruction is dropped",
+			stored:         &bchain.ContractInfo{CreatedInBlock: 100, DestructedInBlock: 300},
+			healed:         []bchain.ContractInfo{{DestructedInBlock: 200}},
+			wantCreated:    100,
+			wantDestructed: 300,
+		},
+		{
+			// sync: the creation overwrites the whole row, so the contract is alive again
+			name:        "a creation after the stored destruction revives the contract",
+			stored:      &bchain.ContractInfo{CreatedInBlock: 100, DestructedInBlock: 200},
+			healed:      []bchain.ContractInfo{{CreatedInBlock: 300}},
+			wantCreated: 300,
+		},
+		{
+			// a destruction in a later block must survive re-healing the creating block
+			name:           "a newer destruction survives a creation healed again",
+			stored:         &bchain.ContractInfo{CreatedInBlock: 100, DestructedInBlock: 150},
+			healed:         []bchain.ContractInfo{{CreatedInBlock: 100}},
+			wantCreated:    100,
+			wantDestructed: 150,
+		},
+		{
+			// sync: the destruction lands on the previous incarnation, then the creation
+			// overwrites the row - the contract deployed in this block is alive
+			name:        "a destruction followed by a creation in one block leaves it alive",
+			stored:      &bchain.ContractInfo{CreatedInBlock: 100},
+			healed:      []bchain.ContractInfo{{DestructedInBlock: 400}, {CreatedInBlock: 400}},
+			wantCreated: 400,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := setupRocksDB(t, &testEthereumParser{
+				EthereumParser: ethereumTestnetParser(),
+			})
+			defer closeAndDestroyRocksDB(t, d)
+
+			address := "0x" + dbtestdata.EthAddrContract4a
+			stored := *tt.stored
+			stored.Contract = address
+			stored.Standard = bchain.ERC20TokenStandard
+			stored.Type = bchain.ERC20TokenStandard
+			if err := d.StoreContractInfo(&stored); err != nil {
+				t.Fatal(err)
+			}
+
+			wb := grocksdb.NewWriteBatch()
+			defer wb.Destroy()
+			healed := append([]bchain.ContractInfo(nil), tt.healed...)
+			for i := range healed {
+				healed[i].Contract = address
+			}
+			if err := d.storeHealedContractInfos(wb, healed); err != nil {
+				t.Fatal(err)
+			}
+			if err := d.WriteBatch(wb); err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := d.GetContractInfoForAddress(address)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got == nil || got.CreatedInBlock != tt.wantCreated || got.DestructedInBlock != tt.wantDestructed {
+				t.Errorf("healed record = %+v, want created %d, destructed %d", got, tt.wantCreated, tt.wantDestructed)
+			}
+			// the guards must never cost the enrichment a client already queried
+			if got != nil && got.Standard != bchain.ERC20TokenStandard {
+				t.Errorf("healed record standard = %s, want %s", got.Standard, bchain.ERC20TokenStandard)
+			}
+		})
+	}
+}
+
+func Test_applyHealedLifecycle(t *testing.T) {
+	tests := []struct {
+		name           string
+		contractInfo   bchain.ContractInfo
+		creation       uint32
+		destruction    uint32
+		wantApplied    bool
+		wantCreated    uint32
+		wantDestructed uint32
+	}{
+		// the case the healer exists for: a row enriched on demand carries no creation
+		{name: "creation fills an empty row", creation: 100, wantApplied: true, wantCreated: 100},
+		{
+			name: "creation is idempotent", contractInfo: bchain.ContractInfo{CreatedInBlock: 100},
+			creation: 100, wantApplied: true, wantCreated: 100,
+		},
+		{
+			name: "creation older than the stored one is dropped", contractInfo: bchain.ContractInfo{CreatedInBlock: 200},
+			creation: 100, wantApplied: false, wantCreated: 200,
+		},
+		{
+			name:         "creation clears a destruction of the previous incarnation",
+			contractInfo: bchain.ContractInfo{CreatedInBlock: 100, DestructedInBlock: 200},
+			creation:     300, wantApplied: true, wantCreated: 300,
+		},
+		{
+			name:         "creation keeps a destruction that is newer",
+			contractInfo: bchain.ContractInfo{CreatedInBlock: 100, DestructedInBlock: 300},
+			creation:     100, wantApplied: true, wantCreated: 100, wantDestructed: 300,
+		},
+		{
+			name: "destruction of a stored creation applies", contractInfo: bchain.ContractInfo{CreatedInBlock: 100},
+			destruction: 150, wantApplied: true, wantCreated: 100, wantDestructed: 150,
+		},
+		// a destruction with no stored row is recorded, so a contract created before the
+		// index knew about it does not look alive forever
+		{name: "destruction of an unknown contract applies", destruction: 150, wantApplied: true, wantDestructed: 150},
+		{
+			name: "destruction before the stored creation is dropped", contractInfo: bchain.ContractInfo{CreatedInBlock: 200},
+			destruction: 150, wantApplied: false, wantCreated: 200,
+		},
+		{
+			name:         "destruction is idempotent",
+			contractInfo: bchain.ContractInfo{CreatedInBlock: 100, DestructedInBlock: 150},
+			destruction:  150, wantApplied: false, wantCreated: 100, wantDestructed: 150,
+		},
+		{
+			name:         "destruction in the creating block applies",
+			contractInfo: bchain.ContractInfo{CreatedInBlock: 100},
+			destruction:  100, wantApplied: true, wantCreated: 100, wantDestructed: 100,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contractInfo := tt.contractInfo
+			var applied bool
+			if tt.creation != 0 {
+				applied = applyHealedCreation(&contractInfo, tt.creation)
+			} else {
+				applied = applyHealedDestruction(&contractInfo, tt.destruction)
+			}
+			if applied != tt.wantApplied {
+				t.Errorf("applied = %v, want %v", applied, tt.wantApplied)
+			}
+			if contractInfo.CreatedInBlock != tt.wantCreated || contractInfo.DestructedInBlock != tt.wantDestructed {
+				t.Errorf("record = %+v, want created %d, destructed %d", contractInfo, tt.wantCreated, tt.wantDestructed)
+			}
+		})
 	}
 }
 

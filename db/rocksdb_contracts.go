@@ -2,6 +2,7 @@ package db
 
 import (
 	vlq "github.com/bsm/go-vlq"
+	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
@@ -200,76 +201,127 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 	return nil
 }
 
+// applyHealedCreation records a creation in block height, reporting whether the record
+// applies. A creation older than the stored one belongs to a previous incarnation of a
+// reused address (SELFDESTRUCT followed by CREATE2), so it is dropped rather than rewinding
+// the row; a destruction no younger than the creation belongs to that same previous
+// incarnation and is cleared, as the overwrite in storeContractInfo would have done.
+func applyHealedCreation(contractInfo *bchain.ContractInfo, height uint32) bool {
+	if height < contractInfo.CreatedInBlock {
+		return false
+	}
+	contractInfo.CreatedInBlock = height
+	if contractInfo.DestructedInBlock <= height {
+		contractInfo.DestructedInBlock = 0
+	}
+	return true
+}
+
+// applyHealedDestruction records a destruction in block height, reporting whether the
+// record applies. A destruction that precedes the stored creation, or that is not newer
+// than the stored destruction, describes a previous incarnation of the address - storing it
+// would leave the contract destructed before it was created.
+func applyHealedDestruction(contractInfo *bchain.ContractInfo, height uint32) bool {
+	if height < contractInfo.CreatedInBlock || height <= contractInfo.DestructedInBlock {
+		return false
+	}
+	contractInfo.DestructedInBlock = height
+	return true
+}
+
 // storeHealedContractInfos records the contracts a healed block created or destroyed. The
 // failed internal data fetch is what would have produced them, so sync stored none of
 // them. Only the lifecycle fields are overlaid on the stored row: sync never fills in
 // name/symbol/standard, so a plain put would strip the metadata of a contract that a
-// client already queried and enriched. The records are merged per contract first, so a
-// contract created and destroyed in the same block ends up with both heights - the
-// destruct branch of storeContractInfo reads committed state only and drops that case.
+// client already queried and enriched.
+//
+// The records are applied in trace order, each guarded so that the result is what a
+// sequential sync would have left behind. Healing runs out of block order, so an unguarded
+// overlay could rewind the lifecycle of a reused address or record a destruction preceding
+// the creation - states no sync can produce. Applying them in order, rather than merging
+// them per contract first, is what keeps a create and a destruct in the same block from
+// depending on which one the map happened to keep.
 func (d *RocksDB) storeHealedContractInfos(wb *grocksdb.WriteBatch, contracts []bchain.ContractInfo) error {
-	type lifecycle struct {
-		created, destructed uint32
+	type healedContract struct {
+		addrDesc     bchain.AddressDescriptor
+		contractInfo *bchain.ContractInfo
+		changed      bool
 	}
-	merged := make(map[string]*lifecycle, len(contracts))
+	healed := make(map[string]*healedContract, len(contracts))
 	order := make([]string, 0, len(contracts))
 	for i := range contracts {
 		ci := &contracts[i]
 		if ci.Contract == "" {
 			continue
 		}
-		key, err := d.chainParser.GetAddrDescFromAddress(ci.Contract)
+		addrDesc, err := d.chainParser.GetAddrDescFromAddress(ci.Contract)
 		if err != nil {
 			return err
 		}
-		if len(key) == 0 {
+		if len(addrDesc) == 0 {
 			continue
 		}
-		l, found := merged[string(key)]
+		key := string(addrDesc)
+		hc, found := healed[key]
 		if !found {
-			l = &lifecycle{}
-			merged[string(key)] = l
-			order = append(order, string(key))
+			contractInfo, err := d.healedContractInfo(addrDesc)
+			if err != nil {
+				return err
+			}
+			hc = &healedContract{addrDesc: addrDesc, contractInfo: contractInfo}
+			healed[key] = hc
+			order = append(order, key)
 		}
 		if ci.CreatedInBlock != 0 {
-			l.created = ci.CreatedInBlock
+			if applyHealedCreation(hc.contractInfo, ci.CreatedInBlock) {
+				hc.changed = true
+			} else {
+				glog.Infof("storeHealedContractInfos: contract %s created in block %d skipped, the stored record is newer (created %d, destructed %d)",
+					ci.Contract, ci.CreatedInBlock, hc.contractInfo.CreatedInBlock, hc.contractInfo.DestructedInBlock)
+			}
 		}
 		if ci.DestructedInBlock != 0 {
-			l.destructed = ci.DestructedInBlock
+			if applyHealedDestruction(hc.contractInfo, ci.DestructedInBlock) {
+				hc.changed = true
+			} else {
+				glog.Infof("storeHealedContractInfos: contract %s destructed in block %d skipped, the stored record is newer (created %d, destructed %d)",
+					ci.Contract, ci.DestructedInBlock, hc.contractInfo.CreatedInBlock, hc.contractInfo.DestructedInBlock)
+			}
 		}
 	}
 	for _, key := range order {
-		l := merged[key]
-		addrDesc := bchain.AddressDescriptor(key)
-		stored, err := d.GetContractInfo(addrDesc, "")
-		if err != nil {
-			return err
+		hc := healed[key]
+		if !hc.changed {
+			continue
 		}
-		var contractInfo bchain.ContractInfo
-		if stored != nil {
-			// copy before mutating, GetContractInfo may return the shared cached entry
-			contractInfo = *stored
-		} else {
-			// a creation that was never indexed leaves no row to enrich; record what the
-			// trace knows, the same stub sync would have stored
-			contractInfo = bchain.ContractInfo{
-				Standard: bchain.UnhandledTokenStandard,
-				Type:     bchain.UnhandledTokenStandard,
-			}
-			if addresses, _, err := d.chainParser.GetAddressesFromAddrDesc(addrDesc); err == nil && len(addresses) > 0 {
-				contractInfo.Contract = addresses[0]
-			}
-		}
-		if l.created != 0 {
-			contractInfo.CreatedInBlock = l.created
-		}
-		if l.destructed != 0 {
-			contractInfo.DestructedInBlock = l.destructed
-		}
-		wb.PutCF(d.cfh[cfContracts], addrDesc, packContractInfo(&contractInfo))
+		wb.PutCF(d.cfh[cfContracts], hc.addrDesc, packContractInfo(hc.contractInfo))
 		cachedContracts.delete(key)
 	}
 	return nil
+}
+
+// healedContractInfo returns a private copy of the stored record to overlay a healed
+// block's lifecycle onto, or the stub sync would have stored when there is no row - a
+// destruction whose creation was never indexed would otherwise be dropped and the contract
+// would look alive forever.
+func (d *RocksDB) healedContractInfo(addrDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
+	stored, err := d.GetContractInfo(addrDesc, "")
+	if err != nil {
+		return nil, err
+	}
+	if stored != nil {
+		// copy before mutating, GetContractInfo may return the shared cached entry
+		contractInfo := *stored
+		return &contractInfo, nil
+	}
+	contractInfo := bchain.ContractInfo{
+		Standard: bchain.UnhandledTokenStandard,
+		Type:     bchain.UnhandledTokenStandard,
+	}
+	if addresses, _, err := d.chainParser.GetAddressesFromAddrDesc(addrDesc); err == nil && len(addresses) > 0 {
+		contractInfo.Contract = addresses[0]
+	}
+	return &contractInfo, nil
 }
 
 // ListContractInfos returns up to limit stored contract records ordered by
