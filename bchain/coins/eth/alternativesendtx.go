@@ -69,6 +69,7 @@ type AlternativeSendTxProvider struct {
 	acceptedSlots                map[nonceSlot]acceptedSlot // guarded by recentSendersMux
 	sendGeneration               uint64                     // counts successful sends; guarded by recentSendersMux
 	recentSendersMux             sync.Mutex
+	refreshing                   sync.WaitGroup // background fetch-backs started by SendRawTransaction
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
@@ -114,7 +115,14 @@ func (p *AlternativeSendTxProvider) SetupMempool(mempool *bchain.MempoolEthereum
 	}
 }
 
-// SendRawTransaction sends raw transaction to alternative providers
+// SendRawTransaction sends raw transaction to alternative providers.
+//
+// A wallet waits for this call, and its own deadline is what turns a slow relay into a transaction
+// the user is told failed while it is on its way to the chain - after which a re-send at the next
+// nonce pays the recipient twice. Two things therefore bound the time spent here: the broadcast to
+// every configured relay runs concurrently (below), so the wall time is the slowest single URL
+// rather than their sum, and the post-send fetch-back is not waited for at all (see the end of this
+// function).
 func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, error) {
 	var txid string
 	var retErr error
@@ -125,19 +133,49 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// later "my tx vanished" or nonce-gap report has to be reconciled against
 	sent, decErr := decodeAlternativeSendTx(hex)
 
+	// Broadcasting to every configured relay is deliberate redundancy, but it must not cost
+	// len(urls) * rpcTimeout in the worst case: one unresponsive relay used to hold up the answer to
+	// the wallet for its full timeout before the next URL was even tried. Results are collected in
+	// URL order below, so the aggregation - and which URL counts as the accepting one - is exactly
+	// as deterministic as the sequential loop it replaces.
+	type sendResult struct {
+		txid string
+		err  error
+	}
+	results := make([]sendResult, len(p.urls))
+	var wg sync.WaitGroup
 	for i := range p.urls {
-		host := providerLabel(p.urls[i])
-		start := time.Now()
-		r, err := p.callHttpStringResult(p.urls[i], "eth_sendRawTransaction", hex)
-		duration := time.Since(start)
-		p.observeSendTx(host, duration, err)
-		if err != nil {
-			// not terminal on its own - a later provider may still accept the transaction, and the
-			// all-rejected case is logged as an error below
-			glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %v", i+1, len(p.urls), host, sentTxLogString(sent, decErr), duration.Round(time.Millisecond), err)
-		} else {
-			glog.Infof("eth_sendRawTransaction to provider %d/%d %s accepted %s as txid %s in %v", i+1, len(p.urls), host, sentTxLogString(sent, decErr), r, duration.Round(time.Millisecond))
-		}
+		// pre-set, so a panic recovered below cannot leave a zero value that reads as success
+		results[i] = sendResult{err: errors.New(p.urls[i] + " eth_sendRawTransaction : no result")}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// A relay broadcast must not be able to take the process down; the websocket/HTTP request
+			// handler that called us cannot recover a panic raised in this goroutine.
+			defer func() {
+				if r := recover(); r != nil {
+					glog.Errorf("eth_sendRawTransaction to %s panicked: %v", providerLabel(p.urls[i]), r)
+				}
+			}()
+			host := providerLabel(p.urls[i])
+			start := time.Now()
+			r, err := p.callHttpStringResult(p.urls[i], "eth_sendRawTransaction", hex)
+			duration := time.Since(start)
+			p.observeSendTx(host, duration, err)
+			if err != nil {
+				// not terminal on its own - another provider may still accept the transaction, and the
+				// all-rejected case is logged as an error below
+				glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %v", i+1, len(p.urls), host, sentTxLogString(sent, decErr), duration.Round(time.Millisecond), err)
+			} else {
+				glog.Infof("eth_sendRawTransaction to provider %d/%d %s accepted %s as txid %s in %v", i+1, len(p.urls), host, sentTxLogString(sent, decErr), r, duration.Round(time.Millisecond))
+			}
+			results[i] = sendResult{txid: r, err: err}
+		}(i)
+	}
+	wg.Wait()
+
+	for i := range results {
+		r, err := results[i].txid, results[i].err
 		if err == nil && acceptedURL == "" {
 			acceptedURL = p.urls[i]
 		}
@@ -160,8 +198,8 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// the transaction was decoded once at the top of the send and the result is reused for
 	// recent-sender registration, the RBF eviction and the cache entry below - a single ECDSA
 	// sender recovery instead of one per consumer. On decode failure gen stays 0 and neither
-	// eviction nor local caching runs, but the transaction is still handed to
-	// handleMempoolTransaction(txid, 0), exactly as before.
+	// eviction nor local caching runs, but the transaction is still handed to the fetch-back
+	// with gen 0, exactly as before.
 	var gen uint64
 	if decErr != nil {
 		glog.Warningf("cannot decode accepted transaction: %v", decErr)
@@ -194,10 +232,15 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 			// reuse its nonce (the accepted_but_uncached precursor). The signed bytes carry
 			// everything a pending transaction needs, so this needs no round-trip and cannot fail.
 			p.cacheMempoolTransaction(sent.txid, sent.body, gen)
-			// The fetch-back below now only refreshes that entry with the relay's own view.
-			p.handleMempoolTransaction(sent.txid, gen)
+			// The fetch-back only refreshes that entry with the relay's own view, so nothing the
+			// caller can observe depends on it: run it in the background instead of making the
+			// wallet wait another rpcTimeout per URL for it. Ordering stays correct because the
+			// refresh carries this send's generation - a concurrent higher-generation send for the
+			// same nonce slot makes it a no-op through slotSupersededBy / the obsolete scan in
+			// cacheMempoolTransaction, exactly as it does for a slow fetch-back today.
+			p.refreshMempoolTransaction(sent.txid, gen)
 		} else {
-			p.handleMempoolTransaction(txid, gen)
+			p.refreshMempoolTransaction(txid, gen)
 		}
 	}
 
@@ -276,6 +319,30 @@ func decodeRawTx(rawTxHex string) decodedTx {
 	}
 	sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
 	return decodedTx{tx: &tx, sender: sender, err: err}
+}
+
+// refreshMempoolTransaction runs the post-send fetch-back off the send path, so the wallet's answer
+// does not wait for another relay round-trip (up to rpcTimeout per configured URL) that can only
+// replace an already-cached body with the relay's own view of it. Errors are handled and metered
+// inside handleMempoolTransaction; there is no outcome left for a caller to act on.
+func (p *AlternativeSendTxProvider) refreshMempoolTransaction(txid string, gen uint64) {
+	p.refreshing.Add(1)
+	go func() {
+		defer p.refreshing.Done()
+		// this goroutine outlives the request handler, whose recover cannot protect it
+		defer func() {
+			if r := recover(); r != nil {
+				glog.Errorf("fetch-back of %s panicked: %v", txid, r)
+			}
+		}()
+		p.handleMempoolTransaction(txid, gen)
+	}()
+}
+
+// waitForRefreshes blocks until every background fetch-back has finished. For tests, which need a
+// deterministic cache state after a send; production code never has to wait for a refresh.
+func (p *AlternativeSendTxProvider) waitForRefreshes() {
+	p.refreshing.Wait()
 }
 
 // alternativeSendTx is everything the send path derives from an accepted raw transaction: the
