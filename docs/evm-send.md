@@ -132,8 +132,11 @@ a dead on-chain gap):
   benign cause to rule out first: a transaction that by design never mines (a drop-mode cancel) sits
   out the full timeout too.
 - `blockbook_eth_alternative_send_not_surfaced_total{reason}` — a relay-accepted send the
-  fetch-back did not surface (`not_found`/`error`). The transaction is still cached and indexed from
-  its signed bytes (unless those did not decode, which is logged as `cannot decode accepted
+  fetch-back did not surface (`not_found`/`error`), or never ran because too many were already in
+  flight (`dropped`, counted only on the raw-hex-decode-failure path, where the fetch-back is the only
+  thing that can expose the transaction — a `dropped` there means that send really is exposed
+  nowhere). The transaction is otherwise still cached and indexed from its signed bytes (unless those
+  did not decode, which is logged as `cannot decode accepted
   transaction`), so this is no longer a nonce-reuse precursor; it means the relay does not report
   back what it accepted, so the entry cannot be reconciled against the relay's view and only the
   cache timeout can retire it.
