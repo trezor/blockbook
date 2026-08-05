@@ -7,10 +7,11 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# blockbook resolves ./static relative to the working directory.
+# blockbook resolves ./static and ./openapi.yaml relative to the working directory.
 WORKDIR /src
 
 COPY static /src/static
+COPY openapi.yaml /src/openapi.yaml
 COPY blockbook /src/blockbook
 
 RUN chmod +x /src/blockbook

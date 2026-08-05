@@ -54,6 +54,7 @@ jobs:
           rm -rf runtime_ctx && mkdir runtime_ctx
           cp build/docker/runtime/Dockerfile runtime_ctx/Dockerfile
           cp build/blockbook runtime_ctx/blockbook
+          cp openapi.yaml runtime_ctx/openapi.yaml
           cp -R static runtime_ctx/static
 
       - name: Log in to GHCR
