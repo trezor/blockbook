@@ -64,12 +64,22 @@ flowchart TD
 
 Key invariants:
 
-- **The wallet's answer waits for the broadcast and nothing else.** The broadcast to every
-  configured relay URL runs concurrently, so it costs the slowest single URL instead of the sum of
-  all of them; the caching below is local work; and the fetch-back runs in the background. This
-  matters beyond latency: a wallet that gives up before Blockbook answers tells the user the send
-  failed while it is on its way to the chain, and a re-send at the next nonce then pays the recipient
-  twice. Trezor Suite's per-request deadline is 20 s, against `rpc_timeout` of 25 s *per relay URL*.
+- **On the relay-accepted path, the wallet's answer waits for the broadcast and nothing else.** The
+  broadcast to every configured relay URL runs concurrently, so it costs the slowest single URL
+  instead of the sum of all of them; the caching below is local work; and the fetch-back runs in the
+  background. This matters beyond latency: a wallet that gives up before Blockbook answers tells the
+  user the send failed while it is on its way to the chain, and a re-send at the next nonce then pays
+  the recipient twice. Trezor Suite's per-request deadline is 20 s today and 60 s for pushes once
+  [trezor-suite#30846](https://github.com/trezor/trezor-suite/pull/30846) lands, against `rpc_timeout`
+  of 25 s *per relay URL*.
+
+  The fall-through path is not bounded that way. When no relay accepts and `ALTERNATIVE_SENDTX_ONLY`
+  is not set, the answer additionally waits for the primary `eth_sendRawTransaction` and, on the
+  `disableMempoolSync` coins, for the mempool add that makes an own send visible — which costs one
+  primary `eth_getTransactionByHash`, plus the pruned-index recovery's `eth_getTransactionReceipt`
+  when that answers null. Up to 3–4 × `rpc_timeout` in total, and the same tail exists on those coins
+  with no relay configured at all. The add is skipped when the send itself failed, since there is then
+  no txid to index.
 - **An accepted send is cached from its own signed bytes, before the relay is asked about it.**
   Everything a pending `RpcTransaction` carries is in the signed transaction, so the fetch-back only
   *updates* that entry with the relay's own view of it — it never creates one, because by the time it
