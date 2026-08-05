@@ -103,8 +103,9 @@ func TestAlternativeSendTxProviderObserveSendTxAccepted(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderFetchBackObservesError asserts a failed post-send fetch-back is
-// counted: it leaves the just-broadcast transaction out of the cache, so the wallet that sent it
-// sees no pending transaction at all - previously visible only as a log line.
+// counted. The fetch-back no longer writes the cache (the send path caches the tx from its own
+// signed bytes), so the failure surfaces as send_not_surfaced{reason=error} - the relay did not
+// report back what it accepted - rather than the retired fetchback_error reconciliation action.
 func TestAlternativeSendTxProviderFetchBackObservesError(t *testing.T) {
 	m := newSendTxMetrics()
 	provider := &AlternativeSendTxProvider{
@@ -120,9 +121,9 @@ func TestAlternativeSendTxProviderFetchBackObservesError(t *testing.T) {
 		t.Fatal("expected error from unreachable provider")
 	}
 
-	failed := gatherMetric(t, m.EthAlternativeMempoolEvents, map[string]string{"action": "fetchback_error"})
+	failed := gatherMetric(t, m.EthAlternativeSendNotSurfaced, map[string]string{"reason": "error"})
 	if failed == nil || failed.GetCounter().GetValue() != 1 {
-		t.Errorf("fetchback_error counter = %v, want 1", failed)
+		t.Errorf("send_not_surfaced{reason=error} counter = %v, want 1", failed)
 	}
 }
 
