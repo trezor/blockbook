@@ -2225,6 +2225,111 @@ func TestAlternativeSendTxProviderUndecodableSendUsesFetchBack(t *testing.T) {
 	}
 }
 
+// TestAlternativeSendTxProviderDroppedFetchBackMetered covers the one drop that loses a transaction.
+// A refused fetch-back is normally harmless - the entry it would refresh is cached and reconcile
+// re-probes it - but on the raw-hex-decode-failure path the fetch-back is the only thing that can
+// expose the send at all, so a drop there leaves it served nowhere, indexed nowhere and raising no
+// pending-nonce floor. That is the nonce-reuse precursor, and it was the only variant of it the
+// dashboard could not see.
+func TestAlternativeSendTxProviderDroppedFetchBackMetered(t *testing.T) {
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+		// every slot of the expose allowance taken, so the fetch-back below is refused
+		exposeCount: maxExposeFetchBacks,
+	}
+
+	// undecodable raw hex: nothing can be derived from it, so the refused fetch-back loses the send
+	if _, err := provider.SendRawTransaction("0xdeadbeef"); err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	// no waitForRefreshes: the slots are held by hand, so the counter never drains
+
+	if got := labeledCounterValue(t, provider.metrics.EthAlternativeSendNotSurfaced, "reason", "dropped"); got != 1 {
+		t.Errorf("send_not_surfaced{reason=dropped} = %v, want 1", got)
+	}
+	if got := server.callCount("eth_getTransactionByHash"); got != 0 {
+		t.Errorf("eth_getTransactionByHash calls = %d, want 0 (the fetch-back was refused)", got)
+	}
+	if len(provider.mempoolTxs) != 0 {
+		t.Errorf("cache size = %d, want 0 (nothing could be derived or fetched)", len(provider.mempoolTxs))
+	}
+}
+
+// TestAlternativeSendTxProviderDroppedRefreshNotMetered is the other half: a refused refresh must NOT
+// be reported as a not-surfaced send. The transaction is cached and indexed from its signed bytes, so
+// counting it would raise a false alarm on the metric documented as the nonce-reuse precursor.
+func TestAlternativeSendTxProviderDroppedRefreshNotMetered(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction": `{"jsonrpc":"2.0","id":1,"result":"` + txID + `"}`,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+		backgroundCount:   maxBackgroundFetchBacks,
+	}
+
+	if _, err := provider.SendRawTransaction(rawTx); err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	// no waitForRefreshes: the slots are held by hand, so the counter never drains
+
+	if got := labeledCounterValue(t, provider.metrics.EthAlternativeSendNotSurfaced, "reason", "dropped"); got != 0 {
+		t.Errorf("send_not_surfaced{reason=dropped} = %v, want 0 for a refused refresh", got)
+	}
+	// the send is exposed regardless of the refresh, which is why the drop is not worth reporting
+	if _, found := provider.GetTransaction(txID); !found {
+		t.Error("accepted send is not served as pending")
+	}
+	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
+		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
+	}
+}
+
+// TestAlternativeSendTxProviderShutdownDropNotMetered keeps a fetch-back declined at shutdown out of
+// the counter: the process is going down, and an alert on the nonce-reuse precursor must not fire on
+// every restart that catches a send in flight.
+func TestAlternativeSendTxProviderShutdownDropNotMetered(t *testing.T) {
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction": `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+		stop:              make(chan struct{}),
+	}
+	provider.shutdown()
+
+	if _, err := provider.SendRawTransaction("0xdeadbeef"); err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	provider.waitForRefreshes()
+
+	if got := labeledCounterValue(t, provider.metrics.EthAlternativeSendNotSurfaced, "reason", "dropped"); got != 0 {
+		t.Errorf("send_not_surfaced{reason=dropped} = %v, want 0 at shutdown", got)
+	}
+}
+
 // TestAlternativeSendTxProviderNotSurfacedErrorMetered covers the error label of
 // eth_alternative_send_not_surfaced_total, and that a relay failing the fetch-back leaves the
 // transaction cached from its signed bytes all the same.

@@ -59,12 +59,34 @@ type acceptedSlot struct {
 
 const alternativeMempoolTxCheckPeriod = time.Minute
 
-// maxBackgroundFetchBacks caps the post-send fetch-backs running at once. The send path used to wait
-// for its own fetch-back, so in-flight fetch-backs were bounded by in-flight send requests (and by
-// the websocket server's per-connection pending-request limit); now that it does not, this is the
-// backpressure. Private send volume is low, so the cap is only ever reached by a burst or by a relay
-// that has stopped answering.
-const maxBackgroundFetchBacks = 16
+// maxBackgroundFetchBacks and maxExposeFetchBacks cap the post-send fetch-backs running at once, per
+// kind. The send path used to wait for its own fetch-back, so in-flight fetch-backs were bounded by
+// in-flight send requests (and by the websocket server's per-connection pending-request limit); now
+// that it does not, this is the backpressure. Private send volume is low, so a cap is only ever
+// reached by a burst or by a relay that has stopped answering - and in that second case shedding is
+// near-total for as long as it lasts, since each refused slot is held for len(urls) * rpcTimeout and
+// only the reconcile loop keeps probing.
+//
+// The two allowances are independent because a refusal costs the two call sites completely different
+// things: a refused refresh loses nothing (the transaction is already cached and indexed, and
+// reconcile re-probes it within a cycle), while a refused fetch-back on the raw-hex-decode-failure
+// path loses the send itself - nothing serves it, nothing indexes it and the pending-nonce floor does
+// not rise. Sharing one allowance let ordinary refresh traffic, which is all of it in practice, starve
+// the only fetch-back that carries data.
+const (
+	maxBackgroundFetchBacks = 16
+	maxExposeFetchBacks     = 16
+)
+
+// backgroundKind selects which allowance a fetch-back draws on: backgroundRefresh for the ones that
+// only replace a cached body, backgroundExpose for the one that is the sole thing able to expose an
+// accepted send.
+type backgroundKind int
+
+const (
+	backgroundRefresh backgroundKind = iota
+	backgroundExpose
+)
 
 // AlternativeSendTxProvider handles sending transactions to alternative providers
 type AlternativeSendTxProvider struct {
@@ -85,7 +107,8 @@ type AlternativeSendTxProvider struct {
 	acceptedSlots                map[nonceSlot]acceptedSlot // guarded by recentSendersMux
 	sendGeneration               uint64                     // counts successful sends; guarded by recentSendersMux
 	recentSendersMux             sync.Mutex
-	backgroundCount              int        // background fetch-backs in flight; guarded by backgroundMux
+	backgroundCount              int        // refresh fetch-backs in flight; guarded by backgroundMux
+	exposeCount                  int        // decode-failure fetch-backs in flight; guarded by backgroundMux
 	backgroundIdle               *sync.Cond // signalled when backgroundCount reaches 0; created lazily
 	backgroundMux                sync.Mutex
 }
@@ -261,11 +284,19 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 			// every chain we index) the transaction may have mined and block sync may have cleared
 			// it, and re-inserting the pending body would flip a confirmed transaction back to
 			// Unconfirmed, re-index it as pending and count its cache exit twice.
-			p.inBackground(func() { p.refreshCachedTransaction(sent.txid, gen) })
+			// Dropping this one under load is safe: the entry it would refresh is already cached
+			// and indexed, and reconcileMempoolTxs re-probes it within a cycle anyway.
+			p.inBackground(backgroundRefresh, func() { p.refreshCachedTransaction(sent.txid, gen) })
 		} else {
 			// Nothing was cached (the raw hex did not decode), so here the fetch-back is the only
-			// thing that can expose the transaction at all and keeps its create semantics.
-			p.inBackground(func() { p.handleMempoolTransaction(txid, gen) })
+			// thing that can expose the transaction at all and keeps its create semantics. Dropping
+			// it therefore loses the accepted send: nothing serves it, nothing indexes it and the
+			// pending-nonce floor does not rise, which is the nonce-reuse precursor - so report it
+			// under the same counter as a relay that does not surface what it accepted, rather than
+			// leaving the one unobservable variant of that failure.
+			if !p.inBackground(backgroundExpose, func() { p.handleMempoolTransaction(txid, gen) }) && !p.stopped() {
+				p.observeSendNotSurfaced("dropped")
+			}
 		}
 	}
 
@@ -348,17 +379,19 @@ func decodeRawTx(rawTxHex string) decodedTx {
 
 // inBackground runs the post-send fetch-back off the send path, so the wallet's answer does not wait
 // for another relay round-trip (up to rpcTimeout per configured URL) it cannot observe the outcome of.
-// It is a no-op once the provider is shut down, and it drops the work rather than queueing it beyond
-// maxBackgroundFetchBacks: the send path no longer applies backpressure, so a burst of accepted sends
-// would otherwise grow goroutines, sockets and relay-quota consumption without bound. Dropping is
-// safe - the fetch-back is best-effort, and reconcileMempoolTxs revisits every cached entry within a
-// minute anyway.
-func (p *AlternativeSendTxProvider) inBackground(fetchBack func()) {
-	if !p.startBackground() {
-		return
+// It reports whether it took the work: it declines once the provider is shut down, and drops rather
+// than queues beyond maxBackgroundFetchBacks, because the send path no longer applies backpressure and
+// a burst of accepted sends would otherwise grow goroutines, sockets and relay-quota consumption
+// without bound. Queueing is not an alternative - a queue either grows unbounded or pushes back into
+// the wallet's own deadline, and a fetch-back that runs minutes late tells us nothing reconcile has
+// not already decided. What a drop costs differs per call site, so the callers decide what to make of
+// a false return.
+func (p *AlternativeSendTxProvider) inBackground(kind backgroundKind, fetchBack func()) bool {
+	if !p.startBackground(kind) {
+		return false
 	}
 	go func() {
-		defer p.finishBackground()
+		defer p.finishBackground(kind)
 		// this goroutine outlives the request handler, whose own recover cannot protect it
 		defer func() {
 			if r := recover(); r != nil {
@@ -367,35 +400,70 @@ func (p *AlternativeSendTxProvider) inBackground(fetchBack func()) {
 		}()
 		fetchBack()
 	}()
+
+	return true
+}
+
+// inFlight reports the fetch-backs currently running, per kind.
+func (p *AlternativeSendTxProvider) inFlight(kind backgroundKind) int {
+	if kind == backgroundExpose {
+		return p.exposeCount
+	}
+	return p.backgroundCount
 }
 
 // startBackground reserves one of the maxBackgroundFetchBacks slots, reporting whether the caller got
 // one. A plain sync.WaitGroup cannot serve here: Add would race the Wait in waitForRefreshes (the
 // documented reuse misuse, which panics and leaves the counter stuck), and it could not cap anything.
-func (p *AlternativeSendTxProvider) startBackground() bool {
-	select {
-	case <-p.stop:
+func (p *AlternativeSendTxProvider) startBackground(kind backgroundKind) bool {
+	if p.stopped() {
 		return false
-	default:
 	}
 	p.backgroundMux.Lock()
 	defer p.backgroundMux.Unlock()
-	if p.backgroundCount >= maxBackgroundFetchBacks {
-		glog.Warningf("skipping fetch-back: %d already in flight", p.backgroundCount)
+	max := maxBackgroundFetchBacks
+	if kind == backgroundExpose {
+		max = maxExposeFetchBacks
+	}
+	if p.inFlight(kind) >= max {
+		glog.Warningf("skipping fetch-back: %d of kind %d already in flight", p.inFlight(kind), kind)
 		return false
 	}
 	if p.backgroundIdle == nil {
 		p.backgroundIdle = sync.NewCond(&p.backgroundMux)
 	}
-	p.backgroundCount++
+	if kind == backgroundExpose {
+		p.exposeCount++
+	} else {
+		p.backgroundCount++
+	}
 	return true
 }
 
-func (p *AlternativeSendTxProvider) finishBackground() {
+// stopped reports whether shutdown has been requested. It keeps a fetch-back declined at shutdown from
+// being reported as a lost send: the process is going down, and an alert on the nonce-reuse precursor
+// must not fire on every restart that catches a send in flight.
+func (p *AlternativeSendTxProvider) stopped() bool {
+	if p.stop == nil {
+		return false
+	}
+	select {
+	case <-p.stop:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *AlternativeSendTxProvider) finishBackground(kind backgroundKind) {
 	p.backgroundMux.Lock()
 	defer p.backgroundMux.Unlock()
-	p.backgroundCount--
-	if p.backgroundCount == 0 {
+	if kind == backgroundExpose {
+		p.exposeCount--
+	} else {
+		p.backgroundCount--
+	}
+	if p.backgroundCount+p.exposeCount == 0 {
 		p.backgroundIdle.Broadcast()
 	}
 }
@@ -408,7 +476,7 @@ func (p *AlternativeSendTxProvider) waitForRefreshes() {
 	if p.backgroundIdle == nil {
 		p.backgroundIdle = sync.NewCond(&p.backgroundMux)
 	}
-	for p.backgroundCount > 0 {
+	for p.backgroundCount+p.exposeCount > 0 {
 		p.backgroundIdle.Wait()
 	}
 }
