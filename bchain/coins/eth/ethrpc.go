@@ -2019,15 +2019,11 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 
-	// Route eth_estimateGas through the alternative provider ONLY for a sender that recently
-	// sent a private transaction through it (see useForNonces) - that sender may have a pending
-	// private tx the primary RPC does not know about, so estimating against the provider's state
-	// is what the provider path exists for. Every other estimate (the overwhelming majority - the
-	// wallet calls estimateFee on every send-form keystroke, see trezor-suite
-	// sendFormEthereumThunks) goes straight to the primary backend, so the hot estimateFee
-	// endpoint no longer burns the provider's rate-limit quota (#1629). A missing/empty `from`
-	// also takes the primary path: without a sender the gate cannot apply and the primary is
-	// authoritative for gas estimation anyway.
+	// Route eth_estimateGas through the provider ONLY for a sender that recently sent a private tx
+	// through it (see useForNonces), which may have pending state the primary RPC does not know about.
+	// Every other estimate - the overwhelming majority, since the wallet calls estimateFee on each
+	// send-form keystroke - goes straight to the primary, so the hot endpoint no longer burns the
+	// provider's rate-limit quota (#1629). A missing `from` takes the primary path too.
 	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
 		b.alternativeSendTxProvider.useForNonces(msg.From) {
 		result, err := b.alternativeSendTxProvider.callHttpStringResult(
@@ -2314,11 +2310,9 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	}
 	glog.Infof("eth_sendRawTransaction to the primary RPC accepted %s as txid %s in %v", decoded, txid, duration)
 	if b.ChainConfig.DisableMempoolSync {
-		// Add transactions submitted by us to the mempool if sync is disabled: with no
-		// newPendingTransactions feed this is the only thing that makes an own send visible for its
-		// addresses and pushes it to subscribed wallets. Reached only on a successful send (the
-		// early return above) - on a failed send txid is empty and this used to index the zero
-		// hash, costing up to two more rpc_timeouts while the wallet was already waiting.
+		// With no newPendingTransactions feed this add is the only thing that makes an own send visible
+		// for its addresses. Reached only on success (the early return above): with an empty txid it
+		// indexed the zero hash instead, two more rpc_timeouts spent on nothing while the wallet waited.
 		b.Mempool.AddTransactionToMempool(txid)
 	}
 	return txid, nil
