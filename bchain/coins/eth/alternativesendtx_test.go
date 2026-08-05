@@ -2156,13 +2156,10 @@ func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval is the reason the fetch-back updates
-// an entry instead of inserting one. It answers up to rpcTimeout per URL after the wallet was told the
-// send succeeded, which straddles a block on every chain we index, so by then the transaction may have
-// mined and block sync may have cleared it - and a relay is free to keep reporting it as pending
-// (which is why the mined check cannot cover this). Re-inserting the pending body would flip a
-// confirmed transaction back to Unconfirmed, re-index it for its addresses and count the cache exit a
-// second time.
+// TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval is why the fetch-back never writes the
+// cache. It answers up to rpcTimeout per URL after the wallet was told the send succeeded, so the
+// transaction may have mined and block sync may have cleared it by then - and a relay is free to keep
+// reporting it as pending. Re-inserting it would flip a confirmed transaction back to Unconfirmed.
 func TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	provider, release, _ := newBlockedFetchBackProvider(t, rawTx, sender, txID)
@@ -2210,12 +2207,10 @@ func TestAlternativeSendTxProviderFetchBackKeepsDerivedBody(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync pins that the fetch-back
-// does not evict when the relay already reports the transaction mined. The relay can see it in a block
-// before Blockbook's own block sync has indexed that block, and an eviction clears the wrapped
-// mempool's address index too - so in between the transaction would be in neither store: not pending,
-// not confirmed, missing from its addresses. On a 250 ms-block chain the fetch-back regularly wins that
-// race. Block sync removes it as sync_removed instead, and reconcile is the backstop.
+// TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync pins that the fetch-back does
+// not evict when the relay already reports the transaction mined: the relay can see the block before
+// Blockbook indexes it, and eviction clears the address index too, so the transaction would briefly be
+// in neither store. Block sync removes it as sync_removed instead.
 func TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	provider, release, _ := newBlockedFetchBackProviderWithBody(t, rawTx, txID,
@@ -2272,12 +2267,10 @@ func TestAlternativeSendTxProviderUndecodableSendUsesFetchBack(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderDroppedFetchBackMetered covers the one drop that loses a transaction.
-// A refused fetch-back is normally harmless - the entry it would refresh is cached and reconcile
-// re-probes it - but on the raw-hex-decode-failure path the fetch-back is the only thing that can
-// expose the send at all, so a drop there leaves it served nowhere, indexed nowhere and raising no
-// pending-nonce floor. That is the nonce-reuse precursor, and it was the only variant of it the
-// dashboard could not see.
+// TestAlternativeSendTxProviderDroppedFetchBackMetered covers the one drop that loses a transaction: on
+// the raw-hex-decode-failure path the fetch-back is the only thing that can expose the send, so a
+// refusal leaves it served nowhere, indexed nowhere and raising no pending-nonce floor - the
+// nonce-reuse precursor, and the only variant of it the dashboard could not see.
 func TestAlternativeSendTxProviderDroppedFetchBackMetered(t *testing.T) {
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
@@ -2510,12 +2503,9 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionUnorderedFetchBackSkip
 }
 
 // TestAlternativeSendTxProviderGetTransactionReturnsCopy pins that the cached body never leaves the
-// provider. Its only caller hands the result straight to EthTxToTx with fixEIP55=true, which rewrites
-// From and To IN PLACE while holding no lock - so returning the cached body made every private send
-// mutate its own just-inserted entry (via cacheMempoolTransaction -> AddTransactionToMempool ->
-// GetTransactionForMempool) concurrently with the reads that do hold mempoolTxsMux. Deterministic on
-// purpose: mutating the result and finding the cache unchanged proves ownership without depending on
-// the race detector catching a schedule.
+// provider: its only caller hands the result to EthTxToTx with fixEIP55=true, which rewrites From and
+// To in place holding no lock. Deterministic on purpose - mutating the result and finding the cache
+// unchanged proves ownership without depending on the race detector catching a schedule.
 func TestAlternativeSendTxProviderGetTransactionReturnsCopy(t *testing.T) {
 	const from = "0x2222222222222222222222222222222222222222"
 	provider := &AlternativeSendTxProvider{
