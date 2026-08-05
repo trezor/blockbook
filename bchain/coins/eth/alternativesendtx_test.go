@@ -1438,10 +1438,12 @@ func TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacemen
 	if !found {
 		t.Fatal("surfaced replacement was not cached")
 	}
-	// the surfaced body carries no gasPrice, unlike the one derived from the signed bytes, so this
-	// distinguishes a real refresh from the send-path insert that happens either way
-	if cached.tx.GasPrice != "" {
-		t.Errorf("cached body was not refreshed with the relay's view: gasPrice = %q, want empty", cached.tx.GasPrice)
+	// the entry is the one derived from the signed bytes; the fetch-back only probes, and it did run
+	if cached.tx.GasPrice == "" {
+		t.Error("cached body is not the one derived from the signed bytes")
+	}
+	if got := server.callCount("eth_getTransactionByHash"); got != 1 {
+		t.Errorf("eth_getTransactionByHash calls = %d, want 1", got)
 	}
 	if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "rbf_replaced"); got != 1 {
 		t.Errorf("rbf_replaced events = %v, want 1 (must not double-count)", got)
@@ -2143,12 +2145,14 @@ func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
 	if got := server.callCount("eth_getTransactionByHash"); got != 1 {
 		t.Errorf("eth_getTransactionByHash calls = %d, want exactly 1 (in the background)", got)
 	}
-	refreshed, found := provider.GetTransaction(txID)
+	// and it stays the derived body afterwards: the fetch-back only probes, so the relay's view - which
+	// could carry a different hash, `to` or `value` - never becomes what Blockbook serves
+	after, found := provider.GetTransaction(txID)
 	if !found {
 		t.Fatal("transaction left the cache after the fetch-back")
 	}
-	if refreshed.TransactionIndex != "0x7" {
-		t.Errorf("cached body was not refreshed with the relay's view: transactionIndex = %q, want 0x7", refreshed.TransactionIndex)
+	if after.TransactionIndex != "" {
+		t.Errorf("the fetch-back adopted the relay's body: transactionIndex = %q, want it untouched", after.TransactionIndex)
 	}
 }
 
@@ -2181,14 +2185,12 @@ func TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval(t *testing.T)
 	}
 }
 
-// TestAlternativeSendTxProviderFetchBackKeepsDerivedBodyOnMismatch covers the other half of the
-// update: a relay whose view of the transaction does not identify the same (from, nonce) slot - or
-// does not identify one at all - must not replace the body derived from the signed bytes. That body is
-// what keeps the entry visible to the pending-nonce floor, to the sender's routing release and to the
-// nonce-superseded reconcile check.
-func TestAlternativeSendTxProviderFetchBackKeepsDerivedBodyOnMismatch(t *testing.T) {
+// TestAlternativeSendTxProviderFetchBackKeepsDerivedBody covers the body a relay disagrees about: it
+// must stay the one derived from the signed bytes, which is what keeps the entry visible to
+// pendingNonceFloor, to releaseRecentSender and to the nonce-superseded reconcile check.
+func TestAlternativeSendTxProviderFetchBackKeepsDerivedBody(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
-	// surfaced without `from`, so txSenderAndNonce cannot decode the slot it fills
+	// surfaced without `from`, so it identifies no nonce slot at all
 	provider, release, _ := newBlockedFetchBackProviderWithBody(t, rawTx, txID,
 		`{"jsonrpc":"2.0","id":1,"result":{"hash":"`+txID+`","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
 
@@ -2208,11 +2210,13 @@ func TestAlternativeSendTxProviderFetchBackKeepsDerivedBodyOnMismatch(t *testing
 	}
 }
 
-// TestAlternativeSendTxProviderFetchBackEvictsMinedTransaction verifies the relay reporting the
-// transaction as mined evicts the pending entry - the same decision reconcileMempoolTxs makes on the
-// same signal - instead of leaving the derived pending body served as Unconfirmed until the next
-// reconcile cycle.
-func TestAlternativeSendTxProviderFetchBackEvictsMinedTransaction(t *testing.T) {
+// TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync pins that the fetch-back
+// does not evict when the relay already reports the transaction mined. The relay can see it in a block
+// before Blockbook's own block sync has indexed that block, and an eviction clears the wrapped
+// mempool's address index too - so in between the transaction would be in neither store: not pending,
+// not confirmed, missing from its addresses. On a 250 ms-block chain the fetch-back regularly wins that
+// race. Block sync removes it as sync_removed instead, and reconcile is the backstop.
+func TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	provider, release, _ := newBlockedFetchBackProviderWithBody(t, rawTx, txID,
 		`{"jsonrpc":"2.0","id":1,"result":{"hash":"`+txID+`","from":"`+sender.Hex()+`","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","blockNumber":"0x10"}}`)
@@ -2221,11 +2225,11 @@ func TestAlternativeSendTxProviderFetchBackEvictsMinedTransaction(t *testing.T) 
 	close(release)
 	provider.waitForRefreshes()
 
-	if _, found := provider.mempoolTxs[txID]; found {
-		t.Fatal("a mined transaction stayed in the pending cache")
+	if _, found := provider.mempoolTxs[txID]; !found {
+		t.Fatal("the fetch-back evicted a mined transaction before block sync could index its block")
 	}
-	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 1 {
-		t.Errorf("mined events = %v, want 1", got)
+	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 0 {
+		t.Errorf("mined events = %v, want 0 from the fetch-back", got)
 	}
 }
 

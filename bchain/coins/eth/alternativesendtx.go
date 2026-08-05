@@ -22,9 +22,8 @@ import (
 
 // storedTx is one entry of the alternative-provider pending cache.
 //
-// Its tx body is IMMUTABLE once published into mempoolTxs: an entry is updated by replacing the
-// pointer (see refreshCachedTransaction), never by writing through it, and GetTransaction hands out a
-// copy rather than the body itself. That is what lets the reads under mempoolTxsMux
+// Its tx body is IMMUTABLE once published into mempoolTxs: nothing writes through the pointer, and
+// GetTransaction hands out a copy rather than the body itself. That is what lets the reads under mempoolTxsMux
 // (pendingNonceFloor, txSenderAndNonce via insertMempoolTx / evictReplacedByNonce, the senderSettled
 // scan in removeTransaction) and the lockless ones outside it (the reconcileMempoolTxs snapshot) be
 // race-free, since a body is fully built before it is published and the publication happens under the
@@ -277,16 +276,16 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 			// reuse its nonce (the send-not-surfaced precursor). The signed bytes carry
 			// everything a pending transaction needs, so this needs no round-trip and cannot fail.
 			p.cacheMempoolTransaction(sent.txid, sent.body, gen)
-			// The fetch-back can now only refresh that entry with the relay's own view, so nothing
-			// the caller can observe depends on it: run it in the background instead of making the
-			// wallet wait another rpcTimeout per URL for it. It must not re-create the entry -
-			// by the time it answers (up to rpcTimeout per URL later, which straddles a block on
-			// every chain we index) the transaction may have mined and block sync may have cleared
-			// it, and re-inserting the pending body would flip a confirmed transaction back to
-			// Unconfirmed, re-index it as pending and count its cache exit twice.
-			// Dropping this one under load is safe: the entry it would refresh is already cached
-			// and indexed, and reconcileMempoolTxs re-probes it within a cycle anyway.
-			p.inBackground(backgroundRefresh, func() { p.refreshCachedTransaction(sent.txid, gen) })
+			// Only a probe: it reports whether the relay surfaces what it accepted, and never touches
+			// the cache. Nothing the caller can observe depends on it, so it runs in the background
+			// rather than making the wallet wait another rpcTimeout per URL. It must not write the
+			// cache either: by the time it answers (up to rpcTimeout per URL later, which straddles a
+			// block on every chain we index) the transaction may have mined and block sync may have
+			// cleared it, and re-inserting the pending body would flip a confirmed transaction back to
+			// Unconfirmed, re-index it as pending and count its cache exit twice. Dropping it under
+			// load is safe - the entry is already cached and indexed, and reconcileMempoolTxs
+			// re-probes it within a cycle anyway.
+			p.inBackground(backgroundRefresh, func() { p.probeSentTransaction(sent.txid) })
 		} else {
 			// Nothing was cached (the raw hex did not decode), so here the fetch-back is the only
 			// thing that can expose the transaction at all and keeps its create semantics. Dropping
@@ -481,50 +480,32 @@ func (p *AlternativeSendTxProvider) waitForRefreshes() {
 	}
 }
 
-// refreshCachedTransaction replaces the body of an already-cached entry with the relay's own view of
-// the same transaction, and never creates one: the send path cached it from the signed bytes before
-// this fetch-back was started, and in the meantime the transaction may have mined and been cleared by
-// block sync, or been evicted by the reconcile loop or the read path. Re-inserting it then would
-// surface a settled transaction as pending again, re-index it for its addresses and count its cache
-// exit twice. A relay that reports it as mined evicts it here instead, the same decision
-// reconcileMempoolTxs makes on the same signal.
-func (p *AlternativeSendTxProvider) refreshCachedTransaction(txid string, gen uint64) {
+// probeSentTransaction asks the relay about a transaction the send path has already cached from its
+// own signed bytes. It only observes: whether the relay reports back what it accepted (counted by
+// fetchMempoolTransaction) and whether it already considers the transaction mined.
+//
+// It deliberately does not touch the cache. Two reasons, both learned the hard way:
+//
+//   - Adopting the relay's body buys nothing and costs trust. Everything a pending RpcTransaction
+//     carries is in the signed bytes, so the relay's view is at best identical - and at worst it
+//     carries a different hash, `to` or `value`, which EthTxToTx would then serve to the wallet as the
+//     transaction's own identity (it takes txid from tx.Hash). The send path deliberately overrides a
+//     relay that echoes the wrong txid; adopting that same echo one round-trip later would undo it.
+//   - Evicting on a mined answer is premature. The relay can see the transaction in a block before
+//     Blockbook's own block sync has indexed that block, and eviction clears the wrapped mempool's
+//     address index too - so between the two the transaction would be in neither store: not pending,
+//     not confirmed, absent from its addresses. On a 250 ms-block chain the fetch-back regularly wins
+//     that race. Block sync removes it as sync_removed when it indexes the block, and reconcile's
+//     mined branch is the backstop; neither can produce the gap, because reconcile only probes an
+//     entry that is at least one check period old.
+func (p *AlternativeSendTxProvider) probeSentTransaction(txid string) {
 	tx, found := p.fetchMempoolTransaction(txid)
 	if !found {
 		return
 	}
 	if tx.BlockNumber != "" {
-		p.mempoolTxsMux.Lock()
-		cached, stillCached := p.mempoolTxs[txid]
-		p.mempoolTxsMux.Unlock()
-		if stillCached {
-			glog.Infof("eth_getTransactionByHash from alternative providers returned mined txid %s", txid)
-			p.evictMempoolTx("mined", txid, cached.time)
-		}
-		return
+		glog.Infof("eth_getTransactionByHash from alternative providers already reports txid %s mined; leaving it to block sync", txid)
 	}
-
-	from, nonce, decoded := txSenderAndNonce(tx)
-
-	p.mempoolTxsMux.Lock()
-	defer p.mempoolTxsMux.Unlock()
-	cached, stillCached := p.mempoolTxs[txid]
-	if !stillCached || cached.gen != gen {
-		// evicted while the fetch-back was in flight, or the entry now belongs to a later send
-		return
-	}
-	if cachedFrom, cachedNonce, cachedDecoded := txSenderAndNonce(cached.tx); cachedDecoded &&
-		(!decoded || cachedFrom != from || cachedNonce != nonce) {
-		// The relay's view disagrees with the signed bytes about which nonce slot this transaction
-		// fills, or does not say. Keeping the derived body is what keeps the entry visible to
-		// pendingNonceFloor, releaseRecentSender and the nonce-superseded reconcile check.
-		glog.Warningf("alternative provider view of %s does not match its signed bytes, keeping the derived body", txid)
-		return
-	}
-	cached.tx = tx
-	// time and gen are deliberately preserved: the entry's age is measured from the broadcast, which
-	// is what the retention timeout, the reconcile freshness window and the residence metric mean.
-	p.mempoolTxs[txid] = cached
 }
 
 // alternativeSendTx is everything the send path derives from an accepted raw transaction: the
@@ -743,7 +724,7 @@ func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, 
 // handleMempoolTransaction fetches the transaction back from the alternative providers and caches it.
 // Reached only when the send path could not derive the transaction from its own signed bytes (the raw
 // hex did not decode), which makes this fetch-back the only thing that can expose the transaction at
-// all; everywhere else the entry already exists and refreshCachedTransaction updates it in place.
+// all; everywhere else the entry already exists and the fetch-back only probes the relay.
 // gen is the send generation registerSuccessfulSend assigned to THIS submission - it must be
 // passed in rather than read from recentSenders here, because the fetch-back is a network
 // round-trip during which a concurrent send from the same sender can bump the sender's current
