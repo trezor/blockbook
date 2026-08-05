@@ -262,12 +262,14 @@ func (s *methodAwareServer) callCount(method string) int {
 func newMethodAwareTxProviderTestServer(t *testing.T, responses map[string]string) *methodAwareServer {
 	t.Helper()
 
-	return newDelayedMethodAwareTxProviderTestServer(t, responses, nil)
+	return newHookedMethodAwareTxProviderTestServer(t, responses, nil)
 }
 
-// newDelayedMethodAwareTxProviderTestServer is newMethodAwareTxProviderTestServer with an optional
-// per-method delay, so a test can tell a call that is waited for from one that is not.
-func newDelayedMethodAwareTxProviderTestServer(t *testing.T, responses map[string]string, delays map[string]time.Duration) *methodAwareServer {
+// newHookedMethodAwareTxProviderTestServer is newMethodAwareTxProviderTestServer with a hook that runs
+// before the response is written. Blocking in the hook lets a test hold a specific RPC method in
+// flight - which is how the send path's concurrency and its independence from the fetch-back are
+// asserted exactly, without wall-clock margins.
+func newHookedMethodAwareTxProviderTestServer(t *testing.T, responses map[string]string, before func(method string)) *methodAwareServer {
 	t.Helper()
 
 	s := &methodAwareServer{calls: make(map[string]int)}
@@ -282,8 +284,8 @@ func newDelayedMethodAwareTxProviderTestServer(t *testing.T, responses map[strin
 		s.calls[req.Method]++
 		s.mu.Unlock()
 
-		if delay := delays[req.Method]; delay > 0 {
-			time.Sleep(delay)
+		if before != nil {
+			before(req.Method)
 		}
 
 		resp, ok := responses[req.Method]
@@ -462,8 +464,8 @@ func newReconcileTestMetrics() *common.Metrics {
 			prometheus.GaugeOpts{Name: "test_alt_mempool_cache_size"}),
 		EthAlternativeMempoolOldestAge: prometheus.NewGauge(
 			prometheus.GaugeOpts{Name: "test_alt_mempool_oldest_age_seconds"}),
-		EthAlternativeSendAcceptedUncached: prometheus.NewCounterVec(
-			prometheus.CounterOpts{Name: "test_alt_send_accepted_but_uncached_total"}, []string{"reason"}),
+		EthAlternativeSendNotSurfaced: prometheus.NewCounterVec(
+			prometheus.CounterOpts{Name: "test_alt_send_not_surfaced_total"}, []string{"reason"}),
 	}
 }
 
@@ -949,14 +951,64 @@ func TestDecodeAlternativeSendTx(t *testing.T) {
 		}
 	})
 
+	t.Run("access list transaction has no fee-market fields", func(t *testing.T) {
+		// type 1 is the other half of the condition that adds maxFeePerGas/maxPriorityFeePerGas, and
+		// geth reports neither for it - coverage cannot see this, the branch is shared with legacy
+		raw, _, tx := signTestTx(t, &types.AccessListTx{
+			ChainID:  big.NewInt(1),
+			Nonce:    2,
+			GasPrice: big.NewInt(7),
+			Gas:      30000,
+			To:       &to,
+			Value:    big.NewInt(0),
+		})
+		sent, err := decodeAlternativeSendTx(raw)
+		if err != nil {
+			t.Fatalf("decodeAlternativeSendTx() error = %v", err)
+		}
+		if sent.body.MaxFeePerGas != "" || sent.body.MaxPriorityFeePerGas != "" {
+			t.Errorf("access list body carries fee-market fields: maxFeePerGas=%q maxPriorityFeePerGas=%q", sent.body.MaxFeePerGas, sent.body.MaxPriorityFeePerGas)
+		}
+		if sent.body.GasPrice != "0x7" || sent.txid != tx.Hash().Hex() {
+			t.Errorf("got (gasPrice=%s txid=%s), want (0x7 %s)", sent.body.GasPrice, sent.txid, tx.Hash().Hex())
+		}
+	})
+
+	t.Run("unprotected pre-EIP-155 transaction", func(t *testing.T) {
+		// ChainId() is a non-nil zero for these, which the latest signer rejects by PANICKING - and a
+		// panic here would abort the answer to a wallet whose transaction the relay already accepted
+		const unprotected = "0xf85f010182520894333333333333333333333333333333333333333301801ba0e993c688e0fefda43299dc6dffd9142da3d1135e31e7e637f4a479b1a139762ca01d30e00a368007ad7d4cc0102d95f156c3766590ced509d71fc8994153c745a4"
+		sent, err := decodeAlternativeSendTx(unprotected)
+		if err != nil {
+			t.Fatalf("decodeAlternativeSendTx() error = %v", err)
+		}
+		if want := "0x71562b71999873db5b286df957af199ec94617f7"; sent.body.From != want {
+			t.Errorf("from = %q, want %q recovered with the Homestead signer", sent.body.From, want)
+		}
+	})
+
 	t.Run("undecodable raw hex", func(t *testing.T) {
 		if _, err := decodeAlternativeSendTx("0xdeadbeef"); err == nil {
 			t.Fatal("decodeAlternativeSendTx() error = nil, want decode failure")
 		}
 	})
+
+	t.Run("unrecoverable signature", func(t *testing.T) {
+		// decodes as RLP but the signature recovers to nothing, so no sender and no (from, nonce) slot
+		bogus, err := types.NewTx(&types.LegacyTx{
+			Nonce: 1, GasPrice: big.NewInt(1), Gas: 21000, To: &to, Value: big.NewInt(0),
+			V: big.NewInt(27), R: big.NewInt(0), S: big.NewInt(1),
+		}).MarshalBinary()
+		if err != nil {
+			t.Fatalf("MarshalBinary() error = %v", err)
+		}
+		if _, err := decodeAlternativeSendTx(hexutil.Encode(bogus)); err == nil {
+			t.Fatal("decodeAlternativeSendTx() error = nil, want sender recovery failure")
+		}
+	})
 }
 
-// TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack covers the accepted_but_uncached
+// TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack covers the send-not-surfaced
 // hole: a relay that ACKs the send but never returns the transaction from eth_getTransactionByHash
 // used to leave it cached and indexed nowhere - not served as pending and not raising the
 // pending-nonce floor, so the next send could reuse its nonce. The send path now caches it from its
@@ -1008,8 +1060,8 @@ func TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack(t *testing.
 	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 5 {
 		t.Errorf("pendingNonceFloor() = (%d, %v), want (5, true)", floor, ok)
 	}
-	if got := labeledCounterValue(t, metrics.EthAlternativeSendAcceptedUncached, "reason", "not_found"); got != 1 {
-		t.Errorf("accepted_but_uncached{not_found} = %v, want 1", got)
+	if got := counterVecValue(t, metrics.EthAlternativeSendNotSurfaced, "reason", "not_found"); got != 1 {
+		t.Errorf("send_not_surfaced{not_found} = %v, want 1", got)
 	}
 }
 
@@ -1302,10 +1354,10 @@ func cachedPredecessor(txid string, from ethcommon.Address, nonceHex string) sto
 // eth_getTransactionByHash. Before the fix the predecessor lingered as "Unconfirmed" until the
 // cache timeout because eviction was gated behind a successful fetch-back.
 func TestAlternativeSendTxProviderAcceptedSendRetiresUnsurfacedPredecessor(t *testing.T) {
-	rawTx, sender := signedTestTx(t) // nonce 1
+	rawTx, sender, sentTxID := signedTestTxWithHash(t) // nonce 1
 	// relay accepts the send but never surfaces it (drop mode): getTransactionByHash returns null
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + sentTxID + `"}`,
 		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
 	})
 	provider := &AlternativeSendTxProvider{
@@ -1327,6 +1379,11 @@ func TestAlternativeSendTxProviderAcceptedSendRetiresUnsurfacedPredecessor(t *te
 
 	if _, err := provider.SendRawTransaction(rawTx); err != nil {
 		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	// checked before waiting for the background fetch-back: the retirement must have happened by the
+	// time the wallet is answered, not merely by the time the relay has been asked about the send
+	if _, found := provider.GetTransaction(testAlternativeSecondTxID); found {
+		t.Fatal("predecessor still served as pending when the send returned")
 	}
 	provider.waitForRefreshes()
 
@@ -1377,8 +1434,14 @@ func TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacemen
 	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
 		t.Fatal("predecessor remained in cache after a surfaced same-nonce replacement")
 	}
-	if _, found := provider.mempoolTxs[replacementTxID]; !found {
+	cached, found := provider.mempoolTxs[replacementTxID]
+	if !found {
 		t.Fatal("surfaced replacement was not cached")
+	}
+	// the surfaced body carries no gasPrice, unlike the one derived from the signed bytes, so this
+	// distinguishes a real refresh from the send-path insert that happens either way
+	if cached.tx.GasPrice != "" {
+		t.Errorf("cached body was not refreshed with the relay's view: gasPrice = %q, want empty", cached.tx.GasPrice)
 	}
 	if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "rbf_replaced"); got != 1 {
 		t.Errorf("rbf_replaced events = %v, want 1 (must not double-count)", got)
@@ -1389,9 +1452,9 @@ func TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacemen
 // is scoped to the same nonce slot: a cached transaction with a different nonce is a distinct,
 // still-mineable in-flight tx and must be left in the cache.
 func TestAlternativeSendTxProviderAcceptedSendKeepsDifferentNonce(t *testing.T) {
-	rawTx, sender := signedTestTx(t) // nonce 1
+	rawTx, sender, sentTxID := signedTestTxWithHash(t) // nonce 1
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + sentTxID + `"}`,
 		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
 	})
 	provider := &AlternativeSendTxProvider{
@@ -1714,9 +1777,9 @@ func TestAlternativeSendTxProviderAcceptedSlotRetiresLateFetchBack(t *testing.T)
 // TestAlternativeSendTxProviderSendRecordsAcceptedSlot verifies SendRawTransaction records the
 // (sender, nonce) slot it filled even when the relay never surfaces the transaction.
 func TestAlternativeSendTxProviderSendRecordsAcceptedSlot(t *testing.T) {
-	rawTx, sender := signedTestTx(t) // nonce 1
+	rawTx, sender, sentTxID := signedTestTxWithHash(t) // nonce 1
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + sentTxID + `"}`,
 		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
 	})
 	provider := &AlternativeSendTxProvider{
@@ -1743,15 +1806,15 @@ func TestAlternativeSendTxProviderSendRecordsAcceptedSlot(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderAcceptedButUncachedMetered verifies that a relay-accepted send whose
-// fetch-back never surfaces is counted under eth_alternative_send_accepted_but_uncached_total - the
+// TestAlternativeSendTxProviderNotSurfacedMetered verifies that a relay-accepted send whose
+// fetch-back never surfaces is counted under eth_alternative_send_not_surfaced_total - the
 // observable signal that a relay does not surface what it accepted (#1638 review). The transaction
 // itself is cached from its own signed bytes, so the counter no longer implies the cache is empty
 // (see TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack).
-func TestAlternativeSendTxProviderAcceptedButUncachedMetered(t *testing.T) {
-	rawTx, _ := signedTestTx(t)
+func TestAlternativeSendTxProviderNotSurfacedMetered(t *testing.T) {
+	rawTx, _, sentTxID := signedTestTxWithHash(t)
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + sentTxID + `"}`,
 		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`, // accepted but never surfaced
 	})
 	provider := &AlternativeSendTxProvider{
@@ -1770,8 +1833,8 @@ func TestAlternativeSendTxProviderAcceptedButUncachedMetered(t *testing.T) {
 	}
 	provider.waitForRefreshes()
 
-	if got := counterVecValue(t, provider.metrics.EthAlternativeSendAcceptedUncached, "reason", "not_found"); got != 1 {
-		t.Errorf("accepted_but_uncached{reason=not_found} = %v, want 1", got)
+	if got := counterVecValue(t, provider.metrics.EthAlternativeSendNotSurfaced, "reason", "not_found"); got != 1 {
+		t.Errorf("send_not_surfaced{reason=not_found} = %v, want 1", got)
 	}
 	// the accepted send is still exposed: cached from the signed bytes, under its true hash
 	if len(provider.mempoolTxs) != 1 {
@@ -1784,16 +1847,25 @@ func TestAlternativeSendTxProviderAcceptedButUncachedMetered(t *testing.T) {
 // up the wallet's answer for its full timeout before the next URL was even tried, and a wallet that
 // gives up before Blockbook answers reports a failure for a transaction that is on its way.
 func TestAlternativeSendTxProviderSendBroadcastsConcurrently(t *testing.T) {
-	const delay = 300 * time.Millisecond
 	rawTx, _, txID := signedTestTxWithHash(t)
 	sendResponse := `{"jsonrpc":"2.0","id":1,"result":"` + txID + `"}`
 
-	servers := make([]*methodAwareServer, 3)
+	// Every relay holds its response until ALL of them have the broadcast in flight, so the send can
+	// only complete if the broadcasts really are simultaneous. A sequential broadcast (or one capped
+	// below len(urls) concurrency) never reaches the barrier and fails the test on the fallback,
+	// rather than on a wall-clock margin that a partial regression could still fit inside.
+	const parties = 3
+	barrier := newTestBarrier(parties)
+	servers := make([]*methodAwareServer, parties)
 	urls := make([]string, len(servers))
 	for i := range servers {
-		servers[i] = newDelayedMethodAwareTxProviderTestServer(t,
+		servers[i] = newHookedMethodAwareTxProviderTestServer(t,
 			map[string]string{"eth_sendRawTransaction": sendResponse},
-			map[string]time.Duration{"eth_sendRawTransaction": delay})
+			func(method string) {
+				if method == "eth_sendRawTransaction" {
+					barrier.arrive(t)
+				}
+			})
 		urls[i] = servers[i].URL
 	}
 	provider := &AlternativeSendTxProvider{
@@ -1802,21 +1874,56 @@ func TestAlternativeSendTxProviderSendBroadcastsConcurrently(t *testing.T) {
 		rpcTimeout:        10 * time.Second,
 	}
 
-	start := time.Now()
 	if _, err := provider.SendRawTransaction(rawTx); err != nil {
 		t.Fatalf("SendRawTransaction() error = %v", err)
 	}
-	elapsed := time.Since(start)
 
+	if !barrier.reached() {
+		t.Errorf("the %d broadcasts were not in flight simultaneously, want a concurrent fan-out", parties)
+	}
 	for i, s := range servers {
 		if got := s.callCount("eth_sendRawTransaction"); got != 1 {
 			t.Errorf("url %d received %d broadcasts, want 1", i, got)
 		}
 	}
-	// sequential would be len(urls)*delay = 900ms; the margin is wide enough for a loaded CI box
-	if max := time.Duration(len(urls)) * delay; elapsed >= max-delay/2 {
-		t.Errorf("broadcast to %d urls took %s, want well under the sequential %s", len(urls), elapsed, max)
+}
+
+// testBarrier releases every arriving caller only once `parties` of them are waiting, so a test can
+// assert that N calls really overlap. The fallback timeout keeps a regression a failed assertion
+// instead of a hung test.
+type testBarrier struct {
+	mu      sync.Mutex
+	arrived int
+	parties int
+	open    chan struct{}
+	all     bool
+}
+
+func newTestBarrier(parties int) *testBarrier {
+	return &testBarrier{parties: parties, open: make(chan struct{})}
+}
+
+func (b *testBarrier) arrive(t *testing.T) {
+	t.Helper()
+	b.mu.Lock()
+	b.arrived++
+	if b.arrived == b.parties {
+		b.all = true
+		close(b.open)
 	}
+	b.mu.Unlock()
+	select {
+	case <-b.open:
+	case <-time.After(3 * time.Second):
+		// the handler runs in a different goroutine, t.Fatalf must not be called from here
+		t.Error("barrier not reached: calls did not overlap")
+	}
+}
+
+func (b *testBarrier) reached() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.all
 }
 
 // TestAlternativeSendTxProviderSendAggregatesResultsInURLOrder pins the outcome aggregation of the
@@ -1859,6 +1966,41 @@ func TestAlternativeSendTxProviderSendAggregatesResultsInURLOrder(t *testing.T) 
 		})
 	}
 
+	t.Run("unresponsive url does not fail or stall the send", func(t *testing.T) {
+		// The case the concurrent fan-out exists for: sequentially, each unresponsive relay burned its
+		// full rpcTimeout before the next URL was even tried, so two of them pushed the answer past
+		// any wallet deadline. Cleanup order matters - the hanging handlers must be released before
+		// httptest.Server.Close, which waits for outstanding requests (t.Cleanup runs LIFO).
+		hang := make(chan struct{})
+		hold := func(method string) { <-hang }
+		urls := []string{
+			newHookedMethodAwareTxProviderTestServer(t, nil, hold).URL,
+			newHookedMethodAwareTxProviderTestServer(t, nil, hold).URL,
+			newMethodAwareTxProviderTestServer(t, map[string]string{"eth_sendRawTransaction": sendResponse}).URL,
+		}
+		t.Cleanup(func() { close(hang) })
+		const rpcTimeout = 400 * time.Millisecond
+		provider := &AlternativeSendTxProvider{urls: urls, mempoolTxsTimeout: time.Hour, rpcTimeout: rpcTimeout}
+
+		start := time.Now()
+		got, err := provider.SendRawTransaction(rawTx)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			t.Fatalf("SendRawTransaction() error = %v, want the accepting url to decide the outcome", err)
+		}
+		if got != txID {
+			t.Errorf("txid = %q, want %q", got, txID)
+		}
+		if s := provider.recentSenders[sender]; s.url != urls[2] {
+			t.Errorf("recorded accepting url = %q, want %q", s.url, urls[2])
+		}
+		// two unresponsive urls cost 2*rpcTimeout sequentially and one rpcTimeout concurrently
+		if elapsed >= 2*rpcTimeout {
+			t.Errorf("send took %s with 2 unresponsive urls, want about one rpcTimeout (%s)", elapsed, rpcTimeout)
+		}
+	})
+
 	t.Run("no url accepts", func(t *testing.T) {
 		urls := []string{
 			newMethodAwareTxProviderTestServer(t, map[string]string{"eth_sendRawTransaction": rejection}).URL,
@@ -1876,21 +2018,30 @@ func TestAlternativeSendTxProviderSendAggregatesResultsInURLOrder(t *testing.T) 
 	})
 }
 
-// TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack checks that the post-send fetch-back does
-// not delay the answer to the wallet: it can only replace the body cached from the signed bytes with
-// the relay's own view of the same transaction, so it runs in the background.
-func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
-	const fetchBackDelay = 600 * time.Millisecond
-	rawTx, sender, txID := signedTestTxWithHash(t)
-	// the relay surfaces the tx with a block-explorer field the locally derived body cannot have,
-	// so the test can tell the refreshed entry from the one cached at send time
-	surfaced := `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + txID + `","from":"` + sender.Hex() + `","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","transactionIndex":"0x7"}}`
-	server := newDelayedMethodAwareTxProviderTestServer(t,
+// newBlockedFetchBackProvider wires a provider whose relay accepts the send immediately but holds its
+// eth_getTransactionByHash response until the returned release channel is closed, so a test can make
+// assertions while the fetch-back is provably still in flight. The surfaced body differs from the one
+// derived from the signed bytes by transactionIndex, an artificial marker: a real pending transaction
+// has none, which is exactly why it identifies the relay's view unambiguously.
+func newBlockedFetchBackProvider(t *testing.T, rawTx string, sender ethcommon.Address, txID string) (*AlternativeSendTxProvider, chan struct{}, *methodAwareServer) {
+	t.Helper()
+	return newBlockedFetchBackProviderWithBody(t, rawTx, txID,
+		`{"jsonrpc":"2.0","id":1,"result":{"hash":"`+txID+`","from":"`+sender.Hex()+`","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","transactionIndex":"0x7"}}`)
+}
+
+func newBlockedFetchBackProviderWithBody(t *testing.T, rawTx, txID, fetchBackResponse string) (*AlternativeSendTxProvider, chan struct{}, *methodAwareServer) {
+	t.Helper()
+	release := make(chan struct{})
+	server := newHookedMethodAwareTxProviderTestServer(t,
 		map[string]string{
 			"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + txID + `"}`,
-			"eth_getTransactionByHash": surfaced,
+			"eth_getTransactionByHash": fetchBackResponse,
 		},
-		map[string]time.Duration{"eth_getTransactionByHash": fetchBackDelay})
+		func(method string) {
+			if method == "eth_getTransactionByHash" {
+				<-release
+			}
+		})
 	provider := &AlternativeSendTxProvider{
 		urls:              []string{server.URL},
 		fetchMempoolTx:    true,
@@ -1901,16 +2052,40 @@ func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
 		metrics:           newReconcileTestMetrics(),
 	}
 	provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
+	return provider, release, server
+}
 
-	start := time.Now()
-	if _, err := provider.SendRawTransaction(rawTx); err != nil {
+// sendWhileFetchBackBlocked runs the send and returns once it has answered, failing the test if it
+// waits for the blocked fetch-back.
+func sendWhileFetchBackBlocked(t *testing.T, provider *AlternativeSendTxProvider, rawTx string) string {
+	t.Helper()
+	var txid string
+	var err error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		txid, err = provider.SendRawTransaction(rawTx)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SendRawTransaction() did not answer while the fetch-back was still in flight")
+	}
+	if err != nil {
 		t.Fatalf("SendRawTransaction() error = %v", err)
 	}
-	elapsed := time.Since(start)
+	return txid
+}
 
-	if elapsed >= fetchBackDelay {
-		t.Errorf("SendRawTransaction() took %s, want to return without waiting for the %s fetch-back", elapsed, fetchBackDelay)
-	}
+// TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack checks that the post-send fetch-back does
+// not delay the answer to the wallet: the transaction is already cached from its signed bytes when the
+// send returns, and the fetch-back only replaces that body with the relay's own view of it.
+func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	provider, release, server := newBlockedFetchBackProvider(t, rawTx, sender, txID)
+
+	sendWhileFetchBackBlocked(t, provider, rawTx)
+
 	// the transaction is already exposed as pending, from the signed bytes
 	cached, found := provider.GetTransaction(txID)
 	if !found {
@@ -1920,13 +2095,209 @@ func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
 		t.Error("cached body came from the relay, want the one derived from the signed bytes")
 	}
 
+	close(release)
 	provider.waitForRefreshes()
+	if got := server.callCount("eth_getTransactionByHash"); got != 1 {
+		t.Errorf("eth_getTransactionByHash calls = %d, want exactly 1 (in the background)", got)
+	}
 	refreshed, found := provider.GetTransaction(txID)
 	if !found {
 		t.Fatal("transaction left the cache after the fetch-back")
 	}
 	if refreshed.TransactionIndex != "0x7" {
 		t.Errorf("cached body was not refreshed with the relay's view: transactionIndex = %q, want 0x7", refreshed.TransactionIndex)
+	}
+}
+
+// TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval is the reason the fetch-back updates
+// an entry instead of inserting one. It answers up to rpcTimeout per URL after the wallet was told the
+// send succeeded, which straddles a block on every chain we index, so by then the transaction may have
+// mined and block sync may have cleared it - and a relay is free to keep reporting it as pending
+// (which is why the mined check cannot cover this). Re-inserting the pending body would flip a
+// confirmed transaction back to Unconfirmed, re-index it for its addresses and count the cache exit a
+// second time.
+func TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	provider, release, _ := newBlockedFetchBackProvider(t, rawTx, sender, txID)
+
+	sendWhileFetchBackBlocked(t, provider, rawTx)
+
+	// block sync indexing the mined transaction, while the fetch-back is still in flight
+	if !provider.RemoveTransaction(txID) {
+		t.Fatal("transaction was not cached by the send")
+	}
+
+	close(release)
+	provider.waitForRefreshes()
+
+	if _, found := provider.mempoolTxs[txID]; found {
+		t.Fatal("the fetch-back re-inserted a transaction that had already left the cache")
+	}
+	if floor, ok := provider.pendingNonceFloor(sender); ok {
+		t.Errorf("pendingNonceFloor() = (%d, true), want no floor after the entry was removed", floor)
+	}
+}
+
+// TestAlternativeSendTxProviderFetchBackKeepsDerivedBodyOnMismatch covers the other half of the
+// update: a relay whose view of the transaction does not identify the same (from, nonce) slot - or
+// does not identify one at all - must not replace the body derived from the signed bytes. That body is
+// what keeps the entry visible to the pending-nonce floor, to the sender's routing release and to the
+// nonce-superseded reconcile check.
+func TestAlternativeSendTxProviderFetchBackKeepsDerivedBodyOnMismatch(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	// surfaced without `from`, so txSenderAndNonce cannot decode the slot it fills
+	provider, release, _ := newBlockedFetchBackProviderWithBody(t, rawTx, txID,
+		`{"jsonrpc":"2.0","id":1,"result":{"hash":"`+txID+`","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`)
+
+	sendWhileFetchBackBlocked(t, provider, rawTx)
+	close(release)
+	provider.waitForRefreshes()
+
+	cached, found := provider.GetTransaction(txID)
+	if !found {
+		t.Fatal("transaction left the cache after the fetch-back")
+	}
+	if cached.From != strings.ToLower(sender.Hex()) {
+		t.Errorf("cached From = %q, want the derived %q kept", cached.From, strings.ToLower(sender.Hex()))
+	}
+	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
+		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
+	}
+}
+
+// TestAlternativeSendTxProviderFetchBackEvictsMinedTransaction verifies the relay reporting the
+// transaction as mined evicts the pending entry - the same decision reconcileMempoolTxs makes on the
+// same signal - instead of leaving the derived pending body served as Unconfirmed until the next
+// reconcile cycle.
+func TestAlternativeSendTxProviderFetchBackEvictsMinedTransaction(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	provider, release, _ := newBlockedFetchBackProviderWithBody(t, rawTx, txID,
+		`{"jsonrpc":"2.0","id":1,"result":{"hash":"`+txID+`","from":"`+sender.Hex()+`","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","blockNumber":"0x10"}}`)
+
+	sendWhileFetchBackBlocked(t, provider, rawTx)
+	close(release)
+	provider.waitForRefreshes()
+
+	if _, found := provider.mempoolTxs[txID]; found {
+		t.Fatal("a mined transaction stayed in the pending cache")
+	}
+	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 1 {
+		t.Errorf("mined events = %v, want 1", got)
+	}
+}
+
+// TestAlternativeSendTxProviderUndecodableSendUsesFetchBack covers the fallback: when the accepted raw
+// hex does not decode, nothing can be derived from it, so the fetch-back keeps its create semantics
+// and the relay's echoed txid is the only key available.
+func TestAlternativeSendTxProviderUndecodableSendUsesFetchBack(t *testing.T) {
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+	}
+
+	txid, err := provider.SendRawTransaction("0xdeadbeef")
+	if err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	provider.waitForRefreshes()
+
+	if txid != testAlternativeTxID {
+		t.Errorf("txid = %q, want the relay echo %q when the raw hex does not decode", txid, testAlternativeTxID)
+	}
+	cached, found := provider.mempoolTxs[testAlternativeTxID]
+	if !found {
+		t.Fatal("the fetch-back did not cache the transaction when the raw hex could not be decoded")
+	}
+	if cached.gen != 0 {
+		t.Errorf("cached gen = %d, want 0 (the send order is unknown)", cached.gen)
+	}
+	if len(provider.recentSenders) != 0 {
+		t.Errorf("recentSenders has %d entries, want 0 after an undecodable raw tx", len(provider.recentSenders))
+	}
+}
+
+// TestAlternativeSendTxProviderNotSurfacedErrorMetered covers the error label of
+// eth_alternative_send_not_surfaced_total, and that a relay failing the fetch-back leaves the
+// transaction cached from its signed bytes all the same.
+func TestAlternativeSendTxProviderNotSurfacedErrorMetered(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + txID + `"}`,
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"rate limited"}}`,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+	}
+
+	if _, err := provider.SendRawTransaction(rawTx); err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	provider.waitForRefreshes()
+
+	if got := counterVecValue(t, provider.metrics.EthAlternativeSendNotSurfaced, "reason", "error"); got != 1 {
+		t.Errorf("send_not_surfaced{reason=error} = %v, want 1", got)
+	}
+	if _, found := provider.GetTransaction(txID); !found {
+		t.Error("transaction is not served as pending after a failed fetch-back")
+	}
+	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
+		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
+	}
+}
+
+// TestAlternativeSendTxProviderSendKeysOnSignedBytesHash pins the decision that the txid comes from
+// the signed bytes rather than the relay's echo: the echo is what a wallet would poll and what its own
+// optimistic pending entry is keyed on, so a relay echoing anything else must not decide where the
+// transaction lives.
+func TestAlternativeSendTxProviderSendKeysOnSignedBytesHash(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		// the relay echoes a different hash than the bytes it was given
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeSecondTxID + `"}`,
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+	}
+
+	got, err := provider.SendRawTransaction(rawTx)
+	if err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	provider.waitForRefreshes()
+
+	if got != txID {
+		t.Errorf("returned txid = %q, want the signed bytes hash %q", got, txID)
+	}
+	if _, found := provider.mempoolTxs[txID]; !found {
+		t.Error("transaction was not cached under the hash of its signed bytes")
+	}
+	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
+		t.Error("transaction was cached under the relay's echoed hash")
+	}
+	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
+		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
 	}
 }
 
