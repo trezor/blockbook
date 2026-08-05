@@ -10,7 +10,7 @@ path below is skipped entirely. The broadcast flow and its invariants are descri
 |---|---|---|
 | Type | `bchain.MempoolEthereumType` (`b.Mempool`) | `eth.AlternativeSendTxProvider.mempoolTxs` |
 | Holds | txid + address index (+ token transfers) | full `RpcTransaction` body, sender, nonce, send generation |
-| Populated from | `newPendingTransactions` WS feed; the resync snapshot; own sends when `disableMempoolSync` | only sends a relay ACKed, in `ALTERNATIVE_SENDTX_ONLY` + `ALTERNATIVE_FETCH_MEMPOOL_TX` mode |
+| Populated from | `newPendingTransactions` WS feed; the resync snapshot; own sends when `disableMempoolSync` | only sends a relay ACKed, in `ALTERNATIVE_SENDTX_ONLY` + `ALTERNATIVE_FETCH_MEMPOOL_TX` mode — from the signed bytes, then refreshed with the relay's view |
 | Serves | address and xpub txs (`GetAddrDescTransactions`), wallet `NewTx` pushes | tx bodies on `GetTransaction`, the pending-nonce floor |
 | Retention | `mempoolTxTimeout` — 10 min when a relay is configured, else `mempoolTxTimeoutHours` | `alternativeMempoolTxTimeout` — 5 min |
 | Reconciled | `Resync` every ~60 s; timeout sweep at most every 10 min | `reconcileMempoolTxs` every 1 min, against the relay |
@@ -22,7 +22,9 @@ Two couplings between the stores are load-bearing:
 
 - `AddTransactionToMempool` builds its address index through `GetTransactionForMempool` →
   `GetTransaction`, which reads the cache first. A private transaction must therefore be cached
-  *before* it is added to the wrapped mempool, or it cannot be indexed at all.
+  *before* it is added to the wrapped mempool, or it cannot be indexed at all. The body comes from
+  the send's own signed bytes, so this holds even when the relay never surfaces the transaction; the
+  fetch-back only refreshes it.
 - The cache must expire **before** the wrapped mempool. Every cache exit clears the wrapped mempool
   too, but the mempool's own timeout sweep does not clear the cache; inverted, a private transaction
   loses its address index while still being served as pending. The defaults are ordered correctly
@@ -42,7 +44,8 @@ flowchart TD
     primary["primary backend<br/>eth_sendRawTransaction"]
     reg["registerSuccessfulSend<br/>sender + accepting URL + nonce slot<br/>assign send generation"]
     ackevict["evictReplacedByNonce<br/>retire same from+nonce predecessor<br/>on ACK, generation-ordered"]
-    handle["handleMempoolTransaction<br/>fetch-back eth_getTransactionByHash<br/>skipped if a newer send holds the slot"]
+    cache["cacheMempoolTransaction<br/>body decoded from the signed bytes<br/>skipped if a newer send holds the slot"]
+    handle["handleMempoolTransaction<br/>fetch-back eth_getTransactionByHash<br/>refreshes the body with the relay's view"]
 
     ws["eth_subscribe newPendingTransactions<br/>skipped when disableMempoolSync"]
     snap["startup and Resync snapshot<br/>eth_getBlockByNumber pending<br/>only when queryBackendOnMempoolResync"]
@@ -66,10 +69,11 @@ flowchart TD
     acc -- "no" --> only
     only -- "yes" --> fail
     only -- "no" --> primary
-    acc -- "yes" --> reg --> ackevict --> handle
+    acc -- "yes" --> reg --> ackevict --> cache --> handle
     ackevict -. "predecessor" .-> altrm
-    handle -- "1. cache the body" --> alt
-    handle -- "2. AddTransactionToMempool,<br/>index built by reading the cache,<br/>then push NewTx" --> pub
+    cache -- "1. cache the body" --> alt
+    cache -- "2. AddTransactionToMempool,<br/>index built by reading the cache,<br/>then push NewTx" --> pub
+    handle -. "refresh the cached body" .-> alt
     primary -. "only when disableMempoolSync" .-> pub
     ws --> pub
     snap --> pub
@@ -88,7 +92,7 @@ flowchart TD
     classDef pubstore fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
     classDef sink fill:#fff7e6,stroke:#b8860b,color:#3a2a00;
     classDef error fill:#ffecec,stroke:#c03535,color:#3b0a0a;
-    class send,route,relay,acc,only,primary,reg,ackevict,handle,ws,snap,altrec,pubrec,readalt,blk,readmined step;
+    class send,route,relay,acc,only,primary,reg,ackevict,cache,handle,ws,snap,altrec,pubrec,readalt,blk,readmined step;
     class alt mev;
     class pub pubstore;
     class altrm,bothrm sink;

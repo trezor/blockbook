@@ -263,8 +263,8 @@ panels:
         promql: '{{name:eth_alternative_mempool_oldest_age_seconds}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_send_accepted_but_uncached:
-    title: Alternative send accepted-but-uncached (req/s, nonce-reuse precursor)
-    description: 'Private sends a relay ACCEPTED but whose post-send fetch-back failed to surface, so the tx was cached and indexed nowhere, per second by reason (not_found = relay returned null, error = relay call failed). Such a tx is not exposed as pending and does not raise the pending-nonce floor, so a later send can reuse its nonce and collide - a sustained rate is the precursor to a nonce-reuse / hanging-transaction incident and usually means the accepting relay node had not yet indexed the tx. Should be ~0 on a healthy relay. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    title: Alternative send not surfaced by the relay (req/s)
+    description: 'Private sends a relay ACCEPTED but whose post-send fetch-back did not surface, per second by reason (not_found = relay returned null, error = relay call failed). The tx itself is still cached and indexed from its own signed bytes, so it stays exposed as pending and keeps raising the pending-nonce floor; what this shows is a relay that does not report back what it accepted, so the tx cannot be reconciled against the relay and only the cache timeout can retire it. Usually means the accepting relay node had not yet indexed the tx. Should be ~0 on a healthy relay. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       by_reason:
         promql: sum by (coin, reason) (rate({{name:eth_alternative_send_accepted_but_uncached_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
