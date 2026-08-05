@@ -2314,7 +2314,11 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	}
 	glog.Infof("eth_sendRawTransaction to the primary RPC accepted %s as txid %s in %v", decoded, txid, duration)
 	if b.ChainConfig.DisableMempoolSync {
-		// add transactions submitted by us to mempool if sync is disabled
+		// Add transactions submitted by us to the mempool if sync is disabled: with no
+		// newPendingTransactions feed this is the only thing that makes an own send visible for its
+		// addresses and pushes it to subscribed wallets. Reached only on a successful send (the
+		// early return above) - on a failed send txid is empty and this used to index the zero
+		// hash, costing up to two more rpc_timeouts while the wallet was already waiting.
 		b.Mempool.AddTransactionToMempool(txid)
 	}
 	return txid, nil
