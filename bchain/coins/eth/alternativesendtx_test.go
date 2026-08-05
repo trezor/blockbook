@@ -1566,6 +1566,49 @@ func TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration(t *test
 		}
 	}
 
+	t.Run("retires every victim for the slot", func(t *testing.T) {
+		const thirdTxID = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		otherNonce := entry(thirdTxID, 2)
+		otherNonce.tx.AccountNonce = "0x2"
+		var removed []string
+		provider := &AlternativeSendTxProvider{
+			fetchMempoolTx: true,
+			mempoolTxs: map[string]storedTx{
+				// two entries for one slot: reachable because insertMempoolTx refuses an insert only
+				// when a STRICTLY newer entry already holds it, so a send whose scan ran first still lands
+				testAlternativeTxID:       entry(testAlternativeTxID, 1),
+				testAlternativeSecondTxID: entry(testAlternativeSecondTxID, 2),
+				thirdTxID:                 otherNonce, // different nonce, must survive
+			},
+			metrics: newReconcileTestMetrics(),
+		}
+		provider.removeTransactionFromMempool = func(txid string) {
+			removed = append(removed, txid)
+			provider.RemoveTransaction(txid)
+		}
+
+		provider.evictReplacedByNonce(sender, 1, "0xkeep", 3)
+
+		if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+			t.Error("gen-1 predecessor was kept")
+		}
+		if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
+			t.Error("gen-2 predecessor was kept: stopping after the first victim leaves two entries for one nonce slot")
+		}
+		if _, found := provider.mempoolTxs[thirdTxID]; !found {
+			t.Error("an entry for a different nonce was evicted")
+		}
+		if len(removed) != 2 {
+			t.Errorf("removeTransactionFromMempool fired %d times, want 2 (both stores must be cleared per victim)", len(removed))
+		}
+		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "rbf_replaced"); got != 2 {
+			t.Errorf("rbf_replaced events = %v, want 2", got)
+		}
+		if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "rbf_replaced"); got != 2 {
+			t.Errorf("rbf_replaced residence samples = %d, want 2", got)
+		}
+	})
+
 	t.Run("keeps a strictly newer replacement", func(t *testing.T) {
 		provider := &AlternativeSendTxProvider{
 			fetchMempoolTx: true,
