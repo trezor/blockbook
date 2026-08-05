@@ -37,7 +37,7 @@ Two couplings between the stores are load-bearing:
 flowchart TD
     send["SendRawTransaction(hex, disableAlternativeRPC)"]
     route{"relay configured<br/>and not disabled?"}
-    relay["broadcast to every relay URL<br/>eth_sendRawTransaction"]
+    relay["broadcast to every relay URL<br/>eth_sendRawTransaction, concurrently"]
     acc{"any relay URL accepted?"}
     only{"ALTERNATIVE_SENDTX_ONLY?"}
     fail["return relay error<br/>no cache path, no fetch-back"]
@@ -45,7 +45,7 @@ flowchart TD
     reg["registerSuccessfulSend<br/>sender + accepting URL + nonce slot<br/>assign send generation"]
     ackevict["evictReplacedByNonce<br/>retire same from+nonce predecessor<br/>on ACK, generation-ordered"]
     cache["cacheMempoolTransaction<br/>body decoded from the signed bytes<br/>skipped if a newer send holds the slot"]
-    handle["handleMempoolTransaction<br/>fetch-back eth_getTransactionByHash<br/>refreshes the body with the relay's view"]
+    handle["handleMempoolTransaction (background)<br/>fetch-back eth_getTransactionByHash<br/>refreshes the body with the relay's view"]
 
     ws["eth_subscribe newPendingTransactions<br/>skipped when disableMempoolSync"]
     snap["startup and Resync snapshot<br/>eth_getBlockByNumber pending<br/>only when queryBackendOnMempoolResync"]

@@ -23,13 +23,13 @@ flowchart TD
     send["SendRawTransaction(hex, disableAlternativeRPC)"]
     route{"provider configured<br/>and not disabled?"}
     primary["primary eth_sendRawTransaction"]
-    relay["broadcast to relay URLs"]
+    relay["broadcast to every relay URL<br/>concurrently"]
     acc{"any URL accepted?"}
     reject["onlyAlternative: return error<br/>else: fall back to primary"]
     reg["registerSuccessfulSend<br/>(record sender + URL, assign gen)"]
     evict["evictReplacedByNonce<br/>retire same-(from,nonce) predecessor<br/>on ACK (RBF / cancel), gen-ordered"]
     cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → AddTransactionToMempool → notify"]
-    handle["handleMempoolTransaction<br/>fetch-back → refresh the cached body<br/>with the relay's own view"]
+    handle["handleMempoolTransaction (background)<br/>fetch-back → refresh the cached body<br/>with the relay's own view"]
 
     subgraph rec ["reconcileMempoolTxs (every minute, per cached tx)"]
         mined["mined → evict"]
@@ -63,6 +63,13 @@ flowchart TD
 
 Key invariants:
 
+- **The wallet's answer waits for the broadcast and nothing else.** The broadcast to every
+  configured relay URL runs concurrently, so it costs the slowest single URL instead of the sum of
+  all of them, and the fetch-back runs in the background (it can only refresh a body that is already
+  cached). This matters beyond latency: a wallet that gives up before Blockbook answers tells the
+  user the send failed while it is on its way to the chain, and a re-send at the next nonce then pays
+  the recipient twice. Trezor Suite's per-request deadline is 20 s, against `rpc_timeout` of 25 s
+  *per relay URL*.
 - **An accepted send is cached from its own signed bytes, before the relay is asked about it.**
   Everything a pending `RpcTransaction` carries is in the signed transaction, so the relay only ever
   *refreshes* the entry. A relay that accepts a transaction and then does not surface it (or is
