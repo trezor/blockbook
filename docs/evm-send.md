@@ -28,7 +28,8 @@ flowchart TD
     reject["onlyAlternative: return error<br/>else: fall back to primary"]
     reg["registerSuccessfulSend<br/>(record sender + URL, assign gen)"]
     evict["evictReplacedByNonce<br/>retire same-(from,nonce) predecessor<br/>on ACK (RBF / cancel), gen-ordered"]
-    handle["handleMempoolTransaction<br/>fetch-back → cache pending (gen-ordered)<br/>→ AddTransactionToMempool → notify"]
+    cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → AddTransactionToMempool → notify"]
+    handle["handleMempoolTransaction<br/>fetch-back → refresh the cached body<br/>with the relay's own view"]
 
     subgraph rec ["reconcileMempoolTxs (every minute, per cached tx)"]
         mined["mined → evict"]
@@ -44,9 +45,9 @@ flowchart TD
     route -- "no" --> primary
     route -- "yes" --> relay --> acc
     acc -- "no" --> reject
-    acc -- "yes" --> reg --> evict --> handle
+    acc -- "yes" --> reg --> evict --> cache --> handle
     evict -. removes predecessor .-> remove
-    handle -. caches new tx .-> readpath
+    cache -. caches new tx .-> readpath
     mined --> remove
     super --> remove
     to --> remove
@@ -55,13 +56,20 @@ flowchart TD
     classDef normal fill:#e7f0ff,stroke:#4078c0,color:#10243e;
     classDef store fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
     classDef error fill:#ffecec,stroke:#c03535,color:#3b0a0a;
-    class send,route,relay,acc,reg,evict,handle,mined,super,miss,to,readpath,primary normal;
+    class send,route,relay,acc,reg,evict,cache,handle,mined,super,miss,to,readpath,primary normal;
     class remove store;
     class reject error;
 ```
 
 Key invariants:
 
+- **An accepted send is cached from its own signed bytes, before the relay is asked about it.**
+  Everything a pending `RpcTransaction` carries is in the signed transaction, so the relay only ever
+  *refreshes* the entry. A relay that accepts a transaction and then does not surface it (or is
+  briefly unreachable) therefore no longer leaves the send exposed nowhere at all — not served as
+  pending, not in the address index, not raising the pending-nonce floor, so its nonce free for the
+  next send to reuse. The txid is the hash of the signed bytes rather than the relay's echo, so the
+  cache is keyed on what the chain will show.
 - **A same-`(from, nonce)` predecessor is retired the moment the relay ACKs its replacement**, from
   the raw hex — not by waiting for the relay to surface the replacement. A Blink drop-mode cancel
   is never surfaced and its nonce is never consumed on-chain, so without this the superseded tx
@@ -104,10 +112,11 @@ a dead on-chain gap):
   sampled per reconcile cycle. The residence histogram only records an age once an entry leaves, so a
   stuck tx is invisible until it times out; this gauge exposes it live. Climbing toward the cache
   timeout at non-zero depth means cached txs are dying underpriced rather than mining.
-- `blockbook_eth_alternative_send_accepted_but_uncached_total{reason}` — a relay-accepted send whose
-  fetch-back never surfaced (`not_found`/`error`), so it is cached and indexed nowhere and does not
-  raise the pending-nonce floor. A subsequent send can then reuse its nonce, so a sustained rate is
-  the precursor to a nonce-reuse incident.
+- `blockbook_eth_alternative_send_accepted_but_uncached_total{reason}` — a relay-accepted send the
+  fetch-back did not surface (`not_found`/`error`). The transaction is still cached and indexed from
+  its signed bytes, so this is no longer a nonce-reuse precursor; it means the relay does not report
+  back what it accepted, so the entry cannot be reconciled against the relay's view and only the
+  cache timeout can retire it.
 - `blockbook_eth_alternative_pending_floor_raised_total{source}` — `raiseToPendingFloor` lifted the
   reported pending nonce above the backend's own answer (`provider`: the relay had already dropped
   the still-cached tx past its ~1-min pending window; `primary`: the fallback RPC never knew it). A

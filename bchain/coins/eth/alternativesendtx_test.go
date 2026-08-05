@@ -804,18 +804,42 @@ func TestAlternativeSendTxProviderGetNonces(t *testing.T) {
 // encoding together with the sender address the key derives to.
 func signedTestTx(t *testing.T) (string, ethcommon.Address) {
 	t.Helper()
-	key, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	if err != nil {
-		t.Fatalf("HexToECDSA() error = %v", err)
-	}
 	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
-	tx, err := types.SignNewTx(key, types.LatestSignerForChainID(big.NewInt(1)), &types.LegacyTx{
+	raw, sender, _ := signTestTx(t, &types.LegacyTx{
 		Nonce:    1,
 		GasPrice: big.NewInt(1),
 		Gas:      21000,
 		To:       &to,
 		Value:    big.NewInt(0),
 	})
+	return raw, sender
+}
+
+// signedTestTxWithHash is signedTestTx plus the transaction's true hash, for tests whose relay mock
+// must echo - and surface - the same txid the signed bytes hash to, which is the txid the send path
+// caches under.
+func signedTestTxWithHash(t *testing.T) (string, ethcommon.Address, string) {
+	t.Helper()
+	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
+	raw, sender, tx := signTestTx(t, &types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(1),
+		Gas:      21000,
+		To:       &to,
+		Value:    big.NewInt(0),
+	})
+	return raw, sender, tx.Hash().Hex()
+}
+
+// signTestTx signs inner with the fixed test key on chain id 1 and returns its raw hex, the sender
+// address and the signed transaction itself (so a test can assert against its true hash).
+func signTestTx(t *testing.T, inner types.TxData) (string, ethcommon.Address, *types.Transaction) {
+	t.Helper()
+	key, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	if err != nil {
+		t.Fatalf("HexToECDSA() error = %v", err)
+	}
+	tx, err := types.SignNewTx(key, types.LatestSignerForChainID(big.NewInt(1)), inner)
 	if err != nil {
 		t.Fatalf("SignNewTx() error = %v", err)
 	}
@@ -823,7 +847,157 @@ func signedTestTx(t *testing.T) (string, ethcommon.Address) {
 	if err != nil {
 		t.Fatalf("MarshalBinary() error = %v", err)
 	}
-	return hexutil.Encode(raw), crypto.PubkeyToAddress(key.PublicKey)
+	return hexutil.Encode(raw), crypto.PubkeyToAddress(key.PublicKey), tx
+}
+
+// TestDecodeAlternativeSendTx checks that the pending-transaction body derived from the signed bytes
+// carries the same fields, in the same encoding, that eth_getTransactionByHash would return for the
+// same unmined transaction - that equivalence is what lets the send path cache a relay-accepted
+// transaction without the relay having to surface it.
+func TestDecodeAlternativeSendTx(t *testing.T) {
+	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
+
+	t.Run("legacy transaction", func(t *testing.T) {
+		raw, sender, tx := signTestTx(t, &types.LegacyTx{
+			Nonce:    7,
+			GasPrice: big.NewInt(1000000000),
+			Gas:      21000,
+			To:       &to,
+			Value:    big.NewInt(12345),
+		})
+		sent, err := decodeAlternativeSendTx(raw)
+		if err != nil {
+			t.Fatalf("decodeAlternativeSendTx() error = %v", err)
+		}
+		if sent.from != sender || sent.nonce != 7 || sent.txid != tx.Hash().Hex() {
+			t.Fatalf("got (from=%s nonce=%d txid=%s), want (%s 7 %s)", sent.from.Hex(), sent.nonce, sent.txid, sender.Hex(), tx.Hash().Hex())
+		}
+		want := bchain.RpcTransaction{
+			AccountNonce: "0x7",
+			GasPrice:     "0x3b9aca00",
+			GasLimit:     "0x5208",
+			To:           strings.ToLower(to.Hex()),
+			Value:        "0x3039",
+			Payload:      "0x",
+			Hash:         tx.Hash().Hex(),
+			From:         strings.ToLower(sender.Hex()),
+		}
+		if *sent.body != want {
+			t.Errorf("body = %+v, want %+v", *sent.body, want)
+		}
+	})
+
+	t.Run("dynamic fee transaction with payload", func(t *testing.T) {
+		raw, sender, tx := signTestTx(t, &types.DynamicFeeTx{
+			ChainID:   big.NewInt(1),
+			Nonce:     3,
+			GasTipCap: big.NewInt(2000000000),
+			GasFeeCap: big.NewInt(30000000000),
+			Gas:       60000,
+			To:        &to,
+			Value:     big.NewInt(0),
+			Data:      ethcommon.FromHex("0xa9059cbb"),
+		})
+		sent, err := decodeAlternativeSendTx(raw)
+		if err != nil {
+			t.Fatalf("decodeAlternativeSendTx() error = %v", err)
+		}
+		want := bchain.RpcTransaction{
+			AccountNonce: "0x3",
+			// a pending EIP-1559 transaction reports its fee cap as gasPrice
+			GasPrice:             "0x6fc23ac00",
+			MaxFeePerGas:         "0x6fc23ac00",
+			MaxPriorityFeePerGas: "0x77359400",
+			GasLimit:             "0xea60",
+			To:                   strings.ToLower(to.Hex()),
+			Value:                "0x0",
+			Payload:              "0xa9059cbb",
+			Hash:                 tx.Hash().Hex(),
+			From:                 strings.ToLower(sender.Hex()),
+		}
+		if *sent.body != want {
+			t.Errorf("body = %+v, want %+v", *sent.body, want)
+		}
+	})
+
+	t.Run("contract creation has no recipient", func(t *testing.T) {
+		raw, _, _ := signTestTx(t, &types.LegacyTx{
+			Nonce:    0,
+			GasPrice: big.NewInt(1),
+			Gas:      100000,
+			Value:    big.NewInt(0),
+			Data:     ethcommon.FromHex("0x60006000"),
+		})
+		sent, err := decodeAlternativeSendTx(raw)
+		if err != nil {
+			t.Fatalf("decodeAlternativeSendTx() error = %v", err)
+		}
+		if sent.body.To != "" {
+			t.Errorf("To = %q, want empty for a contract creation", sent.body.To)
+		}
+	})
+
+	t.Run("undecodable raw hex", func(t *testing.T) {
+		if _, err := decodeAlternativeSendTx("0xdeadbeef"); err == nil {
+			t.Fatal("decodeAlternativeSendTx() error = nil, want decode failure")
+		}
+	})
+}
+
+// TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack covers the accepted_but_uncached
+// hole: a relay that ACKs the send but never returns the transaction from eth_getTransactionByHash
+// used to leave it cached and indexed nowhere - not served as pending and not raising the
+// pending-nonce floor, so the next send could reuse its nonce. The send path now caches it from its
+// own signed bytes, so the failed fetch-back only costs the metric.
+func TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack(t *testing.T) {
+	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
+	rawTx, sender, tx := signTestTx(t, &types.LegacyTx{
+		Nonce:    4,
+		GasPrice: big.NewInt(1),
+		Gas:      21000,
+		To:       &to,
+		Value:    big.NewInt(1),
+	})
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction": `{"jsonrpc":"2.0","id":1,"result":"` + tx.Hash().Hex() + `"}`,
+		// the relay accepted the transaction but does not surface it
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
+	})
+	metrics := newReconcileTestMetrics()
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		onlyAlternative:   true,
+		fetchMempoolTx:    true,
+		mempoolTxs:        map[string]storedTx{},
+		mempoolTxsTimeout: time.Hour,
+		rpcTimeout:        time.Second,
+		metrics:           metrics,
+	}
+
+	txid, err := provider.SendRawTransaction(rawTx)
+	if err != nil {
+		t.Fatalf("SendRawTransaction() error = %v", err)
+	}
+	if txid != tx.Hash().Hex() {
+		t.Fatalf("txid = %q, want %q", txid, tx.Hash().Hex())
+	}
+	if server.callCount("eth_getTransactionByHash") == 0 {
+		t.Error("fetch-back was not attempted")
+	}
+
+	cached, found := provider.GetTransaction(txid)
+	if !found {
+		t.Fatal("accepted transaction is not served as pending after a failed fetch-back")
+	}
+	if cached.From != strings.ToLower(sender.Hex()) || cached.AccountNonce != "0x4" {
+		t.Errorf("cached body = (from=%s nonce=%s), want (%s 0x4)", cached.From, cached.AccountNonce, strings.ToLower(sender.Hex()))
+	}
+	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 5 {
+		t.Errorf("pendingNonceFloor() = (%d, %v), want (5, true)", floor, ok)
+	}
+	if got := labeledCounterValue(t, metrics.EthAlternativeSendAcceptedUncached, "reason", "not_found"); got != 1 {
+		t.Errorf("accepted_but_uncached{not_found} = %v, want 1", got)
+	}
 }
 
 func TestAlternativeSendTxProviderUseForNonces(t *testing.T) {
@@ -1161,11 +1335,11 @@ func TestAlternativeSendTxProviderAcceptedSendRetiresUnsurfacedPredecessor(t *te
 // predecessor is retired, and the fee-replacement exit is counted exactly once (not doubled by the
 // acceptance-time and handleMempoolTransaction removals both firing).
 func TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacement(t *testing.T) {
-	rawTx, sender := signedTestTx(t) // nonce 1
+	rawTx, sender, replacementTxID := signedTestTxWithHash(t) // nonce 1
 	// the surfaced replacement shares the sender and nonce of the predecessor
-	surfaced := `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + testAlternativeTxID + `","from":"` + sender.Hex() + `","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`
+	surfaced := `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + replacementTxID + `","from":"` + sender.Hex() + `","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333"}}`
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
-		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + replacementTxID + `"}`,
 		"eth_getTransactionByHash": surfaced,
 	})
 	provider := &AlternativeSendTxProvider{
@@ -1188,7 +1362,7 @@ func TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacemen
 	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
 		t.Fatal("predecessor remained in cache after a surfaced same-nonce replacement")
 	}
-	if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
+	if _, found := provider.mempoolTxs[replacementTxID]; !found {
 		t.Fatal("surfaced replacement was not cached")
 	}
 	if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "rbf_replaced"); got != 1 {
@@ -1552,8 +1726,10 @@ func TestAlternativeSendTxProviderSendRecordsAcceptedSlot(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderAcceptedButUncachedMetered verifies that a relay-accepted send whose
-// fetch-back never surfaces is counted under eth_alternative_send_accepted_but_uncached_total and
-// leaves the cache empty - the observable precursor to a nonce-reuse hang (#1638 review).
+// fetch-back never surfaces is counted under eth_alternative_send_accepted_but_uncached_total - the
+// observable signal that a relay does not surface what it accepted (#1638 review). The transaction
+// itself is cached from its own signed bytes, so the counter no longer implies the cache is empty
+// (see TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack).
 func TestAlternativeSendTxProviderAcceptedButUncachedMetered(t *testing.T) {
 	rawTx, _ := signedTestTx(t)
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -1578,8 +1754,9 @@ func TestAlternativeSendTxProviderAcceptedButUncachedMetered(t *testing.T) {
 	if got := counterVecValue(t, provider.metrics.EthAlternativeSendAcceptedUncached, "reason", "not_found"); got != 1 {
 		t.Errorf("accepted_but_uncached{reason=not_found} = %v, want 1", got)
 	}
-	if len(provider.mempoolTxs) != 0 {
-		t.Errorf("cache size = %d, want 0 (fetch-back missed, nothing cached)", len(provider.mempoolTxs))
+	// the accepted send is still exposed: cached from the signed bytes, under its true hash
+	if len(provider.mempoolTxs) != 1 {
+		t.Errorf("cache size = %d, want 1 (accepted send cached from its signed bytes)", len(provider.mempoolTxs))
 	}
 }
 

@@ -120,10 +120,10 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	var retErr error
 	var acceptedURL string
 
-	// decoded once for the log lines and for registerSuccessfulSend below - a send is the only
+	// decoded once for the log lines and the accepted-send bookkeeping below - a send is the only
 	// moment Blockbook sees the sender and nonce of a private transaction, and both are what a
 	// later "my tx vanished" or nonce-gap report has to be reconciled against
-	decoded := decodeRawTx(hex)
+	sent, decErr := decodeAlternativeSendTx(hex)
 
 	for i := range p.urls {
 		host := providerLabel(p.urls[i])
@@ -134,9 +134,9 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		if err != nil {
 			// not terminal on its own - a later provider may still accept the transaction, and the
 			// all-rejected case is logged as an error below
-			glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %v", i+1, len(p.urls), host, decoded, duration.Round(time.Millisecond), err)
+			glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %v", i+1, len(p.urls), host, sentTxLogString(sent, decErr), duration.Round(time.Millisecond), err)
 		} else {
-			glog.Infof("eth_sendRawTransaction to provider %d/%d %s accepted %s as txid %s in %v", i+1, len(p.urls), host, decoded, r, duration.Round(time.Millisecond))
+			glog.Infof("eth_sendRawTransaction to provider %d/%d %s accepted %s as txid %s in %v", i+1, len(p.urls), host, sentTxLogString(sent, decErr), r, duration.Round(time.Millisecond))
 		}
 		if err == nil && acceptedURL == "" {
 			acceptedURL = p.urls[i]
@@ -153,19 +153,25 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// there is no send to register and no txid to fetch back - the lookup would query the zero
 	// hash and log a confusing not-found error.
 	if acceptedURL == "" {
-		glog.Errorf("eth_sendRawTransaction rejected by all %d alternative providers, %s: %v", len(p.urls), decoded, retErr)
+		glog.Errorf("eth_sendRawTransaction rejected by all %d alternative providers, %s: %v", len(p.urls), sentTxLogString(sent, decErr), retErr)
 		return txid, retErr
 	}
 
-	// the sender and nonce were decoded once at the top of the send and are reused for recent-
-	// sender registration and the RBF eviction below - a single ECDSA sender recovery. On decode
-	// failure gen stays 0 and no eviction runs, but the transaction is still handed to
+	// the transaction was decoded once at the top of the send and the result is reused for
+	// recent-sender registration, the RBF eviction and the cache entry below - a single ECDSA
+	// sender recovery instead of one per consumer. On decode failure gen stays 0 and neither
+	// eviction nor local caching runs, but the transaction is still handed to
 	// handleMempoolTransaction(txid, 0), exactly as before.
 	var gen uint64
-	if decoded.err != nil {
-		glog.Warningf("cannot decode sender/nonce of accepted transaction: %v", decoded.err)
+	if decErr != nil {
+		glog.Warningf("cannot decode accepted transaction: %v", decErr)
 	} else {
-		gen = p.registerSuccessfulSend(decoded.sender, decoded.tx.Nonce(), acceptedURL)
+		gen = p.registerSuccessfulSend(sent.from, sent.nonce, acceptedURL)
+		if sent.txid != txid {
+			// Not fatal: the cache path below keys on the locally derived hash, which is what the
+			// chain will show. A mismatch means the relay echoed something else, so surface it.
+			glog.Errorf("eth_sendRawTransaction to %s returned txid %s, signed bytes hash to %s", acceptedURL, txid, sent.txid)
+		}
 	}
 
 	if p.onlyAlternative && p.fetchMempoolTx {
@@ -178,10 +184,21 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		// forwarded to builders can still mine, and then this dropped the tx that wins (block sync
 		// re-indexes it). Deferring until the replacement is cached is no alternative: a drop-mode
 		// cancel is never cached, so #1573 would be back.
-		if decoded.err == nil {
-			p.evictReplacedByNonce(decoded.sender, decoded.tx.Nonce(), txid, gen)
+		if decErr == nil {
+			p.evictReplacedByNonce(sent.from, sent.nonce, sent.txid, gen)
+			// Cache and index the transaction from its own signed bytes, before asking the relay
+			// for it: an accepted send must never end up exposed nowhere. The relay is free to
+			// stop surfacing (or never surface) a transaction it has accepted, and every such
+			// send used to be cached and indexed nowhere at all - not served as pending, not in
+			// the address index, and not raising the pending-nonce floor, so the next send could
+			// reuse its nonce (the accepted_but_uncached precursor). The signed bytes carry
+			// everything a pending transaction needs, so this needs no round-trip and cannot fail.
+			p.cacheMempoolTransaction(sent.txid, sent.body, gen)
+			// The fetch-back below now only refreshes that entry with the relay's own view.
+			p.handleMempoolTransaction(sent.txid, gen)
+		} else {
+			p.handleMempoolTransaction(txid, gen)
 		}
-		p.handleMempoolTransaction(txid, gen)
 	}
 
 	return txid, retErr
@@ -259,6 +276,68 @@ func decodeRawTx(rawTxHex string) decodedTx {
 	}
 	sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
 	return decodedTx{tx: &tx, sender: sender, err: err}
+}
+
+// alternativeSendTx is everything the send path derives from an accepted raw transaction: the
+// (from, nonce) slot it fills, its txid, and a pending-transaction body to cache for it.
+type alternativeSendTx struct {
+	from  ethcommon.Address
+	nonce uint64
+	txid  string
+	body  *bchain.RpcTransaction
+}
+
+// sentTxLogString renders the sender and nonce of a decoded send for a log line. Failures are
+// rendered rather than returned - this only feeds logging and must never change a send's outcome.
+func sentTxLogString(sent *alternativeSendTx, decErr error) string {
+	if sent == nil {
+		return fmt.Sprintf("undecodable tx (%v)", decErr)
+	}
+	return fmt.Sprintf("tx from %s nonce %d", sent.from.Hex(), sent.nonce)
+}
+
+// decodeAlternativeSendTx decodes a raw transaction hex once and derives everything the send path
+// needs from the signed bytes. The chain id needed to recover the sender is taken from the
+// transaction itself.
+//
+//   - the sender and nonce identify the (from, nonce) slot the send fills, so a cached predecessor
+//     for that slot can be retired at acceptance time (see evictReplacedByNonce)
+//   - the txid is the hash of the signed bytes, i.e. what the chain will show, independent of what
+//     the relay echoes back
+//   - the body is a complete pending-transaction body: everything bchain.RpcTransaction carries for
+//     an unmined transaction is in the signed bytes, so Blockbook can surface and index an accepted
+//     private transaction without the relay having to return it from eth_getTransactionByHash
+//     (see cacheMempoolTransaction). Field encoding follows eth_getTransactionByHash: lower-case
+//     hex addresses, minimal hex quantities, and gasPrice carrying the fee cap for typed
+//     fee-market transactions (as geth reports for a pending one).
+func decodeAlternativeSendTx(rawTxHex string) (*alternativeSendTx, error) {
+	var tx types.Transaction
+	if err := tx.UnmarshalBinary(ethcommon.FromHex(rawTxHex)); err != nil {
+		return nil, err
+	}
+	sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
+	if err != nil {
+		return nil, err
+	}
+	body := &bchain.RpcTransaction{
+		AccountNonce: hexutil.EncodeUint64(tx.Nonce()),
+		GasPrice:     hexutil.EncodeBig(tx.GasFeeCap()),
+		GasLimit:     hexutil.EncodeUint64(tx.Gas()),
+		Value:        hexutil.EncodeBig(tx.Value()),
+		Payload:      hexutil.Encode(tx.Data()),
+		Hash:         tx.Hash().Hex(),
+		From:         strings.ToLower(sender.Hex()),
+		// BlockNumber, BlockHash and TransactionIndex stay empty - this is a mempool transaction,
+		// which is also what makes GetTransaction render it through the mempool branch.
+	}
+	if tx.Type() != types.LegacyTxType && tx.Type() != types.AccessListTxType {
+		body.MaxFeePerGas = hexutil.EncodeBig(tx.GasFeeCap())
+		body.MaxPriorityFeePerGas = hexutil.EncodeBig(tx.GasTipCap())
+	}
+	if to := tx.To(); to != nil {
+		body.To = strings.ToLower(to.Hex())
+	}
+	return &alternativeSendTx{from: sender, nonce: tx.Nonce(), txid: body.Hash, body: body}, nil
 }
 
 // registerSuccessfulSend records the sender of a transaction accepted by an alternative
@@ -404,19 +483,25 @@ func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, 
 	return pending
 }
 
-// handleMempoolTransaction handles the transaction when using only alternative providers.
+// handleMempoolTransaction fetches the transaction back from the alternative providers and refreshes
+// its cache entry with the relay's own view of it. The send path has already cached the transaction
+// from its signed bytes, so this no longer decides whether the transaction is exposed at all - it
+// only replaces a locally derived body with the relay's, and reports (through
+// observeAcceptedButUncached) an accepted send the relay does not surface.
 // gen is the send generation registerSuccessfulSend assigned to THIS submission - it must be
-// passed in rather than read from recentSenders here, because the fetch-back above is a
-// network round-trip during which a concurrent send from the same sender can bump the
-// sender's current generation; stamping the cache entry with that newer generation would let
-// its eviction release the sender's routing while the newer transaction is still pending.
+// passed in rather than read from recentSenders here, because the fetch-back is a network
+// round-trip during which a concurrent send from the same sender can bump the sender's current
+// generation; stamping the cache entry with that newer generation would let its eviction release
+// the sender's routing while the newer transaction is still pending.
 func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen uint64) (string, error) {
 	tx, found, err := p.getTransactionFromProviders(txid)
 	// a failed fetch-back is not just a lost cache entry: the transaction is then never surfaced as
 	// pending, so the wallet that just broadcast it sees nothing - count both outcomes
 	if err != nil {
-		// The relay accepted the send but the fetch-back failed, so nothing is cached or indexed and
-		// the tx is exposed nowhere. Counting it makes the nonce-reuse precursor observable (#1638 review).
+		// The relay accepted the send but did not return it. The send path has already cached and
+		// indexed the transaction from its own signed bytes, so it is still exposed as pending and
+		// still raises the pending-nonce floor; counting this keeps the "relay never surfaced an
+		// accepted send" signal - the nonce-reuse precursor - observable (#1638 review).
 		p.observeAcceptedButUncached("error")
 		glog.Errorf("eth_getTransactionByHash from alternative providers returned error for txid %s: %v", txid, err)
 		p.observeMempoolReconciliation("fetchback_error")
@@ -427,19 +512,37 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 		p.observeMempoolReconciliation("fetchback_missing")
 		return txid, bchain.ErrTxNotFound
 	}
+	if tx.BlockNumber != "" {
+		// Already mined: block sync owns it from here (it clears the cache entry as sync_removed).
+		// Re-inserting it would surface a mined transaction as pending.
+		glog.Infof("eth_getTransactionByHash from alternative providers returned mined txid %s, not caching as pending", txid)
+		return txid, nil
+	}
 	p.observeMempoolReconciliation("fetchback_cached")
 
+	p.cacheMempoolTransaction(txid, tx, gen)
+
+	return txid, nil
+}
+
+// cacheMempoolTransaction caches a pending transaction body under txid and indexes it in the wrapped
+// Blockbook mempool, ordering itself against concurrent sends for the same (from, nonce) slot through
+// the send generation gen. Reached twice per accepted private send: once from the send path with the
+// body decoded from the signed bytes, and once from handleMempoolTransaction with the relay's own
+// view of the same transaction (a refresh, which is a no-op for everything but the body).
+func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bchain.RpcTransaction, gen uint64) {
 	from, nonce, decoded := txSenderAndNonce(tx)
 
 	// checked before the cache scan below: the scan only sees slots that produced an entry
 	if decoded && p.slotSupersededBy(from, nonce, gen) {
-		return txid, nil
+		return
 	}
 
 	p.mempoolTxsMux.Lock()
-	// Skip a stale fetch-back: the eth_getTransactionByHash round-trip above is slow enough that a
-	// concurrent, higher-generation send for the same (from, nonce) slot can already have cached
-	// its replacement. Inserting this older submission would surface a second pending tx for the
+	// Skip a stale insert: a concurrent, higher-generation send for the same (from, nonce) slot can
+	// already have cached its replacement - certainly while this call is a fetch-back arriving after
+	// its own eth_getTransactionByHash round-trip, but equally when two sends for the slot race in
+	// the send path. Inserting this older submission would surface a second pending tx for the
 	// same nonce and, worse, its eviction below would drop the newer replacement that will actually
 	// mine. The send generations exist to order exactly this; consult them here (#1573 follow-up).
 	// The comparison must stay the plain `>` evictReplacedByNonce applies to the same pair, or a
@@ -464,13 +567,13 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 
 	if obsolete {
 		// a newer replacement already occupies this nonce slot; do not cache or surface this one
-		return txid, nil
+		return
 	}
 
 	// Retire any cached predecessor sharing this tx's sender and nonce. The send path already
 	// does this from the raw hex the moment the relay accepts the replacement (see
-	// SendRawTransaction, #1573); repeating it here from the surfaced tx is a harmless no-op in
-	// that flow and keeps the removal correct when handleMempoolTransaction is reached directly.
+	// SendRawTransaction, #1573); repeating it here is a harmless no-op in that flow and keeps the
+	// removal correct when handleMempoolTransaction is reached directly.
 	if decoded {
 		p.evictReplacedByNonce(from, nonce, txid, gen)
 	}
@@ -491,8 +594,6 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 			p.mempool.RemoveTransactionFromMempool(txid)
 		}
 	}
-
-	return txid, nil
 }
 
 // txSenderAndNonce decodes the sender address and account nonce of a cached RPC transaction,
