@@ -20,6 +20,15 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
+// storedTx is one entry of the alternative-provider pending cache.
+//
+// Its tx body is IMMUTABLE once published into mempoolTxs: an entry is updated by replacing the
+// pointer (see refreshCachedTransaction), never by writing through it, and GetTransaction hands out a
+// copy rather than the body itself. That is what lets the reads under mempoolTxsMux
+// (pendingNonceFloor, txSenderAndNonce via insertMempoolTx / evictReplacedByNonce, the senderSettled
+// scan in removeTransaction) and the lockless ones outside it (the reconcileMempoolTxs snapshot) be
+// race-free, since a body is fully built before it is published and the publication happens under the
+// mutex. Anything that mutates a body in place reopens all of them at once.
 type storedTx struct {
 	tx   *bchain.RpcTransaction
 	time uint32
@@ -876,7 +885,19 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 			}
 			return nil, false
 		}
-		return storedTx.tx, true
+		if storedTx.tx == nil {
+			return nil, false
+		}
+		// Hand out a copy, never the cached body itself. The caller (EthereumRPC.GetTransaction ->
+		// EthTxToTx with fixEIP55=true) rewrites From and To in place, and it holds no lock - which is
+		// what makes it a data race against every reader here, all of which hold mempoolTxsMux. The
+		// send path triggers that writer on its own freshly cached entry, through
+		// cacheMempoolTransaction -> AddTransactionToMempool -> GetTransactionForMempool. It is also
+		// what silently rewrote the body decodeAlternativeSendTx documents as lower-case hex.
+		// RpcTransaction is all strings, so this shallow copy is a complete one: keep it that way, or
+		// deep-copy any reference-typed field a future version adds.
+		body := *storedTx.tx
+		return &body, true
 	}
 
 	return nil, false

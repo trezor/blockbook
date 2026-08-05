@@ -2357,6 +2357,61 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionUnorderedFetchBackSkip
 	}
 }
 
+// TestAlternativeSendTxProviderGetTransactionReturnsCopy pins that the cached body never leaves the
+// provider. Its only caller hands the result straight to EthTxToTx with fixEIP55=true, which rewrites
+// From and To IN PLACE while holding no lock - so returning the cached body made every private send
+// mutate its own just-inserted entry (via cacheMempoolTransaction -> AddTransactionToMempool ->
+// GetTransactionForMempool) concurrently with the reads that do hold mempoolTxsMux. Deterministic on
+// purpose: mutating the result and finding the cache unchanged proves ownership without depending on
+// the race detector catching a schedule.
+func TestAlternativeSendTxProviderGetTransactionReturnsCopy(t *testing.T) {
+	const from = "0x2222222222222222222222222222222222222222"
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs: map[string]storedTx{
+			testAlternativeTxID: {
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: from, To: "0x3333333333333333333333333333333333333333", AccountNonce: "0x1"},
+				time: uint32(time.Now().Unix()),
+			},
+		},
+	}
+
+	body, found := provider.GetTransaction(testAlternativeTxID)
+	if !found {
+		t.Fatal("cached tx not found")
+	}
+	if body == provider.mempoolTxs[testAlternativeTxID].tx {
+		t.Fatal("GetTransaction handed out the cached body itself")
+	}
+
+	// stands in for EthTxToTx's in-place EIP-55 rewrite of From/To
+	body.From = strings.ToUpper(from)
+	body.To = ""
+
+	cached := provider.mempoolTxs[testAlternativeTxID].tx
+	if cached.From != from {
+		t.Errorf("cached From = %q, want the untouched %q", cached.From, from)
+	}
+	if cached.To == "" {
+		t.Error("caller cleared the cached To")
+	}
+}
+
+// TestAlternativeSendTxProviderGetTransactionNilBody covers the entry whose body is nil: every other
+// reader of the cache guards against it, so the read path must too rather than dereference it.
+func TestAlternativeSendTxProviderGetTransactionNilBody(t *testing.T) {
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{testAlternativeTxID: {time: uint32(time.Now().Unix())}},
+	}
+
+	if tx, found := provider.GetTransaction(testAlternativeTxID); found || tx != nil {
+		t.Fatalf("GetTransaction() = (%v, %v), want (nil, false) for an entry with no body", tx, found)
+	}
+}
+
 // TestAlternativeSendTxProviderGetTransactionTimeoutCleansWrappedMempool verifies the read-path
 // staleness eviction routes through the removeTransactionFromMempool delegate (which clears the
 // wrapped Blockbook mempool's address index), not the cache-only RemoveTransaction. Before the fix
