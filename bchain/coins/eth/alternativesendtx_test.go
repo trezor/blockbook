@@ -186,6 +186,75 @@ func TestAlternativeSendTxProviderReconcileSkipsFreshTransaction(t *testing.T) {
 	}
 }
 
+// TestAlternativeSendTxProviderReconcileBacksOffByAge pins the probe pacing that keeps a long cache
+// retention from turning into one relay round-trip per entry per minute for hours. The tick is
+// unchanged; what changes is which entries it re-asks about.
+func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		age        time.Duration
+		sinceProbe time.Duration
+		wantProbes int
+		wantAction string
+	}{
+		{name: "young entry is probed every cycle", age: 5 * time.Minute, sinceProbe: 90 * time.Second, wantProbes: 1, wantAction: "provider_missing_pending"},
+		{name: "waiting entry is not re-asked within its interval", age: 30 * time.Minute, sinceProbe: 90 * time.Second, wantProbes: 0, wantAction: "skipped_backoff"},
+		{name: "waiting entry is re-asked once its interval elapses", age: 30 * time.Minute, sinceProbe: 6 * time.Minute, wantProbes: 1, wantAction: "provider_missing_pending"},
+		{name: "hour-old entry backs off further", age: 2 * time.Hour, sinceProbe: 6 * time.Minute, wantProbes: 0, wantAction: "skipped_backoff"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newMethodAwareTxProviderTestServer(t, map[string]string{
+				"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
+			})
+			var removed string
+			provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+			provider.mempoolTxsTimeout = 3 * time.Hour
+			provider.metrics = newReconcileTestMetrics()
+			entry := provider.mempoolTxs[testAlternativeTxID]
+			entry.time = uint32(time.Now().Add(-tt.age).Unix())
+			entry.lastProbe = uint32(time.Now().Add(-tt.sinceProbe).Unix())
+			provider.mempoolTxs[testAlternativeTxID] = entry
+
+			provider.reconcileMempoolTxs()
+
+			if got := server.callCount("eth_getTransactionByHash"); got != tt.wantProbes {
+				t.Errorf("relay probes = %d, want %d", got, tt.wantProbes)
+			}
+			if got := labeledCounterValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", tt.wantAction); got != 1 {
+				t.Errorf("reconciliation_events{action=%s} = %v, want 1", tt.wantAction, got)
+			}
+			if _, found := provider.mempoolTxs[testAlternativeTxID]; !found {
+				t.Error("entry evicted although it is neither timed out nor superseded")
+			}
+		})
+	}
+}
+
+// TestAlternativeSendTxProviderReconcileEvictsTimedOutEntryDespiteBackoff pins that the backoff paces
+// only the relay round-trip: the cache timeout is a local decision and must still fire on the cycle it
+// comes due, or a backed-off entry would outlive the retention by up to a probe interval.
+func TestAlternativeSendTxProviderReconcileEvictsTimedOutEntryDespiteBackoff(t *testing.T) {
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
+	})
+	var removed string
+	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+	provider.metrics = newReconcileTestMetrics()
+	entry := provider.mempoolTxs[testAlternativeTxID]
+	entry.time = uint32(time.Now().Add(-2 * time.Hour).Unix()) // past the 1h test retention
+	entry.lastProbe = uint32(time.Now().Add(-time.Second).Unix())
+	provider.mempoolTxs[testAlternativeTxID] = entry
+
+	provider.reconcileMempoolTxs()
+
+	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+		t.Error("timed-out entry survived because its probe was backed off")
+	}
+	if removed != testAlternativeTxID {
+		t.Errorf("removed txid = %q, want %q", removed, testAlternativeTxID)
+	}
+}
+
 func TestAlternativeSendTxProviderReconcileKeepsTransactionKnownByAnyProvider(t *testing.T) {
 	droppedServer := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`)
 	knownServer := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)

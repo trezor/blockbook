@@ -245,7 +245,7 @@ metrics:
   eth_alternative_mempool_reconciliation_events_total:
     name: blockbook_eth_alternative_mempool_reconciliation_events_total
     type: counter_vec
-    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action - skipped_fresh and kept retain an entry for the next cycle, provider_error and provider_missing_pending keep an unconfirmed entry pending retry, and mined, nonce_superseded, provider_missing, timeout (from the reconcile loop or a read-path expiry), rbf_replaced (fee replacement) and sync_removed (block sync or the read path clearing an entry whose transaction was indexed, normally the dominant exit) remove it
+    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action - skipped_fresh (younger than one check period), skipped_backoff (re-asked less often as it ages, see probeInterval) and kept retain an entry for the next cycle, provider_error and provider_missing_pending keep an unconfirmed entry pending retry, and mined, nonce_superseded, provider_missing, timeout (from the reconcile loop or a read-path expiry), rbf_replaced (fee replacement) and sync_removed (block sync or the read path clearing an entry whose transaction was indexed, normally the dominant exit) remove it
     labels: [action]
   eth_alternative_mempool_tx_residence_seconds:
     name: blockbook_eth_alternative_mempool_tx_residence_seconds
