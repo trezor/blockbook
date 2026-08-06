@@ -50,10 +50,19 @@ const (
 	// internal-data trace finish.
 	defaultRPCTimeoutSeconds = 15
 
-	// Alternative/private relays expire pending txs quickly, so local pending state
-	// must not inherit the legacy hour-scale public mempool timeout.
-	defaultMempoolTxTimeoutWithAlternativeProvider = 10 * time.Minute
-	defaultAlternativeMempoolTxTimeout             = 5 * time.Minute
+	// defaultAlternativePendingTxWindow is how long a transaction broadcast through a private relay
+	// is treated as still pending. A relay dropping it from eth_getTransactionByHash and from its
+	// pending nonce count is not the same thing as the transaction being gone: it stays broadcast and
+	// builders can still include it, which Blinklabs puts at around three hours. Sizing Blockbook's
+	// pending state to the relay's visibility window instead - it used to be about a minute - is what
+	// made Blockbook stop showing a live transaction and hand its nonce back out (#1573, #1675).
+	defaultAlternativePendingTxWindow = 3 * time.Hour
+	// mempoolRetentionMarginOverPendingWindow is how much longer the wrapped Blockbook mempool keeps a
+	// transaction than the alternative cache does. The order is load-bearing (see
+	// mempoolRetentionInverted) and the margin only has to cover the mempool's own sweep granularity,
+	// which runs at most every 10 minutes. Deriving the mempool default from the cache retention
+	// rather than writing both out means changing the window cannot invert the pair.
+	mempoolRetentionMarginOverPendingWindow = 30 * time.Minute
 )
 
 // Ethereum address constants
@@ -92,6 +101,7 @@ type Configuration struct {
 	EnableEnsReverseAliases         bool   `json:"enable_ens_reverse_aliases,omitempty"`
 	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
 	MempoolTxTimeout                string `json:"mempoolTxTimeout,omitempty"`
+	AlternativePendingTxWindow      string `json:"alternativePendingTxWindow,omitempty"`
 	AlternativeMempoolTxTimeout     string `json:"alternativeMempoolTxTimeout,omitempty"`
 	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
@@ -131,31 +141,49 @@ func parsePositiveDuration(name string, value string) (time.Duration, error) {
 	return d, nil
 }
 
-// MempoolTxTimeoutDuration returns the Blockbook-side EVM mempool retention.
+// MempoolTxTimeoutDuration returns the Blockbook-side EVM mempool retention. With a relay configured
+// it follows the alternative cache retention plus a margin, so the wrapped mempool always outlives
+// the store whose exits are what clear it.
 func (c *Configuration) MempoolTxTimeoutDuration(alternativeSendTxProviderEnabled bool) (time.Duration, error) {
 	if c.MempoolTxTimeout != "" {
 		return parseNonNegativeDuration("mempoolTxTimeout", c.MempoolTxTimeout)
 	}
-	// Keep the shorter timeout scoped to alternative/private submission only.
 	if alternativeSendTxProviderEnabled {
-		return defaultMempoolTxTimeoutWithAlternativeProvider, nil
+		alternative, err := c.AlternativeMempoolTxTimeoutDuration()
+		if err != nil {
+			return 0, err
+		}
+		return alternative + mempoolRetentionMarginOverPendingWindow, nil
 	}
 	return time.Duration(c.MempoolTxTimeoutHours) * time.Hour, nil
 }
 
-// AlternativeMempoolTxTimeoutDuration returns the alternative-provider cache retention.
+// AlternativePendingTxWindowDuration returns how long a transaction broadcast through the alternative
+// provider is treated as still pending - the window in which it can still be built into a block.
+func (c *Configuration) AlternativePendingTxWindowDuration() (time.Duration, error) {
+	if c.AlternativePendingTxWindow != "" {
+		return parsePositiveDuration("alternativePendingTxWindow", c.AlternativePendingTxWindow)
+	}
+	return defaultAlternativePendingTxWindow, nil
+}
+
+// AlternativeMempoolTxTimeoutDuration returns the alternative-provider cache retention, which is the
+// pending window unless a deployment overrides how long Blockbook holds the transaction independently
+// of how long it can still land.
 func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, error) {
 	if c.AlternativeMempoolTxTimeout != "" {
 		return parsePositiveDuration("alternativeMempoolTxTimeout", c.AlternativeMempoolTxTimeout)
 	}
-	return defaultAlternativeMempoolTxTimeout, nil
+	return c.AlternativePendingTxWindowDuration()
 }
 
 // mempoolRetentionInverted reports whether the alternative-provider cache is configured to outlive
 // the wrapped Blockbook mempool. Every cache exit clears the wrapped mempool too, but the mempool's
 // own timeout sweep is the one exit that does NOT clear the cache: inverted, that sweep drops a
 // private transaction's address index while the cache keeps serving its body as pending, and nothing
-// reconciles the two. Only an explicit timeout pair can invert it; the defaults cannot.
+// reconciles the two. The defaults cannot invert it because the mempool default is derived from the
+// cache retention; only an explicit mempoolTxTimeout can, which is why it is rejected rather than
+// warned about.
 func mempoolRetentionInverted(alternativeTimeout, mempoolTimeout time.Duration) bool {
 	return alternativeTimeout >= mempoolTimeout
 }
@@ -280,6 +308,14 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		}
 	}
 	if _, err := c.MempoolTxTimeoutDuration(false); err != nil {
+		return nil, err
+	}
+	// also with a provider: that branch derives its answer from the two settings below, and whether a
+	// provider ends up configured is an env-var decision this early code cannot see
+	if _, err := c.MempoolTxTimeoutDuration(true); err != nil {
+		return nil, err
+	}
+	if _, err := c.AlternativePendingTxWindowDuration(); err != nil {
 		return nil, err
 	}
 	if _, err := c.AlternativeMempoolTxTimeoutDuration(); err != nil {
@@ -744,14 +780,18 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 		if err != nil {
 			return nil, err
 		}
+		// Checked here, not in Validate: the effective mempool retention depends on the
+		// env-configured provider existing. Rejected rather than warned about - only an explicit
+		// mempoolTxTimeout can invert the pair, and running inverted means private transactions
+		// silently lose their address index while still being served as pending (#1573). Checked
+		// before the mempool is assigned, so a rejected configuration cannot leave a mempool behind
+		// that a second call would hand out with the provider never wired to it.
+		if b.alternativeSendTxProvider != nil && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
+			return nil, errors.Errorf("mempoolTxTimeout=%s must be longer than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
+		}
 		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
 		if b.alternativeSendTxProvider != nil {
-			// warned here, not in Validate: the effective mempool retention depends on the
-			// env-configured provider existing
-			if mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
-				glog.Warningf("alternativeMempoolTxTimeout=%s is not shorter than mempoolTxTimeout=%s: the wrapped mempool may drop a private transaction's address index while the provider cache still serves it as pending", b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout)
-			}
 			b.alternativeSendTxProvider.SetupMempool(b.Mempool, b.removeTransactionFromMempool)
 		}
 
