@@ -3,7 +3,9 @@ package eth
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -1057,8 +1059,8 @@ func TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack(t *testing.
 	if cached.From != strings.ToLower(sender.Hex()) || cached.AccountNonce != "0x4" {
 		t.Errorf("cached body = (from=%s nonce=%s), want (%s 0x4)", cached.From, cached.AccountNonce, strings.ToLower(sender.Hex()))
 	}
-	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 5 {
-		t.Errorf("pendingNonceFloor() = (%d, %v), want (5, true)", floor, ok)
+	if floor, stranded := provider.raiseToPendingFloor(sender, 4); floor != 5 || stranded {
+		t.Errorf("raiseToPendingFloor(4) = (%d, %v), want (5, false)", floor, stranded)
 	}
 	if got := counterVecValue(t, metrics.EthAlternativeSendNotSurfaced, "reason", "not_found"); got != 1 {
 		t.Errorf("send_not_surfaced{not_found} = %v, want 1", got)
@@ -1311,26 +1313,56 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionStampsOwnGeneration(t 
 	}
 }
 
-func TestAlternativeSendTxProviderPendingNonceFloor(t *testing.T) {
-	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
-	provider := &AlternativeSendTxProvider{
-		mempoolTxs: map[string]storedTx{
-			"0x01": {tx: &bchain.RpcTransaction{From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x4"}},
-			"0x02": {tx: &bchain.RpcTransaction{From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x7"}},
-			"0x03": {tx: &bchain.RpcTransaction{From: "0x2222222222222222222222222222222222222222", AccountNonce: "0xZZ"}}, // unparsable, skipped
-			"0x04": {tx: &bchain.RpcTransaction{From: "0x3333333333333333333333333333333333333333", AccountNonce: "0x9"}},
-		},
+// TestAlternativeSendTxProviderRaiseToPendingFloor pins the contiguity clamp of #1675: the floor
+// advances the backend's own pending answer across the run of cached nonces that starts at it, and
+// never across a hole. The pre-#1675 rule was a blind max(cached)+1, which answered 8 for the gap
+// case below and queued every later send behind a nonce nothing was filling.
+func TestAlternativeSendTxProviderRaiseToPendingFloor(t *testing.T) {
+	const senderHex = "0x2222222222222222222222222222222222222222"
+	sender := ethcommon.HexToAddress(senderHex)
+	cached := func(nonces ...string) map[string]storedTx {
+		txs := make(map[string]storedTx, len(nonces)+1)
+		for i, nonce := range nonces {
+			txs[fmt.Sprintf("0x%02d", i)] = storedTx{tx: &bchain.RpcTransaction{From: senderHex, AccountNonce: nonce}}
+		}
+		// another sender's pending tx must never move this one's floor
+		txs["0xff"] = storedTx{tx: &bchain.RpcTransaction{From: "0x3333333333333333333333333333333333333333", AccountNonce: "0x9"}}
+
+		return txs
 	}
 
-	floor, found := provider.pendingNonceFloor(sender)
-	if !found {
-		t.Fatal("no floor found for sender with cached txs")
+	tests := []struct {
+		name         string
+		addr         ethcommon.Address
+		cached       map[string]storedTx
+		pending      uint64
+		wantFloor    uint64
+		wantStranded bool
+	}{
+		{name: "no cached tx: the backend answer stands", addr: sender, cached: cached(), pending: 4, wantFloor: 4},
+		{name: "cached at the pending nonce", addr: sender, cached: cached("0x4"), pending: 4, wantFloor: 5},
+		{name: "contiguous run", addr: sender, cached: cached("0x4", "0x5", "0x6"), pending: 4, wantFloor: 7},
+		{name: "gap: nothing fills the pending nonce", addr: sender, cached: cached("0x7"), pending: 4, wantFloor: 4, wantStranded: true},
+		{name: "run then island", addr: sender, cached: cached("0x4", "0x5", "0x8"), pending: 4, wantFloor: 6, wantStranded: true},
+		{name: "cached below the pending nonce is already consumed", addr: sender, cached: cached("0x2", "0x3"), pending: 4, wantFloor: 4},
+		{name: "unparsable nonce is skipped", addr: sender, cached: cached("0x4", "0xZZ"), pending: 4, wantFloor: 5},
+		{name: "duplicate nonce across two txids counts once", addr: sender, cached: cached("0x4", "0x4"), pending: 4, wantFloor: 5},
+		{name: "another sender's cache is invisible", addr: ethcommon.HexToAddress("0x4444444444444444444444444444444444444444"), cached: cached("0x4"), pending: 4, wantFloor: 4},
+		{name: "first send of an account", addr: sender, cached: cached("0x0"), pending: 0, wantFloor: 1},
+		{name: "the walk cannot wrap below the backend answer", addr: sender, cached: cached(hexutil.EncodeUint64(math.MaxUint64)), pending: math.MaxUint64, wantFloor: math.MaxUint64},
 	}
-	if floor != 8 {
-		t.Errorf("floor = %d, want 8 (highest cached nonce 0x7 + 1)", floor)
-	}
-	if _, found := provider.pendingNonceFloor(ethcommon.HexToAddress("0x4444444444444444444444444444444444444444")); found {
-		t.Error("floor found for address without cached txs")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := &AlternativeSendTxProvider{mempoolTxs: tt.cached}
+			floor, stranded := provider.raiseToPendingFloor(tt.addr, tt.pending)
+			if floor != tt.wantFloor || stranded != tt.wantStranded {
+				t.Errorf("raiseToPendingFloor(%d) = (%d, %v), want (%d, %v)", tt.pending, floor, stranded, tt.wantFloor, tt.wantStranded)
+			}
+			if floor < tt.pending {
+				t.Errorf("floor %d fell below the backend's pending answer %d", floor, tt.pending)
+			}
+		})
 	}
 }
 
@@ -2177,8 +2209,8 @@ func TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval(t *testing.T)
 	if _, found := provider.mempoolTxs[txID]; found {
 		t.Fatal("the fetch-back re-inserted a transaction that had already left the cache")
 	}
-	if floor, ok := provider.pendingNonceFloor(sender); ok {
-		t.Errorf("pendingNonceFloor() = (%d, true), want no floor after the entry was removed", floor)
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 1 || stranded {
+		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want the backend answer (1, false) after the entry was removed", floor, stranded)
 	}
 }
 
@@ -2202,8 +2234,8 @@ func TestAlternativeSendTxProviderFetchBackKeepsDerivedBody(t *testing.T) {
 	if cached.From != strings.ToLower(sender.Hex()) {
 		t.Errorf("cached From = %q, want the derived %q kept", cached.From, strings.ToLower(sender.Hex()))
 	}
-	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
-		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
 
@@ -2336,8 +2368,8 @@ func TestAlternativeSendTxProviderDroppedRefreshNotMetered(t *testing.T) {
 	if _, found := provider.GetTransaction(txID); !found {
 		t.Error("accepted send is not served as pending")
 	}
-	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
-		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
 
@@ -2400,8 +2432,8 @@ func TestAlternativeSendTxProviderNotSurfacedErrorMetered(t *testing.T) {
 	if _, found := provider.GetTransaction(txID); !found {
 		t.Error("transaction is not served as pending after a failed fetch-back")
 	}
-	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
-		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
 
@@ -2441,8 +2473,8 @@ func TestAlternativeSendTxProviderSendKeysOnSignedBytesHash(t *testing.T) {
 	if _, found := provider.mempoolTxs[testAlternativeSecondTxID]; found {
 		t.Error("transaction was cached under the relay's echoed hash")
 	}
-	if floor, ok := provider.pendingNonceFloor(sender); !ok || floor != 2 {
-		t.Errorf("pendingNonceFloor() = (%d, %v), want (2, true)", floor, ok)
+	if floor, stranded := provider.raiseToPendingFloor(sender, 1); floor != 2 || stranded {
+		t.Errorf("raiseToPendingFloor(1) = (%d, %v), want (2, false)", floor, stranded)
 	}
 }
 

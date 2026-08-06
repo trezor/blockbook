@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strings"
@@ -623,39 +624,55 @@ func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address
 	delete(p.recentSenders, sender)
 }
 
-// pendingNonceFloor returns the lowest pending nonce consistent with the private
-// transactions the alternative mempool cache holds for addr (highest cached account nonce
-// + 1), and whether any such transaction exists. Blockbook exposes these cached txs as
-// pending, so reporting a pending nonce below the floor would contradict its own view and
-// lead a wallet to reuse the nonce of an in-flight private transaction.
-func (p *AlternativeSendTxProvider) pendingNonceFloor(addr ethcommon.Address) (uint64, bool) {
+// cachedNoncesFor returns the account nonces of the private transactions the cache holds for addr.
+// Decoding through txSenderAndNonce keeps a body with no sender out of the answer; the previous
+// inline scan ran it through HexToAddress and folded it into the zero address's floor.
+func (p *AlternativeSendTxProvider) cachedNoncesFor(addr ethcommon.Address) map[uint64]struct{} {
+	nonces := make(map[uint64]struct{})
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
-	var floor uint64
-	var found bool
 	for _, storedTx := range p.mempoolTxs {
-		if storedTx.tx == nil || ethcommon.HexToAddress(storedTx.tx.From) != addr {
+		from, nonce, ok := txSenderAndNonce(storedTx.tx)
+		if !ok || from != addr {
 			continue
 		}
-		nonce, err := hexutil.DecodeUint64(storedTx.tx.AccountNonce)
-		if err != nil {
-			continue
-		}
-		if nonce+1 > floor {
-			floor = nonce + 1
-			found = true
-		}
+		nonces[nonce] = struct{}{}
 	}
-	return floor, found
+	return nonces
 }
 
-// raiseToPendingFloor returns pending, raised to pendingNonceFloor(addr) when the cache
-// holds a higher-nonce private transaction for the address.
-func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, pending uint64) uint64 {
-	if floor, found := p.pendingNonceFloor(addr); found && floor > pending {
-		return floor
+// raiseToPendingFloor advances the backend's pending nonce across the CONTIGUOUS run of cached
+// private nonces that starts at it, and reports whether the cache also holds a nonce above that run.
+// Blockbook exposes the cached txs as pending, so answering below the run would hand a wallet the
+// nonce of one that is in flight. Answering above a hole is the opposite failure and the one #1675
+// describes: the cache can hold N+1 while nothing fills N - an accepted send that never reached the
+// cache, or a reorg re-exposing the slot - and a wallet given N+2 there queues every later send
+// behind a nonce that may never be consumed. The old floor was a blind max(cached)+1, which could
+// only make that answer. The walk yields pending <= floor <= pending+len(cached) instead, so the
+// answer is always consistent with what Blockbook itself displays.
+//
+// The trade this accepts: an under-reporting backend now lowers the answer where max(cached)+1
+// happened to ride over it. That is the same input as a real hole with no way to tell them apart,
+// and its cost is one collision that resolves in a block, against a wallet stranded for the whole
+// cache retention.
+func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, pending uint64) (uint64, bool) {
+	nonces := p.cachedNoncesFor(addr)
+	floor := pending
+	for {
+		if _, cached := nonces[floor]; !cached {
+			break
+		}
+		if floor == math.MaxUint64 {
+			break
+		}
+		floor++
 	}
-	return pending
+	for nonce := range nonces {
+		if nonce > floor {
+			return floor, true
+		}
+	}
+	return floor, false
 }
 
 // handleMempoolTransaction fetches the transaction back from the alternative providers and caches it.

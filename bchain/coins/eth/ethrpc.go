@@ -2133,15 +2133,28 @@ func (b *EthereumRPC) observeAlternativeNonceRequest(result string) {
 }
 
 // observePendingFloorRaised records that raiseToPendingFloor lifted a getTransactionCount answer above
-// the backend's own pending nonce because the cache still holds a higher-nonce private tx, labeled by
-// source: provider (the relay's own pending count had already dropped the still-cached tx) or primary
-// (the fallback primary RPC never knew the private tx). A sustained rate is the precursor to the
-// queue-behind-a-dead-nonce hang (#1638 review).
+// the backend's own pending nonce because the cache holds the private txs filling the slots from it
+// upward, labeled by source: provider (the relay's own pending count had already dropped a still-cached
+// tx) or primary (the fallback primary RPC never knew the private tx). This is the expected shape while
+// a private send is in flight, not a fault.
 func (b *EthereumRPC) observePendingFloorRaised(source string) {
 	if b.metrics == nil || b.metrics.EthAlternativePendingFloorRaised == nil {
 		return
 	}
 	b.metrics.EthAlternativePendingFloorRaised.With(common.Labels{"source": source}).Inc()
+}
+
+// observePendingFloorStranded records that the cache held a private tx for a nonce ABOVE the
+// contiguous run the floor could advance over - a slot between the backend's pending nonce and that
+// transaction is filled by nothing Blockbook knows of. The floor deliberately stops below the hole
+// (see raiseToPendingFloor), so the stranded transaction cannot mine until the hole is filled. Same
+// source labels as observePendingFloorRaised. This is the actionable signal of #1675; a sustained
+// rate on the provider source means relay-accepted sends are going missing from the cache.
+func (b *EthereumRPC) observePendingFloorStranded(source string) {
+	if b.metrics == nil || b.metrics.EthAlternativePendingFloorStranded == nil {
+		return
+	}
+	b.metrics.EthAlternativePendingFloorStranded.With(common.Labels{"source": source}).Inc()
 }
 
 // eip1559BaseFeeMultiplier is the headroom applied to the projected base fee when deriving
@@ -2378,9 +2391,10 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // those may have a pending transaction the primary RPC does not know about. All other
 // addresses go straight to the primary RPC so that the hottest API endpoint does not burn
 // the provider's rate-limit quota. Whenever a provider is configured, the pending answer -
-// whether from the provider or from the primary RPC - is raised to the floor implied by
-// the alternative mempool cache (see pendingNonceFloor) so it never contradicts
-// Blockbook's own pending view of the sender's private transactions.
+// whether from the provider or from the primary RPC - is advanced across the contiguous run
+// of nonces the alternative mempool cache holds private transactions for (see
+// raiseToPendingFloor), so it never contradicts Blockbook's own pending view of the sender
+// and never runs past a slot nothing fills: pending <= answer <= pending + cached.
 //
 // The pending nonce (eth_getTransactionCount at the "pending" tag) counts transactions
 // still queued in the mempool and is the next nonce the account will use; it is always
@@ -2400,12 +2414,15 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		if err == nil {
 			b.observeAlternativeNonceRequest("success")
 			// Even the provider's own answer can fall below Blockbook's advertised pending
-			// view: Blink-style relays stop counting a still-pending tx at the pending tag
-			// while Blockbook keeps exposing it until the cache timeout (see
-			// reconcileMempoolTxs).
-			raised := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+			// view: a relay stops counting a still-pending tx at the pending tag once past
+			// its own pending window, while Blockbook keeps exposing it until the cache
+			// timeout (see reconcileMempoolTxs).
+			raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
 			if raised > pending {
 				b.observePendingFloorRaised("provider")
+			}
+			if stranded {
+				b.observePendingFloorStranded("provider")
 			}
 			return raised, confirmed, confirmedOK, nil
 		}
@@ -2425,9 +2442,12 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// primary answer below the floor would contradict the pending tx Blockbook still
 		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
 		// the hot path.
-		raised := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+		raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
 		if raised > pending {
 			b.observePendingFloorRaised("primary")
+		}
+		if stranded {
+			b.observePendingFloorStranded("primary")
 		}
 		pending = raised
 	}

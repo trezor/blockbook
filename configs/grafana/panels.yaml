@@ -270,11 +270,18 @@ panels:
         promql: sum by (coin, reason) (rate({{name:eth_alternative_send_not_surfaced_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
         legend: '{{coin}} - {{reason}}'
   sync.eth_alternative_pending_floor_raised:
-    title: Alternative pending-nonce floor raised (req/s, queue-behind-dead-nonce precursor)
-    description: 'eth_getTransactionCount answers where the pending nonce was lifted above the backend answer because the cache still holds a higher-nonce private tx, per second by source (provider = the relay had already dropped the still-cached tx past its ~1-min pending window; primary = the fallback RPC never knew the private tx). Sustained rate means a sender''s next nonce is pinned above a private nonce the relay may have abandoned - if that tx is underpriced and never mines, the next send queues behind the dead nonce until the cache timeout. Read alongside the oldest-age and death-ratio panels. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    title: Alternative pending-nonce floor raised (req/s)
+    description: 'eth_getTransactionCount answers where the pending nonce was advanced above the backend answer, across the contiguous run of nonces the cache holds private txs for, per second by source (provider = the relay had already dropped a still-cached tx past its own pending window; primary = the fallback RPC never knew the private tx). This is the expected shape while a private send is in flight, not a fault - it tracks private-send activity. What it costs is that a send the relay accepted but will never mine (a drop-mode cancel is the deliberate case) holds its slot for the full cache retention; read alongside the oldest-age and death-ratio panels to tell that apart from healthy in-flight sends. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       by_source:
         promql: sum by (coin, source) (rate({{name:eth_alternative_pending_floor_raised_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{source}}'
+  sync.eth_alternative_pending_floor_stranded:
+    title: Alternative pending-nonce floor stranded above a hole (req/s, #1675 signal)
+    description: 'eth_getTransactionCount answers where the cache held a private tx for a nonce ABOVE the contiguous run the floor could advance over - a slot between the backend''s pending nonce and that transaction is filled by nothing Blockbook knows of. The floor deliberately stops below the hole rather than advertising past it (#1675), so the wallet gets a usable nonce, but the stranded transaction cannot mine until the hole is filled. Should be ~0. A sustained rate on source=provider means relay-accepted sends are not reaching the cache - cross-read with the send-not-surfaced panel. Note each sample is one REQUEST, not one transaction, so the rate tracks how often the affected wallet polls, not how many txs are stranded. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    queries:
+      by_source:
+        promql: sum by (coin, source) (rate({{name:eth_alternative_pending_floor_stranded_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
         legend: '{{coin}} - {{source}}'
   sync.eth_alternative_mempool_death_ratio:
     title: Alternative mempool exit death ratio (stuck / underpriced)

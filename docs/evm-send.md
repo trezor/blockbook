@@ -152,8 +152,15 @@ a dead on-chain gap):
   transaction`), so this is no longer a nonce-reuse precursor; it means the relay does not report
   back what it accepted, so the entry cannot be reconciled against the relay's view and only the
   cache timeout can retire it.
-- `blockbook_eth_alternative_pending_floor_raised_total{source}` — `raiseToPendingFloor` lifted the
+- `blockbook_eth_alternative_pending_floor_raised_total{source}` — `raiseToPendingFloor` advanced the
   reported pending nonce above the backend's own answer (`provider`: the relay had already dropped
-  the still-cached tx past its ~1-min pending window; `primary`: the fallback RPC never knew it). A
-  sustained rate is the precursor to a wallet queueing its next send behind a nonce the relay has
-  abandoned.
+  a still-cached tx past its own pending window; `primary`: the fallback RPC never knew it). This is
+  the expected shape while a private send is in flight, so it tracks private-send activity rather
+  than faults.
+- `blockbook_eth_alternative_pending_floor_stranded_total{source}` — the cache held a private tx for a
+  nonce *above* the run the floor could advance over: a slot between the backend's answer and that
+  transaction is filled by nothing Blockbook knows of. The floor stops below the hole rather than
+  advertising past it, so the wallet still gets a usable nonce, but the stranded transaction cannot
+  mine until the hole is filled. Should be ~0; a sustained rate on `provider` means relay-accepted
+  sends are not reaching the cache. Each sample is one request, not one transaction, so its rate
+  follows how often the affected wallet polls.
