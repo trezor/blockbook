@@ -684,7 +684,7 @@ export interface WsRes {
     data: any;
 }
 export interface WsPrivatePending {
-    /** Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel); do not pad or default the array, as any entry raises the reported pending nonce to at least value+1. */
+    /** Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel) and is treated as an occupied nonce slot alongside Blockbook's own cached private transactions: the reported pending nonce advances from the backend's own answer across the contiguous run of occupied slots. Send the whole in-flight set, not just its maximum, and do not pad or default the array - a declared nonce above a slot nothing fills does not lift the answer over that slot. */
     nonces?: number[];
     /** Transaction hashes of the in-flight private transactions (reserved for future use). */
     txids?: string[];

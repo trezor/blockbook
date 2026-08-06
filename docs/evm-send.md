@@ -178,8 +178,8 @@ The field appears in two places, matching the two consumers of the routing machi
   accepted it or a restart cleared it. It is the same walk described above, over the union of the two
   sources, which is why a declared nonce above an unfilled slot strands rather than lifting the answer
   over the hole (#1675). The answer only ever *raises* the backend's; it never lowers it. The nonce
-  list is capped (see `maxPrivatePendingNonces`) and, past the cap, collapsed to its single highest
-  entry — a request that far over the cap is malformed, and the highest nonce is the one worth keeping.
+  list is capped (see `maxPrivatePendingNonces`); past the cap the lowest entries are kept, since the
+  walk can only ever consume the slots just above the backend's answer.
 - **`estimateFee` → `specific.privatePending`** is a **routing signal only**. Unlike a nonce, the
   wallet cannot compute gas itself, so Blockbook still simulates the call — the declaration only says
   "estimate against the relay's pending-private state" (e.g. a privately-submitted `approve` a

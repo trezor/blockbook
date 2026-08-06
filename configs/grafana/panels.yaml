@@ -278,7 +278,7 @@ panels:
         legend: '{{coin}} - {{source}}'
   sync.eth_alternative_pending_floor_stranded:
     title: 'Alternative pending-nonce floor stranded above a hole (req/s, #1675 signal)'
-    description: 'eth_getTransactionCount answers where the cache held a private tx above a nonce hole - a slot nothing Blockbook knows of fills. The floor deliberately stops below the hole (#1675), so the stranded tx cannot mine until the hole is filled. Should be ~0; a sustained rate on source=provider means relay-accepted sends are not reaching the cache - cross-read with the send-not-surfaced panel. Each sample is one REQUEST, not one transaction. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    description: 'eth_getTransactionCount answers where the cache held a private tx above a nonce hole - a slot nothing Blockbook knows of fills. The floor deliberately stops below the hole (#1675), so the stranded tx cannot mine until the hole is filled. A caller-declared nonce (privatePending) counts here as well as a cached one. Should be ~0; a sustained rate on source=provider means relay-accepted sends are not reaching the cache - cross-read with the send-not-surfaced panel. Each sample is one REQUEST, not one transaction. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       by_source:
         promql: sum by (coin, source) (rate({{name:eth_alternative_pending_floor_stranded_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
