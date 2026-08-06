@@ -90,6 +90,12 @@ const (
 	maxExposeFetchBacks     = 16
 )
 
+// backgroundDrainMargin and backgroundDrainPoll bound and pace the shutdown drain (see drainBackground).
+const (
+	backgroundDrainMargin = 2 * time.Second
+	backgroundDrainPoll   = 10 * time.Millisecond
+)
+
 // backgroundKind selects which allowance a fetch-back draws on: backgroundRefresh for the ones that only
 // replace a cached body, backgroundExpose for the one that is the sole thing able to expose a send.
 type backgroundKind int
@@ -398,11 +404,13 @@ func (p *AlternativeSendTxProvider) inFlight(kind backgroundKind) int {
 // plain sync.WaitGroup cannot serve here: Add would race the Wait in waitForRefreshes (the documented
 // reuse misuse, which panics and leaves the counter stuck), and it could not cap anything.
 func (p *AlternativeSendTxProvider) startBackground(kind backgroundKind) bool {
+	p.backgroundMux.Lock()
+	defer p.backgroundMux.Unlock()
+	// under the mutex, so a send racing shutdown cannot pass this check and then spawn a goroutine
+	// the drain in shutdown has already stopped waiting for
 	if p.stopped() {
 		return false
 	}
-	p.backgroundMux.Lock()
-	defer p.backgroundMux.Unlock()
 	max := maxBackgroundFetchBacks
 	if kind == backgroundExpose {
 		max = maxExposeFetchBacks
@@ -948,6 +956,33 @@ func (p *AlternativeSendTxProvider) shutdown() {
 		return
 	}
 	p.stopOnce.Do(func() { close(p.stop) })
+	p.drainBackground()
+}
+
+// drainBackground waits out the fetch-backs already in flight when shutdown was requested, so none of
+// them is still running when the caller tears down what they write to: a fetch-back reaching
+// cacheMempoolTransaction pushes a NewTx through the wrapped mempool, and returning before that lands
+// puts the push after the public server has closed and on into the deferred database close.
+//
+// Bounded rather than unconditional, because closing the shutdown channel does not stop a probe: an
+// HTTP rpc.Client's Close is a no-op, so a request already issued runs to its own rpcTimeout whatever
+// happens here. The bound is that timeout plus a margin, which is how long the last probe can take;
+// past it the work is abandoned, since a shutdown that does not finish is worse than a lost probe.
+func (p *AlternativeSendTxProvider) drainBackground() {
+	deadline := time.Now().Add(p.rpcTimeout + backgroundDrainMargin)
+	for {
+		p.backgroundMux.Lock()
+		inFlight := p.backgroundCount + p.exposeCount
+		p.backgroundMux.Unlock()
+		if inFlight == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			glog.Warningf("shutdown: abandoning %d alternative-provider fetch-backs still in flight", inFlight)
+			return
+		}
+		time.Sleep(backgroundDrainPoll)
+	}
 }
 
 func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
