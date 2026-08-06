@@ -781,7 +781,9 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 		// served as pending (#1573), so it is rejected rather than warned about - and rejected before the
 		// mempool is assigned, so a second call cannot hand out a mempool with no provider wired to it.
 		if b.alternativeSendTxProvider != nil && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
-			return nil, errors.Errorf("mempoolTxTimeout=%s must be longer than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
+			// wrapped in ErrConfiguration so startup fails fast: this cannot resolve on a retry, and
+			// the retry loop would otherwise spend two minutes reporting it once a second as an RPC fault
+			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must be longer than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
 		}
 		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)

@@ -33,6 +33,11 @@ var (
 	// ErrTxidMissing is returned if txid is not specified
 	// for example coinbase transactions in Bitcoin
 	ErrTxidMissing = errors.New("Txid missing")
+	// ErrConfiguration marks a failure caused by static configuration rather than by an unavailable
+	// backend. Startup retries an unavailable backend for two minutes; a configuration error cannot
+	// resolve in that time and must not be reported as an RPC fault, so it is wrapped in this and
+	// checked with IsConfigurationError.
+	ErrConfiguration = errors.New("invalid configuration")
 	// ErrTxNotFound is returned if transaction was not found
 	ErrTxNotFound = errors.New("Tx not found")
 )
@@ -468,4 +473,10 @@ type XpubConfig struct {
 	// MaxAddressesGap is the maximum user-supplied gap value the
 	// server will accept (zero / missing → 10000).
 	MaxAddressesGap int `json:"maxAddressesGap,omitempty"`
+}
+
+// IsConfigurationError reports whether err was caused by static configuration (see ErrConfiguration),
+// so a caller can fail fast instead of retrying something that cannot change.
+func IsConfigurationError(err error) bool {
+	return errors.Is(err, ErrConfiguration)
 }

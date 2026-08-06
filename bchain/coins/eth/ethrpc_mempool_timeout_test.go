@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/trezor/blockbook/bchain"
 )
 
 func TestConfigurationMempoolTxTimeoutDuration(t *testing.T) {
@@ -283,6 +285,11 @@ func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
 				t.Fatalf("CreateMempool() error = %v", err)
 			}
 			if tt.wantError {
+				// a static config error must be recognizable, or startup retries it once a second for
+				// two minutes and reports it as an RPC fault
+				if !bchain.IsConfigurationError(err) {
+					t.Fatalf("CreateMempool() error = %v, want one startup can recognize as a configuration error", err)
+				}
 				// a rejected pair must not leave a mempool behind, or a second call hands it out with
 				// the provider never wired to it
 				if b.Mempool != nil {

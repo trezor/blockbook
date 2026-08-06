@@ -201,7 +201,11 @@ func mainWithExitCode() int {
 	}
 
 	if chain, mempool, err = getBlockChainWithRetry(config.CoinName, *configFile, pushSynchronizationHandler, metrics, 120); err != nil {
-		glog.Error("rpc: ", err)
+		if bchain.IsConfigurationError(err) {
+			glog.Error("config: ", err)
+		} else {
+			glog.Error("rpc: ", err)
+		}
 		return exitCodeFatal
 	}
 
@@ -475,6 +479,11 @@ func getBlockChainWithRetry(coin string, configFile string, pushHandler func(bch
 	timer := time.NewTimer(time.Second)
 	for i := 0; ; i++ {
 		if chain, mempool, err = coins.NewBlockChain(coin, configFile, pushHandler, metrics); err != nil {
+			// a static configuration error cannot resolve on a retry, and reporting it once a second
+			// for two minutes under an "rpc:" prefix hides what it actually is
+			if bchain.IsConfigurationError(err) {
+				return nil, nil, err
+			}
 			if i < seconds {
 				glog.Error("rpc: ", err, " Retrying...")
 				select {
