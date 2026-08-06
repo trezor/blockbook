@@ -1353,6 +1353,9 @@ func (d *RocksDB) disconnectInternalData(btxID []byte, height uint32, addresses 
 		return err
 	}
 	if internalData != nil {
+		// no top-level destruction branch: the persisted tx type is one bit
+		// (CALL|CREATE, see packEthInternalData), so a root SELFDESTRUCT cannot
+		// reach here - destructions always arrive as the transfer frames below
 		if internalData.Type == bchain.CREATE {
 			contract, err := d.chainParser.GetAddrDescFromAddress(internalData.Contract)
 			if err != nil {
