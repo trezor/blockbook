@@ -62,6 +62,8 @@ type Metrics struct {
 	IndexReorgEvents                  *prometheus.CounterVec   `metric:"index_reorg_events"`
 	IndexSyncYields                   *prometheus.CounterVec   `metric:"index_sync_yields"`
 	IndexDBSize                       prometheus.Gauge         `metric:"index_db_size"`
+	InternalDataErrorQueue            prometheus.Gauge         `metric:"internal_data_error_queue"`
+	InternalDataHeals                 *prometheus.CounterVec   `metric:"internal_data_heals"`
 	ExplorerViews                     *prometheus.CounterVec   `metric:"explorer_views"`
 	MempoolSize                       prometheus.Gauge         `metric:"mempool_size"`
 	MempoolLastSync                   *prometheus.GaugeVec     `metric:"mempool_last_sync_timestamp_seconds"`

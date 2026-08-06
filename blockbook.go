@@ -787,7 +787,7 @@ func healInternalDataLoop() {
 		if common.IsInShutdown() {
 			return
 		}
-		w.HealInternalData(pass)
+		w.HealInternalData(pass, chanOsSignal)
 	}
 }
 

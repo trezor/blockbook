@@ -3,6 +3,8 @@ package api
 import (
 	stdErrors "errors"
 	"math"
+	"os"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -15,17 +17,24 @@ import (
 // cadence - so a block that keeps failing is slowed down but never abandoned.
 const maxHealBackoffShift = 6
 
+// healInterBlockDelay spaces consecutive heal attempts. After a long backend outage the
+// queue can hold tens of thousands of blocks, and pass 0 retries all of them after a
+// restart - back-to-back traces would compete with live sync for the backend.
+const healInterBlockDelay = time.Second
+
 // HealInternalData walks the internal data error queue once and heals the blocks whose
-// backoff schedule is due in this pass. Blocks are handled one at a time to bound the
-// trace load healing adds to the backend. Called serially from a single loop, so it needs
-// no single-flight guard.
-func (w *Worker) HealInternalData(pass uint64) {
+// backoff schedule is due in this pass. Blocks are handled one at a time, spaced by
+// healInterBlockDelay, to bound the trace load healing adds to the backend. Called
+// serially from a single loop, so it needs no single-flight guard; stop cuts the pass
+// short on shutdown.
+func (w *Worker) HealInternalData(pass uint64, stop <-chan os.Signal) {
 	internalErrors, err := w.db.GetBlockInternalDataErrorsEthereumType()
 	if err != nil {
 		glog.Error("HealInternalData: GetBlockInternalDataErrorsEthereumType ", err)
 		return
 	}
-	var healed, failed, postponed int
+	var healed, failed, reconnectErrors, postponed int
+	attempted := false
 	for i := range internalErrors {
 		// give up between blocks so shutdown waits for at most one of them
 		if common.IsInShutdown() {
@@ -37,6 +46,12 @@ func (w *Worker) HealInternalData(pass uint64) {
 			postponed++
 			continue
 		}
+		// rate-limit only actual attempts - postponed entries cost the backend nothing
+		if attempted && !sleepBetweenHeals(stop) {
+			glog.Info("HealInternalData: interrupted by shutdown")
+			break
+		}
+		attempted = true
 		glog.Infof("HealInternalData: healing internal data of %d %s, previous failures %d", ie.Height, ie.Hash, ie.Retries)
 		block, err := w.fetchBlockForHealing(ie.Hash, ie.Height)
 		// the fetch above cannot be aborted - go-ethereum's rpc client Close is a no-op
@@ -67,15 +82,36 @@ func (w *Worker) HealInternalData(pass uint64) {
 		if err = w.db.ReconnectInternalDataToBlockEthereumType(block); err != nil {
 			// a reconnect failure is local - rocksdb or the disk - or a reorg that moved
 			// the block out of the index, rather than a property of the block, so it does
-			// not spend the backoff budget
+			// not spend the backoff budget; a block stuck here stays visible through the
+			// reconnect_error series of the heals metric
 			glog.Errorf("HealInternalData: ReconnectInternalDataToBlockEthereumType %d %s, error %v", ie.Height, ie.Hash, err)
+			reconnectErrors++
 			continue
 		}
 		healed++
 		glog.Infof("HealInternalData: healed internal data of %d %s", ie.Height, ie.Hash)
 	}
-	if healed > 0 || failed > 0 {
-		glog.Infof("HealInternalData: pass %d done, %d healed, %d failed, %d backed off", pass, healed, failed, postponed)
+	if healed > 0 || failed > 0 || reconnectErrors > 0 {
+		glog.Infof("HealInternalData: pass %d done, %d healed, %d failed, %d reconnect errors, %d backed off", pass, healed, failed, reconnectErrors, postponed)
+	}
+	if w.metrics != nil {
+		// zero Adds still create the series, so dashboards see the counters from the first pass
+		w.metrics.InternalDataHeals.With(common.Labels{"result": "healed"}).Add(float64(healed))
+		w.metrics.InternalDataHeals.With(common.Labels{"result": "failed"}).Add(float64(failed))
+		w.metrics.InternalDataHeals.With(common.Labels{"result": "reconnect_error"}).Add(float64(reconnectErrors))
+		// healed blocks left the queue with their reconnect; new sync failures show up next pass
+		w.metrics.InternalDataErrorQueue.Set(float64(len(internalErrors) - healed))
+	}
+}
+
+// sleepBetweenHeals rate-limits a healing pass to one block per healInterBlockDelay,
+// reporting false when the wait is cut short by shutdown.
+func sleepBetweenHeals(stop <-chan os.Signal) bool {
+	select {
+	case <-stop:
+		return false
+	case <-time.After(healInterBlockDelay):
+		return true
 	}
 }
 

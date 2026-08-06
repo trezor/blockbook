@@ -2,7 +2,25 @@
 
 package api
 
-import "testing"
+import (
+	"os"
+	"testing"
+	"time"
+)
+
+// The delay between heals must not hold up shutdown - a pass over a large queue sleeps
+// most of its wall-clock time, so the sleep has to give up as soon as stop closes.
+func Test_sleepBetweenHeals_Shutdown(t *testing.T) {
+	stop := make(chan os.Signal)
+	close(stop)
+	start := time.Now()
+	if sleepBetweenHeals(stop) {
+		t.Error("sleepBetweenHeals() = true on a closed stop channel, want false")
+	}
+	if elapsed := time.Since(start); elapsed >= healInterBlockDelay {
+		t.Errorf("sleepBetweenHeals waited %v on a closed stop channel", elapsed)
+	}
+}
 
 func Test_healDue(t *testing.T) {
 	tests := []struct {
