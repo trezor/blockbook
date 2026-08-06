@@ -2467,8 +2467,8 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// entry expires at send time + timeout while the cached tx stays exposed as pending
 		// until fetch-back time + timeout (plus reconcile granularity), and in that window a
 		// primary answer below the floor would contradict the pending tx Blockbook still
-		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
-		// the hot path.
+		// displays. The scan is over the private sends still pending for the whole window, and
+		// decodes nothing per entry (see storedTx.slot), so it stays cheap on this hot path.
 		raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
 		if raised > pending {
 			b.observePendingFloorRaised("primary")

@@ -29,6 +29,13 @@ type storedTx struct {
 	time      uint32
 	gen       uint64 // send generation of the submission that created this entry, orders it against later sends
 	lastProbe uint32 // unix seconds of the last reconcile probe, 0 until the first one; see probeInterval
+	// The nonce slot this entry fills, decoded from the body once at insert rather than on every scan.
+	// The body is immutable, so these cannot drift from it. Four scans walk the whole cache - the
+	// pending-nonce floor on every address request, and three per accepted send - and re-parsing an
+	// address and a quantity per entry inside mempoolTxsMux is what made cache depth cost.
+	from    ethcommon.Address
+	nonce   uint64
+	decoded bool
 }
 
 // recentSender records when an address last successfully sent a transaction through an
@@ -695,7 +702,7 @@ func (p *AlternativeSendTxProvider) cachedNoncesFor(addr ethcommon.Address) map[
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
 	for _, storedTx := range p.mempoolTxs {
-		from, nonce, ok := txSenderAndNonce(storedTx.tx)
+		from, nonce, ok := storedTx.slot()
 		if !ok || from != addr {
 			continue
 		}
@@ -833,13 +840,25 @@ func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcT
 			if otherTxid == txid {
 				continue
 			}
-			if f, n, ok := txSenderAndNonce(st.tx); ok && f == from && n == nonce && st.gen > gen {
+			if f, n, ok := st.slot(); ok && f == from && n == nonce && st.gen > gen {
 				return false
 			}
 		}
 	}
-	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen}
+	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen, from: from, nonce: nonce, decoded: decoded}
 	return true
+}
+
+// slot returns the nonce slot the entry fills, from the copy decoded at insert. It falls back to
+// decoding the body for an entry that did not come through insertMempoolTx - only tests build those, and
+// the fallback is what keeps them equivalent to a real one rather than silently invisible to every scan.
+// A body carrying no sender decodes to ok=false either way, so the two paths never disagree.
+func (st storedTx) slot() (ethcommon.Address, uint64, bool) {
+	if st.decoded {
+		return st.from, st.nonce, true
+	}
+
+	return txSenderAndNonce(st.tx)
 }
 
 // txSenderAndNonce decodes the sender address and account nonce of a cached RPC transaction, reporting
@@ -874,7 +893,7 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 		if txid == keepTxid {
 			continue
 		}
-		cachedFrom, cachedNonce, ok := txSenderAndNonce(storedTx.tx)
+		cachedFrom, cachedNonce, ok := storedTx.slot()
 		if !ok || cachedFrom != from || cachedNonce != nonce {
 			continue
 		}
@@ -1305,11 +1324,11 @@ func (p *AlternativeSendTxProvider) removeTransaction(txid string, action string
 	delete(p.mempoolTxs, txid)
 	senderSettled := false
 	var sender ethcommon.Address
-	if found && removedTx.tx != nil && removedTx.tx.From != "" {
-		sender = ethcommon.HexToAddress(removedTx.tx.From)
+	if from, _, ok := removedTx.slot(); found && ok {
+		sender = from
 		senderSettled = true
 		for _, storedTx := range p.mempoolTxs {
-			if storedTx.tx != nil && ethcommon.HexToAddress(storedTx.tx.From) == sender {
+			if f, _, ok := storedTx.slot(); ok && f == sender {
 				senderSettled = false
 				break
 			}
