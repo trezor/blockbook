@@ -245,12 +245,12 @@ metrics:
   eth_alternative_mempool_reconciliation_events_total:
     name: blockbook_eth_alternative_mempool_reconciliation_events_total
     type: counter_vec
-    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action. Retained - skipped_fresh, skipped_backoff (ageing entries are re-asked less often, see probeInterval), kept, provider_error, provider_missing_pending. Removed - mined, nonce_superseded, provider_missing, timeout, rbf_replaced, sync_removed (block sync indexed it, normally the dominant exit). A rising provider_missing or timeout share means private sends are dying rather than settling
+    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action. Retained - skipped_fresh, skipped_backoff (ageing entries are re-asked less often, see probeInterval), kept, provider_error, provider_missing_pending (a null relay answer younger than alternativeMissingTxTimeout). Removed - mined, nonce_superseded, provider_missing (missing from the relay for alternativeMissingTxTimeout, 2m by default - the relay answers from one consistent store over its whole pending window, so a run of nulls means dropped or cancelled), timeout, rbf_replaced, sync_removed (block sync indexed it, normally the dominant exit). A rising timeout share means private sends are dying rather than settling; provider_missing is the expected exit of a drop-mode cancel
     labels: [action]
   eth_alternative_mempool_tx_residence_seconds:
     name: blockbook_eth_alternative_mempool_tx_residence_seconds
     type: histogram_vec
-    help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry when it leaves the cache, labeled by the removing action (the exit actions of eth_alternative_mempool_reconciliation_events_total). provider_missing collapsing to minutes is the premature-eviction regression (#1573)
+    help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry when it leaves the cache, labeled by the removing action (the exit actions of eth_alternative_mempool_reconciliation_events_total). provider_missing belongs near alternativeMissingTxTimeout (a dropped or cancelled tx retired on schedule); collapsing below one reconcile cycle would be the premature-eviction regression (#1573), sitting at the cache timeout means the missing eviction is configured off
     labels: [action]
     buckets: [1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800, 12600]
   eth_alternative_mempool_cache_size:
@@ -281,16 +281,16 @@ metrics:
   eth_alternative_mempool_oldest_age_seconds:
     name: blockbook_eth_alternative_mempool_oldest_age_seconds
     type: gauge
-    help: Age in seconds of the oldest transaction still held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle (0 when empty). Residence only records an age once an entry leaves, so this is the live stuck-tx signal. Pinning near the cache timeout (alternativePendingTxWindow, 3h by default) at non-zero depth means private txs are timing out rather than mining; a drop-mode cancel never mines by design and is the benign cause to rule out first
+    help: Age in seconds of the oldest transaction still held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle (0 when empty). Residence only records an age once an entry leaves, so this is the live stuck-tx signal. Pinning near the cache timeout (alternativePendingTxWindow, 3h by default) at non-zero depth means private txs the relay still surfaces are dying underpriced rather than mining - a dropped or cancelled tx leaves much earlier through the missing eviction (alternativeMissingTxTimeout, 2m by default)
   eth_alternative_send_not_surfaced_total:
     name: blockbook_eth_alternative_send_not_surfaced_total
     type: counter_vec
-    help: Private sends a relay ACCEPTED but whose post-send fetch-back (eth_getTransactionByHash) did not surface, labeled by reason - not_found (relay returned null), error (relay call failed) or dropped (refused under load, on the one path that alone can expose the send). The transaction stays cached and pending from its own signed bytes; what is lost is reconciliation against the relay, so only the cache timeout retires it. Usually the accepting relay node had not indexed it yet; a sustained rate means the relay is broadcasting blind
+    help: Private sends a relay ACCEPTED but whose post-send fetch-back (eth_getTransactionByHash) did not surface, labeled by reason - not_found (relay returned null), error (relay call failed) or dropped (refused under load, on the one path that alone can expose the send). The transaction stays cached and pending from its own signed bytes; a relay that keeps not surfacing it retires the entry through the missing eviction (alternativeMissingTxTimeout), with the cache timeout as the backstop. Should be ~0 - the relay answers from one consistent store, so even the immediate post-send fetch-back sees an accepted tx; a sustained rate means the relay stopped surfacing what it accepts, the pre-alignment behavior Blockbook no longer assumes
     labels: [reason]
   eth_alternative_pending_floor_raised_total:
     name: blockbook_eth_alternative_pending_floor_raised_total
     type: counter_vec
-    help: eth_getTransactionCount answers where raiseToPendingFloor advanced the pending nonce above the backend's own, across the contiguous run of nonces the cache holds private txs for. Labeled by source - provider (the relay had already dropped a still-cached tx) or primary (the RPC never knew the private tx). Expected while a private send is in flight, not a fault; its cost is that a send that never mines (a drop-mode cancel) holds its nonce slot until the cache timeout
+    help: eth_getTransactionCount answers where raiseToPendingFloor advanced the pending nonce above the backend's own, across the contiguous run of nonces the cache holds private txs for. Labeled by source - provider (the relay's pending count lagged a still-cached tx; with the relay counting pending over its whole window this should be near zero, and a sustained rate means its pending count regressed) or primary (the RPC never knew the private tx - expected while a private send is in flight). The cost is bounded - a send that never mines holds its nonce slot until the missing eviction (alternativeMissingTxTimeout) retires it
     labels: [source]
   eth_alternative_pending_floor_stranded_total:
     name: blockbook_eth_alternative_pending_floor_stranded_total

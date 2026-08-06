@@ -219,21 +219,21 @@ panels:
         legend: stale cutoff (900s = 15 reload periods)
   sync.eth_alternative_mempool_reconciliation:
     title: Alternative mempool reconciliation
-    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing, timeout, rbf_replaced and sync_removed remove an entry; skipped_fresh, skipped_backoff, kept, provider_error and provider_missing_pending retain it for a later cycle. Expect sync_removed to dominate and mined to be rare - block sync clears a confirmed private tx before the next reconcile probe would observe it as mined.
+    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing (missing from the relay for alternativeMissingTxTimeout - the dropped/cancelled exit, since the relay surfaces an accepted tx for its whole pending window), timeout, rbf_replaced and sync_removed remove an entry; skipped_fresh, skipped_backoff, kept, provider_error and provider_missing_pending retain it for a later cycle. Expect sync_removed to dominate and mined to be rare - block sync clears a confirmed private tx before the next reconcile probe would observe it as mined.
     queries:
       actions:
         promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60
         legend: '{{action}}/min'
   sync.eth_alternative_mempool_cache_size:
     title: Alternative mempool cache depth
-    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. It counts in-flight private sends INCLUDING ones the relay never surfaces or will never mine, which stay for the full cache timeout (alternativePendingTxWindow, 3h by default). A steady climb means entries are added faster than they are mined or evicted; re-baseline the panel after changing that timeout.
+    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. It counts in-flight private sends; one the relay stops surfacing (dropped, cancelled) leaves through the missing eviction (alternativeMissingTxTimeout, 2m by default), so only txs the relay keeps reporting can stay for the full cache timeout (alternativePendingTxWindow, 3h by default). A steady climb means entries are added faster than they are mined or evicted; re-baseline the panel after changing those timeouts.
     queries:
       size:
         promql: '{{name:eth_alternative_mempool_cache_size}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_mempool_tx_residence:
     title: Alternative mempool tx lifetime by eviction reason
-    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing and timeout near the cache timeout is healthy; provider_missing collapsing to minutes is the premature-eviction regression (#1573). sync_removed, normally the dominant exit, shows how quickly relays actually confirm.
+    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing belongs near alternativeMissingTxTimeout (a dropped or cancelled tx retired on schedule) - collapsing below one reconcile cycle would be the premature-eviction regression (#1573), sitting at the cache timeout means the missing eviction is configured off. sync_removed, normally the dominant exit, shows how quickly relays actually confirm.
     queries:
       p50:
         promql: histogram_quantile(0.5, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
@@ -257,21 +257,21 @@ panels:
         legend: '{{coin}} - {{result}}'
   sync.eth_alternative_mempool_oldest_age:
     title: Alternative mempool oldest cached tx age (stuck-tx signal)
-    description: 'Age of the oldest transaction still in the alternative send-tx cache (1-min sampled at reconcile end), the live signal residence cannot give. Pinning near the cache timeout (alternativePendingTxWindow, 3h by default) at non-zero cache depth means cached private txs are dying underpriced rather than mining; rule out a drop-mode cancel first, which never mines by design and also sits out the full timeout. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    description: 'Age of the oldest transaction still in the alternative send-tx cache (1-min sampled at reconcile end), the live signal residence cannot give. Pinning near the cache timeout (alternativePendingTxWindow, 3h by default) at non-zero cache depth means private txs the relay still surfaces are dying underpriced rather than mining - a dropped or cancelled tx leaves much earlier through the missing eviction (alternativeMissingTxTimeout, 2m by default). Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       age:
         promql: '{{name:eth_alternative_mempool_oldest_age_seconds}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_send_not_surfaced:
     title: Alternative send not surfaced by the relay (req/s)
-    description: 'Relay-accepted private sends whose post-send fetch-back did not surface, per second by reason (not_found = relay returned null, error = relay call failed, dropped = fetch-back refused under load). The tx is still cached and served as pending, but cannot be reconciled against the relay, so only the cache timeout retires it. Should be ~0 - usually the accepting node had simply not indexed it yet. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    description: 'Relay-accepted private sends whose post-send fetch-back did not surface, per second by reason (not_found = relay returned null, error = relay call failed, dropped = fetch-back refused under load). The tx is still cached and served as pending; if the relay keeps not surfacing it, the missing eviction (alternativeMissingTxTimeout) retires it. Should be ~0 - the relay answers from one consistent store, so even the immediate post-send fetch-back sees an accepted tx; a sustained rate means the relay stopped surfacing what it accepts, the pre-alignment behavior. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       by_reason:
         promql: sum by (coin, reason) (rate({{name:eth_alternative_send_not_surfaced_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
         legend: '{{coin}} - {{reason}}'
   sync.eth_alternative_pending_floor_raised:
     title: Alternative pending-nonce floor raised (req/s)
-    description: 'eth_getTransactionCount answers where the pending nonce was advanced above the backend answer, per second by source (provider = the relay had already dropped a still-cached tx; primary = the RPC never knew it). Expected while a private send is in flight, not a fault. Its cost is that a send that never mines (a drop-mode cancel) holds its nonce slot for the full cache retention - read with the oldest-age and death-ratio panels to tell those apart. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    description: 'eth_getTransactionCount answers where the pending nonce was advanced above the backend answer, per second by source. primary (the RPC never knew the private tx) is expected while a private send is in flight; provider should be ~0 now that the relay counts a pending tx over its whole window - a sustained rate means its pending count regressed below that window again. The cost is bounded: a send that never mines holds its nonce slot until the missing eviction (alternativeMissingTxTimeout) retires it. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       by_source:
         promql: sum by (coin, source) (rate({{name:eth_alternative_pending_floor_raised_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
