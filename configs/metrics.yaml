@@ -222,7 +222,7 @@ metrics:
   internal_data_heals:
     name: blockbook_internal_data_heals_total
     type: counter_vec
-    help: 'Outcomes of internal data healing attempts (healed: reconnected to the index; failed: the block itself failed again and was backed off; reconnect_error: the write failed, retried next pass without backoff)'
+    help: 'Outcomes of internal data healing attempts (healed: reconnected to the index; failed: the block itself failed again and was backed off; fetch_error: backend-wide fetch failure, retried without backoff; reconnect_error: the write failed, retried next pass without backoff)'
     labels: [result]
   explorer_views:
     name: blockbook_explorer_views

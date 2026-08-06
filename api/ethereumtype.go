@@ -33,7 +33,7 @@ func (w *Worker) HealInternalData(pass uint64, stop <-chan os.Signal) {
 		glog.Error("HealInternalData: GetBlockInternalDataErrorsEthereumType ", err)
 		return
 	}
-	var healed, failed, reconnectErrors, postponed int
+	var healed, failed, fetchErrors, reconnectErrors, postponed int
 	attempted := false
 	for i := range internalErrors {
 		// give up between blocks so shutdown waits for at most one of them
@@ -69,6 +69,10 @@ func (w *Worker) HealInternalData(pass uint64, stop <-chan os.Signal) {
 			if stdErrors.Is(errors.Cause(err), bchain.ErrBlockNotFound) {
 				failed++
 				w.chargeInternalDataFailure(ie, err.Error())
+			} else {
+				// uncharged, but counted - a pass lost to an outage must not look like
+				// a pass that attempted nothing
+				fetchErrors++
 			}
 			continue
 		}
@@ -91,13 +95,14 @@ func (w *Worker) HealInternalData(pass uint64, stop <-chan os.Signal) {
 		healed++
 		glog.Infof("HealInternalData: healed internal data of %d %s", ie.Height, ie.Hash)
 	}
-	if healed > 0 || failed > 0 || reconnectErrors > 0 {
-		glog.Infof("HealInternalData: pass %d done, %d healed, %d failed, %d reconnect errors, %d backed off", pass, healed, failed, reconnectErrors, postponed)
+	if healed > 0 || failed > 0 || fetchErrors > 0 || reconnectErrors > 0 {
+		glog.Infof("HealInternalData: pass %d done, %d healed, %d failed, %d fetch errors, %d reconnect errors, %d backed off", pass, healed, failed, fetchErrors, reconnectErrors, postponed)
 	}
 	if w.metrics != nil {
 		// zero Adds still create the series, so dashboards see the counters from the first pass
 		w.metrics.InternalDataHeals.With(common.Labels{"result": "healed"}).Add(float64(healed))
 		w.metrics.InternalDataHeals.With(common.Labels{"result": "failed"}).Add(float64(failed))
+		w.metrics.InternalDataHeals.With(common.Labels{"result": "fetch_error"}).Add(float64(fetchErrors))
 		w.metrics.InternalDataHeals.With(common.Labels{"result": "reconnect_error"}).Add(float64(reconnectErrors))
 		// healed blocks left the queue with their reconnect; new sync failures show up next pass
 		w.metrics.InternalDataErrorQueue.Set(float64(len(internalErrors) - healed))
@@ -115,9 +120,11 @@ func sleepBetweenHeals(stop <-chan os.Signal) bool {
 	}
 }
 
-// healDue spaces out repeated failures: a block that has failed n times is attempted
-// every 2^n passes, capped by maxHealBackoffShift. Pass 0 matches every schedule, so a
-// restart gives the whole queue one immediate attempt.
+// healDue spaces out repeated failures: a block that has failed n times is attempted on
+// passes divisible by 2^n (n capped by maxHealBackoffShift), so the wait after a failure
+// is up to 2^n passes, not exactly 2^n - the schedule is aligned to the pass counter, not
+// to the block. Pass 0 matches every schedule, so a restart gives the whole queue one
+// immediate attempt.
 func healDue(failures uint8, pass uint64) bool {
 	shift := uint(failures)
 	if shift > maxHealBackoffShift {
