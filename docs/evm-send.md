@@ -69,9 +69,9 @@ Key invariants:
   broadcast to every relay URL runs concurrently, so it costs the slowest URL, not their sum; caching
   is local work and the fetch-back is background. A wallet that gives up before Blockbook answers
   tells the user the send failed while it is on its way to the chain, and a re-send at the next nonce
-  then pays the recipient twice. Trezor Suite's deadline is 20 s per request, 60 s for pushes once
-  [trezor-suite#30846](https://github.com/trezor/trezor-suite/pull/30846) lands, against `rpc_timeout`
-  of 25 s *per relay URL*.
+  then pays the recipient twice. Trezor Suite's deadline is 20 s per request, 110 s for pushes once
+  [trezor-suite#30846](https://github.com/trezor/trezor-suite/pull/30846) lands — sized to the
+  fall-through tail below, not just the relay leg's one `rpc_timeout` (25 s).
 
   The fall-through path is not bounded that way. With no relay acceptance and
   `ALTERNATIVE_SENDTX_ONLY` unset, the answer also waits for the primary `eth_sendRawTransaction` and,
