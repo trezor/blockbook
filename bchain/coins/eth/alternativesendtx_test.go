@@ -230,6 +230,118 @@ func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
 	}
 }
 
+// TestAlternativeSendTxProviderReconcileStampsProbe closes the loop the table above opens: it seeds
+// no lastProbe at all, so the pacing has to come from reconcile stamping the entry itself. Without
+// this, a markProbed that silently stopped writing would leave every entry re-probed once a minute
+// for the whole retention - the relay quota load the backoff exists to remove - and no test would
+// notice.
+func TestAlternativeSendTxProviderReconcileStampsProbe(t *testing.T) {
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
+	})
+	var removed string
+	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+	provider.mempoolTxsTimeout = 3 * time.Hour
+	provider.metrics = newReconcileTestMetrics()
+	entry := provider.mempoolTxs[testAlternativeTxID]
+	entry.time = uint32(time.Now().Add(-30 * time.Minute).Unix())
+	provider.mempoolTxs[testAlternativeTxID] = entry
+
+	provider.reconcileMempoolTxs()
+	if got := server.callCount("eth_getTransactionByHash"); got != 1 {
+		t.Fatalf("relay probes after the first cycle = %d, want 1 (a never-probed entry is always asked)", got)
+	}
+	if provider.mempoolTxs[testAlternativeTxID].lastProbe == 0 {
+		t.Fatal("reconcile did not stamp lastProbe, so nothing paces the next cycle")
+	}
+
+	provider.reconcileMempoolTxs()
+	if got := server.callCount("eth_getTransactionByHash"); got != 1 {
+		t.Errorf("relay probes after the second cycle = %d, want 1 - a 30 min old entry is asked every 5 min", got)
+	}
+	if got := labeledCounterValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "skipped_backoff"); got != 1 {
+		t.Errorf("reconciliation_events{action=skipped_backoff} = %v, want 1", got)
+	}
+}
+
+// TestAlternativeSendTxProviderMarkProbedOnlyStampsTheSnapshottedEntry pins the identity check that
+// keeps the stamp from writing through a concurrent eviction or replacement: reconcile works off a
+// snapshot taken at the start of the cycle, so by the time it stamps, the txid may have been evicted
+// or re-cached by a newer send.
+func TestAlternativeSendTxProviderMarkProbedOnlyStampsTheSnapshottedEntry(t *testing.T) {
+	body := &bchain.RpcTransaction{Hash: testAlternativeTxID, From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x1"}
+	current := storedTx{tx: body, time: 1000, gen: 2}
+
+	for _, tt := range []struct {
+		name      string
+		snapshot  storedTx
+		wantStamp bool
+	}{
+		{name: "identical entry is stamped", snapshot: current, wantStamp: true},
+		{name: "a newer generation holds the slot", snapshot: storedTx{tx: body, time: 1000, gen: 1}},
+		{name: "the entry was re-cached at another time", snapshot: storedTx{tx: body, time: 900, gen: 2}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := &AlternativeSendTxProvider{mempoolTxs: map[string]storedTx{testAlternativeTxID: current}}
+
+			provider.markProbed(testAlternativeTxID, tt.snapshot)
+
+			stamped := provider.mempoolTxs[testAlternativeTxID]
+			if got := stamped.lastProbe != 0; got != tt.wantStamp {
+				t.Errorf("lastProbe stamped = %v, want %v", got, tt.wantStamp)
+			}
+			if stamped.tx != body {
+				t.Error("markProbed replaced the cached body, which must stay immutable once published")
+			}
+		})
+	}
+
+	// an entry that left the cache must not be recreated by a stamp
+	provider := &AlternativeSendTxProvider{mempoolTxs: map[string]storedTx{}}
+	provider.markProbed(testAlternativeTxID, current)
+	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
+		t.Error("markProbed resurrected an evicted entry")
+	}
+}
+
+// TestAlternativeSendTxProviderReconcileSweepsSendTracking covers the two send-tracking maps being
+// pruned by the reconcile tick rather than only when the next send arrives, and on their two
+// different horizons: routing lapses in minutes, an accepted nonce slot only when its transaction
+// can no longer land.
+func TestAlternativeSendTxProviderReconcileSweepsSendTracking(t *testing.T) {
+	lapsed := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
+	fresh := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
+	oldSlot := nonceSlot{addr: lapsed, nonce: 1}
+	liveSlot := nonceSlot{addr: fresh, nonce: 2}
+	provider := &AlternativeSendTxProvider{
+		mempoolTxsTimeout: 3 * time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		recentSenders: map[ethcommon.Address]recentSender{
+			lapsed: {time: time.Now().Add(-30 * time.Minute)},
+			fresh:  {time: time.Now()},
+		},
+		acceptedSlots: map[nonceSlot]acceptedSlot{
+			oldSlot:  {gen: 1, time: time.Now().Add(-4 * time.Hour)},
+			liveSlot: {gen: 2, time: time.Now().Add(-30 * time.Minute)},
+		},
+	}
+
+	provider.reconcileMempoolTxs()
+
+	if _, found := provider.recentSenders[lapsed]; found {
+		t.Error("a sender past the routing horizon survived the reconcile sweep")
+	}
+	if _, found := provider.recentSenders[fresh]; !found {
+		t.Error("a sender inside the routing horizon was swept")
+	}
+	if _, found := provider.acceptedSlots[oldSlot]; found {
+		t.Error("an accepted slot past the cache retention survived the reconcile sweep")
+	}
+	if _, found := provider.acceptedSlots[liveSlot]; !found {
+		t.Error("an accepted slot was swept on the routing horizon instead of the cache retention")
+	}
+}
+
 // TestAlternativeSendTxProviderReconcileEvictsTimedOutEntryDespiteBackoff pins that the backoff paces
 // only the relay round-trip: the cache timeout is a local decision and must still fire on the cycle it
 // comes due, or a backed-off entry would outlive the retention by up to a probe interval.
@@ -2319,7 +2431,7 @@ func TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval(t *testing.T)
 
 // TestAlternativeSendTxProviderFetchBackKeepsDerivedBody covers the body a relay disagrees about: it
 // must stay the one derived from the signed bytes, which is what keeps the entry visible to
-// pendingNonceFloor, to releaseRecentSender and to the nonce-superseded reconcile check.
+// cachedNoncesFor, to releaseRecentSender and to the nonce-superseded reconcile check.
 func TestAlternativeSendTxProviderFetchBackKeepsDerivedBody(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	// surfaced without `from`, so it identifies no nonce slot at all
