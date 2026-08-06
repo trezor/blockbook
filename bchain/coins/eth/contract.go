@@ -658,11 +658,12 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 			glog.Warningf("erc20 balances multicall3 failed at chunk [%d:%d), falling back for %d contract(s): %v", start, end, len(valid)-start, err)
 			break
 		}
-		// Starvation shows up as a trailing run: aggregate3 forwards all remaining gas to
-		// each sub-call, so once one exhausts it the calls after it fail too. A chunk whose
-		// last element did not fail empty was never starved, and its empty failures are
-		// bare revert()s that stay nil — re-reading those would cost one metered call per
-		// dead token on every request, which is what this path exists to avoid.
+		// Starvation usually shows up as a trailing run: a sub-call that exhausts the gas
+		// leaves aggregate3 only the 1/64 the EVM withholds, rarely enough for the calls
+		// after it. A heuristic, not an invariant — it assumes comparably priced sub-calls,
+		// and a mid-chunk gas hog can spare enough for the rest to succeed, leaving its own
+		// empty failure read as a bare revert and its balance nil. Accepted because treating
+		// every empty failure as starved costs a metered call per dead token per request.
 		tailStarved := len(results) > 0 && emptyAggregate3Failure(results[len(results)-1])
 		for j := range results {
 			i := chunk[j]

@@ -806,7 +806,8 @@ func TestEthereumTypeGetErc20ContractBalancesGenuineRevertNotReresolved(t *testi
 	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
 	contractC := common.HexToAddress("0x00000000000000000000000000000000000000cc")
 	// A ok (=50), B empty revert, C Panic(0x11) with returndata. C did not fail empty, so
-	// the chunk was never starved and B is a bare revert() — neither is re-resolved.
+	// the chunk shows no starvation signal and B is read as a bare revert() — neither is
+	// re-resolved.
 	panicData := "0x4e487b71" + fmt.Sprintf("%064x", 0x11)
 	agg := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
 		{Success: true, Data: fmt.Sprintf("0x%064x", 50)},
