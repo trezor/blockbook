@@ -2932,3 +2932,34 @@ func TestAlternativeSendTxProviderStartBackgroundRefusesAfterShutdown(t *testing
 		t.Errorf("in-flight counters = (%d, %d), want (0, 0)", provider.exposeCount, provider.backgroundCount)
 	}
 }
+
+// TestStoredTxSlotMatchesTheBody pins that the slot decoded at insert and the one decoded from the body
+// never disagree - the whole point of caching it is that four scans stop re-parsing, so the two must
+// stay interchangeable, including for a body that carries no slot at all.
+func TestStoredTxSlotMatchesTheBody(t *testing.T) {
+	const senderHex = "0x2222222222222222222222222222222222222222"
+	for _, tt := range []struct {
+		name string
+		tx   *bchain.RpcTransaction
+	}{
+		{name: "decodable", tx: &bchain.RpcTransaction{From: senderHex, AccountNonce: "0x4"}},
+		{name: "no sender", tx: &bchain.RpcTransaction{AccountNonce: "0x4"}},
+		{name: "unparsable nonce", tx: &bchain.RpcTransaction{From: senderHex, AccountNonce: "0xZZ"}},
+		{name: "nil body", tx: nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			from, nonce, decoded := txSenderAndNonce(tt.tx)
+			stored := storedTx{tx: tt.tx, from: from, nonce: nonce, decoded: decoded}
+			gotFrom, gotNonce, gotOK := stored.slot()
+			if gotFrom != from || gotNonce != nonce || gotOK != decoded {
+				t.Errorf("slot() = (%v, %d, %v), want (%v, %d, %v)", gotFrom, gotNonce, gotOK, from, nonce, decoded)
+			}
+			// an entry built without the decoded copy (every test fixture) must answer identically
+			fallback := storedTx{tx: tt.tx}
+			fbFrom, fbNonce, fbOK := fallback.slot()
+			if fbFrom != from || fbNonce != nonce || fbOK != decoded {
+				t.Errorf("fallback slot() = (%v, %d, %v), want (%v, %d, %v)", fbFrom, fbNonce, fbOK, from, nonce, decoded)
+			}
+		})
+	}
+}
