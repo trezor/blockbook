@@ -290,7 +290,12 @@ metrics:
   eth_alternative_pending_floor_raised_total:
     name: blockbook_eth_alternative_pending_floor_raised_total
     type: counter_vec
-    help: eth_getTransactionCount answers where raiseToPendingFloor lifted the reported pending nonce above the backend's own answer because the alternative cache still holds a higher-nonce private tx for the sender, labeled by source - provider (the relay's own pending count had already dropped the still-cached tx, i.e. past its ~1-min pending window) or primary (the fallback primary RPC never knew the private tx). A sustained rate means a sender's next nonce is being pinned above a private nonce the relay may already have abandoned; if that tx is underpriced and never mines, the next send queues behind the dead nonce until the cache timeout clears it
+    help: eth_getTransactionCount answers where raiseToPendingFloor advanced the reported pending nonce above the backend's own answer, across the contiguous run of nonces the alternative cache holds private txs for, labeled by source - provider (the relay's own pending count had already dropped a still-cached tx, i.e. past its pending window) or primary (the fallback primary RPC never knew the private tx). This is the expected shape while a private send is in flight, not a fault; what it costs is that a send the relay accepted but will never mine (a drop-mode cancel is the deliberate case) holds its slot until the cache timeout
+    labels: [source]
+  eth_alternative_pending_floor_stranded_total:
+    name: blockbook_eth_alternative_pending_floor_stranded_total
+    type: counter_vec
+    help: eth_getTransactionCount answers where the alternative cache held a private tx for a nonce ABOVE the contiguous run the floor could advance over, i.e. a slot between the backend's pending nonce and that transaction is filled by nothing Blockbook knows of, labeled by the same source as the raised counter. The floor deliberately stops below the hole rather than advertising past it (#1675), so the stranded transaction cannot mine until the hole is filled - by the send that opened it, or by a wallet resending at the reported nonce. Should be ~0; a sustained rate on source=provider means relay-accepted sends are not reaching the cache, and each sample is one request rather than one transaction, so its rate tracks how often the affected wallet polls
     labels: [source]
   eth_alternative_nonce_requests_total:
     name: blockbook_eth_alternative_nonce_requests_total

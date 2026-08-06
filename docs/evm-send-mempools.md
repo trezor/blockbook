@@ -177,7 +177,7 @@ flowchart LR
     gate{"useForNonces(addr)?<br/>private send within 5 min"}
     nrelay["relay eth_getTransactionCount<br/>single accepting URL, batched pending+latest"]
     nprim["primary eth_getTransactionCount"]
-    floor["raiseToPendingFloor<br/>never below highest cached nonce + 1"]
+    floor["raiseToPendingFloor<br/>advance over the contiguous cached run,<br/>never past a slot nothing fills"]
 
     est["EthereumTypeEstimateGas"]
     egate{"from set and useForNonces?"}
