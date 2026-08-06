@@ -53,7 +53,7 @@ flowchart TD
     alt[("MEV / private cache<br/>full tx bodies<br/>timeout 3 h")]
     pub[("Blockbook mempool<br/>txids + address index<br/>cache retention + 30 min with relay")]
 
-    altrec["reconcileMempoolTxs, 1 min tick<br/>evicts mined, nonce_superseded, timeout<br/>keeps provider_missing until timeout"]
+    altrec["reconcileMempoolTxs, 1 min tick<br/>evicts mined, nonce_superseded, timeout and<br/>entries missing from the relay past<br/>alternativeMissingTxTimeout"]
     pubrec["Mempool Resync, every 60 s<br/>timeout sweep at most every 10 min<br/>plus backend-missing removal"]
 
     readalt["GetTransaction read path<br/>entry past the cache timeout"]
@@ -123,9 +123,9 @@ flowchart TD
     s{"confirmed nonce above tx nonce?<br/>relay eth_getTransactionCount latest"}
     evSup["evict: nonce_superseded"]
     k{"still surfaced by the relay?"}
-    kto{"past the cache timeout?"}
+    kto{"missing run past<br/>alternativeMissingTxTimeout,<br/>or past the cache timeout?"}
     evMiss["evict: provider_missing"]
-    keepMiss["keep: provider_missing_pending<br/>an empty probe is not authoritative"]
+    keepMiss["keep: provider_missing_pending<br/>a short run of nulls is tolerated,<br/>absorbing a transient relay fluke"]
     yto{"past the cache timeout?"}
     evTo2["evict: timeout"]
     keepK["keep: kept"]

@@ -100,9 +100,10 @@ func TestAlternativeSendTxProviderReconcileLivenessOutcomes(t *testing.T) {
 		response    string
 		wantRemoved bool
 	}{
-		// An empty provider result is NOT proof the tx is gone: private/MEV relays stop surfacing a
-		// still-pending tx via eth_getTransactionByHash, so it is kept until the cache timeout (1h here).
-		{"empty provider result is kept until timeout", `{"jsonrpc":"2.0","id":1,"result":null}`, false},
+		// A single empty provider result is tolerated, absorbing a transient relay fluke; eviction
+		// needs a run of nulls outlasting the missing timeout (see
+		// TestAlternativeSendTxProviderReconcileEvictsSustainedMissingTx).
+		{"single empty provider result is tolerated", `{"jsonrpc":"2.0","id":1,"result":null}`, false},
 		{"mined tx is removed", minedTxResponse, true},
 		{"known pending tx is kept", testAlternativeKnownTxResponse, false},
 		{"tx is kept on provider error", `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"temporary failure"}}`, false},
@@ -164,6 +165,63 @@ func TestAlternativeSendTxProviderReconcileTimeoutEviction(t *testing.T) {
 
 			assertReconcileOutcome(t, provider, removed, true)
 		})
+	}
+}
+
+// TestAlternativeSendTxProviderReconcileEvictsSustainedMissingTx pins the eviction that aligns
+// Blockbook with the relay surfacing an accepted tx for its whole pending window: a run of null
+// eth_getTransactionByHash answers outlasting the missing timeout means dropped or cancelled (a
+// drop-mode cancel leaves no replacement to retire it), so the entry leaves both stores well before the
+// cache timeout instead of being served as pending for the full window.
+func TestAlternativeSendTxProviderReconcileEvictsSustainedMissingTx(t *testing.T) {
+	server := newAlternativeTxProviderTestServer(t, `{"jsonrpc":"2.0","id":1,"result":null}`)
+	var removed string
+	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+	provider.metrics = newReconcileTestMetrics()
+
+	provider.reconcileMempoolTxs()
+
+	entry, found := provider.mempoolTxs[testAlternativeTxID]
+	if !found {
+		t.Fatal("entry evicted on the first null answer, want tolerated")
+	}
+	if entry.missingSince == 0 {
+		t.Fatal("first null answer did not start the missing run")
+	}
+
+	// age the missing run past the timeout and let the probe backoff re-ask
+	entry.missingSince = uint32(time.Now().Add(-provider.missingTimeout() - time.Second).Unix())
+	entry.lastProbe = uint32(time.Now().Add(-2 * alternativeMempoolTxCheckPeriod).Unix())
+	provider.mempoolTxs[testAlternativeTxID] = entry
+
+	provider.reconcileMempoolTxs()
+
+	assertReconcileOutcome(t, provider, removed, true)
+	if got := labeledCounterValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "provider_missing"); got != 1 {
+		t.Errorf("reconciliation_events{action=provider_missing} = %v, want 1", got)
+	}
+}
+
+// TestAlternativeSendTxProviderReconcileMissingRunResetsWhenSurfaced pins that the missing run is a run
+// of CONSECUTIVE nulls: once the relay surfaces the tx again, an accumulated run is discarded rather
+// than left to count a later transient gap toward eviction.
+func TestAlternativeSendTxProviderReconcileMissingRunResetsWhenSurfaced(t *testing.T) {
+	server := newMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
+		// confirmed nonce equals the tx nonce (0x1): not superseded
+		"eth_getTransactionCount": nonceCountResponse("0x1"),
+	})
+	var removed string
+	provider := newTestAlternativeSendTxProvider(server.URL, &removed)
+	entry := provider.mempoolTxs[testAlternativeTxID]
+	entry.missingSince = uint32(time.Now().Add(-provider.missingTimeout() - time.Second).Unix())
+	provider.mempoolTxs[testAlternativeTxID] = entry
+
+	provider.reconcileMempoolTxs()
+
+	assertReconcileOutcome(t, provider, removed, false)
+	if got := provider.mempoolTxs[testAlternativeTxID].missingSince; got != 0 {
+		t.Errorf("missingSince = %d after the relay surfaced the tx again, want 0", got)
 	}
 }
 

@@ -128,6 +128,48 @@ func TestConfigurationAlternativeMempoolTxTimeoutDuration(t *testing.T) {
 	}
 }
 
+func TestConfigurationAlternativeMissingTxTimeoutDuration(t *testing.T) {
+	tests := []struct {
+		name   string
+		config Configuration
+		want   time.Duration
+	}{
+		{
+			name: "default",
+			want: defaultAlternativeMissingTxTimeout,
+		},
+		{
+			name: "explicit missing timeout",
+			config: Configuration{
+				AlternativeMissingTxTimeout: "30m",
+			},
+			want: 30 * time.Minute,
+		},
+		{
+			// at or above the pending window the cache timeout fires first, which is the documented
+			// way to restore timeout-only eviction for a relay that does not surface over the window
+			name: "missing timeout at the pending window disables the early eviction",
+			config: Configuration{
+				AlternativePendingTxWindow:  "3h",
+				AlternativeMissingTxTimeout: "3h",
+			},
+			want: 3 * time.Hour,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.config.AlternativeMissingTxTimeoutDuration()
+			if err != nil {
+				t.Fatalf("AlternativeMissingTxTimeoutDuration() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("AlternativeMissingTxTimeoutDuration() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestMempoolRetentionInverted covers the retention-order check: the provider cache must expire
 // before the wrapped mempool, whose timeout sweep is the only exit that does not clear the cache.
 func TestMempoolRetentionInverted(t *testing.T) {
@@ -224,6 +266,16 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 				"coin_shortcut":"ETH",
 				"rpc_timeout":25,
 				"mempoolTxTimeout":"-1s",
+				"block_addresses_to_keep":600
+			}`,
+		},
+		{
+			name: "zero alternative missing timeout",
+			config: `{
+				"coin_name":"Ethereum",
+				"coin_shortcut":"ETH",
+				"rpc_timeout":25,
+				"alternativeMissingTxTimeout":"0s",
 				"block_addresses_to_keep":600
 			}`,
 		},
@@ -353,6 +405,52 @@ func TestInitAlternativeProvidersUsesAlternativeMempoolTxTimeout(t *testing.T) {
 			}
 			if got := b.alternativeSendTxProvider.mempoolTxsTimeout; got != tt.want {
 				t.Fatalf("mempoolTxsTimeout = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInitAlternativeProvidersWiresMissingTxTimeout(t *testing.T) {
+	t.Setenv("ETH_ALTERNATIVE_SENDTX_URLS", "http://localhost:8545")
+
+	tests := []struct {
+		name   string
+		config Configuration
+		want   time.Duration
+	}{
+		{
+			name: "default",
+			config: Configuration{
+				CoinShortcut: "eth",
+				RPCTimeout:   1,
+			},
+			want: defaultAlternativeMissingTxTimeout,
+		},
+		{
+			name: "configured missing timeout",
+			config: Configuration{
+				CoinShortcut:                "eth",
+				RPCTimeout:                  1,
+				AlternativeMissingTxTimeout: "25m",
+			},
+			want: 25 * time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &EthereumRPC{
+				ChainConfig: &tt.config,
+			}
+			if err := b.InitAlternativeProviders(); err != nil {
+				t.Fatalf("InitAlternativeProviders() error = %v", err)
+			}
+
+			if b.alternativeSendTxProvider == nil {
+				t.Fatal("alternativeSendTxProvider is nil")
+			}
+			if got := b.alternativeSendTxProvider.missingTimeout(); got != tt.want {
+				t.Fatalf("missingTimeout() = %s, want %s", got, tt.want)
 			}
 		})
 	}

@@ -29,6 +29,12 @@ type storedTx struct {
 	time      uint32
 	gen       uint64 // send generation of the submission that created this entry, orders it against later sends
 	lastProbe uint32 // unix seconds of the last reconcile probe, 0 until the first one; see probeInterval
+	// missingSince is the unix time the current run of consecutive null eth_getTransactionByHash
+	// answers started, 0 while the relay surfaces the tx. The relay answers from one consistent store
+	// over its whole pending window, so a run outlasting missingTimeout() means dropped or cancelled
+	// and reconcile evicts; requiring a run rather than one null absorbs a transient relay fluke. See
+	// defaultAlternativeMissingTxTimeout.
+	missingSince uint32
 	// The nonce slot this entry fills, decoded from the body once at insert rather than on every scan.
 	// The body is immutable, so these cannot drift from it. Four scans walk the whole cache - the
 	// pending-nonce floor on every address request, and three per accepted send - and re-parsing an
@@ -120,6 +126,7 @@ type AlternativeSendTxProvider struct {
 	mempoolTxs                   map[string]storedTx
 	mempoolTxsMux                sync.Mutex
 	mempoolTxsTimeout            time.Duration
+	missingTxTimeout             time.Duration
 	rpcTimeout                   time.Duration
 	mempool                      *bchain.MempoolEthereumType
 	metrics                      *common.Metrics
@@ -138,7 +145,7 @@ type AlternativeSendTxProvider struct {
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
-func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTimeout time.Duration, metrics *common.Metrics) *AlternativeSendTxProvider {
+func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTimeout, missingTxTimeout time.Duration, metrics *common.Metrics) *AlternativeSendTxProvider {
 	urls := strings.Split(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_URLS"), ",")
 	onlyAlternative := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
 	fetchMempoolTx := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_FETCH_MEMPOOL_TX")) == "TRUE"
@@ -153,6 +160,7 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 		fetchMempoolTx:    fetchMempoolTx,
 		rpcTimeout:        time.Duration(rpcTimeout) * time.Second,
 		mempoolTxsTimeout: mempoolTxsTimeout,
+		missingTxTimeout:  missingTxTimeout,
 		mempoolTxs:        make(map[string]storedTx),
 		recentSenders:     make(map[ethcommon.Address]recentSender),
 		acceptedSlots:     make(map[nonceSlot]acceptedSlot),
@@ -263,7 +271,7 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// the transaction was decoded once at the top of the send and the result is reused for
 	// recent-sender registration, the RBF eviction and the cache entry below - a single ECDSA
 	// sender recovery instead of one per consumer. On decode failure neither eviction nor local
-	// caching runs, but the transaction is still handed to the fetch-back.
+	// caching runs, but the transaction is still handed to handleMempoolTransaction(txid, gen).
 	if decErr != nil {
 		glog.Warningf("cannot decode accepted transaction: %v", decErr)
 	} else {
@@ -562,6 +570,17 @@ func (p *AlternativeSendTxProvider) routingTimeout() time.Duration {
 		return p.mempoolTxsTimeout
 	}
 	return alternativeNonceRoutingTimeout
+}
+
+// missingTimeout is how long a cached transaction may stay missing from the relay - consecutive null
+// eth_getTransactionByHash answers - before reconcile evicts it; the cache timeout stays the backstop
+// regardless. Defaulted here as well so a provider built by a test from a struct literal cannot end up
+// with a zero horizon that evicts on the first null answer.
+func (p *AlternativeSendTxProvider) missingTimeout() time.Duration {
+	if p.missingTxTimeout > 0 {
+		return p.missingTxTimeout
+	}
+	return defaultAlternativeMissingTxTimeout
 }
 
 // nextSendGeneration assigns the send generation of an accepted submission, sweeping the expired
@@ -1025,8 +1044,8 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 
 	for _, tx := range txs {
 		age := time.Since(time.Unix(int64(tx.tx.time), 0))
-		// a freshly submitted tx may transiently be unknown to a load-balanced provider node,
-		// give it one check period before reconciling
+		// a freshly submitted tx was cached by the send path moments ago and its own fetch-back is
+		// probing the relay; re-asking within the first check period only spends relay quota
 		if age < alternativeMempoolTxCheckPeriod {
 			p.observeMempoolReconciliation("skipped_fresh")
 			continue
@@ -1065,18 +1084,28 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		}
 
 		if !known {
-			// A null/empty eth_getTransactionByHash is NOT authoritative proof the tx is gone:
-			// Blink-style private/MEV relays stop surfacing a still-pending, still-mineable tx while
-			// it stays broadcast. Evicting on a single empty probe deleted the tx from both sender and
-			// recipient about a minute after send (#1573). Defer eviction to the absolute cache
-			// timeout; mined and nonce_superseded above stay the only deterministic early evictions.
+			// The relay answers eth_getTransactionByHash from one consistent store over the whole
+			// pending window (the Blinklabs alignment that closed #1573's root cause), so a null is no
+			// longer the non-authoritative "stopped surfacing" it used to be: a run of nulls outlasting
+			// missingTimeout means the tx was dropped or cancelled - a drop-mode cancel leaves no
+			// replacement behind to retire it - and the entry is evicted, releasing its nonce slot.
+			// Requiring a short run rather than a single null absorbs a transient relay fluke; a relay
+			// without that consistency is accommodated by configuring alternativeMissingTxTimeout at
+			// the pending window, which restores timeout-only eviction.
 			if timedOut {
+				p.evictMempoolTx("provider_missing", tx.txid, tx.tx.time)
+				continue
+			}
+			missingSince := p.markMissing(tx.txid, tx.tx)
+			if missingSince != 0 && time.Since(time.Unix(int64(missingSince), 0)) >= p.missingTimeout() {
 				p.evictMempoolTx("provider_missing", tx.txid, tx.tx.time)
 				continue
 			}
 			p.observeMempoolReconciliation("provider_missing_pending")
 			continue
 		}
+		// surfaced (again): a transient gap must not accumulate toward the missing eviction
+		p.clearMissing(tx.txid, tx.tx)
 
 		if timedOut {
 			p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
@@ -1110,6 +1139,36 @@ func (p *AlternativeSendTxProvider) markProbed(txid string, snapshot storedTx) {
 		return
 	}
 	current.lastProbe = uint32(time.Now().Unix())
+	p.mempoolTxs[txid] = current
+}
+
+// markMissing stamps the start of the entry's current run of null relay answers - keeping an already
+// running one - and returns the run's start, 0 when the entry is gone or replaced. Guarded like
+// markProbed, so a replacement cached in the meantime never inherits its predecessor's run.
+func (p *AlternativeSendTxProvider) markMissing(txid string, snapshot storedTx) uint32 {
+	p.mempoolTxsMux.Lock()
+	defer p.mempoolTxsMux.Unlock()
+	current, found := p.mempoolTxs[txid]
+	if !found || current.gen != snapshot.gen || current.time != snapshot.time {
+		return 0
+	}
+	if current.missingSince == 0 {
+		current.missingSince = uint32(time.Now().Unix())
+		p.mempoolTxs[txid] = current
+	}
+	return current.missingSince
+}
+
+// clearMissing resets the entry's missing run once the relay surfaces the tx again, so transient gaps
+// do not accumulate toward the missing eviction. Guarded like markProbed.
+func (p *AlternativeSendTxProvider) clearMissing(txid string, snapshot storedTx) {
+	p.mempoolTxsMux.Lock()
+	defer p.mempoolTxsMux.Unlock()
+	current, found := p.mempoolTxs[txid]
+	if !found || current.gen != snapshot.gen || current.time != snapshot.time || current.missingSince == 0 {
+		return
+	}
+	current.missingSince = 0
 	p.mempoolTxs[txid] = current
 }
 
@@ -1172,8 +1231,9 @@ func (p *AlternativeSendTxProvider) setMempoolOldestAge(oldestUnix uint32) {
 
 // observeSendNotSurfaced counts a relay-accepted private send whose post-send fetch-back did not surface
 // it. For not_found and error the transaction is still cached and indexed from its own signed bytes, so
-// it only means the relay does not report back what it accepted and the entry can be retired only by the
-// cache timeout. The dropped reason is the exception: there the raw hex did not decode and the refused
+// it only means the relay does not report back what it accepted; a relay that keeps not surfacing it
+// retires the entry through the missing eviction (see reconcileMempoolTxs), with the cache timeout as
+// the backstop. The dropped reason is the exception: there the raw hex did not decode and the refused
 // fetch-back was the one thing that could have exposed the send, so it really is exposed nowhere.
 func (p *AlternativeSendTxProvider) observeSendNotSurfaced(reason string) {
 	if p.metrics == nil || p.metrics.EthAlternativeSendNotSurfaced == nil {

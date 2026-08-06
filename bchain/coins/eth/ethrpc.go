@@ -51,16 +51,26 @@ const (
 	defaultRPCTimeoutSeconds = 15
 
 	// defaultAlternativePendingTxWindow is how long a transaction broadcast through a private relay is
-	// treated as still pending. A relay dropping it from eth_getTransactionByHash and from its pending
-	// nonce count is not the same thing as it being gone: it stays broadcast and builders can still
-	// include it, which Blinklabs puts at around three hours. Sizing pending state below the relay's
-	// window made Blockbook stop showing a live transaction and hand its nonce back out (#1573, #1675).
+	// treated as still pending: the window in which builders can still include it, which Blinklabs puts
+	// at around three hours. The relay's eth_getTransactionByHash and pending eth_getTransactionCount
+	// answers now cover that same window (they used to stop after about a minute, the root cause of
+	// #1573). Sizing pending state below the window made Blockbook stop showing a live transaction and
+	// hand its nonce back out (#1573, #1675).
 	defaultAlternativePendingTxWindow = 3 * time.Hour
 	// mempoolRetentionMarginOverPendingWindow keeps the wrapped Blockbook mempool alive longer than the
 	// alternative cache, an order that is load-bearing (see mempoolRetentionInverted). It only has to
 	// cover the mempool's own sweep granularity of at most 10 minutes, and deriving the mempool default
 	// from the cache retention means changing the window cannot invert the pair.
 	mempoolRetentionMarginOverPendingWindow = 30 * time.Minute
+	// defaultAlternativeMissingTxTimeout is how long a cached private transaction may stay missing from
+	// the relay - consecutive null eth_getTransactionByHash answers - before reconcile evicts it. The
+	// relay answers from one consistent store over the whole pending window above, so a null means the
+	// transaction is gone - dropped or cancelled (a drop-mode cancel leaves no replacement behind to
+	// retire its predecessor) - and the short run requirement only absorbs a transient relay fluke
+	// rather than any node-to-node lag. For a relay without that consistency, configure
+	// alternativeMissingTxTimeout at or above the pending window, which restores eviction by cache
+	// timeout only.
+	defaultAlternativeMissingTxTimeout = 2 * time.Minute
 )
 
 // Ethereum address constants
@@ -101,6 +111,7 @@ type Configuration struct {
 	MempoolTxTimeout                string `json:"mempoolTxTimeout,omitempty"`
 	AlternativePendingTxWindow      string `json:"alternativePendingTxWindow,omitempty"`
 	AlternativeMempoolTxTimeout     string `json:"alternativeMempoolTxTimeout,omitempty"`
+	AlternativeMissingTxTimeout     string `json:"alternativeMissingTxTimeout,omitempty"`
 	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
@@ -172,6 +183,17 @@ func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, er
 		return parsePositiveDuration("alternativeMempoolTxTimeout", c.AlternativeMempoolTxTimeout)
 	}
 	return c.AlternativePendingTxWindowDuration()
+}
+
+// AlternativeMissingTxTimeoutDuration returns how long a cached private transaction may stay missing
+// from the relay's eth_getTransactionByHash before the reconcile loop evicts it (see
+// defaultAlternativeMissingTxTimeout for what a sustained run of nulls means and how to disable the
+// early eviction for a relay that does not surface over the whole pending window).
+func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, error) {
+	if c.AlternativeMissingTxTimeout != "" {
+		return parsePositiveDuration("alternativeMissingTxTimeout", c.AlternativeMissingTxTimeout)
+	}
+	return defaultAlternativeMissingTxTimeout, nil
 }
 
 // mempoolRetentionInverted reports whether the alternative-provider cache is configured to outlive the
@@ -315,6 +337,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		return nil, err
 	}
 	if _, err := c.AlternativeMempoolTxTimeoutDuration(); err != nil {
+		return nil, err
+	}
+	if _, err := c.AlternativeMissingTxTimeoutDuration(); err != nil {
 		return nil, err
 	}
 	if _, err := c.AverageBlockTimeDuration(); err != nil {
@@ -765,7 +790,11 @@ func (b *EthereumRPC) InitAlternativeProviders() error {
 	if err != nil {
 		return err
 	}
-	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, alternativeMempoolTxTimeout, b.metrics)
+	alternativeMissingTxTimeout, err := b.ChainConfig.AlternativeMissingTxTimeoutDuration()
+	if err != nil {
+		return err
+	}
+	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, alternativeMempoolTxTimeout, alternativeMissingTxTimeout, b.metrics)
 	return nil
 }
 
@@ -2462,9 +2491,11 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
 		if err == nil {
 			b.observeAlternativeNonceRequest("success")
-			// Even the provider's own answer can fall below Blockbook's advertised pending
-			// view: a relay stops counting a still-pending tx once past its own pending
-			// window, while Blockbook exposes it until the cache timeout (see reconcileMempoolTxs).
+			// Even the provider's own answer can fall below Blockbook's advertised pending view.
+			// The relay counts a pending tx over the whole pending window, so this floor is a
+			// safety net for a lagging or misbehaving relay node rather than the routine case it
+			// was before that alignment; a sustained floor_raised{source=provider} rate means the
+			// relay's pending count regressed below its window again.
 			raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
 			if raised > pending {
 				b.observePendingFloorRaised("provider")
