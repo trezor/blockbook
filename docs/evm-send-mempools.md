@@ -111,6 +111,8 @@ flowchart TD
     e["cached entry, 1 min tick"]
     f{"age under 1 min?"}
     keepFresh["keep: skipped_fresh"]
+    b{"probed within its interval?<br/>1 min under 10 min old,<br/>5 min under 1 h, then 15 min"}
+    keepBackoff["keep: skipped_backoff"]
     q["relay eth_getTransactionByHash"]
     qerr{"past 5 min timeout?"}
     evTo["evict: timeout"]
@@ -129,7 +131,9 @@ flowchart TD
 
     e --> f
     f -- "yes" --> keepFresh
-    f -- "no" --> q
+    f -- "no" --> b
+    b -- "yes, and not timed out" --> keepBackoff
+    b -- "no" --> q
     q -- "error" --> qerr
     qerr -- "yes" --> evTo
     qerr -- "no" --> keepErr
@@ -148,8 +152,8 @@ flowchart TD
     classDef step fill:#e7f0ff,stroke:#4078c0,color:#10243e;
     classDef keep fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
     classDef evict fill:#fff7e6,stroke:#b8860b,color:#3a2a00;
-    class e,f,q,qerr,m,s,k,kto,yto step;
-    class keepFresh,keepErr,keepMiss,keepK keep;
+    class e,f,b,q,qerr,m,s,k,kto,yto step;
+    class keepFresh,keepBackoff,keepErr,keepMiss,keepK keep;
     class evTo,evTo2,evMined,evSup,evMiss evict;
 ```
 

@@ -26,9 +26,10 @@ import (
 // which is what makes the nine reads of it race-free - a body is fully built before publication, and
 // publication happens under mempoolTxsMux. Mutating a body in place reopens all of them at once.
 type storedTx struct {
-	tx   *bchain.RpcTransaction
-	time uint32
-	gen  uint64 // send generation of the submission that created this entry, orders it against later sends
+	tx        *bchain.RpcTransaction
+	time      uint32
+	gen       uint64 // send generation of the submission that created this entry, orders it against later sends
+	lastProbe uint32 // unix seconds of the last reconcile probe, 0 until the first one; see probeInterval
 }
 
 // recentSender records when an address last successfully sent a transaction through an
@@ -65,6 +66,24 @@ const alternativeMempoolTxCheckPeriod = time.Minute
 // What the routing window still covers is the minutes right after a send, when a cache entry can be
 // missing and the relay's own view is the only one that has the transaction.
 const alternativeNonceRoutingTimeout = 15 * time.Minute
+
+// probeInterval returns how often reconcile re-asks the relay about a cached entry of the given age.
+// The tick stays at alternativeMempoolTxCheckPeriod; this only decides which entries it probes. A
+// young entry is where the answer still changes - it is about to mine, or its nonce is about to be
+// consumed by something else - so it is probed every cycle. An entry that has waited an hour is
+// waiting on a builder, and re-asking sixty times an hour buys a quarter-hour of eviction latency at
+// sixty times the relay quota, each probe a fresh dial (see callHttpRawResult) and, through
+// transactionSupersededByNonce, an eth_getTransactionCount to every configured URL.
+func probeInterval(age time.Duration) time.Duration {
+	switch {
+	case age < 10*time.Minute:
+		return alternativeMempoolTxCheckPeriod
+	case age < time.Hour:
+		return 5 * time.Minute
+	default:
+		return 15 * time.Minute
+	}
+}
 
 // maxBackgroundFetchBacks and maxExposeFetchBacks bound the post-send fetch-backs in flight. The send
 // path no longer waits for its own, so in-flight work is no longer bounded by in-flight requests and
@@ -969,13 +988,21 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 	confirmedNonceFailed := make(map[string]bool)
 
 	for _, tx := range txs {
+		age := time.Since(time.Unix(int64(tx.tx.time), 0))
 		// a freshly submitted tx may transiently be unknown to a load-balanced provider node,
 		// give it one check period before reconciling
-		if time.Since(time.Unix(int64(tx.tx.time), 0)) < alternativeMempoolTxCheckPeriod {
+		if age < alternativeMempoolTxCheckPeriod {
 			p.observeMempoolReconciliation("skipped_fresh")
 			continue
 		}
+		// an entry that has already waited is re-asked less often (see probeInterval); the timeout
+		// eviction below is not gated on it, so a backed-off entry still leaves on schedule
 		timedOut := time.Unix(int64(tx.tx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout))
+		if !timedOut && tx.tx.lastProbe != 0 && time.Since(time.Unix(int64(tx.tx.lastProbe), 0)) < probeInterval(age) {
+			p.observeMempoolReconciliation("skipped_backoff")
+			continue
+		}
+		p.markProbed(tx.txid, tx.tx)
 		known, mined, err := p.providerKnowsTransaction(tx.txid)
 		if err != nil {
 			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
@@ -1037,6 +1064,21 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 	p.mempoolTxsMux.Unlock()
 	p.setMempoolCacheSize(size)
 	p.setMempoolOldestAge(oldest)
+}
+
+// markProbed stamps this cycle onto the cache entry so probeInterval can pace the next probe. It
+// updates only an entry still identical to the snapshot the loop is working from, so a concurrent
+// eviction is never undone and a replacement cached in the meantime never inherits its predecessor's
+// probe schedule. The tx body is carried over untouched, keeping it immutable once published.
+func (p *AlternativeSendTxProvider) markProbed(txid string, snapshot storedTx) {
+	p.mempoolTxsMux.Lock()
+	defer p.mempoolTxsMux.Unlock()
+	current, found := p.mempoolTxs[txid]
+	if !found || current.gen != snapshot.gen || current.time != snapshot.time {
+		return
+	}
+	current.lastProbe = uint32(time.Now().Unix())
+	p.mempoolTxs[txid] = current
 }
 
 func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) {

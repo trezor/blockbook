@@ -219,7 +219,7 @@ panels:
         legend: stale cutoff (900s = 15 reload periods)
   sync.eth_alternative_mempool_reconciliation:
     title: Alternative mempool reconciliation
-    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry), rbf_replaced and sync_removed remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh and kept retain a still-young or still-pending entry. Expect sync_removed to dominate and mined to be rare, since block sync clears a confirmed private tx well before the next reconcile probe would observe it as mined.
+    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry), rbf_replaced and sync_removed remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh, skipped_backoff (an ageing entry is re-asked less often, see probeInterval) and kept retain a still-young or still-pending entry. Expect sync_removed to dominate and mined to be rare, since block sync clears a confirmed private tx well before the next reconcile probe would observe it as mined.
     queries:
       actions:
         promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60
