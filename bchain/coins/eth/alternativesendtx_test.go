@@ -2464,8 +2464,10 @@ func TestAlternativeSendTxProviderUndecodableSendUsesFetchBack(t *testing.T) {
 	if !found {
 		t.Fatal("the fetch-back did not cache the transaction when the raw hex could not be decoded")
 	}
-	if cached.gen != 0 {
-		t.Errorf("cached gen = %d, want 0 (the send order is unknown)", cached.gen)
+	// the acceptance is ordered even though the slot it fills is not: leaving the generation at 0 made
+	// the entry read as older than every earlier acceptance (see UndecodableReplacementIsCached)
+	if cached.gen == 0 {
+		t.Error("cached gen = 0, want the accepted send's generation - the send order is known, only its nonce slot is not")
 	}
 	if len(provider.recentSenders) != 0 {
 		t.Errorf("recentSenders has %d entries, want 0 after an undecodable raw tx", len(provider.recentSenders))
@@ -2783,5 +2785,67 @@ func TestAlternativeSendTxProviderGetTransactionTimeoutCleansWrappedMempool(t *t
 	}
 	if _, found := provider.mempoolTxs[testAlternativeTxID]; found {
 		t.Fatal("expired tx remained in provider cache")
+	}
+}
+
+// TestAlternativeSendTxProviderUndecodableReplacementIsCached pins the one path where the send
+// generation cannot come from the signed bytes. A replacement whose raw hex Blockbook cannot decode
+// (a transaction type newer than the pinned go-ethereum, or any sender-recovery failure) is still
+// accepted by the relay, and the fetch-back is the only thing that can expose it. Its generation must
+// therefore still order it AFTER the predecessor it replaces: with an unordered generation, the
+// predecessor's own accepted slot read as strictly newer and the replacement was cached nowhere,
+// indexed nowhere and never raised the floor - the #1573 symptom, on the path built to prevent it,
+// and silently, since inBackground did take the work so no dropped metric fires.
+func TestAlternativeSendTxProviderUndecodableReplacementIsCached(t *testing.T) {
+	rawTx, sender, txID := signedTestTxWithHash(t)
+	const replacementTxID = testAlternativeSecondTxID
+	// the relay surfaces the undecodable replacement at the same (from, nonce) slot as its predecessor
+	relayBody := `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + replacementTxID + `","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","from":"` + strings.ToLower(sender.Hex()) + `","to":"0x3333333333333333333333333333333333333333"}}`
+	var sendCount int
+	server := newHookedMethodAwareTxProviderTestServer(t, map[string]string{
+		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + replacementTxID + `"}`,
+		"eth_getTransactionByHash": relayBody,
+	}, func(method string) {
+		if method == "eth_sendRawTransaction" {
+			sendCount++
+		}
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{server.URL},
+		fetchMempoolTx:    true,
+		onlyAlternative:   true,
+		rpcTimeout:        time.Second,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        map[string]storedTx{},
+		metrics:           newReconcileTestMetrics(),
+	}
+
+	// predecessor: decodes, so it registers the (from, nonce) slot with a real generation
+	if _, err := provider.SendRawTransaction(rawTx); err != nil {
+		t.Fatalf("SendRawTransaction(predecessor) error = %v", err)
+	}
+	provider.waitForRefreshes()
+	if _, found := provider.GetTransaction(txID); !found {
+		t.Fatal("predecessor was not cached")
+	}
+
+	// replacement: same slot, but the raw hex does not decode
+	if _, err := provider.SendRawTransaction("0xdeadbeef"); err != nil {
+		t.Fatalf("SendRawTransaction(replacement) error = %v", err)
+	}
+	provider.waitForRefreshes()
+
+	if _, found := provider.GetTransaction(replacementTxID); !found {
+		t.Fatal("the undecodable replacement is exposed nowhere: not served, not indexed, floor not raised")
+	}
+	if floor, _ := provider.raiseToPendingFloor(sender, 1); floor != 2 {
+		t.Errorf("raiseToPendingFloor(1) = %d, want 2 (the replacement holds nonce 1)", floor)
+	}
+	// and it retires the predecessor it replaces, exactly as a decodable replacement would
+	if _, found := provider.GetTransaction(txID); found {
+		t.Error("predecessor still served as pending after its replacement was accepted")
+	}
+	if sendCount != 2 {
+		t.Errorf("relay sends = %d, want 2", sendCount)
 	}
 }
