@@ -55,6 +55,17 @@ type acceptedSlot struct {
 
 const alternativeMempoolTxCheckPeriod = time.Minute
 
+// alternativeNonceRoutingTimeout caps how long after an accepted send the sender's eth_getTransactionCount
+// and eth_estimateGas lookups keep being routed to the relay. It is deliberately shorter than the cache
+// retention, which used to drive it: the retention now spans the whole window a private tx can still
+// land, and over that window routing buys nothing a wallet can observe. The cached transaction already
+// carries the pending nonce, and the floor is applied to the primary RPC's answer too (see
+// EthereumTypeGetNonces), so a released sender still gets the same nonce - while eth_estimateGas is
+// called on every send-form keystroke, which is how the relay's rate quota was exhausted in #1629.
+// What the routing window still covers is the minutes right after a send, when a cache entry can be
+// missing and the relay's own view is the only one that has the transaction.
+const alternativeNonceRoutingTimeout = 15 * time.Minute
+
 // maxBackgroundFetchBacks and maxExposeFetchBacks bound the post-send fetch-backs in flight. The send
 // path no longer waits for its own, so in-flight work is no longer bounded by in-flight requests and
 // needs an explicit cap; a hanging relay holds each slot for len(urls) * rpcTimeout, so shedding is
@@ -521,14 +532,25 @@ func decodeAlternativeSendTx(rawTxHex string) (*alternativeSendTx, error) {
 	return &alternativeSendTx{from: sender, nonce: tx.Nonce(), txid: body.Hash, body: body}, nil
 }
 
+// routingTimeout is how long after an accepted send the sender's nonce and gas-estimate lookups keep
+// being routed to the relay: alternativeNonceRoutingTimeout, or the cache retention when that is
+// configured shorter, so a deployment that shortens the retention shortens routing with it. Computed
+// rather than stored so a provider built by a test from a struct literal cannot end up with a zero
+// horizon that silently routes nothing.
+func (p *AlternativeSendTxProvider) routingTimeout() time.Duration {
+	if p.mempoolTxsTimeout < alternativeNonceRoutingTimeout {
+		return p.mempoolTxsTimeout
+	}
+	return alternativeNonceRoutingTimeout
+}
+
 // registerSuccessfulSend records the sender of an accepted transaction so useForNonces routes its
-// nonce lookups to the accepting URL - the one provider guaranteed to know the tx - while it may still
-// be pending there. Expired entries are swept on the way. It returns the send generation assigned to
+// nonce lookups to the accepting URL - the one provider guaranteed to know the tx - for the routing
+// window. Expired entries of both maps are swept on the way. It returns the send generation assigned to
 // this submission, which the caller must carry to the cache entry it creates so releaseRecentSender can
 // order evictions against later sends, and records the (sender, nonce) slot so the acceptance survives
 // a fetch-back that produces no cache entry (see slotSupersededBy).
 func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Address, nonce uint64, acceptedURL string) uint64 {
-	now := time.Now()
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
 	if p.recentSenders == nil {
@@ -537,21 +559,40 @@ func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Addr
 	if p.acceptedSlots == nil {
 		p.acceptedSlots = make(map[nonceSlot]acceptedSlot)
 	}
+	now := p.sweepRecentSendsLocked()
+	p.sendGeneration++
+	p.recentSenders[sender] = recentSender{time: now, url: acceptedURL, gen: p.sendGeneration}
+	p.acceptedSlots[nonceSlot{addr: sender, nonce: nonce}] = acceptedSlot{gen: p.sendGeneration, time: now}
+	return p.sendGeneration
+}
+
+// sweepRecentSendsLocked drops the expired entries of both send-tracking maps and returns the instant
+// it swept at. The two horizons differ on purpose: routing is a quota decision that stops paying off
+// within minutes, while an accepted slot must outlive every predecessor it could still retire, i.e. as
+// long as one can land (see slotSupersededBy). Callers must hold recentSendersMux.
+func (p *AlternativeSendTxProvider) sweepRecentSendsLocked() time.Time {
+	now := time.Now()
+	routing := p.routingTimeout()
 	for addr, s := range p.recentSenders {
-		if now.Sub(s.time) > p.mempoolTxsTimeout {
+		if now.Sub(s.time) > routing {
 			delete(p.recentSenders, addr)
 		}
 	}
-	// same horizon and cheap inline sweep as recentSenders above
 	for slot, s := range p.acceptedSlots {
 		if now.Sub(s.time) > p.mempoolTxsTimeout {
 			delete(p.acceptedSlots, slot)
 		}
 	}
-	p.sendGeneration++
-	p.recentSenders[sender] = recentSender{time: now, url: acceptedURL, gen: p.sendGeneration}
-	p.acceptedSlots[nonceSlot{addr: sender, nonce: nonce}] = acceptedSlot{gen: p.sendGeneration, time: now}
-	return p.sendGeneration
+	return now
+}
+
+// sweepRecentSends is the reconcile loop's call into the sweep above. Without it the maps shrink only
+// when a new send arrives, so an instance that goes quiet after a burst holds every entry until the
+// next send - which the cache-retention-length horizons make a long time.
+func (p *AlternativeSendTxProvider) sweepRecentSends() {
+	p.recentSendersMux.Lock()
+	defer p.recentSendersMux.Unlock()
+	p.sweepRecentSendsLocked()
 }
 
 // slotSupersededBy reports whether a send strictly newer than generation gen has already been
@@ -575,17 +616,17 @@ func (p *AlternativeSendTxProvider) slotSupersededBy(from ethcommon.Address, non
 	return s.gen > gen
 }
 
-// useForNonces reports whether nonce lookups for addr should be routed to the alternative
-// provider. Only addresses that recently (within mempoolTxsTimeout, the same horizon at
-// which Blockbook stops surfacing the tx as pending) sent a transaction through it can have
-// a pending transaction the primary RPC does not know about; for everybody else the primary
-// is authoritative and the provider round-trip is pure waste of its rate-limit quota.
-// Senders whose cached transactions have all settled are released before the timeout (see
-// releaseRecentSender). Accepted limitations: a restart wipes the map (exposure bounded by
-// mempoolTxsTimeout), a transaction pending longer than the timeout, and private
-// transactions submitted outside this Blockbook instance - which includes sends accepted
-// by another replica in a load-balanced deployment without request affinity (wallet
-// websocket flows are naturally sticky to one instance; see docs/env.md).
+// useForNonces reports whether nonce and gas-estimate lookups for addr should be routed to the
+// alternative provider. Only addresses that sent a transaction through it within the routing
+// window (see routingTimeout) can have a pending transaction the primary RPC does not know
+// about AND no cache entry carrying it; for everybody else the primary is authoritative and
+// the provider round-trip is pure waste of its rate-limit quota. Senders whose cached
+// transactions have all settled are released before the window ends (see releaseRecentSender).
+// Accepted limitations: a restart wipes the map, a transaction still pending past the window
+// - after which the cache and the pending-nonce floor, not the relay, are what keep its nonce
+// reserved - and private transactions submitted outside this Blockbook instance, which
+// includes sends accepted by another replica in a load-balanced deployment without request
+// affinity (wallet websocket flows are naturally sticky to one instance; see docs/env.md).
 func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
@@ -593,7 +634,7 @@ func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 	if !found {
 		return false
 	}
-	if time.Since(s.time) > p.mempoolTxsTimeout {
+	if time.Since(s.time) > p.routingTimeout() {
 		delete(p.recentSenders, addr)
 		return false
 	}
@@ -913,6 +954,8 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		txid string
 		tx   storedTx
 	}
+
+	p.sweepRecentSends()
 
 	p.mempoolTxsMux.Lock()
 	txs := make([]cachedTx, 0, len(p.mempoolTxs))

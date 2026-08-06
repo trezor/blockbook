@@ -1093,6 +1093,40 @@ func TestAlternativeSendTxProviderUseForNonces(t *testing.T) {
 	}
 }
 
+// TestAlternativeSendTxProviderRoutingHorizonIsIndependentOfRetention pins the split the long cache
+// retention forces: a sender stops being routed to the relay well before its transaction stops being
+// exposed as pending. Routing is a rate-quota decision (eth_estimateGas rides the same gate, once per
+// send-form keystroke - #1629); keeping the nonce reserved is the cache's job, and the floor answers
+// from the primary RPC just as well.
+func TestAlternativeSendTxProviderRoutingHorizonIsIndependentOfRetention(t *testing.T) {
+	const senderHex = "0x2222222222222222222222222222222222222222"
+	sender := ethcommon.HexToAddress(senderHex)
+	provider := &AlternativeSendTxProvider{
+		mempoolTxsTimeout: 3 * time.Hour,
+		recentSenders: map[ethcommon.Address]recentSender{
+			sender: {time: time.Now().Add(-30 * time.Minute)},
+		},
+		acceptedSlots: map[nonceSlot]acceptedSlot{
+			{addr: sender, nonce: 4}: {gen: 1, time: time.Now().Add(-30 * time.Minute)},
+		},
+		mempoolTxs: map[string]storedTx{
+			testAlternativeTxID: {tx: &bchain.RpcTransaction{From: senderHex, AccountNonce: "0x4"}, gen: 1},
+		},
+	}
+
+	if provider.useForNonces(sender) {
+		t.Error("sender still routed to the relay 30 min after its send, twice the routing horizon")
+	}
+	if floor, stranded := provider.raiseToPendingFloor(sender, 4); floor != 5 || stranded {
+		t.Errorf("raiseToPendingFloor(4) = (%d, %v), want (5, false) - the cached tx must keep its nonce reserved after routing lapsed", floor, stranded)
+	}
+	// the acceptance must outlive routing: it is what retires a predecessor whose replacement the
+	// relay never surfaces (#1573), and a predecessor can land for as long as the cache holds it
+	if !provider.slotSupersededBy(sender, 4, 0) {
+		t.Error("accepted nonce slot swept on the routing horizon instead of the cache retention")
+	}
+}
+
 func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 	rawTx, sender := signedTestTx(t)
 	// callHttpStringResult dials a fresh client per call, so its first request always has id 1

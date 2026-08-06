@@ -174,7 +174,7 @@ flowchart LR
     idx["Blockbook mempool address index"]
 
     non["EthereumTypeGetNonces(addr)"]
-    gate{"useForNonces(addr)?<br/>private send within 5 min"}
+    gate{"useForNonces(addr)?<br/>private send within 15 min"}
     nrelay["relay eth_getTransactionCount<br/>single accepting URL, batched pending+latest"]
     nprim["primary eth_getTransactionCount"]
     floor["raiseToPendingFloor<br/>advance over the contiguous cached run,<br/>never past a slot nothing fills"]
