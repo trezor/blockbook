@@ -4,10 +4,11 @@ How Blockbook broadcasts a **Trezor Suite** EVM transaction through the private 
 tracks it in its own pending-transaction cache until the chain confirms or supersedes it. Fee
 estimation is covered in [fees.md](/docs/fees.md).
 
-The private-relay path — the alternative send-tx provider and its pending-tx cache — is active only
-when a coin is configured with `*_ALTERNATIVE_SENDTX_URLS`, `*_ALTERNATIVE_SENDTX_ONLY` and
-`*_ALTERNATIVE_FETCH_MEMPOOL_TX`. Without them Blockbook sends through the normal backend RPC and the
-cache path is skipped.
+The two pieces switch on separately. **Broadcasting** through the relay needs only
+`*_ALTERNATIVE_SENDTX_URLS`: set it and every send goes to the relay, with no URL configured Blockbook
+sends through the normal backend RPC. The **pending-tx cache** below additionally needs
+`*_ALTERNATIVE_SENDTX_ONLY` and `*_ALTERNATIVE_FETCH_MEMPOOL_TX`; without them the relay still
+broadcasts but Blockbook keeps no pending state of its own.
 
 ## Broadcast and the pending-transaction cache
 
@@ -37,7 +38,8 @@ flowchart TD
     end
 
     readpath["GetTransaction read path<br/>expired entry → evict"]
-    remove[("removeMempoolTx<br/>clear cache + wrapped mempool<br/>+ release nonce routing<br/>metered once")]
+    syncrm["block sync indexing its block, or the<br/>read path finding it mined or unknown"]
+    remove[("clear cache + wrapped mempool<br/>+ release nonce routing")]
 
     send --> route
     route -- "no" --> primary
@@ -46,16 +48,17 @@ flowchart TD
     acc -- "yes" --> reg --> evict --> cache --> handle
     evict -. removes predecessor .-> remove
     cache -. caches new tx .-> readpath
-    mined --> remove
-    super --> remove
+    mined -- "removeMempoolTx" --> remove
+    super -- "removeMempoolTx" --> remove
     miss -. "kept until timeout" .-> to
-    to --> remove
-    readpath --> remove
+    to -- "removeMempoolTx" --> remove
+    readpath -- "removeMempoolTx" --> remove
+    syncrm -- "RemoveTransaction,<br/>metered sync_removed" --> remove
 
     classDef normal fill:#e7f0ff,stroke:#4078c0,color:#10243e;
     classDef store fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
     classDef error fill:#ffecec,stroke:#c03535,color:#3b0a0a;
-    class send,route,relay,acc,reg,evict,cache,handle,mined,super,miss,to,readpath,primary normal;
+    class send,route,relay,acc,reg,evict,cache,handle,mined,super,miss,to,readpath,syncrm,primary normal;
     class remove store;
     class reject error;
 ```
@@ -105,13 +108,18 @@ Key invariants:
 - **Send generations order concurrent same-nonce sends.** Each accepted send gets a monotonic
   generation; an older submission's slow fetch-back neither caches itself over, nor evicts, a newer
   replacement that already holds the nonce slot.
-- **Every exit funnels through `removeMempoolTx`** (see the diagram for what it clears), which records
-  the lifecycle metric exactly once — gated on the actual removal, so concurrent reconcile /
-  read-path / RBF evictions of the same entry don't double-count.
+- **Every exit clears both stores and is metered exactly once.** The reconcile and RBF evictions go
+  through `removeMempoolTx`; `sync_removed` — block sync, and the read path finding a transaction
+  mined or unknown — goes through `RemoveTransaction` directly. Neither meters anything itself:
+  `removeMempoolTx` passes an empty action, so its callers do the metering, gated on the bool it
+  returns, and `RemoveTransaction` passes `sync_removed`, which nothing else would record. The gating
+  is what keeps concurrent reconcile / read-path / RBF evictions of the same entry from
+  double-counting.
 - **Removals are not pushed to the wallet.** Blockbook pushes only *added* txs; a wallet learns a
   pending tx is gone on its next account re-fetch (the initiating device also removes it
-  optimistically). The cache timeout, at the pending window's length, is only the backstop, so `mined`
-  and `nonce_superseded` retire an entry in practice.
+  optimistically). The cache timeout, at the pending window's length, is only the backstop: in
+  practice `sync_removed` retires an entry, with `nonce_superseded` covering a replacement submitted
+  outside Blockbook.
 
 ## How long a private transaction stays pending
 
@@ -148,7 +156,8 @@ Prometheus counters for the cache lifecycle:
   (`mined`, `nonce_superseded`, `provider_missing`, `timeout`, `rbf_replaced`, `sync_removed`) plus
   the kept actions (`skipped_fresh`, `skipped_backoff`, `provider_missing_pending`, `kept`,
   `provider_error`). `sync_removed` — block sync indexing the tx's block, or the read path finding it
-  mined — should dominate, `mined` should be rare.
+  mined or unknown (a null lookup whose pruned-index recovery also failed) — should dominate, `mined`
+  should be rare.
 - `blockbook_eth_alternative_mempool_tx_residence_seconds{action}` — entry lifetime per eviction
   reason. `provider_missing` belongs near the cache timeout; collapsing to minutes is the
   premature-eviction regression #1573 describes.
