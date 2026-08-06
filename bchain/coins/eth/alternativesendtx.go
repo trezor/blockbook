@@ -241,15 +241,20 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		return txid, retErr
 	}
 
+	// Ordered before the decode-dependent registration, because a send that does not decode is
+	// still a send: leaving it at the zero generation made it read as OLDER than every earlier
+	// acceptance, so an undecodable replacement lost its own slot to the predecessor it replaces
+	// and ended up exposed nowhere. Generations order acceptances, which is knowable here; what
+	// the decode adds is which slot the acceptance fills.
+	gen := p.nextSendGeneration()
 	// the transaction was decoded once at the top of the send and the result is reused for
 	// recent-sender registration, the RBF eviction and the cache entry below - a single ECDSA
-	// sender recovery instead of one per consumer. On decode failure gen stays 0 and neither
-	// eviction nor local caching runs, but the transaction is still handed to the fetch-back.
-	var gen uint64
+	// sender recovery instead of one per consumer. On decode failure neither eviction nor local
+	// caching runs, but the transaction is still handed to the fetch-back.
 	if decErr != nil {
 		glog.Warningf("cannot decode accepted transaction: %v", decErr)
 	} else {
-		gen = p.registerSuccessfulSend(sent.from, sent.nonce, acceptedURL)
+		p.registerSuccessfulSend(sent.from, sent.nonce, acceptedURL, gen)
 		if !strings.EqualFold(sent.txid, txid) {
 			// Report the locally derived hash, which is what the chain will show and what everything
 			// below is keyed on; the echo would name a txid Blockbook has no entry for.
@@ -544,12 +549,27 @@ func (p *AlternativeSendTxProvider) routingTimeout() time.Duration {
 	return alternativeNonceRoutingTimeout
 }
 
+// nextSendGeneration assigns the send generation of an accepted submission, sweeping the expired
+// entries of both send-tracking maps on the way. Every acceptance takes one, whether or not its raw hex
+// decodes, so the generation always orders it against the other acceptances; the caller carries it to
+// the cache entry it creates, so releaseRecentSender and slotSupersededBy can order evictions against
+// later sends.
+func (p *AlternativeSendTxProvider) nextSendGeneration() uint64 {
+	p.recentSendersMux.Lock()
+	defer p.recentSendersMux.Unlock()
+	p.sweepRecentSendsLocked()
+	p.sendGeneration++
+
+	return p.sendGeneration
+}
+
 // registerSuccessfulSend records the sender of an accepted transaction so useForNonces routes its nonce
 // lookups to the accepting URL - the one provider guaranteed to know the tx - for the routing window,
 // and records the (sender, nonce) slot so the acceptance survives a fetch-back that produces no cache
-// entry (see slotSupersededBy). The returned send generation must be carried to the cache entry the
-// caller creates, so releaseRecentSender can order evictions against later sends.
-func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Address, nonce uint64, acceptedURL string) uint64 {
+// entry (see slotSupersededBy). gen comes from nextSendGeneration; only a strictly newer acceptance may
+// overwrite either entry, since separating the two calls left nothing else ordering them.
+func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Address, nonce uint64, acceptedURL string, gen uint64) {
+	now := time.Now()
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
 	if p.recentSenders == nil {
@@ -558,11 +578,13 @@ func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Addr
 	if p.acceptedSlots == nil {
 		p.acceptedSlots = make(map[nonceSlot]acceptedSlot)
 	}
-	now := p.sweepRecentSendsLocked()
-	p.sendGeneration++
-	p.recentSenders[sender] = recentSender{time: now, url: acceptedURL, gen: p.sendGeneration}
-	p.acceptedSlots[nonceSlot{addr: sender, nonce: nonce}] = acceptedSlot{gen: p.sendGeneration, time: now}
-	return p.sendGeneration
+	if s, found := p.recentSenders[sender]; !found || gen > s.gen {
+		p.recentSenders[sender] = recentSender{time: now, url: acceptedURL, gen: gen}
+	}
+	slot := nonceSlot{addr: sender, nonce: nonce}
+	if s, found := p.acceptedSlots[slot]; !found || gen > s.gen {
+		p.acceptedSlots[slot] = acceptedSlot{gen: gen, time: now}
+	}
 }
 
 // sweepRecentSendsLocked drops the expired entries of both send-tracking maps and returns the instant
