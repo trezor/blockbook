@@ -99,9 +99,8 @@ func TestAlternativeSendTxProviderReconcileLivenessOutcomes(t *testing.T) {
 		response    string
 		wantRemoved bool
 	}{
-		// A provider that returns empty is NOT authoritative proof the tx is gone (Blink-style
-		// private/MEV relays stop surfacing a still-pending tx via eth_getTransactionByHash). The tx
-		// is kept until the cache timeout - here mempoolTxsTimeout is time.Hour, so it stays.
+		// An empty provider result is NOT proof the tx is gone: private/MEV relays stop surfacing a
+		// still-pending tx via eth_getTransactionByHash, so it is kept until the cache timeout (1h here).
 		{"empty provider result is kept until timeout", `{"jsonrpc":"2.0","id":1,"result":null}`, false},
 		{"mined tx is removed", minedTxResponse, true},
 		{"known pending tx is kept", testAlternativeKnownTxResponse, false},
@@ -121,10 +120,9 @@ func TestAlternativeSendTxProviderReconcileLivenessOutcomes(t *testing.T) {
 }
 
 func TestAlternativeSendTxProviderReconcileTimeoutEviction(t *testing.T) {
-	// A tx older than mempoolTxsTimeout must be evicted by the reconcile timeout "safety net", and -
-	// like every other eviction path - the eviction must go through removeMempoolTx (the
-	// removeTransactionFromMempool callback) so the tx is dropped from BOTH the main mempool and the
-	// alternative cache, not only the cache. assertReconcileOutcome checks the callback fired.
+	// A tx older than mempoolTxsTimeout must be evicted by the reconcile timeout "safety net", and the
+	// eviction must go through removeMempoolTx (the removeTransactionFromMempool callback) so it leaves
+	// the main mempool too, not only the cache; assertReconcileOutcome checks the callback fired.
 	tests := []struct {
 		name      string
 		serverURL func(t *testing.T) string
@@ -187,8 +185,7 @@ func TestAlternativeSendTxProviderReconcileSkipsFreshTransaction(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderReconcileBacksOffByAge pins the probe pacing that keeps a long cache
-// retention from turning into one relay round-trip per entry per minute for hours. The tick is
-// unchanged; what changes is which entries it re-asks about.
+// retention from costing one relay round-trip per entry per minute for hours. The tick is unchanged.
 func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
 	for _, tt := range []struct {
 		name       string
@@ -230,11 +227,9 @@ func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderReconcileStampsProbe closes the loop the table above opens: it seeds
-// no lastProbe at all, so the pacing has to come from reconcile stamping the entry itself. Without
-// this, a markProbed that silently stopped writing would leave every entry re-probed once a minute
-// for the whole retention - the relay quota load the backoff exists to remove - and no test would
-// notice.
+// TestAlternativeSendTxProviderReconcileStampsProbe closes the loop the table above opens: with no
+// lastProbe seeded, the pacing has to come from reconcile stamping the entry itself. A markProbed that
+// silently stopped writing would re-probe every entry once a minute for the whole retention, unnoticed.
 func TestAlternativeSendTxProviderReconcileStampsProbe(t *testing.T) {
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
@@ -266,8 +261,7 @@ func TestAlternativeSendTxProviderReconcileStampsProbe(t *testing.T) {
 
 // TestAlternativeSendTxProviderMarkProbedOnlyStampsTheSnapshottedEntry pins the identity check that
 // keeps the stamp from writing through a concurrent eviction or replacement: reconcile works off a
-// snapshot taken at the start of the cycle, so by the time it stamps, the txid may have been evicted
-// or re-cached by a newer send.
+// snapshot, so by the time it stamps, the txid may have been evicted or re-cached by a newer send.
 func TestAlternativeSendTxProviderMarkProbedOnlyStampsTheSnapshottedEntry(t *testing.T) {
 	body := &bchain.RpcTransaction{Hash: testAlternativeTxID, From: "0x2222222222222222222222222222222222222222", AccountNonce: "0x1"}
 	current := storedTx{tx: body, time: 1000, gen: 2}
@@ -305,9 +299,8 @@ func TestAlternativeSendTxProviderMarkProbedOnlyStampsTheSnapshottedEntry(t *tes
 }
 
 // TestAlternativeSendTxProviderReconcileSweepsSendTracking covers the two send-tracking maps being
-// pruned by the reconcile tick rather than only when the next send arrives, and on their two
-// different horizons: routing lapses in minutes, an accepted nonce slot only when its transaction
-// can no longer land.
+// pruned by the reconcile tick rather than only on the next send, on their two different horizons:
+// routing lapses in minutes, an accepted nonce slot only when its transaction can no longer land.
 func TestAlternativeSendTxProviderReconcileSweepsSendTracking(t *testing.T) {
 	lapsed := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
 	fresh := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
@@ -343,8 +336,8 @@ func TestAlternativeSendTxProviderReconcileSweepsSendTracking(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderReconcileEvictsTimedOutEntryDespiteBackoff pins that the backoff paces
-// only the relay round-trip: the cache timeout is a local decision and must still fire on the cycle it
-// comes due, or a backed-off entry would outlive the retention by up to a probe interval.
+// only the relay round-trip: the cache timeout is local and must still fire on the cycle it comes due,
+// or a backed-off entry outlives the retention by up to a probe interval.
 func TestAlternativeSendTxProviderReconcileEvictsTimedOutEntryDespiteBackoff(t *testing.T) {
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
@@ -449,9 +442,8 @@ func newMethodAwareTxProviderTestServer(t *testing.T, responses map[string]strin
 }
 
 // newHookedMethodAwareTxProviderTestServer is newMethodAwareTxProviderTestServer with a hook that runs
-// before the response is written. Blocking in the hook lets a test hold a specific RPC method in
-// flight - which is how the send path's concurrency and its independence from the fetch-back are
-// asserted exactly, without wall-clock margins.
+// before the response is written. Blocking in the hook holds a specific RPC method in flight, which is
+// how the send path's concurrency is asserted exactly rather than with wall-clock margins.
 func newHookedMethodAwareTxProviderTestServer(t *testing.T, responses map[string]string, before func(method string)) *methodAwareServer {
 	t.Helper()
 
@@ -521,10 +513,9 @@ func TestAlternativeSendTxProviderReconcileNonceOutcomes(t *testing.T) {
 }
 
 func TestAlternativeSendTxProviderReconcileEvictsSupersededMissingTx(t *testing.T) {
-	// The provider no longer surfaces the tx via eth_getTransactionByHash (returns empty), so it is
-	// not evicted on the "missing" path alone. But the confirmed account nonce (0x2) is strictly
-	// above the cached tx nonce (0x1): the nonce is spent on-chain, so the tx can never be mined and
-	// is evicted deterministically even though it is well within the (1h) cache timeout.
+	// The provider no longer surfaces the tx, which alone would not evict it. But the confirmed account
+	// nonce (0x2) is above the cached tx nonce (0x1): that nonce is spent on-chain, so the tx can never
+	// mine and is evicted deterministically, well within the 1h cache timeout.
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_getTransactionByHash": `{"jsonrpc":"2.0","id":1,"result":null}`,
 		"eth_getTransactionCount":  nonceCountResponse("0x2"),
@@ -585,9 +576,8 @@ func TestAlternativeSendTxProviderReconcileKeepsTransactionWithUnparsableNonce(t
 }
 
 func TestAlternativeSendTxProviderReconcileFailedNonceLookupIsPerSender(t *testing.T) {
-	// sender 0x2222 is checked here; a failed lookup for one sender must not suppress eviction for
-	// another. Single-provider servers cannot distinguish senders, so this test uses one sender and
-	// asserts the failed-memo does not leak into the resolved map.
+	// a failed lookup for one sender must not suppress eviction for another; single-provider servers
+	// cannot distinguish senders, so this asserts the failed-memo does not leak into the resolved map
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_getTransactionByHash": testAlternativeKnownTxResponse,
 		"eth_getTransactionCount":  nonceCountResponse("0x2"),
@@ -688,9 +678,8 @@ func labeledCounterValue(t *testing.T, cv *prometheus.CounterVec, label, value s
 	return counterVecValue(t, cv, label, value)
 }
 
-// TestAlternativeSendTxProviderReconcileObservesMetrics asserts the reconcile flow feeds the two
-// metrics added to make it transparent: the per-action tx-lifetime histogram (observed only on
-// eviction, under the same action label as the decision counter) and the cache-depth gauge.
+// TestAlternativeSendTxProviderReconcileObservesMetrics asserts the reconcile flow feeds the tx-lifetime
+// histogram - only on eviction, under the same action label as the counter - and the cache-depth gauge.
 func TestAlternativeSendTxProviderReconcileObservesMetrics(t *testing.T) {
 	const minedTxResponse = `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + testAlternativeTxID + `","from":"0x2222222222222222222222222222222222222222","nonce":"0x1","gas":"0x5208","value":"0x0","input":"0x","to":"0x3333333333333333333333333333333333333333","blockNumber":"0x1"}}`
 
@@ -705,11 +694,9 @@ func TestAlternativeSendTxProviderReconcileObservesMetrics(t *testing.T) {
 		if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "mined"); got != 1 {
 			t.Errorf("mined reconciliation events = %v, want 1", got)
 		}
-		// the lifetime histogram records exactly one sample, under the same action label as the counter
 		if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "mined"); got != 1 {
 			t.Errorf("mined residence sample count = %d, want 1", got)
 		}
-		// the only cached tx was evicted, so the depth gauge settles at 0
 		if got := gaugeValue(t, provider.metrics.EthAlternativeMempoolCacheSize); got != 0 {
 			t.Errorf("cache depth gauge = %v, want 0 after eviction", got)
 		}
@@ -726,7 +713,6 @@ func TestAlternativeSendTxProviderReconcileObservesMetrics(t *testing.T) {
 		if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "kept"); got != 1 {
 			t.Errorf("kept reconciliation events = %v, want 1", got)
 		}
-		// nothing was evicted, so no lifetime sample must be recorded for any terminal action
 		for _, action := range []string{"mined", "nonce_superseded", "provider_missing", "timeout"} {
 			if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, action); got != 0 {
 				t.Errorf("residence sample count for %q = %d, want 0 when nothing is evicted", action, got)
@@ -739,9 +725,8 @@ func TestAlternativeSendTxProviderReconcileObservesMetrics(t *testing.T) {
 }
 
 func TestAlternativeSendTxProviderGetTransactionTimeoutObservesMetrics(t *testing.T) {
-	// a cached entry past mempoolTxsTimeout, read before the reconcile loop reaches it, is evicted on
-	// the read path - and that eviction must be counted and have its residence observed just like the
-	// reconcile-loop timeout, otherwise the timeout series is undercounted.
+	// an entry past mempoolTxsTimeout is evicted on the read path, and that eviction must be metered like
+	// the reconcile-loop timeout or the timeout series is undercounted
 	provider := &AlternativeSendTxProvider{
 		fetchMempoolTx:    true,
 		mempoolTxsTimeout: time.Minute,
@@ -769,9 +754,8 @@ func TestAlternativeSendTxProviderGetTransactionTimeoutObservesMetrics(t *testin
 }
 
 func TestAlternativeSendTxProviderRBFReplacementObservesMetrics(t *testing.T) {
-	// handleMempoolTransaction replaces a cached entry sharing the incoming tx's sender+nonce. The
-	// replaced entry leaves the cache by fee-replacement, so that exit must be counted and its residence
-	// observed, not silently dropped.
+	// handleMempoolTransaction replaces a cached entry sharing the incoming tx's sender+nonce; that exit
+	// is a fee replacement and must be counted with its residence, not silently dropped
 	server := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
 	provider := &AlternativeSendTxProvider{
 		urls:              []string{server.URL},
@@ -850,11 +834,9 @@ type jsonRPCReq struct {
 	Params []interface{}   `json:"params"`
 }
 
-// nonceRPCServer is a JSON-RPC test server for eth_getTransactionCount. It serves a per-block-tag
-// hex result (or a per-tag JSON-RPC error) and supports both single and batched requests, so it can
-// drive AlternativeSendTxProvider.getNonces over a real rpc.Client round-trip (the batched path uses
-// BatchCallContext, which a plain method-keyed mock cannot exercise). It records how many times each
-// block tag was queried so a test can assert the "latest" call is skipped when not requested.
+// nonceRPCServer is a JSON-RPC test server for eth_getTransactionCount. It serves a per-block-tag hex
+// result (or error) over both single and batched requests, so it can drive getNonces over a real
+// rpc.Client - a plain method-keyed mock cannot exercise BatchCallContext - and counts queries per tag.
 type nonceRPCServer struct {
 	*httptest.Server
 	mu      sync.Mutex
@@ -924,10 +906,9 @@ func newNonceRPCServer(t *testing.T, results map[string]string, errs map[string]
 	return s
 }
 
-// TestAlternativeSendTxProviderGetNonces covers the alternative-provider nonce path that backs the
-// confirmedNonce field for private/Blink relay coins. It mirrors the primary-RPC getNoncesRPC tests
-// in nonce_test.go: pending-only when gated off, batched pending+confirmed when gated on, best-effort
-// confirmed failure, fatal pending failure, and fatal batch transport failure.
+// TestAlternativeSendTxProviderGetNonces covers the alternative-provider nonce path backing the
+// confirmedNonce field for private-relay coins; it mirrors the primary-RPC getNoncesRPC tests in
+// nonce_test.go.
 func TestAlternativeSendTxProviderGetNonces(t *testing.T) {
 	addr := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
 
@@ -997,8 +978,7 @@ func TestAlternativeSendTxProviderGetNonces(t *testing.T) {
 	})
 }
 
-// signedTestTx builds a signed raw transaction with a throwaway key and returns its hex
-// encoding together with the sender address the key derives to.
+// signedTestTx builds a signed raw transaction with a throwaway key and returns its hex plus the sender.
 func signedTestTx(t *testing.T) (string, ethcommon.Address) {
 	t.Helper()
 	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
@@ -1012,9 +992,8 @@ func signedTestTx(t *testing.T) (string, ethcommon.Address) {
 	return raw, sender
 }
 
-// signedTestTxWithHash is signedTestTx plus the transaction's true hash, for tests whose relay mock
-// must echo - and surface - the same txid the signed bytes hash to, which is the txid the send path
-// caches under.
+// signedTestTxWithHash is signedTestTx plus the transaction's true hash, for tests whose relay mock must
+// echo the txid the signed bytes hash to - the txid the send path caches under.
 func signedTestTxWithHash(t *testing.T) (string, ethcommon.Address, string) {
 	t.Helper()
 	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
@@ -1047,10 +1026,9 @@ func signTestTx(t *testing.T, inner types.TxData) (string, ethcommon.Address, *t
 	return hexutil.Encode(raw), crypto.PubkeyToAddress(key.PublicKey), tx
 }
 
-// TestDecodeAlternativeSendTx checks that the pending-transaction body derived from the signed bytes
-// carries the same fields, in the same encoding, that eth_getTransactionByHash would return for the
-// same unmined transaction - that equivalence is what lets the send path cache a relay-accepted
-// transaction without the relay having to surface it.
+// TestDecodeAlternativeSendTx checks the body derived from the signed bytes carries the same fields, in
+// the same encoding, eth_getTransactionByHash would return for the same unmined transaction - the
+// equivalence that lets the send path cache without the relay surfacing anything.
 func TestDecodeAlternativeSendTx(t *testing.T) {
 	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
 
@@ -1191,11 +1169,10 @@ func TestDecodeAlternativeSendTx(t *testing.T) {
 	})
 }
 
-// TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack covers the send-not-surfaced
-// hole: a relay that ACKs the send but never returns the transaction from eth_getTransactionByHash
-// used to leave it cached and indexed nowhere - not served as pending and not raising the
-// pending-nonce floor, so the next send could reuse its nonce. The send path now caches it from its
-// own signed bytes, so the failed fetch-back only costs the metric.
+// TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack covers the send-not-surfaced hole: a
+// relay that ACKs a send but never returns it from eth_getTransactionByHash left it exposed nowhere and
+// raising no pending-nonce floor, so the next send could reuse its nonce. Caching from the signed bytes
+// closes it, leaving the failed fetch-back to cost only the metric.
 func TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack(t *testing.T) {
 	to := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
 	rawTx, sender, tx := signTestTx(t, &types.LegacyTx{
@@ -1277,8 +1254,7 @@ func TestAlternativeSendTxProviderUseForNonces(t *testing.T) {
 // TestAlternativeSendTxProviderRoutingHorizonIsIndependentOfRetention pins the split the long cache
 // retention forces: a sender stops being routed to the relay well before its transaction stops being
 // exposed as pending. Routing is a rate-quota decision (eth_estimateGas rides the same gate, once per
-// send-form keystroke - #1629); keeping the nonce reserved is the cache's job, and the floor answers
-// from the primary RPC just as well.
+// send-form keystroke - #1629); keeping the nonce reserved is the cache's job, and works off the primary.
 func TestAlternativeSendTxProviderRoutingHorizonIsIndependentOfRetention(t *testing.T) {
 	const senderHex = "0x2222222222222222222222222222222222222222"
 	sender := ethcommon.HexToAddress(senderHex)
@@ -1353,10 +1329,9 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 	})
 
 	t.Run("nonce reads follow the accepting provider", func(t *testing.T) {
-		// urls[0] is unreachable: the broadcast succeeds only through the second provider, so
-		// nonce reads for the sender must go there too - urls[0] never saw the transaction.
-		// The nonce server answers eth_sendRawTransaction via the empty tag and
-		// eth_getTransactionCount via the "pending" tag.
+		// urls[0] is unreachable: the broadcast succeeds only through the second provider, so nonce reads
+		// must go there too - urls[0] never saw the transaction. The nonce server answers
+		// eth_sendRawTransaction under the empty tag and eth_getTransactionCount under "pending".
 		server := newNonceRPCServer(t, map[string]string{"": testAlternativeTxID, "pending": "0x9"}, nil)
 		provider := &AlternativeSendTxProvider{
 			urls:              []string{"http://127.0.0.1:1", server.URL},
@@ -1380,9 +1355,8 @@ func TestAlternativeSendTxProviderSendRecordsSender(t *testing.T) {
 	})
 
 	t.Run("batched nonce read follows the accepting provider", func(t *testing.T) {
-		// withConfirmed=true exercises the batch branch of getNonces, which dials the url
-		// itself instead of going through callHttpStringResult - it must pick the accepting
-		// provider the same way as the pending-only branch
+		// withConfirmed=true exercises the batch branch of getNonces, which dials the url itself
+		// instead of going through callHttpStringResult - it must pick the accepting provider too
 		server := newNonceRPCServer(t, map[string]string{"": testAlternativeTxID, "pending": "0x9", "latest": "0x5"}, nil)
 		provider := &AlternativeSendTxProvider{
 			urls:              []string{"http://127.0.0.1:1", server.URL},
@@ -1470,10 +1444,9 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 	})
 
 	t.Run("a newer send since the evicted tx keeps the entry", func(t *testing.T) {
-		// the sender submitted again after the evicted tx was cached (possibly without a cache
-		// entry of its own, e.g. when the post-send fetch-back failed) - the entry must survive.
-		// The generation counter orders the sends precisely, so this holds even when both sends
-		// landed within the same wall-clock second.
+		// the sender submitted again after the evicted tx was cached (possibly without a cache entry of
+		// its own, e.g. a failed post-send fetch-back) - the entry must survive. The generation counter
+		// orders the sends even when both landed within the same wall-clock second.
 		provider := makeProvider(2, map[string]storedTx{testAlternativeTxID: cachedTx("0x1", 1)})
 
 		provider.RemoveTransaction(testAlternativeTxID)
@@ -1495,13 +1468,10 @@ func TestAlternativeSendTxProviderRemoveTransactionReleasesSender(t *testing.T) 
 }
 
 func TestAlternativeSendTxProviderHandleMempoolTransactionStampsOwnGeneration(t *testing.T) {
-	// The cached entry must carry the generation of ITS OWN submission, not the sender's
-	// current generation: the fetch-back is a network round-trip during which a concurrent
-	// send can bump the sender's generation. Simulated here: transaction A (generation 1)
-	// finishes its slow fetch-back after a concurrent transaction B (generation 2) was
-	// registered but left no cache entry because B's own fetch-back failed. Stamping A with
-	// generation 2 would make A's eviction release the sender's routing while B is still
-	// privately pending.
+	// The cached entry must carry the generation of ITS OWN submission, not the sender's current one:
+	// the fetch-back is a round-trip during which a concurrent send can bump the generation. Here A
+	// (gen 1) finishes its slow fetch-back after B (gen 2) was registered but left no cache entry;
+	// stamping A with gen 2 would make A's eviction release routing while B is still privately pending.
 	server := newAlternativeTxProviderTestServer(t, testAlternativeKnownTxResponse)
 	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
 	provider := &AlternativeSendTxProvider{
@@ -1529,9 +1499,9 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionStampsOwnGeneration(t 
 }
 
 // TestAlternativeSendTxProviderRaiseToPendingFloor pins the contiguity clamp of #1675: the floor
-// advances the backend's own pending answer across the run of cached nonces that starts at it, and
-// never across a hole. The pre-#1675 rule was a blind max(cached)+1, which answered 8 for the gap
-// case below and queued every later send behind a nonce nothing was filling.
+// advances the backend's pending answer across the run of cached nonces starting at it, never across a
+// hole. A blind max(cached)+1 answers 8 for the gap case below, queuing every later send behind a nonce
+// nothing fills.
 func TestAlternativeSendTxProviderRaiseToPendingFloor(t *testing.T) {
 	const senderHex = "0x2222222222222222222222222222222222222222"
 	sender := ethcommon.HexToAddress(senderHex)
@@ -1581,9 +1551,8 @@ func TestAlternativeSendTxProviderRaiseToPendingFloor(t *testing.T) {
 	}
 }
 
-// cachedPredecessor builds a cache entry for a transaction from `from` with the given hex nonce,
-// aged past the reconcile grace period, so a test can assert it is retired by a same-nonce
-// replacement rather than by any reconcile timing.
+// cachedPredecessor builds a cache entry aged past the reconcile grace period, so a test can attribute
+// its retirement to a same-nonce replacement rather than to reconcile timing.
 func cachedPredecessor(txid string, from ethcommon.Address, nonceHex string) storedTx {
 	return storedTx{
 		tx: &bchain.RpcTransaction{
@@ -1597,9 +1566,8 @@ func cachedPredecessor(txid string, from ethcommon.Address, nonceHex string) sto
 
 // TestAlternativeSendTxProviderAcceptedSendRetiresUnsurfacedPredecessor is the core of #1573: a
 // replacement or drop-mode cancel accepted by the relay retires the cached predecessor sharing its
-// (from, nonce) immediately, even when the relay never surfaces the replacement via
-// eth_getTransactionByHash. Before the fix the predecessor lingered as "Unconfirmed" until the
-// cache timeout because eviction was gated behind a successful fetch-back.
+// (from, nonce) immediately, even when the relay never surfaces the replacement. Gating that eviction
+// behind a successful fetch-back left the predecessor "Unconfirmed" until the cache timeout.
 func TestAlternativeSendTxProviderAcceptedSendRetiresUnsurfacedPredecessor(t *testing.T) {
 	rawTx, sender, sentTxID := signedTestTxWithHash(t) // nonce 1
 	// relay accepts the send but never surfaces it (drop mode): getTransactionByHash returns null
@@ -1649,9 +1617,8 @@ func TestAlternativeSendTxProviderAcceptedSendRetiresUnsurfacedPredecessor(t *te
 }
 
 // TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacement covers the ordinary
-// surfaced RBF path through SendRawTransaction: the replacement is fetched back and cached, the
-// predecessor is retired, and the fee-replacement exit is counted exactly once (not doubled by the
-// acceptance-time and handleMempoolTransaction removals both firing).
+// surfaced RBF path: the replacement is cached, the predecessor retired, and the fee-replacement exit
+// counted exactly once - not doubled by the acceptance-time and handleMempoolTransaction removals.
 func TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacement(t *testing.T) {
 	rawTx, sender, replacementTxID := signedTestTxWithHash(t) // nonce 1
 	// the surfaced replacement shares the sender and nonce of the predecessor
@@ -1697,9 +1664,8 @@ func TestAlternativeSendTxProviderAcceptedSendCachesAndRetiresSurfacedReplacemen
 	}
 }
 
-// TestAlternativeSendTxProviderAcceptedSendKeepsDifferentNonce confirms the acceptance-time eviction
-// is scoped to the same nonce slot: a cached transaction with a different nonce is a distinct,
-// still-mineable in-flight tx and must be left in the cache.
+// TestAlternativeSendTxProviderAcceptedSendKeepsDifferentNonce scopes the acceptance-time eviction to
+// the same nonce slot: a cached tx with a different nonce is a distinct, still-mineable in-flight tx.
 func TestAlternativeSendTxProviderAcceptedSendKeepsDifferentNonce(t *testing.T) {
 	rawTx, sender, sentTxID := signedTestTxWithHash(t) // nonce 1
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -1737,9 +1703,9 @@ func TestAlternativeSendTxProviderAcceptedSendKeepsDifferentNonce(t *testing.T) 
 	}
 }
 
-// TestAlternativeSendTxProviderRejectedSendSkipsMempoolFetch verifies that when every relay rejects
-// the broadcast (no acceptedURL, empty txid) the provider does not run the mempool-cache path:
-// no eth_getTransactionByHash fan-out for the zero hash and no spurious error log (#1629 follow-up).
+// TestAlternativeSendTxProviderRejectedSendSkipsMempoolFetch verifies that when every relay rejects the
+// broadcast the provider skips the mempool-cache path: no eth_getTransactionByHash fan-out for the zero
+// hash and no spurious error log (#1629 follow-up).
 func TestAlternativeSendTxProviderRejectedSendSkipsMempoolFetch(t *testing.T) {
 	rawTx, _ := signedTestTx(t)
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -1763,10 +1729,9 @@ func TestAlternativeSendTxProviderRejectedSendSkipsMempoolFetch(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval verifies the lifecycle metrics are
-// attributed to the single eviction that actually removed a cache entry. A second eviction of the
-// same txid (e.g. reconcile working off a stale snapshot after the read-path already evicted the
-// entry) must not record another event or residence sample under a different action.
+// TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval attributes the lifecycle metrics to the
+// single eviction that actually removed the entry: a second eviction of the same txid (reconcile off a
+// stale snapshot after the read path already evicted it) must record nothing under its own action.
 func TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval(t *testing.T) {
 	added := uint32(time.Now().Add(-3 * time.Minute).Unix())
 	provider := &AlternativeSendTxProvider{
@@ -1782,9 +1747,8 @@ func TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval(t *testing.T) {
 	}
 	provider.removeTransactionFromMempool = func(txid string) { provider.RemoveTransaction(txid) }
 
-	// first eviction removes the entry and is metered
 	provider.evictMempoolTx("timeout", testAlternativeTxID, added)
-	// second eviction targets the already-gone entry under a different action and must be a no-op
+	// the already-gone entry under a different action must be a no-op
 	provider.evictMempoolTx("mined", testAlternativeTxID, added)
 
 	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "timeout"); got != 1 {
@@ -1802,9 +1766,9 @@ func TestAlternativeSendTxProviderEvictionMetricsGatedOnRemoval(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration verifies the RBF eviction is
-// generation-ordered: it retires a strictly-older predecessor for the nonce slot but leaves a
-// strictly-newer replacement intact, so an older submission's late fetch-back cannot drop the newer
-// tx that will actually mine (#1573 follow-up / finding #1).
+// generation-ordered: it retires a strictly-older predecessor for the nonce slot but leaves a strictly
+// newer replacement, so an older submission's late fetch-back cannot drop the tx that will actually
+// mine (#1573 follow-up / finding #1).
 func TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration(t *testing.T) {
 	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
 	entry := func(txid string, gen uint64) storedTx {
@@ -1884,10 +1848,10 @@ func TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration(t *test
 	})
 
 	t.Run("unknown keeper generation keeps a generation-carrying replacement", func(t *testing.T) {
-		// A keeper whose own send order is unknown (keepGen 0 - raw-hex sender recovery failed at
-		// send time, though the fetched tx still decodes) must NOT evict a cached replacement that
-		// carries a real generation. Evicting it dropped the newer tx that will actually mine and
-		// surfaced the stale one (#1573 follow-up / finding #2).
+		// A keeper whose own send order is unknown (keepGen 0 - raw-hex sender recovery failed at send
+		// time, though the fetched tx still decodes) must NOT evict a cached replacement carrying a
+		// real generation: that dropped the newer tx that will mine and surfaced the stale one
+		// (#1573 follow-up / finding #2).
 		provider := &AlternativeSendTxProvider{
 			fetchMempoolTx: true,
 			mempoolTxs:     map[string]storedTx{testAlternativeTxID: entry(testAlternativeTxID, 2)},
@@ -1900,9 +1864,9 @@ func TestAlternativeSendTxProviderEvictReplacedByNonceRespectsGeneration(t *test
 	})
 
 	t.Run("unknown keeper generation still evicts an unordered predecessor", func(t *testing.T) {
-		// When neither side carries a generation (both 0) the order is genuinely unknown; the keeper
-		// is the just-accepted replacement, so retiring the equally-unordered predecessor keeps the
-		// #1573 acceptance-time eviction working (and the rbf_replaced metric balanced) for that path.
+		// When neither side carries a generation the order is genuinely unknown; the keeper is the
+		// just-accepted replacement, so retiring the equally-unordered predecessor keeps the #1573
+		// acceptance-time eviction working for that path.
 		provider := &AlternativeSendTxProvider{
 			fetchMempoolTx: true,
 			mempoolTxs:     map[string]storedTx{testAlternativeSecondTxID: entry(testAlternativeSecondTxID, 0)},
@@ -1952,9 +1916,9 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsStaleFetchBack(t 
 }
 
 // TestAlternativeSendTxProviderSyncRemovalIsMetered verifies the removal path carrying no reconcile
-// decision - block sync or the read path, via EthereumRPC.removeTransactionFromMempool - records its
-// exit. evictMempoolTx meters only the goroutine whose delete removed the entry, and block sync
-// almost always beats the next reconcile probe, so this exit was counted nowhere.
+// decision - block sync or the read path via EthereumRPC.removeTransactionFromMempool - records its
+// exit: evictMempoolTx meters only the deleting goroutine, and block sync usually beats the next
+// reconcile probe, so this exit was counted nowhere.
 func TestAlternativeSendTxProviderSyncRemovalIsMetered(t *testing.T) {
 	added := uint32(time.Now().Add(-3 * time.Minute).Unix())
 	newProvider := func() *AlternativeSendTxProvider {
@@ -2008,10 +1972,10 @@ func TestAlternativeSendTxProviderSyncRemovalIsMetered(t *testing.T) {
 	})
 }
 
-// TestAlternativeSendTxProviderAcceptedSlotRetiresLateFetchBack verifies the acceptance-time
-// retirement survives a fetch-back that produces no cache entry: the relay ACK records the
-// (sender, nonce) slot, so a slower submission for that slot is dropped on arrival even though the
-// newer send left nothing cached to order it against (Blink drop mode, #1573).
+// TestAlternativeSendTxProviderAcceptedSlotRetiresLateFetchBack verifies the acceptance-time retirement
+// survives a fetch-back that produces no cache entry: the relay ACK records the (sender, nonce) slot, so
+// a slower submission for it is dropped on arrival with nothing cached to order it against (drop mode,
+// #1573).
 func TestAlternativeSendTxProviderAcceptedSlotRetiresLateFetchBack(t *testing.T) {
 	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
 	// getTransactionByHash surfaces the older submission A, sender+nonce 0x1
@@ -2098,11 +2062,10 @@ func TestAlternativeSendTxProviderSendRecordsAcceptedSlot(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderNotSurfacedMetered verifies that a relay-accepted send whose
-// fetch-back never surfaces is counted under eth_alternative_send_not_surfaced_total - the
-// observable signal that a relay does not surface what it accepted (#1638 review). The transaction
-// itself is cached from its own signed bytes, so the counter no longer implies the cache is empty
-// (see TestAlternativeSendTxProviderAcceptedSendCachedWithoutFetchBack).
+// TestAlternativeSendTxProviderNotSurfacedMetered counts a relay-accepted send whose fetch-back never
+// surfaces under eth_alternative_send_not_surfaced_total - the observable signal that a relay does not
+// surface what it accepted (#1638 review). The tx is still cached from its signed bytes, so the counter
+// does not imply an empty cache.
 func TestAlternativeSendTxProviderNotSurfacedMetered(t *testing.T) {
 	rawTx, _, sentTxID := signedTestTxWithHash(t)
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -2134,18 +2097,18 @@ func TestAlternativeSendTxProviderNotSurfacedMetered(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderSendBroadcastsConcurrently checks that the broadcast to several relay
-// URLs costs the slowest single URL rather than their sum. Sequentially, one unresponsive relay held
-// up the wallet's answer for its full timeout before the next URL was even tried, and a wallet that
-// gives up before Blockbook answers reports a failure for a transaction that is on its way.
+// TestAlternativeSendTxProviderSendBroadcastsConcurrently checks the broadcast to several relay URLs
+// costs the slowest single URL rather than their sum. Sequentially one unresponsive relay held up the
+// wallet's answer for its full timeout, and a wallet that gives up first reports a failure for a
+// transaction that is on its way.
 func TestAlternativeSendTxProviderSendBroadcastsConcurrently(t *testing.T) {
 	rawTx, _, txID := signedTestTxWithHash(t)
 	sendResponse := `{"jsonrpc":"2.0","id":1,"result":"` + txID + `"}`
 
-	// Every relay holds its response until ALL of them have the broadcast in flight, so the send can
-	// only complete if the broadcasts really are simultaneous. A sequential broadcast (or one capped
-	// below len(urls) concurrency) never reaches the barrier and fails the test on the fallback,
-	// rather than on a wall-clock margin that a partial regression could still fit inside.
+	// Every relay holds its response until ALL of them have the broadcast in flight, so the send can only
+	// complete if the broadcasts really are simultaneous - a sequential fan-out (or one capped below
+	// len(urls)) fails on the barrier fallback rather than on a wall-clock margin a partial regression
+	// could still fit inside.
 	const parties = 3
 	barrier := newTestBarrier(parties)
 	servers := make([]*methodAwareServer, parties)
@@ -2181,8 +2144,7 @@ func TestAlternativeSendTxProviderSendBroadcastsConcurrently(t *testing.T) {
 }
 
 // testBarrier releases every arriving caller only once `parties` of them are waiting, so a test can
-// assert that N calls really overlap. The fallback timeout keeps a regression a failed assertion
-// instead of a hung test.
+// assert N calls really overlap. The fallback timeout keeps a regression a failed assertion, not a hang.
 type testBarrier struct {
 	mu      sync.Mutex
 	arrived int
@@ -2220,8 +2182,7 @@ func (b *testBarrier) reached() bool {
 
 // TestAlternativeSendTxProviderSendAggregatesResultsInURLOrder pins the outcome aggregation of the
 // concurrent broadcast: any accepting URL makes the send successful, the first accepting URL in
-// configuration order is the one recorded for the sender's nonce routing, and a later failure never
-// turns an accepted send into an error.
+// configuration order is recorded for nonce routing, and a later failure never turns it into an error.
 func TestAlternativeSendTxProviderSendAggregatesResultsInURLOrder(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	sendResponse := `{"jsonrpc":"2.0","id":1,"result":"` + txID + `"}`
@@ -2260,9 +2221,9 @@ func TestAlternativeSendTxProviderSendAggregatesResultsInURLOrder(t *testing.T) 
 
 	t.Run("unresponsive url does not fail or stall the send", func(t *testing.T) {
 		// The case the concurrent fan-out exists for: sequentially, each unresponsive relay burned its
-		// full rpcTimeout before the next URL was even tried, so two of them pushed the answer past
-		// any wallet deadline. Cleanup order matters - the hanging handlers must be released before
-		// httptest.Server.Close, which waits for outstanding requests (t.Cleanup runs LIFO).
+		// full rpcTimeout before the next URL was tried, pushing the answer past any wallet deadline.
+		// Cleanup order matters - the hanging handlers must be released before httptest.Server.Close,
+		// which waits for outstanding requests (t.Cleanup runs LIFO).
 		hang := make(chan struct{})
 		hold := func(method string) { <-hang }
 		urls := []string{
@@ -2311,10 +2272,9 @@ func TestAlternativeSendTxProviderSendAggregatesResultsInURLOrder(t *testing.T) 
 }
 
 // newBlockedFetchBackProvider wires a provider whose relay accepts the send immediately but holds its
-// eth_getTransactionByHash response until the returned release channel is closed, so a test can make
-// assertions while the fetch-back is provably still in flight. The surfaced body differs from the one
-// derived from the signed bytes by transactionIndex, an artificial marker: a real pending transaction
-// has none, which is exactly why it identifies the relay's view unambiguously.
+// eth_getTransactionByHash response until the returned channel is closed, so a test can assert while the
+// fetch-back is provably in flight. The surfaced body carries transactionIndex, which a real pending
+// transaction never has - an unambiguous marker of the relay's view.
 func newBlockedFetchBackProvider(t *testing.T, rawTx string, sender ethcommon.Address, txID string) (*AlternativeSendTxProvider, chan struct{}, *methodAwareServer) {
 	t.Helper()
 	return newBlockedFetchBackProviderWithBody(t, rawTx, txID,
@@ -2369,9 +2329,8 @@ func sendWhileFetchBackBlocked(t *testing.T, provider *AlternativeSendTxProvider
 	return txid
 }
 
-// TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack checks that the post-send fetch-back does
-// not delay the answer to the wallet: the transaction is already cached from its signed bytes when the
-// send returns, and the fetch-back only replaces that body with the relay's own view of it.
+// TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack checks the post-send fetch-back does not
+// delay the wallet's answer: the transaction is cached from its signed bytes before the send returns.
 func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	provider, release, server := newBlockedFetchBackProvider(t, rawTx, sender, txID)
@@ -2404,9 +2363,9 @@ func TestAlternativeSendTxProviderSendDoesNotWaitForFetchBack(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval is why the fetch-back never writes the
-// cache. It answers up to rpcTimeout per URL after the wallet was told the send succeeded, so the
-// transaction may have mined and block sync may have cleared it by then - and a relay is free to keep
-// reporting it as pending. Re-inserting it would flip a confirmed transaction back to Unconfirmed.
+// cache: it answers up to rpcTimeout per URL after the wallet was told the send succeeded, so the tx may
+// have mined and block sync cleared it while a relay still reports it pending. Re-inserting it would
+// flip a confirmed transaction back to Unconfirmed.
 func TestAlternativeSendTxProviderFetchBackDoesNotResurrectRemoval(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	provider, release, _ := newBlockedFetchBackProvider(t, rawTx, sender, txID)
@@ -2455,9 +2414,9 @@ func TestAlternativeSendTxProviderFetchBackKeepsDerivedBody(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync pins that the fetch-back does
-// not evict when the relay already reports the transaction mined: the relay can see the block before
-// Blockbook indexes it, and eviction clears the address index too, so the transaction would briefly be
-// in neither store. Block sync removes it as sync_removed instead.
+// not evict a transaction the relay already reports mined: the relay sees the block before Blockbook
+// indexes it, and eviction clears the address index too, leaving the tx in neither store. Block sync
+// removes it as sync_removed instead.
 func TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	provider, release, _ := newBlockedFetchBackProviderWithBody(t, rawTx, txID,
@@ -2475,9 +2434,8 @@ func TestAlternativeSendTxProviderFetchBackKeepsMinedTransactionForBlockSync(t *
 	}
 }
 
-// TestAlternativeSendTxProviderUndecodableSendUsesFetchBack covers the fallback: when the accepted raw
-// hex does not decode, nothing can be derived from it, so the fetch-back keeps its create semantics
-// and the relay's echoed txid is the only key available.
+// TestAlternativeSendTxProviderUndecodableSendUsesFetchBack covers the fallback: with undecodable raw
+// hex nothing can be derived, so the fetch-back still creates the entry under the relay's echoed txid.
 func TestAlternativeSendTxProviderUndecodableSendUsesFetchBack(t *testing.T) {
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
@@ -2515,9 +2473,8 @@ func TestAlternativeSendTxProviderUndecodableSendUsesFetchBack(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderDroppedFetchBackMetered covers the one drop that loses a transaction: on
-// the raw-hex-decode-failure path the fetch-back is the only thing that can expose the send, so a
-// refusal leaves it served nowhere, indexed nowhere and raising no pending-nonce floor - the
-// nonce-reuse precursor, and the only variant of it the dashboard could not see.
+// the raw-hex-decode-failure path the fetch-back is the only thing that can expose the send, so a refusal
+// leaves it served nowhere and raising no pending-nonce floor - the nonce-reuse precursor.
 func TestAlternativeSendTxProviderDroppedFetchBackMetered(t *testing.T) {
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_sendRawTransaction":   `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
@@ -2552,9 +2509,9 @@ func TestAlternativeSendTxProviderDroppedFetchBackMetered(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderDroppedRefreshNotMetered is the other half: a refused refresh must NOT
-// be reported as a not-surfaced send. The transaction is cached and indexed from its signed bytes, so
-// counting it would raise a false alarm on the metric documented as the nonce-reuse precursor.
+// TestAlternativeSendTxProviderDroppedRefreshNotMetered is the other half: a refused refresh must NOT be
+// reported as a not-surfaced send - the tx is cached and indexed from its signed bytes, so counting it
+// would false-alarm the metric documented as the nonce-reuse precursor.
 func TestAlternativeSendTxProviderDroppedRefreshNotMetered(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -2588,9 +2545,8 @@ func TestAlternativeSendTxProviderDroppedRefreshNotMetered(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderShutdownDropNotMetered keeps a fetch-back declined at shutdown out of
-// the counter: the process is going down, and an alert on the nonce-reuse precursor must not fire on
-// every restart that catches a send in flight.
+// TestAlternativeSendTxProviderShutdownDropNotMetered keeps a fetch-back declined at shutdown out of the
+// counter, so an alert on the nonce-reuse precursor does not fire on every restart catching a send.
 func TestAlternativeSendTxProviderShutdownDropNotMetered(t *testing.T) {
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
 		"eth_sendRawTransaction": `{"jsonrpc":"2.0","id":1,"result":"` + testAlternativeTxID + `"}`,
@@ -2618,8 +2574,7 @@ func TestAlternativeSendTxProviderShutdownDropNotMetered(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderNotSurfacedErrorMetered covers the error label of
-// eth_alternative_send_not_surfaced_total, and that a relay failing the fetch-back leaves the
-// transaction cached from its signed bytes all the same.
+// eth_alternative_send_not_surfaced_total, and that a failed fetch-back still leaves the tx cached.
 func TestAlternativeSendTxProviderNotSurfacedErrorMetered(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -2652,10 +2607,9 @@ func TestAlternativeSendTxProviderNotSurfacedErrorMetered(t *testing.T) {
 	}
 }
 
-// TestAlternativeSendTxProviderSendKeysOnSignedBytesHash pins the decision that the txid comes from
-// the signed bytes rather than the relay's echo: the echo is what a wallet would poll and what its own
-// optimistic pending entry is keyed on, so a relay echoing anything else must not decide where the
-// transaction lives.
+// TestAlternativeSendTxProviderSendKeysOnSignedBytesHash pins that the txid comes from the signed bytes
+// rather than the relay's echo: the signed-bytes hash is what a wallet polls and keys its own optimistic
+// pending entry on, so a relay echoing anything else must not decide where the transaction lives.
 func TestAlternativeSendTxProviderSendKeysOnSignedBytesHash(t *testing.T) {
 	rawTx, sender, txID := signedTestTxWithHash(t)
 	server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -2710,9 +2664,9 @@ func TestAlternativeSendTxProviderOldestAgeGauge(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderHandleMempoolTransactionUnorderedFetchBackSkipsItself verifies a
-// fetch-back of unknown send order (gen 0) skips itself when a generation-carrying entry holds the
-// nonce slot. evictReplacedByNonce protects that entry from a gen-0 keeper, so an asymmetric check
-// here left BOTH transactions cached for one slot.
+// fetch-back of unknown send order (gen 0) skips itself when a generation-carrying entry holds the nonce
+// slot: evictReplacedByNonce protects that entry from a gen-0 keeper, so an asymmetric check left BOTH
+// cached for one slot.
 func TestAlternativeSendTxProviderHandleMempoolTransactionUnorderedFetchBackSkipsItself(t *testing.T) {
 	sender := ethcommon.HexToAddress("0x2222222222222222222222222222222222222222")
 	// getTransactionByHash surfaces A (testAlternativeTxID), same sender+nonce as the cached gen-2 B
@@ -2750,9 +2704,9 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionUnorderedFetchBackSkip
 }
 
 // TestAlternativeSendTxProviderGetTransactionReturnsCopy pins that the cached body never leaves the
-// provider: its only caller hands the result to EthTxToTx with fixEIP55=true, which rewrites From and
-// To in place holding no lock. Deterministic on purpose - mutating the result and finding the cache
-// unchanged proves ownership without depending on the race detector catching a schedule.
+// provider: its only caller hands the result to EthTxToTx with fixEIP55=true, which rewrites From and To
+// in place holding no lock. Mutating the result and finding the cache unchanged proves ownership without
+// depending on the race detector catching a schedule.
 func TestAlternativeSendTxProviderGetTransactionReturnsCopy(t *testing.T) {
 	const from = "0x2222222222222222222222222222222222222222"
 	provider := &AlternativeSendTxProvider{
@@ -2802,10 +2756,9 @@ func TestAlternativeSendTxProviderGetTransactionNilBody(t *testing.T) {
 }
 
 // TestAlternativeSendTxProviderGetTransactionTimeoutCleansWrappedMempool verifies the read-path
-// staleness eviction routes through the removeTransactionFromMempool delegate (which clears the
-// wrapped Blockbook mempool's address index), not the cache-only RemoveTransaction. Before the fix
-// an expired private tx lingered in the wrapped mempool whenever the caller's own primary-RPC
-// lookup errored instead of returning null (finding #3).
+// staleness eviction routes through the removeTransactionFromMempool delegate, which clears the wrapped
+// mempool's address index, not the cache-only RemoveTransaction: otherwise an expired private tx lingers
+// there whenever the caller's own primary-RPC lookup errors instead of returning null (finding #3).
 func TestAlternativeSendTxProviderGetTransactionTimeoutCleansWrappedMempool(t *testing.T) {
 	var removed string
 	provider := &AlternativeSendTxProvider{
