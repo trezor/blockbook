@@ -97,8 +97,9 @@ func TestEthereumTypeGetNonces_PrivatePendingHint_WithConfirmedNonce(t *testing.
 }
 
 // TestEthereumTypeGetNonces_PrivatePendingHint_RoutesOnDeclaredZero confirms a declared nonce of 0
-// (a wallet's very first tx) still trips the routing guard (declaredFloor 1 > 0) and raises the
-// pending nonce to 1 — the boundary the routing tests above (nonce 42) do not exercise.
+// (a wallet's very first tx) routes and advances the answer to 1 - the boundary the routing tests
+// above (nonce 42) do not exercise. Both halves depend on 0 being read as a literal rather than a
+// zero value: the gate is the declaration being non-empty, and the walk treats 0 as an occupied slot.
 func TestEthereumTypeGetNonces_PrivatePendingHint_RoutesOnDeclaredZero(t *testing.T) {
 	server := newNonceRPCServer(t, map[string]string{"pending": "0x0"}, nil)
 	stub := &nonceBatchStub{results: map[string]string{"pending": "0x0"}}
@@ -109,7 +110,7 @@ func TestEthereumTypeGetNonces_PrivatePendingHint_RoutesOnDeclaredZero(t *testin
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if pending != 1 {
-		t.Errorf("pending = %d, want 1 (declared nonce 0 → floor 1)", pending)
+		t.Errorf("pending = %d, want 1 (nonce 0 is in flight, so the walk advances past it)", pending)
 	}
 	if got := server.callCount("pending"); got != 1 {
 		t.Errorf("alternative provider queried %d times, want 1 (declared 0 must still route)", got)

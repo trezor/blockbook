@@ -51,7 +51,7 @@ type WsAccountInfoReq struct {
 // rather than guessing from which addresses recently sent through this instance. Only Nonces drive
 // behavior today; Txids are accepted for forward compatibility (future pending-tx correlation).
 type WsPrivatePending struct {
-	Nonces []uint64 `json:"nonces,omitempty" ts_doc:"Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel); do not pad or default the array, as any entry raises the reported pending nonce to at least value+1."`
+	Nonces []uint64 `json:"nonces,omitempty" ts_doc:"Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel) and is treated as an occupied nonce slot alongside Blockbook's own cached private transactions: the reported pending nonce advances from the backend's own answer across the contiguous run of occupied slots. Send the whole in-flight set, not just its maximum, and do not pad or default the array - a declared nonce above a slot nothing fills does not lift the answer over that slot."`
 	Txids  []string `json:"txids,omitempty" ts_doc:"Transaction hashes of the in-flight private transactions (reserved for future use)."`
 }
 
