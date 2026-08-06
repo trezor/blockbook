@@ -2032,6 +2032,7 @@ func GetStringFromMap(p string, params map[string]interface{}) (string, bool) {
 
 // EthereumTypeEstimateGas returns estimation of gas consumption for given transaction parameters
 func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
+	started := time.Now()
 	msg := ethereum.CallMsg{}
 	if s, ok := GetStringFromMap("from", params); ok && len(s) > 0 {
 		msg.From = ethcommon.HexToAddress(s)
@@ -2080,10 +2081,28 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	}
 	// Deadline built here rather than at function entry: the provider round-trip above runs on its own
 	// context and a slow or rate-limited relay can burn most of b.Timeout, so a context created at entry
-	// could already be expired by the time the fallback reaches the healthy primary (#1629).
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	// could already be expired by the time the fallback reaches the healthy primary (#1629). What it
+	// gets is the rest of the request's budget, not a fresh one - both legs are configured from
+	// rpc_timeout, so a full one let a blackholing relay double the request's wall time and hold a
+	// websocket pending-request slot for twice as long, on the endpoint the wallet calls per keystroke.
+	ctx, cancel := context.WithTimeout(context.Background(), b.remainingEstimateTimeout(started))
 	defer cancel()
 	return b.Client.EstimateGas(ctx, msg)
+}
+
+// minEstimateFallbackTimeout is what the primary estimate keeps even when the relay leg consumed the
+// whole request budget. Without a floor a slow relay would leave the fallback pre-expired, which is the
+// failure the deadline placement above exists to avoid.
+const minEstimateFallbackTimeout = 5 * time.Second
+
+// remainingEstimateTimeout returns what is left of the request's budget since started, floored at
+// minEstimateFallbackTimeout.
+func (b *EthereumRPC) remainingEstimateTimeout(started time.Time) time.Duration {
+	if remaining := b.Timeout - time.Since(started); remaining > minEstimateFallbackTimeout {
+		return remaining
+	}
+
+	return minEstimateFallbackTimeout
 }
 
 // observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
