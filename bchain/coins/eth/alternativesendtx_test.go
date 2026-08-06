@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2847,5 +2848,87 @@ func TestAlternativeSendTxProviderUndecodableReplacementIsCached(t *testing.T) {
 	}
 	if sendCount != 2 {
 		t.Errorf("relay sends = %d, want 2", sendCount)
+	}
+}
+
+// TestAlternativeSendTxProviderShutdownDrainsFetchBacks pins that shutdown waits out the fetch-backs
+// already in flight. A fetch-back that outlives it reaches cacheMempoolTransaction and pushes a NewTx
+// through the wrapped mempool - after the public server has closed and into the deferred database
+// close - and its own work is abandoned mid-flight without being counted anywhere.
+func TestAlternativeSendTxProviderShutdownDrainsFetchBacks(t *testing.T) {
+	release := make(chan struct{})
+	var finished atomic.Bool
+	provider := &AlternativeSendTxProvider{
+		rpcTimeout: time.Second,
+		stop:       make(chan struct{}),
+	}
+	if !provider.inBackground(backgroundExpose, func() {
+		<-release
+		finished.Store(true)
+	}) {
+		t.Fatal("fetch-back was not started")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		provider.shutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("shutdown returned while a fetch-back was still in flight")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown did not return after the fetch-back finished")
+	}
+	if !finished.Load() {
+		t.Error("shutdown returned before the fetch-back completed its work")
+	}
+}
+
+// TestAlternativeSendTxProviderShutdownDrainIsBounded pins the drain's deadline: an HTTP rpc.Client's
+// Close is a no-op, so a probe already issued cannot be cancelled and a drain that waited for it
+// unconditionally would hang shutdown for as long as the relay does.
+func TestAlternativeSendTxProviderShutdownDrainIsBounded(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+	provider := &AlternativeSendTxProvider{
+		rpcTimeout: 10 * time.Millisecond,
+		stop:       make(chan struct{}),
+	}
+	if !provider.inBackground(backgroundExpose, func() { <-release }) {
+		t.Fatal("fetch-back was not started")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		provider.shutdown()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("shutdown blocked on a fetch-back that never returns")
+	}
+}
+
+// TestAlternativeSendTxProviderStartBackgroundRefusesAfterShutdown pins that the shutdown check is
+// taken under the same mutex as the counter, so a send racing shutdown cannot pass the check and then
+// spawn a goroutine the drain has already stopped waiting for.
+func TestAlternativeSendTxProviderStartBackgroundRefusesAfterShutdown(t *testing.T) {
+	provider := &AlternativeSendTxProvider{rpcTimeout: time.Second, stop: make(chan struct{})}
+	provider.shutdown()
+
+	if provider.inBackground(backgroundExpose, func() { t.Error("fetch-back ran after shutdown") }) {
+		t.Error("inBackground accepted work after shutdown")
+	}
+	if provider.exposeCount != 0 || provider.backgroundCount != 0 {
+		t.Errorf("in-flight counters = (%d, %d), want (0, 0)", provider.exposeCount, provider.backgroundCount)
 	}
 }
