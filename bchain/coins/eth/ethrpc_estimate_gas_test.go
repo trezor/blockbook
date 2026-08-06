@@ -13,8 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// countingEstimateGasServer answers eth_estimateGas with a fixed hex gas value and counts how many
-// times it was hit, so a test can assert whether a given path (provider vs. primary) was consulted.
+// countingEstimateGasServer answers eth_estimateGas with a fixed hex gas value and counts hits, so a
+// test can tell which path - provider or primary - was consulted.
 func countingEstimateGasServer(t *testing.T, gasHex string) (*httptest.Server, *int32) {
 	t.Helper()
 	var hits int32
@@ -29,9 +29,8 @@ func countingEstimateGasServer(t *testing.T, gasHex string) (*httptest.Server, *
 	return server, &hits
 }
 
-// newEstimateGasTestRPC wires an EthereumRPC whose primary Client points at primaryURL and whose
-// alternative send-tx provider points at providerURL, so a routing decision is observable by which
-// server receives the eth_estimateGas hit.
+// newEstimateGasTestRPC points the primary Client at primaryURL and the alternative send-tx provider
+// at providerURL, so the routing decision shows up as which server receives the hit.
 func newEstimateGasTestRPC(t *testing.T, primaryURL, providerURL string) *EthereumRPC {
 	t.Helper()
 	primaryRPC, err := rpc.DialContext(context.Background(), primaryURL)
@@ -51,10 +50,9 @@ func newEstimateGasTestRPC(t *testing.T, primaryURL, providerURL string) *Ethere
 	}
 }
 
-// TestEthereumTypeEstimateGasSkipsProviderForNonRecentSender is the core of #1629: a sender that has
-// not recently sent a private transaction through the alternative provider must not have its gas
-// estimate routed there - it goes straight to the primary backend, so the hot estimateFee endpoint
-// does not burn the provider's rate-limit quota.
+// TestEthereumTypeEstimateGasSkipsProviderForNonRecentSender is the core of #1629: a sender with no
+// recent private transaction must not have its estimate routed to the provider, so the hot estimateFee
+// endpoint does not burn the provider's rate-limit quota.
 func TestEthereumTypeEstimateGasSkipsProviderForNonRecentSender(t *testing.T) {
 	primary, primaryHits := countingEstimateGasServer(t, "0x5208")
 	provider, providerHits := countingEstimateGasServer(t, "0x9999")
@@ -78,9 +76,9 @@ func TestEthereumTypeEstimateGasSkipsProviderForNonRecentSender(t *testing.T) {
 	}
 }
 
-// TestEthereumTypeEstimateGasRoutesRecentSenderToProvider confirms the provider path is preserved
-// for the case it exists for: a sender with a recent private transaction is routed to the provider
-// URL that accepted its send (see nonceURL), which may know a pending tx the primary does not.
+// TestEthereumTypeEstimateGasRoutesRecentSenderToProvider keeps the provider path for the case it
+// exists for: a recent private sender goes to the URL that accepted its send (see nonceURL), which
+// may know a pending tx the primary does not.
 func TestEthereumTypeEstimateGasRoutesRecentSenderToProvider(t *testing.T) {
 	primary, primaryHits := countingEstimateGasServer(t, "0x5208")
 	provider, providerHits := countingEstimateGasServer(t, "0x9999")
@@ -111,8 +109,8 @@ func TestEthereumTypeEstimateGasRoutesRecentSenderToProvider(t *testing.T) {
 	}
 }
 
-// TestEthereumTypeEstimateGasFallsBackWhenProviderFails checks that a provider error is not fatal:
-// a recent sender whose provider call fails still gets an estimate from the primary backend.
+// TestEthereumTypeEstimateGasFallsBackWhenProviderFails pins that a provider error is not fatal to the
+// estimate.
 func TestEthereumTypeEstimateGasFallsBackWhenProviderFails(t *testing.T) {
 	primary, primaryHits := countingEstimateGasServer(t, "0x5208")
 	// a provider server that always errors the JSON-RPC call
@@ -138,9 +136,8 @@ func TestEthereumTypeEstimateGasFallsBackWhenProviderFails(t *testing.T) {
 	}
 }
 
-// TestEthereumTypeEstimateGasFallsBackWhenProviderReturnsMalformedResult confirms a provider that
-// answers without a transport error but with a non-decodable gas value is treated as a failure:
-// the estimate falls back to the primary backend rather than surfacing the decode error.
+// TestEthereumTypeEstimateGasFallsBackWhenProviderReturnsMalformedResult treats a successful response
+// carrying a non-decodable gas value as a provider failure: fall back, do not surface the decode error.
 func TestEthereumTypeEstimateGasFallsBackWhenProviderReturnsMalformedResult(t *testing.T) {
 	primary, primaryHits := countingEstimateGasServer(t, "0x5208")
 	// a provider that returns a non-hex string result for eth_estimateGas
@@ -166,8 +163,8 @@ func TestEthereumTypeEstimateGasFallsBackWhenProviderReturnsMalformedResult(t *t
 	}
 }
 
-// TestEthereumTypeEstimateGasNoFromUsesPrimary confirms an estimate without a sender takes the
-// primary path - the gate cannot apply without a from address.
+// TestEthereumTypeEstimateGasNoFromUsesPrimary: without a from address the gate cannot apply, so the
+// estimate takes the primary path.
 func TestEthereumTypeEstimateGasNoFromUsesPrimary(t *testing.T) {
 	primary, primaryHits := countingEstimateGasServer(t, "0x5208")
 	provider, providerHits := countingEstimateGasServer(t, "0x9999")

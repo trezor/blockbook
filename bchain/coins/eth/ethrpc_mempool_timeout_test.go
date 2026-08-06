@@ -238,10 +238,9 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 }
 
 // TestCreateMempoolRejectsInvertedRetention pins that an inverted pair fails startup rather than
-// warning. Inverted, the wrapped mempool's timeout sweep drops a private transaction's address index
-// while the provider cache keeps serving its body as pending, and nothing reconciles the two - the
-// #1573 symptom, arrived at silently. Only an explicit mempoolTxTimeout can get there, since the
-// default is derived from the cache retention.
+// warning: inverted, the mempool's timeout sweep drops a private transaction's address index while the
+// cache keeps serving its body as pending, the #1573 symptom arrived at silently. Only an explicit
+// mempoolTxTimeout can get there, since the default is derived from the cache retention.
 func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
@@ -284,8 +283,8 @@ func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
 				t.Fatalf("CreateMempool() error = %v", err)
 			}
 			if tt.wantError {
-				// a rejected pair must not leave a mempool behind: the second call would return it
-				// with the provider never wired to it, which is the failure the check exists to stop
+				// a rejected pair must not leave a mempool behind, or a second call hands it out with
+				// the provider never wired to it
 				if b.Mempool != nil {
 					t.Fatal("rejected configuration left a mempool behind")
 				}

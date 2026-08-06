@@ -23,8 +23,7 @@ import (
 
 // storedTx is one entry of the alternative-provider pending cache. Its tx body is IMMUTABLE once
 // published into mempoolTxs: nothing writes through the pointer and GetTransaction hands out a copy,
-// which is what makes the nine reads of it race-free - a body is fully built before publication, and
-// publication happens under mempoolTxsMux. Mutating a body in place reopens all of them at once.
+// which is what makes every read of it race-free. Mutating a body in place reopens all of them at once.
 type storedTx struct {
 	tx        *bchain.RpcTransaction
 	time      uint32
@@ -58,22 +57,19 @@ const alternativeMempoolTxCheckPeriod = time.Minute
 
 // alternativeNonceRoutingTimeout caps how long after an accepted send the sender's eth_getTransactionCount
 // and eth_estimateGas lookups keep being routed to the relay. It is deliberately shorter than the cache
-// retention, which used to drive it: the retention now spans the whole window a private tx can still
-// land, and over that window routing buys nothing a wallet can observe. The cached transaction already
-// carries the pending nonce, and the floor is applied to the primary RPC's answer too (see
-// EthereumTypeGetNonces), so a released sender still gets the same nonce - while eth_estimateGas is
-// called on every send-form keystroke, which is how the relay's rate quota was exhausted in #1629.
-// What the routing window still covers is the minutes right after a send, when a cache entry can be
-// missing and the relay's own view is the only one that has the transaction.
+// retention: a released sender still gets the same nonce, because the cached transaction carries it and
+// the floor is applied to the primary RPC's answer too (see EthereumTypeGetNonces), while eth_estimateGas
+// is called on every send-form keystroke, which is how the relay's rate quota was exhausted in #1629. The
+// window still covers the minutes right after a send, when a cache entry can be missing and only the
+// relay has the transaction.
 const alternativeNonceRoutingTimeout = 15 * time.Minute
 
-// probeInterval returns how often reconcile re-asks the relay about a cached entry of the given age.
-// The tick stays at alternativeMempoolTxCheckPeriod; this only decides which entries it probes. A
-// young entry is where the answer still changes - it is about to mine, or its nonce is about to be
-// consumed by something else - so it is probed every cycle. An entry that has waited an hour is
-// waiting on a builder, and re-asking sixty times an hour buys a quarter-hour of eviction latency at
-// sixty times the relay quota, each probe a fresh dial (see callHttpRawResult) and, through
-// transactionSupersededByNonce, an eth_getTransactionCount to every configured URL.
+// probeInterval returns how often reconcile re-asks the relay about a cached entry of the given age; the
+// tick itself stays at alternativeMempoolTxCheckPeriod. A young entry is where the answer still changes
+// (about to mine, or its nonce about to be consumed), so it is probed every cycle. An entry that has
+// waited an hour is waiting on a builder, where probing every cycle buys a quarter-hour of eviction
+// latency at sixty times the relay quota: a fresh dial per probe plus, through
+// transactionSupersededByNonce, an eth_getTransactionCount per URL.
 func probeInterval(age time.Duration) time.Duration {
 	switch {
 	case age < 10*time.Minute:
@@ -86,19 +82,16 @@ func probeInterval(age time.Duration) time.Duration {
 }
 
 // maxBackgroundFetchBacks and maxExposeFetchBacks bound the post-send fetch-backs in flight. The send
-// path no longer waits for its own, so in-flight work is no longer bounded by in-flight requests and
-// needs an explicit cap; a hanging relay holds each slot for len(urls) * rpcTimeout, so shedding is
-// near-total while it lasts. The allowances are separate because a refused refresh loses nothing while
-// a refused expose loses the send (see the two call sites), and one shared allowance let ordinary
-// refresh traffic starve the exposing one.
+// path no longer waits for its own, so in-flight work is no longer bounded by in-flight requests. The
+// allowances are separate because a refused refresh loses nothing while a refused expose loses the send
+// (see the two call sites), and one shared allowance let refresh traffic starve the exposing one.
 const (
 	maxBackgroundFetchBacks = 16
 	maxExposeFetchBacks     = 16
 )
 
-// backgroundKind selects which allowance a fetch-back draws on: backgroundRefresh for the ones that
-// only replace a cached body, backgroundExpose for the one that is the sole thing able to expose an
-// accepted send.
+// backgroundKind selects which allowance a fetch-back draws on: backgroundRefresh for the ones that only
+// replace a cached body, backgroundExpose for the one that is the sole thing able to expose a send.
 type backgroundKind int
 
 const (
@@ -174,11 +167,10 @@ func (p *AlternativeSendTxProvider) SetupMempool(mempool *bchain.MempoolEthereum
 	}
 }
 
-// SendRawTransaction sends raw transaction to alternative providers. A wallet waits for this call, and
-// its own deadline is what turns a slow relay into a transaction the user is told failed while it is on
-// its way to the chain - after which a re-send at the next nonce pays the recipient twice. So the
-// broadcast to every relay runs concurrently (wall time = slowest URL, not their sum) and the
-// post-send fetch-back is not waited for at all.
+// SendRawTransaction sends raw transaction to alternative providers. A wallet waits for this call, and a
+// relay slow past the wallet's deadline means a transaction the user is told failed while it is on its
+// way to the chain - a re-send at the next nonce then pays the recipient twice. So the broadcast to every
+// relay runs concurrently and the post-send fetch-back is not waited for at all.
 func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, error) {
 	var txid string
 	var retErr error
@@ -189,11 +181,9 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// later "my tx vanished" or nonce-gap report has to be reconciled against
 	sent, decErr := decodeAlternativeSendTx(hex)
 
-	// Broadcasting to every configured relay is deliberate redundancy, but it must not cost
-	// len(urls) * rpcTimeout in the worst case: one unresponsive relay used to hold up the answer to
-	// the wallet for its full timeout before the next URL was even tried. Results are collected in
-	// URL order below, so the aggregation - and which URL counts as the accepting one - is exactly
-	// as deterministic as the sequential loop it replaces.
+	// Fanning out rather than looping keeps the wallet's answer off len(urls) * rpcTimeout. Results are
+	// collected in URL order below, so the aggregation - and which URL counts as the accepting one -
+	// stays as deterministic as the sequential loop it replaces.
 	type sendResult struct {
 		txid string
 		err  error
@@ -206,8 +196,8 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			// A relay broadcast must not be able to take the process down; the websocket/HTTP request
-			// handler that called us cannot recover a panic raised in this goroutine.
+			// a panic here would take the process down: the calling request handler's own recover
+			// cannot reach this goroutine
 			defer func() {
 				if r := recover(); r != nil {
 					glog.Errorf("eth_sendRawTransaction to %s panicked: %v", providerLabel(p.urls[i]), r)
@@ -254,8 +244,7 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	// the transaction was decoded once at the top of the send and the result is reused for
 	// recent-sender registration, the RBF eviction and the cache entry below - a single ECDSA
 	// sender recovery instead of one per consumer. On decode failure gen stays 0 and neither
-	// eviction nor local caching runs, but the transaction is still handed to the fetch-back
-	// with gen 0, exactly as before.
+	// eviction nor local caching runs, but the transaction is still handed to the fetch-back.
 	var gen uint64
 	if decErr != nil {
 		glog.Warningf("cannot decode accepted transaction: %v", decErr)
@@ -285,11 +274,9 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 			p.inBackground(backgroundRefresh, func() { p.probeSentTransaction(sent.txid) })
 		} else {
 			// Nothing was cached (the raw hex did not decode), so here the fetch-back is the only
-			// thing that can expose the transaction at all and keeps its create semantics. Dropping
-			// it therefore loses the accepted send: nothing serves it, nothing indexes it and the
-			// pending-nonce floor does not rise, which is the nonce-reuse precursor - so report it
-			// under the same counter as a relay that does not surface what it accepted, rather than
-			// leaving the one unobservable variant of that failure.
+			// thing that can expose the transaction. Dropping it loses the accepted send: nothing
+			// serves it, nothing indexes it and the pending-nonce floor does not rise, which is the
+			// nonce-reuse precursor - so count it like a relay that does not surface what it accepted.
 			if !p.inBackground(backgroundExpose, func() { p.handleMempoolTransaction(txid, gen) }) && !p.stopped() {
 				p.observeSendNotSurfaced("dropped")
 			}
@@ -373,11 +360,10 @@ func decodeRawTx(rawTxHex string) decodedTx {
 	return decodedTx{tx: &tx, sender: sender, err: err}
 }
 
-// inBackground runs the post-send fetch-back off the send path, so the wallet's answer does not wait
-// for a relay round-trip it cannot observe the outcome of. It reports whether it took the work: it
-// declines at shutdown and drops beyond the per-kind allowance rather than queueing, because a queue
-// either grows unbounded or pushes back into the wallet's deadline. What a drop costs differs per call
-// site, so the callers decide what to make of a false return.
+// inBackground runs the post-send fetch-back off the send path, so the wallet's answer does not wait for
+// a relay round-trip it cannot observe the outcome of. It reports whether it took the work: it declines
+// at shutdown and drops beyond the per-kind allowance rather than queueing, because a queue either grows
+// unbounded or pushes back into the wallet's deadline. What a drop costs differs per call site.
 func (p *AlternativeSendTxProvider) inBackground(kind backgroundKind, fetchBack func()) bool {
 	if !p.startBackground(kind) {
 		return false
@@ -396,7 +382,6 @@ func (p *AlternativeSendTxProvider) inBackground(kind backgroundKind, fetchBack 
 	return true
 }
 
-// inFlight reports the fetch-backs currently running, per kind.
 func (p *AlternativeSendTxProvider) inFlight(kind backgroundKind) int {
 	if kind == backgroundExpose {
 		return p.exposeCount
@@ -404,9 +389,9 @@ func (p *AlternativeSendTxProvider) inFlight(kind backgroundKind) int {
 	return p.backgroundCount
 }
 
-// startBackground reserves one of the maxBackgroundFetchBacks slots, reporting whether the caller got
-// one. A plain sync.WaitGroup cannot serve here: Add would race the Wait in waitForRefreshes (the
-// documented reuse misuse, which panics and leaves the counter stuck), and it could not cap anything.
+// startBackground reserves one of the per-kind fetch-back slots, reporting whether the caller got one. A
+// plain sync.WaitGroup cannot serve here: Add would race the Wait in waitForRefreshes (the documented
+// reuse misuse, which panics and leaves the counter stuck), and it could not cap anything.
 func (p *AlternativeSendTxProvider) startBackground(kind backgroundKind) bool {
 	if p.stopped() {
 		return false
@@ -432,9 +417,9 @@ func (p *AlternativeSendTxProvider) startBackground(kind backgroundKind) bool {
 	return true
 }
 
-// stopped reports whether shutdown has been requested. It keeps a fetch-back declined at shutdown from
-// being reported as a lost send: the process is going down, and an alert on the nonce-reuse precursor
-// must not fire on every restart that catches a send in flight.
+// stopped reports whether shutdown has been requested. A fetch-back declined at shutdown must not be
+// reported as a lost send: an alert on the nonce-reuse precursor must not fire on every restart that
+// catches a send in flight.
 func (p *AlternativeSendTxProvider) stopped() bool {
 	if p.stop == nil {
 		return false
@@ -461,7 +446,7 @@ func (p *AlternativeSendTxProvider) finishBackground(kind backgroundKind) {
 }
 
 // waitForRefreshes blocks until every background fetch-back has finished. For tests, which need a
-// deterministic cache state after a send; production code never has to wait for a refresh.
+// deterministic cache state after a send; production never waits.
 func (p *AlternativeSendTxProvider) waitForRefreshes() {
 	p.backgroundMux.Lock()
 	defer p.backgroundMux.Unlock()
@@ -474,11 +459,11 @@ func (p *AlternativeSendTxProvider) waitForRefreshes() {
 }
 
 // probeSentTransaction asks the relay about a transaction the send path already cached from its signed
-// bytes, and writes nothing. Adopting the relay's body would buy nothing (the signed bytes carry it
-// all) and could serve its hash as the entry's identity, undoing the send path's own txid override.
-// Evicting on a mined answer would be premature: the relay can see the block before Blockbook indexes
-// it, and eviction clears the address index too, so the transaction would briefly be in neither store.
-// Block sync removes it as sync_removed; reconcile is the backstop.
+// bytes, and writes nothing. Adopting the relay's body would buy nothing (the signed bytes carry it all)
+// and could serve its hash as the entry's identity, undoing the send path's own txid override. Evicting
+// on a mined answer would be premature: the relay can see the block before Blockbook indexes it, and
+// eviction clears the address index too, so the transaction would briefly be in neither store; block
+// sync removes it as sync_removed, with reconcile as the backstop.
 func (p *AlternativeSendTxProvider) probeSentTransaction(txid string) {
 	tx, found := p.fetchMempoolTransaction(txid)
 	if !found {
@@ -489,8 +474,7 @@ func (p *AlternativeSendTxProvider) probeSentTransaction(txid string) {
 	}
 }
 
-// alternativeSendTx is everything the send path derives from an accepted raw transaction: the
-// (from, nonce) slot it fills, its txid, and a pending-transaction body to cache for it.
+// alternativeSendTx is everything the send path derives from an accepted raw transaction.
 type alternativeSendTx struct {
 	from  ethcommon.Address
 	nonce uint64
@@ -508,11 +492,10 @@ func sentTxLogString(sent *alternativeSendTx, decErr error) string {
 }
 
 // decodeAlternativeSendTx derives everything the send path needs from the signed bytes in one decode,
-// taking the chain id from the transaction itself. Sender and nonce identify the slot the send fills;
-// the txid is the hash of those bytes, i.e. what the chain will show whatever the relay echoes; and the
-// body is a complete pending transaction, so an accepted send can be surfaced and indexed without the
-// relay returning it. Encoding follows eth_getTransactionByHash: lower-case hex addresses, minimal
-// quantities, gasPrice carrying the fee cap for typed fee-market transactions.
+// taking the chain id from the transaction itself: the (from, nonce) slot the send fills, the txid the
+// chain will show whatever the relay echoes, and a complete pending body, so an accepted send can be
+// surfaced and indexed without the relay returning it. Encoding follows eth_getTransactionByHash:
+// lower-case hex addresses, minimal quantities, gasPrice carrying the fee cap for typed fee-market txs.
 func decodeAlternativeSendTx(rawTxHex string) (*alternativeSendTx, error) {
 	var tx types.Transaction
 	if err := tx.UnmarshalBinary(ethcommon.FromHex(rawTxHex)); err != nil {
@@ -520,8 +503,7 @@ func decodeAlternativeSendTx(rawTxHex string) (*alternativeSendTx, error) {
 	}
 	// LatestSignerForChainID PANICS for a chain id of zero or nil, which is what an unprotected
 	// (pre-EIP-155) legacy transaction decodes to - and a panic here would abort the response to a
-	// wallet whose transaction the relay has already accepted, the exact failure this path exists to
-	// prevent. Such a transaction is Homestead-signed, so derive its sender with that signer.
+	// wallet whose transaction the relay has already accepted. Such a transaction is Homestead-signed.
 	var signer types.Signer = types.HomesteadSigner{}
 	if chainID := tx.ChainId(); chainID != nil && chainID.Sign() > 0 {
 		signer = types.LatestSignerForChainID(chainID)
@@ -553,9 +535,8 @@ func decodeAlternativeSendTx(rawTxHex string) (*alternativeSendTx, error) {
 
 // routingTimeout is how long after an accepted send the sender's nonce and gas-estimate lookups keep
 // being routed to the relay: alternativeNonceRoutingTimeout, or the cache retention when that is
-// configured shorter, so a deployment that shortens the retention shortens routing with it. Computed
-// rather than stored so a provider built by a test from a struct literal cannot end up with a zero
-// horizon that silently routes nothing.
+// configured shorter. Computed rather than stored so a provider built by a test from a struct literal
+// cannot end up with a zero horizon that silently routes nothing.
 func (p *AlternativeSendTxProvider) routingTimeout() time.Duration {
 	if p.mempoolTxsTimeout < alternativeNonceRoutingTimeout {
 		return p.mempoolTxsTimeout
@@ -563,12 +544,11 @@ func (p *AlternativeSendTxProvider) routingTimeout() time.Duration {
 	return alternativeNonceRoutingTimeout
 }
 
-// registerSuccessfulSend records the sender of an accepted transaction so useForNonces routes its
-// nonce lookups to the accepting URL - the one provider guaranteed to know the tx - for the routing
-// window. Expired entries of both maps are swept on the way. It returns the send generation assigned to
-// this submission, which the caller must carry to the cache entry it creates so releaseRecentSender can
-// order evictions against later sends, and records the (sender, nonce) slot so the acceptance survives
-// a fetch-back that produces no cache entry (see slotSupersededBy).
+// registerSuccessfulSend records the sender of an accepted transaction so useForNonces routes its nonce
+// lookups to the accepting URL - the one provider guaranteed to know the tx - for the routing window,
+// and records the (sender, nonce) slot so the acceptance survives a fetch-back that produces no cache
+// entry (see slotSupersededBy). The returned send generation must be carried to the cache entry the
+// caller creates, so releaseRecentSender can order evictions against later sends.
 func (p *AlternativeSendTxProvider) registerSuccessfulSend(sender ethcommon.Address, nonce uint64, acceptedURL string) uint64 {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
@@ -606,20 +586,19 @@ func (p *AlternativeSendTxProvider) sweepRecentSendsLocked() time.Time {
 }
 
 // sweepRecentSends is the reconcile loop's call into the sweep above. Without it the maps shrink only
-// when a new send arrives, so an instance that goes quiet after a burst holds every entry until the
-// next send - which the cache-retention-length horizons make a long time.
+// when a new send arrives, so an instance that goes quiet after a burst holds every entry until the next
+// one.
 func (p *AlternativeSendTxProvider) sweepRecentSends() {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
 	p.sweepRecentSendsLocked()
 }
 
-// slotSupersededBy reports whether a send strictly newer than generation gen has already been
-// accepted for the (from, nonce) slot. It makes the acceptance-time retirement in SendRawTransaction
-// durable: that retirement scans only the cache, so it finds nothing while the predecessor's own
-// fetch-back is still in flight, and if the replacement's fetch-back then fails (the Blink drop-mode
-// case) no cache entry ever exists to order the predecessor against - which left it surfaced as
-// pending until the cache timeout (#1573).
+// slotSupersededBy reports whether a send strictly newer than gen has already been accepted for the
+// (from, nonce) slot. It makes SendRawTransaction's acceptance-time retirement durable: that retirement
+// scans only the cache, so it finds nothing while the predecessor's own fetch-back is still in flight,
+// and if the replacement's fetch-back then fails (the Blink drop-mode case) no cache entry ever exists to
+// order the predecessor against - which left it surfaced as pending until the cache timeout (#1573).
 func (p *AlternativeSendTxProvider) slotSupersededBy(from ethcommon.Address, nonce uint64, gen uint64) bool {
 	slot := nonceSlot{addr: from, nonce: nonce}
 	p.recentSendersMux.Lock()
@@ -636,16 +615,13 @@ func (p *AlternativeSendTxProvider) slotSupersededBy(from ethcommon.Address, non
 }
 
 // useForNonces reports whether nonce and gas-estimate lookups for addr should be routed to the
-// alternative provider. Only addresses that sent a transaction through it within the routing
-// window (see routingTimeout) can have a pending transaction the primary RPC does not know
-// about AND no cache entry carrying it; for everybody else the primary is authoritative and
-// the provider round-trip is pure waste of its rate-limit quota. Senders whose cached
-// transactions have all settled are released before the window ends (see releaseRecentSender).
-// Accepted limitations: a restart wipes the map, a transaction still pending past the window
-// - after which the cache and the pending-nonce floor, not the relay, are what keep its nonce
-// reserved - and private transactions submitted outside this Blockbook instance, which
-// includes sends accepted by another replica in a load-balanced deployment without request
-// affinity (wallet websocket flows are naturally sticky to one instance; see docs/env.md).
+// alternative provider. Only an address that sent through it within the routing window (see
+// routingTimeout) can have a pending transaction the primary RPC does not know about AND no cache entry
+// carrying it; for everybody else the primary is authoritative and the provider round-trip is pure waste
+// of its rate-limit quota. Accepted limitations: a restart wipes the map, a transaction still pending
+// past the window - after which the cache and the pending-nonce floor, not the relay, keep its nonce
+// reserved - and sends accepted outside this instance, including by another replica in a load-balanced
+// deployment without request affinity (see docs/env.md).
 func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
@@ -660,17 +636,14 @@ func (p *AlternativeSendTxProvider) useForNonces(addr ethcommon.Address) bool {
 	return true
 }
 
-// releaseRecentSender drops the sender's nonce-routing entry once its last cached
-// transaction left the alternative mempool cache (mined, superseded, replaced or timed
-// out), so address polling stops consuming the alternative provider's quota as soon as no
-// private transaction remains pending. The entry is kept when its send generation is newer
-// than the evicted transaction's: the sender submitted again after that transaction was
-// cached (even within the same wall-clock second) and the newer transaction may not have a
-// cache entry of its own (e.g. when the post-send fetch-back failed).
-// Residual risk, accepted: an UNCACHED send OLDER than the evicted transaction cannot be
-// represented and loses its routing with the release. It needs a failed fetch-back, and
-// mined evictions largely exclude it anyway - the sender's nonces are sequential, so an
-// older transaction cannot still be pending once a newer one mined.
+// releaseRecentSender drops the sender's nonce-routing entry once its last cached transaction left the
+// cache (mined, superseded, replaced or timed out), so address polling stops consuming the provider's
+// quota before the routing window ends. The entry is kept when its send generation is newer than the
+// evicted transaction's: the sender submitted again after that transaction was cached (even within the
+// same wall-clock second) and the newer transaction may have no cache entry of its own. Residual risk,
+// accepted: an UNCACHED send OLDER than the evicted transaction cannot be represented and loses its
+// routing here - it needs a failed fetch-back, and sequential nonces mean an older transaction cannot
+// still be pending once a newer one mined.
 func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address, evictedTxGen uint64) {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
@@ -685,8 +658,8 @@ func (p *AlternativeSendTxProvider) releaseRecentSender(sender ethcommon.Address
 }
 
 // cachedNoncesFor returns the account nonces of the private transactions the cache holds for addr.
-// Decoding through txSenderAndNonce keeps a body with no sender out of the answer; the previous
-// inline scan ran it through HexToAddress and folded it into the zero address's floor.
+// Decoding through txSenderAndNonce keeps a body with no sender out of the answer instead of folding it
+// into the zero address's floor.
 func (p *AlternativeSendTxProvider) cachedNoncesFor(addr ethcommon.Address) map[uint64]struct{} {
 	nonces := make(map[uint64]struct{})
 	p.mempoolTxsMux.Lock()
@@ -701,20 +674,18 @@ func (p *AlternativeSendTxProvider) cachedNoncesFor(addr ethcommon.Address) map[
 	return nonces
 }
 
-// raiseToPendingFloor advances the backend's pending nonce across the CONTIGUOUS run of cached
-// private nonces that starts at it, and reports whether the cache also holds a nonce above that run.
-// Blockbook exposes the cached txs as pending, so answering below the run would hand a wallet the
-// nonce of one that is in flight. Answering above a hole is the opposite failure and the one #1675
-// describes: the cache can hold N+1 while nothing fills N - an accepted send that never reached the
-// cache, or a reorg re-exposing the slot - and a wallet given N+2 there queues every later send
-// behind a nonce that may never be consumed. The old floor was a blind max(cached)+1, which could
-// only make that answer. The walk yields pending <= floor <= pending+len(cached) instead, so the
-// answer is always consistent with what Blockbook itself displays.
+// raiseToPendingFloor advances the backend's pending nonce across the CONTIGUOUS run of cached private
+// nonces that starts at it, and reports whether the cache also holds a nonce above that run. Blockbook
+// exposes the cached txs as pending, so answering below the run would hand a wallet the nonce of one
+// that is in flight. Answering above a hole is the opposite failure and the one #1675 describes: the
+// cache can hold N+1 while nothing fills N - an accepted send that never reached the cache, or a reorg
+// re-exposing the slot - and a wallet given N+2 there queues every later send behind a nonce that may
+// never be consumed, which is all a blind max(cached)+1 floor could answer. The walk yields
+// pending <= floor <= pending+len(cached), always consistent with what Blockbook itself displays.
 //
-// The trade this accepts: an under-reporting backend now lowers the answer where max(cached)+1
-// happened to ride over it. That is the same input as a real hole with no way to tell them apart,
-// and its cost is one collision that resolves in a block, against a wallet stranded for the whole
-// cache retention.
+// The trade this accepts: an under-reporting backend now lowers the answer where max(cached)+1 rode
+// over it. That input is indistinguishable from a real hole, and costs one collision that resolves in
+// a block against a wallet stranded for the whole cache retention.
 func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, pending uint64) (uint64, bool) {
 	nonces := p.cachedNoncesFor(addr)
 	floor := pending
@@ -737,10 +708,9 @@ func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, 
 
 // handleMempoolTransaction fetches the transaction back from the alternative providers and caches it.
 // Reached only when the raw hex did not decode, which makes this the only thing that can expose the
-// transaction; everywhere else the entry exists and the fetch-back only probes. gen must be THIS
-// submission's generation rather than the sender's current one, which a concurrent send can have bumped
-// during the round-trip: stamping the newer one would let this entry's eviction release the sender's
-// routing while that newer transaction is still pending.
+// transaction. gen must be THIS submission's generation rather than the sender's current one, which a
+// concurrent send can have bumped during the round-trip: stamping the newer one would let this entry's
+// eviction release the sender's routing while that newer transaction is still pending.
 func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen uint64) (string, error) {
 	tx, found := p.fetchMempoolTransaction(txid)
 	if !found {
@@ -757,12 +727,9 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 	return txid, nil
 }
 
-// fetchMempoolTransaction asks the alternative providers for the transaction and reports whether any
-// of them returned it. A relay that accepted the send but does not return it is counted under
-// observeSendNotSurfaced: the transaction is still cached and indexed from its own signed bytes
-// (unless those did not decode - see handleMempoolTransaction), so this is not the nonce-reuse
-// precursor it used to be, but it does mean the entry cannot be reconciled against the relay's own
-// view of it and only the cache timeout can retire it (#1638 review).
+// fetchMempoolTransaction asks the alternative providers for the transaction and reports whether any of
+// them returned it. A relay that accepted the send but does not return it is counted under
+// observeSendNotSurfaced, which documents what that costs (#1638 review).
 func (p *AlternativeSendTxProvider) fetchMempoolTransaction(txid string) (*bchain.RpcTransaction, bool) {
 	tx, found, err := p.getTransactionFromProviders(txid)
 	if err != nil {
@@ -780,8 +747,8 @@ func (p *AlternativeSendTxProvider) fetchMempoolTransaction(txid string) (*bchai
 
 // cacheMempoolTransaction caches a pending transaction body under txid and indexes it in the wrapped
 // Blockbook mempool, ordering itself against concurrent sends for the same (from, nonce) slot through
-// the send generation gen. Reached from the send path with the body decoded from the signed bytes,
-// and from handleMempoolTransaction when those bytes did not decode.
+// the send generation gen. Reached from the send path, and from handleMempoolTransaction when the
+// signed bytes did not decode.
 func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bchain.RpcTransaction, gen uint64) {
 	from, nonce, decoded := txSenderAndNonce(tx)
 
@@ -791,14 +758,13 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 	}
 
 	if !p.insertMempoolTx(txid, tx, gen, from, nonce, decoded) {
-		// a newer replacement already occupies this nonce slot; do not cache or surface this one
+		// a newer replacement already occupies this nonce slot
 		return
 	}
 
-	// Retire any cached predecessor sharing this tx's sender and nonce. The send path already
-	// does this from the raw hex the moment the relay accepts the replacement (see
-	// SendRawTransaction, #1573); repeating it here is a harmless no-op in that flow and keeps the
-	// removal correct when handleMempoolTransaction is reached directly.
+	// Retire any cached predecessor sharing this tx's sender and nonce. The send path already does
+	// this at acceptance time (see SendRawTransaction, #1573); repeating it here is a no-op in that
+	// flow and covers the decode-failure path.
 	if decoded {
 		p.evictReplacedByNonce(from, nonce, txid, gen)
 	}
@@ -807,8 +773,8 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 		p.mempool.AddTransactionToMempool(txid)
 		// A concurrent higher-generation send for this slot can evict txid from both stores during the
 		// add above, which then re-inserts it into the wrapped mempool only - and reconcile walks just
-		// the provider cache, so that orphan would linger as "Unconfirmed" until the wrapped mempool sweep
-		// (#1573). Undo the add if the entry is gone. The lock covers only a map read, never a call.
+		// the provider cache, so that orphan would linger as "Unconfirmed" until the wrapped mempool
+		// sweep (#1573). The lock covers only a map read, never a call.
 		p.mempoolTxsMux.Lock()
 		_, stillCached := p.mempoolTxs[txid]
 		p.mempoolTxsMux.Unlock()
@@ -819,10 +785,9 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 }
 
 // insertMempoolTx inserts the entry unless a strictly newer send for the same (from, nonce) slot has
-// already cached its own, reporting whether it inserted. Deliberately a separate function: the unlock
-// is deferred, so a panic inside cannot leave mempoolTxsMux held - which, since the fetch-back moved
-// to a goroutine with a recover, would deadlock every send, read, reconcile and nonce-floor lookup
-// instead of crashing the process. It also lazily creates the map, the one panic it could hit.
+// already cached its own, reporting whether it inserted. Deliberately a separate function so the unlock
+// is deferred: a panic leaving mempoolTxsMux held would deadlock every send, read, reconcile and
+// nonce-floor lookup instead of crashing the process, since the fetch-back goroutine recovers panics.
 func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcTransaction, gen uint64, from ethcommon.Address, nonce uint64, decoded bool) bool {
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
@@ -847,9 +812,8 @@ func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcT
 	return true
 }
 
-// txSenderAndNonce decodes the sender address and account nonce of a cached RPC transaction,
-// reporting ok=false when either field is missing or unparsable so callers skip the entry rather
-// than act on a zero value.
+// txSenderAndNonce decodes the sender address and account nonce of a cached RPC transaction, reporting
+// ok=false when either is missing or unparsable so callers skip the entry rather than act on a zero value.
 func txSenderAndNonce(tx *bchain.RpcTransaction) (ethcommon.Address, uint64, bool) {
 	if tx == nil || tx.From == "" || tx.AccountNonce == "" {
 		return ethcommon.Address{}, 0, false
@@ -884,10 +848,8 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 		if !ok || cachedFrom != from || cachedNonce != nonce {
 			continue
 		}
-		// Keep any cached entry from a higher send generation. For keepGen==0 (this replacement's
-		// order is unknown) that still protects every generation-carrying replacement while evicting
-		// only other unordered (gen==0) predecessors. handleMempoolTransaction's staleness check uses
-		// the same comparison, so the two rules cannot disagree about a slot.
+		// see the doc comment; insertMempoolTx's staleness check uses the same comparison, so the two
+		// rules cannot disagree about a slot
 		if storedTx.gen > keepGen {
 			continue
 		}
@@ -897,9 +859,8 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 
 	for _, v := range victims {
 		glog.Infof("eth_sendRawTransaction replacing txid %s by %s", v.txid, keepTxid)
-		// Meter the fee-replacement exit only if this call is the one that removed the predecessor;
-		// the acceptance-time and handleMempoolTransaction passes can both target it, as can a
-		// concurrent reconcile eviction, so gating on the removal avoids double-counting rbf_replaced.
+		// Meter the exit only if this call is the one that removed the predecessor: the acceptance-time
+		// pass, the cacheMempoolTransaction pass and a concurrent reconcile eviction can all target it.
 		if p.removeMempoolTx(v.txid) {
 			p.observeMempoolReconciliation("rbf_replaced")
 			p.observeMempoolTxResidence("rbf_replaced", v.time)
@@ -924,8 +885,8 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 		if time.Unix(int64(storedTx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
 			// The reconcile loop's staleness timeout, reached on the read path first. It goes through
 			// removeMempoolTx so the wrapped mempool's address index is cleared too, or the expired tx
-			// stays listed as pending until the wrapped mempool sweep whenever the caller's own primary lookup
-			// errors instead of returning null. Metered only if this read is what removed it.
+			// stays listed as pending whenever the caller's own primary lookup errors instead of
+			// returning null.
 			if p.removeMempoolTx(txid) {
 				p.observeMempoolReconciliation("timeout")
 				p.observeMempoolTxResidence("timeout", storedTx.time)
@@ -936,9 +897,9 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 			return nil, false
 		}
 		// A copy, never the cached body: the caller passes it to EthTxToTx with fixEIP55=true, which
-		// rewrites From and To in place holding no lock - a data race against every reader here, and
-		// triggered by the send path on its own entry via AddTransactionToMempool. RpcTransaction is all
-		// strings, so this shallow copy is complete; deep-copy any reference-typed field added later.
+		// rewrites From and To in place holding no lock - a data race against every reader here.
+		// RpcTransaction is all strings, so this shallow copy is complete; deep-copy any
+		// reference-typed field added later.
 		body := *storedTx.tx
 		return &body, true
 	}
@@ -959,8 +920,7 @@ func (p *AlternativeSendTxProvider) watchMempoolTxs() {
 	}
 }
 
-// shutdown stops the background mempool reconciliation goroutine. Safe to call on a
-// nil receiver and more than once.
+// shutdown stops the background mempool reconciliation goroutine. Safe on a nil receiver and repeated.
 func (p *AlternativeSendTxProvider) shutdown() {
 	if p == nil || p.stop == nil {
 		return
@@ -1018,14 +978,11 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			continue
 		}
 
-		// The provider answered without error and the tx is not mined: it is either still reported as
-		// pending (known) or no longer surfaced by eth_getTransactionByHash (!known). If a different
-		// transaction has already consumed its nonce (e.g. a replacement submitted outside Blockbook),
-		// it can never be mined, so evict it deterministically instead of waiting for the timeout -
-		// regardless of whether the provider still surfaces it, because a spent nonce is a positive,
-		// irreversible on-chain fact. Only nonces strictly below the confirmed account nonce are
-		// treated as superseded; equal or higher nonces are still mineable (the next tx, or a gap
-		// waiting to be filled) and are left intact.
+		// The provider answered without error and the tx is not mined. A nonce already consumed by a
+		// different transaction (e.g. a replacement submitted outside Blockbook) means this one can never
+		// mine, so evict it deterministically rather than wait for the timeout - whether or not the
+		// provider still surfaces it, since a spent nonce is a positive, irreversible on-chain fact. Only
+		// nonces strictly below the confirmed account nonce count; equal or higher are still mineable.
 		if p.transactionSupersededByNonce(tx.tx.tx, confirmedNonces, confirmedNonceFailed) {
 			p.evictMempoolTx("nonce_superseded", tx.txid, tx.tx.time)
 			continue
@@ -1033,11 +990,10 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 
 		if !known {
 			// A null/empty eth_getTransactionByHash is NOT authoritative proof the tx is gone:
-			// Blink-style private/MEV relays stop surfacing a still-pending, still-mineable tx via
-			// eth_getTransactionByHash while it stays broadcast. Evicting on a single empty probe
-			// deleted the tx from both sender and recipient about a minute after send, even though it
-			// could still be mined. Defer eviction to the absolute cache timeout instead; mined and
-			// nonce_superseded above remain the only deterministic early evictions.
+			// Blink-style private/MEV relays stop surfacing a still-pending, still-mineable tx while
+			// it stays broadcast. Evicting on a single empty probe deleted the tx from both sender and
+			// recipient about a minute after send (#1573). Defer eviction to the absolute cache
+			// timeout; mined and nonce_superseded above stay the only deterministic early evictions.
 			if timedOut {
 				p.evictMempoolTx("provider_missing", tx.txid, tx.tx.time)
 				continue
@@ -1066,10 +1022,10 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 	p.setMempoolOldestAge(oldest)
 }
 
-// markProbed stamps this cycle onto the cache entry so probeInterval can pace the next probe. It
-// updates only an entry still identical to the snapshot the loop is working from, so a concurrent
-// eviction is never undone and a replacement cached in the meantime never inherits its predecessor's
-// probe schedule. The tx body is carried over untouched, keeping it immutable once published.
+// markProbed stamps this cycle onto the cache entry so probeInterval can pace the next probe. It updates
+// only an entry still identical to the snapshot the loop is working from, so a concurrent eviction is
+// never undone and a replacement cached in the meantime never inherits its predecessor's probe schedule.
+// The tx body is carried over untouched (see storedTx).
 func (p *AlternativeSendTxProvider) markProbed(txid string, snapshot storedTx) {
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
@@ -1089,10 +1045,8 @@ func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) 
 }
 
 // evictMempoolTx removes the cache entry and, only when this call actually removed it, records the
-// terminal reconcile decision plus the entry's residence. Gating on the removal keeps the count honest:
-// reconcile works off a cycle-start snapshot, so the read path or a concurrent RBF eviction may already
-// have removed and metered the same entry. Decisions that keep an entry use
-// observeMempoolReconciliation directly.
+// terminal reconcile decision plus the entry's residence: reconcile works off a cycle-start snapshot, so
+// the read path or a concurrent RBF eviction may already have removed and metered the same entry.
 func (p *AlternativeSendTxProvider) evictMempoolTx(action, txid string, addedUnix uint32) {
 	if !p.removeMempoolTx(txid) {
 		return
@@ -1102,9 +1056,9 @@ func (p *AlternativeSendTxProvider) evictMempoolTx(action, txid string, addedUni
 }
 
 // observeMempoolTxResidence records the age of a cache entry (seconds since it was broadcast) at the
-// moment it is evicted, labeled by the deciding action. This makes the non-deterministic lifetime of
-// an unconfirmed tx visible per eviction reason - e.g. provider_missing clustering near the timeout
-// rather than within minutes would show a premature-eviction regression like the one #1573 describes.
+// moment it is evicted, labeled by the deciding action, making the non-deterministic lifetime of an
+// unconfirmed tx visible per reason - provider_missing clustering within minutes rather than near the
+// timeout is the premature-eviction regression #1573 describes.
 func (p *AlternativeSendTxProvider) observeMempoolTxResidence(action string, addedUnix uint32) {
 	if p.metrics == nil || p.metrics.EthAlternativeMempoolTxResidence == nil {
 		return
@@ -1124,10 +1078,9 @@ func (p *AlternativeSendTxProvider) setMempoolCacheSize(size int) {
 	p.metrics.EthAlternativeMempoolCacheSize.Set(float64(size))
 }
 
-// setMempoolOldestAge records how long the oldest cached entry has lived (seconds since broadcast),
-// or 0 when the cache is empty. Sampled once per reconcile cycle alongside the cache size. A value
-// climbing toward the cache timeout at non-zero depth is the live stuck-tx signal the exit-only
-// residence histogram cannot show until an entry finally times out.
+// setMempoolOldestAge records how long the oldest cached entry has lived (seconds since broadcast), or 0
+// when the cache is empty. A value climbing toward the cache timeout at non-zero depth is the live
+// stuck-tx signal the exit-only residence histogram cannot show until an entry finally times out.
 func (p *AlternativeSendTxProvider) setMempoolOldestAge(oldestUnix uint32) {
 	if p.metrics == nil || p.metrics.EthAlternativeMempoolOldestAge == nil {
 		return
@@ -1141,12 +1094,11 @@ func (p *AlternativeSendTxProvider) setMempoolOldestAge(oldestUnix uint32) {
 	p.metrics.EthAlternativeMempoolOldestAge.Set(age)
 }
 
-// observeSendNotSurfaced counts a relay-accepted private send whose post-send fetch-back did not
-// surface it. For not_found and error the transaction is still cached and indexed from its own signed
-// bytes, so this is no longer the nonce-reuse precursor - it means the relay does not report back what
-// it accepted, so the entry can only be retired by the cache timeout. The dropped reason is the
-// exception: it is counted only where the raw hex did not decode and the refused fetch-back was the
-// one thing that could have exposed the send, so there it really is exposed nowhere.
+// observeSendNotSurfaced counts a relay-accepted private send whose post-send fetch-back did not surface
+// it. For not_found and error the transaction is still cached and indexed from its own signed bytes, so
+// it only means the relay does not report back what it accepted and the entry can be retired only by the
+// cache timeout. The dropped reason is the exception: there the raw hex did not decode and the refused
+// fetch-back was the one thing that could have exposed the send, so it really is exposed nowhere.
 func (p *AlternativeSendTxProvider) observeSendNotSurfaced(reason string) {
 	if p.metrics == nil || p.metrics.EthAlternativeSendNotSurfaced == nil {
 		return
@@ -1154,9 +1106,8 @@ func (p *AlternativeSendTxProvider) observeSendNotSurfaced(reason string) {
 	p.metrics.EthAlternativeSendNotSurfaced.With(common.Labels{"reason": reason}).Inc()
 }
 
-// transactionSupersededByNonce reports whether a different transaction has already consumed the
-// cached transaction's nonce, making it permanently unmineable. Confirmed-nonce lookups are memoized
-// per sender via resolved/failed so each sender is queried at most once per reconcile cycle.
+// transactionSupersededByNonce reports whether a different transaction has already consumed the cached
+// transaction's nonce, making it permanently unmineable. resolved/failed memoize the lookups per sender.
 func (p *AlternativeSendTxProvider) transactionSupersededByNonce(tx *bchain.RpcTransaction, resolved map[string]uint64, failed map[string]bool) bool {
 	if tx == nil || tx.From == "" || tx.AccountNonce == "" {
 		return false
@@ -1183,15 +1134,12 @@ func (p *AlternativeSendTxProvider) transactionSupersededByNonce(tx *bchain.RpcT
 	return txNonce < confirmed
 }
 
-// getConfirmedNonce returns the number of transactions mined from the address at the latest block,
-// i.e. the lowest nonce not yet consumed on-chain. It queries every configured provider and returns
-// the most conservative (lowest) value so a lagging or misbehaving provider cannot cause a still
-// mineable transaction to be evicted.
-//
-// The "latest" tag carries the usual chain-tip caveat: if the nonce was consumed only in the tip
-// block and that block is later reorged out, an eviction here may turn out premature. This is the
-// same exposure as the mined-tx removal above and is bounded - eviction only drops Blockbook's cache
-// entry, it cancels nothing on-chain, and a still-valid tx is re-indexed when it is actually mined.
+// getConfirmedNonce returns the number of transactions mined from the address at the latest block, i.e.
+// the lowest nonce not yet consumed on-chain. It queries every configured provider and returns the most
+// conservative (lowest) value so a lagging or misbehaving provider cannot get a still mineable
+// transaction evicted. The "latest" tag carries the usual chain-tip caveat: a nonce consumed only in a
+// tip block later reorged out makes the eviction premature, bounded as with the mined-tx removal above -
+// eviction drops only the cache entry, and a still-valid tx is re-indexed when it is actually mined.
 func (p *AlternativeSendTxProvider) getConfirmedNonce(from string) (uint64, error) {
 	address := ethcommon.HexToAddress(from)
 	var lowest uint64
@@ -1265,10 +1213,9 @@ func (p *AlternativeSendTxProvider) getTransactionFromProviders(txid string) (*b
 }
 
 // removeMempoolTx evicts txid from the provider cache and, when a delegate is wired, from the wrapped
-// Blockbook mempool too, reporting whether the entry was present. The cache delete runs first and is
-// the single point of truth: concurrent reconcile / read-path / RBF evictions of the same txid then see
-// false for all but the one that deleted it, so callers can meter the exit exactly once. The delegate
-// runs only on a real removal and re-enters RemoveTransaction as a harmless no-op.
+// Blockbook mempool too, reporting whether the entry was present. The cache delete runs first and is the
+// single point of truth: concurrent reconcile / read-path / RBF evictions of the same txid see false for
+// all but the one that deleted it.
 func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) bool {
 	// action "" - the caller meters this exit under its own reconcile decision
 	removed := p.removeTransaction(txid, "")
@@ -1279,20 +1226,18 @@ func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) bool {
 }
 
 // RemoveTransaction removes a transaction from the alternative mempool cache. It is the entry point for
-// removals carrying no reconcile decision of their own - block sync indexing a mined transaction, and
-// the read path finding one mined or unknown - so it meters them as sync_removed, which nothing else
-// would: block sync almost always beats the next reconcile probe. Reached again as removeMempoolTx's
+// removals carrying no reconcile decision of their own - block sync indexing a mined transaction, the
+// read path finding one mined or unknown - and meters them as sync_removed, which nothing else would
+// since block sync almost always beats the next reconcile probe. Reached again as removeMempoolTx's
 // delegate, where the entry is already gone, so nothing is metered twice.
 func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) bool {
 	return p.removeTransaction(txid, "sync_removed")
 }
 
 // removeTransaction removes a transaction from the alternative mempool cache. When the removed
-// transaction was the sender's last cached one, the sender's nonce-routing entry is released
-// as well (see releaseRecentSender) so address polling stops hitting the alternative provider
-// once nothing private remains pending. It reports whether the entry was actually present, so
-// callers can attribute a lifecycle metric to the single goroutine that truly evicted it (see
-// evictMempoolTx / evictReplacedByNonce). A non-empty action meters the exit here instead.
+// transaction was the sender's last cached one, the sender's nonce-routing entry is released as well
+// (see releaseRecentSender). It reports whether the entry was actually present, so callers can meter the
+// exit exactly once (see evictMempoolTx); a non-empty action meters it here instead.
 func (p *AlternativeSendTxProvider) removeTransaction(txid string, action string) bool {
 	if !p.fetchMempoolTx {
 		return false
@@ -1365,10 +1310,9 @@ func (p *AlternativeSendTxProvider) callHttpStringResult(url string, rpcMethod s
 	return result, nil
 }
 
-// nonceURL returns the provider URL to use for addr's nonce lookup: the URL that accepted
-// the sender's most recent transaction when known (a broadcast succeeds if ANY configured
-// provider accepts it, so the first URL may never have seen the transaction), falling back
-// to the first configured URL.
+// nonceURL returns the provider URL to use for addr's nonce lookup: the URL that accepted the sender's
+// most recent transaction when known (a broadcast succeeds if ANY configured provider accepts it, so the
+// first URL may never have seen the transaction), falling back to the first configured URL.
 func (p *AlternativeSendTxProvider) nonceURL(addr ethcommon.Address) string {
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()
@@ -1378,12 +1322,11 @@ func (p *AlternativeSendTxProvider) nonceURL(addr ethcommon.Address) string {
 	return p.urls[0]
 }
 
-// getNonces returns the pending account nonce from the alternative provider that accepted
-// the sender's most recent transaction (see nonceURL), plus the confirmed (latest) nonce
-// when withConfirmed is set. When both are requested they are fetched in a single JSON-RPC
-// batch round-trip; otherwise only the pending nonce is requested. The confirmed nonce is
-// best-effort: a failed latest lookup yields confirmedOK=false (not an error) so the caller
-// can omit it. An error is returned only when the required pending nonce cannot be obtained.
+// getNonces returns the pending account nonce from the alternative provider that accepted the sender's
+// most recent transaction (see nonceURL), plus the confirmed (latest) nonce when withConfirmed is set,
+// both in a single JSON-RPC batch round-trip. The confirmed nonce is best-effort: a failed latest lookup
+// yields confirmedOK=false (not an error) so the caller can omit it. An error is returned only when the
+// required pending nonce cannot be obtained.
 func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address, withConfirmed bool) (uint64, uint64, bool, error) {
 	if len(p.urls) == 0 {
 		return 0, 0, false, errors.New("no alternative provider url configured")

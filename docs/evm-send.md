@@ -1,21 +1,19 @@
 # EVM transaction submission
 
-This page documents how Blockbook broadcasts a **Trezor Suite** EVM transaction through the
-private send-tx relay and tracks it in its own pending-transaction cache until the chain confirms
-or supersedes it. Fee estimation — a separate step of the same send flow — is covered in
-[fees.md](/docs/fees.md) and is not repeated here.
+How Blockbook broadcasts a **Trezor Suite** EVM transaction through the private send-tx relay and
+tracks it in its own pending-transaction cache until the chain confirms or supersedes it. Fee
+estimation is covered in [fees.md](/docs/fees.md).
 
-The private-relay pieces (the alternative send-tx provider and its pending-tx cache) are active
-only when a coin is configured with the `*_ALTERNATIVE_SENDTX_URLS`, `*_ALTERNATIVE_SENDTX_ONLY`,
-and `*_ALTERNATIVE_FETCH_MEMPOOL_TX` environment variables. Without them Blockbook sends through
-the normal backend RPC and the cache path below is skipped.
+The private-relay path — the alternative send-tx provider and its pending-tx cache — is active only
+when a coin is configured with `*_ALTERNATIVE_SENDTX_URLS`, `*_ALTERNATIVE_SENDTX_ONLY` and
+`*_ALTERNATIVE_FETCH_MEMPOOL_TX`. Without them Blockbook sends through the normal backend RPC and the
+cache path is skipped.
 
 ## Broadcast and the pending-transaction cache
 
-`SendRawTransaction` broadcasts and — when the relay accepts and the coin runs in
-`ALTERNATIVE_SENDTX_ONLY` + `ALTERNATIVE_FETCH_MEMPOOL_TX` mode — keeps its own pending-tx cache,
-because the relay exposes no mempool to reconcile against. A background loop and the read path
-reconcile that cache against the chain.
+`SendRawTransaction` broadcasts and, when the relay accepts in `ALTERNATIVE_SENDTX_ONLY` +
+`ALTERNATIVE_FETCH_MEMPOOL_TX` mode, keeps its own pending-tx cache — the relay exposes no mempool to
+reconcile against. A background loop and the read path reconcile that cache against the chain.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280", "primaryTextColor": "#111827"}}}%%
@@ -65,73 +63,62 @@ flowchart TD
 Key invariants:
 
 - **On the relay-accepted path, the wallet's answer waits for the broadcast and nothing else.** The
-  broadcast to every configured relay URL runs concurrently, so it costs the slowest single URL
-  instead of the sum of all of them; the caching below is local work; and the fetch-back runs in the
-  background. This matters beyond latency: a wallet that gives up before Blockbook answers tells the
-  user the send failed while it is on its way to the chain, and a re-send at the next nonce then pays
-  the recipient twice. Trezor Suite's per-request deadline is 20 s today and 60 s for pushes once
+  broadcast to every relay URL runs concurrently, so it costs the slowest URL, not their sum; caching
+  is local work and the fetch-back is background. A wallet that gives up before Blockbook answers
+  tells the user the send failed while it is on its way to the chain, and a re-send at the next nonce
+  then pays the recipient twice. Trezor Suite's deadline is 20 s per request, 60 s for pushes once
   [trezor-suite#30846](https://github.com/trezor/trezor-suite/pull/30846) lands, against `rpc_timeout`
   of 25 s *per relay URL*.
 
-  The fall-through path is not bounded that way. When no relay accepts and `ALTERNATIVE_SENDTX_ONLY`
-  is not set, the answer additionally waits for the primary `eth_sendRawTransaction` and, on the
-  `disableMempoolSync` coins, for the mempool add that makes an own send visible — which costs one
-  primary `eth_getTransactionByHash`, plus the pruned-index recovery's `eth_getTransactionReceipt`
-  when that answers null. Up to 3–4 × `rpc_timeout` in total, and the same tail exists on those coins
-  with no relay configured at all. The add is skipped when the send itself failed, since there is then
-  no txid to index.
-- **An accepted send is cached from its own signed bytes, before the relay is asked about it.**
-  Everything a pending `RpcTransaction` carries is in the signed transaction, so the fetch-back does
-  not write the cache at all — it only reports whether the relay surfaces what it accepted. It must
-  not: by the time it answers the transaction may have mined and block sync may have cleared it, and
-  the relay's own view can name a different hash, `to` or `value` than the bytes Blockbook was given.
-  A relay that accepts a transaction and then does not surface it (or is briefly unreachable)
-  therefore no longer leaves the send exposed nowhere at all. It used to be neither served as pending,
-  nor present in the address index, nor raising the pending-nonce floor, leaving its nonce free for
-  the next send to reuse. The txid is the hash of the
-  signed bytes rather than the relay's echo, so the cache, the address index and the answer to the
-  wallet all name what the chain will show. The one exception is a raw transaction Blockbook cannot
-  decode: nothing can be derived from it, so there the fetch-back is still the only thing that can
-  expose it and keeps its create semantics.
+  The fall-through path is not bounded that way. With no relay acceptance and
+  `ALTERNATIVE_SENDTX_ONLY` unset, the answer also waits for the primary `eth_sendRawTransaction` and,
+  on `disableMempoolSync` coins, for the mempool add that makes an own send visible: one primary
+  `eth_getTransactionByHash` plus the pruned-index recovery's `eth_getTransactionReceipt` when that
+  answers null, up to 3–4 × `rpc_timeout` in total. The same tail exists there with no relay at all.
+  The add is skipped on a failed send — no txid to index.
+- **An accepted send is cached from its own signed bytes, before the relay is asked about it.** The
+  signed transaction carries everything a pending `RpcTransaction` needs, so the fetch-back writes
+  nothing and only reports whether the relay surfaces what it accepted. It must not write: by then the
+  transaction may have mined and block sync may have cleared it, and the relay's view can name a
+  different hash, `to` or `value` than the bytes Blockbook was given. So a relay that accepts and then
+  does not surface a transaction no longer leaves the send exposed nowhere — not served as pending,
+  not indexed, not raising the pending-nonce floor, its nonce free to reuse. The txid is the hash of
+  the signed bytes, not the relay's echo, so cache, address index and the wallet's answer all name what
+  the chain will show. Exception: an undecodable raw transaction, where nothing can be derived and the
+  fetch-back keeps its create semantics as the only thing that can expose the send.
 - **What is cached is what a relay accepted, which is not the same as what will mine.** A transaction
   the relay drops or never mines — a Blink drop-mode cancel is the deliberate case — holds its nonce
-  slot, and with it the pending-nonce floor, for the whole pending window. A wallet's next send is
-  then built above a nonce nothing will consume, and cannot mine until that slot is filled. This is
-  the accepted side of the #1638 trade: reserving a nonce that turns out dead, rather than handing
-  out one that is genuinely in flight and letting two transactions pay the same recipient. It is not
-  self-healing at a three-hour window, so what bounds it is the floor's contiguity rule rather than
-  the timeout — the floor never advances *past* an unfilled slot, so a wallet is always given a nonce
-  it can use, and the affected transaction is the private one that is stuck rather than every send
-  after it (#1675). Suite can speed it up or cancel it for the whole window.
-- **A same-`(from, nonce)` predecessor is retired the moment the relay ACKs its replacement**, from
-  the raw hex — not by waiting for the relay to surface the replacement. A Blink drop-mode cancel
-  is never surfaced and its nonce is never consumed on-chain, so without this the superseded tx
-  lingered as "Unconfirmed" until the cache timeout. This is deliberately distinct from an *empty*
-  `eth_getTransactionByHash` probe, which is **not** authoritative — a private relay stops
-  surfacing a still-mineable tx while it stays broadcast, so `provider_missing` is kept until the
-  timeout rather than evicted early. `mined` and `nonce_superseded` are the only deterministic
-  early evictions the reconcile loop makes.
+  slot, and with it the pending-nonce floor, for the whole pending window; the wallet's next send is
+  built above a nonce nothing will consume. That is the accepted side of the #1638 trade: a reserved
+  dead nonce beats handing out one that is genuinely in flight. What bounds it is the floor's
+  contiguity rule, not the three-hour timeout — the floor never advances *past* an unfilled slot, so
+  the wallet always gets a usable nonce and only the stuck private transaction is affected, not every
+  send after it (#1675). Suite can speed it up or cancel it for the whole window.
+- **Every same-`(from, nonce)` predecessor is retired the moment the relay ACKs its replacement** —
+  only one transaction per slot can mine — from the raw hex, not on the relay surfacing the
+  replacement: a Blink drop-mode cancel is never surfaced and never consumes its nonce on-chain, which
+  left the superseded tx "Unconfirmed" until the cache timeout (#1573). This is deliberately distinct
+  from an *empty* `eth_getTransactionByHash` probe, which
+  is **not** authoritative: a private relay stops surfacing a still-mineable tx while it stays
+  broadcast, so `provider_missing` is kept until the timeout. `mined` and `nonce_superseded` are
+  reconcile's only deterministic early evictions.
 - **Send generations order concurrent same-nonce sends.** Each accepted send gets a monotonic
-  generation; an older submission's slow fetch-back neither caches itself over, nor evicts, a
-  newer replacement that already holds the nonce slot.
-- **Every exit funnels through `removeMempoolTx`**, which clears the provider cache *and* the
-  wrapped Blockbook mempool (address index), releases the sender's nonce routing once nothing
-  private remains pending, and records the lifecycle metric exactly once (gated on the actual
-  removal, so concurrent reconcile / read-path / RBF evictions of the same entry don't
-  double-count).
+  generation; an older submission's slow fetch-back neither caches itself over, nor evicts, a newer
+  replacement that already holds the nonce slot.
+- **Every exit funnels through `removeMempoolTx`** (see the diagram for what it clears), which records
+  the lifecycle metric exactly once — gated on the actual removal, so concurrent reconcile /
+  read-path / RBF evictions of the same entry don't double-count.
 - **Removals are not pushed to the wallet.** Blockbook pushes only *added* txs; a wallet learns a
   pending tx is gone on its next account re-fetch (the initiating device also removes it
-  optimistically). The cache timeout is the backstop for anything the deterministic evictions miss —
-  at the pending window's length, so `mined` and `nonce_superseded` are what retire an entry in
-  practice.
+  optimistically). The cache timeout, at the pending window's length, is only the backstop, so `mined`
+  and `nonce_superseded` retire an entry in practice.
 
 ## How long a private transaction stays pending
 
 A relay dropping a transaction from `eth_getTransactionByHash`, or from the pending nonce it reports,
-is **not** the same as the transaction being gone. It stays broadcast and builders can still include
-it; Blinklabs puts that window at around three hours, and is widening the two RPC answers to match
-what used to be roughly a minute. Blockbook is sized to the window in which the transaction can still
-land, not to how long the relay talks about it:
+is **not** the transaction being gone: it stays broadcast and builders can still include it. Blinklabs
+puts that window at around three hours, and is widening both RPC answers to match what used to be
+roughly a minute. Blockbook is sized to that window, not to how long the relay talks about it:
 
 | setting | default | what it governs |
 |---|---|---|
@@ -141,9 +128,9 @@ land, not to how long the relay talks about it:
 | relay routing (`useForNonces`) | 15 min | how long the sender's `eth_getTransactionCount` and `eth_estimateGas` go to the relay rather than the primary backend |
 
 The routing horizon is deliberately the odd one out. Once the send is cached, the pending-nonce floor
-is applied to the primary backend's answer too, so a sender released from routing gets the same
-nonce — while `eth_estimateGas` rides the same gate and is called once per send-form keystroke, which
-is how the relay's rate quota was exhausted in [#1629](https://github.com/trezor/blockbook/issues/1629).
+is applied to the primary backend's answer too, so a sender released from routing gets the same nonce.
+`eth_estimateGas` rides the same gate and is called once per send-form keystroke, which is how the
+relay's rate quota was exhausted in [#1629](https://github.com/trezor/blockbook/issues/1629).
 
 **Rollout order matters.** An empty `eth_getTransactionByHash` is still treated as non-authoritative
 (`provider_missing` is kept until the cache timeout), and that must not change before the relay's own
@@ -158,43 +145,36 @@ what says the relay is answering over the full window.
 Prometheus counters for the cache lifecycle:
 
 - `blockbook_eth_alternative_mempool_reconciliation_events_total{action}` — cache exits by reason
-  (`mined`, `nonce_superseded`, `provider_missing`, `timeout`, `rbf_replaced`, `sync_removed`, plus
-  the kept actions `skipped_fresh`, `provider_missing_pending`, `kept`, `provider_error`).
-  `sync_removed` covers the exits with no reconcile decision — block sync indexing the transaction's
-  block, or the read path finding it mined. Expect it to dominate and `mined` to be rare: block sync
-  clears a confirmed private tx well before the next reconcile probe would see it.
-- `blockbook_eth_alternative_mempool_tx_residence_seconds{action}` — how long an entry lived before
-  each eviction reason fired. `provider_missing` clustering near the cache timeout is the healthy
-  shape; collapsing to minutes instead is the premature-eviction regression #1573 describes.
+  (`mined`, `nonce_superseded`, `provider_missing`, `timeout`, `rbf_replaced`, `sync_removed`) plus
+  the kept actions (`skipped_fresh`, `skipped_backoff`, `provider_missing_pending`, `kept`,
+  `provider_error`). `sync_removed` — block sync indexing the tx's block, or the read path finding it
+  mined — should dominate, `mined` should be rare.
+- `blockbook_eth_alternative_mempool_tx_residence_seconds{action}` — entry lifetime per eviction
+  reason. `provider_missing` belongs near the cache timeout; collapsing to minutes is the
+  premature-eviction regression #1573 describes.
 - `blockbook_eth_alternative_mempool_cache_size` — current cache depth.
 
-Signals that reveal *hanging* private transactions (a tx stuck Unconfirmed, or a nonce pinned above
-a dead on-chain gap):
+Signals for *hanging* private transactions — a tx stuck Unconfirmed, or a nonce pinned above a dead
+on-chain gap:
 
-- `blockbook_eth_alternative_mempool_oldest_age_seconds` — age of the oldest still-cached entry,
-  sampled per reconcile cycle. The residence histogram only records an age once an entry leaves, so a
-  stuck tx is invisible until it times out; this gauge exposes it live. Climbing toward the cache
-  timeout at non-zero depth means cached txs are dying underpriced rather than mining — with one
-  benign cause to rule out first: a transaction that by design never mines (a drop-mode cancel) sits
-  out the full timeout too.
-- `blockbook_eth_alternative_send_not_surfaced_total{reason}` — a relay-accepted send the
-  fetch-back did not surface (`not_found`/`error`), or never ran because too many were already in
-  flight (`dropped`, counted only on the raw-hex-decode-failure path, where the fetch-back is the only
-  thing that can expose the transaction — a `dropped` there means that send really is exposed
-  nowhere). The transaction is otherwise still cached and indexed from its signed bytes (unless those
-  did not decode, which is logged as `cannot decode accepted
-  transaction`), so this is no longer a nonce-reuse precursor; it means the relay does not report
-  back what it accepted, so the entry cannot be reconciled against the relay's view and only the
-  cache timeout can retire it.
-- `blockbook_eth_alternative_pending_floor_raised_total{source}` — `raiseToPendingFloor` advanced the
-  reported pending nonce above the backend's own answer (`provider`: the relay had already dropped
-  a still-cached tx past its own pending window; `primary`: the fallback RPC never knew it). This is
-  the expected shape while a private send is in flight, so it tracks private-send activity rather
-  than faults.
-- `blockbook_eth_alternative_pending_floor_stranded_total{source}` — the cache held a private tx for a
-  nonce *above* the run the floor could advance over: a slot between the backend's answer and that
-  transaction is filled by nothing Blockbook knows of. The floor stops below the hole rather than
-  advertising past it, so the wallet still gets a usable nonce, but the stranded transaction cannot
+- `blockbook_eth_alternative_mempool_oldest_age_seconds` — age of the oldest cached entry, sampled per
+  reconcile cycle; the residence histogram records an age only once an entry leaves, so a stuck tx is
+  otherwise invisible until it times out. Climbing toward the cache timeout at non-zero depth means
+  cached txs are dying underpriced rather than mining — a drop-mode cancel, which never mines by
+  design, is the benign cause to rule out.
+- `blockbook_eth_alternative_send_not_surfaced_total{reason}` — a relay-accepted send the fetch-back
+  did not surface (`not_found`/`error`) or never ran at all (`dropped`); the tx is still cached and
+  indexed from its signed bytes, so this is not a nonce-reuse precursor, but only the cache timeout can
+  retire the entry. `dropped` is counted only on the raw-hex-decode-failure path (logged as `cannot
+  decode accepted transaction`), where the fetch-back was the one thing that could expose the send —
+  there it really is exposed nowhere.
+- `blockbook_eth_alternative_pending_floor_raised_total{source}` — `raiseToPendingFloor` lifted the
+  pending nonce above the backend's own answer (`provider`: the relay dropped a still-cached tx past
+  its own pending window; `primary`: the fallback RPC never knew it). Tracks private-send activity,
+  not faults.
+- `blockbook_eth_alternative_pending_floor_stranded_total{source}` — the cache holds a private tx at a
+  nonce *above* the run the floor could advance over, i.e. a slot nothing Blockbook knows of fills; the
+  floor stops below the hole, so the wallet still gets a usable nonce while that transaction cannot
   mine until the hole is filled. Should be ~0; a sustained rate on `provider` means relay-accepted
-  sends are not reaching the cache. Each sample is one request, not one transaction, so its rate
-  follows how often the affected wallet polls.
+  sends are not reaching the cache. Each sample is one request, not one transaction, so the rate
+  follows wallet polling.

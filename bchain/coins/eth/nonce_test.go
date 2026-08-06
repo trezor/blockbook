@@ -304,10 +304,9 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FallbackToPrimaryOnProviderEr
 }
 
 func TestEthereumTypeGetNonces_AlternativeProvider_FallbackRaisedToCacheFloor(t *testing.T) {
-	// the provider lookup fails and the primary answers 4, but the alternative mempool cache
-	// still holds the sender's pending private tx at nonce 4 - the fallback must report 5,
-	// otherwise a wallet building on the primary answer would replace that in-flight tx.
-	// The gap case is the other half of #1675: with nothing filling nonce 4, the floor must
+	// the provider lookup fails and the primary answers 4: with the cache holding the sender's tx at
+	// nonce 4 the fallback must report 5, or a wallet building on the primary answer replaces that
+	// in-flight tx. The gap case is the other half of #1675 - nothing fills nonce 4, so the floor must
 	// NOT jump over the hole to the cached 0x7, or every later send queues behind it.
 	for _, tt := range []struct {
 		name        string
@@ -343,10 +342,9 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FallbackRaisedToCacheFloor(t 
 }
 
 func TestEthereumTypeGetNonces_AlternativeProvider_ProviderAnswerRaisedToCacheFloor(t *testing.T) {
-	// a relay stops counting a still-pending tx at the pending tag once past its own pending
-	// window, while Blockbook keeps exposing it until the cache timeout: the provider answers 4
-	// although the cache holds the sender's tx at nonce 4, and the answer must become 5 so it
-	// never contradicts Blockbook's own pending view. The gap case must stay at 4 (#1675).
+	// a relay stops counting a still-pending tx once past its own pending window while Blockbook
+	// exposes it until the cache timeout: the provider answers 4 with the cache holding nonce 4, so
+	// the answer must become 5 and never contradict Blockbook's pending view. A gap stays at 4 (#1675).
 	for _, tt := range []struct {
 		name        string
 		cachedNonce string
@@ -478,10 +476,10 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FloorAppliedWithoutRouting(t 
 	}
 }
 
-// TestEthereumTypeGetNonces_AlternativeProvider_ObservesFloorMetrics pins which of the two floor
-// counters a request lands on: raised when the cache fills the slots from the backend's answer
-// upward, stranded when it holds one above a slot nothing fills. A gap is BOTH not-raised and
-// stranded - the answer stays the backend's, which is the whole point of the #1675 clamp.
+// TestEthereumTypeGetNonces_AlternativeProvider_ObservesFloorMetrics pins which floor counter a request
+// lands on: raised when the cache fills the slots above the backend's answer, stranded when it holds one
+// above a slot nothing fills. A gap is BOTH not-raised and stranded, the answer staying the backend's -
+// the point of the #1675 clamp.
 func TestEthereumTypeGetNonces_AlternativeProvider_ObservesFloorMetrics(t *testing.T) {
 	for _, tt := range []struct {
 		name         string
