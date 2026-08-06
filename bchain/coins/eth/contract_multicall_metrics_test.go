@@ -63,8 +63,8 @@ func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsCountElements(t *tes
 func TestEthereumTypeGetErc20ContractBalancesFallbackMetricsSeparateChunkErrorsFromHoles(t *testing.T) {
 	metrics := newFallbackTestMetrics()
 	addr := ethcommon.HexToAddress("0x0000000000000000000000000000000000000011")
-	n := multicall3MaxCallsPerAggregate + 20 // chunk 1 succeeds with a hole, chunk 2 fails
-	holeAt := 3
+	n := multicall3MaxCallsPerAggregate + 20     // chunk 1 succeeds with a hole, chunk 2 fails
+	holeAt := multicall3MaxCallsPerAggregate - 1 // last element of chunk 1: a starved tail
 	contracts := erc20TestContracts(n)
 	inner := &mockBatchRPC{results: map[string]string{
 		hexutil.Encode(contracts[holeAt]): fmt.Sprintf("0x%064x", erc20BatchTestValue(holeAt)),

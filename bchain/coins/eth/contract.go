@@ -612,6 +612,12 @@ func (b *EthereumRPC) erc20BalancesBatchChunked(batcher batchCaller, callData st
 	return balances, nil
 }
 
+// emptyAggregate3Failure reports an element that failed with no returndata: a bare revert()
+// and gas starvation are indistinguishable from the element alone.
+func emptyAggregate3Failure(r bchain.EthereumMulticallResult) bool {
+	return !r.Success && len(r.Data) <= 2
+}
+
 // erc20BalancesMulticall3 fetches balanceOf via gas-bounded aggregate3 chunks. holes are the
 // indexes it could not settle; the caller must re-read those with independent eth_calls.
 func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []bchain.AddressDescriptor, blockNumber *big.Int) (balances []*big.Int, holes []int) {
@@ -652,13 +658,18 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 			glog.Warningf("erc20 balances multicall3 failed at chunk [%d:%d), falling back for %d contract(s): %v", start, end, len(valid)-start, err)
 			break
 		}
+		// Starvation shows up as a trailing run: aggregate3 forwards all remaining gas to
+		// each sub-call, so once one exhausts it the calls after it fail too. A chunk whose
+		// last element did not fail empty was never starved, and its empty failures are
+		// bare revert()s that stay nil — re-reading those would cost one metered call per
+		// dead token on every request, which is what this path exists to avoid.
+		tailStarved := len(results) > 0 && emptyAggregate3Failure(results[len(results)-1])
 		for j := range results {
 			i := chunk[j]
 			if !results[j].Success {
 				elemErrors++
-				// Non-empty returndata is a genuine revert and stays nil; only empty
-				// returndata may be gas starvation, so re-read those.
-				if len(results[j].Data) <= 2 {
+				// Once the tail is starved, earlier empty failures may be starved too.
+				if tailStarved && emptyAggregate3Failure(results[j]) {
 					holes = append(holes, i)
 					starved++
 				}

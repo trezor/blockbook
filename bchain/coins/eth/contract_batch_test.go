@@ -805,7 +805,8 @@ func TestEthereumTypeGetErc20ContractBalancesGenuineRevertNotReresolved(t *testi
 	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
 	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
 	contractC := common.HexToAddress("0x00000000000000000000000000000000000000cc")
-	// A ok (=50), B empty revert (re-resolved -> 88), C Panic(0x11) with returndata (stays nil).
+	// A ok (=50), B empty revert, C Panic(0x11) with returndata. C did not fail empty, so
+	// the chunk was never starved and B is a bare revert() — neither is re-resolved.
 	panicData := "0x4e487b71" + fmt.Sprintf("%064x", 0x11)
 	agg := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
 		{Success: true, Data: fmt.Sprintf("0x%064x", 50)},
@@ -831,15 +832,67 @@ func TestEthereumTypeGetErc20ContractBalancesGenuineRevertNotReresolved(t *testi
 	if balances[0] == nil || balances[0].Cmp(big.NewInt(50)) != 0 {
 		t.Fatalf("balance[0]=%v, want 50", balances[0])
 	}
-	if balances[1] == nil || balances[1].Cmp(big.NewInt(88)) != 0 {
-		t.Fatalf("balance[1]=%v, want 88 (empty-revert re-resolved)", balances[1])
+	if balances[1] != nil {
+		t.Fatalf("balance[1]=%v, want nil (isolated empty revert, clean tail)", balances[1])
 	}
 	if balances[2] != nil {
 		t.Fatalf("balance[2]=%v, want nil (genuine revert not re-resolved)", balances[2])
 	}
-	// Only B is re-resolved: one batch of size 1, not 2.
-	if len(inner.batchSizes) != 1 || inner.batchSizes[0] != 1 {
-		t.Fatalf("expected one re-resolve batch of size 1 (only the empty-revert element), got %v", inner.batchSizes)
+	// The regression this guards: one metered eth_call per dead token, on every request.
+	if len(inner.batchSizes) != 0 {
+		t.Fatalf("expected no re-resolve batch when the tail is not starved, got %v", inner.batchSizes)
+	}
+}
+
+// Gas starvation is a trailing run, so a chunk whose tail failed empty re-reads its earlier
+// empty failures too — but a revert carrying returndata is deterministic and stays nil.
+func TestEthereumTypeGetErc20ContractBalancesStarvedTailReresolvesEarlierEmptyFailures(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	contractA := common.HexToAddress("0x00000000000000000000000000000000000000aa")
+	contractB := common.HexToAddress("0x00000000000000000000000000000000000000bb")
+	contractC := common.HexToAddress("0x00000000000000000000000000000000000000cc")
+	contractD := common.HexToAddress("0x00000000000000000000000000000000000000dd")
+	// A empty failure, B Panic(0x11) with returndata, C ok, D empty failure (the starved tail).
+	panicData := "0x4e487b71" + fmt.Sprintf("%064x", 0x11)
+	agg := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
+		{Success: false, Data: "0x"},
+		{Success: false, Data: panicData},
+		{Success: true, Data: fmt.Sprintf("0x%064x", 50)},
+		{Success: false, Data: "0x"},
+	})
+	inner := &mockBatchRPC{results: map[string]string{
+		hexutil.Encode(contractA.Bytes()): fmt.Sprintf("0x%064x", 11),
+		hexutil.Encode(contractD.Bytes()): fmt.Sprintf("0x%064x", 44),
+	}}
+	mock := &mockMulticallThenBatchRPC{mockBatchRPC: inner, aggregate3Resp: agg}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second}
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(
+		bchain.AddressDescriptor(addr.Bytes()),
+		[]bchain.AddressDescriptor{
+			bchain.AddressDescriptor(contractA.Bytes()),
+			bchain.AddressDescriptor(contractB.Bytes()),
+			bchain.AddressDescriptor(contractC.Bytes()),
+			bchain.AddressDescriptor(contractD.Bytes()),
+		},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if balances[0] == nil || balances[0].Cmp(big.NewInt(11)) != 0 {
+		t.Fatalf("balance[0]=%v, want 11 (earlier empty failure re-read under a starved tail)", balances[0])
+	}
+	if balances[1] != nil {
+		t.Fatalf("balance[1]=%v, want nil (revert with returndata is deterministic)", balances[1])
+	}
+	if balances[2] == nil || balances[2].Cmp(big.NewInt(50)) != 0 {
+		t.Fatalf("balance[2]=%v, want 50 (from aggregate3)", balances[2])
+	}
+	if balances[3] == nil || balances[3].Cmp(big.NewInt(44)) != 0 {
+		t.Fatalf("balance[3]=%v, want 44 (the starved tail element)", balances[3])
+	}
+	// Only the two empty failures are re-read, not the returndata-carrying revert.
+	if len(inner.batchSizes) != 1 || inner.batchSizes[0] != 2 {
+		t.Fatalf("expected one re-resolve batch of size 2 (the empty failures only), got %v", inner.batchSizes)
 	}
 }
 
@@ -944,8 +997,8 @@ func TestEthereumTypeGetErc20ContractBalancesSystemicChunkFailureStopsAtFirstChu
 
 // mockMulticallMixedRPC: probe deployed; aggregate3 answers carry per-global-index values (a
 // mis-mapped write-back shows as a wrong balance), the element at holeAt returns Success=false
-// with empty returndata (-1 for none), and the chunk covering failFrom on fails. Fallback batch
-// served by mockBatchRPC.
+// with empty returndata (-1 for none; put it last in a chunk to model a starved tail), and the
+// chunk covering failFrom on fails. Fallback batch served by mockBatchRPC.
 type mockMulticallMixedRPC struct {
 	*mockBatchRPC
 	holeAt   int
@@ -998,8 +1051,8 @@ func (m *mockMulticallMixedRPC) CallContext(ctx context.Context, result interfac
 // fallback batch and write every result back to its own contract.
 func TestEthereumTypeGetErc20ContractBalancesMixedHolesSettledInOneBatch(t *testing.T) {
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
-	n := multicall3MaxCallsPerAggregate + 20 // chunk 1 succeeds with a hole, chunk 2 fails
-	holeAt := 3
+	n := multicall3MaxCallsPerAggregate + 20     // chunk 1 succeeds with a hole, chunk 2 fails
+	holeAt := multicall3MaxCallsPerAggregate - 1 // last element of chunk 1: a starved tail
 	contracts := erc20TestContracts(n)
 	// The batch may only answer for the hole and the failed chunk; anything else means the
 	// fallback subset was built wrong.
