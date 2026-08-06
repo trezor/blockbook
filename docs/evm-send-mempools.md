@@ -60,7 +60,7 @@ flowchart TD
     blk["GetBlock: tx in a connected block"]
     readmined["GetTransaction: mined or unknown"]
 
-    altrm[("removeMempoolTx<br/>cache delete decides the race<br/>release nonce routing, metered once")]
+    altrm[("removeMempoolTx<br/>cache delete decides the race<br/>release nonce routing<br/>metered by its caller, on its bool")]
     bothrm[("removeTransactionFromMempool<br/>clears BOTH stores")]
 
     send --> route
@@ -80,7 +80,7 @@ flowchart TD
 
     alt --> altrec --> altrm
     readalt --> altrm
-    altrm -- "delegate, already metered" --> bothrm
+    altrm -- "delegate, entry already gone" --> bothrm
     blk -- "metered sync_removed" --> bothrm
     readmined -- "metered sync_removed" --> bothrm
     bothrm -- "delete" --> alt
@@ -103,8 +103,8 @@ flowchart TD
 
 Evaluated in this order on every one-minute tick, for every cached transaction the probe backoff lets
 through. The labels are the `action` values of
-`blockbook_eth_alternative_mempool_reconciliation_events_total`; every `evict:` box funnels through
-`removeMempoolTx` in the first diagram.
+`blockbook_eth_alternative_mempool_reconciliation_events_total`; every `evict:` box goes through
+`removeMempoolTx` in the first diagram, and is metered by the caller rather than there.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280", "primaryTextColor": "#111827"}}}%%
