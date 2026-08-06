@@ -21,12 +21,31 @@ func TestConfigurationMempoolTxTimeoutDuration(t *testing.T) {
 			want: 12 * time.Hour,
 		},
 		{
-			name: "alternative provider default",
+			name: "alternative provider default is the pending window plus the sweep margin",
 			config: Configuration{
 				MempoolTxTimeoutHours: 12,
 			},
 			alternativeProviderEnabled: true,
-			want:                       10 * time.Minute,
+			want:                       defaultAlternativePendingTxWindow + mempoolRetentionMarginOverPendingWindow,
+		},
+		{
+			name: "a configured pending window carries into the mempool default",
+			config: Configuration{
+				MempoolTxTimeoutHours:      12,
+				AlternativePendingTxWindow: "1h",
+			},
+			alternativeProviderEnabled: true,
+			want:                       time.Hour + mempoolRetentionMarginOverPendingWindow,
+		},
+		{
+			name: "a cache-only override carries into the mempool default too",
+			config: Configuration{
+				MempoolTxTimeoutHours:       12,
+				AlternativePendingTxWindow:  "3h",
+				AlternativeMempoolTxTimeout: "20m",
+			},
+			alternativeProviderEnabled: true,
+			want:                       20*time.Minute + mempoolRetentionMarginOverPendingWindow,
 		},
 		{
 			name: "explicit duration overrides alternative provider default",
@@ -74,12 +93,20 @@ func TestConfigurationAlternativeMempoolTxTimeoutDuration(t *testing.T) {
 		want   time.Duration
 	}{
 		{
-			name: "default",
-			want: 5 * time.Minute,
+			name: "default is the pending window",
+			want: defaultAlternativePendingTxWindow,
 		},
 		{
-			name: "explicit duration",
+			name: "follows a configured pending window",
 			config: Configuration{
+				AlternativePendingTxWindow: "90m",
+			},
+			want: 90 * time.Minute,
+		},
+		{
+			name: "an explicit cache retention overrides the window",
+			config: Configuration{
+				AlternativePendingTxWindow:  "3h",
 				AlternativeMempoolTxTimeout: "7m",
 			},
 			want: 7 * time.Minute,
@@ -110,8 +137,8 @@ func TestMempoolRetentionInverted(t *testing.T) {
 	}{
 		{
 			name:        "defaults are ordered correctly",
-			alternative: defaultAlternativeMempoolTxTimeout,
-			mempool:     defaultMempoolTxTimeoutWithAlternativeProvider,
+			alternative: defaultAlternativePendingTxWindow,
+			mempool:     defaultAlternativePendingTxWindow + mempoolRetentionMarginOverPendingWindow,
 			want:        false,
 		},
 		{
@@ -169,6 +196,26 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 			}`,
 		},
 		{
+			name: "zero alternative pending window",
+			config: `{
+				"coin_name":"Ethereum",
+				"coin_shortcut":"ETH",
+				"rpc_timeout":25,
+				"alternativePendingTxWindow":"0s",
+				"block_addresses_to_keep":600
+			}`,
+		},
+		{
+			name: "unparsable alternative pending window",
+			config: `{
+				"coin_name":"Ethereum",
+				"coin_shortcut":"ETH",
+				"rpc_timeout":25,
+				"alternativePendingTxWindow":"three hours",
+				"block_addresses_to_keep":600
+			}`,
+		},
+		{
 			name: "negative blockbook mempool timeout",
 			config: `{
 				"coin_name":"Ethereum",
@@ -190,6 +237,66 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 	}
 }
 
+// TestCreateMempoolRejectsInvertedRetention pins that an inverted pair fails startup rather than
+// warning. Inverted, the wrapped mempool's timeout sweep drops a private transaction's address index
+// while the provider cache keeps serving its body as pending, and nothing reconciles the two - the
+// #1573 symptom, arrived at silently. Only an explicit mempoolTxTimeout can get there, since the
+// default is derived from the cache retention.
+func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		config    Configuration
+		wantError bool
+	}{
+		{
+			name:      "explicit mempool timeout below the pending window",
+			config:    Configuration{MempoolTxTimeout: "10m", AlternativePendingTxWindow: "3h"},
+			wantError: true,
+		},
+		{
+			name:      "explicit mempool timeout equal to the pending window",
+			config:    Configuration{MempoolTxTimeout: "3h", AlternativePendingTxWindow: "3h"},
+			wantError: true,
+		},
+		{
+			name:   "explicit mempool timeout above the pending window",
+			config: Configuration{MempoolTxTimeout: "4h", AlternativePendingTxWindow: "3h"},
+		},
+		{
+			name:   "derived defaults are never inverted",
+			config: Configuration{AlternativePendingTxWindow: "3h"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			alternative, err := tt.config.AlternativeMempoolTxTimeoutDuration()
+			if err != nil {
+				t.Fatalf("AlternativeMempoolTxTimeoutDuration() error = %v", err)
+			}
+			b := &EthereumRPC{
+				ChainConfig:               &tt.config,
+				alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: alternative},
+			}
+			_, err = b.CreateMempool(nil)
+			if tt.wantError && err == nil {
+				t.Fatal("inverted retention pair was accepted")
+			}
+			if !tt.wantError && err != nil {
+				t.Fatalf("CreateMempool() error = %v", err)
+			}
+			if tt.wantError {
+				// a rejected pair must not leave a mempool behind: the second call would return it
+				// with the provider never wired to it, which is the failure the check exists to stop
+				if b.Mempool != nil {
+					t.Fatal("rejected configuration left a mempool behind")
+				}
+				if _, err := b.CreateMempool(nil); err == nil {
+					t.Fatal("a second CreateMempool accepted the same inverted pair")
+				}
+			}
+		})
+	}
+}
+
 func TestInitAlternativeProvidersUsesAlternativeMempoolTxTimeout(t *testing.T) {
 	t.Setenv("ETH_ALTERNATIVE_SENDTX_URLS", "http://localhost:8545")
 
@@ -204,10 +311,19 @@ func TestInitAlternativeProvidersUsesAlternativeMempoolTxTimeout(t *testing.T) {
 				CoinShortcut: "eth",
 				RPCTimeout:   1,
 			},
-			want: 5 * time.Minute,
+			want: defaultAlternativePendingTxWindow,
 		},
 		{
-			name: "explicit duration",
+			name: "configured pending window",
+			config: Configuration{
+				CoinShortcut:               "eth",
+				RPCTimeout:                 1,
+				AlternativePendingTxWindow: "90m",
+			},
+			want: 90 * time.Minute,
+		},
+		{
+			name: "explicit cache retention",
 			config: Configuration{
 				CoinShortcut:                "eth",
 				RPCTimeout:                  1,

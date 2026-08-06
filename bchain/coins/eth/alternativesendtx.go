@@ -807,7 +807,7 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 		p.mempool.AddTransactionToMempool(txid)
 		// A concurrent higher-generation send for this slot can evict txid from both stores during the
 		// add above, which then re-inserts it into the wrapped mempool only - and reconcile walks just
-		// the provider cache, so that orphan would linger as "Unconfirmed" until the 10-minute sweep
+		// the provider cache, so that orphan would linger as "Unconfirmed" until the wrapped mempool sweep
 		// (#1573). Undo the add if the entry is gone. The lock covers only a map read, never a call.
 		p.mempoolTxsMux.Lock()
 		_, stillCached := p.mempoolTxs[txid]
@@ -924,7 +924,7 @@ func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTran
 		if time.Unix(int64(storedTx.time), 0).Before(time.Now().Add(-p.mempoolTxsTimeout)) {
 			// The reconcile loop's staleness timeout, reached on the read path first. It goes through
 			// removeMempoolTx so the wrapped mempool's address index is cleared too, or the expired tx
-			// stays listed as pending until the 10-minute sweep whenever the caller's own primary lookup
+			// stays listed as pending until the wrapped mempool sweep whenever the caller's own primary lookup
 			// errors instead of returning null. Metered only if this read is what removed it.
 			if p.removeMempoolTx(txid) {
 				p.observeMempoolReconciliation("timeout")
@@ -1035,7 +1035,7 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			// A null/empty eth_getTransactionByHash is NOT authoritative proof the tx is gone:
 			// Blink-style private/MEV relays stop surfacing a still-pending, still-mineable tx via
 			// eth_getTransactionByHash while it stays broadcast. Evicting on a single empty probe
-			// deleted the tx from both sender and recipient ~1-2 minutes after send, even though it
+			// deleted the tx from both sender and recipient about a minute after send, even though it
 			// could still be mined. Defer eviction to the absolute cache timeout instead; mined and
 			// nonce_superseded above remain the only deterministic early evictions.
 			if timedOut {
@@ -1104,7 +1104,7 @@ func (p *AlternativeSendTxProvider) evictMempoolTx(action, txid string, addedUni
 // observeMempoolTxResidence records the age of a cache entry (seconds since it was broadcast) at the
 // moment it is evicted, labeled by the deciding action. This makes the non-deterministic lifetime of
 // an unconfirmed tx visible per eviction reason - e.g. provider_missing clustering near the timeout
-// rather than at ~1-2 min would show a premature-eviction regression like the one #1573 describes.
+// rather than within minutes would show a premature-eviction regression like the one #1573 describes.
 func (p *AlternativeSendTxProvider) observeMempoolTxResidence(action string, addedUnix uint32) {
 	if p.metrics == nil || p.metrics.EthAlternativeMempoolTxResidence == nil {
 		return

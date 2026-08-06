@@ -12,8 +12,8 @@ path below is skipped entirely. The broadcast flow and its invariants are descri
 | Holds | txid + address index (+ token transfers) | full `RpcTransaction` body, sender, nonce, send generation |
 | Populated from | `newPendingTransactions` WS feed; the resync snapshot; own sends when `disableMempoolSync` (and only when the send succeeded) | only sends a relay ACKed, in `ALTERNATIVE_SENDTX_ONLY` + `ALTERNATIVE_FETCH_MEMPOOL_TX` mode — from the signed bytes alone |
 | Serves | address and xpub txs (`GetAddrDescTransactions`), wallet `NewTx` pushes | tx bodies on `GetTransaction`, the pending-nonce floor |
-| Retention | `mempoolTxTimeout` — 10 min when a relay is configured, else `mempoolTxTimeoutHours` | `alternativeMempoolTxTimeout` — 5 min |
-| Reconciled | `Resync` every ~60 s; timeout sweep at most every 10 min | `reconcileMempoolTxs` every 1 min, against the relay |
+| Retention | `mempoolTxTimeout` — the cache retention + 30 min when a relay is configured, else `mempoolTxTimeoutHours` | `alternativePendingTxWindow` — 3 h, the window in which a privately broadcast tx can still be built into a block |
+| Reconciled | `Resync` every ~60 s; timeout sweep at most every 10 min | `reconcileMempoolTxs` on a 1 min tick, against the relay; an entry is re-probed less often as it ages |
 
 A private transaction is in **both**: the cache holds the body and is the source of truth, the
 wrapped mempool holds the index built from it. A public transaction is only ever in the mempool.
@@ -28,8 +28,9 @@ Two couplings between the stores are load-bearing:
   been cleared by block sync, nor replace a body Blockbook derived with a relay's view of it.
 - The cache must expire **before** the wrapped mempool. Every cache exit clears the wrapped mempool
   too, but the mempool's own timeout sweep does not clear the cache; inverted, a private transaction
-  loses its address index while still being served as pending. The defaults are ordered correctly
-  and `CreateMempool` warns when an explicit configuration inverts them.
+  loses its address index while still being served as pending. The mempool default is *derived* from
+  the cache retention, so it cannot be ordered wrong by changing the window; only an explicit
+  `mempoolTxTimeout` can invert the pair, and `CreateMempool` then refuses to start.
 
 ## Broadcast, ingest and eviction
 
@@ -51,10 +52,10 @@ flowchart TD
     ws["eth_subscribe newPendingTransactions<br/>skipped when disableMempoolSync"]
     snap["startup and Resync snapshot<br/>eth_getBlockByNumber pending<br/>only when queryBackendOnMempoolResync"]
 
-    alt[("MEV / private cache<br/>full tx bodies<br/>timeout 5 min")]
-    pub[("Blockbook mempool<br/>txids + address index<br/>timeout 10 min with relay")]
+    alt[("MEV / private cache<br/>full tx bodies<br/>timeout 3 h")]
+    pub[("Blockbook mempool<br/>txids + address index<br/>cache retention + 30 min with relay")]
 
-    altrec["reconcileMempoolTxs, every 1 min<br/>evicts mined, nonce_superseded, timeout<br/>keeps provider_missing until timeout"]
+    altrec["reconcileMempoolTxs, 1 min tick<br/>evicts mined, nonce_superseded, timeout<br/>keeps provider_missing until timeout"]
     pubrec["Mempool Resync, every 60 s<br/>timeout sweep at most every 10 min<br/>plus backend-missing removal"]
 
     readalt["GetTransaction read path<br/>entry past the cache timeout"]
@@ -102,8 +103,9 @@ flowchart TD
 
 ## What the cache reconcile decides, per entry
 
-Evaluated in this order once a minute for every cached transaction. The labels are the `action`
-values of `blockbook_eth_alternative_mempool_reconciliation_events_total`.
+Evaluated in this order on every one-minute tick, for every cached transaction the probe backoff
+lets through. The labels are the `action` values of
+`blockbook_eth_alternative_mempool_reconciliation_events_total`.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280", "primaryTextColor": "#111827"}}}%%
@@ -114,7 +116,7 @@ flowchart TD
     b{"probed within its interval?<br/>1 min under 10 min old,<br/>5 min under 1 h, then 15 min"}
     keepBackoff["keep: skipped_backoff"]
     q["relay eth_getTransactionByHash"]
-    qerr{"past 5 min timeout?"}
+    qerr{"past the cache timeout?"}
     evTo["evict: timeout"]
     keepErr["keep: provider_error"]
     m{"blockNumber set?"}
@@ -122,10 +124,10 @@ flowchart TD
     s{"confirmed nonce above tx nonce?<br/>relay eth_getTransactionCount latest"}
     evSup["evict: nonce_superseded"]
     k{"still surfaced by the relay?"}
-    kto{"past 5 min timeout?"}
+    kto{"past the cache timeout?"}
     evMiss["evict: provider_missing"]
     keepMiss["keep: provider_missing_pending<br/>an empty probe is not authoritative"]
-    yto{"past 5 min timeout?"}
+    yto{"past the cache timeout?"}
     evTo2["evict: timeout"]
     keepK["keep: kept"]
 
@@ -163,8 +165,10 @@ next probe reaches the `mined` branch here.
 
 ## How the two stores are read back
 
-Only addresses that sent through the relay within the cache retention are routed to it
-(`useForNonces`); everything else is served by the primary backend.
+Only addresses that sent through the relay in the last 15 minutes are routed to it (`useForNonces`);
+everything else is served by the primary backend. That window is much shorter than the cache
+retention on purpose: once the send is cached, the floor below gives the same answer from the primary
+backend, so routing past it only spends relay quota.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280", "primaryTextColor": "#111827"}}}%%

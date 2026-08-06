@@ -252,7 +252,7 @@ metrics:
     type: histogram_vec
     help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry at the moment it leaves the cache, labeled by the removing action (mined, nonce_superseded, provider_missing, timeout, rbf_replaced or sync_removed) - reveals how long unconfirmed txs actually survive before each exit reason fires
     labels: [action]
-    buckets: [1, 2, 5, 10, 20, 30, 45, 60, 90, 120, 180, 240, 300, 360, 420]
+    buckets: [1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800, 12600]
   eth_alternative_mempool_cache_size:
     name: blockbook_eth_alternative_mempool_cache_size
     type: gauge
@@ -281,7 +281,7 @@ metrics:
   eth_alternative_mempool_oldest_age_seconds:
     name: blockbook_eth_alternative_mempool_oldest_age_seconds
     type: gauge
-    help: Age in seconds of the oldest transaction still held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle (0 when the cache is empty). The residence histogram records an entry's age only when it leaves, so a tx that is stuck but not yet evicted is invisible until it times out; this gauge exposes it live. A value climbing toward and pinning near the 5-min cache timeout at non-zero cache depth means cached private txs are timing out rather than mining or being superseded - the underpriced / hanging-transaction signal - with one benign cause to rule out first, a relay-accepted transaction that by design never mines (a drop-mode cancel) also sits out the full timeout
+    help: Age in seconds of the oldest transaction still held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle (0 when the cache is empty). The residence histogram records an entry's age only when it leaves, so a tx that is stuck but not yet evicted is invisible until it times out; this gauge exposes it live. A value climbing toward and pinning near the configured cache timeout (alternativePendingTxWindow, 3h by default) at non-zero cache depth means cached private txs are timing out rather than mining or being superseded - the underpriced / hanging-transaction signal - with one benign cause to rule out first, a relay-accepted transaction that by design never mines (a drop-mode cancel) also sits out the full timeout
   eth_alternative_send_not_surfaced_total:
     name: blockbook_eth_alternative_send_not_surfaced_total
     type: counter_vec

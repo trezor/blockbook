@@ -2216,11 +2216,11 @@
               },
               {
                 "color": "yellow",
-                "value": 60
+                "value": 2160
               },
               {
                 "color": "red",
-                "value": 240
+                "value": 8640
               }
             ]
           },

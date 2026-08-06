@@ -226,14 +226,14 @@ panels:
         legend: '{{action}}/min'
   sync.eth_alternative_mempool_cache_size:
     title: Alternative mempool cache depth
-    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. Every send a relay accepts is cached (from its own signed bytes), so this tracks in-flight private sends INCLUDING ones the relay never surfaces or will never mine, each of which stays for the full 5-min timeout; a steady climb means entries are added faster than they are mined or evicted.
+    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. Every send a relay accepts is cached (from its own signed bytes), so this tracks in-flight private sends INCLUDING ones the relay never surfaces or will never mine, each of which stays for the full cache timeout (alternativePendingTxWindow, 3h by default); a steady climb means entries are added faster than they are mined or evicted. Steady-state depth scales with that retention, so re-baseline this panel after changing it rather than reading the step as an incident.
     queries:
       size:
         promql: '{{name:eth_alternative_mempool_cache_size}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_mempool_tx_residence:
     title: Alternative mempool tx lifetime by eviction reason
-    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing and timeout sitting near the cache timeout is healthy; provider_missing collapsing toward ~1-2 min would surface the premature-eviction regression from #1573, while sync_removed (block sync clearing a confirmed private tx, and normally the dominant exit) shows how quickly relays actually confirm.
+    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing and timeout sitting near the cache timeout is healthy; provider_missing collapsing to minutes would surface the premature-eviction regression from #1573, while sync_removed (block sync clearing a confirmed private tx, and normally the dominant exit) shows how quickly relays actually confirm.
     queries:
       p50:
         promql: histogram_quantile(0.5, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
@@ -257,7 +257,7 @@ panels:
         legend: '{{coin}} - {{result}}'
   sync.eth_alternative_mempool_oldest_age:
     title: Alternative mempool oldest cached tx age (stuck-tx signal)
-    description: 'Age of the oldest transaction still in the alternative send-tx cache (1-min sampled at reconcile end). This is the LIVE stuck-tx signal the residence histogram cannot give - residence only records an age once a tx leaves, so a hanging tx is invisible until it finally times out. A value climbing toward and pinning near the 5-min cache timeout while cache depth is non-zero means cached private txs are dying underpriced rather than mining - rule out the benign cause first: a relay-accepted transaction that by design never mines (a drop-mode cancel) also sits out the full timeout. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    description: 'Age of the oldest transaction still in the alternative send-tx cache (1-min sampled at reconcile end). This is the LIVE stuck-tx signal the residence histogram cannot give - residence only records an age once a tx leaves, so a hanging tx is invisible until it finally times out. A value climbing toward and pinning near the configured cache timeout (alternativePendingTxWindow, 3h by default) while cache depth is non-zero means cached private txs are dying underpriced rather than mining - rule out the benign cause first: a relay-accepted transaction that by design never mines (a drop-mode cancel) also sits out the full timeout. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       age:
         promql: '{{name:eth_alternative_mempool_oldest_age_seconds}}{job="blockbook", coin="$coin"}'
