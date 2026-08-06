@@ -1087,6 +1087,80 @@ func TestDisconnectBlockRange_RollsBackContractRegistry(t *testing.T) {
 	assertRegistryRow(longLived, &bchain.ContractInfo{CreatedInBlock: block1.Height})
 }
 
+// a contract destroyed and re-deployed at the same address within one block must
+// keep its row - deleting it would drop a contract live on the canonical chain
+func TestDisconnectBlockRange_KeepsRowOfContractRecreatedInDisconnectedBlock(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	metamorphic := "0x5555555555555555555555555555555555555555"
+
+	block1 := dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)
+	block1.CoinSpecificData = &bchain.EthereumBlockSpecificData{
+		Contracts: []bchain.ContractInfo{
+			{Contract: metamorphic, Standard: bchain.UnhandledTokenStandard, CreatedInBlock: block1.Height},
+		},
+	}
+	if err := d.ConnectBlock(block1); err != nil {
+		t.Fatal(err)
+	}
+
+	// destruction first, re-deployment second - the order the disconnect walk sees
+	block2 := dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)
+	internal := &bchain.EthereumInternalData{
+		Type: bchain.CALL,
+		Transfers: []bchain.EthereumInternalTransfer{
+			{Type: bchain.SELFDESTRUCT, From: metamorphic, To: metamorphic},
+			{Type: bchain.CREATE, From: metamorphic, To: metamorphic},
+		},
+	}
+	for i := range block2.Txs {
+		csd, _ := block2.Txs[i].CoinSpecificData.(bchain.EthereumSpecificData)
+		if i == 0 {
+			csd.InternalData = internal
+		} else {
+			csd.InternalData = nil
+		}
+		block2.Txs[i].CoinSpecificData = csd
+	}
+	block2.CoinSpecificData = &bchain.EthereumBlockSpecificData{
+		Contracts: []bchain.ContractInfo{
+			{Contract: metamorphic, DestructedInBlock: block2.Height},
+			{Contract: metamorphic, Standard: bchain.UnhandledTokenStandard, CreatedInBlock: block2.Height},
+		},
+	}
+	if err := d.ConnectBlock(block2); err != nil {
+		t.Fatal(err)
+	}
+
+	// the sparse creation record already overwrote the pre-range CreatedInBlock
+	ci, err := d.GetContractInfoForAddress(metamorphic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ci == nil || ci.CreatedInBlock != block2.Height || ci.DestructedInBlock != 0 {
+		t.Fatalf("connected row = %+v, want CreatedInBlock %d, DestructedInBlock 0", ci, block2.Height)
+	}
+
+	if err := d.DisconnectBlockRangeEthereumType(block2.Height, block2.Height); err != nil {
+		t.Fatal(err)
+	}
+
+	// the row must survive; CreatedInBlock stays stale until a reindex
+	ci, err = d.GetContractInfoForAddress(metamorphic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ci == nil {
+		t.Fatal("row of a contract created before the disconnected range was deleted")
+	}
+	if ci.DestructedInBlock != 0 {
+		t.Errorf("row = %+v, want DestructedInBlock 0", ci)
+	}
+}
+
 func Test_BulkConnect_EthereumType(t *testing.T) {
 	d := setupRocksDB(t, &testEthereumParser{
 		EthereumParser: ethereumTestnetParser(),
