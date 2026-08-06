@@ -182,3 +182,66 @@ func TestEthereumTypeEstimateGasNoFromUsesPrimary(t *testing.T) {
 		t.Fatalf("primary hits = %d, want 1", got)
 	}
 }
+
+// TestEthereumTypeEstimateGasBoundsFallbackToRequestBudget pins that a slow relay cannot double the
+// request's wall time. Both legs are configured from rpc_timeout, so a fallback given a fresh full
+// budget makes the worst case 2x - and on this endpoint that holds a websocket pending-request slot
+// for twice as long, per send-form keystroke, exactly while the relay is already degraded.
+//
+// The two existing fallback tests use instant-error providers, so they pass whether the deadline is
+// built at function entry or after the provider leg. This one needs a provider that is slow rather
+// than broken.
+func TestEthereumTypeEstimateGasBoundsFallbackToRequestBudget(t *testing.T) {
+	primary, primaryHits := countingEstimateGasServer(t, "0x5208")
+	slowProvider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond) // outlives the provider leg's own timeout below
+	}))
+	t.Cleanup(slowProvider.Close)
+
+	b := newEstimateGasTestRPC(t, primary.URL, slowProvider.URL)
+	b.Timeout = 200 * time.Millisecond
+	b.alternativeSendTxProvider.rpcTimeout = 200 * time.Millisecond
+	sender := ethcommon.HexToAddress("0x1111111111111111111111111111111111111111")
+	b.alternativeSendTxProvider.recentSenders[sender] = recentSender{time: time.Now(), url: slowProvider.URL}
+
+	started := time.Now()
+	gas, err := b.EthereumTypeEstimateGas(map[string]interface{}{"from": sender.Hex(), "to": sender.Hex()})
+	elapsed := time.Since(started)
+	if err != nil {
+		t.Fatalf("EthereumTypeEstimateGas() error = %v", err)
+	}
+	if gas != 0x5208 {
+		t.Errorf("gas = %d, want the primary's answer after the slow provider", gas)
+	}
+	if atomic.LoadInt32(primaryHits) != 1 {
+		t.Errorf("primary hits = %d, want 1", atomic.LoadInt32(primaryHits))
+	}
+	// the provider leg burned the whole budget, so the fallback runs on the floor, not a second budget
+	if elapsed > b.Timeout+minEstimateFallbackTimeout {
+		t.Errorf("elapsed %s exceeds the request budget %s plus the fallback floor %s", elapsed, b.Timeout, minEstimateFallbackTimeout)
+	}
+}
+
+// TestRemainingEstimateTimeout covers the budget arithmetic directly: what is left of the request, but
+// never so little that the fallback is pre-expired.
+func TestRemainingEstimateTimeout(t *testing.T) {
+	b := &EthereumRPC{Timeout: 25 * time.Second}
+	for _, tt := range []struct {
+		name    string
+		elapsed time.Duration
+		wantMin time.Duration
+		wantMax time.Duration
+	}{
+		{name: "nothing spent yet", elapsed: 0, wantMin: 24 * time.Second, wantMax: 25 * time.Second},
+		{name: "half spent", elapsed: 12 * time.Second, wantMin: 12*time.Second - time.Second, wantMax: 13 * time.Second},
+		{name: "budget exhausted falls to the floor", elapsed: 25 * time.Second, wantMin: minEstimateFallbackTimeout, wantMax: minEstimateFallbackTimeout},
+		{name: "budget overrun still gets the floor", elapsed: time.Minute, wantMin: minEstimateFallbackTimeout, wantMax: minEstimateFallbackTimeout},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := b.remainingEstimateTimeout(time.Now().Add(-tt.elapsed))
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("remainingEstimateTimeout() = %s, want within [%s, %s]", got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
