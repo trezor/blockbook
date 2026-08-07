@@ -173,6 +173,16 @@ panels:
       size:
         promql: '{{name:mempool_size}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
+  sync.mempool_reload_age:
+    title: Mempool reload age
+    description: 'Time since the last SUCCESSFUL mempool reload (time() - last sync). The reload loop runs about every 60s (resyncmempoolperiod), so a healthy node draws a sawtooth that resets under a minute; a line climbing without resetting means reloads are failing or the loop is wedged. Read this instead of the /api/ inSyncMempool flag, which is cleared at the START of every reload and so reads "not syncing" for a large fraction of samples on a healthy node. The series is absent until the first successful reload, so it is blank during an initial sync and on a coin with mempool sync disabled. The dashed line marks the 15-reload cutoff the BlockbookMempoolReloadStale alert uses.'
+    queries:
+      age:
+        promql: (time() - {{name:mempool_last_sync_timestamp_seconds}}{job="blockbook", coin="$coin"})
+        legend: '{{coin}} - {{instance}} - {{chain}}'
+      cutoff:
+        promql: vector(900)
+        legend: stale cutoff (900s = 15 reload periods)
   sync.eth_alternative_mempool_reconciliation:
     title: Alternative mempool reconciliation
     description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry) and rbf_replaced remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh and kept retain a still-young or still-pending entry.

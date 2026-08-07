@@ -562,11 +562,12 @@ func refreshSyncMetrics() {
 }
 
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
-	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
+	// not named `api`: that shadowed the package for the rest of the function.
+	w, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return err
 	}
-	si, err := api.GetSystemInfo(false)
+	si, err := w.GetSystemInfo(false)
 	if err != nil {
 		return err
 	}
@@ -607,7 +608,7 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 	// derived it from a live GetChainInfo tip while RefreshSyncMetrics uses the cached one
 	// - so the gauge oscillated on the app-info period. Publish it from the single shared
 	// path instead of recomputing it here.
-	refreshSyncMetrics()
+	api.RefreshSyncMetrics(is, chain, metrics)
 	return nil
 }
 

@@ -2660,13 +2660,13 @@ const (
 )
 
 // systemInfoInSync decides the externally reported in-sync state from the raw
-// IsSynchronized flag plus a freshness/tip check. The freshness path applies to any chain
-// with a known block period (a configured averageBlockTimeMs), not only EVM: the raw flag
-// is cleared for the whole of every resync iteration, so without it a chain that takes
-// longer than the start grace to connect a batch would read out-of-sync mid-iteration even
-// though its index is at the tip. A chain with no configured cadence (blockPeriod <= 0)
-// keeps the raw flag unchanged.
-func systemInfoInSync(inSync bool, initialSync bool, bestHeight uint32, backendBlocks int, lastBlockTime, startSync, now time.Time, blockPeriod time.Duration) bool {
+// IsSynchronized flag plus a freshness/tip check. The tip rescue (out-of-sync -> synced)
+// applies to any chain with a known block period, not only EVM: the raw flag is cleared for
+// the whole of every resync iteration, so without it a chain that takes longer than the
+// start grace to connect a batch reads out-of-sync mid-iteration even though its index is
+// at the tip. The demotion (synced -> out-of-sync on a stale index) stays EVM-only; see the
+// comment on it. A chain with no configured cadence (blockPeriod <= 0) keeps the raw flag.
+func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType, bestHeight uint32, backendBlocks int, lastBlockTime, startSync, now time.Time, blockPeriod time.Duration) bool {
 	if !inSync && !initialSync {
 		// If less than 5 seconds into syncing, return inSync=true to avoid short
 		// out-of-sync reports that confuse monitoring.
@@ -2695,7 +2695,15 @@ func systemInfoInSync(inSync bool, initialSync bool, bestHeight uint32, backendB
 		return true
 	}
 
-	if inSync && !isFresh {
+	// Demote a synced-but-stale index on EVM chains only. Their tip arrives over a newHeads
+	// subscription that can die silently, their spacing is near-deterministic, and 12 block
+	// times floored at 30s leaves large headroom. UTXO block arrival is Poisson: a natural
+	// gap past 12 mean spacings is ~6e-6 per block, and Bitcoin's configured 600s against
+	// an observed ~682s makes the window tighter than nominal, so across the fleet this
+	// would demote healthy nodes a few times a year and page via blockbookApiInSync. A
+	// stalled UTXO indexer is caught by BlockbookIndexStalled (blockbook_best_height against
+	// blockbook_backend_best_height), which is chain-agnostic and does not read this flag.
+	if inSync && !isFresh && chainType == bchain.ChainEthereumType {
 		return false
 	}
 
@@ -2722,6 +2730,19 @@ func syncBlockPeriod(chain bchain.BlockChain, is *common.InternalState) time.Dur
 	return blockPeriod
 }
 
+// syncChainType returns the chain type systemInfoInSync gates its demotion on. A chain or
+// parser that is not wired up yet (startup, and the unit tests) degrades to the UTXO type,
+// which is the side of the gate that leaves the raw flag alone.
+func syncChainType(chain bchain.BlockChain) bchain.ChainType {
+	if chain == nil {
+		return bchain.ChainBitcoinType
+	}
+	if p := chain.GetChainParser(); p != nil {
+		return p.GetChainType()
+	}
+	return bchain.ChainBitcoinType
+}
+
 // RefreshSyncMetrics publishes the sync-state gauges from internal state and the cached
 // backend info with no backend round trip, so it can run on a short timer. These gauges
 // used to be written only by the ~15-minute app-info loop, which needs three RPCs, so a
@@ -2741,8 +2762,8 @@ func RefreshSyncMetrics(is *common.InternalState, chain bchain.BlockChain, metri
 	// re-queries live. A genuine backend outage freezes bi.Blocks and lastSync, so the
 	// freshness check below degrades EVM chains to 0 on its own; a stalled backend is the
 	// job of blockbook_tip_age_seconds and the backend-stuck rules, not this gauge.
-	inSync := systemInfoInSync(isSynchronized, initialSync, bestHeight, bi.Blocks,
-		lastSync, startSync, time.Now().UTC(), syncBlockPeriod(chain, is))
+	inSync := systemInfoInSync(isSynchronized, initialSync, syncChainType(chain), bestHeight,
+		bi.Blocks, lastSync, startSync, time.Now().UTC(), syncBlockPeriod(chain, is))
 
 	metrics.BlockbookBestHeight.Set(float64(bestHeight))
 	if bi.Blocks > 0 {
@@ -2777,7 +2798,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		inSync = false
 		inSyncMempool = false
 	} else {
-		inSync = systemInfoInSync(inSync, w.is.GetInitialSync(), bestHeight, ci.Blocks, lastBlockTime, startSync, time.Now().UTC(), blockPeriod)
+		inSync = systemInfoInSync(inSync, w.is.GetInitialSync(), w.chainType, bestHeight, ci.Blocks, lastBlockTime, startSync, time.Now().UTC(), blockPeriod)
 	}
 	var columnStats []common.InternalStateColumn
 	var internalDBSize int64

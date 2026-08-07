@@ -30,6 +30,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		name          string
 		inSync        bool
 		initialSync   bool
+		chainType     bchain.ChainType
 		bestHeight    uint32
 		backendBlocks int
 		lastBlockTime time.Time
@@ -39,6 +40,7 @@ func TestSystemInfoInSync(t *testing.T) {
 	}{
 		{
 			name:          "reports evm synced when active sync loop is already at backend tip",
+			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -48,6 +50,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "does not hide stale evm tip when heights match",
+			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-45 * time.Second),
@@ -56,6 +59,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "does not report synced while local height is behind",
+			chainType:     bchain.ChainEthereumType,
 			bestHeight:    90,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -64,6 +68,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "reports evm synced within one block of a fresh tip",
+			chainType:     bchain.ChainEthereumType,
 			bestHeight:    99,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -73,6 +78,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "reports evm synced on a sub-second chain at the tip",
+			chainType:     bchain.ChainEthereumType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-1 * time.Second),
@@ -82,6 +88,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "keeps sub-second chain synced inside the freshness floor",
+			chainType:     bchain.ChainEthereumType,
 			inSync:        true,
 			bestHeight:    100,
 			backendBlocks: 100,
@@ -93,6 +100,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "marks sub-second chain stale past the freshness floor",
+			chainType:     bchain.ChainEthereumType,
 			inSync:        true,
 			bestHeight:    100,
 			backendBlocks: 100,
@@ -102,6 +110,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "does not report synced more than one block behind tip",
+			chainType:     bchain.ChainEthereumType,
 			bestHeight:    98,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -110,6 +119,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "does not report synced during initial sync",
+			chainType:     bchain.ChainEthereumType,
 			initialSync:   true,
 			bestHeight:    100,
 			backendBlocks: 100,
@@ -119,12 +129,14 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "keeps startup grace for fresh regular sync",
+			chainType:     bchain.ChainBitcoinType,
 			backendBlocks: 100,
 			startSync:     now.Add(-2 * time.Second),
 			want:          true,
 		},
 		{
 			name:          "marks already synced evm stale",
+			chainType:     bchain.ChainEthereumType,
 			inSync:        true,
 			bestHeight:    100,
 			backendBlocks: 100,
@@ -134,6 +146,7 @@ func TestSystemInfoInSync(t *testing.T) {
 		},
 		{
 			name:          "keeps already synced evm fresh",
+			chainType:     bchain.ChainEthereumType,
 			inSync:        true,
 			bestHeight:    100,
 			backendBlocks: 100,
@@ -146,6 +159,7 @@ func TestSystemInfoInSync(t *testing.T) {
 			// The tip/freshness rescue applies to any chain with a configured cadence, not
 			// only EVM: a UTXO chain at the tip mid-resync-iteration must not read stale.
 			name:          "reports synced at a fresh tip for a non-evm chain",
+			chainType:     bchain.ChainBitcoinType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -154,9 +168,25 @@ func TestSystemInfoInSync(t *testing.T) {
 			want:          true,
 		},
 		{
+			// The demotion, unlike the rescue, stays EVM-only. UTXO block arrival is
+			// Poisson, so a gap past 12 mean spacings happens on a healthy chain often
+			// enough to page; a stalled UTXO indexer is caught by comparing
+			// blockbook_best_height against blockbook_backend_best_height instead.
+			name:          "does not demote a stale non-evm chain",
+			chainType:     bchain.ChainBitcoinType,
+			inSync:        true,
+			bestHeight:    100,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-3 * time.Hour),
+			startSync:     oldStart,
+			blockPeriod:   600 * time.Second,
+			want:          true,
+		},
+		{
 			// No configured cadence (blockPeriod <= 0): fall back to the raw flag, no
 			// freshness rescue or demotion.
 			name:          "keeps the raw out-of-sync flag without a configured cadence",
+			chainType:     bchain.ChainBitcoinType,
 			bestHeight:    100,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
@@ -167,7 +197,7 @@ func TestSystemInfoInSync(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := systemInfoInSync(tt.inSync, tt.initialSync, tt.bestHeight, tt.backendBlocks, tt.lastBlockTime, tt.startSync, now, tt.blockPeriod)
+			got := systemInfoInSync(tt.inSync, tt.initialSync, tt.chainType, tt.bestHeight, tt.backendBlocks, tt.lastBlockTime, tt.startSync, now, tt.blockPeriod)
 			if got != tt.want {
 				t.Fatalf("systemInfoInSync() = %v, want %v", got, tt.want)
 			}
@@ -558,6 +588,10 @@ func fanInHash(n uint64) string { return fmt.Sprintf("%064x", n) }
 // registry swapped in for the duration. This keeps each test from sharing gauge state with
 // the others (which made them order-dependent under -shuffle) and from registering ~60
 // Blockbook collectors on the process-wide prometheus.DefaultRegisterer.
+//
+// The swap is of package-level globals, so a caller must not run under t.Parallel() - no
+// test in this package does. common.GetMetrics takes no registry, which is why the globals
+// are the seam; give it one if a parallel caller ever needs this.
 func newRefreshTestMetrics(t *testing.T) *common.Metrics {
 	t.Helper()
 	oldReg, oldGath := prometheus.DefaultRegisterer, prometheus.DefaultGatherer
