@@ -72,7 +72,7 @@
                 "alternative_estimate_fee": "1inch",
                 "alternative_estimate_fee_params": "{\"url\": \"https://api.1inch.dev/gas-price/v1.5/1\", \"periodSeconds\": 10}",
                 "mempoolTxTimeoutHours": 48,
-                "mempoolTxTimeout": "3h",
+                "mempoolTxTimeout": "48h",
                 "alternativeMempoolTxTimeout": "3h",
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,
