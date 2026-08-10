@@ -123,7 +123,8 @@ flowchart TD
     s{"confirmed nonce above tx nonce?<br/>relay eth_getTransactionCount latest"}
     evSup["evict: nonce_superseded"]
     k{"still surfaced by the relay?"}
-    kto{"missing run past<br/>alternativeMissingTxTimeout,<br/>or past the cache timeout?"}
+    nto{"past the cache timeout?"}
+    kto{"missing run past<br/>alternativeMissingTxTimeout?"}
     evMiss["evict: provider_missing"]
     keepMiss["keep: provider_missing_pending<br/>a short run of nulls is tolerated,<br/>absorbing a transient relay fluke"]
     yto{"past the cache timeout?"}
@@ -143,7 +144,9 @@ flowchart TD
     m -- "no" --> s
     s -- "yes" --> evSup
     s -- "no" --> k
-    k -- "no" --> kto
+    k -- "no" --> nto
+    nto -- "yes" --> evTo2
+    nto -- "no" --> kto
     kto -- "yes" --> evMiss
     kto -- "no" --> keepMiss
     k -- "yes" --> yto
@@ -153,7 +156,7 @@ flowchart TD
     classDef step fill:#e7f0ff,stroke:#4078c0,color:#10243e;
     classDef keep fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
     classDef evict fill:#fff7e6,stroke:#b8860b,color:#3a2a00;
-    class e,f,b,q,qerr,m,s,k,kto,yto step;
+    class e,f,b,q,qerr,m,s,k,nto,kto,yto step;
     class keepFresh,keepBackoff,keepErr,keepMiss,keepK keep;
     class evTo,evTo2,evMined,evSup,evMiss evict;
 ```
