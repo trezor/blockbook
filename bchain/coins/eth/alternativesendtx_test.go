@@ -480,6 +480,40 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsTransactionWithou
 	}
 }
 
+// TestAlternativeSendTxProviderNormalizesTxidSpelling pins that the cache answers whatever spelling of
+// the hash a caller uses. It is keyed on tx.Hash().Hex() - 0x-prefixed lower case - and is the
+// authoritative store for a relay-accepted send (the primary RPC does not know the tx), so a
+// case-mismatch miss on the read path reads as the transaction not existing anywhere, and a missed
+// removal leaves a mined transaction served as pending until the cache timeout.
+func TestAlternativeSendTxProviderNormalizesTxidSpelling(t *testing.T) {
+	const canonical = "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	for name, spelling := range map[string]string{
+		"upper case":     "0x" + strings.ToUpper(canonical[2:]),
+		"no prefix":      canonical[2:],
+		"0X prefix":      "0X" + canonical[2:],
+		"canonical form": canonical,
+	} {
+		t.Run(name, func(t *testing.T) {
+			provider := &AlternativeSendTxProvider{
+				fetchMempoolTx:    true,
+				mempoolTxsTimeout: time.Hour,
+				mempoolTxs: map[string]storedTx{
+					canonical: {tx: &bchain.RpcTransaction{Hash: canonical}, time: uint32(time.Now().Unix())},
+				},
+			}
+			if _, found := provider.GetTransaction(spelling); !found {
+				t.Errorf("GetTransaction(%q) missed the cache entry keyed %q", spelling, canonical)
+			}
+			if !provider.RemoveTransaction(spelling) {
+				t.Errorf("RemoveTransaction(%q) missed the cache entry keyed %q", spelling, canonical)
+			}
+			if len(provider.mempoolTxs) != 0 {
+				t.Error("entry survived the removal")
+			}
+		})
+	}
+}
+
 // newSequencedTxProviderTestServer answers each eth_getTransactionByHash call with the next response in
 // the sequence, repeating the last one once exhausted, and reports how many calls it served.
 func newSequencedTxProviderTestServer(t *testing.T, responses []string) (*httptest.Server, func() int) {
