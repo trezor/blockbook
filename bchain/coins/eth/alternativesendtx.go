@@ -850,11 +850,23 @@ func (p *AlternativeSendTxProvider) exposeRetryDelay() time.Duration {
 	return exposeFetchBackRetryDelay
 }
 
+// normalizeTxid canonicalizes a transaction hash to the form the cache is keyed on - 0x-prefixed
+// lower-case, the encoding of tx.Hash().Hex() the send path inserts under. The cache is authoritative
+// for a relay-accepted send (the primary RPC does not know it), so a lookup or removal arriving in any
+// other spelling - upper case, missing prefix - would read as the transaction not existing anywhere,
+// which is the exposed-nowhere outcome this subsystem exists to prevent. Applied at every boundary
+// that takes a caller-supplied txid, so no single call site has to remember it.
+func normalizeTxid(txid string) string {
+	return ethcommon.HexToHash(txid).Hex()
+}
+
 // cacheMempoolTransaction caches a pending transaction body under txid and indexes it in the wrapped
 // Blockbook mempool, ordering itself against concurrent sends for the same (from, nonce) slot through
 // the send generation gen. Reached from the send path, and from handleMempoolTransaction when the
-// signed bytes did not decode.
+// signed bytes did not decode - there txid is the relay's echo, which normalizeTxid folds onto the
+// cache's canonical key form.
 func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bchain.RpcTransaction, gen uint64) {
+	txid = normalizeTxid(txid)
 	from, nonce, decoded := txSenderAndNonce(tx)
 
 	// checked before the cache scan below: the scan only sees slots that produced an entry
@@ -985,11 +997,14 @@ func (p *AlternativeSendTxProvider) evictReplacedByNonce(from ethcommon.Address,
 	}
 }
 
-// GetTransaction gets a transaction from alternative mempool cache
+// GetTransaction gets a transaction from alternative mempool cache. The txid is normalized to the
+// cache's key form first: the caller's spelling comes off the wire, and a case-mismatch miss here
+// falls through to the primary RPC, which by design does not have the private transaction.
 func (p *AlternativeSendTxProvider) GetTransaction(txid string) (*bchain.RpcTransaction, bool) {
 	if !p.fetchMempoolTx {
 		return nil, false
 	}
+	txid = normalizeTxid(txid)
 
 	var storedTx storedTx
 	var found bool
@@ -1434,6 +1449,8 @@ func (p *AlternativeSendTxProvider) removeTransaction(txid string, action string
 	if !p.fetchMempoolTx {
 		return false
 	}
+	// normalized like GetTransaction: block sync and the read path hand over the caller's spelling
+	txid = normalizeTxid(txid)
 
 	p.mempoolTxsMux.Lock()
 	removedTx, found := p.mempoolTxs[txid]
