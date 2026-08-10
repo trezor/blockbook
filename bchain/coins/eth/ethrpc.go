@@ -801,7 +801,12 @@ func (b *EthereumRPC) InitAlternativeProviders() error {
 // CreateMempool creates mempool if not already created, however does not initialize it
 func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		mempoolTxTimeout, err := b.ChainConfig.MempoolTxTimeoutDuration(b.alternativeSendTxProvider != nil)
+		// The retention coupling below exists only when the pending-tx cache does: a URLS-only
+		// deployment (no *_ALTERNATIVE_FETCH_MEMPOOL_TX) broadcasts through the relay but never
+		// writes the cache, so there is no private address index to outlive and nothing to invert -
+		// it keeps the legacy retention and must not be failed for an explicit short timeout.
+		cacheEnabled := b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.fetchMempoolTx
+		mempoolTxTimeout, err := b.ChainConfig.MempoolTxTimeoutDuration(cacheEnabled)
 		if err != nil {
 			return nil, err
 		}
@@ -809,7 +814,7 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 		// existing. Inverted, private transactions silently lose their address index while still being
 		// served as pending (#1573), so it is rejected rather than warned about - and rejected before the
 		// mempool is assigned, so a second call cannot hand out a mempool with no provider wired to it.
-		if b.alternativeSendTxProvider != nil && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
+		if cacheEnabled && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
 			// wrapped in ErrConfiguration so startup fails fast: this cannot resolve on a retry, and
 			// the retry loop would otherwise spend two minutes reporting it once a second as an RPC fault
 			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must be longer than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)

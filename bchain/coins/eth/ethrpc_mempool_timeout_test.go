@@ -327,7 +327,7 @@ func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
 			}
 			b := &EthereumRPC{
 				ChainConfig:               &tt.config,
-				alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: alternative},
+				alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: alternative, fetchMempoolTx: true},
 			}
 			_, err = b.CreateMempool(nil)
 			if tt.wantError && err == nil {
@@ -353,6 +353,37 @@ func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCreateMempoolWithoutFetchMempoolTxKeepsLegacyRetention pins that a URLS-only deployment
+// (broadcast through the relay, *_ALTERNATIVE_FETCH_MEMPOOL_TX unset) is outside the retention
+// coupling: the pending-tx cache is never written or read, so there is no private address index to
+// outlive - an explicit short mempoolTxTimeout must not fail startup, and the derived default must
+// stay the legacy hour-based value rather than the cache retention plus margin.
+func TestCreateMempoolWithoutFetchMempoolTxKeepsLegacyRetention(t *testing.T) {
+	t.Run("explicit short timeout is accepted", func(t *testing.T) {
+		b := &EthereumRPC{
+			ChainConfig:               &Configuration{MempoolTxTimeout: "10m", AlternativePendingTxWindow: "3h"},
+			alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: 3 * time.Hour},
+		}
+		if _, err := b.CreateMempool(nil); err != nil {
+			t.Fatalf("CreateMempool() error = %v, want a URLS-only deployment with a short explicit timeout accepted", err)
+		}
+	})
+	t.Run("derived default stays legacy", func(t *testing.T) {
+		// The derivation consults the alternative window only when the cache exists (see
+		// TestConfigurationMempoolTxTimeoutDuration for the two derivations themselves); a window
+		// this config cannot parse proves CreateMempool takes the legacy branch for a URLS-only
+		// provider rather than keying on the provider existing.
+		config := &Configuration{MempoolTxTimeoutHours: 12, AlternativePendingTxWindow: "not-a-duration"}
+		b := &EthereumRPC{
+			ChainConfig:               config,
+			alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: 3 * time.Hour},
+		}
+		if _, err := b.CreateMempool(nil); err != nil {
+			t.Fatalf("CreateMempool() error = %v, want the URLS-only path to never read the alternative window", err)
+		}
+	})
 }
 
 func TestInitAlternativeProvidersUsesAlternativeMempoolTxTimeout(t *testing.T) {

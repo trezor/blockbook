@@ -11,7 +11,7 @@ and its invariants are in [evm-send.md](/docs/evm-send.md); this page maps the t
 | Holds | txid + address index (+ token transfers) | full `RpcTransaction` body, sender, nonce, send generation |
 | Populated from | `newPendingTransactions` WS feed; the resync snapshot; own successful sends when `disableMempoolSync` | only sends a relay ACKed, in `ALTERNATIVE_SENDTX_ONLY` + `ALTERNATIVE_FETCH_MEMPOOL_TX` mode — from the signed bytes alone |
 | Serves | address and xpub txs (`GetAddrDescTransactions`), wallet `NewTx` pushes | tx bodies on `GetTransaction`, the pending-nonce floor |
-| Retention | `mempoolTxTimeout` — the cache retention + 30 min when a relay is configured, else `mempoolTxTimeoutHours` | `alternativePendingTxWindow` — 3 h, the window in which a privately broadcast tx can still be built into a block |
+| Retention | `mempoolTxTimeout` — the cache retention + 30 min when the pending-tx cache is enabled, else `mempoolTxTimeoutHours` | `alternativePendingTxWindow` — 3 h, the window in which a privately broadcast tx can still be built into a block |
 | Reconciled | `Resync` every ~60 s; timeout sweep at most every 10 min | `reconcileMempoolTxs` on a 1 min tick, against the relay; an entry is re-probed less often as it ages |
 
 A private transaction is in **both**: the cache holds the body and is the source of truth, the wrapped
@@ -51,7 +51,7 @@ flowchart TD
     snap["startup and Resync snapshot<br/>eth_getBlockByNumber pending<br/>only when queryBackendOnMempoolResync"]
 
     alt[("MEV / private cache<br/>full tx bodies<br/>timeout 3 h")]
-    pub[("Blockbook mempool<br/>txids + address index<br/>cache retention + 30 min with relay")]
+    pub[("Blockbook mempool<br/>txids + address index<br/>cache retention + 30 min with the cache")]
 
     altrec["reconcileMempoolTxs, 1 min tick<br/>evicts mined, nonce_superseded, timeout and<br/>entries missing from the relay past<br/>alternativeMissingTxTimeout"]
     pubrec["Mempool Resync, every 60 s<br/>timeout sweep at most every 10 min<br/>plus backend-missing removal"]
