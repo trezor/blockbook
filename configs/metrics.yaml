@@ -349,7 +349,7 @@ metrics:
   synchronized:
     name: blockbook_synchronized
     type: gauge
-    help: 1 when /api/status reports inSync, 0 otherwise; sustained 0 outside initial sync means the index is not keeping up with the tip, for example after a stalled tip feed. Refreshed on every sync-loop iteration, so a stall shows up within one resync rather than on the next periodic metrics tick; pair it with blockbook_initial_sync to exclude planned reindexes
+    help: 1 when /api/status reports inSync, 0 otherwise; sustained 0 outside initial sync means the index is not keeping up with the tip, for example after a stalled tip feed. Refreshed on every sync-loop iteration, so a stall shows up within one resync rather than on the next periodic metrics tick; pair it with blockbook_initial_sync to exclude planned reindexes. The index may trail the tip by up to 30s worth of blocks and still read 1 - 120 blocks on a 250ms chain, 2 on Ethereum, 1 on anything spaced over 15s - so this is a "not keeping up" signal, not a "one block behind" signal
   backend_best_height:
     name: blockbook_backend_best_height
     type: gauge
