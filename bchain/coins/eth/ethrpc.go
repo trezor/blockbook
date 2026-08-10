@@ -2127,18 +2127,25 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 }
 
 // minEstimateFallbackTimeout is what the primary estimate keeps even when the relay leg consumed the
-// whole request budget. Without a floor a slow relay would leave the fallback pre-expired, which is the
-// failure the deadline placement above exists to avoid.
+// whole request budget - clamped to the budget itself for coins whose rpc_timeout sits below it (see
+// remainingEstimateTimeout). Without a floor a slow relay would leave the fallback pre-expired, which
+// is the failure the deadline placement above exists to avoid.
 const minEstimateFallbackTimeout = 5 * time.Second
 
 // remainingEstimateTimeout returns what is left of the request's budget since started, floored at
-// minEstimateFallbackTimeout.
+// minEstimateFallbackTimeout - clamped to the budget itself, so a coin configured with rpc_timeout
+// below the floor is not handed a fallback larger than its whole budget (at rpc_timeout 2s an
+// unclamped floor let the request run 3.5x its budget).
 func (b *EthereumRPC) remainingEstimateTimeout(started time.Time) time.Duration {
-	if remaining := b.Timeout - time.Since(started); remaining > minEstimateFallbackTimeout {
+	floor := minEstimateFallbackTimeout
+	if b.Timeout < floor {
+		floor = b.Timeout
+	}
+	if remaining := b.Timeout - time.Since(started); remaining > floor {
 		return remaining
 	}
 
-	return minEstimateFallbackTimeout
+	return floor
 }
 
 // observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
