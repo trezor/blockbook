@@ -204,6 +204,14 @@ Declaring the field also outlives the routing window: `useForNonces` stops routi
 after its send, but a wallet that keeps declaring an in-flight transaction keeps being routed to the
 relay for as long as it is actually pending.
 
+Pruning the declaration is the wallet's side of the contract. Blockbook cannot tell a stale
+declaration from a live one and never expires one server-side — unlike a cached transaction, which
+the missing eviction retires once the relay stops answering for it (`alternativeMissingTxTimeout`) —
+so a wallet that keeps declaring a dropped transaction's nonce keeps its own floor raised past it
+(only its own: the declaration is per-request). A wallet that derives the declaration from the
+pending transactions Blockbook itself reports self-heals: the missing eviction removes the dropped
+transaction from those answers within minutes, and the declaration follows on the next re-fetch.
+
 Note the deliberate trade-off against pre-#1629 behavior: `estimateFee` is no longer routed to the
 relay for *every* sender, so a wallet that sent privately, omitted the hint, and is served by a
 different replica than the one that accepted the send has its estimate simulated on the primary RPC
@@ -217,8 +225,10 @@ declaration is per-request only: it is never written into `recentSenders` or the
 a hostile client can distort only its **own** request's answer and cannot poison another client's
 view or any shared state. Its one outward effect is forcing the read to route to the relay; that is
 bounded by the relay's own rate-limit quota and the per-connection pending-requests limit, and — by
-design — does **not** re-introduce the #1629 hot-path quota drain, because a normal wallet declares
-the field only when it genuinely has a private tx in flight (rare), not on every keystroke.
+design — does **not** re-introduce the #1629 hot-path quota drain: #1629 routed *every* sender's
+every keystroke unconditionally, while a declared estimate reaches the relay at keystroke rate only
+from a wallet actually tracking an in-flight transaction, a population and a window bounded by
+pendinghood rather than by everyone composing a send.
 
 ## Observability
 
