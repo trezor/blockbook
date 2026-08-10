@@ -15,8 +15,9 @@ import (
 // useForNonces is false and it would otherwise go to the primary RPC) is routed to the alternative
 // provider purely because the request declared an in-flight private nonce.
 func TestEthereumTypeGetNonces_PrivatePendingHint_RoutesUnknownAddress(t *testing.T) {
-	// the relay no longer counts the declared tx at its pending tag, so it answers 42 for a tx that
-	// occupies exactly that slot - the gap the hint exists to close
+	// the answering relay node does not count the declared tx at its pending tag - lagging, regressed
+	// below its window, or never given the tx - so it answers 42 for a tx occupying exactly that
+	// slot; the declared floor is the safety net that closes it
 	server := newNonceRPCServer(t, map[string]string{"pending": "0x2a"}, nil)
 	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
 	// no recent senders → without the hint this address would be served by the primary RPC
