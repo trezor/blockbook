@@ -1726,7 +1726,10 @@ func TestAlternativeSendTxProviderRaiseToPendingFloor(t *testing.T) {
 		{name: "declared above a hole strands, it does not jump", addr: sender, cached: cached(), declared: []uint64{7}, pending: 4, wantFloor: 4, wantStranded: true},
 		{name: "declared nonce 0 is a literal, not a sentinel", addr: sender, cached: cached(), declared: []uint64{0}, pending: 0, wantFloor: 1},
 		{name: "declared set is order-independent", addr: sender, cached: cached(), declared: []uint64{6, 4, 5}, pending: 4, wantFloor: 7},
-		{name: "declared for another address is invisible", addr: ethcommon.HexToAddress("0x4444444444444444444444444444444444444444"), cached: cached("0x4"), pending: 4, wantFloor: 4},
+		// declared nonces are folded in for whichever address is queried - unlike the cache, this
+		// function does not filter them by address; scoping the declaration to its own request (and so
+		// to its own descriptor) is the caller's job, see api.AddressFilter.PrivatePendingNonces
+		{name: "declared applies to the queried address, unlike another sender's cache", addr: ethcommon.HexToAddress("0x4444444444444444444444444444444444444444"), cached: cached("0x4"), declared: []uint64{4}, pending: 4, wantFloor: 5},
 		// a physically unreachable declared nonce cannot corrupt the answer: it is a set member like
 		// any other, so it is simply never reached by a walk that starts far below it
 		{name: "declared MaxUint64 next to a real nonce", addr: sender, cached: cached(), declared: []uint64{math.MaxUint64, 4}, pending: 4, wantFloor: 5, wantStranded: true},
