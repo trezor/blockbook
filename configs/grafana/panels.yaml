@@ -243,14 +243,14 @@ panels:
         legend: '{{action}} p95'
   sync.eth_alternative_nonce_requests:
     title: Alternative send-tx provider nonce requests (req/s)
-    description: 'eth_getTransactionCount lookups routed to the alternative send-tx provider, per second by result (error = fell back to the primary RPC). Gated to addresses that sent privately within the routing window (15 min, see useForNonces / #1627), so it is a small subset of nonce traffic and should track recent private-send activity. A sustained climb means the gating is not shedding load off the provider''s rate quota; a rising error share means the relay is unhealthy.'
+    description: 'eth_getTransactionCount lookups routed to the alternative send-tx provider, per second by result (error = fell back to the primary RPC). Routed on a declared privatePending hint or on the recent-sender window (15 min, see useForNonces / #1627), so it is a subset of nonce traffic tracking accounts with a pending tx - hint-declaring wallets re-declare on every account sync while anything is pending, so the rate follows pendinghood, not recent sends through this instance. A rising error share means the relay is unhealthy.'
     queries:
       by_result:
         promql: sum by (coin, result) (rate({{name:eth_alternative_nonce_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
         legend: '{{coin}} - {{result}}'
   sync.eth_alternative_estimate_gas_requests:
     title: Alternative send-tx provider gas estimates (req/s)
-    description: 'eth_estimateGas calls routed to the alternative send-tx provider, per second by result (error = fell back to the primary RPC). Gated to addresses that sent privately within the routing window (15 min, see useForNonces / #1629), so it is a small subset of estimateFee traffic. A sustained climb means the gating is not shedding this hot endpoint off the provider''s rate quota; a rising error share means the relay is unhealthy.'
+    description: 'eth_estimateGas calls routed to the alternative send-tx provider, per second by result (error = fell back to the primary RPC). Routed on a declared privatePending hint or on the recent-sender window (15 min, see useForNonces / #1629), so it is a subset of estimateFee traffic - but a declaring wallet composing a send estimates at keystroke rate, so volume tracks senders with something pending rather than the 15-min window. Hint-less keystroke traffic still going to the relay for everyone would be the #1629 regression; a rising error share means the relay is unhealthy.'
     queries:
       by_result:
         promql: sum by (coin, result) (rate({{name:eth_alternative_estimate_gas_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))

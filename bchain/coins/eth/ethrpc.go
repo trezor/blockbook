@@ -2098,7 +2098,8 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	// load-balanced-replica gaps the heuristic leaves. Every other estimate - the bulk of them, since
 	// the wallet calls estimateFee on each send-form keystroke - goes straight to the primary and no
 	// longer burns the provider's quota (#1629); so does a missing `from`. Unlike a declared nonce,
-	// which is itself the answer, a declared estimate only picks the backend: Blockbook still simulates.
+	// which joins the answer's floor walk, a declared estimate only picks the backend: Blockbook still
+	// simulates.
 	// The hint is an unauthenticated per-request client signal: it can route only the caller's own
 	// request to the relay and never touches shared state, so it does not re-open the #1629 hot-path
 	// quota drain (accepted trust boundary, see docs/evm-send.md).
@@ -2257,8 +2258,9 @@ func (b *EthereumRPC) observeEip1559FeeSource(source string) {
 
 // observeAlternativeNonceRequest records an eth_getTransactionCount lookup routed to the alternative
 // send-tx provider, labeled by result: success (provider answered) or error (provider failed and the
-// lookup fell back to the primary RPC). Only recent private senders are routed here (see useForNonces),
-// so this counts the gated subset rather than every address request.
+// lookup fell back to the primary RPC). Only requests that declared private-pending state or whose
+// sender sent privately recently (see useForNonces) are routed here, a gated subset rather than every
+// address request.
 func (b *EthereumRPC) observeAlternativeNonceRequest(result string) {
 	if b.metrics == nil || b.metrics.EthAlternativeNonceRequests == nil {
 		return
@@ -2267,9 +2269,10 @@ func (b *EthereumRPC) observeAlternativeNonceRequest(result string) {
 }
 
 // observePendingFloorRaised records that raiseToPendingFloor lifted a getTransactionCount answer above
-// the backend's own pending nonce, by source: provider (the relay's own pending count had already
-// dropped a still-cached tx) or primary (the fallback RPC never knew the private tx). Expected while a
-// private send is in flight, not a fault.
+// the backend's own pending nonce, by source: provider (the relay's pending count lagged an in-flight
+// tx - near zero now that the relay counts over its whole window, a sustained rate means it regressed)
+// or primary (the fallback RPC never knew the private tx - expected while a private send is in flight,
+// not a fault).
 func (b *EthereumRPC) observePendingFloorRaised(source string) {
 	if b.metrics == nil || b.metrics.EthAlternativePendingFloorRaised == nil {
 		return
@@ -2520,14 +2523,16 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // is set, the confirmed (latest) nonce.
 //
 // When an alternative send-tx provider is configured, the lookup is routed through it only
-// for addresses that recently sent a transaction via that provider (see useForNonces) —
-// those may have a pending transaction the primary RPC does not know about. All other
-// addresses go straight to the primary RPC so that the hottest API endpoint does not burn
-// the provider's rate-limit quota. Whenever a provider is configured, the pending answer -
-// whether from the provider or from the primary RPC - is advanced across the contiguous run
-// of nonces the alternative mempool cache holds private transactions for (see
-// raiseToPendingFloor), so it never contradicts Blockbook's own pending view and never runs
-// past a slot nothing fills: pending <= answer <= pending + cached.
+// for requests that declare in-flight private transactions (privatePendingNonces, see
+// server.WsPrivatePending) and for addresses that recently sent a transaction via that
+// provider (see useForNonces) — both may have a pending transaction the primary RPC does
+// not know about. All other addresses go straight to the primary RPC so that the hottest
+// API endpoint does not burn the provider's rate-limit quota. Whenever a provider is
+// configured, the pending answer - whether from the provider or from the primary RPC - is
+// advanced across the contiguous run of nonce slots held by cached private transactions
+// and by the declared nonces (see raiseToPendingFloor), so it never contradicts Blockbook's
+// own pending view and never runs past a slot nothing fills:
+// pending <= answer <= pending + cached + declared.
 //
 // The pending nonce (eth_getTransactionCount at the "pending" tag) counts transactions
 // still queued in the mempool and is the next nonce the account will use; it is always

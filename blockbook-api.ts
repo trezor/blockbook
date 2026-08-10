@@ -714,7 +714,7 @@ export interface WsAccountInfoReq {
     gap?: number;
     /** If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call). */
     confirmedNonce?: boolean;
-    /** Ethereum-like only: the sender's in-flight private (alternative send-tx / relay) transactions the wallet is tracking for this address. When present, Blockbook answers the pending-nonce lookup from this authoritative wallet state instead of inferring it from recently accepted sends (see docs/evm-send.md). */
+    /** Ethereum-like only: the sender's in-flight private (alternative send-tx / relay) transactions the wallet is tracking for this address. When it declares nonces, Blockbook answers the pending-nonce lookup from this authoritative wallet state instead of inferring it from recently accepted sends (see docs/evm-send.md). */
     privatePending?: WsPrivatePending;
 }
 export interface WsContractInfoReq {
