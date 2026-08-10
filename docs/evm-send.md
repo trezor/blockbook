@@ -128,8 +128,11 @@ Key invariants:
 A privately broadcast transaction can be built into a block for around three hours (Blinklabs'
 figure), and the relay's `eth_getTransactionByHash` and pending `eth_getTransactionCount` answers
 cover that same window — they used to stop after roughly a minute, the root cause of
-[#1573](https://github.com/trezor/blockbook/issues/1573). Blockbook is sized to the window, and
-treats a transaction the relay stops answering for as dropped:
+[#1573](https://github.com/trezor/blockbook/issues/1573). One documented exception: with Blink's
+*revert protection* the retention is 96 seconds, not three hours — a send through such an endpoint
+that never mines stops being answered after that window and leaves through the missing eviction
+minutes later, not after `alternativePendingTxWindow`. Blockbook is sized to the window, and treats
+a transaction the relay stops answering for as dropped:
 
 | setting | default | what it governs |
 |---|---|---|
