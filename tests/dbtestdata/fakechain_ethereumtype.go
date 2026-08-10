@@ -118,7 +118,22 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetBalance(addrDesc bchain.Addr
 func (c *fakeBlockChainEthereumType) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (uint64, uint64, bool, error) {
 	// pending and confirmed are equal in the fake; production fetches them from
 	// distinct block tags ("pending" vs "latest"), and only fetches confirmed when requested.
-	return uint64(addrDesc[0]), uint64(addrDesc[0]), withConfirmed, nil
+	pending := uint64(addrDesc[0])
+	// Walk the pending nonce across the declared slots the way production does (see
+	// raiseToPendingFloor), so a server-level test can observe through the response that a request's
+	// privatePending declaration actually crossed the AddressFilter -> worker seam; the parameter is
+	// an optional variadic, so dropping it anywhere on that path compiles and nothing else notices.
+	declared := make(map[uint64]struct{}, len(privatePendingNonces))
+	for _, n := range privatePendingNonces {
+		declared[n] = struct{}{}
+	}
+	for {
+		if _, occupied := declared[pending]; !occupied {
+			break
+		}
+		pending++
+	}
+	return pending, uint64(addrDesc[0]), withConfirmed, nil
 }
 
 func (c *fakeBlockChainEthereumType) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
