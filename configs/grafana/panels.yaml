@@ -233,7 +233,7 @@ panels:
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_mempool_tx_residence:
     title: Alternative mempool tx lifetime by eviction reason
-    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing belongs near alternativeMissingTxTimeout (a dropped or cancelled tx retired on schedule) - collapsing below one reconcile cycle would be the premature-eviction regression (#1573), sitting at the cache timeout means the missing eviction is configured off. sync_removed, normally the dominant exit, shows how quickly relays actually confirm.
+    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing is the dropped/cancelled exit; residence counts age since broadcast, so a cancel N minutes after the send records ~N plus alternativeMissingTxTimeout - read the reason, not the age. Collapsing below one reconcile cycle would be the premature-eviction regression (#1573); an entry reaching the cache timeout leaves as timeout even when the relay answers null, so with the missing eviction configured off provider_missing stops firing. sync_removed, normally the dominant exit, shows how quickly relays actually confirm.
     queries:
       p50:
         promql: histogram_quantile(0.5, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
@@ -271,7 +271,7 @@ panels:
         legend: '{{coin}} - {{reason}}'
   sync.eth_alternative_pending_floor_raised:
     title: Alternative pending-nonce floor raised (req/s)
-    description: 'eth_getTransactionCount answers where the pending nonce was advanced above the backend answer, per second by source. primary (the RPC never knew the private tx) is expected while a private send is in flight; provider should be ~0 now that the relay counts a pending tx over its whole window - a sustained rate means its pending count regressed below that window again. The cost is bounded: a send that never mines holds its nonce slot until the missing eviction (alternativeMissingTxTimeout) retires it. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    description: 'eth_getTransactionCount answers where the pending nonce was advanced above the backend answer, per second by source. primary (the RPC never knew the private tx) is expected while a private send is in flight; provider should be ~0 now that the relay counts a pending tx over its whole window - a sustained rate means its pending count regressed below that window again, with a revert-protected send between its 96s retention lapsing and the missing eviction firing as the benign exception. The cost is bounded: a send that never mines holds its nonce slot until the missing eviction (alternativeMissingTxTimeout) retires it. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       by_source:
         promql: sum by (coin, source) (rate({{name:eth_alternative_pending_floor_raised_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))

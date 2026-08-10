@@ -28,7 +28,7 @@ flowchart TD
     reg["registerSuccessfulSend<br/>(record sender + URL, assign gen)"]
     evict["evictReplacedByNonce<br/>retire same-(from,nonce) predecessor<br/>on ACK (RBF / cancel), gen-ordered"]
     cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → AddTransactionToMempool → notify"]
-    handle["probeSentTransaction (background)<br/>fetch-back → report whether the relay<br/>surfaces what it accepted; writes nothing<br/>(undecodable hex → handleMempoolTransaction caches)"]
+    handle["probeSentTransaction (background)<br/>fetch-back → report whether the relay<br/>surfaces what it accepted; writes nothing<br/>(undecodable hex → exposeAcceptedSend<br/>retries, then caches)"]
 
     subgraph rec ["reconcileMempoolTxs (1 min tick, per cached tx, probes backed off by age)"]
         mined["mined → evict"]
@@ -151,7 +151,10 @@ relay's rate quota was exhausted in [#1629](https://github.com/trezor/blockbook/
 deployed. Two signals verify it in production:
 `blockbook_eth_alternative_pending_floor_raised_total{source="provider"}` and
 `blockbook_eth_alternative_send_not_surfaced_total{reason="not_found"}` should both sit near zero; a
-sustained rate on either means the relay's answers regressed below its window. For a relay that does
+sustained rate on either means the relay's answers regressed below its window. Revert-protected
+sends are the benign exception: between their 96 s retention lapsing and the missing eviction
+firing, a nonce lookup routed to the relay can raise the floor from the still-cached tx, ticking
+`floor_raised{source="provider"}` without any regression. For a relay that does
 not surface accepted transactions over its window at all, set `alternativeMissingTxTimeout` at the
 pending window — that restores the old timeout-only eviction instead of re-living
 [#1573](https://github.com/trezor/blockbook/issues/1573).
@@ -163,14 +166,17 @@ Prometheus counters for the cache lifecycle:
 - `blockbook_eth_alternative_mempool_reconciliation_events_total{action}` — cache exits by reason
   (`mined`, `nonce_superseded`, `provider_missing`, `timeout`, `rbf_replaced`, `sync_removed`) plus
   the kept actions (`skipped_fresh`, `skipped_backoff`, `provider_missing_pending`, `kept`,
-  `provider_error`). `sync_removed` — block sync indexing the tx's block, or the read path finding it
-  mined or unknown (a null lookup whose pruned-index recovery also failed) — should dominate, `mined`
-  should be rare.
+  `provider_error`). `sync_removed` — block sync indexing the tx's block — should dominate, `mined`
+  should be rare. The read path's mined-or-unknown removal also meters here, but it can fire only on
+  a cache miss (a cached entry is served without asking the node), so block sync is effectively the
+  sole source.
 - `blockbook_eth_alternative_mempool_tx_residence_seconds{action}` — entry lifetime per eviction
-  reason. `provider_missing` belongs near `alternativeMissingTxTimeout` (a dropped or cancelled tx
-  retired on schedule); collapsing below one reconcile cycle would be the premature-eviction
-  regression #1573 describes, sitting at the cache timeout means the missing eviction is configured
-  off.
+  reason. `provider_missing` is the dropped/cancelled exit; residence counts age since broadcast,
+  so a cancel N minutes after the send records ~N plus `alternativeMissingTxTimeout` — read the
+  reason, not the age. Collapsing below one reconcile cycle would be the premature-eviction
+  regression #1573 describes. An entry reaching the cache timeout leaves as `timeout` even when the
+  relay answers null, so with the missing eviction configured off `provider_missing` stops firing
+  rather than pinning at the timeout.
 - `blockbook_eth_alternative_mempool_cache_size` — current cache depth.
 
 Signals for *hanging* private transactions — a tx stuck Unconfirmed, or a nonce pinned above a dead
@@ -182,15 +188,18 @@ on-chain gap:
   txs the relay still surfaces are dying underpriced rather than mining — a dropped or cancelled tx
   leaves much earlier through the missing eviction.
 - `blockbook_eth_alternative_send_not_surfaced_total{reason}` — a relay-accepted send the fetch-back
-  did not surface (`not_found`/`error`) or never ran at all (`dropped`); the tx is still cached and
-  indexed from its signed bytes, so this is not a nonce-reuse precursor, and a relay that keeps not
-  surfacing it retires the entry through the missing eviction. `dropped` is counted only on the
+  did not surface (`not_found`/`error`) or never ran at all (`dropped`). On the normal path the tx is
+  still cached and indexed from its signed bytes, so this is not a nonce-reuse precursor, and a relay
+  that keeps not surfacing it retires the entry through the missing eviction. The exception is the
   raw-hex-decode-failure path (logged as `cannot decode accepted transaction`), where the fetch-back
-  was the one thing that could expose the send — there it really is exposed nowhere.
+  is the one thing that can expose the send: it retries for ~30 s (a lookup error means retry, never
+  gone, per the relay's contract), and a reason recorded there — `dropped` included — means the send
+  really is exposed nowhere.
 - `blockbook_eth_alternative_pending_floor_raised_total{source}` — `raiseToPendingFloor` lifted the
   pending nonce above the backend's own answer. `primary` (the fallback RPC never knew the private tx)
   tracks private-send activity, not faults; `provider` should sit near zero now that the relay counts
-  a pending tx over its whole window — a sustained rate means its pending count regressed.
+  a pending tx over its whole window — a sustained rate means its pending count regressed, with
+  revert-protected sends in their post-96s eviction gap as the benign exception (see above).
 - `blockbook_eth_alternative_pending_floor_stranded_total{source}` — the cache holds a private tx at a
   nonce *above* the run the floor could advance over, i.e. a slot nothing Blockbook knows of fills; the
   floor stops below the hole, so the wallet still gets a usable nonce while that transaction cannot

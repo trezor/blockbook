@@ -480,6 +480,93 @@ func TestAlternativeSendTxProviderHandleMempoolTransactionSkipsTransactionWithou
 	}
 }
 
+// newSequencedTxProviderTestServer answers each eth_getTransactionByHash call with the next response in
+// the sequence, repeating the last one once exhausted, and reports how many calls it served.
+func newSequencedTxProviderTestServer(t *testing.T, responses []string) (*httptest.Server, func() int) {
+	t.Helper()
+	var mu sync.Mutex
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		resp := responses[min(calls, len(responses)-1)]
+		calls++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(resp)); err != nil {
+			t.Errorf("Write() error = %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, func() int { mu.Lock(); defer mu.Unlock(); return calls }
+}
+
+// TestAlternativeSendTxProviderExposeAcceptedSendRetriesTransientFailure pins the retry that keeps a
+// transient relay fault from losing an accepted send for good: on this path no cache entry exists, so
+// nothing ever re-asks after the fetch-back gives up. Per the relay's contract a lookup error means
+// retry, never gone - here the first ask errors, the second answers null, the third surfaces the tx.
+func TestAlternativeSendTxProviderExposeAcceptedSendRetriesTransientFailure(t *testing.T) {
+	server, calls := newSequencedTxProviderTestServer(t, []string{
+		`{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"transient"}}`,
+		`{"jsonrpc":"2.0","id":1,"result":null}`,
+		testAlternativeKnownTxResponse,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:                 []string{server.URL},
+		rpcTimeout:           time.Second,
+		mempoolTxsTimeout:    time.Hour,
+		mempoolTxs:           map[string]storedTx{},
+		metrics:              newReconcileTestMetrics(),
+		exposeFetchBackDelay: time.Millisecond,
+	}
+
+	provider.exposeAcceptedSend(testAlternativeTxID, 1)
+
+	if got := calls(); got != 3 {
+		t.Errorf("eth_getTransactionByHash calls = %d, want 3 (error, null, found)", got)
+	}
+	entry, found := provider.mempoolTxs[testAlternativeTxID]
+	if !found {
+		t.Fatal("accepted send not cached after the retry surfaced it")
+	}
+	if entry.gen != 1 {
+		t.Errorf("cached tx generation = %d, want 1 (the generation of its own submission)", entry.gen)
+	}
+	for _, reason := range []string{"error", "not_found"} {
+		if got := labeledCounterValue(t, provider.metrics.EthAlternativeSendNotSurfaced, "reason", reason); got != 0 {
+			t.Errorf("send_not_surfaced{%s} = %v, want 0 - a retried-and-surfaced send is not a failure", reason, got)
+		}
+	}
+}
+
+// TestAlternativeSendTxProviderExposeAcceptedSendGivesUpAfterRetries pins the other side: a send the
+// relay never surfaces is asked exposeFetchBackAttempts times and observed exactly once, on the final
+// attempt - retries must not inflate the counter.
+func TestAlternativeSendTxProviderExposeAcceptedSendGivesUpAfterRetries(t *testing.T) {
+	server, calls := newSequencedTxProviderTestServer(t, []string{
+		`{"jsonrpc":"2.0","id":1,"result":null}`,
+	})
+	provider := &AlternativeSendTxProvider{
+		urls:                 []string{server.URL},
+		rpcTimeout:           time.Second,
+		mempoolTxsTimeout:    time.Hour,
+		mempoolTxs:           map[string]storedTx{},
+		metrics:              newReconcileTestMetrics(),
+		exposeFetchBackDelay: time.Millisecond,
+	}
+
+	provider.exposeAcceptedSend(testAlternativeTxID, 1)
+
+	if got := calls(); got != exposeFetchBackAttempts {
+		t.Errorf("eth_getTransactionByHash calls = %d, want %d", got, exposeFetchBackAttempts)
+	}
+	if got := labeledCounterValue(t, provider.metrics.EthAlternativeSendNotSurfaced, "reason", "not_found"); got != 1 {
+		t.Errorf("send_not_surfaced{not_found} = %v, want 1 (once at the final attempt, not per ask)", got)
+	}
+	if len(provider.mempoolTxs) != 0 {
+		t.Errorf("cache size = %d, want 0", len(provider.mempoolTxs))
+	}
+}
+
 // methodAwareServer is a JSON-RPC test server that returns a different response per RPC method and
 // records how many times each method was called.
 type methodAwareServer struct {

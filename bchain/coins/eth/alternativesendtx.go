@@ -142,6 +142,7 @@ type AlternativeSendTxProvider struct {
 	exposeCount                  int        // decode-failure fetch-backs in flight; guarded by backgroundMux
 	backgroundIdle               *sync.Cond // signalled when backgroundCount reaches 0; created lazily
 	backgroundMux                sync.Mutex
+	exposeFetchBackDelay         time.Duration // test seam; 0 means exposeFetchBackRetryDelay
 }
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
@@ -306,7 +307,7 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 			// thing that can expose the transaction. Dropping it loses the accepted send: nothing
 			// serves it, nothing indexes it and the pending-nonce floor does not rise, which is the
 			// nonce-reuse precursor - so count it like a relay that does not surface what it accepted.
-			if !p.inBackground(backgroundExpose, func() { p.handleMempoolTransaction(txid, gen) }) && !p.stopped() {
+			if !p.inBackground(backgroundExpose, func() { p.exposeAcceptedSend(txid, gen) }) && !p.stopped() {
 				p.observeSendNotSurfaced("dropped")
 			}
 		}
@@ -496,8 +497,15 @@ func (p *AlternativeSendTxProvider) waitForRefreshes() {
 // eviction clears the address index too, so the transaction would briefly be in neither store; block
 // sync removes it as sync_removed, with reconcile as the backstop.
 func (p *AlternativeSendTxProvider) probeSentTransaction(txid string) {
-	tx, found := p.fetchMempoolTransaction(txid)
+	tx, found, err := p.getTransactionFromProviders(txid)
+	if err != nil {
+		p.observeSendNotSurfaced("error")
+		glog.Errorf("eth_getTransactionByHash from alternative providers returned error %v", err)
+		return
+	}
 	if !found {
+		p.observeSendNotSurfaced("not_found")
+		glog.Errorf("eth_getTransactionByHash from alternative providers did not find txid %s", txid)
 		return
 	}
 	if tx.BlockNumber != "" {
@@ -765,13 +773,19 @@ func (p *AlternativeSendTxProvider) raiseToPendingFloor(addr ethcommon.Address, 
 	return floor, false
 }
 
-// handleMempoolTransaction fetches the transaction back from the alternative providers and caches it.
-// Reached only when the raw hex did not decode, which makes this the only thing that can expose the
-// transaction. gen must be THIS submission's generation rather than the sender's current one, which a
-// concurrent send can have bumped during the round-trip: stamping the newer one would let this entry's
-// eviction release the sender's routing while that newer transaction is still pending.
+// handleMempoolTransaction fetches the transaction back from the alternative providers and caches it -
+// one ask; exposeAcceptedSend is the retrying send-path wrapper. A failed lookup (the provider error)
+// is returned distinct from the relay answering null (bchain.ErrTxNotFound), because per the relay's
+// contract an error means retry-the-poll while only a null is a statement about the transaction; the
+// callers meter the two differently. gen must be THIS submission's generation rather than the sender's
+// current one, which a concurrent send can have bumped during the round-trip: stamping the newer one
+// would let this entry's eviction release the sender's routing while that newer transaction is still
+// pending.
 func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen uint64) (string, error) {
-	tx, found := p.fetchMempoolTransaction(txid)
+	tx, found, err := p.getTransactionFromProviders(txid)
+	if err != nil {
+		return txid, err
+	}
 	if !found {
 		return txid, bchain.ErrTxNotFound
 	}
@@ -786,22 +800,54 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string, gen ui
 	return txid, nil
 }
 
-// fetchMempoolTransaction asks the alternative providers for the transaction and reports whether any of
-// them returned it. A relay that accepted the send but does not return it is counted under
-// observeSendNotSurfaced, which documents what that costs (#1638 review).
-func (p *AlternativeSendTxProvider) fetchMempoolTransaction(txid string) (*bchain.RpcTransaction, bool) {
-	tx, found, err := p.getTransactionFromProviders(txid)
-	if err != nil {
-		p.observeSendNotSurfaced("error")
-		glog.Errorf("eth_getTransactionByHash from alternative providers returned error %v", err)
-		return nil, false
+// exposeFetchBackAttempts and exposeFetchBackRetryDelay bound how long exposeAcceptedSend keeps
+// re-asking the relay. No cache entry exists on that path, so nothing ever re-asks after it gives up -
+// reconcile walks only cached entries. The relay answers from one consistent store, so the first ask
+// should already surface an accepted send; the retries absorb a transient lookup error, which the
+// relay's contract says means retry, never gone. Four asks over ~30s also stay inside the 96s
+// revert-protection retention, the shortest window an accepted send can have.
+const (
+	exposeFetchBackAttempts   = 4
+	exposeFetchBackRetryDelay = 10 * time.Second
+)
+
+// exposeAcceptedSend fetches an accepted send back from the relay and caches it, re-asking up to
+// exposeFetchBackAttempts times. Reached only when the raw hex did not decode, which makes this
+// fetch-back the only thing that can expose the transaction - so unlike the probe path, a final
+// failure means the send is exposed NOWHERE (not served, not indexed, floor not raised), for
+// not_found and error exactly as for dropped. The failure is observed once, at the final attempt,
+// not per ask.
+func (p *AlternativeSendTxProvider) exposeAcceptedSend(txid string, gen uint64) {
+	for attempt := 1; ; attempt++ {
+		_, err := p.handleMempoolTransaction(txid, gen)
+		if err == nil {
+			return
+		}
+		if attempt < exposeFetchBackAttempts && !p.stopped() {
+			select {
+			case <-p.stop:
+				return
+			case <-time.After(p.exposeRetryDelay()):
+			}
+			continue
+		}
+		if err == bchain.ErrTxNotFound {
+			p.observeSendNotSurfaced("not_found")
+			glog.Errorf("eth_getTransactionByHash from alternative providers did not find accepted send %s; it is exposed nowhere", txid)
+		} else {
+			p.observeSendNotSurfaced("error")
+			glog.Errorf("eth_getTransactionByHash from alternative providers returned error %v for accepted send %s; it is exposed nowhere", err, txid)
+		}
+		return
 	}
-	if !found {
-		p.observeSendNotSurfaced("not_found")
-		glog.Errorf("eth_getTransactionByHash from alternative providers did not find txid %s", txid)
-		return nil, false
+}
+
+// exposeRetryDelay is exposeFetchBackRetryDelay unless a test shortens it through the struct field.
+func (p *AlternativeSendTxProvider) exposeRetryDelay() time.Duration {
+	if p.exposeFetchBackDelay > 0 {
+		return p.exposeFetchBackDelay
 	}
-	return tx, true
+	return exposeFetchBackRetryDelay
 }
 
 // cacheMempoolTransaction caches a pending transaction body under txid and indexes it in the wrapped
@@ -1095,8 +1141,12 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			// Requiring a short run rather than a single null absorbs a transient relay fluke; a relay
 			// without that consistency is accommodated by configuring alternativeMissingTxTimeout at
 			// the pending window, which restores timeout-only eviction.
+			// An entry at the cache timeout leaves as timeout whatever the final probe answered:
+			// provider_missing is reserved for the missing-run rule, so its residence reads as "how
+			// long after the drop", and the retention boundary - where Blink's 3h window makes a
+			// final null the EXPECTED answer for a tx stuck the whole window - does not pollute it.
 			if timedOut {
-				p.evictMempoolTx("provider_missing", tx.txid, tx.tx.time)
+				p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 				continue
 			}
 			missingSince := p.markMissing(tx.txid, tx.tx)
@@ -1233,11 +1283,13 @@ func (p *AlternativeSendTxProvider) setMempoolOldestAge(oldestUnix uint32) {
 }
 
 // observeSendNotSurfaced counts a relay-accepted private send whose post-send fetch-back did not surface
-// it. For not_found and error the transaction is still cached and indexed from its own signed bytes, so
-// it only means the relay does not report back what it accepted; a relay that keeps not surfacing it
-// retires the entry through the missing eviction (see reconcileMempoolTxs), with the cache timeout as
-// the backstop. The dropped reason is the exception: there the raw hex did not decode and the refused
-// fetch-back was the one thing that could have exposed the send, so it really is exposed nowhere.
+// it. What a reason means depends on which fetch-back observed it. On the probe path (the raw hex
+// decoded and the send is already cached from its signed bytes) not_found and error only mean the relay
+// does not report back what it accepted; a relay that keeps not surfacing it retires the entry through
+// the missing eviction (see reconcileMempoolTxs), with the cache timeout as the backstop. On the expose
+// path (the raw hex did not decode, see exposeAcceptedSend) every reason means the send is exposed
+// nowhere: not_found and error after the retries run out, dropped when the fetch-back was refused under
+// load and never ran at all.
 func (p *AlternativeSendTxProvider) observeSendNotSurfaced(reason string) {
 	if p.metrics == nil || p.metrics.EthAlternativeSendNotSurfaced == nil {
 		return
@@ -1366,8 +1418,9 @@ func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) bool {
 
 // RemoveTransaction removes a transaction from the alternative mempool cache. It is the entry point for
 // removals carrying no reconcile decision of their own - block sync indexing a mined transaction, the
-// read path finding one mined or unknown - and meters them as sync_removed, which nothing else would
-// since block sync almost always beats the next reconcile probe. Reached again as removeMempoolTx's
+// read path finding one mined or unknown - and meters them as sync_removed, which nothing else would.
+// In practice block sync is the sole source: the read path serves cached entries without asking the
+// node, so its mined/unknown branches run only on a cache miss, where there is nothing to remove. Reached again as removeMempoolTx's
 // delegate, where the entry is already gone, so nothing is metered twice.
 func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) bool {
 	return p.removeTransaction(txid, "sync_removed")
