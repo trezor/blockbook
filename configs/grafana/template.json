@@ -2160,7 +2160,7 @@
         },
         "overrides": []
       },
-      "id": 352,
+      "id": 358,
       "options": {
         "legend": {
           "calcs": [
@@ -3556,7 +3556,7 @@
               }
             ]
           },
-          "unit": "µs"
+          "unit": "\u00b5s"
         },
         "overrides": []
       },
