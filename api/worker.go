@@ -2660,10 +2660,15 @@ const (
 	// and the floor is what lets a fast chain's configured cadence be corrected downwards
 	// without tightening this check.
 	systemInfoMinStale = 30 * time.Second
-	// systemInfoSyncedGap is how far the indexed height may trail the backend tip and
-	// still count as synchronized. It covers the one-block window between the tip
+	// systemInfoSyncedGap is the floor for how far the indexed height may trail the backend
+	// tip and still count as synchronized. It covers the one-block window between the tip
 	// advancing and that block being connected, which would otherwise flap the status.
 	systemInfoSyncedGap = 1
+	// systemInfoSyncedGapWindow turns that floor into wall clock. One block is 12s of slack
+	// on Ethereum but 0.25s on Arbitrum, where an excursion peaking at 211 blocks - 53s of
+	// real lag - read as out-of-sync and paged. Same value as systemInfoMinStale on purpose:
+	// under 30s is jitter for both checks.
+	systemInfoSyncedGapWindow = systemInfoMinStale
 )
 
 // systemInfoInSync decides the externally reported in-sync state from the raw
@@ -2692,13 +2697,28 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 	}
 	isFresh := !lastBlockTime.Add(threshold).Before(now)
 
-	// A sync loop can stay inside ResyncIndex while new blocks keep arriving. If the
-	// indexed height is at (or within one block of) the backend tip and the index was
-	// updated recently, report the externally observable state as synchronized. int64
-	// avoids underflow if the backend momentarily reports a lower tip; gap >= 0 keeps an
-	// "ahead of tip" read from qualifying.
+	// Tolerate the blocks the chain produces inside the window, never fewer than one.
+	// Derived from the constant, not from threshold above: 12 block times divided by the
+	// block time is 12 blocks on every chain, which would stretch Bitcoin to two hours.
+	syncedGap := int64(systemInfoSyncedGap)
+	if lag := int64(systemInfoSyncedGapWindow / blockPeriod); lag > syncedGap {
+		syncedGap = lag
+	}
+
+	// A sync loop can stay inside ResyncIndex while new blocks keep arriving. If the indexed
+	// height is at (or close behind) the backend tip and the index was updated recently,
+	// report the externally observable state as synchronized. int64 avoids underflow if the
+	// backend reports a lower tip.
 	gap := int64(backendBlocks) - int64(bestHeight)
-	if !inSync && !initialSync && gap >= 0 && gap <= systemInfoSyncedGap && isFresh {
+	// A negative gap is the steady state for RefreshSyncMetrics, which compares against
+	// is.BackendInfo.Blocks - refreshed only at the end of a resync iteration: 99.8% of a
+	// day on Avalanche, 69% on Robinhood. Being past a cached tip only means blocks were
+	// connected after that snapshot, and isFresh still gates the rescue, so clamp rather
+	// than reject. backendBlocks > 0 keeps it from rescuing before any tip was observed.
+	if gap < 0 {
+		gap = 0
+	}
+	if !inSync && !initialSync && backendBlocks > 0 && gap <= syncedGap && isFresh {
 		return true
 	}
 
