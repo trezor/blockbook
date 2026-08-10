@@ -216,9 +216,11 @@ func TestEthereumTypeEstimateGasBoundsFallbackToRequestBudget(t *testing.T) {
 	if atomic.LoadInt32(primaryHits) != 1 {
 		t.Errorf("primary hits = %d, want 1", atomic.LoadInt32(primaryHits))
 	}
-	// the provider leg burned the whole budget, so the fallback runs on the floor, not a second budget
-	if elapsed > b.Timeout+minEstimateFallbackTimeout {
-		t.Errorf("elapsed %s exceeds the request budget %s plus the fallback floor %s", elapsed, b.Timeout, minEstimateFallbackTimeout)
+	// The provider leg burned the whole budget; with b.Timeout below the 5s floor the clamp hands the
+	// fallback exactly one more budget, so the worst case is two budgets - not budget plus a fixed 5s.
+	// The primary answers instantly here, so the generous slack only absorbs CI scheduling.
+	if elapsed > 2*b.Timeout+time.Second {
+		t.Errorf("elapsed %s exceeds two request budgets of %s plus slack", elapsed, b.Timeout)
 	}
 }
 
@@ -244,4 +246,16 @@ func TestRemainingEstimateTimeout(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("floor clamps to a budget below it", func(t *testing.T) {
+		// With rpc_timeout under the floor, an unclamped floor would hand the fallback more than the
+		// whole request budget - at 2s the request could run 3.5x its budget.
+		small := &EthereumRPC{Timeout: 2 * time.Second}
+		if got := small.remainingEstimateTimeout(time.Now().Add(-2 * time.Second)); got != 2*time.Second {
+			t.Errorf("remainingEstimateTimeout() = %s, want the whole 2s budget as the clamped floor", got)
+		}
+		if got := small.remainingEstimateTimeout(time.Now()); got > 2*time.Second {
+			t.Errorf("remainingEstimateTimeout() = %s, want at most the 2s budget", got)
+		}
+	})
 }
