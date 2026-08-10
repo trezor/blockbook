@@ -295,7 +295,7 @@ metrics:
   eth_alternative_pending_floor_stranded_total:
     name: blockbook_eth_alternative_pending_floor_stranded_total
     type: counter_vec
-    help: eth_getTransactionCount answers where the cache held a private tx for a nonce ABOVE the contiguous run the floor could advance over, i.e. with a hole below it that nothing Blockbook knows of fills. Labeled by source as in the raised counter; each sample is one request, not one transaction. The floor deliberately stops below the hole rather than advertising past it (#1675), so the stranded tx cannot mine until the hole is filled. Should be ~0; a sustained rate on source=provider means relay-accepted sends are not reaching the cache Counts a caller-declared nonce above the run as well as a cached one, so a client declaring odd nonces shows up here too.
+    help: eth_getTransactionCount answers where the cache held a private tx for a nonce ABOVE the contiguous run the floor could advance over, i.e. with a hole below it that nothing Blockbook knows of fills. Labeled by source as in the raised counter; each sample is one request, not one transaction. The floor deliberately stops below the hole rather than advertising past it (#1675), so the stranded tx cannot mine until the hole is filled. Should be ~0; a sustained rate on source=provider means relay-accepted sends are not reaching the cache. Counts a caller-declared nonce above the run as well as a cached one, so a client declaring odd nonces shows up here too
     labels: [source]
   eth_alternative_nonce_requests_total:
     name: blockbook_eth_alternative_nonce_requests_total
