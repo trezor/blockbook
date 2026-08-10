@@ -103,7 +103,11 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 
 	for i := range p.urls {
 		r, err := p.callHttpStringResult(p.urls[i], "eth_sendRawTransaction", hex)
-		glog.Infof("eth_sendRawTransaction to %s, txid %s", p.urls[i], r)
+		if err != nil {
+			glog.Errorf("eth_sendRawTransaction to %s failed: %v", p.urls[i], err)
+		} else {
+			glog.Infof("eth_sendRawTransaction to %s, txid %s", p.urls[i], r)
+		}
 		if err == nil && acceptedURL == "" {
 			acceptedURL = p.urls[i]
 		}
@@ -121,7 +125,9 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		gen = p.registerSuccessfulSend(hex, acceptedURL)
 	}
 
-	if p.onlyAlternative && p.fetchMempoolTx {
+	// fetch back only when some provider accepted the send; with txid empty the
+	// lookup would query the zero hash and log a confusing not-found error
+	if p.onlyAlternative && p.fetchMempoolTx && acceptedURL != "" {
 		p.handleMempoolTransaction(txid, gen)
 	}
 
