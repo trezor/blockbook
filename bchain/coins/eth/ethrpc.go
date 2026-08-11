@@ -83,9 +83,10 @@ type Configuration struct {
 	AddressContractsCacheMaxBytes     int64  `json:"address_contracts_cache_max_bytes,omitempty"`
 	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
 	AddressAliases                    bool   `json:"address_aliases,omitempty"`
-	// DisableEnsAliases turns off ENS reverse aliasing (address->name labels),
-	// keeping contract/token-name aliases; forward ResolveENS is unaffected.
-	DisableEnsAliases               bool   `json:"disable_ens_aliases,omitempty"`
+	// EnableEnsReverseAliases opts a chain into ENS reverse aliasing (address->name
+	// labels), which is off by default; see the warning on getEnsRecord. Contract/
+	// token-name aliases and forward ResolveENS are unaffected either way.
+	EnableEnsReverseAliases         bool   `json:"enable_ens_reverse_aliases,omitempty"`
 	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
 	MempoolTxTimeout                string `json:"mempoolTxTimeout,omitempty"`
 	AlternativeMempoolTxTimeout     string `json:"alternativeMempoolTxTimeout,omitempty"`
@@ -268,7 +269,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 	// always create parser
 	parser := NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
-	parser.DisableEnsAliases = c.DisableEnsAliases
+	parser.EnableEnsReverseAliases = c.EnableEnsReverseAliases
 	parser.HotAddressMinContracts = c.HotAddressMinContracts
 	parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
 	parser.HotAddressMinHits = c.HotAddressMinHits

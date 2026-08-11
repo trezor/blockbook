@@ -53,7 +53,6 @@
             "additional_params": {
                 "averageBlockTimeMs": 250,
                 "address_aliases": true,
-                "disable_ens_aliases": true,
                 "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
                 "trace_timeout": "10s",

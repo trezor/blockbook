@@ -37,15 +37,17 @@ func (p *EthereumParser) SetEnsSuffix(suffix string) {
 }
 
 // UseEnsReverseAliases reports whether ENS reverse aliases are recorded and served.
+// Opt-in: a chain gets them only with both address_aliases and
+// enable_ens_reverse_aliases set.
 func (p *EthereumParser) UseEnsReverseAliases() bool {
-	return p.AddressAliases && !p.DisableEnsAliases
+	return p.AddressAliases && p.EnableEnsReverseAliases
 }
 
+// getEnsRecord parses an ENS record from a transaction log entry.
+//
 // WARNING: not production-ready, disabled by default (see UseEnsReverseAliases).
 // Trusts any log emitter (spoofable labels), does not validate names, and ignores
 // expiry/ownership (stale/duplicate labels). Use forward ResolveENS instead.
-//
-// getEnsRecord parses an ENS record from a transaction log entry.
 func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
 	if len(l.Topics) == 3 && l.Topics[0] == nameRegisteredEventSignature && len(l.Data) >= 322 {
 		address, err := addressFromPaddedHex(l.Topics[2])

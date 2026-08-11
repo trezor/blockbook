@@ -52,7 +52,6 @@
             "block_addresses_to_keep": 10000,
             "additional_params": {
                 "address_aliases": true,
-                "disable_ens_aliases": true,
                 "mempoolTxTimeoutHours": 4,
                 "queryBackendOnMempoolResync": true,
                 "averageBlockTimeMs": 3000,

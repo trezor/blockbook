@@ -64,7 +64,6 @@
                     "maxStallMs": 60000
                 },
                 "address_aliases": true,
-                "disable_ens_aliases": true,
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "infura",
                 "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/43114/suggestedGasFees\", \"periodSeconds\": 15}",

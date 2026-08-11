@@ -13,18 +13,25 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// TestTronParser_UseEnsReverseAliases guards that the ENS reverse opt-out is
-// honored through TronParser's embedded eth parser. NewTronRPC recreates the
-// parser, so it must re-apply DisableEnsAliases (regression: Tron ignored the
-// flag and kept serving ENS reverse labels).
+// TestTronParser_UseEnsReverseAliases pins the opt-in truth table on the parser that
+// TronParser embeds: both address_aliases and enable_ens_reverse_aliases are required.
 func TestTronParser_UseEnsReverseAliases(t *testing.T) {
-	p := NewTronParser(1, true) // address aliases enabled
-	if !p.UseEnsReverseAliases() {
-		t.Fatal("expected ENS reverse aliases enabled by default")
-	}
-	p.DisableEnsAliases = true
-	if p.UseEnsReverseAliases() {
-		t.Fatal("expected ENS reverse aliases disabled after DisableEnsAliases=true")
+	for _, tt := range []struct {
+		name           string
+		addressAliases bool
+		enableEns      bool
+		want           bool
+	}{
+		{name: "off by default", addressAliases: true},
+		{name: "opted in", addressAliases: true, enableEns: true, want: true},
+		{name: "opt-in alone is not enough", enableEns: true},
+		{name: "both off", addressAliases: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewTronParser(1, tt.addressAliases)
+			p.EnableEnsReverseAliases = tt.enableEns
+			require.Equal(t, tt.want, p.UseEnsReverseAliases())
+		})
 	}
 }
 
