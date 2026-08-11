@@ -2101,8 +2101,7 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	// which joins the answer's floor walk, a declared estimate only picks the backend: Blockbook still
 	// simulates.
 	// The hint is an unauthenticated per-request client signal: it can route only the caller's own
-	// request to the relay and never touches shared state, so it does not re-open the #1629 hot-path
-	// quota drain (accepted trust boundary, see docs/evm-send.md).
+	// request to the relay and never touches shared state (see docs/evm-send.md, "Trust boundary").
 	declaredPrivatePending := estimatePrivatePendingDeclared(params)
 	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
 		(declaredPrivatePending || b.alternativeSendTxProvider.useForNonces(msg.From)) {
@@ -2555,12 +2554,9 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// Route to the provider when the caller declared in-flight private txs - a wallet knows its
 		// own submitted nonces authoritatively, where the recentSenders heuristic is defeated by a
 		// restart or by a load-balanced replica that did not accept the send - or when that
-		// heuristic says this sender sent privately through this instance recently. Routing replaces
-		// the primary's answer, which is safe because the relay's pending count is documented as the
-		// greater of the node's pending count and the relay's latest accepted nonce + 1 - a
-		// public-mempool superset, so it never falls below what the primary would have answered even
-		// for pending txs the declaring wallet does not know about (see docs/evm-send.md; a relay
-		// without that property would need this path made floor-only).
+		// heuristic says this sender sent privately through this instance recently. Replacing the
+		// primary's answer is safe because the relay's pending count is a public-mempool superset
+		// (see docs/evm-send.md).
 		if declared || b.alternativeSendTxProvider.useForNonces(ethAddress) {
 			pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
 			if err == nil {
