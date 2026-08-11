@@ -964,3 +964,49 @@ func TestTronRPC_RequestLatestSolidifiedBlockHeight_MissingNumber(t *testing.T) 
 	_, err := tronRPC.requestLatestSolidifiedBlockHeight(context.Background())
 	require.Error(t, err)
 }
+
+// TestNewTronRPC_PropagatesEnsReverseOptIn guards the config->parser wiring, not just the
+// parser predicate: NewTronRPC recreates the parser that NewEthereumRPC configured, so a
+// dropped re-apply silently leaves Tron serving ENS reverse labels (the original
+// regression). Reads the flag back through EthereumLikeParser, the same way
+// api.NewWorker does.
+func TestNewTronRPC_PropagatesEnsReverseOptIn(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		configEns string
+		want      bool
+	}{
+		{name: "absent from config leaves it off", configEns: ""},
+		{name: "explicit false leaves it off", configEns: `"enable_ens_reverse_aliases": false,`},
+		{name: "explicit true opts in", configEns: `"enable_ens_reverse_aliases": true,`, want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// NewEthereumRPC writes these process-wide; keep the test order-independent.
+			origProcessInternal := bchain.ProcessInternalTransactions
+			origStandards := bchain.EthereumTokenStandardMap
+			t.Cleanup(func() {
+				bchain.ProcessInternalTransactions = origProcessInternal
+				bchain.EthereumTokenStandardMap = origStandards
+			})
+
+			config := json.RawMessage(`{
+				"coin_name": "Tron",
+				"rpc_url": "http://127.0.0.1:18090",
+				"rpc_timeout": 25,
+				"block_addresses_to_keep": 300,
+				"address_aliases": true,
+				` + tt.configEns + `
+				"averageBlockTimeMs": 3000,
+				"mempoolTxTimeoutHours": 4
+			}`)
+
+			chain, err := NewTronRPC(config, func(bchain.NotificationType) {})
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, chain.Shutdown(context.Background())) })
+
+			parser, ok := chain.GetChainParser().(eth.EthereumLikeParser)
+			require.True(t, ok, "TronParser must satisfy EthereumLikeParser for the api worker gate")
+			require.Equal(t, tt.want, parser.UseEnsReverseAliases())
+		})
+	}
+}
