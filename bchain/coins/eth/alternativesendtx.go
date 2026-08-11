@@ -147,9 +147,10 @@ type AlternativeSendTxProvider struct {
 
 // NewAlternativeSendTxProvider creates a new alternative send tx provider if enabled
 func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTimeout, missingTxTimeout time.Duration, metrics *common.Metrics) *AlternativeSendTxProvider {
-	urls := strings.Split(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_URLS"), ",")
-	onlyAlternative := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
-	fetchMempoolTx := strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_FETCH_MEMPOOL_TX")) == "TRUE"
+	prefix := strings.ToUpper(network)
+	urls := strings.Split(os.Getenv(prefix+"_ALTERNATIVE_SENDTX_URLS"), ",")
+	onlyAlternative := strings.ToUpper(os.Getenv(prefix+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
+	fetchMempoolTx := strings.ToUpper(os.Getenv(prefix+"_ALTERNATIVE_FETCH_MEMPOOL_TX")) == "TRUE"
 	// Empty URL keeps the normal public RPC send path.
 	if len(urls) == 0 || urls[0] == "" {
 		return nil
@@ -168,7 +169,6 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 		metrics:           metrics,
 		stop:              make(chan struct{}),
 	}
-
 	// hosts only - the configured URLs commonly carry an API key
 	glog.Infof("Using %d alternative send transaction providers %v. Only alternative providers %v", len(urls), providerLabels(urls), onlyAlternative)
 	if fetchMempoolTx {

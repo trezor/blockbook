@@ -184,14 +184,10 @@ The field appears in two places, matching the two consumers of the routing machi
   Routing the lookup — replacing the primary's answer with the relay's — rests on a stated relay
   property: Blink's pending `eth_getTransactionCount` answers *the greater of* the node's pending
   count and the relay's latest accepted nonce + 1 (its API reference), i.e. a **superset of the
-  public mempool**. The routed answer therefore never falls below what the primary would have said,
-  even for pending transactions the declaring wallet knows nothing about — another device on the
-  same account with public pending txs, the case the declared floor alone cannot cover. A relay
-  *without* this property must not be routed to on the hint: its private-only count can fall below
-  the public mempool's, and the walk would strand a multi-device account on a nonce a public pending
-  tx already owns. With such a relay the nonce path would need to be made floor-only — the declared
-  floor over the primary's answer, which this PR's fallback path already computes, is correct for
-  the declaring wallet at zero relay cost; routing buys the *undeclared* private txs on top.
+  public mempool** — it never falls below what the primary would have said, even for pending txs
+  the declaring wallet knows nothing about (another device on the same account). A relay *without*
+  this property must not be routed to on the hint; its nonce path would have to be made floor-only —
+  the declared floor over the primary's answer, which the provider-failure fallback already computes.
 - **`estimateFee` → `specific.privatePending`** is a **routing signal only**. Unlike a nonce, the
   wallet cannot compute gas itself, so Blockbook still simulates the call — the declaration only says
   "estimate against the relay's pending-private state" (e.g. a privately-submitted `approve` a
@@ -231,16 +227,13 @@ without the private predecessor. Declaring `privatePending` closes that gap dete
 widening routing for hint-less senders is avoided because it is indistinguishable from the #1629
 hot-path drain.
 
-**Trust boundary (accepted).** `privatePending` is an *unauthenticated client hint* — Blockbook does
-not verify the caller owns the address or that a private tx actually exists. This is safe because the
-declaration is per-request only: it is never written into `recentSenders` or the pending-tx cache, so
-a hostile client can distort only its **own** request's answer and cannot poison another client's
-view or any shared state. Its one outward effect is forcing the read to route to the relay; that is
-bounded by the relay's own rate-limit quota and the per-connection pending-requests limit, and — by
-design — does **not** re-introduce the #1629 hot-path quota drain: #1629 routed *every* sender's
-every keystroke unconditionally, while a declared estimate reaches the relay at keystroke rate only
-from a wallet actually tracking an in-flight transaction, a population and a window bounded by
-pendinghood rather than by everyone composing a send.
+**Trust boundary (accepted).** `privatePending` is an *unauthenticated client hint*, and
+per-request only — never written into `recentSenders` or the pending-tx cache — so a hostile client
+can distort only its own request's answer, never shared state. Its one outward effect, routing the
+read to the relay, adds no capability an unauthenticated caller does not already have:
+`sendTransaction` spends the same relay quota with every call, fanned out to *every* relay URL, at
+no cost for a rejected transaction. Relay-quota protection, if ever needed, belongs in the server's
+per-IP rate limiting, uniformly across methods — not in this path.
 
 ## Observability
 
