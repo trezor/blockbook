@@ -69,3 +69,34 @@ func TestGetAddressAliases_EnsReverseGate(t *testing.T) {
 		require.Equal(t, AddressAliasesMap{contractAddr: contractAlias}, got)
 	})
 }
+
+// TestNewWorker_ReadsEnsReverseOptInFromParser closes the parser->worker hop. This is the
+// seam Test_PublicServer_EthereumType depends on: it configures only the parser and expects
+// the rendered pages to carry the ENS labels, so a worker that stopped consulting the parser
+// would break there rather than here. Also pins the wire format the server asserts
+// (address7b.eth), not just "some non-empty alias".
+func TestNewWorker_ReadsEnsReverseOptInFromParser(t *testing.T) {
+	for _, enableEns := range []bool{false, true} {
+		name := "gate closed"
+		if enableEns {
+			name = "gate open"
+		}
+		t.Run(name, func(t *testing.T) {
+			database, parser := setupEnsAliasDB(t)
+			parser.EnableEnsReverseAliases = enableEns
+			chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+			require.NoError(t, err)
+
+			w, err := NewWorker(database, chain, nil, nil, nil, database.GetInternalState(), nil)
+			require.NoError(t, err)
+			require.Equal(t, enableEns, w.useEnsReverseAliases)
+
+			got := w.getAddressAliases(map[string]struct{}{dbtestdata.EthAddr7bEIP55: {}})
+			if enableEns {
+				require.Equal(t, AddressAlias{Type: "ENS", Alias: "address7b.eth"}, got[dbtestdata.EthAddr7bEIP55])
+			} else {
+				require.NotContains(t, got, dbtestdata.EthAddr7bEIP55)
+			}
+		})
+	}
+}

@@ -348,6 +348,10 @@ func initTestFiatRatesEthereumType(d *db.RocksDB) error {
 func Test_PublicServer_EthereumType(t *testing.T) {
 	timeNow = fixedTimeNow
 	parser := eth.NewEthereumParser(1, true)
+	// httpTestsEthereumType asserts the ENS reverse labels (address7b.eth) that the test
+	// blocks record, so this server has to be an opted-in chain - the labels are off by
+	// default. Keeps the alias rendering path covered for chains that do opt in.
+	parser.EnableEnsReverseAliases = true
 	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
 	if err != nil {
 		glog.Fatal("fakechain: ", err)
