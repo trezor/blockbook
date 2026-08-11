@@ -38,7 +38,8 @@ func (p *EthereumParser) SetEnsSuffix(suffix string) {
 
 // UseEnsReverseAliases reports whether ENS reverse aliases are recorded and served.
 // Opt-in: a chain gets them only with both address_aliases and
-// enable_ens_reverse_aliases set.
+// enable_ens_reverse_aliases set. Gating the recording side means toggling this on later
+// does not recover labels for blocks already synced without it (no backfill).
 func (p *EthereumParser) UseEnsReverseAliases() bool {
 	return p.AddressAliases && p.EnableEnsReverseAliases
 }

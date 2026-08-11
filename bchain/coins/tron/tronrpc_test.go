@@ -996,6 +996,7 @@ func TestNewTronRPC_PropagatesEnsReverseOptIn(t *testing.T) {
 				"block_addresses_to_keep": 300,
 				"address_aliases": true,
 				` + tt.configEns + `
+				"hot_address_min_hits": 7,
 				"averageBlockTimeMs": 3000,
 				"mempoolTxTimeoutHours": 4
 			}`)
@@ -1004,9 +1005,12 @@ func TestNewTronRPC_PropagatesEnsReverseOptIn(t *testing.T) {
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, chain.Shutdown(context.Background())) })
 
-			parser, ok := chain.GetChainParser().(eth.EthereumLikeParser)
-			require.True(t, ok, "TronParser must satisfy EthereumLikeParser for the api worker gate")
+			parser := chain.GetChainParser()
 			require.Equal(t, tt.want, parser.UseEnsReverseAliases())
+			// A second config-derived field, to prove NewTronRPC applies the whole config via
+			// ApplyToParser rather than cherry-picking the ENS flag.
+			require.Equal(t, 7, chain.(*TronRPC).Parser.HotAddressMinHits)
+			require.Equal(t, 300, chain.(*TronRPC).Parser.KeepBlockAddresses())
 		})
 	}
 }

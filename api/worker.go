@@ -63,12 +63,6 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
 		}
 	}
-	// opt-in per chain; the fallback stays off so a parser that predates the flag
-	// never serves ENS labels (only read for EthereumType, where all parsers implement it)
-	useEnsReverseAliases := false
-	if p, ok := chain.GetChainParser().(eth.EthereumLikeParser); ok {
-		useEnsReverseAliases = p.UseEnsReverseAliases()
-	}
 	w := &Worker{
 		db:                   db,
 		txCache:              txCache,
@@ -76,7 +70,7 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		chainParser:          chain.GetChainParser(),
 		chainType:            chain.GetChainParser().GetChainType(),
 		useAddressAliases:    chain.GetChainParser().UseAddressAliases(),
-		useEnsReverseAliases: useEnsReverseAliases,
+		useEnsReverseAliases: chain.GetChainParser().UseEnsReverseAliases(),
 		mempool:              mempool,
 		is:                   is,
 		fiatRates:            fiatRates,

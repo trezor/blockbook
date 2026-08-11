@@ -86,6 +86,9 @@ type Configuration struct {
 	// EnableEnsReverseAliases opts a chain into ENS reverse aliasing (address->name
 	// labels), which is off by default; see the warning on getEnsRecord. Contract/
 	// token-name aliases and forward ResolveENS are unaffected either way.
+	// Labels are only recorded as blocks are synced and there is no backfill, so enabling
+	// this later covers new blocks only - names registered while it was off stay unlabeled
+	// until the chain is reindexed.
 	EnableEnsReverseAliases         bool   `json:"enable_ens_reverse_aliases,omitempty"`
 	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
 	MempoolTxTimeout                string `json:"mempoolTxTimeout,omitempty"`
@@ -154,6 +157,23 @@ func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
 		return 0, errors.Errorf("averageBlockTimeMs must be a positive integer")
 	}
 	return time.Duration(c.AverageBlockTimeMs) * time.Millisecond, nil
+}
+
+// ApplyToParser copies every config-derived field onto p. Coin packages that build their own
+// EthereumParser instead of reusing the one NewEthereumRPC configured (Tron) call this as well,
+// so a new config-derived parser field is added in one place rather than in each constructor -
+// forgetting one there is silent, and previously dropped disable_ens_aliases on Tron.
+// Fields a coin owns (EnsSuffix, AmountDecimalPoint, the address format funcs) are left alone.
+func (c *Configuration) ApplyToParser(p *EthereumParser) {
+	p.BlockAddressesToKeep = c.BlockAddressesToKeep
+	p.AddressAliases = c.AddressAliases
+	p.EnableEnsReverseAliases = c.EnableEnsReverseAliases
+	p.HotAddressMinContracts = c.HotAddressMinContracts
+	p.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
+	p.HotAddressMinHits = c.HotAddressMinHits
+	p.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
+	p.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
+	p.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -269,13 +289,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 	// always create parser
 	parser := NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
-	parser.EnableEnsReverseAliases = c.EnableEnsReverseAliases
-	parser.HotAddressMinContracts = c.HotAddressMinContracts
-	parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
-	parser.HotAddressMinHits = c.HotAddressMinHits
-	parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
-	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
-	parser.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
+	c.ApplyToParser(parser)
 	s.Parser = parser
 	if c.RPCTimeout <= 0 {
 		glog.Warningf("rpc_timeout=%d is invalid, using default %d seconds", c.RPCTimeout, defaultRPCTimeoutSeconds)

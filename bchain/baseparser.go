@@ -199,6 +199,12 @@ func (p *BaseParser) UseAddressAliases() bool {
 	return p.AddressAliases
 }
 
+// UseEnsReverseAliases returns false - ENS reverse labels are an EthereumType concern,
+// and off unless that parser opts the chain in.
+func (p *BaseParser) UseEnsReverseAliases() bool {
+	return false
+}
+
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 	var tx Tx

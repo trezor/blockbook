@@ -41,7 +41,6 @@ type EthereumLikeParser interface {
 	bchain.BlockChainParser
 	EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
 	SetEnsSuffix(suffix string)
-	UseEnsReverseAliases() bool
 }
 
 // EthereumParser handle
