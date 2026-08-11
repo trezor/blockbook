@@ -180,6 +180,18 @@ The field appears in two places, matching the two consumers of the routing machi
   over the hole (#1675). The answer only ever *raises* the backend's; it never lowers it. The nonce
   list is capped (see `maxPrivatePendingNonces`); past the cap the lowest entries are kept, since the
   walk can only ever consume the slots just above the backend's answer.
+
+  Routing the lookup — replacing the primary's answer with the relay's — rests on a stated relay
+  property: Blink's pending `eth_getTransactionCount` answers *the greater of* the node's pending
+  count and the relay's latest accepted nonce + 1 (its API reference), i.e. a **superset of the
+  public mempool**. The routed answer therefore never falls below what the primary would have said,
+  even for pending transactions the declaring wallet knows nothing about — another device on the
+  same account with public pending txs, the case the declared floor alone cannot cover. A relay
+  *without* this property must not be routed to on the hint: its private-only count can fall below
+  the public mempool's, and the walk would strand a multi-device account on a nonce a public pending
+  tx already owns. With such a relay the nonce path would need to be made floor-only — the declared
+  floor over the primary's answer, which this PR's fallback path already computes, is correct for
+  the declaring wallet at zero relay cost; routing buys the *undeclared* private txs on top.
 - **`estimateFee` → `specific.privatePending`** is a **routing signal only**. Unlike a nonce, the
   wallet cannot compute gas itself, so Blockbook still simulates the call — the declaration only says
   "estimate against the relay's pending-private state" (e.g. a privately-submitted `approve` a
