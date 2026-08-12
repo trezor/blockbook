@@ -13,6 +13,28 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
+// TestTronParser_UseEnsReverseAliases pins the opt-in truth table on the parser that
+// TronParser embeds: both address_aliases and enable_ens_reverse_aliases are required.
+func TestTronParser_UseEnsReverseAliases(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		addressAliases bool
+		enableEns      bool
+		want           bool
+	}{
+		{name: "off by default", addressAliases: true},
+		{name: "opted in", addressAliases: true, enableEns: true, want: true},
+		{name: "opt-in alone is not enough", enableEns: true},
+		{name: "both off", addressAliases: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewTronParser(1, tt.addressAliases)
+			p.EnableEnsReverseAliases = tt.enableEns
+			require.Equal(t, tt.want, p.UseEnsReverseAliases())
+		})
+	}
+}
+
 func TestTronParser_GetAddrDescFromAddress(t *testing.T) {
 	type args struct {
 		address string

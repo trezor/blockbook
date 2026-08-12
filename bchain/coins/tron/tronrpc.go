@@ -137,12 +137,10 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	}
 	ethChainConfig := tronRpc.EthereumRPC.ChainConfig
 
-	tronRpc.Parser.HotAddressMinContracts = ethChainConfig.HotAddressMinContracts
-	tronRpc.Parser.HotAddressLRUCacheSize = ethChainConfig.HotAddressLRUCacheSize
-	tronRpc.Parser.HotAddressMinHits = ethChainConfig.HotAddressMinHits
-	tronRpc.Parser.AddrContractsCacheMinSize = ethChainConfig.AddressContractsCacheMinSize
-	tronRpc.Parser.AddrContractsCacheMaxBytes = ethChainConfig.AddressContractsCacheMaxBytes
-	tronRpc.Parser.AddrContractsCacheBulkMaxBytes = ethChainConfig.AddressContractsCacheBulkMaxBytes
+	// NewTronParser discards the parser NewEthereumRPC configured, so the config has to be
+	// applied again here; ApplyToParser keeps that a single call instead of a per-field list
+	// that silently drifts from the eth side.
+	ethChainConfig.ApplyToParser(tronRpc.Parser.EthereumParser)
 
 	tronRpc.EthereumRPC.Parser = tronRpc.Parser
 	tronRpc.ChainConfig = &cfg

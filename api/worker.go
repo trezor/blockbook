@@ -30,11 +30,13 @@ type Worker struct {
 	chainParser       bchain.BlockChainParser
 	chainType         bchain.ChainType
 	useAddressAliases bool
-	mempool           bchain.Mempool
-	is                *common.InternalState
-	fiatRates         *fiat.FiatRates
-	metrics           *common.Metrics
-	xpubConfig        XpubConfig
+	// useEnsReverseAliases gates serving ENS reverse labels (EthereumType only).
+	useEnsReverseAliases bool
+	mempool              bchain.Mempool
+	is                   *common.InternalState
+	fiatRates            *fiat.FiatRates
+	metrics              *common.Metrics
+	xpubConfig           XpubConfig
 }
 
 var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
@@ -62,17 +64,18 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		}
 	}
 	w := &Worker{
-		db:                db,
-		txCache:           txCache,
-		chain:             chain,
-		chainParser:       chain.GetChainParser(),
-		chainType:         chain.GetChainParser().GetChainType(),
-		useAddressAliases: chain.GetChainParser().UseAddressAliases(),
-		mempool:           mempool,
-		is:                is,
-		fiatRates:         fiatRates,
-		metrics:           metrics,
-		xpubConfig:        xpubCfg,
+		db:                   db,
+		txCache:              txCache,
+		chain:                chain,
+		chainParser:          chain.GetChainParser(),
+		chainType:            chain.GetChainParser().GetChainType(),
+		useAddressAliases:    chain.GetChainParser().UseAddressAliases(),
+		useEnsReverseAliases: chain.GetChainParser().UseEnsReverseAliases(),
+		mempool:              mempool,
+		is:                   is,
+		fiatRates:            fiatRates,
+		metrics:              metrics,
+		xpubConfig:           xpubCfg,
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
@@ -235,6 +238,10 @@ func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliases
 					if err == nil && ci != nil && ci.Name != "" {
 						aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
 					}
+				}
+				// keep the contract/token name, skip the ENS label when disabled
+				if !w.useEnsReverseAliases {
+					continue
 				}
 			}
 			n := w.db.GetAddressAlias(a)

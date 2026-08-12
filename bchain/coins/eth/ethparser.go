@@ -55,6 +55,8 @@ type EthereumParser struct {
 	AddrContractsCacheBulkMaxBytes int64
 	FormatAddressFunc              func(addr string) string
 	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
+	// EnableEnsReverseAliases opts this chain into ENS reverse aliasing, off by default.
+	EnableEnsReverseAliases bool
 }
 
 // NewEthereumParser returns new EthereumParser instance
@@ -113,10 +115,6 @@ type rpcBlockTransactions struct {
 
 type rpcBlockTxids struct {
 	Transactions []string `json:"transactions"`
-}
-
-func (p *EthereumParser) SetEnsSuffix(suffix string) {
-	p.EnsSuffix = suffix
 }
 
 func ethNumber(n string) (int64, error) {

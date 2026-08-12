@@ -376,6 +376,8 @@ type BlockChainParser interface {
 	AmountDecimals() int
 	// UseAddressAliases returns true if address aliases are enabled
 	UseAddressAliases() bool
+	// UseEnsReverseAliases returns true if ENS reverse labels (address->name) are recorded and served
+	UseEnsReverseAliases() bool
 	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
 	MinimumCoinbaseConfirmations() int
 	// SupportsVSize returns true if vsize of a transaction should be computed and returned by API

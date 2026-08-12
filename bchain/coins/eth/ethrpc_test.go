@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	stdErrors "errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -314,6 +315,119 @@ func TestCheckENSExpiration_ParsesPaddedResult(t *testing.T) {
 			}
 			if expired != tc.wantExpired {
 				t.Errorf("CheckENSExpiration(%q) expired = %v, want %v", tc.result, expired, tc.wantExpired)
+			}
+		})
+	}
+}
+
+// TestNewEthereumRPC_PropagatesEnsReverseOptIn pins the config->parser wiring that both
+// gates read: processEventsForBlock (write path) and api.NewWorker (read path) both call
+// UseEnsReverseAliases on this parser, so ENS reverse aliasing must stay off unless a chain
+// sets enable_ens_reverse_aliases alongside address_aliases.
+func TestNewEthereumRPC_PropagatesEnsReverseOptIn(t *testing.T) {
+	tests := []struct {
+		name   string
+		params string
+		want   bool
+	}{
+		{name: "aliases on, opt-in absent", params: `"address_aliases": true`},
+		{name: "aliases on, opt-in false", params: `"address_aliases": true, "enable_ens_reverse_aliases": false`},
+		{name: "aliases on, opt-in true", params: `"address_aliases": true, "enable_ens_reverse_aliases": true`, want: true},
+		{name: "opt-in without address_aliases", params: `"enable_ens_reverse_aliases": true`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// NewEthereumRPC writes this process-wide; keep the test order-independent.
+			orig := bchain.ProcessInternalTransactions
+			defer func() { bchain.ProcessInternalTransactions = orig }()
+
+			config := json.RawMessage(`{
+				"coin_name": "Ethereum",
+				"rpc_url": "http://127.0.0.1:8545",
+				"rpc_timeout": 25,
+				"block_addresses_to_keep": 300,
+				` + tt.params + `,
+				"averageBlockTimeMs": 12000,
+				"mempoolTxTimeoutHours": 48
+			}`)
+
+			chain, err := NewEthereumRPC(config, func(bchain.NotificationType) {})
+			if err != nil {
+				t.Fatalf("NewEthereumRPC: %v", err)
+			}
+			if got := chain.(*EthereumRPC).Parser.UseEnsReverseAliases(); got != tt.want {
+				t.Errorf("UseEnsReverseAliases() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// getLogsStub serves one canned eth_getLogs response.
+type getLogsStub struct{ logsJSON string }
+
+func (s *getLogsStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
+	return nil, stdErrors.New("not implemented")
+}
+
+func (s *getLogsStub) Close() {}
+
+func (s *getLogsStub) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	if method != "eth_getLogs" {
+		return stdErrors.New("unexpected method: " + method)
+	}
+	return json.Unmarshal([]byte(s.logsJSON), result)
+}
+
+// TestProcessEventsForBlock_EnsReverseGate covers the write-path half of the opt-out: a
+// NameRegistered log must yield no AddressAliasRecord (so nothing reaches cfAddressAliases)
+// unless the chain opted in, while the tx logs themselves are returned either way.
+func TestProcessEventsForBlock_EnsReverseGate(t *testing.T) {
+	const txHash = "0x1a2b3c4d5e6f70000000000000000000000000000000000000000000000000ab"
+	// The "unraveled" NameRegistered fixture from Test_getEnsRecord.
+	logsJSON := `[{
+		"transactionHash": "` + txHash + `",
+		"address": "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5",
+		"topics": [
+			"0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f",
+			"0x40ce2aa8cd9ee9fef4bf3a68abab7fbcceb6bac89370518caf6a602cefe836bd",
+			"0x0000000000000000000000002c630b16aa53ae0189880e15c23323688acb607c"
+		],
+		"data": "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000017629245f5a86f0000000000000000000000000000000000000000000000000000000069dbb21d0000000000000000000000000000000000000000000000000000000000000009756e726176656c65640000000000000000000000000000000000000000000000"
+	}]`
+
+	tests := []struct {
+		name      string
+		enableEns bool
+		wantEns   []bchain.AddressAliasRecord
+	}{
+		{name: "gate closed records no ENS label"},
+		{
+			name:      "gate open records the ENS label",
+			enableEns: true,
+			wantEns:   []bchain.AddressAliasRecord{{Address: "0x2C630b16Aa53ae0189880e15C23323688acb607c", Name: "unraveled"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewEthereumParser(1, true)
+			parser.EnableEnsReverseAliases = tt.enableEns
+			b := &EthereumRPC{
+				BaseChain: &bchain.BaseChain{},
+				Parser:    parser,
+				RPC:       &getLogsStub{logsJSON: logsJSON},
+				Timeout:   time.Second,
+			}
+
+			logs, ens, err := b.processEventsForBlock("0x1")
+			if err != nil {
+				t.Fatalf("processEventsForBlock: %v", err)
+			}
+			// The gate must not affect the tx logs themselves.
+			if len(logs[txHash]) != 1 {
+				t.Errorf("logs[%s] = %d entries, want 1", txHash, len(logs[txHash]))
+			}
+			if !reflect.DeepEqual(ens, tt.wantEns) {
+				t.Errorf("ensRecords = %+v, want %+v", ens, tt.wantEns)
 			}
 		})
 	}
