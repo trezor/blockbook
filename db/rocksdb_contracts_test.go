@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
@@ -132,6 +133,61 @@ func TestRocksDB_DeleteContractInfoForAddress(t *testing.T) {
 
 	if _, err = d.DeleteContractInfoForAddress("not-an-address"); err == nil {
 		t.Error("DeleteContractInfoForAddress() with invalid address: expected error")
+	}
+}
+
+func TestStoreContractInfo_MergesSameBatchCreateAndDestroy(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	ephemeral := "0x" + dbtestdata.EthAddr20
+	destroyedOnly := "0x" + dbtestdata.EthAddr4b
+
+	// an ephemeral contract emits creation and destruction in one block; the
+	// destruction can see the uncommitted creation only through the in-batch map
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	inBatch := make(map[string]*bchain.ContractInfo)
+	if err := d.storeContractInfo(wb, &bchain.ContractInfo{
+		Contract:       ephemeral,
+		Standard:       bchain.UnhandledTokenStandard,
+		CreatedInBlock: 500,
+	}, inBatch); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.storeContractInfo(wb, &bchain.ContractInfo{
+		Contract:          ephemeral,
+		DestructedInBlock: 500,
+	}, inBatch); err != nil {
+		t.Fatal(err)
+	}
+	// a destruction of a contract known neither in the batch nor in the DB
+	// stays dropped
+	if err := d.storeContractInfo(wb, &bchain.ContractInfo{
+		Contract:          destroyedOnly,
+		DestructedInBlock: 500,
+	}, inBatch); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := d.GetContractInfoForAddress(ephemeral)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.CreatedInBlock != 500 || got.DestructedInBlock != 500 {
+		t.Errorf("GetContractInfoForAddress() = %+v, want CreatedInBlock 500 and DestructedInBlock 500", got)
+	}
+	got, err = d.GetContractInfoForAddress(destroyedOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Errorf("GetContractInfoForAddress() = %+v, want nil for an unknown destroyed contract", got)
 	}
 }
 

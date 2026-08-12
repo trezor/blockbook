@@ -158,32 +158,44 @@ func (d *RocksDB) GetContractInfoErc4626Vault(contract bchain.AddressDescriptor)
 func (d *RocksDB) StoreContractInfo(contractInfo *bchain.ContractInfo) error {
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
-	if err := d.storeContractInfo(wb, contractInfo); err != nil {
+	if err := d.storeContractInfo(wb, contractInfo, nil); err != nil {
 		return err
 	}
 	return d.WriteBatch(wb)
 }
 
-func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchain.ContractInfo) error {
+// inBatch carries rows already written to wb, keyed by address descriptor: a
+// destruction can only merge into a same-batch creation through it, because
+// GetContractInfo does not see the batch before it commits.
+func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchain.ContractInfo, inBatch map[string]*bchain.ContractInfo) error {
 	if contractInfo.Contract != "" {
 		key, err := d.chainParser.GetAddrDescFromAddress(contractInfo.Contract)
 		if err != nil {
 			return err
 		}
 		if contractInfo.CreatedInBlock == 0 && contractInfo.DestructedInBlock != 0 {
-			storedCI, err := d.GetContractInfo(key, "")
-			if err != nil {
-				return err
-			}
+			storedCI := inBatch[string(key)]
 			if storedCI == nil {
-				return nil
+				ci, err := d.GetContractInfo(key, "")
+				if err != nil {
+					return err
+				}
+				if ci == nil {
+					return nil
+				}
+				// copy - the shared cached value must not change before the
+				// batch commits
+				ciCopy := *ci
+				storedCI = &ciCopy
 			}
 			storedCI.DestructedInBlock = contractInfo.DestructedInBlock
 			contractInfo = storedCI
 		}
 		wb.PutCF(d.cfh[cfContracts], key, packContractInfo(contractInfo))
-		cacheKey := string(key)
-		cachedContracts.delete(cacheKey)
+		if inBatch != nil {
+			inBatch[string(key)] = contractInfo
+		}
+		cachedContracts.delete(string(key))
 	}
 	return nil
 }
