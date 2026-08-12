@@ -317,17 +317,16 @@ type WsBlockedIPView struct {
 
 // InternalTemplateData is used to transfer data to the templates
 type InternalTemplateData struct {
-	CoinName               string
-	CoinShortcut           string
-	CoinLabel              string
-	ChainType              bchain.ChainType
-	Error                  *api.APIError
-	InternalDataErrors     []db.BlockInternalDataError
-	RefetchingInternalData bool
-	WsGetAccountInfoLimit  int
-	WsLimitExceedingIPs    []WsLimitExceedingIP
-	WsBlockedIPs           []WsBlockedIPView
-	RuntimeSettings        []RuntimeSettingView
+	CoinName              string
+	CoinShortcut          string
+	CoinLabel             string
+	ChainType             bchain.ChainType
+	Error                 *api.APIError
+	InternalDataErrors    []db.BlockInternalDataError
+	WsGetAccountInfoLimit int
+	WsLimitExceedingIPs   []WsLimitExceedingIP
+	WsBlockedIPs          []WsBlockedIPView
+	RuntimeSettings       []RuntimeSettingView
 }
 
 func (s *InternalServer) newTemplateData(r *http.Request) *InternalTemplateData {
@@ -372,20 +371,15 @@ func (s *InternalServer) adminIndex(w http.ResponseWriter, r *http.Request) (tpl
 	return adminIndexTpl, data, nil
 }
 
+// internalDataErrors lists the blocks queued for internal data healing. The queue is
+// drained by healInternalDataLoop, so the page is read-only.
 func (s *InternalServer) internalDataErrors(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {
-	if r.Method == http.MethodPost {
-		err := s.api.RefetchInternalData()
-		if err != nil {
-			return errorTpl, nil, err
-		}
-	}
 	data := s.newTemplateData(r)
 	internalErrors, err := s.db.GetBlockInternalDataErrorsEthereumType()
 	if err != nil {
 		return errorTpl, nil, err
 	}
 	data.InternalDataErrors = internalErrors
-	data.RefetchingInternalData = s.api.IsRefetchingInternalData()
 	return adminInternalErrorsTpl, data, nil
 }
 

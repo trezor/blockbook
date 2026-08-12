@@ -248,7 +248,11 @@ Column families used only by **Ethereum type** coins:
 
 - **blockInternalDataErrors** (used only by Ethereum type coins)
 
-  Errors when fetching internal data from backend. Stored so that the action can be retried.
+  Errors when fetching internal data from backend. Stored so that the fetch can be retried;
+  the queue is drained automatically about every hour. `retryCount` counts the failures of
+  the block itself and schedules its next attempt, which is made on passes divisible by
+  2^retryCount (capped at 2^6, about 2.7 days of hourly passes) - a wait of up to, not
+  exactly, 2^retryCount passes - so a block is slowed down but never abandoned.
 
   ```
   (blockHeight uint32) -> (blockHash [32]byte)+(retryCount byte)+(errorMessage []byte)

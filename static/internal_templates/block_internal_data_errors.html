@@ -2,14 +2,12 @@
 <h3>Blocks with errors from fetching internal data</h3>
 <div class="row g-0">
     <div class="col-md-11">Count: {{len .InternalDataErrors}}</div>
-    <div class="col-md-1 justify-content-right">
-        {{if .RefetchingInternalData}}Fetching...{{else}}
-        <form method="POST" action="/admin/internal-data-errors">
-            <button type="submit" class="btn btn-outline-secondary">Retry fetch</button>
-        </form>    
-        {{end}}
-    </div>
-</row>
+</div>
+<div class="row g-0">
+    <div class="col">The queue is retried automatically about every hour. A block that keeps
+        failing is retried less often, doubling the delay with each failure up to about
+        2.7 days, so the Retries column shows which blocks have backed off.</div>
+</div>
 <div>
     <table class="table table-hover">
         <thead>
