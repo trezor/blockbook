@@ -692,9 +692,12 @@ func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, tx
 		return nil, errors.Annotatef(err, "txid %v", txByID.TxID)
 	}
 
+	// java-tron precomputes the receipt ContractAddress even for failed
+	// deployments - only a successful receipt proves the contract exists
 	if len(tx.Vout) > 0 &&
 		tx.Vout[0].ScriptPubKey.Addresses == nil &&
 		csd.Receipt != nil &&
+		csd.Receipt.Status == "0x1" &&
 		csd.Receipt.ContractAddress != "" {
 		tx.Vout = []bchain.Vout{{
 			ValueSat: tx.Vout[0].ValueSat,
