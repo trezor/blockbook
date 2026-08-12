@@ -44,6 +44,9 @@ func bitcoinTestnetParser() *btc.BitcoinParser {
 }
 
 func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
+	// the contract cache is package-level, so entries cached by a previous
+	// test's database would leak into this one
+	cachedContracts.reset()
 	tmp, err := os.MkdirTemp("", "testdb")
 	if err != nil {
 		t.Fatal(err)
@@ -1753,6 +1756,9 @@ func TestRocksDB_packTxIndexes_unpackTxIndexes(t *testing.T) {
 // the extendedIndex layout; used by TestGetTxAddressesOutput to cover both forms.
 func setupRocksDBWithExtendedIndex(t *testing.T, p bchain.BlockChainParser, extendedIndex bool) *RocksDB {
 	t.Helper()
+	// the contract cache is package-level, so entries cached by a previous
+	// test's database would leak into this one
+	cachedContracts.reset()
 	tmp, err := os.MkdirTemp("", "testdb")
 	require.NoError(t, err)
 	d, err := NewRocksDB(tmp, 100000, -1, p, nil, extendedIndex)

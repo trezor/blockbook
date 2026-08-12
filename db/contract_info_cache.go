@@ -93,6 +93,18 @@ func (c *contractInfoLRU) add(key string, value *bchain.ContractInfo, reorgGen, 
 	delete(c.items, oldest.Value.(*contractInfoLRUEntry).key)
 }
 
+// reset empties the cache; the package-level cache outlives a database instance,
+// so tests must call it when opening a fresh database.
+func (c *contractInfoLRU) reset() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.order.Init()
+	clear(c.items)
+}
+
 func (c *contractInfoLRU) delete(key string) {
 	if c == nil {
 		return
