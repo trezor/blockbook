@@ -693,11 +693,12 @@ func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, tx
 	}
 
 	// java-tron precomputes the receipt ContractAddress even for failed
-	// deployments - only a successful receipt proves the contract exists
+	// deployments - only a successful receipt proves the contract exists;
+	// same success signal as the CREATE classification during indexing
 	if len(tx.Vout) > 0 &&
 		tx.Vout[0].ScriptPubKey.Addresses == nil &&
 		csd.Receipt != nil &&
-		csd.Receipt.Status == "0x1" &&
+		tronReceiptResultSuccess(txInfo.Receipt.Result) &&
 		csd.Receipt.ContractAddress != "" {
 		tx.Vout = []bchain.Vout{{
 			ValueSat: tx.Vout[0].ValueSat,
