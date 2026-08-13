@@ -160,10 +160,10 @@ func buildInternalDataFromTronInfos(
 		// ordinary TriggerSmartContract calls too, and `to` is null also for
 		// native non-VM operations (FreezeBalance, WithdrawBalance, ...), which
 		// have an empty contract_address. A failed deployment created nothing -
-		// java-tron precomputes contract_address even for those.
+		// java-tron precomputes contract_address even for those. A missing
+		// recipient follows EthTxToTx semantics: "" and "0x" both count.
 		deployedContract := ""
-		deploySucceeded := info.Receipt.Result == "" || info.Receipt.Result == "SUCCESS"
-		if tx.To == "" && info.ContractAddress != "" && deploySucceeded {
+		if len(tx.To) <= 2 && info.ContractAddress != "" && tronReceiptResultSuccess(info.Receipt.Result) {
 			deployedContract = ToTronAddressFromAddress(info.ContractAddress)
 			d.Type = bchain.CREATE
 			d.Contract = deployedContract
@@ -222,7 +222,10 @@ func buildInternalDataFromTronInfos(
 			}
 
 			// java-tron puts at most one TRX entry in callValueInfo (extras
-			// are TRC-10), so like eth this emits one transfer per frame
+			// are TRC-10), so like eth this emits one transfer per frame.
+			// No root-frame guard here: a hypothetical root create frame's
+			// value is booked nowhere else, the rebuilt deployment tx
+			// carries value 0 (tronBuildRpcTransaction has no CREATE case)
 			transferEmitted := false
 			for _, cv := range itx.CallValueInfo {
 				// skip TRC-10
@@ -254,7 +257,7 @@ func buildInternalDataFromTronInfos(
 			}
 		}
 
-		if info.Receipt.Result != "" && info.Receipt.Result != "SUCCESS" {
+		if !tronReceiptResultSuccess(info.Receipt.Result) {
 			d.Error = info.Receipt.Result
 		}
 	}

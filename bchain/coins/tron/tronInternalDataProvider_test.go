@@ -226,6 +226,22 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 		},
 
 		{
+			// "0x" counts as a missing recipient, same as EthTxToTx
+			name: "Deployment with 0x recipient is CREATE",
+			infos: []tronTxInfo{
+				{
+					ID:              "deploy0x",
+					ContractAddress: "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+					Receipt:         tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:           []bchain.RpcTransaction{{Hash: "0xdeploy0x", To: "0x"}},
+			wantType:      bchain.CREATE,
+			wantContract:  "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U",
+			wantContracts: []contractEvent{{addr: "TFFAMQLZybALaLb4uxHA9RBE7pxhUAjF3U"}},
+		},
+
+		{
 			// java-tron precomputes contract_address even when the deployment
 			// failed - nothing was created, nothing may be registered
 			name: "Failed deployment registers no contract",

@@ -145,6 +145,12 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 	return extra
 }
 
+// tronReceiptResultSuccess reports whether receipt.result marks a successful
+// execution - empty is the non-VM shape, java-tron sets SUCCESS only for VM txs
+func tronReceiptResultSuccess(result string) bool {
+	return result == "" || result == "SUCCESS"
+}
+
 func tronBuildRpcReceipt(txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
 	receipt := &bchain.RpcReceipt{
 		GasUsed: "0x0",
