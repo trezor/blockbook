@@ -731,6 +731,7 @@ func TestParseBlock(t *testing.T) {
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
+					Prev: "a3b419a943bdc31aba65d40fc71f12ceb4ef2edcf1c8bd6d83b839261387e0d9",
 					Size: 200286,
 					Time: 1547120622,
 				},
@@ -746,6 +747,7 @@ func TestParseBlock(t *testing.T) {
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
+					Prev: "0fb6e382a25a9e298a533237f359cb6cd86a99afb8d98e3d981e650fd5012c00",
 					Size: 25298,
 					Time: 1482107572,
 				},
@@ -761,6 +763,7 @@ func TestParseBlock(t *testing.T) {
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
+					Prev: "12c117c25e52f71e8863eadd0ccc7cd7d45e7ef907cfadf99ca4b4d390cb1a0a",
 					Size: 200062,
 					Time: 1591752749,
 				},

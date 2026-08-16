@@ -12,6 +12,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -27,8 +28,8 @@ import (
 	"github.com/trezor/blockbook/server"
 )
 
-// debounce too close requests for resync
-const debounceResyncIndexMs = 1009
+// default debounce for too-close requests for resync
+const defaultResyncIndexDebounceMs = 1009
 
 // debounce too close requests for resync mempool (ZeroMQ sends message for each tx, when new block there are many transactions)
 const debounceResyncMempoolMs = 1009
@@ -81,6 +82,9 @@ var (
 	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncIndexPeriodMs = flag.Int("resyncindexperiod", 935093, "resync index period in milliseconds")
 
+	// debounce for push-triggered index resync requests
+	resyncIndexDebounceMs = flag.Int("resyncindexdebounce", defaultResyncIndexDebounceMs, "debounce for push-triggered index resync requests in milliseconds")
+
 	// resync mempool at least each resyncMempoolPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncMempoolPeriodMs = flag.Int("resyncmempoolperiod", 60017, "resync mempool period in milliseconds")
 
@@ -88,8 +92,12 @@ var (
 )
 
 var (
-	chanSyncIndex                 = make(chan struct{})
-	chanSyncMempool               = make(chan struct{})
+	// Buffer 1 + non-blocking sends in pushSynchronizationHandler decouple the
+	// WebSocket/ZMQ source goroutines from sync progress. If sync is stuck inside
+	// TickAndDebounce's f(), additional notifications are dropped here rather
+	// than blocking the source; TickAndDebounce's tick-period backstop still fires.
+	chanSyncIndex                 = make(chan struct{}, 1)
+	chanSyncMempool               = make(chan struct{}, 1)
 	chanStoreInternalState        = make(chan struct{})
 	chanSyncIndexDone             = make(chan struct{})
 	chanSyncMempoolDone           = make(chan struct{})
@@ -103,7 +111,6 @@ var (
 	internalState                 *common.InternalState
 	fiatRates                     *fiat.FiatRates
 	callbacksOnNewBlock           []bchain.OnNewBlockFunc
-	callbacksOnNewTxAddr          []bchain.OnNewTxAddrFunc
 	callbacksOnNewTx              []bchain.OnNewTxFunc
 	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
 	chanOsSignal                  chan os.Signal
@@ -134,7 +141,24 @@ func mainWithExitCode() int {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	chanOsSignal = make(chan os.Signal, 1)
-	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	shutdownSigCh := make(chan os.Signal, 1)
+	signalCh := make(chan os.Signal, 1)
+	// Use a single signal listener and fan out shutdown signals to avoid races
+	// where long-running workers consume the OS signal before main shutdown runs.
+	signal.Notify(signalCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	var shutdownOnce sync.Once
+	go func() {
+		sig := <-signalCh
+		shutdownOnce.Do(func() {
+			// Flip global shutdown state and close chanOsSignal to broadcast shutdown.
+			// Closing the channel unblocks select loops that only receive from it.
+			common.SetInShutdown()
+			close(chanOsSignal)
+			// Ensure waitForSignalAndShutdown can proceed even if the OS signal
+			// was already consumed by another goroutine in previous versions.
+			shutdownSigCh <- sig
+		})
+	}()
 
 	glog.Infof("Blockbook: %+v, debug mode %v", common.GetVersionInfo(), *debugMode)
 
@@ -169,12 +193,29 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
+	// Chains that expose a configured average block time (currently EVM coins via
+	// EthereumRPC.AverageBlockTimeDuration) publish it as a static gauge so
+	// alerts can normalize the tip-age metric across coins with different cadences.
+	if provider, ok := chain.(interface {
+		AverageBlockTimeDuration() (time.Duration, error)
+	}); ok {
+		if d, err := provider.AverageBlockTimeDuration(); err == nil && d > 0 {
+			metrics.AverageBlockTimeSeconds.Set(d.Seconds())
+		}
+	}
+
 	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics, *extendedIndex)
 	if err != nil {
 		glog.Error("rocksDB: ", err)
 		return exitCodeFatal
 	}
-	defer index.Close()
+	defer func() {
+		glog.Info("shutdown: rocksdb close start")
+		if err := index.Close(); err != nil {
+			glog.Error("shutdown: rocksdb close error: ", err)
+		}
+		glog.Info("shutdown: rocksdb close finished")
+	}()
 
 	internalState, err = newInternalState(config, index, *enableSubNewTx)
 	if err != nil {
@@ -241,7 +282,24 @@ func mainWithExitCode() int {
 		return exitCodeOK
 	}
 
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState)
+	// Per-chain missing-block retry override, if any. Coin RPCs that opt in
+	// expose MissingBlockRetryOverride(); chains without the method keep defaults.
+	var syncCfg *db.SyncWorkerConfig
+	if provider, ok := chain.(interface {
+		MissingBlockRetryOverride() *bchain.MissingBlockRetry
+	}); ok {
+		if override := provider.MissingBlockRetryOverride(); override != nil {
+			syncCfg = &db.SyncWorkerConfig{
+				MissingBlockRetry: db.ApplyMissingBlockRetryOverride(override),
+			}
+			glog.Infof("sync: missingBlockRetry override applied: retryDelay=%s recheckThreshold=%d tipRecheckThreshold=%d maxStall=%s",
+				syncCfg.MissingBlockRetry.RetryDelay,
+				syncCfg.MissingBlockRetry.RecheckThreshold,
+				syncCfg.MissingBlockRetry.TipRecheckThreshold,
+				syncCfg.MissingBlockRetry.MaxStallDuration)
+		}
+	}
+	syncWorker, err = db.NewSyncWorkerWithConfig(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState, syncCfg)
 	if err != nil {
 		glog.Errorf("NewSyncWorker %v", err)
 		return exitCodeFatal
@@ -311,7 +369,7 @@ func mainWithExitCode() int {
 		if chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType {
 			addrDescForOutpoint = index.AddrDescForOutpoint
 		}
-		err = chain.InitializeMempool(addrDescForOutpoint, onNewTxAddr, onNewTx)
+		err = chain.InitializeMempool(addrDescForOutpoint, onNewTx)
 		if err != nil {
 			glog.Error("initializeMempool ", err)
 			return exitCodeFatal
@@ -331,7 +389,6 @@ func mainWithExitCode() int {
 	if publicServer != nil {
 		// start full public interface
 		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
-		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 		callbacksOnNewTx = append(callbacksOnNewTx, publicServer.OnNewTx)
 		callbacksOnNewFiatRatesTicker = append(callbacksOnNewFiatRatesTicker, publicServer.OnNewFiatRatesTicker)
 		publicServer.ConnectFullPublicInterface()
@@ -358,17 +415,18 @@ func mainWithExitCode() int {
 	if internalServer != nil || publicServer != nil || chain != nil {
 		// start fiat rates downloader only if not shutting down immediately
 		initDownloaders(index, chain, config)
-		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
+		waitForSignalAndShutdown(internalServer, publicServer, chain, shutdownSigCh, 10*time.Second)
 	}
 
+	// Always stop periodic state storage to prevent writes during shutdown.
+	close(chanStoreInternalState)
 	if *synchronize {
 		close(chanSyncIndex)
 		close(chanSyncMempool)
-		close(chanStoreInternalState)
 		<-chanSyncIndexDone
 		<-chanSyncMempoolDone
-		<-chanStoreInternalStateDone
 	}
+	<-chanStoreInternalStateDone
 	return exitCodeOK
 }
 
@@ -486,7 +544,13 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		"backend_subversion":       subversion,
 		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
 	metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
+	metrics.BackendTipAgeSeconds.Set(time.Since(is.GetBackendTipLastAdvance()).Seconds())
 	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
+	synchronized := 0.0
+	if si.Blockbook.InSync {
+		synchronized = 1
+	}
+	metrics.Synchronized.Set(synchronized)
 	return nil
 }
 
@@ -507,11 +571,54 @@ func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool)
 		is.Host = name
 	}
 
-	is.WsGetAccountInfoLimit, _ = strconv.Atoi(os.Getenv(strings.ToUpper(is.GetNetwork()) + "_WS_GETACCOUNTINFO_LIMIT"))
+	limitStr := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_WS_GETACCOUNTINFO_LIMIT")
+	if limitStr == "" {
+		is.WsGetAccountInfoLimit = 42
+	} else {
+		is.WsGetAccountInfoLimit, _ = strconv.Atoi(limitStr)
+	}
 	if is.WsGetAccountInfoLimit > 0 {
 		glog.Info("WsGetAccountInfoLimit enabled with limit ", is.WsGetAccountInfoLimit)
 		is.WsLimitExceedingIPs = make(map[string]int)
 	}
+
+	// Balance-history transaction cap, split by transport. The shared
+	// <NET>_BALANCE_HISTORY_MAX_TXS is a backward-compatible fallback that sets
+	// the default for both surfaces; the transport-specific
+	// <NET>_WS_BALANCE_HISTORY_MAX_TXS / <NET>_REST_BALANCE_HISTORY_MAX_TXS then
+	// override their respective surface.
+	netUpper := strings.ToUpper(is.GetNetwork())
+	parseMaxTxs := func(envVar string, def int) (int, error) {
+		if v, ok := os.LookupEnv(netUpper + envVar); ok {
+			n, err := strconv.Atoi(strings.TrimSpace(v))
+			if err != nil || n < 0 {
+				return 0, errors.Errorf("%s%s: invalid value %q (want a non-negative integer, 0 to disable)", netUpper, envVar, v)
+			}
+			return n, nil
+		}
+		return def, nil
+	}
+	wsDefault, restDefault := api.DefaultBalanceHistoryMaxTxsWS, api.DefaultBalanceHistoryMaxTxsREST
+	if shared, err := parseMaxTxs("_BALANCE_HISTORY_MAX_TXS", -1); err != nil {
+		return nil, err
+	} else if shared >= 0 {
+		wsDefault, restDefault = shared, shared
+	}
+	if is.BalanceHistoryMaxTxsWS, err = parseMaxTxs("_WS_BALANCE_HISTORY_MAX_TXS", wsDefault); err != nil {
+		return nil, err
+	}
+	if is.BalanceHistoryMaxTxsREST, err = parseMaxTxs("_REST_BALANCE_HISTORY_MAX_TXS", restDefault); err != nil {
+		return nil, err
+	}
+	logMaxTxs := func(surface string, n int) {
+		if n > 0 {
+			glog.Info("BalanceHistoryMaxTxs ", surface, " limit ", n, " transactions per request")
+		} else {
+			glog.Info("BalanceHistoryMaxTxs ", surface, " unlimited")
+		}
+	}
+	logMaxTxs("WS", is.BalanceHistoryMaxTxsWS)
+	logMaxTxs("REST", is.BalanceHistoryMaxTxsREST)
 	return is, nil
 }
 
@@ -519,12 +626,18 @@ func syncIndexLoop() {
 	defer close(chanSyncIndexDone)
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
-	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
-		if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
+	common.TickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, time.Duration(*resyncIndexDebounceMs)*time.Millisecond, chanSyncIndex, func() {
+		if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
+			if err == db.ErrOperationInterrupted || common.IsInShutdown() {
+				return
+			}
 			glog.Error("syncIndexLoop ", errors.ErrorStack(err), ", will retry...")
 			// retry once in case of random network error, after a slight delay
 			time.Sleep(time.Millisecond * 2500)
-			if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
+			if err := syncWorker.ResyncIndex(onNewBlock, false); err != nil {
+				if err == db.ErrOperationInterrupted || common.IsInShutdown() {
+					return
+				}
 				glog.Error("syncIndexLoop ", errors.ErrorStack(err))
 			}
 		}
@@ -532,14 +645,14 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop stopped")
 }
 
-func onNewBlockHash(hash string, height uint32) {
+func onNewBlock(block *bchain.Block) {
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error("onNewBlockHash recovered from panic: ", r)
 		}
 	}()
 	for _, c := range callbacksOnNewBlock {
-		c(hash, height)
+		c(block)
 	}
 }
 
@@ -572,12 +685,11 @@ func syncMempoolLoop() {
 }
 
 func storeInternalStateLoop() {
-	stopCompute := make(chan os.Signal)
 	defer func() {
-		close(stopCompute)
 		close(chanStoreInternalStateDone)
 	}()
-	signal.Notify(stopCompute, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	// Reuse the global shutdown channel so compute work stops when shutdown begins.
+	stopCompute := chanOsSignal
 	var computeRunning bool
 	lastCompute := time.Now()
 	lastAppInfo := time.Now()
@@ -617,17 +729,6 @@ func storeInternalStateLoop() {
 	glog.Info("storeInternalStateLoop stopped")
 }
 
-func onNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
-	defer func() {
-		if r := recover(); r != nil {
-			glog.Error("onNewTxAddr recovered from panic: ", r)
-		}
-	}()
-	for _, c := range callbacksOnNewTxAddr {
-		c(tx, desc)
-	}
-}
-
 func onNewTx(tx *bchain.MempoolTx) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -645,19 +746,31 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 		return
 	}
 	if nt == bchain.NotificationNewBlock {
-		chanSyncIndex <- struct{}{}
+		select {
+		case chanSyncIndex <- struct{}{}:
+		default:
+		}
 	} else if nt == bchain.NotificationNewTx {
-		chanSyncMempool <- struct{}{}
+		select {
+		case chanSyncMempool <- struct{}{}:
+		default:
+		}
 	} else {
 		glog.Error("MQ: unknown notification sent")
 	}
 }
 
-func waitForSignalAndShutdown(internal *server.InternalServer, public *server.PublicServer, chain bchain.BlockChain, timeout time.Duration) {
-	sig := <-chanOsSignal
+func waitForSignalAndShutdown(internal *server.InternalServer, public *server.PublicServer, chain bchain.BlockChain, shutdownSig <-chan os.Signal, timeout time.Duration) {
+	// Read the first OS signal from the dedicated channel to avoid races with worker shutdown paths.
+	sig := <-shutdownSig
 	common.SetInShutdown()
-	glog.Infof("shutdown: %v", sig)
+	if sig != nil {
+		glog.Infof("shutdown: %v", sig)
+	} else {
+		glog.Info("shutdown: signal received")
+	}
 
+	// Bound server/RPC shutdown; RocksDB close happens after main returns via defer.
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -693,8 +806,23 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
+// runStartupSelfHealing runs blocking, at-startup self-healing tasks once RocksDB is
+// initialized. It blocks until done so the rest of startup proceeds against a consistent DB.
+// Future self-healing tasks can be added here; today it reconciles missing historical fiat
+// rates before the periodic downloader loops start.
+func runStartupSelfHealing() {
+	if fiatRates != nil && fiatRates.Enabled {
+		// chanOsSignal is closed on shutdown, so a SIGTERM during a long reconciliation
+		// aborts it promptly instead of blocking startup-shutdown until the backfill ends.
+		fiatRates.ReconcileHistoricalRatesAtStartup(chanOsSignal)
+	}
+}
+
 func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, config *common.Config) {
 	if fiatRates.Enabled {
+		// Block on startup self-healing before the periodic loops begin, so historical gaps
+		// are repaired via the CDN without contending with the Free-tier tip loop.
+		runStartupSelfHealing()
 		go fiatRates.RunDownloader()
 	}
 

@@ -12,7 +12,7 @@
         <div id="qrcode"></div>
         <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
         <script type="text/javascript">
-            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 120, height: 120 });
+            new QRCode(document.getElementById("qrcode"), { text: {{jsStr $addr.AddrStr}}, width: 120, height: 120 });
         </script>
     </div>
 </div>

@@ -1,0 +1,139 @@
+{{define "specific"}}
+<style>
+    .rs-value-input { width: 100%; box-sizing: border-box; }
+    .rs-msg { margin-top: 8px; padding: 6px 12px; border-radius: 4px; display: none; }
+    .rs-msg.error { display: block; background: #f8d7da; color: #721c24; }
+    .rs-msg.success { display: block; background: #d4edda; color: #155724; }
+</style>
+<div id="rs-msg" class="rs-msg"></div>
+<table class="table table-striped" id="rs-table">
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Value</th>
+            <th>Source</th>
+            <th style="width:140px">Actions</th>
+        </tr>
+    </thead>
+    <tbody id="rs-body">
+        {{range .RuntimeSettings}}
+        <tr data-key="{{.Key}}" data-value="{{.Value}}" data-source="{{.Source}}">
+            <td class="rs-key">{{.Key}}</td>
+            <td class="rs-value-cell">{{.Value}}</td>
+            <td class="rs-source">{{.Source}}</td>
+            <td class="rs-actions">
+                <button class="btn btn-sm btn-outline-primary rs-edit-btn">Edit</button>
+                <button class="btn btn-sm btn-outline-danger rs-del-btn">Delete</button>
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+<script>
+    (function () {
+        const msgEl = document.getElementById('rs-msg');
+        function msg(text, type) {
+            msgEl.textContent = text;
+            msgEl.className = 'rs-msg ' + type;
+        }
+        function clearMsg() { msgEl.className = 'rs-msg'; msgEl.textContent = ''; }
+
+        // unwrap the {"error":"..."} body of jsonHandler error responses
+        function errText(t) {
+            try {
+                var o = JSON.parse(t);
+                if (o && o.error) { return o.error; }
+            } catch (e) { }
+            return t;
+        }
+
+        function saveRow(tr, key, newValue) {
+            msg('Saving...', 'success');
+            fetch(window.location.href.split('?')[0] + '/' + key, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: newValue })
+            }).then(function (r) {
+                if (!r.ok) { return r.text().then(function (t) { throw new Error(errText(t)); }); }
+                return r.json();
+            }).then(function (data) {
+                tr.setAttribute('data-value', data.value);
+                tr.setAttribute('data-source', data.source);
+                tr.querySelector('.rs-value-cell').textContent = data.value || '(unset)';
+                tr.querySelector('.rs-source').textContent = data.source;
+                showRowActions(tr);
+                msg('Saved ' + key, 'success');
+            }).catch(function (err) {
+                // keep the row in edit state (input + Save/Cancel) so the
+                // operator can correct the value and retry or cancel
+                msg('Error: ' + err.message, 'error');
+            });
+        }
+
+        function deleteRow(tr, key) {
+            if (!confirm('Delete ' + key + ' and revert to env default?')) return;
+            msg('Deleting...', 'success');
+            fetch(window.location.href.split('?')[0] + '/' + key, {
+                method: 'DELETE'
+            }).then(function (r) {
+                if (!r.ok) { return r.text().then(function (t) { throw new Error(errText(t)); }); }
+                return r.json();
+            }).then(function (data) {
+                tr.setAttribute('data-value', data.value);
+                tr.setAttribute('data-source', data.source);
+                tr.querySelector('.rs-value-cell').textContent = data.value || '(unset)';
+                tr.querySelector('.rs-source').textContent = data.source;
+                msg('Deleted ' + key + ', reverted to ' + data.source, 'success');
+            }).catch(function (err) {
+                msg('Error: ' + err.message, 'error');
+            });
+        }
+
+        function showRowActions(tr) {
+            var actions = tr.querySelector('.rs-actions');
+            actions.innerHTML =
+                '<button class="btn btn-sm btn-outline-primary rs-edit-btn">Edit</button> ' +
+                '<button class="btn btn-sm btn-outline-danger rs-del-btn">Delete</button>';
+            attachRowEvents(tr);
+        }
+
+        function showRowEditing(tr, key, origValue) {
+            var cell = tr.querySelector('.rs-value-cell');
+            var actions = tr.querySelector('.rs-actions');
+            cell.innerHTML = '<input class="form-control form-control-sm rs-value-input" type="text" value="' +
+                origValue.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">';
+            actions.innerHTML =
+                '<button class="btn btn-sm btn-success rs-save-btn">Save</button> ' +
+                '<button class="btn btn-sm btn-secondary rs-cancel-btn">Cancel</button>';
+            var input = cell.querySelector('input');
+            actions.querySelector('.rs-save-btn').addEventListener('click', function () {
+                saveRow(tr, key, input.value);
+            });
+            actions.querySelector('.rs-cancel-btn').addEventListener('click', function () {
+                cell.textContent = origValue;
+                showRowActions(tr);
+            });
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { saveRow(tr, key, input.value); }
+                if (e.key === 'Escape') { cell.textContent = origValue; showRowActions(tr); }
+            });
+            input.focus();
+        }
+
+        function attachRowEvents(tr) {
+            var key = tr.getAttribute('data-key');
+            tr.querySelector('.rs-edit-btn').addEventListener('click', function () {
+                // read at click time: deleteRow updates data-value without
+                // re-attaching events, so a captured value would go stale
+                showRowEditing(tr, key, tr.getAttribute('data-value'));
+            });
+            tr.querySelector('.rs-del-btn').addEventListener('click', function () {
+                deleteRow(tr, key);
+            });
+        }
+
+        var rows = document.querySelectorAll('#rs-body tr');
+        for (var i = 0; i < rows.length; i++) { attachRowEvents(rows[i]); }
+    })();
+</script>
+{{end}}

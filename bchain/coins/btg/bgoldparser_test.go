@@ -25,12 +25,14 @@ type testBlock struct {
 	size int
 	time int64
 	txs  []string
+	prev string
 }
 
 var testParseBlockTxs = map[int]testBlock{
 	104000: {
 		size: 15776,
 		time: 1295705889,
+		prev: "00000000000138de0496607bfc85ec4bfcebb6de0ff30048dd4bc4b12da48997",
 		txs: []string{
 			"331d4ef64118e9e5be75f0f51f1a4c5057550c3320e22ff7206f3e1101f113d0",
 			"1f4817d8e91c21d8c8d163dabccdd1875f760fd2dc34a1c2b7b8fa204e103597",
@@ -84,6 +86,7 @@ var testParseBlockTxs = map[int]testBlock{
 	532144: {
 		size: 12198,
 		time: 1528372417,
+		prev: "0000000048de525aea2af2ac305a7b196222fc327a34298f45110e378f838dce",
 		txs: []string{
 			"574348e23301cc89535408b6927bf75f2ac88fadf8fdfb181c17941a5de02fe0",
 			"9f048446401e7fac84963964df045b1f3992eda330a87b02871e422ff0a3fd28",
@@ -141,6 +144,10 @@ func TestParseBlock(t *testing.T) {
 
 		if blk.Time != tb.time {
 			t.Errorf("ParseBlock() block time: got %d, want %d", blk.Time, tb.time)
+		}
+
+		if blk.Prev != tb.prev {
+			t.Errorf("ParseBlock() prev hash: got %s, want %s", blk.Prev, tb.prev)
 		}
 
 		if len(blk.Txs) != len(tb.txs) {

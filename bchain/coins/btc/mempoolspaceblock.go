@@ -59,7 +59,7 @@ type mempoolSpaceBlockFeeProvider struct {
 }
 
 // NewMempoolSpaceBlockFee initializes the provider completely.
-func NewMempoolSpaceBlockFee(chain bchain.BlockChain, params string) (alternativeFeeProviderInterface, error) {
+func NewMempoolSpaceBlockFee(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
 	var paramsParsed mempoolSpaceBlockFeeParams
 	err := json.Unmarshal([]byte(params), &paramsParsed)
 	if err != nil {
@@ -72,6 +72,8 @@ func NewMempoolSpaceBlockFee(chain bchain.BlockChain, params string) (alternativ
 	}
 
 	p.chain = chain
+	p.metrics = metrics
+	p.name = "mempoolspaceblock"
 	go p.downloader()
 	return p, nil
 }
@@ -192,10 +194,17 @@ func (p *mempoolSpaceBlockFeeProvider) getData(res interface{}) error {
 		defer httpRes.Body.Close()
 	}
 	if err != nil {
+		p.observeRequest("network_error")
 		return err
 	}
 	if httpRes.StatusCode != http.StatusOK {
+		p.observeRequest("http_" + strconv.Itoa(httpRes.StatusCode))
 		return errors.New(p.params.URL + " returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	return common.SafeDecodeResponseFromReader(httpRes.Body, res)
+	if err := common.SafeDecodeResponseFromReader(httpRes.Body, res); err != nil {
+		p.observeRequest("decode_error")
+		return err
+	}
+	p.observeRequest("ok")
+	return nil
 }

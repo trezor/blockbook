@@ -13,6 +13,7 @@
     },
     "ipc": {
         "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_user": "rpc",
         "rpc_pass": "rpc",
         "rpc_timeout": 25,
@@ -59,11 +60,13 @@
             "parse": true,
             "mempool_workers": 8,
             "mempool_sub_workers": 2,
+            "mempool_resync_batch_size": 100,
             "block_addresses_to_keep": 300,
             "xpub_magic": 76067358,
             "xpub_magic_segwit_p2sh": 77429938,
             "xpub_magic_segwit_native": 78792518,
             "additional_params": {
+                "averageBlockTimeMs": 600000,
                 "alternative_estimate_fee": "mempoolspaceblock",
                 "alternative_estimate_fee_params": "{\"url\": \"https://mempool.space/api/v1/fees/mempool-blocks\", \"periodSeconds\": 20, \"feeRangeIndex\": 5, \"fallbackFeePerKB\": 1000}",
                 "fiat_rates": "coingecko",

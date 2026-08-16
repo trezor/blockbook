@@ -5,7 +5,7 @@
 | Ethereum Archive                 | 9116             | 9016               | 8016        | 38316 p2p, 8116 http, 8516 authrpc                  |
 | Bitcoin                          | 9130             | 9030               | 8030        | 38330                                               |
 | Bitcoin Cash                     | 9131             | 9031               | 8031        | 38331                                               |
-| Zcash                            | 9132             | 9032               | 8032        | 38332                                               |
+| Zcash                            | 9132             | 9032               | 8032        |                                                     |
 | Dash                             | 9133             | 9033               | 8033        | 38333                                               |
 | Litecoin                         | 9134             | 9034               | 8034        | 38334                                               |
 | Bitcoin Gold                     | 9135             | 9035               | 8035        | 38335                                               |
@@ -40,6 +40,7 @@
 | BNB Smart Chain Archive          | 9165             | 9065               | 8065        | 38365 p2p, 8165 http                                |
 | Flo                              | 9166             | 9066               | 8066        | 38366                                               |
 | Polis                            | 9167             | 9067               | 8067        | 38367                                               |
+| Neurai                           | 9169             | 9069               | 8069        | 38369                                               |
 | Polygon                          | 9170             | 9070               | 8070        | 38370 p2p, 8170 http                                |
 | Polygon Archive                  | 9172             | 9072               | 8072        | 38372 p2p, 8172 http                                |
 | Qtum                             | 9188             | 9088               | 8088        | 38388                                               |
@@ -61,12 +62,13 @@
 | Arbitrum Nova Archive            | 9308             | 9208               | 8308        | 38408 p2p                                           |
 | Base                             | 9309             | 9209               | 8309        | 38409 p2p, 8209 http, 8409 authrpc                  |
 | Base Archive                     | 9311             | 9211               | 8211        | 38411 p2p, 8311 http, 8411 authrpc                  |
+| Tron                             | 9312             | 9212               | 8545        | 1111 p2p, 5555, 8090 http                           |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                               |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                               |
 | Bitcoin Testnet4                 | 19129            | 19029              | 18029       | 48329                                               |
 | Bitcoin Testnet                  | 19130            | 19030              | 18030       | 48330                                               |
 | Bitcoin Cash Testnet             | 19131            | 19031              | 18031       | 48331                                               |
-| Zcash Testnet                    | 19132            | 19032              | 18032       | 48332                                               |
+| Zcash Testnet                    | 19132            | 19032              | 18032       |                                                     |
 | Dash Testnet                     | 19133            | 19033              | 18033       | 48333                                               |
 | Litecoin Testnet                 | 19134            | 19034              | 18034       | 48334                                               |
 | Bitcoin Gold Testnet             | 19135            | 19035              | 18035       | 48335                                               |
@@ -89,5 +91,6 @@
 | Ethereum Testnet Sepolia Archive | 19186            | 19086              | 18086       | 18186 http, 18186 torrent, 18586 authrpc, 48386 p2p |
 | Qtum Testnet                     | 19188            | 19088              | 18088       | 48388                                               |
 | Omotenashicoin Testnet           | 19189            | 19089              | 18089       | 48389                                               |
+| Tron Nile                        | 19190            | 19090              | 8545        | 18888 p2p, 5555, 8090 http                          |
 
 > NOTE: This document is generated from coin definitions in `configs/coins` using command `go run contrib/scripts/check-and-generate-port-registry.go -w`.

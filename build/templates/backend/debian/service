@@ -7,7 +7,10 @@ After=network.target
 ExecStart={{template "Backend.ExecCommandTemplate" .}}
 User={{.Backend.SystemUser}}
 Restart=on-failure
+# Allow enough time for graceful shutdown/flush work before SIGKILL.
 TimeoutStopSec=300
+# Be explicit about the signal used for graceful shutdown.
+KillSignal=SIGTERM
 WorkingDirectory={{.Env.BackendInstallPath}}/{{.Coin.Alias}}
 {{if eq .Backend.ServiceType "forking" -}}
 Type=forking

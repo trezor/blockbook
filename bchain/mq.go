@@ -9,6 +9,13 @@ import (
 	zmq "github.com/pebbe/zmq4"
 )
 
+type SubscriptionTopics struct {
+	BlockSubscribe string
+	BlockReceive   string
+	TxSubscribe    string
+	TxReceive      string
+}
+
 // MQ is message queue listener handle
 type MQ struct {
 	context   *zmq.Context
@@ -16,6 +23,7 @@ type MQ struct {
 	isRunning bool
 	finished  chan error
 	binding   string
+	subs      SubscriptionTopics
 }
 
 // NotificationType is type of notification
@@ -32,7 +40,7 @@ const (
 
 // NewMQ creates new Bitcoind ZeroMQ listener
 // callback function receives messages
-func NewMQ(binding string, callback func(NotificationType)) (*MQ, error) {
+func NewMQ(binding string, callback func(NotificationType), subs SubscriptionTopics) (*MQ, error) {
 	context, err := zmq.NewContext()
 	if err != nil {
 		return nil, err
@@ -41,13 +49,15 @@ func NewMQ(binding string, callback func(NotificationType)) (*MQ, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = socket.SetSubscribe("hashblock")
-	if err != nil {
-		return nil, err
+	if subs.BlockSubscribe != "" {
+		if err := socket.SetSubscribe(subs.BlockSubscribe); err != nil {
+			return nil, err
+		}
 	}
-	err = socket.SetSubscribe("hashtx")
-	if err != nil {
-		return nil, err
+	if subs.TxSubscribe != "" {
+		if err := socket.SetSubscribe(subs.TxSubscribe); err != nil {
+			return nil, err
+		}
 	}
 	// for now do not use raw subscriptions - we would have to handle skipped/lost notifications from zeromq
 	// on each notification we do sync or syncmempool respectively
@@ -58,7 +68,7 @@ func NewMQ(binding string, callback func(NotificationType)) (*MQ, error) {
 		return nil, err
 	}
 	glog.Info("MQ listening to ", binding)
-	mq := &MQ{context, socket, true, make(chan error), binding}
+	mq := &MQ{context, socket, true, make(chan error), binding, subs}
 	go mq.run(callback)
 	return mq, nil
 }
@@ -92,12 +102,13 @@ func (mq *MQ) run(callback func(NotificationType)) {
 		} else {
 			repeatedError = false
 		}
-		if len(msg) >= 3 {
+
+		if len(msg) >= 2 { // we received at least topic and payload
 			var nt NotificationType
 			switch string(msg[0]) {
-			case "hashblock":
+			case mq.subs.BlockReceive:
 				nt = NotificationNewBlock
-			case "hashtx":
+			case mq.subs.TxReceive:
 				nt = NotificationNewTx
 			default:
 				nt = NotificationUnknown
@@ -121,13 +132,17 @@ func (mq *MQ) Shutdown(ctx context.Context) error {
 	if mq.isRunning {
 		go func() {
 			// if errors in the closing sequence, let it close ungracefully
-			if err := mq.socket.SetUnsubscribe("hashtx"); err != nil {
-				mq.finished <- err
-				return
+			if mq.subs.BlockSubscribe != "" {
+				if err := mq.socket.SetUnsubscribe(mq.subs.BlockSubscribe); err != nil {
+					mq.finished <- err
+					return
+				}
 			}
-			if err := mq.socket.SetUnsubscribe("hashblock"); err != nil {
-				mq.finished <- err
-				return
+			if mq.subs.TxSubscribe != "" {
+				if err := mq.socket.SetUnsubscribe(mq.subs.TxSubscribe); err != nil {
+					mq.finished <- err
+					return
+				}
 			}
 			if err := mq.socket.Unbind(mq.binding); err != nil {
 				mq.finished <- err

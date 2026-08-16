@@ -142,6 +142,140 @@ func TestRocksTickers(t *testing.T) {
 		t.Errorf("Ticker %v found unexpectedly for aud vsCurrency", ticker)
 	}
 
+	queries := []struct {
+		name       string
+		vsCurrency string
+		token      string
+	}{
+		{name: "base", vsCurrency: "", token: ""},
+		{name: "eur", vsCurrency: "eur", token: ""},
+		{name: "token", vsCurrency: "", token: "0x6B175474E89094C44Da98b954EedeAC495271d0F"},
+	}
+	timestamps := []int64{
+		pastKey.Unix(),
+		ts1.Unix(),
+		ts1.Unix() + 3600,
+		ts2.Unix(),
+		futureKey.Unix(),
+	}
+	for _, q := range queries {
+		got, err := d.FiatRatesFindTickers(timestamps, q.vsCurrency, q.token)
+		if err != nil {
+			t.Fatalf("FiatRatesFindTickers(%s) returned error: %v", q.name, err)
+		}
+		if len(got) != len(timestamps) {
+			t.Fatalf("FiatRatesFindTickers(%s) returned %d items, want %d", q.name, len(got), len(timestamps))
+		}
+		for i, ts := range timestamps {
+			tsTime := time.Unix(ts, 0).UTC()
+			want, err := d.FiatRatesFindTicker(&tsTime, q.vsCurrency, q.token)
+			if err != nil {
+				t.Fatalf("FiatRatesFindTicker(%s) returned error: %v", q.name, err)
+			}
+			if !reflect.DeepEqual(got[i], want) {
+				t.Fatalf("FiatRatesFindTickers(%s) mismatch at index %d: got %+v, want %+v", q.name, i, got[i], want)
+			}
+		}
+	}
+
+}
+
+func TestFiatRatesFindTickersSparseTokenGaps(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	ts1, _ := time.Parse(FiatRatesTimeFormat, "20190628000000")
+	ts2, _ := time.Parse(FiatRatesTimeFormat, "20190629000000")
+	ts3, _ := time.Parse(FiatRatesTimeFormat, "20190630000000")
+
+	token := "0x82dF128257A7d7556262E1AB7F1f639d9775B85E"
+
+	ticker1 := &common.CurrencyRatesTicker{
+		Timestamp: ts1,
+		Rates: map[string]float32{
+			"usd": 20000,
+		},
+		TokenRates: map[string]float32{
+			"0x6B175474E89094C44Da98b954EedeAC495271d0F": 17.2,
+		},
+	}
+	ticker2 := &common.CurrencyRatesTicker{
+		Timestamp: ts2,
+		Rates: map[string]float32{
+			"usd": 30000,
+		},
+	}
+	ticker3 := &common.CurrencyRatesTicker{
+		Timestamp: ts3,
+		Rates: map[string]float32{
+			"usd": 40000,
+		},
+		TokenRates: map[string]float32{
+			token: 13.1,
+		},
+	}
+
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.FiatRatesStoreTicker(wb, ticker1); err != nil {
+		t.Fatalf("failed storing ticker1: %v", err)
+	}
+	if err := d.FiatRatesStoreTicker(wb, ticker2); err != nil {
+		t.Fatalf("failed storing ticker2: %v", err)
+	}
+	if err := d.FiatRatesStoreTicker(wb, ticker3); err != nil {
+		t.Fatalf("failed storing ticker3: %v", err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatalf("failed writing batch: %v", err)
+	}
+
+	timestamps := []int64{
+		ts1.Unix() - 1,
+		ts1.Unix(),
+		ts1.Unix() + 3600,
+		ts2.Unix(),
+		ts2.Unix() + 3600,
+		ts3.Unix(),
+		ts3.Unix() + 3600,
+	}
+
+	got, err := d.FiatRatesFindTickers(timestamps, "", token)
+	if err != nil {
+		t.Fatalf("FiatRatesFindTickers returned error: %v", err)
+	}
+	if len(got) != len(timestamps) {
+		t.Fatalf("FiatRatesFindTickers returned %d items, want %d", len(got), len(timestamps))
+	}
+
+	for i := 0; i < len(timestamps)-1; i++ {
+		if got[i] == nil {
+			t.Fatalf("expected ticker at index %d, got nil", i)
+		}
+		if got[i].Timestamp.Unix() != ts3.Unix() {
+			t.Fatalf("unexpected timestamp at index %d: got %d, want %d", i, got[i].Timestamp.Unix(), ts3.Unix())
+		}
+		if got[i].TokenRates[token] != 13.1 {
+			t.Fatalf("unexpected token rate at index %d: got %v, want %v", i, got[i].TokenRates[token], float32(13.1))
+		}
+	}
+	if got[len(got)-1] != nil {
+		t.Fatalf("expected nil for timestamp after last suitable ticker, got %+v", got[len(got)-1])
+	}
+
+	// Keep parity with single-item lookup semantics.
+	for i, ts := range timestamps {
+		tsTime := time.Unix(ts, 0).UTC()
+		want, err := d.FiatRatesFindTicker(&tsTime, "", token)
+		if err != nil {
+			t.Fatalf("FiatRatesFindTicker returned error at index %d: %v", i, err)
+		}
+		if !reflect.DeepEqual(got[i], want) {
+			t.Fatalf("FiatRatesFindTickers mismatch at index %d: got %+v, want %+v", i, got[i], want)
+		}
+	}
 }
 
 func Test_packUnpackCurrencyRatesTicker(t *testing.T) {

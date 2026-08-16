@@ -9,38 +9,57 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins"
-	build "github.com/trezor/blockbook/build/tools"
+	"github.com/trezor/blockbook/tests/connectivity"
 	"github.com/trezor/blockbook/tests/rpc"
-	"github.com/trezor/blockbook/tests/sync"
+	synctests "github.com/trezor/blockbook/tests/sync"
 )
 
 type TestFunc func(t *testing.T, coin string, chain bchain.BlockChain, mempool bchain.Mempool, testConfig json.RawMessage)
 
-var integrationTests = map[string]TestFunc{
-	"rpc":  rpc.IntegrationTest,
-	"sync": sync.IntegrationTest,
+type integrationTest struct {
+	fn            TestFunc
+	requiresChain bool
+}
+
+// integrationTests maps Go-owned test group names from tests.json to their handlers.
+// "connectivity" performs lightweight backend reachability checks.
+// "rpc" runs per-coin RPC fixtures against a fully initialized chain.
+// "sync" exercises block connection/rollback logic and needs a live backend + chain init.
+var integrationTests = map[string]integrationTest{
+	"rpc":          {fn: rpc.IntegrationTest, requiresChain: true},
+	"sync":         {fn: synctests.IntegrationTest, requiresChain: true},
+	"connectivity": {fn: connectivity.IntegrationTest, requiresChain: false},
+}
+
+var typescriptOwnedIntegrationTests = map[string]string{
+	"api": "API e2e tests are TypeScript/OpenAPI-owned; run contrib/tests/run-openapi-tests.sh",
 }
 
 var notConnectedError = errors.New("Not connected to backend server")
 
 func runIntegrationTests(t *testing.T) {
+	supplyPlaceholderFeeProviderKeys(t)
+
 	tests, err := loadTests("tests.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	keys := make([]string, 0, len(tests))
-	for k := range tests {
+	for k, cfg := range tests {
+		if !hasConnectivity(cfg) {
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -48,8 +67,46 @@ func runIntegrationTests(t *testing.T) {
 	for _, coin := range keys {
 		cfg := tests[coin]
 		name := getMatchableName(coin)
+		if isDisabled(cfg) {
+			// Keep the test definitions in tests.json but skip execution, e.g. for
+			// a coin whose backend/Blockbook is temporarily not deployed. Surfaces
+			// as a visible SKIP instead of silently vanishing from the run.
+			t.Run(name, func(t *testing.T) { t.Skipf("%s is disabled in tests.json", coin) })
+			continue
+		}
 		t.Run(name, func(t *testing.T) { runTests(t, coin, cfg) })
 
+	}
+}
+
+// isDisabled reports whether a tests.json coin entry carries `"disabled": true`.
+// Must stay in sync with the disabled handling in .github/scripts/runner.py and
+// tests/openapi/src/config.ts.
+func isDisabled(cfg map[string]json.RawMessage) bool {
+	raw, ok := cfg["disabled"]
+	if !ok {
+		return false
+	}
+	var disabled bool
+	if err := json.Unmarshal(raw, &disabled); err != nil {
+		return false
+	}
+	return disabled
+}
+
+// supplyPlaceholderFeeProviderKeys gives the integration run placeholder API keys for
+// the EVM alternative fee providers. These tests render production coin configs, some
+// of which select a key-gated provider (e.g. avalanche → infura); without its key
+// such a provider now aborts chain initialization instead of degrading silently
+// (see EthereumRPC.initAlternativeFeeProvider). The test environment has no
+// third-party fee-API keys and these tests assert RPC/sync behavior, not fees, so a
+// placeholder lets the chain start and fall back to default fee estimation while the
+// background fee fetch simply errors out. A real key in the environment is respected.
+func supplyPlaceholderFeeProviderKeys(t *testing.T) {
+	for _, key := range []string{"INFURA_API_KEY", "ONE_INCH_API_KEY"} {
+		if _, ok := os.LookupEnv(key); !ok {
+			t.Setenv(key, "integration-test-placeholder")
+		}
 	}
 }
 
@@ -64,11 +121,16 @@ func loadTests(path string) (map[string]map[string]json.RawMessage, error) {
 }
 
 func getMatchableName(coin string) string {
-	if idx := strings.Index(coin, "_testnet"); idx != -1 {
-		return coin[:idx] + "=test"
-	} else {
-		return coin + "=main"
+	const marker = "_testnet"
+	if idx := strings.Index(coin, marker); idx != -1 {
+		// Preserve the network suffix (e.g. "_sepolia", "_nile", "4") so distinct
+		// testnets of the same coin get distinct names instead of all collapsing to
+		// "<coin>=test". Keeps the mapping injective, which lets the deploy
+		// connectivity regex target exactly one testnet. Must stay in sync with
+		// matchable_name() in .github/scripts/deploy_plan.py.
+		return coin[:idx] + "=test" + coin[idx+len(marker):]
 	}
+	return coin + "=main"
 }
 
 func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {
@@ -77,47 +139,50 @@ func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {
 	}
 	defer chaincfg.ResetParams()
 
-	bc, m, err := makeBlockChain(coin)
-	if err != nil {
-		if err == notConnectedError {
-			t.Fatal(err)
+	var (
+		bc       bchain.BlockChain
+		m        bchain.Mempool
+		initOnce sync.Once
+		initErr  error
+	)
+	needsMempool := requiresMempool(cfg)
+	ensureChain := func(t *testing.T) {
+		t.Helper()
+		initOnce.Do(func() {
+			bc, m, initErr = makeBlockChain(coin, needsMempool)
+		})
+		if initErr != nil {
+			if initErr == notConnectedError {
+				t.Fatal(initErr)
+			}
+			t.Fatalf("Cannot init blockchain: %s", initErr)
 		}
-		t.Fatalf("Cannot init blockchain: %s", err)
 	}
 
 	for test, c := range cfg {
-		if fn, found := integrationTests[test]; found {
-			t.Run(test, func(t *testing.T) { fn(t, coin, bc, m, c) })
+		if test == "disabled" {
+			// Reserved meta key handled in runIntegrationTests, not a test group.
+			continue
+		}
+		if reason, found := typescriptOwnedIntegrationTests[test]; found {
+			t.Run(test, func(t *testing.T) {
+				t.Skip(reason)
+			})
+		} else if def, found := integrationTests[test]; found {
+			t.Run(test, func(t *testing.T) {
+				if def.requiresChain {
+					ensureChain(t)
+				}
+				def.fn(t, coin, bc, m, c)
+			})
 		} else {
 			t.Errorf("Test not found: %s", test)
 		}
 	}
 }
 
-func makeBlockChain(coin string) (bchain.BlockChain, bchain.Mempool, error) {
-	c, err := build.LoadConfig("../configs", coin)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	outputDir, err := ioutil.TempDir("", "integration_test")
-	if err != nil {
-		return nil, nil, err
-	}
-	defer os.RemoveAll(outputDir)
-
-	err = build.GeneratePackageDefinitions(c, "../build/templates", outputDir)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	b, err := ioutil.ReadFile(filepath.Join(outputDir, "blockbook", "blockchaincfg.json"))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var cfg json.RawMessage
-	err = json.Unmarshal(b, &cfg)
+func makeBlockChain(coin string, needsMempool bool) (bchain.BlockChain, bchain.Mempool, error) {
+	cfg, err := bchain.LoadBlockchainCfgRaw(coin)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -127,7 +192,7 @@ func makeBlockChain(coin string) (bchain.BlockChain, bchain.Mempool, error) {
 		return nil, nil, err
 	}
 
-	return initBlockChain(coinName, cfg)
+	return initBlockChain(coinName, cfg, needsMempool)
 }
 
 func getName(raw json.RawMessage) (string, error) {
@@ -148,7 +213,7 @@ func getName(raw json.RawMessage) (string, error) {
 	}
 }
 
-func initBlockChain(coinName string, cfg json.RawMessage) (bchain.BlockChain, bchain.Mempool, error) {
+func initBlockChain(coinName string, cfg json.RawMessage, initMempool bool) (bchain.BlockChain, bchain.Mempool, error) {
 	factory, found := coins.BlockChainFactories[coinName]
 	if !found {
 		return nil, nil, fmt.Errorf("Factory function not found")
@@ -177,17 +242,21 @@ func initBlockChain(coinName string, cfg json.RawMessage) (bchain.BlockChain, bc
 		time.Sleep(time.Millisecond * 1000)
 	}
 
-	mempool, err := chain.CreateMempool(chain)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Mempool creation failed: %s", err)
+	if initMempool {
+		mempool, err := chain.CreateMempool(chain)
+		if err != nil {
+			return nil, nil, fmt.Errorf("Mempool creation failed: %s", err)
+		}
+
+		err = chain.InitializeMempool(nil, nil)
+		if err != nil {
+			return nil, nil, fmt.Errorf("Mempool initialization failed: %s", err)
+		}
+
+		return chain, mempool, nil
 	}
 
-	err = chain.InitializeMempool(nil, nil, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Mempool initialization failed: %s", err)
-	}
-
-	return chain, mempool, nil
+	return chain, nil, nil
 }
 
 func isNetError(err error) bool {
@@ -195,4 +264,26 @@ func isNetError(err error) bool {
 		return true
 	}
 	return false
+}
+
+func requiresMempool(cfg map[string]json.RawMessage) bool {
+	tests, ok := cfg["rpc"]
+	if !ok || len(tests) == 0 {
+		return false
+	}
+	var rpcTests []string
+	if err := json.Unmarshal(tests, &rpcTests); err != nil {
+		return true
+	}
+	for _, test := range rpcTests {
+		if test == "MempoolSync" || test == "GetTransactionForMempool" {
+			return true
+		}
+	}
+	return false
+}
+
+func hasConnectivity(cfg map[string]json.RawMessage) bool {
+	_, ok := cfg["connectivity"]
+	return ok
 }

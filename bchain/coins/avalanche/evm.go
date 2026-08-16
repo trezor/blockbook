@@ -48,6 +48,37 @@ type AvalancheRPCClient struct {
 	*rpc.Client
 }
 
+// AvalancheDualRPCClient routes calls and subscriptions to separate RPC clients.
+type AvalancheDualRPCClient struct {
+	CallClient *AvalancheRPCClient
+	SubClient  *AvalancheRPCClient
+}
+
+// CallContext forwards JSON-RPC calls to the HTTP client with Avalanche-specific handling.
+func (c *AvalancheDualRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	return c.CallClient.CallContext(ctx, result, method, args...)
+}
+
+// BatchCallContext forwards batch JSON-RPC calls to the HTTP client.
+func (c *AvalancheDualRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchElem) error {
+	return c.CallClient.BatchCallContext(ctx, batch)
+}
+
+// EthSubscribe forwards subscriptions to the WebSocket client.
+func (c *AvalancheDualRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
+	return c.SubClient.EthSubscribe(ctx, channel, args...)
+}
+
+// Close shuts down both underlying clients.
+func (c *AvalancheDualRPCClient) Close() {
+	if c.SubClient != nil {
+		c.SubClient.Close()
+	}
+	if c.CallClient != nil && c.CallClient != c.SubClient {
+		c.CallClient.Close()
+	}
+}
+
 // EthSubscribe subscribes to events and returns a client subscription that implements the EVMClientSubscription interface
 func (c *AvalancheRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
 	sub, err := c.Client.EthSubscribe(ctx, channel, args...)
@@ -62,9 +93,12 @@ func (c *AvalancheRPCClient) EthSubscribe(ctx context.Context, channel interface
 func (c *AvalancheRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	err := c.Client.CallContext(ctx, result, method, args...)
 	// unfinalized data cannot be queried error returned when trying to query a block height greater than last finalized block
-	// do not throw rpc error and instead treat as ErrBlockNotFound
+	// treat as ErrBlockNotFound so sync retries instead of processing an empty result
 	// https://docs.avax.network/quickstart/exchanges/integrate-exchange-with-avalanche#determining-finality
-	if err != nil && !strings.Contains(err.Error(), "cannot query unfinalized data") {
+	if err != nil {
+		if strings.Contains(err.Error(), "cannot query unfinalized data") {
+			return bchain.ErrBlockNotFound
+		}
 		return err
 	}
 	return nil

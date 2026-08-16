@@ -20,10 +20,24 @@ var (
 	TickerTokenVsCurrency string
 )
 
+func (t *CurrencyRatesTicker) findTokenRate(token string) (float32, bool) {
+	if t.TokenRates == nil {
+		return 0, false
+	}
+	if rate, found := t.TokenRates[token]; found {
+		return rate, true
+	}
+	if rate, found := t.TokenRates[strings.ToLower(token)]; found {
+		return rate, true
+	}
+
+	return 0, false
+}
+
 // Convert returns token rate in base currency
 func (t *CurrencyRatesTicker) GetTokenRate(token string) (float32, bool) {
 	if t.TokenRates != nil {
-		rate, found := t.TokenRates[strings.ToLower(token)]
+		rate, found := t.findTokenRate(token)
 		if !found {
 			return 0, false
 		}
@@ -92,7 +106,7 @@ func IsSuitableTicker(ticker *CurrencyRatesTicker, vsCurrency string, token stri
 		if ticker.TokenRates == nil {
 			return false
 		}
-		if _, found := ticker.TokenRates[token]; !found {
+		if _, found := ticker.findTokenRate(token); !found {
 			return false
 		}
 	}

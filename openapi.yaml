@@ -1,0 +1,3147 @@
+openapi: 3.1.0
+info:
+  title: Blockbook API
+  version: "2.0.0-draft"
+  summary: REST and WebSocket API for indexed blockchain data served by Blockbook.
+  license:
+    name: GNU Affero General Public License v3.0
+    identifier: AGPL-3.0-only
+  description: |-
+    Canonical description of the Blockbook public API, based on
+    blockbook-api.ts, api/xpub.go, and the api/server handlers.
+
+    API V2 is the current Blockbook API. It is available over REST and over
+    WebSocket using the WsRequest/WsResponse JSON envelope documented below.
+    The normalized API shapes are shared by all supported coins, while
+    blockchain-specific payloads remain extensible where Blockbook returns raw
+    backend JSON.
+
+    Amounts are strings in the lowest denomination of the chain, such as
+    satoshis or wei, without a decimal point. Empty fields are omitted: empty
+    means null, an empty string, numeric zero, a null object, or an empty array.
+    Since the same API serves many different chains, this can sometimes hide
+    otherwise meaningful zero values such as transaction version 0.
+
+    Legacy API V1 is a Bitcore Insight-compatible subset for Bitcoin-type
+    coins. It is provided as-is for compatibility and is not being extended.
+
+    Load estimates are qualitative hints for client authors. Low means a small
+    constant-time lookup or cached metadata. Medium means bounded indexed work
+    or response size. High means potentially large scans, large payloads,
+    broadcast/backend work, or external RPC enrichment. Actual cost also
+    depends on chain speed, backend health, cache warmth, mempool size,
+    pageSize, gap, and the number of addresses, transactions, tokens, filters,
+    or timestamps involved.
+servers:
+  - url: /
+    description: Current Blockbook instance
+tags:
+  - name: Status
+    description: Blockbook and backend status.
+  - name: Blocks
+    description: Block, block hash, raw block, and filter endpoints.
+  - name: Transactions
+    description: Transaction lookup and broadcast endpoints.
+  - name: Accounts
+    description: Address, XPUB, UTXO, and balance history endpoints.
+  - name: Contracts
+    description: Smart contract and token metadata endpoints.
+  - name: Fees
+    description: Fee estimation and fee statistics endpoints.
+  - name: Fiat
+    description: Fiat and token rate endpoints.
+  - name: WebSocket
+    description: WebSocket upgrade endpoint and message schemas.
+  - name: Legacy
+    description: Bitcore Insight-compatible V1 routes for Bitcoin-type coins.
+security: []
+
+paths:
+  /api/status:
+    get:
+      tags: [Status]
+      operationId: getStatus
+      summary: Get Blockbook and backend status.
+      description: |-
+        Returns Blockbook sync state and connected backend metadata.
+
+        Load estimate: Low; constant-size status metadata.
+      responses:
+        "200":
+          description: Current Blockbook and backend status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+              examples:
+                status:
+                  $ref: "#/components/examples/Status"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/:
+    get:
+      tags: [Status]
+      operationId: getApiIndexStatus
+      summary: Get status from the API index handler.
+      description: |-
+        Alias served by the same handler as /api/status on full public
+        interfaces.
+
+        Load estimate: Low; constant-size status metadata.
+      responses:
+        "200":
+          description: Current Blockbook and backend status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+              examples:
+                status:
+                  $ref: "#/components/examples/Status"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/block-index/{height}:
+    get:
+      tags: [Blocks]
+      operationId: getBlockHashByHeight
+      summary: Get a block hash by height.
+      description: |-
+        Returns the block hash for a height on the backend main chain.
+        Blockbook follows the backend main chain; after a rollback or reorg,
+        height lookups resolve to the current main-chain block.
+
+        Load estimate: Low; indexed height-to-hash lookup.
+      parameters:
+        - name: height
+          in: path
+          required: true
+          description: Block height on the backend main chain.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Block hash at the requested height.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockHashResponse"
+              examples:
+                blockHash:
+                  $ref: "#/components/examples/BlockHash"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/block/{blockId}:
+    get:
+      tags: [Blocks]
+      operationId: getBlock
+      summary: Get a block by height or hash.
+      description: |-
+        Returns block information with paged transactions. When full
+        transaction details are unavailable, the response can contain only
+        transaction ids.
+
+        Blockbook follows the backend main chain. Height lookups always return
+        the current main-chain block. Hash lookups can return a block from
+        another fork only if the backend still keeps it.
+
+        Load estimate: Medium; grows mainly with block transaction count and
+        requested page.
+      parameters:
+        - name: blockId
+          in: path
+          required: true
+          description: Block height or block hash.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+      responses:
+        "200":
+          description: Block details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Block"
+              examples:
+                block:
+                  $ref: "#/components/examples/Block"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/rawblock/{blockId}:
+    get:
+      tags: [Blocks]
+      operationId: getRawBlock
+      summary: Get raw block hex.
+      description: |-
+        Returns raw serialized block data.
+
+        Load estimate: High for large blocks; payload size grows with the raw
+        block size.
+      parameters:
+        - name: blockId
+          in: path
+          required: true
+          description: Block height or block hash.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Raw block data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockRaw"
+              examples:
+                rawBlock:
+                  $ref: "#/components/examples/RawBlock"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/block-filters/:
+    get:
+      tags: [Blocks]
+      operationId: getBlockFilters
+      summary: Get compact block filters.
+      description: |-
+        Returns compact block filters for the script type configured on this
+        Blockbook instance. Provide either lastN or a from/to range. When to is
+        omitted for a range, the current best height is used.
+
+        Load estimate: High for wide ranges; work and payload grow linearly
+        with the number of requested filters.
+      parameters:
+        - name: scriptType
+          in: query
+          required: true
+          description: Script type configured for block filters on this instance, for example taproot.
+          schema:
+            type: string
+        - name: lastN
+          in: query
+          description: Return filters for the last N blocks.
+          schema:
+            type: integer
+            minimum: 1
+        - name: from
+          in: query
+          description: First block height in the requested range.
+          schema:
+            type: integer
+            minimum: 0
+        - name: to
+          in: query
+          description: Last block height in the requested range. Defaults to the current best height when omitted.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Block filters keyed by block height.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockFilters"
+              examples:
+                blockFilters:
+                  $ref: "#/components/examples/BlockFilters"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/tx/{txid}:
+    get:
+      tags: [Transactions]
+      operationId: getTransaction
+      summary: Get a normalized transaction.
+      description: |-
+        Returns normalized transaction data with the same general structure for
+        all supported coins. Coin-specific fields that do not fit the common
+        shape are omitted here; use getTransactionSpecific for backend-native
+        JSON.
+
+        Bitcoin-like confirmed transactions include blockHash, confirmations,
+        blockTime, size/vsize, value/valueIn, fees, and hex. Unconfirmed
+        transactions can include confirmationETABlocks and
+        confirmationETASeconds.
+
+        Ethereum-like transactions have one vin and one vout, tokenTransfers,
+        ethereumSpecific execution data, and optional addressAliases. Parsed
+        input data is included when the 4byte signature can be resolved.
+
+        For mined transactions, blockTime is the block timestamp. For mempool
+        transactions, blockTime is when this Blockbook instance first learned
+        about the transaction and can differ between instances.
+
+        Load estimate: Medium; grows with inputs, outputs, token transfers,
+        address aliases, and spending=true extra lookups.
+      parameters:
+        - name: txid
+          in: path
+          required: true
+          description: Transaction id/hash.
+          schema:
+            type: string
+        - name: spending
+          in: query
+          description: Include spending transaction metadata for UTXO outputs when available.
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Normalized transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tx"
+              examples:
+                bitcoinConfirmed:
+                  $ref: "#/components/examples/BitcoinTransactionConfirmed"
+                bitcoinUnconfirmed:
+                  $ref: "#/components/examples/BitcoinTransactionUnconfirmed"
+                ethereum:
+                  $ref: "#/components/examples/EthereumTransaction"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/tx-specific/{txid}:
+    get:
+      tags: [Transactions]
+      operationId: getTransactionSpecific
+      summary: Get blockchain-specific transaction JSON.
+      description: |-
+        Returns transaction data in the exact backend-specific format. Use this
+        when a chain exposes fields that are intentionally absent from the
+        normalized Tx schema.
+
+        Load estimate: Medium; payload size depends on chain-specific fields
+        and transaction complexity.
+      parameters:
+        - name: txid
+          in: path
+          required: true
+          description: Transaction id/hash.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chain-specific transaction payload.
+          content:
+            application/json:
+              schema:
+                description: Arbitrary chain-specific transaction payload.
+              examples:
+                transactionSpecific:
+                  $ref: "#/components/examples/TransactionSpecific"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/rawtx/{txid}:
+    get:
+      tags: [Transactions]
+      operationId: getRawTransaction
+      summary: Get raw transaction hex.
+      description: |-
+        Unversioned public endpoint exposed by Blockbook for raw transaction
+        data.
+
+        Load estimate: Medium; payload size grows with raw transaction size.
+      parameters:
+        - name: txid
+          in: path
+          required: true
+          description: Transaction id/hash.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Raw transaction hex as a JSON string.
+          content:
+            application/json:
+              schema:
+                type: string
+              examples:
+                rawTransaction:
+                  $ref: "#/components/examples/RawTransaction"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/sendtx/{hex}:
+    get:
+      tags: [Transactions]
+      operationId: sendTransactionByGet
+      summary: Broadcast a raw transaction using the path.
+      description: |-
+        Broadcasts hex-encoded raw transaction data. Prefer POST for large
+        payloads.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
+      parameters:
+        - name: hex
+          in: path
+          required: true
+          description: Raw transaction.
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F]+$"
+      responses:
+        "200":
+          description: Broadcast result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendTransactionResponse"
+              examples:
+                broadcast:
+                  $ref: "#/components/examples/SendTransaction"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/sendtx/:
+    post:
+      tags: [Transactions]
+      operationId: sendTransactionByPost
+      summary: Broadcast a raw transaction using the request body.
+      description: |-
+        Broadcasts hex-encoded raw transaction data from the request body. The
+        trailing slash is mandatory in the Blockbook handler. POST bodies are
+        limited to 8 MiB.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              pattern: "^[0-9a-fA-F]+$"
+      responses:
+        "200":
+          description: Broadcast result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendTransactionResponse"
+              examples:
+                broadcast:
+                  $ref: "#/components/examples/SendTransaction"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/address/{address}:
+    get:
+      tags: [Accounts]
+      operationId: getAddress
+      summary: Get address/account details.
+      description: |-
+        Returns balances and transactions of an address. Transactions are
+        sorted by block height with newest blocks first. Response size is
+        controlled by the details parameter.
+
+        At details=basic, mempool transactions are not aggregated:
+        unconfirmedBalance, unconfirmedSending, and unconfirmedReceiving are
+        omitted, and unconfirmedTxs reports the raw mempool index size for the
+        address.
+
+        Load estimate: Variable; basic is low, token/tokenBalances and
+        txids/txslight are medium, and txs can be high as it grows with
+        pageSize, transactions, token rows, filters, and protocol enrichment.
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Chain address.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/FromHeight"
+        - $ref: "#/components/parameters/ToHeight"
+        - $ref: "#/components/parameters/Details"
+        - $ref: "#/components/parameters/Filter"
+        - $ref: "#/components/parameters/ContractFilter"
+        - $ref: "#/components/parameters/Protocols"
+        - $ref: "#/components/parameters/SecondaryCurrency"
+        - $ref: "#/components/parameters/ConfirmedNonce"
+      responses:
+        "200":
+          description: Address/account details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Address"
+              examples:
+                bitcoinTxids:
+                  $ref: "#/components/examples/BitcoinAddressTxids"
+                ethereumTokenBalances:
+                  $ref: "#/components/examples/EthereumAddressTokenBalances"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/xpub/{xpub}:
+    get:
+      tags: [Accounts]
+      operationId: getXpub
+      summary: Get XPUB or descriptor account details.
+      description: |-
+        Returns balances and transactions of an XPUB or output descriptor for
+        Bitcoin-type coins. Transactions are sorted by block height with newest
+        blocks first. URL-encode descriptors before placing them after /xpub/.
+
+        Blockbook expects XPUBs at level 3 of the derivation path, for example
+        m/purpose'/coin_type'/account'. It derives the remaining
+        change/address_index path. The BIP scheme is inferred from the XPUB
+        prefix; unknown prefixes default to BIP44.
+
+        Supported descriptors are pkh(xpub), sh(wpkh(xpub)), wpkh(xpub), and
+        tr(xpub). Descriptors can include origin paths and change selectors
+        such as <0;1> or {0,1}; when change is omitted, Blockbook defaults to
+        <0;1>.
+
+        Note: usedTokens always reports the total number of used addresses for
+        the XPUB, regardless of the tokens query filter.
+
+        Load estimate: High for broad accounts; grows with derived addresses,
+        gap, used address count, pageSize, transaction history, token rows, and
+        protocol enrichment.
+      parameters:
+        - name: xpub
+          in: path
+          required: true
+          allowReserved: true
+          description: XPUB or supported descriptor.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/FromHeight"
+        - $ref: "#/components/parameters/ToHeight"
+        - $ref: "#/components/parameters/Details"
+        - $ref: "#/components/parameters/Tokens"
+        - $ref: "#/components/parameters/Filter"
+        - $ref: "#/components/parameters/ContractFilter"
+        - $ref: "#/components/parameters/Protocols"
+        - $ref: "#/components/parameters/SecondaryCurrency"
+        - $ref: "#/components/parameters/Gap"
+      responses:
+        "200":
+          description: XPUB/descriptor account details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Address"
+              examples:
+                xpub:
+                  $ref: "#/components/examples/XpubAddress"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/utxo/{descriptor}:
+    get:
+      tags: [Accounts]
+      operationId: getUtxo
+      summary: Get UTXOs for an address, XPUB, or descriptor.
+      description: |-
+        Returns unspent outputs for an address, XPUB, or descriptor on
+        Bitcoin-type coins. By default both confirmed and unconfirmed UTXOs are
+        returned; confirmed=true filters out unconfirmed entries. Results are
+        sorted by block height with newest entries first.
+
+        Unconfirmed UTXOs omit height, have confirmations set to 0, and can
+        include lockTime. XPUB and descriptor UTXOs also include address and
+        derivation path when available. Coinbase UTXOs include coinbase=true
+        only up to the coinbase confirmation limit, currently 100 blocks.
+
+        Load estimate: Variable; address lookups are usually medium, while
+        XPUB/descriptor lookups grow with gap, derived addresses, and UTXO
+        count.
+      parameters:
+        - name: descriptor
+          in: path
+          required: true
+          allowReserved: true
+          description: Address, XPUB, or supported descriptor. URL-encode descriptors.
+          schema:
+            type: string
+        - name: confirmed
+          in: query
+          description: When true, return only confirmed UTXOs.
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Gap"
+      responses:
+        "200":
+          description: UTXO list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Utxo"
+              examples:
+                utxos:
+                  $ref: "#/components/examples/UtxoList"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/balancehistory/{descriptor}:
+    get:
+      tags: [Accounts]
+      operationId: getBalanceHistory
+      summary: Get account balance history.
+      description: |-
+        Returns balance history points for an address, XPUB, or descriptor.
+        from and to are Unix timestamps. groupBy is an aggregation interval in
+        seconds and defaults to 3600. When fiatcurrency is omitted, rates can
+        contain all available currencies. sentToSelf is the amount sent from an
+        address to itself or within addresses of the same XPUB.
+
+        Load estimate: High; grows with account transaction history, time span,
+        grouping cardinality, fiat rate lookups, and XPUB/descriptor gap.
+      parameters:
+        - name: descriptor
+          in: path
+          required: true
+          allowReserved: true
+          description: Address, XPUB, or supported descriptor. URL-encode descriptors.
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Unix timestamp lower bound.
+          schema:
+            type: integer
+            format: int64
+        - name: to
+          in: query
+          description: Unix timestamp upper bound.
+          schema:
+            type: integer
+            format: int64
+        - name: fiatcurrency
+          in: query
+          description: Optional fiat currency code to include in rates.
+          schema:
+            type: string
+            example: usd
+        - name: groupBy
+          in: query
+          description: Aggregation interval in seconds. Defaults to 3600.
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/Gap"
+      responses:
+        "200":
+          description: Balance history points.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BalanceHistory"
+              examples:
+                allRates:
+                  $ref: "#/components/examples/BalanceHistoryAllRates"
+                usd:
+                  $ref: "#/components/examples/BalanceHistoryUsd"
+                grouped:
+                  $ref: "#/components/examples/BalanceHistoryGrouped"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/contract/{contract}:
+    get:
+      tags: [Contracts]
+      operationId: getContractInfo
+      summary: Get contract metadata.
+      description: |-
+        Returns indexed token/contract metadata and optional current protocol
+        enrichments such as ERC4626.
+
+        blockHeight reflects the indexer's best block at request time.
+        ERC4626 fields under protocols.erc4626 are fetched through JSON-RPC
+        calls pinned to that exact blockHeight, so the ERC4626 values are a
+        consistent snapshot. If a vault is detected but the underlying asset
+        metadata cannot be resolved, protocols.erc4626 contains error and omits
+        asset; callers must not derive fiat rates or human-unit exchange rates
+        from such a partial response.
+
+        Load estimate: Medium; indexed metadata is cheap, but optional protocol
+        enrichment can add backend RPC calls and token metadata lookups.
+      parameters:
+        - name: contract
+          in: path
+          required: true
+          description: Smart contract address.
+          schema:
+            type: string
+        - name: currency
+          in: query
+          description: Secondary currency code for rates.
+          schema:
+            type: string
+            example: usd
+        - $ref: "#/components/parameters/Protocols"
+      responses:
+        "200":
+          description: Contract metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractInfoResult"
+              examples:
+                contract:
+                  $ref: "#/components/examples/ContractInfo"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/estimatefee/{blocks}:
+    get:
+      tags: [Fees]
+      operationId: estimateFee
+      summary: Estimate a fee target.
+      description: |-
+        Returns backend fee estimation for the requested confirmation target.
+
+        Load estimate: Low; a small backend fee estimate lookup.
+      parameters:
+        - name: blocks
+          in: path
+          required: true
+          description: Confirmation target in blocks.
+          schema:
+            type: integer
+            minimum: 1
+        - name: conservative
+          in: query
+          description: Use conservative smart fee estimation where supported.
+          schema:
+            type: boolean
+            default: true
+      responses:
+        "200":
+          description: Decimal fee estimate in chain base currency.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultStringResponse"
+              examples:
+                estimateFee:
+                  $ref: "#/components/examples/EstimateFee"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/feestats/{blockId}:
+    get:
+      tags: [Fees]
+      operationId: getFeeStats
+      summary: Get fee statistics for a block.
+      description: |-
+        Returns fee statistics for transactions in one block.
+
+        Load estimate: Medium to high; grows with the number of transactions
+        in the requested block.
+      parameters:
+        - name: blockId
+          in: path
+          required: true
+          description: Block height or block hash.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fee statistics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeeStats"
+              examples:
+                feeStats:
+                  $ref: "#/components/examples/FeeStats"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/tickers/:
+    get:
+      tags: [Fiat]
+      operationId: getFiatTicker
+      summary: Get current or historical fiat rates.
+      description: |-
+        Returns currency rates for the requested currency and date. If a rate
+        is unavailable for the exact timestamp, the closest available rate can
+        be returned. Responses include the actual rate timestamp. Without a
+        currency parameter, all available currencies can be returned. A rate of
+        -1 marks an unavailable or invalid currency for that timestamp.
+
+        Load estimate: Low to medium; specific currency lookups are cheap,
+        while omitted currency and token lookups increase response size.
+      parameters:
+        - name: currency
+          in: query
+          description: Optional currency code. When omitted, all available rates can be returned.
+          schema:
+            type: string
+            example: usd
+        - name: timestamp
+          in: query
+          description: Unix timestamp for historical rates.
+          schema:
+            type: integer
+            format: int64
+        - name: block
+          in: query
+          description: Block height or hash whose timestamp should be used for historical rates.
+          schema:
+            type: string
+        - name: token
+          in: query
+          description: Optional token symbol or contract/address key for token-specific rates.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fiat rate ticker.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FiatTicker"
+              examples:
+                allRates:
+                  $ref: "#/components/examples/FiatTickerAll"
+                usd:
+                  $ref: "#/components/examples/FiatTickerUsd"
+                unavailable:
+                  $ref: "#/components/examples/FiatTickerUnavailable"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/multi-tickers/:
+    get:
+      tags: [Fiat]
+      operationId: getFiatTickersForTimestamps
+      summary: Get fiat rates for multiple timestamps.
+      description: |-
+        Returns fiat rate tickers for a comma-separated list of Unix
+        timestamps.
+
+        Load estimate: Medium; work and payload grow linearly with timestamp
+        count, plus token/currency selection.
+      parameters:
+        - name: timestamp
+          in: query
+          required: true
+          description: Comma-separated Unix timestamps.
+          schema:
+            type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
+            example: "1710000000,1720000000"
+        - name: currency
+          in: query
+          description: Optional currency code.
+          schema:
+            type: string
+            example: usd
+        - name: token
+          in: query
+          description: Optional token symbol or contract/address key.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fiat rate tickers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FiatTicker"
+              examples:
+                multiTickers:
+                  $ref: "#/components/examples/MultiTickers"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v2/tickers-list/:
+    get:
+      tags: [Fiat]
+      operationId: getFiatTickersList
+      summary: Get currencies available for a timestamp.
+      description: |-
+        Returns available secondary currencies for a date together with the
+        actual rate timestamp.
+
+        Load estimate: Low to medium; token lookups and wide currency lists
+        increase response size.
+      parameters:
+        - name: timestamp
+          in: query
+          required: true
+          description: Unix timestamp for the requested currency list.
+          schema:
+            type: integer
+            format: int64
+        - name: token
+          in: query
+          description: Optional token symbol or contract/address key.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Available currencies.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailableVsCurrencies"
+              examples:
+                tickersList:
+                  $ref: "#/components/examples/TickersList"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/block-index/{height}:
+    get:
+      tags: [Legacy]
+      operationId: getLegacyBlockHashByHeight
+      summary: Legacy get block hash by height.
+      description: |-
+        Bitcore Insight-compatible V1 route for Bitcoin-type coins.
+
+        Load estimate: Low; indexed height-to-hash lookup.
+      parameters:
+        - name: height
+          in: path
+          required: true
+          description: Block height on the backend main chain.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Block hash at the requested height.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockHashResponse"
+              examples:
+                blockHash:
+                  $ref: "#/components/examples/BlockHash"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/tx/{txid}:
+    get:
+      tags: [Legacy]
+      operationId: getLegacyTransaction
+      summary: Legacy get transaction.
+      description: |-
+        Bitcore Insight-compatible V1 transaction shape for Bitcoin-type
+        coins.
+
+        Load estimate: Medium; grows with inputs, outputs, scripts, and raw
+        transaction size.
+      parameters:
+        - name: txid
+          in: path
+          required: true
+          description: Transaction id/hash.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Legacy transaction payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegacyObject"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/address/{address}:
+    get:
+      tags: [Legacy]
+      operationId: getLegacyAddress
+      summary: Legacy get address.
+      description: |-
+        Bitcore Insight-compatible V1 address shape for Bitcoin-type coins.
+
+        Load estimate: Variable; grows with address transaction count and
+        legacy response expansion.
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Chain address.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Legacy address payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegacyObject"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/utxo/{address}:
+    get:
+      tags: [Legacy]
+      operationId: getLegacyUtxo
+      summary: Legacy get address UTXOs.
+      description: |-
+        Bitcore Insight-compatible V1 UTXO list for Bitcoin-type coins.
+
+        Load estimate: Medium; grows with the number of unspent outputs.
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Chain address.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Legacy UTXO list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LegacyObject"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/block/{blockId}:
+    get:
+      tags: [Legacy]
+      operationId: getLegacyBlock
+      summary: Legacy get block by height or hash.
+      description: |-
+        Bitcore Insight-compatible V1 block shape for Bitcoin-type coins.
+
+        Load estimate: Medium to high; grows with block transaction count and
+        legacy payload size.
+      parameters:
+        - name: blockId
+          in: path
+          required: true
+          description: Block height or block hash.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Legacy block payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegacyObject"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/estimatefee/{blocks}:
+    get:
+      tags: [Legacy]
+      operationId: estimateLegacyFee
+      summary: Legacy estimate fee target.
+      description: |-
+        Bitcore Insight-compatible V1 fee estimate for Bitcoin-type coins.
+
+        Load estimate: Low; a small backend fee estimate lookup.
+      parameters:
+        - name: blocks
+          in: path
+          required: true
+          description: Confirmation target in blocks.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Decimal fee estimate in chain base currency.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultStringResponse"
+              examples:
+                estimateFee:
+                  $ref: "#/components/examples/EstimateFee"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/sendtx/{hex}:
+    get:
+      tags: [Legacy]
+      operationId: sendLegacyTransactionByGet
+      summary: Legacy broadcast transaction using the path.
+      description: |-
+        Bitcore Insight-compatible V1 broadcast route for Bitcoin-type coins.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
+      parameters:
+        - name: hex
+          in: path
+          required: true
+          description: Raw transaction.
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F]+$"
+      responses:
+        "200":
+          description: Broadcast result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendTransactionResponse"
+              examples:
+                broadcast:
+                  $ref: "#/components/examples/SendTransaction"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/sendtx/:
+    post:
+      tags: [Legacy]
+      operationId: sendLegacyTransactionByPost
+      summary: Legacy broadcast transaction using the request body.
+      description: |-
+        Bitcore Insight-compatible V1 broadcast route for Bitcoin-type coins.
+
+        Load estimate: High; validates and forwards to the backend, with cost
+        growing with transaction size and backend mempool policy checks.
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              pattern: "^[0-9a-fA-F]+$"
+      responses:
+        "200":
+          description: Broadcast result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendTransactionResponse"
+              examples:
+                broadcast:
+                  $ref: "#/components/examples/SendTransaction"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /websocket:
+    get:
+      tags: [WebSocket]
+      operationId: connectWebSocket
+      summary: WebSocket upgrade endpoint.
+      description: |-
+        Connect with a WebSocket client and exchange JSON messages using the
+        WsRequest/WsResponse schemas. The endpoint can also be explored through
+        /test-websocket.html on a Blockbook instance.
+
+        During a backend reorg, new-block notifications can contain a block
+        hash at the same or even smaller height.
+
+        Load estimate: Variable; idle connections are low, request methods
+        cost roughly like their REST equivalents, and subscriptions grow with
+        connection count, subscribed addresses, and event frequency.
+      servers:
+        - url: /
+          description: Current Blockbook instance. Use ws or wss with the current host for WebSocket clients.
+      responses:
+        "101":
+          description: WebSocket protocol upgrade.
+        "400":
+          description: Bad WebSocket upgrade request.
+      x-websocket-request:
+        $ref: "#/components/schemas/WsRequest"
+      x-websocket-response:
+        $ref: "#/components/schemas/WsResponse"
+      x-websocket-examples:
+        getInfo:
+          $ref: "#/components/examples/WebSocketGetInfoRequest"
+        subscribeAddresses:
+          $ref: "#/components/examples/WebSocketSubscribeAddressesRequest"
+        getContractInfo:
+          $ref: "#/components/examples/WebSocketGetContractInfoRequest"
+        getBlock:
+          $ref: "#/components/examples/WebSocketGetBlockRequest"
+
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 1-based page index. Values outside safe bounds are sanitized to the closest possible page.
+      schema:
+        type: integer
+        minimum: 1
+    PageSize:
+      name: pageSize
+      in: query
+      description: Number of history items per page. The default and maximum for REST account endpoints is 1000.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+    FromHeight:
+      name: from
+      in: query
+      description: First block height included in account transaction filtering.
+      schema:
+        type: integer
+        minimum: 0
+    ToHeight:
+      name: to
+      in: query
+      description: Last block height included in account transaction filtering.
+      schema:
+        type: integer
+        minimum: 0
+    Details:
+      name: details
+      in: query
+      description: |-
+        Controls how much account data is returned.
+        basic returns balances and counts only.
+        tokens adds known token rows.
+        tokenBalances returns token rows with balances.
+        txids adds paged transaction ids.
+        txslight adds limited transaction details from the index.
+        txs adds full transaction details.
+      schema:
+        type: string
+        default: txids
+        enum: [basic, tokens, tokenBalances, txids, txslight, txs]
+    Tokens:
+      name: tokens
+      in: query
+      description: |-
+        Controls which XPUB-derived address rows are included: nonzero returns
+        only addresses with nonzero balance, used returns addresses with at
+        least one transaction, and derived returns all derived addresses.
+      schema:
+        type: string
+        default: nonzero
+        enum: [nonzero, used, derived]
+    Filter:
+      name: filter
+      in: query
+      description: Filter account history by input/output side, or by numeric token/internal filter id.
+      schema:
+        oneOf:
+          - type: string
+            enum: [inputs, outputs]
+          - type: integer
+            minimum: 0
+    ContractFilter:
+      name: contract
+      in: query
+      description: Contract address used to filter token data.
+      schema:
+        type: string
+    Protocols:
+      name: protocols
+      in: query
+      description: "Optional protocol enrichments, comma-separated or repeated. Currently supported value: erc4626. Unknown values are rejected."
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          type: string
+          example: erc4626
+    SecondaryCurrency:
+      name: secondary
+      in: query
+      description: Secondary currency code used to populate fiat values.
+      schema:
+        type: string
+        example: usd
+    Gap:
+      name: gap
+      in: query
+      description: XPUB/address derivation gap limit. Values are capped by the server.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 10000
+    ConfirmedNonce:
+      name: confirmedNonce
+      in: query
+      description: |-
+        If true, additionally return the confirmed nonce for Ethereum-like
+        addresses (the confirmedNonce response field). This triggers an extra
+        eth_getTransactionCount("latest") backend call, so it is off by default.
+      schema:
+        type: boolean
+
+  responses:
+    Error:
+      description: Public API error. Public validation errors are HTTP 400; internal errors are HTTP 500.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            error:
+              $ref: "#/components/examples/Error"
+
+  examples:
+    Error:
+      summary: REST error
+      value:
+        error: "Transaction 'missing-txid' not found"
+
+    Status:
+      summary: Blockbook and backend status
+      value:
+        blockbook:
+          coin: Bitcoin
+          network: BTC
+          host: backend5
+          version: 0.5.1
+          gitCommit: a0960c8e
+          buildTime: "2024-08-08T12:32:50+00:00"
+          syncMode: true
+          initialSync: false
+          inSync: true
+          bestHeight: 860730
+          lastBlockTime: "2024-09-10T08:19:04.471017534Z"
+          inSyncMempool: true
+          lastMempoolTime: "2024-09-10T08:42:39.38871351Z"
+          mempoolSize: 232021
+          decimals: 8
+          dbSize: 761283489075
+          hasFiatRates: true
+          currentFiatRatesTime: "2024-09-10T08:42:00.898792419Z"
+          historicalFiatRatesTime: "2024-09-10T00:00:00Z"
+          about: Blockbook - blockchain indexer for Trezor Suite.
+        backend:
+          chain: main
+          blocks: 860730
+          headers: 860730
+          bestBlockHash: "00000000000000000000effeb0c4460480e6a347deab95332c63007a68646ee5"
+          difficulty: "89471664776970.77"
+          sizeOnDisk: 681584532221
+          version: "270100"
+          subversion: "/Satoshi:27.1.0/"
+          protocolVersion: "70016"
+
+    BlockHash:
+      summary: Block hash at height
+      value:
+        blockHash: "0000000000000000000b7b8574bc6fd285825ec2dbcbeca149121fc05b0c828c"
+
+    RawBlock:
+      summary: Raw block
+      value:
+        hex: "00000020f3e9..."
+
+    BlockFilters:
+      summary: Compact block filters
+      value:
+        P: 19
+        M: 784931
+        zeroedKey: false
+        blockFilters:
+          "860730":
+            blockHash: "00000000000000000000effeb0c4460480e6a347deab95332c63007a68646ee5"
+            filter: "0286f0..."
+
+    BitcoinTransactionConfirmed:
+      summary: Bitcoin-like confirmed transaction
+      value:
+        txid: "8c1e3dec662d1f2a5e322ccef5eca263f98eb16723c6f990be0c88c1db113fb1"
+        version: 2
+        lockTime: 860729
+        vin:
+          - txid: "0eb7b574373de2c88d0dc1444f49947c681d0437d21361f9ebb4dd09c62f2a66"
+            vout: 1
+            sequence: 4294967293
+            n: 0
+            addresses: ["bc1qmgwnfjlda4ns3g6g3yz74w6scnn9yu2ts82yyc"]
+            isAddress: true
+            value: "10106300"
+        vout:
+          - value: "175000"
+            n: 0
+            hex: "76a914ecc999d554eaa3efa5e871c28f58b549c36ec51788ac"
+            addresses: ["1Nb1ykSD7J5k4RFjJQGsrD9gxBE6jzfNa9"]
+            isAddress: true
+          - value: "9888100"
+            n: 1
+            hex: "001496f152a0919487624bf4f13f46f0d20fa10d9acc"
+            addresses: ["bc1qjmc49gy3jjrkyjl57yl5duxjp7ssmxkvh5t2q5"]
+            isAddress: true
+        blockHash: "00000000000000000000effeb0c4460480e6a347deab95332c63007a68646ee5"
+        blockHeight: 860730
+        confirmations: 1
+        blockTime: 1725956288
+        size: 225
+        vsize: 144
+        value: "10063100"
+        valueIn: "10106300"
+        fees: "43200"
+        hex: "02000000000101662a..."
+
+    BitcoinTransactionUnconfirmed:
+      summary: Bitcoin-like unconfirmed transaction
+      value:
+        txid: "73b1ad97194e426031e5c692869de2d83dc2ff6033fc6f0ab5514345f92eaf0d"
+        version: 2
+        vin:
+          - txid: "bccbebb64b1613ada74eefa96753088a80fefa53a10e42c66eef1899371bc096"
+            n: 0
+            addresses: ["bc1q9lh77es6m8ztr7muwcec00ewn8fxakpl9jwv8y"]
+            isAddress: true
+            value: "371042"
+        vout:
+          - value: "293135"
+            n: 0
+            hex: "0014aafd7386f99f4b508ec05ee8f7edc2e07126620a"
+            addresses: ["bc1q4t7h8phena94prkqtm500mwzupcjvcs2akcdy9"]
+            isAddress: true
+        blockHeight: -1
+        confirmations: 0
+        confirmationETABlocks: 1
+        confirmationETASeconds: 619
+        blockTime: 1725959035
+        size: 222
+        vsize: 141
+        value: "367157"
+        valueIn: "371042"
+        fees: "3885"
+        rbf: true
+
+    EthereumTransaction:
+      summary: Ethereum-like transaction
+      value:
+        txid: "0xa6c8ae1f91918d09cf2bd67bbac4c168849e672fd81316fa1d26bb9b4fc0f790"
+        vin:
+          - n: 0
+            addresses: ["0xd446089cf19C3D3Eb1743BeF3A852293Fd2C7775"]
+            isAddress: true
+        vout:
+          - value: "5615959129349132871"
+            n: 0
+            addresses: ["0xC36442b4a4522E871399CD717aBDD847Ab11FE88"]
+            isAddress: true
+        blockHash: "0x10ea8cfecda89d6d864c1d919911f819c9febc2b455b48c9918cee3c6cdc4adb"
+        blockHeight: 16529834
+        confirmations: 3
+        blockTime: 1675204631
+        value: "5615959129349132871"
+        fees: "19141662404282012"
+        tokenTransfers:
+          - type: ERC20
+            standard: ERC20
+            from: "0xd446089cf19C3D3Eb1743BeF3A852293Fd2C7775"
+            to: "0x3B685307C8611AFb2A9E83EBc8743dc20480716E"
+            contract: "0x4E15361FD6b4BB609Fa63C81A2be19d873717870"
+            name: Fantom Token
+            symbol: FTM
+            decimals: 18
+            value: "15362368338194882707417"
+        ethereumSpecific:
+          status: 1
+          nonce: 505
+          gasLimit: 550941
+          gasUsed: 434686
+          gasPrice: "44035608242"
+          maxPriorityFeePerGas: "44035608243"
+          maxFeePerGas: "44035608244"
+          baseFeePerGas: "2035608244"
+          data: "0xac9650d800000000000000000000"
+          parsedData:
+            methodId: "0xfa2b068f"
+            name: Mint
+            function: "mint(address, uint256, uint32, bytes32[], address)"
+            params:
+              - type: address
+                values: ["0xa5fD1Da088598e88ba731B0E29AECF0BC2A31F82"]
+          internalTransfers:
+            - type: 0
+              from: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+              to: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+              value: "5615959129349132871"
+        addressAliases:
+          "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":
+            Type: Contract
+            Alias: Wrapped Ether
+
+    TransactionSpecific:
+      summary: Backend-native transaction JSON
+      value:
+        hex: "040000808...8e6e73cb009"
+        txid: "7a0a0ff6f67bac2a856c7296382b69151949878de6fb0d01a8efa197182b2913"
+        size: 1809
+        overwintered: true
+        version: 4
+        versiongroupid: "892f2085"
+        locktime: 0
+        expiryheight: 495680
+        vin: []
+        vout: []
+        blockhash: "0000000001c4aa394e796dd1b82e358f114535204f6f5b6cf4ad58dc439c47af"
+        height: 495665
+        confirmations: 2145803
+        time: 1552301566
+        blocktime: 1552301566
+
+    RawTransaction:
+      summary: Raw transaction hex
+      value: "02000000000101662a2fc609ddb4eb..."
+
+    SendTransaction:
+      summary: Broadcast result
+      value:
+        result: "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25"
+
+    BitcoinAddressTxids:
+      summary: Address with transaction ids
+      value:
+        page: 1
+        totalPages: 1
+        itemsOnPage: 1000
+        address: "bc1q0wd209cv5k9pd9mhk7nspacywcj038xxdhnt5u"
+        balance: "4225100"
+        totalReceived: "4225100"
+        totalSent: "0"
+        unconfirmedBalance: "0"
+        unconfirmedTxs: 0
+        txs: 2
+        txids:
+          - "0db6010dc0815a4bdaa505bd1ccc851056b0d53c7e4ea7af39c4d648a2c0c019"
+          - "7532920ddc506218337cceac978cce9c7f98e27ad3226dee55f3e934e0b32e80"
+
+    EthereumAddressTokenBalances:
+      summary: Ethereum address with token balances and secondary currency
+      value:
+        address: "0x2df3951b2037bA620C20Ed0B73CCF45Ea473e83B"
+        balance: "21004631949601199"
+        unconfirmedBalance: "0"
+        unconfirmedTxs: 0
+        txs: 5
+        nonTokenTxs: 3
+        nonce: "1"
+        tokens:
+          - type: ERC20
+            standard: ERC20
+            name: Tether USD
+            contract: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+            transfers: 3
+            symbol: USDT
+            decimals: 6
+            balance: "4913000000"
+            baseValue: 3.104622978658881
+            secondaryValue: 4914.214559070491
+        secondaryValue: 33.247601671503574
+        tokensBaseValue: 3.104622978658881
+        tokensSecondaryValue: 4914.214559070491
+        totalBaseValue: 3.125627610608482
+        totalSecondaryValue: 4947.462160741995
+
+    ContractInfo:
+      summary: Contract metadata with ERC4626 enrichment
+      value:
+        type: ERC20
+        standard: ERC20
+        contract: "0x0000000000000000000000000000000000000001"
+        name: Vault Share
+        symbol: vETH
+        decimals: 18
+        rates:
+          baseRate: 0.000523
+          currency: usd
+          secondaryRate: 1.24
+        protocols:
+          erc4626:
+            asset:
+              contract: "0x0000000000000000000000000000000000000002"
+              name: Wrapped Ether
+              symbol: WETH
+              decimals: 18
+            share:
+              contract: "0x0000000000000000000000000000000000000001"
+              name: Vault Share
+              symbol: vETH
+              decimals: 18
+            totalAssets: "123456789"
+            convertToAssets1Share: "1000000000000000000"
+            convertToShares1Asset: "1000000000000000000"
+            previewDeposit1Asset: "999999999999999999"
+            previewRedeem1Share: "1000000000000000000"
+        blockHeight: 12345678
+
+    XpubAddress:
+      summary: XPUB account
+      value:
+        page: 1
+        totalPages: 1
+        itemsOnPage: 1000
+        address: "dgub8sbe5Mi8LA4dXB9zPfLZW8arm...9Vjp2HHx91xdDEmWYpmD49fpoUYF"
+        balance: "90000000"
+        totalReceived: "3093381250"
+        totalSent: "3083381250"
+        unconfirmedBalance: "0"
+        unconfirmedTxs: 0
+        txs: 5
+        txids:
+          - "383ccb5da16fccad294e24a2ef77bdee5810573bb1b252d8b2af4f0ac8c4e04c"
+        usedTokens: 2
+        tokens:
+          - type: XPUBAddress
+            standard: XPUBAddress
+            name: DUCd1B3YBiXL5By15yXgSLZtEkvwsgEdqS
+            path: "m/44'/3'/0'/0/0"
+            transfers: 3
+            decimals: 8
+            balance: "90000000"
+            totalReceived: "2903986975"
+            totalSent: "2803986975"
+        secondaryValue: 21195.47633568
+
+    UtxoList:
+      summary: UTXOs
+      value:
+        - txid: "13d26cd939bf5d155b1c60054e02d9c9b832a85e6ec4f2411be44b6b5a2842e9"
+          vout: 0
+          value: "1422303206539"
+          confirmations: 0
+          lockTime: 2648100
+        - txid: "a79e396a32e10856c97b95f43da7e9d2b9a11d446f7638dbd75e5e7603128cac"
+          vout: 1
+          value: "39748685"
+          height: 2648043
+          confirmations: 47
+          coinbase: true
+
+    Block:
+      summary: Block with transactions
+      value:
+        page: 1
+        totalPages: 1
+        itemsOnPage: 1000
+        hash: "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217"
+        previousBlockHash: "786a1f9f38493d32fd9f9c104d748490a070bc74a83809103bcadd93ae98288f"
+        nextBlockHash: "151615691b209de41dda4798a07e62db8429488554077552ccb1c4f8c7e9f57a"
+        height: 2648059
+        confirmations: 47
+        size: 951
+        time: 1553096617
+        version: "6422787"
+        merkleRoot: "6783f6083788c4f69b8af23bd2e4a194cf36ac34d590dfd97e510fe7aebc72c8"
+        nonce: "0"
+        bits: "1a063f3b"
+        difficulty: "2685605.260733312"
+        txCount: 2
+        txs:
+          - txid: "2b9fc57aaa8d01975631a703b0fc3f11d70671953fc769533b8078a04d029bf9"
+            vin:
+              - n: 0
+                isAddress: false
+                value: "0"
+            vout:
+              - value: "1000100000000"
+                n: 0
+                addresses: ["D6ravJL6Fgxtgp8k2XZZt1QfUmwwGuLwQJ"]
+                isAddress: true
+            blockHash: "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217"
+            blockHeight: 2648059
+            confirmations: 47
+            blockTime: 1553096617
+            value: "1000100000000"
+            valueIn: "0"
+            fees: "0"
+
+    EstimateFee:
+      summary: Fee estimate
+      value:
+        result: "0.00002460"
+
+    FeeStats:
+      summary: Fee statistics
+      value:
+        txCount: 1820
+        totalFeesSat: "182000000"
+        averageFeePerKb: 23.41
+        decilesFeePerKb: [3.1, 5.4, 8.8, 11.2, 15.7, 20.3, 26.8, 35.1, 48.4, 91.6]
+
+    TickersList:
+      summary: Available fiat currencies
+      value:
+        ts: 1574346615
+        available_currencies: [eur, usd]
+
+    FiatTickerAll:
+      summary: All available rates
+      value:
+        ts: 1574346615
+        rates:
+          eur: 7134.1
+          usd: 7914.5
+
+    FiatTickerUsd:
+      summary: Single currency rate
+      value:
+        ts: 1574346615
+        rates:
+          usd: 7914.5
+
+    FiatTickerUnavailable:
+      summary: Unavailable rate marker
+      value:
+        ts: 7980386400
+        rates:
+          usd: -1
+
+    MultiTickers:
+      summary: Rates for multiple timestamps
+      value:
+        - ts: 1574346615
+          rates:
+            usd: 7914.5
+        - ts: 1574433015
+          rates:
+            usd: 7344.2
+
+    BalanceHistoryAllRates:
+      summary: Balance history with all rates
+      value:
+        - time: 1578391200
+          txs: 5
+          received: "5000000"
+          sent: "0"
+          sentToSelf: "100000"
+          rates:
+            usd: 7855.9
+            eur: 6838.13
+        - time: 1578488400
+          txs: 1
+          received: "0"
+          sent: "5000000"
+          sentToSelf: "0"
+          rates:
+            usd: 8283.11
+            eur: 7464.45
+
+    BalanceHistoryUsd:
+      summary: Balance history with USD only
+      value:
+        - time: 1578391200
+          txs: 5
+          received: "5000000"
+          sent: "0"
+          sentToSelf: "0"
+          rates:
+            usd: 7855.9
+        - time: 1578488400
+          txs: 1
+          received: "0"
+          sent: "5000000"
+          sentToSelf: "0"
+          rates:
+            usd: 8283.11
+
+    BalanceHistoryGrouped:
+      summary: Grouped balance history
+      value:
+        - time: 1578355200
+          txs: 6
+          received: "5000000"
+          sent: "5000000"
+          sentToSelf: "0"
+          rates:
+            usd: 7734.45
+
+    WebSocketGetInfoRequest:
+      summary: Get current Blockbook info
+      value:
+        id: "1"
+        method: getInfo
+        params: {}
+
+    WebSocketSubscribeAddressesRequest:
+      summary: Subscribe to address activity
+      value:
+        id: "1"
+        method: subscribeAddresses
+        params:
+          addresses:
+            - mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj
+            - tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee
+          newBlockTxs: true
+
+    WebSocketGetContractInfoRequest:
+      summary: Get contract metadata with ERC4626 enrichment
+      value:
+        id: "1"
+        method: getContractInfo
+        params:
+          contract: "0x0000000000000000000000000000000000000001"
+          currency: usd
+          protocols: [erc4626]
+
+    WebSocketGetBlockRequest:
+      summary: Get a block with paged transactions
+      value:
+        id: "1"
+        method: getBlock
+        params:
+          id: "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217"
+          page: 1
+          pageSize: 1000
+
+  schemas:
+    LegacyObject:
+      type: object
+      description: Legacy Bitcore Insight-compatible payload. Use API V2 for stable typed schemas.
+      additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+
+    AmountString:
+      type: string
+      pattern: "^-?[0-9]+$"
+      description: Integer amount in the lowest chain denomination, encoded as a string.
+      examples: ["100000000", "17177839694340"]
+
+    TokenStandard:
+      type: string
+      description: Token standard name. Empty string means no token standard is known.
+      enum: ["", XPUBAddress, ERC20, ERC721, ERC1155, BEP20, BEP721, BEP1155, TRC20, TRC721, TRC1155]
+
+    BlockHashResponse:
+      type: object
+      required: [blockHash]
+      properties:
+        blockHash:
+          type: string
+
+    ResultStringResponse:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          description: Result string, usually a decimal amount in chain base currency.
+
+    SendTransactionResponse:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          description: Broadcast transaction id/hash.
+
+    AddressAlias:
+      type: object
+      properties:
+        Type:
+          type: string
+        Alias:
+          type: string
+
+    AddressAliases:
+      type: object
+      additionalProperties:
+        $ref: "#/components/schemas/AddressAlias"
+
+    MultiTokenValue:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/AmountString"
+        value:
+          $ref: "#/components/schemas/AmountString"
+
+    TokenTransfer:
+      type: object
+      required: [type, standard, from, to, contract, decimals]
+      properties:
+        type:
+          deprecated: true
+          $ref: "#/components/schemas/TokenStandard"
+        standard:
+          $ref: "#/components/schemas/TokenStandard"
+        from:
+          type: string
+        to:
+          type: string
+        contract:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        decimals:
+          type: integer
+        value:
+          $ref: "#/components/schemas/AmountString"
+        multiTokenValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/MultiTokenValue"
+
+    Vin:
+      type: object
+      required: [n, isAddress]
+      properties:
+        txid:
+          type: string
+        vout:
+          type: integer
+          minimum: 0
+        sequence:
+          type: integer
+        n:
+          type: integer
+          minimum: 0
+        addresses:
+          type: array
+          items:
+            type: string
+        isAddress:
+          type: boolean
+        isOwn:
+          type: boolean
+        value:
+          $ref: "#/components/schemas/AmountString"
+        hex:
+          type: string
+        asm:
+          type: string
+        coinbase:
+          type: string
+
+    Vout:
+      type: object
+      required: [n, addresses, isAddress]
+      properties:
+        value:
+          $ref: "#/components/schemas/AmountString"
+        n:
+          type: integer
+          minimum: 0
+        spent:
+          type: boolean
+        spentTxId:
+          type: string
+        spentIndex:
+          type: integer
+        spentHeight:
+          type: integer
+        hex:
+          type: string
+        asm:
+          type: string
+        addresses:
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: "null"
+        isAddress:
+          type: boolean
+        isOwn:
+          type: boolean
+        type:
+          type: string
+
+    EthereumInternalTransfer:
+      type: object
+      required: [type, from, to]
+      properties:
+        type:
+          type: integer
+        from:
+          type: string
+        to:
+          type: string
+        value:
+          $ref: "#/components/schemas/AmountString"
+
+    EthereumParsedInputParam:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+        values:
+          type: array
+          items:
+            type: string
+
+    EthereumParsedInputData:
+      type: object
+      required: [methodId, name]
+      properties:
+        methodId:
+          type: string
+          description: First 4 bytes of the input data.
+        name:
+          type: string
+          description: Parsed function name when recognized.
+        function:
+          type: string
+          description: Full function signature when recognized.
+        params:
+          type: array
+          items:
+            $ref: "#/components/schemas/EthereumParsedInputParam"
+
+    EthereumSpecific:
+      type: object
+      required: [status, nonce]
+      properties:
+        type:
+          type: integer
+        createdContract:
+          type: string
+        status:
+          type: integer
+          description: 1 success, 0 failed, -1 pending.
+        error:
+          type: string
+        nonce:
+          type: integer
+          format: int64
+        gasLimit:
+          type: integer
+          format: int64
+        gasUsed:
+          type: integer
+          format: int64
+        gasPrice:
+          $ref: "#/components/schemas/AmountString"
+        maxPriorityFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        maxFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        baseFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        l1Fee:
+          type: integer
+          format: int64
+        l1FeeScalar:
+          type: string
+        l1GasPrice:
+          $ref: "#/components/schemas/AmountString"
+        l1GasUsed:
+          type: integer
+          format: int64
+        data:
+          type: string
+        parsedData:
+          $ref: "#/components/schemas/EthereumParsedInputData"
+        internalTransfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/EthereumInternalTransfer"
+
+    TxChainExtraData:
+      type: object
+      required: [payloadType]
+      properties:
+        payloadType:
+          type: string
+          description: Discriminator for normalized chain-specific payloads, for example tron.
+        payload: {}
+
+    AccountChainExtraData:
+      type: object
+      required: [payloadType]
+      properties:
+        payloadType:
+          type: string
+        payload: {}
+
+    Tx:
+      type: object
+      required: [txid, vin, vout, blockHeight, confirmations, blockTime]
+      properties:
+        txid:
+          type: string
+        version:
+          type: integer
+        lockTime:
+          type: integer
+        vin:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vin"
+        vout:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vout"
+        blockHash:
+          type: string
+        blockHeight:
+          type: integer
+          description: -1 for unconfirmed transactions.
+        confirmations:
+          type: integer
+          minimum: 0
+        confirmationETABlocks:
+          type: integer
+        confirmationETASeconds:
+          type: integer
+          format: int64
+        blockTime:
+          type: integer
+          format: int64
+        size:
+          type: integer
+        vsize:
+          type: integer
+        value:
+          $ref: "#/components/schemas/AmountString"
+        valueIn:
+          $ref: "#/components/schemas/AmountString"
+        fees:
+          $ref: "#/components/schemas/AmountString"
+        hex:
+          type: string
+        rbf:
+          type: boolean
+        coinSpecificData:
+          description: Raw blockchain-specific transaction data.
+        chainExtraData:
+          $ref: "#/components/schemas/TxChainExtraData"
+        tokenTransfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenTransfer"
+        ethereumSpecific:
+          $ref: "#/components/schemas/EthereumSpecific"
+        addressAliases:
+          $ref: "#/components/schemas/AddressAliases"
+
+    FeeStats:
+      type: object
+      required: [txCount, averageFeePerKb, decilesFeePerKb]
+      properties:
+        txCount:
+          type: integer
+        totalFeesSat:
+          $ref: "#/components/schemas/AmountString"
+        averageFeePerKb:
+          type: number
+        decilesFeePerKb:
+          type: array
+          items:
+            type: number
+
+    Erc4626TokenMetadata:
+      type: object
+      required: [contract, decimals]
+      properties:
+        contract:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        decimals:
+          type: integer
+
+    Erc4626Token:
+      type: object
+      properties:
+        asset:
+          $ref: "#/components/schemas/Erc4626TokenMetadata"
+        share:
+          $ref: "#/components/schemas/Erc4626TokenMetadata"
+        totalAssets:
+          $ref: "#/components/schemas/AmountString"
+        convertToAssets1Share:
+          $ref: "#/components/schemas/AmountString"
+        convertToShares1Asset:
+          $ref: "#/components/schemas/AmountString"
+        previewDeposit1Asset:
+          $ref: "#/components/schemas/AmountString"
+        previewRedeem1Share:
+          $ref: "#/components/schemas/AmountString"
+        error:
+          type: string
+
+    ContractInfoProtocols:
+      type: object
+      properties:
+        erc4626:
+          $ref: "#/components/schemas/Erc4626Token"
+
+    ContractInfoRates:
+      type: object
+      properties:
+        baseRate:
+          type: number
+        currency:
+          type: string
+        secondaryRate:
+          type: number
+
+    ContractInfoResult:
+      type: object
+      required: [type, standard, contract, name, symbol, decimals, blockHeight]
+      properties:
+        type:
+          deprecated: true
+          $ref: "#/components/schemas/TokenStandard"
+        standard:
+          $ref: "#/components/schemas/TokenStandard"
+        contract:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        decimals:
+          type: integer
+        createdInBlock:
+          type: integer
+        destructedInBlock:
+          type: integer
+        rates:
+          $ref: "#/components/schemas/ContractInfoRates"
+        protocols:
+          $ref: "#/components/schemas/ContractInfoProtocols"
+        blockHeight:
+          type: integer
+
+    Token:
+      type: object
+      required: [type, standard, name, transfers, decimals]
+      properties:
+        type:
+          deprecated: true
+          $ref: "#/components/schemas/TokenStandard"
+        standard:
+          $ref: "#/components/schemas/TokenStandard"
+        name:
+          type: string
+        path:
+          type: string
+        contract:
+          type: string
+        transfers:
+          type: integer
+        symbol:
+          type: string
+        decimals:
+          type: integer
+        balance:
+          $ref: "#/components/schemas/AmountString"
+        baseValue:
+          type: number
+        secondaryValue:
+          type: number
+        ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/AmountString"
+        multiTokenValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/MultiTokenValue"
+        totalReceived:
+          $ref: "#/components/schemas/AmountString"
+        totalSent:
+          $ref: "#/components/schemas/AmountString"
+        protocols:
+          type: array
+          description: Indexed protocol identifiers such as erc4626.
+          items:
+            type: string
+
+    StakingPool:
+      type: object
+      required: [contract, name]
+      properties:
+        contract:
+          type: string
+        name:
+          type: string
+        pendingBalance:
+          $ref: "#/components/schemas/AmountString"
+        pendingDepositedBalance:
+          $ref: "#/components/schemas/AmountString"
+        depositedBalance:
+          $ref: "#/components/schemas/AmountString"
+        withdrawTotalAmount:
+          $ref: "#/components/schemas/AmountString"
+        claimableAmount:
+          $ref: "#/components/schemas/AmountString"
+        restakedReward:
+          $ref: "#/components/schemas/AmountString"
+        autocompoundBalance:
+          $ref: "#/components/schemas/AmountString"
+
+    Address:
+      type: object
+      required: [address, unconfirmedTxs, txs]
+      properties:
+        page:
+          type: integer
+        totalPages:
+          type: integer
+        itemsOnPage:
+          type: integer
+        address:
+          type: string
+        balance:
+          $ref: "#/components/schemas/AmountString"
+        totalReceived:
+          $ref: "#/components/schemas/AmountString"
+        totalSent:
+          $ref: "#/components/schemas/AmountString"
+        unconfirmedBalance:
+          $ref: "#/components/schemas/AmountString"
+        unconfirmedTxs:
+          type: integer
+        unconfirmedSending:
+          $ref: "#/components/schemas/AmountString"
+        unconfirmedReceiving:
+          $ref: "#/components/schemas/AmountString"
+        txs:
+          type: integer
+        addrTxCount:
+          type: integer
+        nonTokenTxs:
+          type: integer
+        internalTxs:
+          type: integer
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tx"
+        txids:
+          type: array
+          items:
+            type: string
+        nonce:
+          type: string
+        confirmedNonce:
+          type: string
+        usedTokens:
+          type: integer
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Token"
+        secondaryValue:
+          type: number
+        tokensBaseValue:
+          type: number
+        tokensSecondaryValue:
+          type: number
+        totalBaseValue:
+          type: number
+        totalSecondaryValue:
+          type: number
+        contractInfo:
+          $ref: "#/components/schemas/ContractInfoResult"
+        erc20Contract:
+          deprecated: true
+          $ref: "#/components/schemas/ContractInfoResult"
+        addressAliases:
+          $ref: "#/components/schemas/AddressAliases"
+        stakingPools:
+          type: array
+          items:
+            $ref: "#/components/schemas/StakingPool"
+        chainExtraData:
+          $ref: "#/components/schemas/AccountChainExtraData"
+
+    Utxo:
+      type: object
+      required: [txid, vout, confirmations]
+      properties:
+        txid:
+          type: string
+        vout:
+          type: integer
+          minimum: 0
+        value:
+          $ref: "#/components/schemas/AmountString"
+        height:
+          type: integer
+        confirmations:
+          type: integer
+          minimum: 0
+        address:
+          type: string
+        path:
+          type: string
+        lockTime:
+          type: integer
+        coinbase:
+          type: boolean
+
+    BalanceHistory:
+      type: object
+      required: [time, txs]
+      properties:
+        time:
+          type: integer
+          format: int64
+        txs:
+          type: integer
+        received:
+          $ref: "#/components/schemas/AmountString"
+        sent:
+          $ref: "#/components/schemas/AmountString"
+        sentToSelf:
+          $ref: "#/components/schemas/AmountString"
+        rates:
+          type: object
+          additionalProperties:
+            type: number
+        txid:
+          type: string
+
+    Block:
+      type: object
+      required: [hash, height, confirmations, txCount]
+      properties:
+        page:
+          type: integer
+        totalPages:
+          type: integer
+        itemsOnPage:
+          type: integer
+        hash:
+          type: string
+        previousBlockHash:
+          type: string
+        nextBlockHash:
+          type: string
+        height:
+          type: integer
+        confirmations:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+        time:
+          type: integer
+          format: int64
+        version:
+          oneOf:
+            - type: string
+            - type: integer
+        merkleRoot:
+          type: string
+        nonce:
+          type: string
+        bits:
+          type: string
+        difficulty:
+          type: string
+        tx:
+          type: array
+          description: Transaction ids when full transactions are not returned.
+          items:
+            type: string
+        txCount:
+          type: integer
+        txs:
+          type: array
+          description: Full transaction details for this page.
+          items:
+            $ref: "#/components/schemas/Tx"
+        addressAliases:
+          $ref: "#/components/schemas/AddressAliases"
+
+    BlockRaw:
+      type: object
+      required: [hex]
+      properties:
+        hex:
+          type: string
+
+    BlockFilters:
+      type: object
+      required: [P, M, zeroedKey, blockFilters]
+      properties:
+        P:
+          type: integer
+        M:
+          type: integer
+          format: int64
+        zeroedKey:
+          type: boolean
+        blockFilters:
+          type: object
+          additionalProperties:
+            type: object
+            required: [blockHash, filter]
+            properties:
+              blockHash:
+                type: string
+              filter:
+                type: string
+
+    BackendInfo:
+      type: object
+      properties:
+        error:
+          type: string
+        chain:
+          type: string
+        blocks:
+          type: integer
+        headers:
+          type: integer
+        bestBlockHash:
+          type: string
+        difficulty:
+          type: string
+        sizeOnDisk:
+          type: integer
+          format: int64
+        version:
+          type: string
+        subversion:
+          type: string
+        protocolVersion:
+          type: string
+        timeOffset:
+          type: integer
+        warnings:
+          type: string
+        consensus_version:
+          type: string
+        consensus:
+          description: Chain-specific consensus data.
+
+    InternalStateColumn:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: integer
+        rows:
+          type: integer
+        keyBytes:
+          type: integer
+          format: int64
+        valueBytes:
+          type: integer
+          format: int64
+        updated:
+          type: string
+
+    BlockbookInfo:
+      type: object
+      required: [coin, network, host, version, gitCommit, buildTime, syncMode, initialSync, inSync, bestHeight, decimals, about]
+      properties:
+        coin:
+          type: string
+        network:
+          type: string
+        host:
+          type: string
+        version:
+          type: string
+        gitCommit:
+          type: string
+        buildTime:
+          type: string
+        syncMode:
+          type: boolean
+        initialSync:
+          type: boolean
+        inSync:
+          type: boolean
+        bestHeight:
+          type: integer
+        lastBlockTime:
+          type: string
+        inSyncMempool:
+          type: boolean
+        lastMempoolTime:
+          type: string
+        mempoolSize:
+          type: integer
+        decimals:
+          type: integer
+        dbSize:
+          type: integer
+          format: int64
+        hasFiatRates:
+          type: boolean
+        hasTokenFiatRates:
+          type: boolean
+        currentFiatRatesTime:
+          type: string
+        historicalFiatRatesTime:
+          type: string
+        historicalTokenFiatRatesTime:
+          type: string
+        supportedStakingPools:
+          type: array
+          items:
+            type: string
+        dbSizeFromColumns:
+          type: integer
+          format: int64
+        dbColumns:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalStateColumn"
+        about:
+          type: string
+
+    SystemInfo:
+      type: object
+      properties:
+        blockbook:
+          $ref: "#/components/schemas/BlockbookInfo"
+        backend:
+          $ref: "#/components/schemas/BackendInfo"
+
+    FiatTicker:
+      type: object
+      required: [rates]
+      properties:
+        ts:
+          type: integer
+          format: int64
+        rates:
+          type: object
+          additionalProperties:
+            type: number
+        error:
+          type: string
+
+    AvailableVsCurrencies:
+      type: object
+      required: [available_currencies]
+      properties:
+        ts:
+          type: integer
+          format: int64
+        available_currencies:
+          type: array
+          items:
+            type: string
+        error:
+          type: string
+
+    WsRequest:
+      type: object
+      required: [id, method]
+      properties:
+        id:
+          type: string
+          description: Client-chosen request id echoed by the response.
+        method:
+          type: string
+          enum:
+            - getAccountInfo
+            - getContractInfo
+            - getInfo
+            - getBlockHash
+            - getBlock
+            - getAccountUtxo
+            - getBalanceHistory
+            - getTransaction
+            - getTransactionSpecific
+            - estimateFee
+            - longTermFeeRate
+            - sendTransaction
+            - getMempoolFilters
+            - getBlockFilter
+            - getBlockFiltersBatch
+            - rpcCall
+            - subscribeNewBlock
+            - unsubscribeNewBlock
+            - subscribeNewTransaction
+            - unsubscribeNewTransaction
+            - subscribeAddresses
+            - unsubscribeAddresses
+            - subscribeFiatRates
+            - unsubscribeFiatRates
+            - ping
+            - getCurrentFiatRates
+            - getFiatRatesForTimestamps
+            - getFiatRatesTickersList
+        params:
+          description: Method-specific request parameters.
+          oneOf:
+            - $ref: "#/components/schemas/WsAccountInfoReq"
+            - $ref: "#/components/schemas/WsContractInfoReq"
+            - $ref: "#/components/schemas/WsBlockHashReq"
+            - $ref: "#/components/schemas/WsBlockReq"
+            - $ref: "#/components/schemas/WsAccountUtxoReq"
+            - $ref: "#/components/schemas/WsBalanceHistoryReq"
+            - $ref: "#/components/schemas/WsTransactionReq"
+            - $ref: "#/components/schemas/WsTransactionSpecificReq"
+            - $ref: "#/components/schemas/WsEstimateFeeReq"
+            - $ref: "#/components/schemas/WsSendTransactionReq"
+            - $ref: "#/components/schemas/WsMempoolFiltersReq"
+            - $ref: "#/components/schemas/WsBlockFilterReq"
+            - $ref: "#/components/schemas/WsBlockFiltersBatchReq"
+            - $ref: "#/components/schemas/WsRpcCallReq"
+            - $ref: "#/components/schemas/WsSubscribeAddressesReq"
+            - $ref: "#/components/schemas/WsSubscribeFiatRatesReq"
+            - $ref: "#/components/schemas/WsCurrentFiatRatesReq"
+            - $ref: "#/components/schemas/WsFiatRatesForTimestampsReq"
+            - $ref: "#/components/schemas/WsFiatRatesTickersListReq"
+            - type: object
+              description: Empty parameter object for methods such as getInfo, ping, and unsubscribe methods.
+
+    WsResponse:
+      type: object
+      required: [id, data]
+      properties:
+        id:
+          type: string
+        data:
+          description: Method-specific result, or WsErrorData on failure.
+          oneOf:
+            - $ref: "#/components/schemas/WsInfoRes"
+            - $ref: "#/components/schemas/WsBlockHashRes"
+            - $ref: "#/components/schemas/Block"
+            - $ref: "#/components/schemas/Address"
+            - type: array
+              items:
+                $ref: "#/components/schemas/Utxo"
+            - $ref: "#/components/schemas/Tx"
+            - $ref: "#/components/schemas/WsEstimateFeeRes"
+            - $ref: "#/components/schemas/ResultStringResponse"
+            - $ref: "#/components/schemas/FiatTicker"
+            - $ref: "#/components/schemas/FiatTickers"
+            - $ref: "#/components/schemas/AvailableVsCurrencies"
+            - $ref: "#/components/schemas/WsRpcCallRes"
+            - $ref: "#/components/schemas/MempoolTxidFilterEntries"
+            - $ref: "#/components/schemas/WsErrorData"
+            - type: object
+
+    WsErrorData:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+
+    WsAccountInfoReq:
+      type: object
+      required: [descriptor]
+      properties:
+        descriptor:
+          type: string
+        details:
+          type: string
+          enum: [basic, tokens, tokenBalances, txids, txslight, txs]
+        tokens:
+          type: string
+          enum: [derived, used, nonzero]
+        protocols:
+          type: array
+          items:
+            type: string
+        pageSize:
+          type: integer
+        page:
+          type: integer
+        from:
+          type: integer
+        to:
+          type: integer
+        contractFilter:
+          type: string
+        secondaryCurrency:
+          type: string
+        gap:
+          type: integer
+        confirmedNonce:
+          type: boolean
+
+    WsContractInfoReq:
+      type: object
+      required: [contract]
+      properties:
+        contract:
+          type: string
+        currency:
+          type: string
+        protocols:
+          type: array
+          items:
+            type: string
+
+    WsBackendInfo:
+      type: object
+      properties:
+        version:
+          type: string
+        subversion:
+          type: string
+        consensus_version:
+          type: string
+        consensus:
+          description: Chain-specific consensus data.
+
+    WsInfoRes:
+      type: object
+      required: [name, shortcut, network, decimals, version, bestHeight, bestHash, block0Hash, testnet, backend]
+      properties:
+        name:
+          type: string
+        shortcut:
+          type: string
+        network:
+          type: string
+        decimals:
+          type: integer
+        version:
+          type: string
+        bestHeight:
+          type: integer
+        bestHash:
+          type: string
+        block0Hash:
+          type: string
+        testnet:
+          type: boolean
+        backend:
+          $ref: "#/components/schemas/WsBackendInfo"
+
+    WsBlockHashReq:
+      type: object
+      required: [height]
+      properties:
+        height:
+          type: integer
+          minimum: 0
+
+    WsBlockHashRes:
+      type: object
+      required: [hash]
+      properties:
+        hash:
+          type: string
+
+    WsBlockReq:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        pageSize:
+          type: integer
+          maximum: 10000
+        page:
+          type: integer
+
+    WsAccountUtxoReq:
+      type: object
+      required: [descriptor]
+      properties:
+        descriptor:
+          type: string
+
+    WsBalanceHistoryReq:
+      type: object
+      required: [descriptor]
+      properties:
+        descriptor:
+          type: string
+        from:
+          type: integer
+          format: int64
+        to:
+          type: integer
+          format: int64
+        currencies:
+          type: array
+          items:
+            type: string
+        gap:
+          type: integer
+        groupBy:
+          type: integer
+
+    WsTransactionReq:
+      type: object
+      required: [txid]
+      properties:
+        txid:
+          type: string
+
+    WsTransactionSpecificReq:
+      type: object
+      required: [txid]
+      properties:
+        txid:
+          type: string
+
+    WsEstimateFeeReq:
+      type: object
+      properties:
+        blocks:
+          type: array
+          items:
+            type: integer
+        specific:
+          type: object
+          additionalProperties: true
+          properties:
+            conservative:
+              type: boolean
+            txsize:
+              type: integer
+            from:
+              type: string
+            to:
+              type: string
+            data:
+              type: string
+            value:
+              type: string
+
+    Eip1559Fee:
+      type: object
+      properties:
+        maxFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        maxPriorityFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        minWaitTimeEstimate:
+          type: number
+        maxWaitTimeEstimate:
+          type: number
+
+    Eip1559Fees:
+      type: object
+      properties:
+        baseFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        low:
+          $ref: "#/components/schemas/Eip1559Fee"
+        medium:
+          $ref: "#/components/schemas/Eip1559Fee"
+        high:
+          $ref: "#/components/schemas/Eip1559Fee"
+        instant:
+          $ref: "#/components/schemas/Eip1559Fee"
+        networkCongestion:
+          type: number
+        latestPriorityFeeRange:
+          type: array
+          items:
+            $ref: "#/components/schemas/AmountString"
+        historicalPriorityFeeRange:
+          type: array
+          items:
+            $ref: "#/components/schemas/AmountString"
+        historicalBaseFeeRange:
+          type: array
+          items:
+            $ref: "#/components/schemas/AmountString"
+        priorityFeeTrend:
+          type: string
+          enum: [up, down]
+        baseFeeTrend:
+          type: string
+          enum: [up, down]
+
+    EthereumGasData:
+      type: object
+      description: >
+        EVM block-level gas figures pushed with subscribeNewBlock notifications, used by the
+        frontend to deterministically project the next block's EIP-1559 base fee. Decimal strings,
+        omitted for pre-London blocks.
+      properties:
+        baseFeePerGas:
+          $ref: "#/components/schemas/AmountString"
+        blockGasUsed:
+          $ref: "#/components/schemas/AmountString"
+        blockGasLimit:
+          $ref: "#/components/schemas/AmountString"
+
+    WsNewBlock:
+      type: object
+      required: [height, hash, evmData]
+      description: Pushed to subscribeNewBlock subscribers when a new block is connected.
+      properties:
+        height:
+          type: number
+        hash:
+          type: string
+        evmData:
+          description: EVM gas data for the EIP-1559 base-fee projection; null on non-EVM chains.
+          oneOf:
+            - $ref: "#/components/schemas/EthereumGasData"
+            - type: "null"
+
+    WsEstimateFeeRes:
+      type: object
+      properties:
+        feePerTx:
+          $ref: "#/components/schemas/AmountString"
+        feePerUnit:
+          $ref: "#/components/schemas/AmountString"
+        feeLimit:
+          $ref: "#/components/schemas/AmountString"
+        eip1559:
+          $ref: "#/components/schemas/Eip1559Fees"
+
+    WsSendTransactionReq:
+      type: object
+      properties:
+        hex:
+          type: string
+        disableAlternativeRpc:
+          type: boolean
+          default: false
+
+    WsMempoolFiltersReq:
+      type: object
+      required: [scriptType, fromTimestamp]
+      properties:
+        scriptType:
+          type: string
+        fromTimestamp:
+          type: integer
+        M:
+          type: integer
+          format: int64
+
+    WsBlockFilterReq:
+      type: object
+      required: [scriptType, blockHash]
+      properties:
+        scriptType:
+          type: string
+        blockHash:
+          type: string
+        M:
+          type: integer
+          format: int64
+
+    WsBlockFiltersBatchReq:
+      type: object
+      required: [scriptType, bestKnownBlockHash]
+      properties:
+        scriptType:
+          type: string
+        bestKnownBlockHash:
+          type: string
+        pageSize:
+          type: integer
+        M:
+          type: integer
+          format: int64
+
+    WsRpcCallReq:
+      type: object
+      required: [to, data]
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        data:
+          type: string
+
+    WsRpcCallRes:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: string
+
+    WsSubscribeAddressesReq:
+      type: object
+      required: [addresses]
+      properties:
+        addresses:
+          type: array
+          items:
+            type: string
+        newBlockTxs:
+          type: boolean
+
+    WsSubscribeFiatRatesReq:
+      type: object
+      properties:
+        currency:
+          type: string
+        tokens:
+          type: array
+          items:
+            type: string
+
+    WsCurrentFiatRatesReq:
+      type: object
+      properties:
+        currencies:
+          type: array
+          items:
+            type: string
+        token:
+          type: string
+
+    WsFiatRatesForTimestampsReq:
+      type: object
+      required: [timestamps]
+      properties:
+        timestamps:
+          type: array
+          items:
+            type: integer
+            format: int64
+        currencies:
+          type: array
+          items:
+            type: string
+        token:
+          type: string
+
+    WsFiatRatesTickersListReq:
+      type: object
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+        token:
+          type: string
+
+    FiatTickers:
+      type: object
+      required: [tickers]
+      properties:
+        tickers:
+          type: array
+          items:
+            $ref: "#/components/schemas/FiatTicker"
+
+    MempoolTxidFilterEntries:
+      type: object
+      properties:
+        entries:
+          type: object
+          additionalProperties:
+            type: string
+        usedZeroedKey:
+          type: boolean

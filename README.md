@@ -7,7 +7,7 @@
 -   index of addresses and address balances of the connected block chain
 -   fast index search
 -   simple blockchain explorer
--   websocket, API and legacy Bitcore Insight compatible socket.io interfaces
+-   websocket, API and legacy Bitcore Insight compatible REST interfaces
 -   support of multiple coins (Bitcoin and Ethereum type) with easy extensibility to other coins
 -   scripts for easy creation of debian packages for backend and blockbook
 
@@ -78,3 +78,7 @@ Blockbook API is described [here](/docs/api.md).
 ## Environment variables
 
 List of environment variables that affect Blockbook's behavior is [here](/docs/env.md).
+
+## Security Note
+
+WebSocket origin checks are not enforced by default. If you expose Blockbook without a proxy that restricts origins, it is your responsibility to configure the origin allowlist (or equivalent controls). See `docs/env.md` for details.

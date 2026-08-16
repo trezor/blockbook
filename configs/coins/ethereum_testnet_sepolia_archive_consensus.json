@@ -16,17 +16,18 @@
         "blockbook_public": 19186
     },
     "ipc": {
-        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 25
     },
     "backend": {
         "package_name": "backend-ethereum-testnet-sepolia-archive-consensus",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "6.1.2",
-        "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.1.2/beacon-chain-v6.1.2-linux-amd64",
+        "version": "7.1.3",
+        "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v7.1.3/beacon-chain-v7.1.3-linux-amd64",
         "verification_type": "sha256",
-        "verification_source": "45d34c817db22e34ae12ebe733d281db76a349e3be439952f9e1dd50f10bc2b1",
+        "verification_source": "6efcd238124e000783f55a4430f0962b324a32599cf33219415f7f6dece8363f",
         "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --sepolia --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=17586 --rpc-port=17587 --monitoring-port=17548 --p2p-tcp-port=13676 --p2p-udp-port=12676 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_sepolia_archive/backend/erigon/jwt.hex --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -40,8 +41,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.1.2/beacon-chain-v6.1.2-linux-arm64",
-                "verification_source": "2651f1407bb842e7f03dc00ba58990ee3345865cb5d474a3f76a968db5e57c02"
+                "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v7.1.3/beacon-chain-v7.1.3-linux-arm64",
+                "verification_source": "23ec40327ac81925dace24cdcb820632dd1c38031208ca8d1c30ebc884612a0c"
             }
         }
     },

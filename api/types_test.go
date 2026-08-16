@@ -330,3 +330,42 @@ func TestTokens_Sort(t *testing.T) {
 		})
 	}
 }
+
+// TestTokenDecimals_AlwaysSerialized guards trezor/blockbook#1577: the decimals
+// field must always be present on Token and TokenTransfer, including when it is
+// 0. Previously the field carried `,omitempty`, so a 0 was dropped entirely and
+// clients could not tell a genuine 0-decimal token apart from missing metadata.
+func TestTokenDecimals_AlwaysSerialized(t *testing.T) {
+	tests := []struct {
+		name string
+		v    interface{}
+		want string
+	}{
+		{
+			name: "TokenTransfer zero decimals is present",
+			v:    TokenTransfer{Standard: "ERC20", From: "0xfrom", To: "0xto", Contract: "0xc"},
+			want: `{"type":"","standard":"ERC20","from":"0xfrom","to":"0xto","contract":"0xc","decimals":0}`,
+		},
+		{
+			name: "TokenTransfer non-zero decimals is present",
+			v:    TokenTransfer{Standard: "ERC20", From: "0xfrom", To: "0xto", Contract: "0xc", Decimals: 18},
+			want: `{"type":"","standard":"ERC20","from":"0xfrom","to":"0xto","contract":"0xc","decimals":18}`,
+		},
+		{
+			name: "Token zero decimals is present",
+			v:    Token{Standard: "ERC20", Name: "n", Contract: "0xc"},
+			want: `{"type":"","standard":"ERC20","name":"n","contract":"0xc","transfers":0,"decimals":0}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := json.Marshal(tt.v)
+			if err != nil {
+				t.Fatalf("json.Marshal() error = %v", err)
+			}
+			if string(b) != tt.want {
+				t.Errorf("json.Marshal() = %v, want %v", string(b), tt.want)
+			}
+		})
+	}
+}

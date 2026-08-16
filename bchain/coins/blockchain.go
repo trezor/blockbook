@@ -54,6 +54,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/ritocoin"
 	"github.com/trezor/blockbook/bchain/coins/snowgem"
 	"github.com/trezor/blockbook/bchain/coins/trezarcoin"
+	"github.com/trezor/blockbook/bchain/coins/tron"
 	"github.com/trezor/blockbook/bchain/coins/unobtanium"
 	"github.com/trezor/blockbook/bchain/coins/vertcoin"
 	"github.com/trezor/blockbook/bchain/coins/viacoin"
@@ -155,6 +156,12 @@ func init() {
 	BlockChainFactories["Arbitrum Nova Archive"] = arbitrum.NewArbitrumRPC
 	BlockChainFactories["Base"] = base.NewBaseRPC
 	BlockChainFactories["Base Archive"] = base.NewBaseRPC
+	BlockChainFactories["Tron"] = tron.NewTronRPC
+	BlockChainFactories["Tron Testnet Nile"] = tron.NewTronRPC
+}
+
+type metricsSetter interface {
+	SetMetrics(*common.Metrics)
 }
 
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin
@@ -175,6 +182,9 @@ func NewBlockChain(coin string, configfile string, pushHandler func(bchain.Notif
 	bc, err := bcf(config, pushHandler)
 	if err != nil {
 		return nil, nil, err
+	}
+	if withMetrics, ok := bc.(metricsSetter); ok {
+		withMetrics.SetMetrics(metrics)
 	}
 	err = bc.Initialize()
 	if err != nil {
@@ -208,8 +218,8 @@ func (c *blockChainWithMetrics) CreateMempool(chain bchain.BlockChain) (bchain.M
 	return c.b.CreateMempool(chain)
 }
 
-func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
-	return c.b.InitializeMempool(addrDescForOutpoint, onNewTxAddr, onNewTx)
+func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTx bchain.OnNewTxFunc) error {
+	return c.b.InitializeMempool(addrDescForOutpoint, onNewTx)
 }
 
 func (c *blockChainWithMetrics) Shutdown(ctx context.Context) error {
@@ -287,6 +297,11 @@ func (c *blockChainWithMetrics) GetTransactionSpecific(tx *bchain.Tx) (v json.Ra
 	return c.b.GetTransactionSpecific(tx)
 }
 
+func (c *blockChainWithMetrics) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (v json.RawMessage, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetAddressChainExtraData", s, err) }(time.Now())
+	return c.b.GetAddressChainExtraData(addrDesc)
+}
+
 func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTransactionForMempool", s, err) }(time.Now())
 	return c.b.GetTransactionForMempool(txid)
@@ -326,9 +341,9 @@ func (c *blockChainWithMetrics) EthereumTypeGetBalance(addrDesc bchain.AddressDe
 	return c.b.EthereumTypeGetBalance(addrDesc)
 }
 
-func (c *blockChainWithMetrics) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (v uint64, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonce", s, err) }(time.Now())
-	return c.b.EthereumTypeGetNonce(addrDesc)
+func (c *blockChainWithMetrics) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonces", s, err) }(time.Now())
+	return c.b.EthereumTypeGetNonces(addrDesc, withConfirmed)
 }
 
 func (c *blockChainWithMetrics) EthereumTypeEstimateGas(params map[string]interface{}) (v uint64, err error) {
@@ -349,6 +364,11 @@ func (c *blockChainWithMetrics) GetContractInfo(contractDesc bchain.AddressDescr
 func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractBalance", s, err) }(time.Now())
 	return c.b.EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc)
+}
+
+func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalances(addrDesc bchain.AddressDescriptor, contractDescs []bchain.AddressDescriptor) (v []*big.Int, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractBalances", s, err) }(time.Now())
+	return c.b.EthereumTypeGetErc20ContractBalances(addrDesc, contractDescs)
 }
 
 // GetTokenURI returns URI of non fungible or multi token defined by token id
@@ -372,14 +392,52 @@ func (c *blockChainWithMetrics) EthereumTypeRpcCall(data, to, from string) (v st
 	return c.b.EthereumTypeRpcCall(data, to, from)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) (v []bchain.EthereumTypeRPCCallResult, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeRpcCallBatch", s, err) }(time.Now())
+	batcher, ok := c.b.(interface {
+		EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error)
+	})
+	if !ok {
+		return nil, errors.New("EthereumTypeRpcCallBatch: not supported")
+	}
+	return batcher.EthereumTypeRpcCallBatch(calls)
+}
+
+func (c *blockChainWithMetrics) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) (v []bchain.EthereumMulticallResult, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeMulticallAggregate3", s, err) }(time.Now())
+	caller, ok := c.b.(interface {
+		EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error)
+	})
+	if !ok {
+		return nil, errors.New("EthereumTypeMulticallAggregate3: not supported")
+	}
+	return caller.EthereumTypeMulticallAggregate3(calls, blockNumber)
+}
+
 func (c *blockChainWithMetrics) EthereumTypeGetRawTransaction(txid string) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetRawTransaction", s, err) }(time.Now())
 	return c.b.EthereumTypeGetRawTransaction(txid)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetTransactionReceipt(txid string) (v *bchain.RpcReceipt, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetTransactionReceipt", s, err) }(time.Now())
+	return c.b.EthereumTypeGetTransactionReceipt(txid)
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics
+}
+
+func (c *mempoolWithMetrics) chainTypeLabel() string {
+	switch c.mempool.(type) {
+	case *bchain.MempoolBitcoinType:
+		return "utxo"
+	case *bchain.MempoolEthereumType:
+		return "evm"
+	default:
+		return "other"
+	}
 }
 
 func (c *mempoolWithMetrics) observeRPCLatency(method string, start time.Time, err error) {
@@ -391,8 +449,26 @@ func (c *mempoolWithMetrics) observeRPCLatency(method string, start time.Time, e
 }
 
 func (c *mempoolWithMetrics) Resync() (count int, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(time.Now())
+	start := time.Now()
+	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(start)
 	count, err = c.mempool.Resync()
+	duration := time.Since(start)
+	c.m.MempoolResyncDuration.Observe(float64(duration) / 1e6) // in milliseconds
+	status := "success"
+	if err != nil {
+		status = "failure"
+	}
+	throughput := 0.0
+	if err == nil {
+		seconds := duration.Seconds()
+		if seconds > 0 {
+			throughput = float64(count) / seconds
+		}
+	}
+	c.m.MempoolResyncThroughput.With(common.Labels{
+		"chain":  c.chainTypeLabel(),
+		"status": status,
+	}).Observe(throughput)
 	if err == nil {
 		c.m.MempoolSize.Set(float64(count))
 	}
@@ -420,4 +496,56 @@ func (c *mempoolWithMetrics) GetTransactionTime(txid string) uint32 {
 
 func (c *mempoolWithMetrics) GetTxidFilterEntries(filterScripts string, fromTimestamp uint32) (bchain.MempoolTxidFilterEntries, error) {
 	return c.mempool.GetTxidFilterEntries(filterScripts, fromTimestamp)
+}
+
+func (c *blockChainWithMetrics) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	if ensResolver, ok := c.b.(interface {
+		ResolveENS(string) (*bchain.ENSResolution, error)
+	}); ok {
+		return ensResolver.ResolveENS(name)
+	}
+	return nil, errors.New("ENS resolution not supported by underlying chain")
+}
+
+func (c *blockChainWithMetrics) CheckENSExpiration(name string) (bool, error) {
+	if ensResolver, ok := c.b.(interface {
+		CheckENSExpiration(string) (bool, error)
+	}); ok {
+		return ensResolver.CheckENSExpiration(name)
+	}
+	return false, errors.New("ENS expiration check not supported by underlying chain")
+}
+
+// AverageBlockTimeDuration forwards the wrapped chain's configured block cadence
+// so blockbook.go's duck-typed lookup reaches it through the metrics wrapper.
+// Returns an error when the underlying chain doesn't expose one.
+func (c *blockChainWithMetrics) AverageBlockTimeDuration() (time.Duration, error) {
+	if p, ok := c.b.(interface {
+		AverageBlockTimeDuration() (time.Duration, error)
+	}); ok {
+		return p.AverageBlockTimeDuration()
+	}
+	return 0, errors.New("average block time not supported by underlying chain")
+}
+
+// MissingBlockRetryOverride forwards the wrapped chain's per-chain sync-worker
+// retry override through the metrics wrapper; nil when none is provided.
+func (c *blockChainWithMetrics) MissingBlockRetryOverride() *bchain.MissingBlockRetry {
+	if p, ok := c.b.(interface {
+		MissingBlockRetryOverride() *bchain.MissingBlockRetry
+	}); ok {
+		return p.MissingBlockRetryOverride()
+	}
+	return nil
+}
+
+// XpubConfigOverride forwards the wrapped chain's per-chain xpub config
+// override through the metrics wrapper; nil when none is provided.
+func (c *blockChainWithMetrics) XpubConfigOverride() *bchain.XpubConfig {
+	if p, ok := c.b.(interface {
+		XpubConfigOverride() *bchain.XpubConfig
+	}); ok {
+		return p.XpubConfigOverride()
+	}
+	return nil
 }

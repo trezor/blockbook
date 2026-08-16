@@ -38,7 +38,7 @@ func NewArbitrumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 func (b *ArbitrumRPC) Initialize() error {
 	b.OpenRPC = eth.OpenRPC
 
-	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)
+	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL, b.ChainConfig.RPCURLWS)
 	if err != nil {
 		return err
 	}
@@ -71,9 +71,15 @@ func (b *ArbitrumRPC) Initialize() error {
 		return errors.Errorf("Unknown network id %v", id)
 	}
 
-	b.InitAlternativeProviders()
+	if err = b.InitAlternativeProviders(); err != nil {
+		return err
+	}
 
 	glog.Info("rpc: block chain ", b.Network)
 
 	return nil
+}
+
+func (b *ArbitrumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	return b.EthereumRPC.ResolveENS(name)
 }

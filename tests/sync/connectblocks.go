@@ -7,11 +7,31 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/db"
 )
+
+// blockingChain delays GetBlock so shutdown can be asserted deterministically.
+type blockingChain struct {
+	bchain.BlockChain
+	gate        chan struct{}
+	started     chan struct{}
+	startedOnce sync.Once
+}
+
+func (c *blockingChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	if c.started != nil {
+		c.startedOnce.Do(func() {
+			close(c.started)
+		})
+	}
+	<-c.gate
+	return nil, bchain.ErrBlockNotFound
+}
 
 func testConnectBlocks(t *testing.T, h *TestHandler) {
 	for _, rng := range h.TestData.ConnectBlocks.SyncRanges {
@@ -21,8 +41,8 @@ func testConnectBlocks(t *testing.T, h *TestHandler) {
 				t.Fatal(err)
 			}
 
-			err = db.ConnectBlocks(sw, func(hash string, height uint32) {
-				if hash == upperHash {
+			err = db.ConnectBlocks(sw, func(block *bchain.Block) {
+				if block != nil && block.Hash == upperHash {
 					close(ch)
 				}
 			}, true)
@@ -43,6 +63,37 @@ func testConnectBlocks(t *testing.T, h *TestHandler) {
 			t.Run("verifyAddresses", func(t *testing.T) { verifyAddresses(t, d, h, rng) })
 		})
 	}
+
+	t.Run("shutdownDuringRegularSync", func(t *testing.T) {
+		withRocksDBAndSyncWorker(t, h, 0, func(_ *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
+			gate := make(chan struct{})
+			defer close(gate)
+			started := make(chan struct{})
+			db.SetBlockChain(sw, &blockingChain{BlockChain: h.Chain, gate: gate, started: started})
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- db.ConnectBlocks(sw, nil, false)
+			}()
+
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for GetBlock")
+			}
+			close(ch)
+
+			var err error
+			select {
+			case err = <-errCh:
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for ConnectBlocks")
+			}
+			if err != db.ErrOperationInterrupted {
+				t.Fatalf("expected ErrOperationInterrupted, got %v", err)
+			}
+		})
+	})
 }
 
 func testConnectBlocksParallel(t *testing.T, h *TestHandler) {

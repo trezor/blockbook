@@ -60,9 +60,15 @@ type oneInchFeeProvider struct {
 	apiKey string
 }
 
+const oneInchFeeStalePeriods = 30
+
+func oneInchFeeStaleDuration(periodSeconds int) time.Duration {
+	return time.Duration(periodSeconds*oneInchFeeStalePeriods) * time.Second
+}
+
 // NewOneInchFeesProvider initializes https://api.1inch.dev provider
-func NewOneInchFeesProvider(chain bchain.BlockChain, params string) (alternativeFeeProviderInterface, error) {
-	p := &oneInchFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{}}
+func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *common.Metrics) (alternativeFeeProviderInterface, error) {
+	p := &oneInchFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{metrics: metrics, name: "1inch"}}
 	err := json.Unmarshal([]byte(params), &p.params)
 	if err != nil {
 		return nil, err
@@ -75,6 +81,7 @@ func NewOneInchFeesProvider(chain bchain.BlockChain, params string) (alternative
 		return nil, errors.New("NewOneInchFeesProvider: missing ONE_INCH_API_KEY env variable.")
 	}
 	p.chain = chain
+	p.staleSyncDuration = oneInchFeeStaleDuration(p.params.PeriodSeconds)
 	go p.FeeDownloader()
 	return p, nil
 }
@@ -111,13 +118,18 @@ func oneInchFeesFromResult(result *oneInchFeeFeeResult) *bchain.Eip1559Fee {
 func (p *oneInchFeeProvider) processData(data *oneInchFeeFeesResult) bool {
 	fees := bchain.Eip1559Fees{}
 	fees.BaseFeePerGas = bigIntFromString(data.BaseFee)
-	fees.Instant = oneInchFeesFromResult(&data.Instant)
-	fees.High = oneInchFeesFromResult(&data.High)
-	fees.Medium = oneInchFeesFromResult(&data.Medium)
-	fees.Low = oneInchFeesFromResult(&data.Low)
+	// 1inch's tiers are tighter than Infura's. Remap so the suite's low/medium/high map
+	// to comparable aggressiveness regardless of provider:
+	//   1inch medium → suite low
+	//   1inch high   → suite medium
+	//   1inch instant → suite high
+	// 1inch's low tier is discarded (too conservative).
+	fees.Low = oneInchFeesFromResult(&data.Medium)
+	fees.Medium = oneInchFeesFromResult(&data.High)
+	fees.High = oneInchFeesFromResult(&data.Instant)
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	p.lastSync = time.Now()
+	p.observeSync(time.Now())
 	p.eip1559Fees = &fees
 	return true
 }
@@ -135,10 +147,17 @@ func (p *oneInchFeeProvider) getData(res interface{}) error {
 		defer httpRes.Body.Close()
 	}
 	if err != nil {
+		p.observeRequest("network_error")
 		return err
 	}
 	if httpRes.StatusCode != http.StatusOK {
+		p.observeRequest("http_" + strconv.Itoa(httpRes.StatusCode))
 		return errors.New(p.params.URL + " returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
+	if err := common.SafeDecodeResponseFromReader(httpRes.Body, res); err != nil {
+		p.observeRequest("decode_error")
+		return err
+	}
+	p.observeRequest("ok")
+	return nil
 }

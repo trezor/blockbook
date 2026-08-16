@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -61,21 +62,42 @@ const addrContractsCacheMinSize = 300_000 // limit for caching address contracts
 
 // RocksDB handle
 type RocksDB struct {
-	path                  string
-	db                    *grocksdb.DB
-	wo                    *grocksdb.WriteOptions
-	ro                    *grocksdb.ReadOptions
-	cfh                   []*grocksdb.ColumnFamilyHandle
-	chainParser           bchain.BlockChainParser
-	is                    *common.InternalState
-	metrics               *common.Metrics
-	cache                 *grocksdb.Cache
-	maxOpenFiles          int
-	cbs                   connectBlockStats
-	extendedIndex         bool
-	connectBlockMux       sync.Mutex
+	path            string
+	db              *grocksdb.DB
+	wo              *grocksdb.WriteOptions
+	ro              *grocksdb.ReadOptions
+	cfh             []*grocksdb.ColumnFamilyHandle
+	chainParser     bchain.BlockChainParser
+	is              *common.InternalState
+	metrics         *common.Metrics
+	cache           *grocksdb.Cache
+	maxOpenFiles    int
+	cbs             connectBlockStats
+	extendedIndex   bool
+	connectBlockMux sync.Mutex
+	// reorgGen advances on every successful Ethereum-type disconnect; embed
+	// in cache keys so a same-height reorg invalidates them lazily.
+	reorgGen atomic.Uint64
+	// protocolGen advances on every successful per-protocol row write
+	// (cfErcProtocols). cachedContracts stamps entries with this counter
+	// so a populate-after-write race (reader reads cfErcProtocols before the
+	// row exists, then caches the stale negative under an unchanged reorgGen)
+	// is invalidated lazily on the next read.
+	protocolGen           atomic.Uint64
 	addrContractsCacheMux sync.Mutex
 	addrContractsCache    map[string]*unpackedAddrContracts
+	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.
+	addrContractsCacheMinSize int
+	// tipAddrContractsCacheMaxBytes is the configured non-bulk cap.
+	tipAddrContractsCacheMaxBytes int64
+	// bulkAddrContractsCacheMaxBytes is the configured bulk-connect cap.
+	bulkAddrContractsCacheMaxBytes int64
+	// addrContractsCacheMaxBytes is a soft cap; when exceeded we flush and clear the cache.
+	addrContractsCacheMaxBytes int64
+	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
+	addrContractsCacheBytes int64
+	hotAddrTracker          *addressHotness
+	setBlockTimesWG         sync.WaitGroup
 }
 
 const (
@@ -101,6 +123,10 @@ const (
 
 	// TODO move to common section
 	cfAddressAliases
+
+	// cfErcProtocols stores per-protocol detection records keyed by contract;
+	// decoupled from cfContracts so API writes never collide with sync.
+	cfErcProtocols
 )
 
 // common columns
@@ -109,7 +135,7 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses", "blockFilter"}
-var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
+var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases", "ercProtocols"}
 
 func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
@@ -154,14 +180,60 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	}
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
-	r := &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex, sync.Mutex{}, sync.Mutex{}, make(map[string]*unpackedAddrContracts)}
+	r := &RocksDB{
+		path:                           path,
+		db:                             db,
+		wo:                             wo,
+		ro:                             ro,
+		cfh:                            cfh,
+		chainParser:                    parser,
+		is:                             nil,
+		metrics:                        metrics,
+		cache:                          c,
+		maxOpenFiles:                   maxOpenFiles,
+		cbs:                            connectBlockStats{},
+		extendedIndex:                  extendedIndex,
+		connectBlockMux:                sync.Mutex{},
+		addrContractsCacheMux:          sync.Mutex{},
+		addrContractsCache:             make(map[string]*unpackedAddrContracts),
+		addrContractsCacheMinSize:      addrContractsCacheMinSize,
+		tipAddrContractsCacheMaxBytes:  0,
+		bulkAddrContractsCacheMaxBytes: 0,
+		addrContractsCacheMaxBytes:     0,
+		addrContractsCacheBytes:        0,
+		hotAddrTracker:                 nil,
+	}
 	if chainType == bchain.ChainEthereumType {
+		r.hotAddrTracker = newAddressHotnessFromParser(parser)
+		if r.hotAddrTracker != nil {
+			r.hotAddrTracker.onEvict = r.dropAddrContractsContractIndex
+		}
+		if cfg, ok := parser.(addressContractsCacheConfigProvider); ok {
+			cacheCfg := cfg.AddressContractsCacheConfig()
+			if cacheCfg.MinSize > 0 {
+				r.addrContractsCacheMinSize = cacheCfg.MinSize
+			}
+			if cacheCfg.TipMaxBytes > 0 {
+				r.tipAddrContractsCacheMaxBytes = cacheCfg.TipMaxBytes
+				r.addrContractsCacheMaxBytes = cacheCfg.TipMaxBytes
+			}
+			if cacheCfg.BulkMaxBytes > 0 {
+				r.bulkAddrContractsCacheMaxBytes = cacheCfg.BulkMaxBytes
+			}
+		}
+		if r.tipAddrContractsCacheMaxBytes == 0 {
+			r.tipAddrContractsCacheMaxBytes = r.addrContractsCacheMaxBytes
+		}
+		if r.bulkAddrContractsCacheMaxBytes == 0 {
+			r.bulkAddrContractsCacheMaxBytes = r.addrContractsCacheMaxBytes
+		}
 		go r.periodicStoreAddrContractsCache()
 	}
 	return r, nil
 }
 
 func (d *RocksDB) closeDB() error {
+	d.setBlockTimesWG.Wait()
 	for _, h := range d.cfh {
 		h.Destroy()
 	}
@@ -344,6 +416,11 @@ const (
 	opDelete = 1
 )
 
+// ReorgGeneration returns the current generation counter; bumps on disconnect.
+func (d *RocksDB) ReorgGeneration() uint64 {
+	return d.reorgGen.Load()
+}
+
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	d.connectBlockMux.Lock()
@@ -351,6 +428,12 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
+
+	var tipTxs uint64
+	var tipTokenTransfers uint64
+	var tipInternalTransfers uint64
+	var tipVin uint64
+	var tipVout uint64
 
 	if glog.V(2) {
 		glog.Infof("rocksdb: insert %d %s", block.Height, block.Hash)
@@ -375,6 +458,13 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances, gf); err != nil {
 			return err
 		}
+		if d.metrics != nil {
+			tipTxs = uint64(len(block.Txs))
+			for i := range block.Txs {
+				tipVin += uint64(len(block.Txs[i].Vin))
+				tipVout += uint64(len(block.Txs[i].Vout))
+			}
+		}
 		if err := d.storeTxAddresses(wb, txAddressesMap); err != nil {
 			return err
 		}
@@ -395,6 +485,15 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		blockTxs, err := d.processAddressesEthereumType(block, addresses, addressContracts)
 		if err != nil {
 			return err
+		}
+		if d.metrics != nil {
+			for i := range blockTxs {
+				tipTokenTransfers += uint64(len(blockTxs[i].contracts))
+				if blockTxs[i].internalData != nil {
+					tipInternalTransfers += uint64(len(blockTxs[i].internalData.transfers))
+				}
+			}
+			tipTxs = uint64(len(blockTxs))
 		}
 		if err := d.storeUnpackedAddressContracts(wb, addressContracts); err != nil {
 			return err
@@ -420,6 +519,24 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	avg := d.is.SetBlockTime(block.Height, uint32(block.Time))
 	if d.metrics != nil {
 		d.metrics.AvgBlockPeriod.Set(float64(avg))
+	}
+	if d.metrics != nil {
+		if chainType == bchain.ChainBitcoinType {
+			d.metrics.SyncBlockStats.With(common.Labels{"scope": "tip", "kind": "txs"}).Set(float64(tipTxs))
+			d.metrics.SyncBlockStats.With(common.Labels{"scope": "tip", "kind": "vin"}).Set(float64(tipVin))
+			d.metrics.SyncBlockStats.With(common.Labels{"scope": "tip", "kind": "vout"}).Set(float64(tipVout))
+		} else if chainType == bchain.ChainEthereumType {
+			d.metrics.SyncBlockStats.With(common.Labels{"scope": "tip", "kind": "txs"}).Set(float64(tipTxs))
+			d.metrics.SyncBlockStats.With(common.Labels{"scope": "tip", "kind": "token_transfers"}).Set(float64(tipTokenTransfers))
+			d.metrics.SyncBlockStats.With(common.Labels{"scope": "tip", "kind": "internal_transfers"}).Set(float64(tipInternalTransfers))
+			if d.hotAddrTracker != nil {
+				eligible, hits, promotions, evictions := d.hotAddrTracker.Stats()
+				d.metrics.SyncHotnessStats.With(common.Labels{"scope": "tip", "kind": "eligible_lookups"}).Set(float64(eligible))
+				d.metrics.SyncHotnessStats.With(common.Labels{"scope": "tip", "kind": "lru_hits"}).Set(float64(hits))
+				d.metrics.SyncHotnessStats.With(common.Labels{"scope": "tip", "kind": "promotions"}).Set(float64(promotions))
+				d.metrics.SyncHotnessStats.With(common.Labels{"scope": "tip", "kind": "evictions"}).Set(float64(evictions))
+			}
+		}
 	}
 	return nil
 }
@@ -877,6 +994,7 @@ func (d *RocksDB) cleanupBlockTxs(wb *grocksdb.WriteBatch, block *bchain.Block) 
 			}
 			// nil data means the key was not found in DB
 			if val.Data() == nil {
+				val.Free()
 				break
 			}
 			val.Free()
@@ -997,6 +1115,49 @@ func (d *RocksDB) GetTxAddresses(txid string) (*TxAddresses, error) {
 		return nil, err
 	}
 	return d.getTxAddresses(btxID)
+}
+
+// GetTxAddressesOutput returns Outputs[vout] of the transaction's TxAddresses
+// record, or nil if the record or that output is not present. Unlike
+// GetTxAddresses it does not unpack the whole record: inputs and preceding
+// outputs are skipped without allocating, so resolving a single previous output
+// costs O(1) allocations regardless of the referenced transaction's size.
+func (d *RocksDB) GetTxAddressesOutput(txid string, vout uint32) (*TxOutput, error) {
+	btxID, err := d.chainParser.PackTxid(txid)
+	if err != nil {
+		return nil, err
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfTxAddresses], btxID)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	buf := val.Data()
+	// 3 is minimum length of a txAddresses record - 1 byte height, 1 byte inputs len, 1 byte outputs len
+	if len(buf) < 3 {
+		return nil, nil
+	}
+	_, l := unpackVaruint(buf) // height
+	if d.extendedIndex {
+		_, n := unpackVaruint(buf[l:]) // vsize
+		l += n
+	}
+	inputs, n := unpackVaruint(buf[l:])
+	l += n
+	for i := uint(0); i < inputs; i++ {
+		l += d.packedTxInputLen(buf[l:])
+	}
+	outputs, n := unpackVaruint(buf[l:])
+	l += n
+	if uint(vout) >= outputs {
+		return nil, nil
+	}
+	for i := uint(0); i < uint(vout); i++ {
+		l += d.packedTxOutputLen(buf[l:])
+	}
+	var output TxOutput
+	d.unpackTxOutput(&output, buf[l:])
+	return &output, nil
 }
 
 // AddrDescForOutpoint is a function that returns address descriptor and value for given outpoint or nil if outpoint not found
@@ -1243,6 +1404,50 @@ func (d *RocksDB) unpackTxOutput(to *TxOutput, buf []byte) int {
 	return al
 }
 
+// packedTxInputLen returns the byte length of the packed input at the start of buf
+// without allocating. Keep in sync with appendTxInput/unpackTxInput.
+func (d *RocksDB) packedTxInputLen(buf []byte) int {
+	if d.extendedIndex {
+		al, pos := unpackVarint(buf)
+		coinbase := al < 0
+		if coinbase {
+			al = ^al
+		}
+		pos += al                // addrDesc
+		pos += int(buf[pos]) + 1 // value (1-byte length prefix + bytes)
+		if !coinbase {
+			pos += d.chainParser.PackedTxidLen() // prev txid
+			_, n := unpackVaruint(buf[pos:])     // prev vout
+			pos += n
+		}
+		return pos
+	}
+	al, pos := unpackVaruint(buf)
+	pos += int(al)           // addrDesc
+	pos += int(buf[pos]) + 1 // value
+	return pos
+}
+
+// packedTxOutputLen returns the byte length of the packed output at the start of buf
+// without allocating. Keep in sync with appendTxOutput/unpackTxOutput.
+func (d *RocksDB) packedTxOutputLen(buf []byte) int {
+	al, pos := unpackVarint(buf)
+	spent := al < 0
+	if spent {
+		al = ^al
+	}
+	pos += al                // addrDesc
+	pos += int(buf[pos]) + 1 // value
+	if d.extendedIndex && spent {
+		pos += d.chainParser.PackedTxidLen() // spent txid
+		_, n := unpackVaruint(buf[pos:])     // spent index
+		pos += n
+		_, n = unpackVaruint(buf[pos:]) // spent height
+		pos += n
+	}
+	return pos
+}
+
 func (d *RocksDB) packTxIndexes(txi []txIndexes) []byte {
 	buf := make([]byte, 0, 32)
 	bvout := make([]byte, vlq.MaxLen32)
@@ -1454,32 +1659,25 @@ func (d *RocksDB) writeHeight(wb *grocksdb.WriteBatch, height uint32, bi *BlockI
 }
 
 // address alias support
-var cachedAddressAliasRecords = make(map[string]string)
-var cachedAddressAliasRecordsMux sync.Mutex
-
-// InitAddressAliasRecords loads all records to cache
-func (d *RocksDB) InitAddressAliasRecords() (int, error) {
-	count := 0
-	cachedAddressAliasRecordsMux.Lock()
-	defer cachedAddressAliasRecordsMux.Unlock()
-	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddressAliases])
-	defer it.Close()
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		address := string(it.Key().Data())
-		name := string(it.Value().Data())
-		if address != "" && name != "" {
-			cachedAddressAliasRecords[address] = d.chainParser.FormatAddressAlias(address, name)
-			count++
-		}
-	}
-	return count, nil
-}
+var cachedAddressAliasRecords = newAddressAliasLRU(cachedAddressAliasRecordsLRUMaxSize)
 
 func (d *RocksDB) GetAddressAlias(address string) string {
-	cachedAddressAliasRecordsMux.Lock()
-	name := cachedAddressAliasRecords[address]
-	cachedAddressAliasRecordsMux.Unlock()
-	return name
+	if formatted, ok := cachedAddressAliasRecords.get(address); ok {
+		return formatted
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressAliases], []byte(address))
+	if err != nil {
+		glog.Errorf("GetAddressAlias %v error %v", address, err)
+		return ""
+	}
+	defer val.Free()
+	name := val.Data()
+	if len(name) == 0 {
+		return ""
+	}
+	formatted := d.chainParser.FormatAddressAlias(address, string(name))
+	cachedAddressAliasRecords.add(address, formatted)
+	return formatted
 }
 
 func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
@@ -1488,9 +1686,7 @@ func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bc
 			r := &records[i]
 			if len(r.Name) > 0 {
 				wb.PutCF(d.cfh[cfAddressAliases], []byte(r.Address), []byte(r.Name))
-				cachedAddressAliasRecordsMux.Lock()
-				cachedAddressAliasRecords[r.Address] = d.chainParser.FormatAddressAlias(r.Address, r.Name)
-				cachedAddressAliasRecordsMux.Unlock()
+				cachedAddressAliasRecords.add(r.Address, d.chainParser.FormatAddressAlias(r.Address, r.Name))
 			}
 		}
 	}
@@ -1900,6 +2096,7 @@ func (d *RocksDB) migrateAddrContractsToV7(approxRows int64) error {
 	var seekKey []byte
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	for {
 		var addrDesc bchain.AddressDescriptor
@@ -2050,7 +2247,11 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	if is.Coin == "coin-unittest" {
 		d.setBlockTimes()
 	} else {
-		go d.setBlockTimes()
+		d.setBlockTimesWG.Add(1)
+		go func() {
+			defer d.setBlockTimesWG.Done()
+			d.setBlockTimes()
+		}()
 	}
 	// after load, reset the synchronization data
 	is.IsSynchronized = false
@@ -2058,14 +2259,6 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	var t time.Time
 	is.LastMempoolSync = t
 	is.SyncMode = false
-
-	if d.chainParser.UseAddressAliases() {
-		recordsCount, err := d.InitAddressAliasRecords()
-		if err != nil {
-			return nil, err
-		}
-		glog.Infof("loaded %d address alias records", recordsCount)
-	}
 
 	is.CoinShortcut = config.CoinShortcut
 	if config.CoinLabel == "" {
@@ -2127,6 +2320,7 @@ func (d *RocksDB) computeColumnSize(col int, stopCompute chan os.Signal) (int64,
 	var seekKey []byte
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	for {
 		var key []byte
@@ -2308,6 +2502,7 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 	var seekKey []byte
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
 	ro.SetFillCache(false)
 	for {
 		var addrDesc bchain.AddressDescriptor

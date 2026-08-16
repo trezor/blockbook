@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"math"
@@ -15,6 +16,9 @@ import (
 
 // FiatRatesTimeFormat is a format string for storing FiatRates timestamps in rocksdb
 const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
+
+const historicalFiatBootstrapStateKey = "HistoricalFiatBootstrapComplete"
+const historicalFiatBootstrapAttemptsKey = "HistoricalFiatBootstrapAttempts"
 
 func packTimestamp(t *time.Time) []byte {
 	return []byte(t.UTC().Format(FiatRatesTimeFormat))
@@ -148,6 +152,68 @@ func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time, vsCurrency string, 
 	return nil, nil
 }
 
+// FiatRatesFindTickers gets FiatRates data closest to each specified timestamp.
+// The method is optimized for timestamps sorted in ascending order.
+func (d *RocksDB) FiatRatesFindTickers(timestamps []int64, vsCurrency string, token string) ([]*common.CurrencyRatesTicker, error) {
+	tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
+	if len(timestamps) == 0 {
+		return tickers, nil
+	}
+	if len(timestamps) == 1 {
+		ts := time.Unix(timestamps[0], 0).UTC()
+		ticker, err := d.FiatRatesFindTicker(&ts, vsCurrency, token)
+		if err != nil {
+			return nil, err
+		}
+		tickers[0] = ticker
+		return tickers, nil
+	}
+
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	first := true
+	// Cache decoding result for the current iterator key. For sparse token rates,
+	// multiple timestamps often resolve to the same key; avoid re-decoding it.
+	var decodedKey []byte
+	var decodedTicker *common.CurrencyRatesTicker
+	hasDecodedKey := false
+	for i, ts := range timestamps {
+		seekKey := []byte(time.Unix(ts, 0).UTC().Format(FiatRatesTimeFormat))
+		if first {
+			it.Seek(seekKey)
+			first = false
+		} else if it.Valid() && bytes.Compare(it.Key().Data(), seekKey) < 0 {
+			it.Seek(seekKey)
+		}
+
+		for ; it.Valid(); it.Next() {
+			keyData := it.Key().Data()
+			if hasDecodedKey && bytes.Equal(keyData, decodedKey) {
+				if decodedTicker != nil {
+					tickers[i] = decodedTicker
+					break
+				}
+				continue
+			}
+
+			ticker, err := getTickerFromIterator(it, vsCurrency, token)
+			if err != nil {
+				glog.Error("FiatRatesFindTickers error: ", err)
+				return nil, err
+			}
+			decodedKey = append(decodedKey[:0], keyData...)
+			decodedTicker = ticker
+			hasDecodedKey = true
+			if ticker != nil {
+				tickers[i] = ticker
+				break
+			}
+		}
+	}
+	return tickers, nil
+}
+
 // FiatRatesGetAllTickers gets FiatRates data closest to the specified timestamp, of the base currency, vsCurrency or the token if specified
 func (d *RocksDB) FiatRatesGetAllTickers(fn func(ticker *common.CurrencyRatesTicker) error) error {
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
@@ -166,6 +232,27 @@ func (d *RocksDB) FiatRatesGetAllTickers(fn func(ticker *common.CurrencyRatesTic
 		}
 	}
 	return nil
+}
+
+// FiatRatesGetTickerTimestamps returns, in ascending order, the unix-second timestamps of all
+// stored fiat-rate tickers at or after `from`. It reads keys only (no value decoding), so it
+// stays cheap even over long history -- used by the startup reconciliation to detect which
+// whole days are missing without loading every (potentially large) record.
+func (d *RocksDB) FiatRatesGetTickerTimestamps(from time.Time) ([]int64, error) {
+	fromKey := []byte(from.UTC().Format(FiatRatesTimeFormat))
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	var timestamps []int64
+	for it.Seek(fromKey); it.Valid(); it.Next() {
+		t, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
+		if err != nil {
+			// defensively skip any key that is not a valid timestamp
+			continue
+		}
+		timestamps = append(timestamps, t.Unix())
+	}
+	return timestamps, nil
 }
 
 // FiatRatesFindLastTicker gets the last FiatRates record, of the base currency, vsCurrency or the token if specified
@@ -209,4 +296,58 @@ func (d *RocksDB) FiatRatesStoreSpecialTickers(key string, tickers *[]common.Cur
 		return err
 	}
 	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(key), data)
+}
+
+// FiatRatesGetHistoricalBootstrapComplete gets persisted historical bootstrap completion state.
+// found=false means no state was stored yet (legacy deployments or pre-bootstrap).
+func (d *RocksDB) FiatRatesGetHistoricalBootstrapComplete() (complete bool, found bool, err error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(historicalFiatBootstrapStateKey))
+	if err != nil {
+		return false, false, err
+	}
+	defer val.Free()
+	data := val.Data()
+	if data == nil {
+		return false, false, nil
+	}
+	if err := json.Unmarshal(data, &complete); err != nil {
+		return false, false, err
+	}
+	return complete, true, nil
+}
+
+// FiatRatesSetHistoricalBootstrapComplete stores historical bootstrap completion state.
+func (d *RocksDB) FiatRatesSetHistoricalBootstrapComplete(complete bool) error {
+	data, err := json.Marshal(complete)
+	if err != nil {
+		return err
+	}
+	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(historicalFiatBootstrapStateKey), data)
+}
+
+// FiatRatesGetHistoricalBootstrapAttempts gets persisted number of failed bootstrap attempts.
+// found=false means no attempt counter was stored yet.
+func (d *RocksDB) FiatRatesGetHistoricalBootstrapAttempts() (attempts int, found bool, err error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(historicalFiatBootstrapAttemptsKey))
+	if err != nil {
+		return 0, false, err
+	}
+	defer val.Free()
+	data := val.Data()
+	if data == nil {
+		return 0, false, nil
+	}
+	if err := json.Unmarshal(data, &attempts); err != nil {
+		return 0, false, err
+	}
+	return attempts, true, nil
+}
+
+// FiatRatesSetHistoricalBootstrapAttempts stores number of failed bootstrap attempts.
+func (d *RocksDB) FiatRatesSetHistoricalBootstrapAttempts(attempts int) error {
+	data, err := json.Marshal(attempts)
+	if err != nil {
+		return err
+	}
+	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(historicalFiatBootstrapAttemptsKey), data)
 }

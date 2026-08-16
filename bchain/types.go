@@ -267,6 +267,10 @@ const (
 	P2TR
 )
 
+// MaxXpubChangeIndexes limits how many change branches one xpub descriptor can
+// expand during account scans.
+const MaxXpubChangeIndexes = 10
+
 // XpubDescriptor contains parsed data from xpub descriptor
 type XpubDescriptor struct {
 	XpubDescriptor string      `ts_doc:"Full descriptor string including xpub and script type."`
@@ -287,17 +291,26 @@ type MempoolTxidFilterEntries struct {
 	UsedZeroedKey bool              `json:"usedZeroedKey,omitempty" ts_doc:"Indicates if a zeroed key was used in filter calculation."`
 }
 
-// OnNewBlockFunc is used to send notification about a new block
-type OnNewBlockFunc func(hash string, height uint32)
+// ENSResolution represents the result of resolving an ENS name to an Ethereum address.
+type ENSResolution struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	Error   string `json:"error,omitempty"`
+}
 
-// OnNewTxAddrFunc is used to send notification about a new transaction/address
-type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
+// OnNewBlockFunc is used to send notification about a new block
+type OnNewBlockFunc func(block *Block)
 
 // OnNewTxFunc is used to send notification about a new transaction/address
 type OnNewTxFunc func(tx *MempoolTx)
 
 // AddrDescForOutpointFunc returns address descriptor and value for given outpoint or nil if outpoint not found
 type AddrDescForOutpointFunc func(outpoint Outpoint) (AddressDescriptor, *big.Int)
+
+// MempoolBatcher allows batch fetching of mempool transactions when supported.
+type MempoolBatcher interface {
+	GetRawTransactionsForMempoolBatch(txids []string) (map[string]*Tx, error)
+}
 
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
@@ -307,7 +320,7 @@ type BlockChain interface {
 	// create mempool but do not initialize it
 	CreateMempool(BlockChain) (Mempool, error)
 	// initialize mempool, create ZeroMQ (or other) subscription
-	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc, OnNewTxFunc) error
+	InitializeMempool(AddrDescForOutpointFunc, OnNewTxFunc) error
 	// shutdown mempool, ZeroMQ and block chain connections
 	Shutdown(ctx context.Context) error
 	// chain info
@@ -328,6 +341,7 @@ type BlockChain interface {
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
 	GetTransactionSpecific(tx *Tx) (json.RawMessage, error)
+	GetAddressChainExtraData(addrDesc AddressDescriptor) (json.RawMessage, error)
 	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
 	EstimateFee(blocks int) (big.Int, error)
 	LongTermFeeRate() (*LongTermFeeRate, error)
@@ -338,14 +352,16 @@ type BlockChain interface {
 	GetChainParser() BlockChainParser
 	// EthereumType specific
 	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
-	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
+	EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfirmed bool) (pending uint64, confirmed uint64, confirmedOK bool, err error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetEip1559Fees() (*Eip1559Fees, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
+	EthereumTypeGetErc20ContractBalances(addrDesc AddressDescriptor, contractDescs []AddressDescriptor) ([]*big.Int, error)
 	EthereumTypeGetSupportedStakingPools() []string
 	EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) ([]StakingPoolData, error)
 	EthereumTypeRpcCall(data, to, from string) (string, error)
 	EthereumTypeGetRawTransaction(txid string) (string, error)
+	EthereumTypeGetTransactionReceipt(txid string) (*RpcReceipt, error)
 	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 
@@ -395,6 +411,10 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
+	GetEthereumTxData(tx *Tx) *EthereumTxData
+	GetChainExtraPayloadType() ChainExtraPayloadType
+	GetChainExtraData(tx *Tx) (json.RawMessage, error)
+	ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData
 	// AddressAlias
 	FormatAddressAlias(address string, name string) string
 }
@@ -407,4 +427,43 @@ type Mempool interface {
 	GetAllEntries() MempoolTxidEntries
 	GetTransactionTime(txid string) uint32
 	GetTxidFilterEntries(filterScripts string, fromTimestamp uint32) (MempoolTxidFilterEntries, error)
+}
+
+// MissingBlockRetry is the JSON wire shape for per-chain overrides of the
+// sync-worker missing-block retry policy. Each field is optional; zero / missing
+// values fall back to the db package's built-in defaults. Operators set this
+// under `additional_params.missingBlockRetry` in `configs/coins/*.json`.
+type MissingBlockRetry struct {
+	// RetryDelayMs is the sleep between successive GetBlock attempts for the same
+	// missing block in the parallel worker path. The sequential tip path applies
+	// an additional internal cap of 250 ms regardless of this value.
+	RetryDelayMs int `json:"retryDelayMs,omitempty"`
+	// RecheckThreshold is the number of consecutive retryable errors in the
+	// parallel worker before probing the chain via shouldRestartSyncOnMissingBlock.
+	RecheckThreshold int `json:"recheckThreshold,omitempty"`
+	// TipRecheckThreshold is the equivalent threshold once the hash queue is
+	// closed (we are at the tail of a range) or for the sequential tip path.
+	TipRecheckThreshold int `json:"tipRecheckThreshold,omitempty"`
+	// MaxStallMs is the wall-clock budget per stuck block before the retry loop
+	// yields errResync to the outer machinery.
+	MaxStallMs int `json:"maxStallMs,omitempty"`
+}
+
+// XpubConfig carries per-chain overrides for xpub address expansion and
+// caching. All fields are optional; zero / missing values fall back to the
+// api package's built-in defaults. Operators set this under
+// `additional_params.xpubConfig` in `configs/coins/*.json`.
+type XpubConfig struct {
+	// MaxCacheExpirationSeconds is the TTL for cached xpub-to-address
+	// derivations (seconds). Zero / missing uses the default (3600).
+	MaxCacheExpirationSeconds int `json:"maxCacheExpirationSeconds,omitempty"`
+	// MaxCacheEntries is the hard cap on the number of cached xpubs.
+	// Zero / missing uses the default (1024).
+	MaxCacheEntries int `json:"maxCacheEntries,omitempty"`
+	// DefaultAddressesGap is the default BIP44 gap limit when the
+	// caller does not supply one (zero / missing → 20).
+	DefaultAddressesGap int `json:"defaultAddressesGap,omitempty"`
+	// MaxAddressesGap is the maximum user-supplied gap value the
+	// server will accept (zero / missing → 10000).
+	MaxAddressesGap int `json:"maxAddressesGap,omitempty"`
 }

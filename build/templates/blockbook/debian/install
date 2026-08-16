@@ -2,6 +2,7 @@
 blockbook {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin
 cert {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}
 static {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}
+openapi.yaml {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}
 blockchaincfg.json {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/config
 logrotate.sh {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin
 ldb {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin

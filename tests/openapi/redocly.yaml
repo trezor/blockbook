@@ -1,0 +1,14 @@
+extends:
+  - recommended
+
+rules:
+  # Blockbook has canonical trailing-slash handlers for endpoints such as
+  # /api/v2/sendtx/ and /api/v2/tickers/. Keep the spec faithful to runtime.
+  no-path-trailing-slash: off
+  # Every REST operation has a default error response, but the recommended rule
+  # requires explicit 4XX entries and does not count default.
+  operation-4xx-response: off
+  # /websocket upgrades with HTTP 101, not a normal 2XX JSON response.
+  operation-2xx-response: off
+  # WebSocket message schemas are referenced from x-websocket-* extensions.
+  no-unused-components: off

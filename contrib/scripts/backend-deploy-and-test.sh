@@ -1,33 +1,79 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
+readonly LOG_PREFIX="CI/CD Pipeline:"
+readonly SCRIPT_NAME="[backend-deploy]"
+
+log() {
+  printf '%s %s %s\n' "$LOG_PREFIX" "$SCRIPT_NAME" "$*" >&2
+}
+
+die() {
+  printf '%s error: %s\n' "$LOG_PREFIX" "$*" >&2
+  exit 1
+}
 
 if [ $# -ne 1 ] && [ $# -ne 4 ]
 then
-    echo -e "Usage:\n\n$(basename $(readlink -f $0)) coin service_name coin_test backend_log_file\n\nor\n\n$(basename $(readlink -f $0)) coin\nin which case service_name, coin_test and backend_log_file are derived from coin or default" 1>&2
-    exit 1
+    die "usage: $(basename $(readlink -f "$0")) coin service_name coin_test backend_log_file OR $(basename $(readlink -f "$0")) coin"
 fi
 
-COIN=$1
-SERVICE=$2
-COIN_TEST=$3
-LOGFILE=$4
+command -v jq >/dev/null 2>&1 || die "jq is required"
 
+COIN=$1
+SERVICE=${2:-}
+COIN_TEST=${3:-}
+LOGFILE=${4:-}
+CONFIG="configs/coins/${COIN}.json"
+
+BACKEND_TIMEOUT="${BACKEND_TIMEOUT:-}"
 [ -z "${BACKEND_TIMEOUT}" ] && BACKEND_TIMEOUT=15s
 [ -z "${SERVICE}" ] && SERVICE="${COIN}"
 [ -z "${COIN_TEST}" ] && COIN_TEST="${COIN}=main"
-[ -z "${LOGFILE}" ] && LOGFILE=debug.log
+if [[ -z "${LOGFILE}" ]]; then
+  if [[ -f "${CONFIG}" ]]; then
+    alias="$(jq -r '.coin.alias // empty' "${CONFIG}")"
+    if [[ -n "${alias}" ]]; then
+      LOGFILE="${alias}.log"
+    else
+      LOGFILE=debug.log
+    fi
+  else
+    LOGFILE=debug.log
+  fi
+fi
 
-echo "Running: $(basename $(readlink -f $0)) ${COIN} ${SERVICE} ${COIN_TEST} ${LOGFILE}"
+log "running: $(basename $(readlink -f "$0")) ${COIN} ${SERVICE} ${COIN_TEST} ${LOGFILE}"
 
-rm build/*.deb
-make "deb-backend-${COIN}"
+rm -f build/*.deb
+log "building backend package for ${COIN}"
+make PORTABLE=1 "deb-backend-${COIN}"
 
-PACKAGE=$(ls ./build/backend-${SERVICE}*.deb)
-[ -z "${PACKAGE}" ] && echo "Package not found" && exit 1
+shopt -s nullglob
+packages=(./build/backend-"${SERVICE}"*.deb)
+shopt -u nullglob
+if [[ "${#packages[@]}" -eq 0 ]]; then
+  die "package not found for backend-${SERVICE}"
+fi
+PACKAGE="${packages[0]}"
 
-sudo /usr/bin/dpkg -i "${PACKAGE}" || exit 1
-sudo /bin/systemctl restart "backend-${SERVICE}" || exit 1
+log "installing ${PACKAGE}"
+sudo /usr/bin/dpkg -i "${PACKAGE}"
+log "restarting backend-${SERVICE}"
+sudo /bin/systemctl restart "backend-${SERVICE}"
 
-echo "Waiting for backend startup for ${BACKEND_TIMEOUT}"
-sudo -u bitcoin /usr/bin/timeout ${BACKEND_TIMEOUT} /usr/bin/tail -f "/opt/coins/data/${COIN}/backend/${LOGFILE}"
+log "waiting for backend startup for ${BACKEND_TIMEOUT}"
+set +e
+sudo -u bitcoin /usr/bin/timeout "${BACKEND_TIMEOUT}" /usr/bin/tail -f "/opt/coins/data/${COIN}/backend/${LOGFILE}"
+status=$?
+set -e
+if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+  if [[ "$status" -eq 1 ]]; then
+    log "backend log ${LOGFILE} is not available yet, continuing to integration tests"
+  else
+    die "backend startup log wait failed with exit code ${status}"
+  fi
+fi
 
-make test-integration ARGS="-v -run=TestIntegration/${COIN_TEST}"
+log "running integration tests: TestIntegration/${COIN_TEST}"
+make PORTABLE=1 test-integration ARGS="-v -run=TestIntegration/${COIN_TEST}"

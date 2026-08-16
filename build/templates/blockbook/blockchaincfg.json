@@ -11,6 +11,7 @@
     "network": "{{.Coin.Network}}",{{end}}
     "coin_label": "{{.Coin.Label}}",
     "rpc_url": "{{template "IPC.RPCURLTemplate" .}}",
+    "rpc_url_ws": "{{template "IPC.RPCURLWSTemplate" .}}",
     "rpc_user": "{{.IPC.RPCUser}}",
     "rpc_pass": "{{.IPC.RPCPass}}",
     "rpc_timeout": {{.IPC.RPCTimeout}},
@@ -25,6 +26,7 @@
 {{end}}
     "mempool_workers": {{.Blockbook.BlockChain.MempoolWorkers}},
     "mempool_sub_workers": {{.Blockbook.BlockChain.MempoolSubWorkers}},
+    "mempool_resync_batch_size": {{.Blockbook.BlockChain.MempoolResyncBatchSize}},
     "block_addresses_to_keep": {{.Blockbook.BlockChain.BlockAddressesToKeep}}
 }
 {{end}}

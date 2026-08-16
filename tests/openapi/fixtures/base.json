@@ -1,0 +1,12 @@
+{
+  "erc4626Fixtures": [
+    {
+      "name": "Morpho-Base-vault",
+      "holder": "0x9eA3721B5Bf3b64b4418c38B603154d2D597FAE3",
+      "contract": "0xbeeF010f9cb27031ad51e3333f9aF9C6B1228183"
+    }
+  ],
+  "nonVaultContracts": [
+    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  ]
+}

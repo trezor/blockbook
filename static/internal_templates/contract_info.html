@@ -26,13 +26,29 @@
     </div>
 </form>
 <div class="row" style="margin: 35px">
-    To update contract, use POST request to /admin/contract-info/ endpoint. Example:
+    Use the /admin/contract-info/ endpoint to manage cached contract metadata. Examples:
     <div style="margin-top: 20px">
         <pre>
-            curl -k -v  \
-            'https://&lt;internaladdress&gt;/admin/contract-info/' \
+            # read the cached metadata of one contract
+            curl -k -u user:password 'https://&lt;internaladdress&gt;/admin/contract-info/&lt;address&gt;'
+
+            # list the stored records page by page; the response
+            # {"contracts":[...],"next":"&lt;address&gt;"} carries the from cursor of the
+            # next page (the collection can hold millions of sync-stored records)
+            curl -k -u user:password 'https://&lt;internaladdress&gt;/admin/contract-info/?limit=1000&amp;from=&lt;address&gt;'
+
+            # update contracts; POST targets the collection path with a JSON array body,
+            # the response is {"updated":N}
+            curl -k -u user:password -X POST 'https://&lt;internaladdress&gt;/admin/contract-info/' \
             -H 'Content-Type: application/json' \
-            --data '[{ContractInfo},{ContractInfo},...]'        
+            --data '[{ContractInfo},{ContractInfo},...]'
+
+            # purge the stored metadata of one contract so it is re-fetched from the
+            # backend node on the next read; the response
+            # {"contract":"...","deleted":true|false,"purged":{ContractInfo}}
+            # returns the removed record — POST it back to restore the sync-owned
+            # createdInBlock/destructedInBlock fields the re-fetch cannot recover
+            curl -k -u user:password -X DELETE 'https://&lt;internaladdress&gt;/admin/contract-info/&lt;address&gt;'
         </pre>
     </div>
 </div>
