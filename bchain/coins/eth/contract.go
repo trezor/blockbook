@@ -634,8 +634,9 @@ func (b *EthereumRPC) erc20BalancesMulticall3(callData string, contractDescs []b
 	if skipped := len(contractDescs) - len(valid); skipped > 0 {
 		glog.V(2).Infof("erc20 balances multicall3: excluding %d malformed contract descriptor(s)", skipped)
 	}
-	for start := 0; start < len(valid); start += multicall3MaxCallsPerAggregate {
-		end := start + multicall3MaxCallsPerAggregate
+	maxCalls := b.multicall3MaxCalls()
+	for start := 0; start < len(valid); start += maxCalls {
+		end := start + maxCalls
 		if end > len(valid) {
 			end = len(valid)
 		}
@@ -779,6 +780,8 @@ func isNonRetriableEthCallError(err error) bool {
 	// These errors are deterministic for the given call data and won't succeed on retry.
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "execution reverted") ||
+		// Tron's phrasing for no code at the address; a single-call retry cannot succeed either.
+		strings.Contains(msg, "smart contract is not exist") ||
 		strings.Contains(msg, "invalid opcode") ||
 		strings.Contains(msg, "out of gas") ||
 		strings.Contains(msg, "stack underflow") ||

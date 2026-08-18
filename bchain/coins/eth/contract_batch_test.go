@@ -1146,3 +1146,77 @@ func TestEthereumTypeGetErc20ContractBalancesMalformedDescriptorExcluded(t *test
 		t.Fatalf("expected 1 aggregate3 eth_call and no fallback, got %d", ethCall)
 	}
 }
+
+// A per-chain cap (Tron's node aborts a long constant call) overrides the default chunk bound.
+func TestEthereumTypeGetErc20ContractBalancesMulticallChunkOverride(t *testing.T) {
+	addr := common.HexToAddress("0x0000000000000000000000000000000000000011")
+	const override = 8
+	n := override*2 + 3 // three chunks: 8, 8, 3
+	contracts := erc20TestContracts(n)
+	var sizes []int
+	mock := &mockMulticallRPC{
+		handler: func(callData string) (string, error) {
+			cnt, err := aggregate3SubCallCount(callData)
+			if err != nil {
+				return "", err
+			}
+			sizes = append(sizes, cnt)
+			res := make([]bchain.EthereumMulticallResult, cnt)
+			for i := range res {
+				res[i] = bchain.EthereumMulticallResult{Success: true, Data: fmt.Sprintf("0x%064x", 1)}
+			}
+			return fixtureAggregate3Result(res), nil
+		},
+	}
+	rpcClient := &EthereumRPC{RPC: mock, Timeout: time.Second, ChainConfig: &Configuration{Multicall3MaxCalls: override}}
+	balances, err := rpcClient.EthereumTypeGetErc20ContractBalances(bchain.AddressDescriptor(addr.Bytes()), contracts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(balances) != n {
+		t.Fatalf("expected %d balances, got %d", n, len(balances))
+	}
+	for i, bal := range balances {
+		if bal == nil || bal.Sign() != 1 {
+			t.Fatalf("balance[%d]=%v, want 1", i, bal)
+		}
+	}
+	want := []int{override, override, 3}
+	if len(sizes) != len(want) {
+		t.Fatalf("aggregate3 chunk sizes = %v, want %v", sizes, want)
+	}
+	for i := range want {
+		if sizes[i] != want[i] {
+			t.Fatalf("aggregate3 chunk sizes = %v, want %v", sizes, want)
+		}
+	}
+}
+
+// multicall3_max_calls defaults to the built-in bound, so an unset or invalid value cannot
+// silently shrink the aggregate3 batch.
+func TestMulticall3MaxCallsConfig(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		client *EthereumRPC
+		want   int
+	}{
+		{"no chain config", &EthereumRPC{}, multicall3MaxCallsPerAggregate},
+		{"unset", &EthereumRPC{ChainConfig: &Configuration{}}, multicall3MaxCallsPerAggregate},
+		{"negative", &EthereumRPC{ChainConfig: &Configuration{Multicall3MaxCalls: -1}}, multicall3MaxCallsPerAggregate},
+		{"configured", &EthereumRPC{ChainConfig: &Configuration{Multicall3MaxCalls: 7}}, 7},
+	} {
+		if got := tt.client.multicall3MaxCalls(); got != tt.want {
+			t.Fatalf("%s: multicall3MaxCalls()=%d, want %d", tt.name, got, tt.want)
+		}
+	}
+}
+
+// Tron reports a missing contract instead of a revert; retrying it as a single call cannot help.
+func TestIsNonRetriableEthCallErrorTronMissingContract(t *testing.T) {
+	if !isNonRetriableEthCallError(errors.New("Smart contract is not exist.")) {
+		t.Fatal("expected Tron's missing-contract error to be non-retriable")
+	}
+	if isNonRetriableEthCallError(errors.New("CPU timeout for 'DUP2' operation executing")) {
+		t.Fatal("expected a CPU timeout to stay retriable")
+	}
+}

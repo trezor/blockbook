@@ -74,6 +74,7 @@ type Configuration struct {
 	RPCTimeout                        int    `json:"rpc_timeout"`
 	TraceTimeout                      string `json:"trace_timeout,omitempty"`
 	Erc20BatchSize                    int    `json:"erc20_batch_size,omitempty"`
+	Multicall3MaxCalls                int    `json:"multicall3_max_calls,omitempty"`
 	BlockAddressesToKeep              int    `json:"block_addresses_to_keep"`
 	HotAddressMinContracts            int    `json:"hot_address_min_contracts,omitempty"`
 	HotAddressLRUCacheSize            int    `json:"hot_address_lru_cache_size,omitempty"`

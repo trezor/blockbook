@@ -66,6 +66,15 @@ func (b *EthereumRPC) multicall3ContractAddress() string {
 	return multicall3Address
 }
 
+// multicall3MaxCalls returns the configured sub-calls per aggregate3, else the default.
+// Lower it for a node that aborts a long constant call before it runs out of gas.
+func (b *EthereumRPC) multicall3MaxCalls() int {
+	if b.ChainConfig != nil && b.ChainConfig.Multicall3MaxCalls > 0 {
+		return b.ChainConfig.Multicall3MaxCalls
+	}
+	return multicall3MaxCallsPerAggregate
+}
+
 // EthereumTypeMulticallAggregate3 issues an aggregate3 batch as one eth_call,
 // observing all sub-calls at the same block (pinned to blockNumber, or
 // "latest" if nil). The first call probes deployment with one eth_getCode;
