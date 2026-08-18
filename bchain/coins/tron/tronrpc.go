@@ -675,6 +675,11 @@ func (b *TronRPC) computeBlockConfirmations(blockNumber uint64) (uint32, error) 
 }
 
 func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData, keepReceipt bool) (*bchain.Tx, error) {
+	// eth parity (EthTxToTx): drop empty internal data so that no useless
+	// cfInternalData row is stored for every plain transaction
+	if internalData != nil && internalData.Type == bchain.CALL && len(internalData.Transfers) == 0 && internalData.Error == "" {
+		internalData = nil
+	}
 	csd := tronBuildEthereumSpecificData(txByID, txInfo)
 	csd.InternalData = internalData
 
@@ -687,9 +692,13 @@ func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, tx
 		return nil, errors.Annotatef(err, "txid %v", txByID.TxID)
 	}
 
+	// java-tron precomputes the receipt ContractAddress even for failed
+	// deployments - only a successful receipt proves the contract exists;
+	// same success signal as the CREATE classification during indexing
 	if len(tx.Vout) > 0 &&
 		tx.Vout[0].ScriptPubKey.Addresses == nil &&
 		csd.Receipt != nil &&
+		tronReceiptResultSuccess(txInfo.Receipt.Result) &&
 		csd.Receipt.ContractAddress != "" {
 		tx.Vout = []bchain.Vout{{
 			ValueSat: tx.Vout[0].ValueSat,
