@@ -44,6 +44,28 @@ func TestNewTronRPC_SetsMulticall3AddressOverride(t *testing.T) {
 	require.Equal(t, tronMulticall3Address, tronRPC.EthereumRPC.Multicall3AddressOverride)
 }
 
+func TestTronRPC_NormalizeMulticallCalls(t *testing.T) {
+	rpc := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{},
+		Parser:      NewTronParser(100, false),
+	}
+	calls := []bchain.EthereumMulticallCall{
+		{Target: "TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED", CallData: "0x1234", AllowFailure: true},
+		{Target: tronMulticall3Address},
+	}
+
+	normalized, err := rpc.normalizeMulticallCalls(calls)
+	require.NoError(t, err)
+	require.Equal(t, []bchain.EthereumMulticallCall{
+		{Target: tronMulticall3Address, CallData: "0x1234", AllowFailure: true},
+		{Target: tronMulticall3Address},
+	}, normalized)
+	require.Equal(t, "TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED", calls[0].Target)
+
+	_, err = rpc.normalizeMulticallCalls(append(calls, bchain.EthereumMulticallCall{Target: "invalid"}))
+	require.ErrorContains(t, err, "normalize multicall target 2")
+}
+
 type tronTestMempool struct {
 	txTimes map[string]uint32
 }

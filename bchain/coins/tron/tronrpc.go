@@ -1165,6 +1165,28 @@ func (b *TronRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return b.EthereumRPC.EthereumTypeRpcCall(data, normalizedTo, normalizedFrom)
 }
 
+// EthereumTypeMulticallAggregate3 supports both EVM hex and Tron Base58 targets.
+func (b *TronRPC) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error) {
+	normalizedCalls, err := b.normalizeMulticallCalls(calls)
+	if err != nil {
+		return nil, err
+	}
+	return b.EthereumRPC.EthereumTypeMulticallAggregate3(normalizedCalls, blockNumber)
+}
+
+func (b *TronRPC) normalizeMulticallCalls(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallCall, error) {
+	normalizedCalls := make([]bchain.EthereumMulticallCall, len(calls))
+	copy(normalizedCalls, calls)
+	for i := range normalizedCalls {
+		target, err := b.Parser.FromTronAddressToHex(normalizedCalls[i].Target)
+		if err != nil {
+			return nil, errors.Annotatef(err, "normalize multicall target %d", i)
+		}
+		normalizedCalls[i].Target = target
+	}
+	return normalizedCalls, nil
+}
+
 // EthereumTypeGetNonces returns the account nonce. Tron exposes only the latest
 // (confirmed) nonce via NonceAt in a single call, so the pending and confirmed
 // values are identical and the withConfirmed flag carries no extra cost here.
