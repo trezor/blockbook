@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,7 +30,7 @@ func TestJSONHandlerRedactsProviderURLFromClientError(t *testing.T) {
 	}{
 		{"public api error", api.NewAPIError(providerErr, true), false, http.StatusBadRequest},
 		{"internal api error", api.NewAPIError(providerErr, false), false, http.StatusInternalServerError},
-		{"plain error in debug mode", &nonAPIError{providerErr}, true, http.StatusInternalServerError},
+		{"plain error in debug mode", errors.New(providerErr), true, http.StatusInternalServerError},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,13 +63,4 @@ func TestJSONHandlerRedactsProviderURLFromClientError(t *testing.T) {
 			}
 		})
 	}
-}
-
-// nonAPIError is an error that is not an *api.APIError, taking the handler's debug branch.
-type nonAPIError struct {
-	text string
-}
-
-func (e *nonAPIError) Error() string {
-	return e.text
 }
