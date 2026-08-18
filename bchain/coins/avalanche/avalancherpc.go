@@ -25,13 +25,7 @@ func dialRPC(rawURL string) (*rpc.Client, error) {
 	if rawURL == "" {
 		return nil, errors.New("empty rpc url")
 	}
-	opts := []rpc.ClientOption{}
-	if parsed, err := url.Parse(rawURL); err == nil {
-		if parsed.Scheme == "ws" || parsed.Scheme == "wss" {
-			opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
-		}
-	}
-	return rpc.DialOptions(context.Background(), rawURL, opts...)
+	return rpc.DialOptions(context.Background(), rawURL, eth.RPCDialOptions(rawURL)...)
 }
 
 // OpenRPC opens RPC connections for Avalanche to separate HTTP and WS endpoints.
@@ -98,7 +92,8 @@ func (b *AvalancheRPC) Initialize() error {
 		scheme = "https"
 	}
 
-	infoClient, err := rpc.DialHTTP(fmt.Sprintf("%s://%s/ext/info", scheme, rpcUrl.Host))
+	infoURL := fmt.Sprintf("%s://%s/ext/info", scheme, rpcUrl.Host)
+	infoClient, err := rpc.DialOptions(context.Background(), infoURL, eth.RPCDialOptions(infoURL)...)
 	if err != nil {
 		return err
 	}

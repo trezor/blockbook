@@ -219,10 +219,7 @@ func resolveTronHTTPURL(explicitURL, rpcURL, defaultPort string) (string, error)
 
 // OpenRPC opens an RPC connection to the Tron backend (wsURL is unused – Tron has no WS subscriptions)
 var OpenRPC = func(url, _ string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
-	opts := []rpc.ClientOption{}
-	opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
-
-	r, err := rpc.DialOptions(context.Background(), url, opts...)
+	r, err := rpc.DialOptions(context.Background(), url, eth.RPCDialOptions(url)...)
 	if err != nil {
 		return nil, nil, err
 	}

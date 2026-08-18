@@ -520,13 +520,9 @@ func dialRPC(rawURL string) (*rpc.Client, error) {
 	if rawURL == "" {
 		return nil, errors.New("empty rpc url")
 	}
-	opts := []rpc.ClientOption{}
-	if strings.HasPrefix(rawURL, "ws://") || strings.HasPrefix(rawURL, "wss://") {
-		opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer cancel()
-	return rpc.DialOptions(ctx, rawURL, opts...)
+	return rpc.DialOptions(ctx, rawURL, RPCDialOptions(rawURL)...)
 }
 
 // OpenRPC opens RPC connection to ETH backend.
