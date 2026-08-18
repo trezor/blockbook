@@ -2215,7 +2215,6 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool) (string, error) {
 	var txid string
 	var retErr error
-	path := "primary"
 
 	if !disableAlternativeRPC && b.alternativeSendTxProvider != nil {
 		txid, retErr = b.alternativeSendTxProvider.SendRawTransaction(hex)
@@ -2227,17 +2226,19 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 			b.observeSendTxPath("alternative", retErr)
 			return txid, retErr
 		}
-		path = "primary_fallback"
 	}
 
 	// decoded once for the log lines - a send is the only moment Blockbook sees the sender and
 	// nonce of a transaction it has not indexed yet, and both are what a later "my tx vanished"
 	// or nonce-gap report has to be reconciled against
-	tx := describeRawTx(hex)
-	if path == "primary_fallback" {
-		// the transaction is about to go to the public mempool although the deployment prefers a
-		// private relay - this switch of destination is otherwise invisible
-		glog.Warningf("eth_sendRawTransaction falling back to the primary RPC, %s, alternative providers error: %v", tx, retErr)
+	decoded := decodeRawTx(hex)
+	// retErr can only have been set by the alternative providers above, so a non-nil one here means
+	// they all rejected and the transaction is about to go to the public mempool although the
+	// deployment prefers a private relay - a switch of destination that is otherwise invisible
+	path := "primary"
+	if retErr != nil {
+		path = "primary_fallback"
+		glog.Warningf("eth_sendRawTransaction falling back to the primary RPC, %s, alternative providers error: %v", decoded, retErr)
 	}
 
 	start := time.Now()
@@ -2245,10 +2246,10 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	duration := time.Since(start).Round(time.Millisecond)
 	b.observeSendTxPath(path, retErr)
 	if retErr != nil {
-		glog.Errorf("eth_sendRawTransaction to the primary RPC rejected %s after %v: %v", tx, duration, retErr)
+		glog.Errorf("eth_sendRawTransaction to the primary RPC rejected %s after %v: %v", decoded, duration, retErr)
 		return txid, retErr
 	}
-	glog.Infof("eth_sendRawTransaction to the primary RPC accepted %s as txid %s in %v", tx, txid, duration)
+	glog.Infof("eth_sendRawTransaction to the primary RPC accepted %s as txid %s in %v", decoded, txid, duration)
 	if b.ChainConfig.DisableMempoolSync {
 		// add transactions submitted by us to mempool if sync is disabled
 		b.Mempool.AddTransactionToMempool(txid)

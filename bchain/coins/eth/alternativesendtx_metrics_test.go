@@ -11,15 +11,15 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
+// newSendTxMetrics extends the reconcile collectors with the send-path ones, so the mempool event
+// counter has a single owner - the fetch-back is observed on it from the send path too.
 func newSendTxMetrics() *common.Metrics {
-	return &common.Metrics{
-		EthAlternativeSendTx: prometheus.NewCounterVec(
-			prometheus.CounterOpts{Name: "test_alt_sendtx_total"}, []string{"provider_host", "status", "reason"}),
-		EthAlternativeSendTxDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{Name: "test_alt_sendtx_duration_seconds", Buckets: []float64{1}}, []string{"provider_host", "status"}),
-		EthAlternativeMempoolEvents: prometheus.NewCounterVec(
-			prometheus.CounterOpts{Name: "test_alt_mempool_events_total"}, []string{"action"}),
-	}
+	m := newReconcileTestMetrics()
+	m.EthAlternativeSendTx = prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "test_alt_sendtx_total"}, []string{"provider_host", "status", "reason"})
+	m.EthAlternativeSendTxDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{Name: "test_alt_sendtx_duration_seconds", Buckets: []float64{1}}, []string{"provider_host", "status"})
+	return m
 }
 
 // gatherMetric returns the single sample of c whose labels match want, or nil when that series was
@@ -90,7 +90,7 @@ func TestAlternativeSendTxProviderObserveSendTxAccepted(t *testing.T) {
 	m := newSendTxMetrics()
 	provider := &AlternativeSendTxProvider{metrics: m}
 
-	provider.observeSendTx("https://relay.example.com/v1/SECRETKEY", 250*time.Millisecond, nil)
+	provider.observeSendTx(providerLabel("https://relay.example.com/v1/SECRETKEY"), 250*time.Millisecond, nil)
 
 	accepted := gatherMetric(t, m.EthAlternativeSendTx, map[string]string{"provider_host": "relay.example.com", "status": bchain.SendTxStatusSuccess, "reason": bchain.ReasonOK})
 	if accepted == nil || accepted.GetCounter().GetValue() != 1 {

@@ -104,22 +104,23 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	var retErr error
 	var acceptedURL string
 
-	// decoded once for the log lines - a send is the only moment Blockbook sees the sender and
-	// nonce of a private transaction, and both are what a later "my tx vanished" or nonce-gap
-	// report has to be reconciled against
-	tx := describeRawTx(hex)
+	// decoded once for the log lines and for registerSuccessfulSend below - a send is the only
+	// moment Blockbook sees the sender and nonce of a private transaction, and both are what a
+	// later "my tx vanished" or nonce-gap report has to be reconciled against
+	decoded := decodeRawTx(hex)
 
 	for i := range p.urls {
+		host := providerLabel(p.urls[i])
 		start := time.Now()
 		r, err := p.callHttpStringResult(p.urls[i], "eth_sendRawTransaction", hex)
 		duration := time.Since(start)
-		p.observeSendTx(p.urls[i], duration, err)
+		p.observeSendTx(host, duration, err)
 		if err != nil {
 			// not terminal on its own - a later provider may still accept the transaction, and the
 			// all-rejected case is logged as an error below
-			glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %v", i+1, len(p.urls), providerLabel(p.urls[i]), tx, duration.Round(time.Millisecond), err)
+			glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %v", i+1, len(p.urls), host, decoded, duration.Round(time.Millisecond), err)
 		} else {
-			glog.Infof("eth_sendRawTransaction to provider %d/%d %s accepted %s as txid %s in %v", i+1, len(p.urls), providerLabel(p.urls[i]), tx, r, duration.Round(time.Millisecond))
+			glog.Infof("eth_sendRawTransaction to provider %d/%d %s accepted %s as txid %s in %v", i+1, len(p.urls), host, decoded, r, duration.Round(time.Millisecond))
 		}
 		if err == nil && acceptedURL == "" {
 			acceptedURL = p.urls[i]
@@ -131,20 +132,17 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		}
 	}
 
+	// keyed on acceptedURL rather than retErr, so the follow-up work does not silently depend on
+	// callHttpStringResult never returning an empty result without an error. With nothing accepted
+	// there is no send to register and no txid to fetch back - the lookup would query the zero
+	// hash and log a confusing not-found error.
 	if acceptedURL == "" {
-		glog.Errorf("eth_sendRawTransaction rejected by all %d alternative providers, %s: %v", len(p.urls), tx, retErr)
+		glog.Errorf("eth_sendRawTransaction rejected by all %d alternative providers, %s: %v", len(p.urls), decoded, retErr)
+		return txid, retErr
 	}
 
-	var gen uint64
-	// keyed on acceptedURL rather than retErr, so registration does not silently depend on
-	// callHttpStringResult never returning an empty result without an error
-	if acceptedURL != "" {
-		gen = p.registerSuccessfulSend(hex, acceptedURL)
-	}
-
-	// fetch back only when some provider accepted the send; with txid empty the
-	// lookup would query the zero hash and log a confusing not-found error
-	if p.onlyAlternative && p.fetchMempoolTx && acceptedURL != "" {
+	gen := p.registerSuccessfulSend(decoded, acceptedURL)
+	if p.onlyAlternative && p.fetchMempoolTx {
 		p.handleMempoolTransaction(txid, gen)
 	}
 
@@ -172,24 +170,32 @@ func providerLabels(rawURLs []string) []string {
 	return labels
 }
 
-// describeRawTx renders the sender and nonce of a raw transaction for a log line. Failures are
-// rendered rather than returned - this only feeds logging and must never change a send's outcome.
-func describeRawTx(rawTxHex string) string {
-	tx, sender, err := decodeRawTx(rawTxHex)
-	if tx == nil {
-		return fmt.Sprintf("undecodable tx (%v)", err)
+// decodedTx is a raw transaction decoded once per send. Recovering the sender costs an elliptic
+// curve operation, by far the most expensive step of a broadcast outside the network call itself,
+// so the value is decoded at the top of a send and reused by every consumer below it.
+type decodedTx struct {
+	tx     *types.Transaction
+	sender ethcommon.Address
+	err    error
+}
+
+// String renders the sender and nonce for a log line. Failures are rendered rather than returned -
+// this only feeds logging and must never change a send's outcome.
+func (d decodedTx) String() string {
+	if d.tx == nil {
+		return fmt.Sprintf("undecodable tx (%v)", d.err)
 	}
-	if err != nil {
-		return fmt.Sprintf("tx nonce %d with unrecoverable sender (%v)", tx.Nonce(), err)
+	if d.err != nil {
+		return fmt.Sprintf("tx nonce %d with unrecoverable sender (%v)", d.tx.Nonce(), d.err)
 	}
-	return fmt.Sprintf("tx from %s nonce %d", sender.Hex(), tx.Nonce())
+	return fmt.Sprintf("tx from %s nonce %d", d.sender.Hex(), d.tx.Nonce())
 }
 
 // observeSendTx records the outcome and latency of one provider's eth_sendRawTransaction call.
 // Per-provider is the granularity that matters: a broadcast succeeds if any provider accepts, so
 // a single provider degrading (timeouts, rate limits) stays invisible in the overall send rate
 // until it is the last one left.
-func (p *AlternativeSendTxProvider) observeSendTx(rawURL string, duration time.Duration, err error) {
+func (p *AlternativeSendTxProvider) observeSendTx(host string, duration time.Duration, err error) {
 	if p.metrics == nil {
 		return
 	}
@@ -197,7 +203,6 @@ func (p *AlternativeSendTxProvider) observeSendTx(rawURL string, duration time.D
 	// name (infura, 1inch), while these providers are configured as a list of URLs and a host is
 	// the only stable identity they have - two value domains must not share a label name
 	status := bchain.SendTxStatus(err)
-	host := providerLabel(rawURL)
 	if p.metrics.EthAlternativeSendTx != nil {
 		p.metrics.EthAlternativeSendTx.With(common.Labels{"provider_host": host, "status": status, "reason": bchain.ClassifySendTxError(err)}).Inc()
 	}
@@ -207,18 +212,15 @@ func (p *AlternativeSendTxProvider) observeSendTx(rawURL string, duration time.D
 }
 
 // decodeRawTx unmarshals a raw transaction hex and recovers its sender. The chain id needed to
-// derive the sender is taken from the transaction itself. A decoded transaction is returned even
-// when the sender cannot be recovered, so a caller that only logs can still report its nonce.
-func decodeRawTx(rawTxHex string) (*types.Transaction, ethcommon.Address, error) {
+// derive the sender is taken from the transaction itself. A decoded transaction is kept even when
+// the sender cannot be recovered, so a caller that only logs can still report its nonce.
+func decodeRawTx(rawTxHex string) decodedTx {
 	var tx types.Transaction
 	if err := tx.UnmarshalBinary(ethcommon.FromHex(rawTxHex)); err != nil {
-		return nil, ethcommon.Address{}, err
+		return decodedTx{err: err}
 	}
 	sender, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), &tx)
-	if err != nil {
-		return &tx, ethcommon.Address{}, err
-	}
-	return &tx, sender, nil
+	return decodedTx{tx: &tx, sender: sender, err: err}
 }
 
 // registerSuccessfulSend records the sender of a transaction accepted by an alternative
@@ -230,12 +232,12 @@ func decodeRawTx(rawTxHex string) (*types.Transaction, ethcommon.Address, error)
 // It returns the send generation assigned to this submission (0 when the sender cannot be
 // decoded); the caller must carry that exact value to the cache entry it creates for the
 // transaction, so that releaseRecentSender can order evictions against later sends.
-func (p *AlternativeSendTxProvider) registerSuccessfulSend(rawTxHex string, acceptedURL string) uint64 {
-	_, sender, err := decodeRawTx(rawTxHex)
-	if err != nil {
-		glog.Warningf("cannot decode sender of transaction sent to alternative provider: %v", err)
+func (p *AlternativeSendTxProvider) registerSuccessfulSend(decoded decodedTx, acceptedURL string) uint64 {
+	if decoded.err != nil {
+		glog.Warningf("cannot decode sender of transaction sent to alternative provider: %v", decoded.err)
 		return 0
 	}
+	sender := decoded.sender
 	now := time.Now()
 	p.recentSendersMux.Lock()
 	defer p.recentSendersMux.Unlock()

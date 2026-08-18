@@ -451,72 +451,27 @@ func newReconcileTestMetrics() *common.Metrics {
 	}
 }
 
-// The readers below register a collector in a throwaway registry and gather it, so a test can read
-// metric values without pulling in the prometheus/testutil dependency (and its transitive modules).
+// The readers below narrow gatherMetric (alternativesendtx_metrics_test.go) to the shapes the
+// reconcile tests assert on, so a test can read metric values without pulling in the
+// prometheus/testutil dependency (and its transitive modules). A series that was never touched
+// reads as zero, which is what these call sites assert against.
 
 // gaugeValue reads the current value of a single gauge.
 func gaugeValue(t *testing.T, g prometheus.Gauge) float64 {
 	t.Helper()
-	reg := prometheus.NewRegistry()
-	if err := reg.Register(g); err != nil {
-		t.Fatalf("register gauge: %v", err)
-	}
-	families, err := reg.Gather()
-	if err != nil {
-		t.Fatalf("gather gauge: %v", err)
-	}
-	for _, mf := range families {
-		for _, m := range mf.GetMetric() {
-			return m.GetGauge().GetValue()
-		}
-	}
-	return 0
+	return gatherMetric(t, g, nil).GetGauge().GetValue()
 }
 
-// counterVecValue reads the counter series carrying label=value, via a throwaway registry.
+// counterVecValue reads the counter series carrying label=value.
 func counterVecValue(t *testing.T, cv *prometheus.CounterVec, label, value string) float64 {
 	t.Helper()
-	reg := prometheus.NewRegistry()
-	if err := reg.Register(cv); err != nil {
-		t.Fatalf("register counter vec: %v", err)
-	}
-	families, err := reg.Gather()
-	if err != nil {
-		t.Fatalf("gather counter vec: %v", err)
-	}
-	for _, mf := range families {
-		for _, m := range mf.GetMetric() {
-			for _, lp := range m.GetLabel() {
-				if lp.GetName() == label && lp.GetValue() == value {
-					return m.GetCounter().GetValue()
-				}
-			}
-		}
-	}
-	return 0
+	return gatherMetric(t, cv, map[string]string{label: value}).GetCounter().GetValue()
 }
 
 // residenceSampleCount reports how many residence observations were recorded under action=action.
 func residenceSampleCount(t *testing.T, h *prometheus.HistogramVec, action string) uint64 {
 	t.Helper()
-	reg := prometheus.NewRegistry()
-	if err := reg.Register(h); err != nil {
-		t.Fatalf("register residence histogram: %v", err)
-	}
-	families, err := reg.Gather()
-	if err != nil {
-		t.Fatalf("gather residence histogram: %v", err)
-	}
-	for _, mf := range families {
-		for _, m := range mf.GetMetric() {
-			for _, lp := range m.GetLabel() {
-				if lp.GetName() == "action" && lp.GetValue() == action {
-					return m.GetHistogram().GetSampleCount()
-				}
-			}
-		}
-	}
-	return 0
+	return gatherMetric(t, h, map[string]string{"action": action}).GetHistogram().GetSampleCount()
 }
 
 // TestAlternativeSendTxProviderReconcileObservesMetrics asserts the reconcile flow feeds the two
