@@ -26,8 +26,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
-	"golang.org/x/crypto/sha3"
-	"golang.org/x/sync/singleflight"
 )
 
 // Network type specifies the type of ethereum network
