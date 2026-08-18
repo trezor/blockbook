@@ -245,7 +245,7 @@ metrics:
   eth_alternative_mempool_reconciliation_events_total:
     name: blockbook_eth_alternative_mempool_reconciliation_events_total
     type: counter_vec
-    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action - skipped_fresh and kept retain an entry for the next cycle, provider_error and provider_missing_pending keep an unconfirmed entry pending retry, and mined, nonce_superseded, provider_missing, timeout (from the reconcile loop or a read-path expiry) and rbf_replaced (fee replacement) remove it
+    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action - fetchback_cached, fetchback_missing and fetchback_error are the post-send fetch-back that puts a just-broadcast tx into the cache (a missing or erroring fetch-back means the tx is not surfaced as pending at all), skipped_fresh and kept retain an entry for the next cycle, provider_error and provider_missing_pending keep an unconfirmed entry pending retry, and mined, nonce_superseded, provider_missing, timeout (from the reconcile loop or a read-path expiry) and rbf_replaced (fee replacement) remove it
     labels: [action]
   eth_alternative_mempool_tx_residence_seconds:
     name: blockbook_eth_alternative_mempool_tx_residence_seconds
@@ -257,6 +257,27 @@ metrics:
     name: blockbook_eth_alternative_mempool_cache_size
     type: gauge
     help: Transactions currently held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle
+  sendtx_requests_total:
+    name: blockbook_sendtx_requests_total
+    type: counter_vec
+    help: Transactions submitted by clients through any API (websocket, REST, explorer form), labeled by result and, for failures, by the class of rejection. Caller-side classes (underpriced, nonce_too_low, insufficient_funds, already_known) mean the transaction was refused on its own merits and no action is needed on the Blockbook side, while rate_limited, timeout and unavailable mean the send never got a verdict from the backend or provider and are the classes worth alerting on. A rising share of "other" is the signal to extend the classifier, not an incident
+    labels: [result, reason]
+  eth_sendtx_path_total:
+    name: blockbook_eth_sendtx_path_total
+    type: counter_vec
+    help: EVM send-transaction attempts by the path that served them and by result - alternative (private relay, the only path when <COIN>_ALTERNATIVE_SENDTX_ONLY is true), primary (public RPC, either no alternative provider configured or the client asked to skip it) or primary_fallback (every alternative provider rejected and the public RPC was tried instead). Any primary_fallback traffic on a chain meant to broadcast privately means transactions are leaking to the public mempool
+    labels: [path, result]
+  eth_alternative_sendtx_total:
+    name: blockbook_eth_alternative_sendtx_total
+    type: counter_vec
+    help: eth_sendRawTransaction calls to individual alternative providers, labeled by provider host, result and rejection class. A broadcast succeeds if ANY configured provider accepts it, so errors here are not failed sends on their own - compare against eth_sendtx_path_total to tell a degraded provider from a failed broadcast
+    labels: [provider, result, reason]
+  eth_alternative_sendtx_duration_seconds:
+    name: blockbook_eth_alternative_sendtx_duration_seconds
+    type: histogram_vec
+    help: Wall-clock duration of an eth_sendRawTransaction call to an alternative provider, labeled by provider host and result. Private relays sit on the wallet's critical path, so this is the user-visible cost of the alternative send path; errors piling up in the buckets at the configured <COIN>_RPC_TIMEOUT are timeouts rather than rejections
+    labels: [provider, result]
+    buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20, 30]
   eth_alternative_nonce_requests_total:
     name: blockbook_eth_alternative_nonce_requests_total
     type: counter_vec

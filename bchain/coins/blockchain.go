@@ -323,8 +323,27 @@ func (c *blockChainWithMetrics) LongTermFeeRate() (v *bchain.LongTermFeeRate, er
 }
 
 func (c *blockChainWithMetrics) SendRawTransaction(tx string, disableAlternativeRPC bool) (v string, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("SendRawTransaction", s, err) }(time.Now())
+	defer func(s time.Time) {
+		c.observeRPCLatency("SendRawTransaction", s, err)
+		c.observeSendTx(err)
+	}(time.Now())
 	return c.b.SendRawTransaction(tx, disableAlternativeRPC)
+}
+
+// observeSendTx counts a client broadcast by outcome and, when it failed, by the class of
+// rejection. This wrapper is the single point every API (websocket, REST, explorer form) and every
+// coin goes through, so it is where the overall send success rate is authoritative; the class is
+// what makes the failure rate actionable - a transaction refused on its own merits and a backend
+// that never answered are indistinguishable in a bare error ratio.
+func (c *blockChainWithMetrics) observeSendTx(err error) {
+	if c.m == nil || c.m.SendTxRequests == nil {
+		return
+	}
+	result := "success"
+	if err != nil {
+		result = "error"
+	}
+	c.m.SendTxRequests.With(common.Labels{"result": result, "reason": bchain.ClassifySendTxError(err)}).Inc()
 }
 
 func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {
