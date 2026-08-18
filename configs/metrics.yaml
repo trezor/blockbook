@@ -260,7 +260,7 @@ metrics:
   sendtx_requests_total:
     name: blockbook_sendtx_requests_total
     type: counter_vec
-    help: Transactions submitted by clients through any API (websocket, REST, explorer form), labeled by status and, for failures, by the class of rejection. Caller-side classes (underpriced, nonce_too_low, insufficient_funds, already_known) mean the transaction was refused on its own merits and no action is needed on the Blockbook side, while rate_limited, timeout and unavailable mean the send never got a verdict from the backend or provider and are the classes worth alerting on. A rising share of "other" is the signal to extend the classifier, not an incident
+    help: Transactions submitted by clients through any API (websocket, REST, explorer form), labeled by status and, for failures, by the class of rejection. Caller-side classes (underpriced, nonce_too_low, insufficient_funds, already_known) mean the transaction was refused on its own merits and no action is needed on the Blockbook side, while rate_limited, unauthorized, timeout and unavailable mean the send never got a verdict from the backend or provider and are the classes worth alerting on. A rising share of "other" is the signal to extend the classifier, not an incident
     labels: [status, reason]
   eth_sendtx_path_total:
     name: blockbook_eth_sendtx_path_total

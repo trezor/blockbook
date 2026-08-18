@@ -1,10 +1,14 @@
 package bchain
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Reason labels for a transaction broadcast outcome. The caller-side classes describe a
-// transaction refused on its own merits, the backend-side ones (rate_limited, timeout,
-// unavailable) mean the send never got a verdict and are the ones an operator should alert on.
+// transaction refused on its own merits, the backend-side ones (rate_limited, unauthorized,
+// timeout, unavailable) mean the send never got a verdict and are the ones an operator should
+// alert on.
 const (
 	ReasonOK                     = "ok"
 	ReasonAlreadyKnown           = "already_known"
@@ -21,6 +25,7 @@ const (
 	ReasonNonFinal               = "non_final"
 	ReasonInvalidTransaction     = "invalid_transaction"
 	ReasonRateLimited            = "rate_limited"
+	ReasonUnauthorized           = "unauthorized"
 	ReasonTimeout                = "timeout"
 	ReasonUnavailable            = "unavailable"
 	ReasonOther                  = "other"
@@ -69,9 +74,14 @@ var sendTxErrorClasses = []struct {
 	{"oversized data", ReasonInvalidTransaction},
 	{"invalid sender", ReasonInvalidTransaction},
 	{"transaction type not supported", ReasonInvalidTransaction},
-	{"rlp", ReasonInvalidTransaction},
+	// anchored on the colon geth's rlp errors always carry: a bare "rlp" is short enough to hit a
+	// provider URL inside the message, which would report every outage of that deployment as a
+	// caller-side rejection
+	{"rlp: ", ReasonInvalidTransaction},
 	{"invalid transaction", ReasonInvalidTransaction},
 	// the backend or provider itself is the problem - these are the classes worth alerting on
+	{"unauthorized", ReasonUnauthorized},
+	{"forbidden", ReasonUnauthorized},
 	{"too many requests", ReasonRateLimited},
 	{"rate limit", ReasonRateLimited},
 	{"context deadline exceeded", ReasonTimeout},
@@ -83,6 +93,36 @@ var sendTxErrorClasses = []struct {
 	{"eof", ReasonUnavailable},
 	{"bad gateway", ReasonUnavailable},
 	{"service unavailable", ReasonUnavailable},
+	{"internal server error", ReasonUnavailable},
+}
+
+// httpStatusReason classifies a failure that carries nothing but an HTTP status. geth renders
+// rpc.HTTPError as "<code> <text>[: <body>]", so a revoked key or a failing provider arrives with
+// no backend wording to match on, and a proxy in front of the provider is free to replace the
+// standard reason phrase the table above looks for. Without this such a failure counts as "other",
+// which the dashboards read as a gap in the classifier rather than as the broadcast outage it is.
+// Codes whose meaning depends on the request (400, 404) are left to "other" on purpose.
+func httpStatusReason(msg string) (string, bool) {
+	// the status is the start of the message, which keeps a number inside a rejection body from
+	// being read as one
+	if len(msg) < 3 || (len(msg) > 3 && msg[3] != ' ' && msg[3] != ':') {
+		return "", false
+	}
+	code, err := strconv.Atoi(msg[:3])
+	if err != nil || code < 100 || code > 599 {
+		return "", false
+	}
+	switch {
+	case code == 401 || code == 402 || code == 403 || code == 407:
+		return ReasonUnauthorized, true
+	case code == 408 || code == 504 || code == 524: // 524 is Cloudflare's origin timeout
+		return ReasonTimeout, true
+	case code == 429:
+		return ReasonRateLimited, true
+	case code >= 500:
+		return ReasonUnavailable, true
+	}
+	return "", false
 }
 
 // SendTxStatus is the status label of a broadcast outcome.
@@ -96,8 +136,9 @@ func SendTxStatus(err error) string {
 // ClassifySendTxError reduces a backend rejection to a bounded metric label. It exists because a
 // bare success/failure ratio cannot tell a wallet-side mistake (underpriced, nonce_too_low) from
 // backend trouble (timeout, rate_limited) - only the class distinguishes the two, and they call
-// for opposite responses. Unmatched messages fall into "other", which is the signal to extend
-// the table rather than to alert.
+// for opposite responses. A message carrying only an HTTP status is classified from the status
+// itself, so a dead provider cannot hide in "other". Everything still unmatched falls into
+// "other", which is the signal to extend the table rather than to alert.
 func ClassifySendTxError(err error) string {
 	if err == nil {
 		return ReasonOK
@@ -107,6 +148,11 @@ func ClassifySendTxError(err error) string {
 		if strings.Contains(msg, c.fragment) {
 			return c.class
 		}
+	}
+	// after the table, so the backend's own wording wins: a 400 whose body says "nonce too low"
+	// is a caller-side rejection, not a provider failure
+	if class, found := httpStatusReason(msg); found {
+		return class
 	}
 	return ReasonOther
 }

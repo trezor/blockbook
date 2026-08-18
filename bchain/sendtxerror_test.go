@@ -27,9 +27,23 @@ func TestClassifySendTxError(t *testing.T) {
 		{"bitcoind missing inputs", errors.New("-25: bad-txns-inputs-missingorspent"), ReasonMissingInputs},
 		{"bitcoind mempool conflict", errors.New("-26: txn-mempool-conflict"), ReasonConflict},
 		{"rlp decode failure", errors.New("rlp: expected input list for types.LegacyTx"), ReasonInvalidTransaction},
+		// the provider URL travels inside the message, so a fragment must not match a path in it
+		{"provider timeout with rlp in the URL", errors.New(`Post "https://relay.example.com/rlp-fast/KEY": context deadline exceeded`), ReasonTimeout},
 		{"provider rate limit", errors.New("429 Too Many Requests: rate exceeded"), ReasonRateLimited},
 		{"rpc timeout", errors.New("context deadline exceeded"), ReasonTimeout},
 		{"provider down", errors.New("dial tcp 127.0.0.1:1: connect: connection refused"), ReasonUnavailable},
+		// a failure carrying only an HTTP status is an outage, not a classifier gap
+		{"revoked provider key", errors.New(`403 Forbidden: {"error":"invalid api key"}`), ReasonUnauthorized},
+		{"provider rejects the credentials", errors.New("401 Unauthorized"), ReasonUnauthorized},
+		{"provider internal error", errors.New("500 Internal Server Error: upstream failure"), ReasonUnavailable},
+		// a proxy is free to replace the standard reason phrase, so the code alone has to carry it
+		{"nonstandard status text", errors.New("503 Backend Fetch Failed"), ReasonUnavailable},
+		{"cloudflare origin timeout", errors.New("524 origin took too long"), ReasonTimeout},
+		// the backend's own wording outranks the transport status
+		{"status with a caller-side body", errors.New("400 Bad Request: nonce too low"), ReasonNonceTooLow},
+		// request-dependent statuses stay unclassified on purpose
+		{"not found stays unclassified", errors.New("404 Not Found"), ReasonOther},
+		{"bitcoind error code is not a status", errors.New("-26: bad-txns-nonstandard"), ReasonOther},
 		{"unknown message falls through", errors.New("something nobody has classified yet"), ReasonOther},
 	}
 	for _, tt := range tests {
