@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -117,7 +118,7 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		if err != nil {
 			// not terminal on its own - a later provider may still accept the transaction, and the
 			// all-rejected case is logged as an error below
-			glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %v", i+1, len(p.urls), providerLabel(p.urls[i]), tx, duration.Round(time.Millisecond), err)
+			glog.Warningf("eth_sendRawTransaction to provider %d/%d %s rejected %s after %v: %s", i+1, len(p.urls), providerLabel(p.urls[i]), tx, duration.Round(time.Millisecond), scrubProviderURLs(err.Error()))
 		} else {
 			glog.Infof("eth_sendRawTransaction to provider %d/%d %s accepted %s as txid %s in %v", i+1, len(p.urls), providerLabel(p.urls[i]), tx, r, duration.Round(time.Millisecond))
 		}
@@ -132,7 +133,9 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 	}
 
 	if acceptedURL == "" {
-		glog.Errorf("eth_sendRawTransaction rejected by all %d alternative providers, %s: %v", len(p.urls), tx, retErr)
+		// scrubbed again at the point of printing: provider calls redact their own errors, but this
+		// line must not depend on every future error path having done so
+		glog.Errorf("eth_sendRawTransaction rejected by all %d alternative providers, %s: %s", len(p.urls), tx, scrubProviderURLs(retErr.Error()))
 	}
 
 	var gen uint64
@@ -161,6 +164,33 @@ func providerLabel(rawURL string) string {
 		return "unknown"
 	}
 	return u.Host
+}
+
+// providerURLPattern matches an http(s) URL anywhere in a message. A quote or whitespace ends the
+// match, which is exactly the shape the http client produces ("Post \"<url>\": dial tcp ...").
+var providerURLPattern = regexp.MustCompile(`(?i)https?://[^\s"'` + "`" + `]+`)
+
+// scrubProviderURLs replaces every URL in a message with its host. Provider URLs routinely carry an
+// API key in the path or query and reach error messages two ways: our own annotations, and the http
+// client's *url.Error on any dial failure or timeout - which is precisely the class of failure the
+// send log lines exist to surface. Everything logged or returned out of a provider call goes
+// through this, because an error message is also what the API hands back to the client.
+func scrubProviderURLs(s string) string {
+	return providerURLPattern.ReplaceAllStringFunc(s, providerLabel)
+}
+
+// redactProviderURLs returns err with every URL in its message replaced by that URL's host. The
+// error is replaced rather than wrapped - its message is the part that leaks - so it must not be
+// used on sentinel errors callers compare against.
+func redactProviderURLs(err error) error {
+	if err == nil {
+		return nil
+	}
+	scrubbed := scrubProviderURLs(err.Error())
+	if scrubbed == err.Error() {
+		return err
+	}
+	return errors.New(scrubbed)
 }
 
 // providerLabels maps providerLabel over a list of provider URLs.
@@ -721,15 +751,15 @@ func (p *AlternativeSendTxProvider) callHttpRawResult(url string, rpcMethod stri
 	defer cancel()
 	client, err := rpc.DialContext(ctx, url)
 	if err != nil {
-		return nil, err
+		return nil, redactProviderURLs(err)
 	}
 	defer client.Close()
 	var raw json.RawMessage
 	err = client.CallContext(ctx, &raw, rpcMethod, args...)
 	if err != nil {
-		return nil, err
+		return nil, redactProviderURLs(err)
 	} else if len(raw) == 0 {
-		return nil, errors.New(url + " " + rpcMethod + " : failed")
+		return nil, errors.New(providerLabel(url) + " " + rpcMethod + " : failed")
 	}
 	return raw, nil
 }
@@ -742,10 +772,10 @@ func (p *AlternativeSendTxProvider) callHttpStringResult(url string, rpcMethod s
 	}
 	var result string
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return "", errors.Annotatef(err, "%s %s raw result %v", url, rpcMethod, raw)
+		return "", errors.Annotatef(err, "%s %s raw result %v", providerLabel(url), rpcMethod, raw)
 	}
 	if result == "" {
-		return "", errors.New(url + " " + rpcMethod + " : failed, empty result")
+		return "", errors.New(providerLabel(url) + " " + rpcMethod + " : failed, empty result")
 	}
 	return result, nil
 }
@@ -789,7 +819,7 @@ func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address, withConfir
 	defer cancel()
 	client, err := rpc.DialContext(ctx, url)
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, false, redactProviderURLs(err)
 	}
 	defer client.Close()
 	var pendingHex, confirmedHex string
@@ -798,10 +828,10 @@ func (p *AlternativeSendTxProvider) getNonces(addr ethcommon.Address, withConfir
 		{Method: "eth_getTransactionCount", Args: []interface{}{addr, "latest"}, Result: &confirmedHex},
 	}
 	if err := client.BatchCallContext(ctx, batch); err != nil {
-		return 0, 0, false, err
+		return 0, 0, false, redactProviderURLs(err)
 	}
 	if batch[0].Error != nil {
-		return 0, 0, false, batch[0].Error
+		return 0, 0, false, redactProviderURLs(batch[0].Error)
 	}
 	pending, err := hexutil.DecodeUint64(pendingHex)
 	if err != nil {

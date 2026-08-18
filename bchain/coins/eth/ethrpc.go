@@ -2237,7 +2237,7 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	if path == "primary_fallback" {
 		// the transaction is about to go to the public mempool although the deployment prefers a
 		// private relay - this switch of destination is otherwise invisible
-		glog.Warningf("eth_sendRawTransaction falling back to the primary RPC, %s, alternative providers error: %v", tx, retErr)
+		glog.Warningf("eth_sendRawTransaction falling back to the primary RPC, %s, alternative providers error: %s", tx, scrubProviderURLs(retErr.Error()))
 	}
 
 	start := time.Now()
@@ -2245,7 +2245,9 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	duration := time.Since(start).Round(time.Millisecond)
 	b.observeSendTxPath(path, retErr)
 	if retErr != nil {
-		glog.Errorf("eth_sendRawTransaction to the primary RPC rejected %s after %v: %v", tx, duration, retErr)
+		// the primary RPC url can carry an API key too, and a dial failure or timeout puts it in
+		// the error message
+		glog.Errorf("eth_sendRawTransaction to the primary RPC rejected %s after %v: %s", tx, duration, scrubProviderURLs(retErr.Error()))
 		return txid, retErr
 	}
 	glog.Infof("eth_sendRawTransaction to the primary RPC accepted %s as txid %s in %v", tx, txid, duration)
