@@ -339,11 +339,7 @@ func (c *blockChainWithMetrics) observeSendTx(err error) {
 	if c.m == nil || c.m.SendTxRequests == nil {
 		return
 	}
-	result := "success"
-	if err != nil {
-		result = "error"
-	}
-	c.m.SendTxRequests.With(common.Labels{"result": result, "reason": bchain.ClassifySendTxError(err)}).Inc()
+	c.m.SendTxRequests.With(common.Labels{"status": bchain.SendTxStatus(err), "reason": bchain.ClassifySendTxError(err)}).Inc()
 }
 
 func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {

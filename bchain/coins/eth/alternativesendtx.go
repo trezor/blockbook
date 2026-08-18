@@ -193,16 +193,16 @@ func (p *AlternativeSendTxProvider) observeSendTx(rawURL string, duration time.D
 	if p.metrics == nil {
 		return
 	}
-	result := "success"
-	if err != nil {
-		result = "error"
-	}
-	provider := providerLabel(rawURL)
+	// provider_host, not provider: the registry's provider label carries a symbolic implementation
+	// name (infura, 1inch), while these providers are configured as a list of URLs and a host is
+	// the only stable identity they have - two value domains must not share a label name
+	status := bchain.SendTxStatus(err)
+	host := providerLabel(rawURL)
 	if p.metrics.EthAlternativeSendTx != nil {
-		p.metrics.EthAlternativeSendTx.With(common.Labels{"provider": provider, "result": result, "reason": bchain.ClassifySendTxError(err)}).Inc()
+		p.metrics.EthAlternativeSendTx.With(common.Labels{"provider_host": host, "status": status, "reason": bchain.ClassifySendTxError(err)}).Inc()
 	}
 	if p.metrics.EthAlternativeSendTxDuration != nil {
-		p.metrics.EthAlternativeSendTxDuration.With(common.Labels{"provider": provider, "result": result}).Observe(duration.Seconds())
+		p.metrics.EthAlternativeSendTxDuration.With(common.Labels{"provider_host": host, "status": status}).Observe(duration.Seconds())
 	}
 }
 

@@ -78,6 +78,21 @@ const (
 	ReasonOther                  = "other"
 )
 
+// Status labels for a transaction broadcast outcome. success/failure is the domain the rest of the
+// metric registry's status labels use.
+const (
+	SendTxStatusSuccess = "success"
+	SendTxStatusFailure = "failure"
+)
+
+// SendTxStatus is the status label of a broadcast outcome.
+func SendTxStatus(err error) string {
+	if err != nil {
+		return SendTxStatusFailure
+	}
+	return SendTxStatusSuccess
+}
+
 // ClassifySendTxError reduces a backend rejection to a bounded metric label. It exists because a
 // bare success/failure ratio cannot tell a wallet-side mistake (underpriced, nonce_too_low) from
 // backend trouble (timeout, rate_limited) - only the class distinguishes the two, and they call

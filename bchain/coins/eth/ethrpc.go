@@ -2258,16 +2258,12 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 
 // observeSendTxPath records which broadcast path served a send and how it ended. The path is the
 // piece the coin-agnostic send metric cannot see, and it is what separates "private broadcast
-// working" from "transactions quietly leaking to the public mempool" (path=primary_fallback).
+// working" from "transactions quietly leaking to the public mempool" (send_path=primary_fallback).
 func (b *EthereumRPC) observeSendTxPath(path string, err error) {
 	if b.metrics == nil || b.metrics.EthSendTxPath == nil {
 		return
 	}
-	result := "success"
-	if err != nil {
-		result = "error"
-	}
-	b.metrics.EthSendTxPath.With(common.Labels{"path": path, "result": result}).Inc()
+	b.metrics.EthSendTxPath.With(common.Labels{"send_path": path, "status": bchain.SendTxStatus(err)}).Inc()
 }
 
 // EthereumTypeGetRawTransaction gets raw transaction in hex format

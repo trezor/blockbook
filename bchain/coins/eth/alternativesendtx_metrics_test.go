@@ -14,9 +14,9 @@ import (
 func newSendTxMetrics() *common.Metrics {
 	return &common.Metrics{
 		EthAlternativeSendTx: prometheus.NewCounterVec(
-			prometheus.CounterOpts{Name: "test_alt_sendtx_total"}, []string{"provider", "result", "reason"}),
+			prometheus.CounterOpts{Name: "test_alt_sendtx_total"}, []string{"provider_host", "status", "reason"}),
 		EthAlternativeSendTxDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{Name: "test_alt_sendtx_duration_seconds", Buckets: []float64{1}}, []string{"provider", "result"}),
+			prometheus.HistogramOpts{Name: "test_alt_sendtx_duration_seconds", Buckets: []float64{1}}, []string{"provider_host", "status"}),
 		EthAlternativeMempoolEvents: prometheus.NewCounterVec(
 			prometheus.CounterOpts{Name: "test_alt_mempool_events_total"}, []string{"action"}),
 	}
@@ -74,11 +74,11 @@ func TestAlternativeSendTxProviderSendObservesProvider(t *testing.T) {
 
 	// the reason label is not pinned here - the dial error text is platform dependent, and the
 	// mapping from message to class is asserted in bchain.TestClassifySendTxError
-	failed := gatherMetric(t, m.EthAlternativeSendTx, map[string]string{"provider": "127.0.0.1:1", "result": "error"})
+	failed := gatherMetric(t, m.EthAlternativeSendTx, map[string]string{"provider_host": "127.0.0.1:1", "status": bchain.SendTxStatusFailure})
 	if failed == nil || failed.GetCounter().GetValue() != 1 {
 		t.Errorf("unreachable provider counter = %v, want 1", failed)
 	}
-	timed := gatherMetric(t, m.EthAlternativeSendTxDuration, map[string]string{"provider": "127.0.0.1:1", "result": "error"})
+	timed := gatherMetric(t, m.EthAlternativeSendTxDuration, map[string]string{"provider_host": "127.0.0.1:1", "status": bchain.SendTxStatusFailure})
 	if timed == nil || timed.GetHistogram().GetSampleCount() != 1 {
 		t.Errorf("unreachable provider duration samples = %v, want 1 - a timing out provider is exactly what the histogram must show", timed)
 	}
@@ -92,11 +92,11 @@ func TestAlternativeSendTxProviderObserveSendTxAccepted(t *testing.T) {
 
 	provider.observeSendTx("https://relay.example.com/v1/SECRETKEY", 250*time.Millisecond, nil)
 
-	accepted := gatherMetric(t, m.EthAlternativeSendTx, map[string]string{"provider": "relay.example.com", "result": "success", "reason": bchain.ReasonOK})
+	accepted := gatherMetric(t, m.EthAlternativeSendTx, map[string]string{"provider_host": "relay.example.com", "status": bchain.SendTxStatusSuccess, "reason": bchain.ReasonOK})
 	if accepted == nil || accepted.GetCounter().GetValue() != 1 {
 		t.Errorf("accepted send counter = %v, want 1", accepted)
 	}
-	timed := gatherMetric(t, m.EthAlternativeSendTxDuration, map[string]string{"provider": "relay.example.com", "result": "success"})
+	timed := gatherMetric(t, m.EthAlternativeSendTxDuration, map[string]string{"provider_host": "relay.example.com", "status": bchain.SendTxStatusSuccess})
 	if timed == nil || timed.GetHistogram().GetSampleCount() != 1 {
 		t.Errorf("accepted send duration samples = %v, want 1", timed)
 	}

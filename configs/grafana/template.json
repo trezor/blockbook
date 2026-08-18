@@ -1106,7 +1106,7 @@
           "editorMode": "code",
           "range": true,
           "refId": "A",
-          "x-query-key": "by_result"
+          "x-query-key": "by_status"
         },
         {
           "editorMode": "code",
