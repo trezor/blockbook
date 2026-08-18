@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -137,5 +138,37 @@ func TestProviderLabel(t *testing.T) {
 		if got := providerLabel(tt.url); got != tt.want {
 			t.Errorf("providerLabel(%q) = %q, want %q", tt.url, got, tt.want)
 		}
+	}
+}
+
+// TestAlternativeSendTxProviderErrorRedactedForClients pins the real error shape a failing provider
+// call produces against the redaction the API applies before answering a client. The URL enters the
+// message from the http client itself (Post "<url>": dial tcp ...), so a key in a provider URL is
+// only kept out of REST/WebSocket responses for as long as that shape stays redactable - this test
+// fails if either side drifts. The unredacted error is what reaches the logs, by design.
+func TestAlternativeSendTxProviderErrorRedactedForClients(t *testing.T) {
+	const key = "SECRET_API_KEY_ABCDEF"
+	rawTx, _ := signedTestTx(t)
+	provider := &AlternativeSendTxProvider{
+		urls:              []string{"http://127.0.0.1:1/v3/" + key},
+		mempoolTxsTimeout: time.Hour,
+		rpcTimeout:        time.Second,
+		metrics:           newSendTxMetrics(),
+	}
+
+	_, err := provider.SendRawTransaction(rawTx)
+	if err == nil {
+		t.Fatal("expected error from unreachable provider")
+	}
+	if !strings.Contains(err.Error(), key) {
+		t.Skipf("provider error carries no url on this platform (%v), nothing to redact", err)
+	}
+
+	redacted := common.RedactURLs(err.Error())
+	if strings.Contains(redacted, key) {
+		t.Errorf("api key survives redaction, would be served to clients: %s", redacted)
+	}
+	if !strings.Contains(redacted, "127.0.0.1:1") {
+		t.Errorf("provider host should survive redaction, got: %s", redacted)
 	}
 }

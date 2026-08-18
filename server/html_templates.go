@@ -114,10 +114,12 @@ func (s *htmlTemplates[TD]) jsonHandler(handler func(r *http.Request, apiVersion
 		data, err = handler(r, apiVersion)
 		if err != nil || data == nil {
 			if apiErr, ok := err.(*api.APIError); ok {
+				// the client sees this text on both branches, so it must not carry a backend URL
+				text := common.RedactURLs(apiErr.Error())
 				if apiErr.Public {
-					data = jsonError{apiErr.Error(), http.StatusBadRequest}
+					data = jsonError{text, http.StatusBadRequest}
 				} else {
-					data = jsonError{apiErr.Error(), http.StatusInternalServerError}
+					data = jsonError{text, http.StatusInternalServerError}
 				}
 			} else {
 				if err != nil {
@@ -125,9 +127,9 @@ func (s *htmlTemplates[TD]) jsonHandler(handler func(r *http.Request, apiVersion
 				}
 				if s.debug {
 					if data != nil {
-						data = jsonError{fmt.Sprintf("Internal server error: %v, data %+v", err, data), http.StatusInternalServerError}
+						data = jsonError{common.RedactURLs(fmt.Sprintf("Internal server error: %v, data %+v", err, data)), http.StatusInternalServerError}
 					} else {
-						data = jsonError{fmt.Sprintf("Internal server error: %v", err), http.StatusInternalServerError}
+						data = jsonError{common.RedactURLs(fmt.Sprintf("Internal server error: %v", err)), http.StatusInternalServerError}
 					}
 				} else {
 					data = jsonError{"Internal server error", http.StatusInternalServerError}
@@ -182,7 +184,7 @@ func (s *htmlTemplates[TD]) htmlTemplateHandler(handler func(w http.ResponseWrit
 		if err != nil || (data == nil && t != noTpl) {
 			t = errorInternalTpl
 			if apiErr, ok := err.(*api.APIError); ok {
-				data = s.newTemplateDataWithError(apiErr, r)
+				data = s.newTemplateDataWithError(api.RedactAPIError(apiErr), r)
 				if apiErr.Public {
 					t = errorTpl
 				}
@@ -191,7 +193,7 @@ func (s *htmlTemplates[TD]) htmlTemplateHandler(handler func(w http.ResponseWrit
 					glog.Error(handlerName, " error: ", err)
 				}
 				if s.debug {
-					data = s.newTemplateDataWithError(&api.APIError{Text: fmt.Sprintf("Internal server error: %v, data %+v", err, data)}, r)
+					data = s.newTemplateDataWithError(&api.APIError{Text: common.RedactURLs(fmt.Sprintf("Internal server error: %v, data %+v", err, data))}, r)
 				} else {
 					data = s.newTemplateDataWithError(&api.APIError{Text: "Internal server error"}, r)
 				}
