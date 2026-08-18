@@ -2,6 +2,37 @@ package bchain
 
 import "strings"
 
+// Reason labels for a transaction broadcast outcome. The caller-side classes describe a
+// transaction refused on its own merits, the backend-side ones (rate_limited, timeout,
+// unavailable) mean the send never got a verdict and are the ones an operator should alert on.
+const (
+	ReasonOK                     = "ok"
+	ReasonAlreadyKnown           = "already_known"
+	ReasonNonceTooLow            = "nonce_too_low"
+	ReasonNonceTooHigh           = "nonce_too_high"
+	ReasonUnderpriced            = "underpriced"
+	ReasonReplacementUnderpriced = "replacement_underpriced"
+	ReasonFeeCap                 = "fee_cap_exceeded"
+	ReasonInsufficientFunds      = "insufficient_funds"
+	ReasonGasLimit               = "gas_limit"
+	ReasonIntrinsicGas           = "intrinsic_gas_too_low"
+	ReasonMissingInputs          = "missing_inputs"
+	ReasonConflict               = "conflict"
+	ReasonNonFinal               = "non_final"
+	ReasonInvalidTransaction     = "invalid_transaction"
+	ReasonRateLimited            = "rate_limited"
+	ReasonTimeout                = "timeout"
+	ReasonUnavailable            = "unavailable"
+	ReasonOther                  = "other"
+)
+
+// Status labels for a transaction broadcast outcome. success/failure is the domain the rest of the
+// metric registry's status labels use.
+const (
+	SendTxStatusSuccess = "success"
+	SendTxStatusFailure = "failure"
+)
+
 // sendTxErrorClasses maps a fragment of a backend rejection message to the reason label reported
 // for a failed transaction broadcast. The table is deliberately backend-agnostic - EVM nodes,
 // private relays and the bitcoind family all reject with free-form strings, and the resulting
@@ -53,37 +84,6 @@ var sendTxErrorClasses = []struct {
 	{"bad gateway", ReasonUnavailable},
 	{"service unavailable", ReasonUnavailable},
 }
-
-// Reason labels for a transaction broadcast outcome. The caller-side classes describe a
-// transaction refused on its own merits, the backend-side ones (rate_limited, timeout,
-// unavailable) mean the send never got a verdict and are the ones an operator should alert on.
-const (
-	ReasonOK                     = "ok"
-	ReasonAlreadyKnown           = "already_known"
-	ReasonNonceTooLow            = "nonce_too_low"
-	ReasonNonceTooHigh           = "nonce_too_high"
-	ReasonUnderpriced            = "underpriced"
-	ReasonReplacementUnderpriced = "replacement_underpriced"
-	ReasonFeeCap                 = "fee_cap_exceeded"
-	ReasonInsufficientFunds      = "insufficient_funds"
-	ReasonGasLimit               = "gas_limit"
-	ReasonIntrinsicGas           = "intrinsic_gas_too_low"
-	ReasonMissingInputs          = "missing_inputs"
-	ReasonConflict               = "conflict"
-	ReasonNonFinal               = "non_final"
-	ReasonInvalidTransaction     = "invalid_transaction"
-	ReasonRateLimited            = "rate_limited"
-	ReasonTimeout                = "timeout"
-	ReasonUnavailable            = "unavailable"
-	ReasonOther                  = "other"
-)
-
-// Status labels for a transaction broadcast outcome. success/failure is the domain the rest of the
-// metric registry's status labels use.
-const (
-	SendTxStatusSuccess = "success"
-	SendTxStatusFailure = "failure"
-)
 
 // SendTxStatus is the status label of a broadcast outcome.
 func SendTxStatus(err error) string {
