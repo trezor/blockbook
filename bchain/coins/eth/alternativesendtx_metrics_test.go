@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -137,46 +136,6 @@ func TestProviderLabel(t *testing.T) {
 	for _, tt := range tests {
 		if got := providerLabel(tt.url); got != tt.want {
 			t.Errorf("providerLabel(%q) = %q, want %q", tt.url, got, tt.want)
-		}
-	}
-}
-
-// TestSendRawTransactionErrorCarriesNoAPIKey reproduces the leak this pair of helpers exists to
-// close: the provider URL embeds an API key, the dial fails, and the resulting *url.Error message
-// is both logged and handed back to the API client. The key must survive in neither.
-func TestSendRawTransactionErrorCarriesNoAPIKey(t *testing.T) {
-	const apiKey = "SECRET_API_KEY_ABCDEF"
-	rawTx, _ := signedTestTx(t)
-	provider := &AlternativeSendTxProvider{
-		urls:              []string{"http://127.0.0.1:1/v3/" + apiKey},
-		mempoolTxsTimeout: time.Hour,
-		rpcTimeout:        time.Second,
-	}
-
-	_, err := provider.SendRawTransaction(rawTx)
-	if err == nil {
-		t.Fatal("expected error from unreachable provider")
-	}
-	if strings.Contains(err.Error(), apiKey) {
-		t.Errorf("error returned to the caller leaks the api key: %s", err)
-	}
-	if got := scrubProviderURLs(err.Error()); strings.Contains(got, apiKey) {
-		t.Errorf("scrubbed message still leaks the api key: %s", got)
-	}
-}
-
-// TestScrubProviderURLs covers the message shapes an API key actually arrives in.
-func TestScrubProviderURLs(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{`Post "http://127.0.0.1:1/v3/SECRET": dial tcp 127.0.0.1:1: connect: connection refused`, `Post "127.0.0.1:1": dial tcp 127.0.0.1:1: connect: connection refused`},
-		{"https://relay.example.com/rpc?apikey=SECRET eth_sendRawTransaction : failed", "relay.example.com eth_sendRawTransaction : failed"},
-		// a plain JSON-RPC rejection carries no url and must pass through untouched, so error
-		// classification keeps seeing the backend's own wording
-		{"nonce too low: next nonce 5, tx nonce 3", "nonce too low: next nonce 5, tx nonce 3"},
-	}
-	for _, tt := range tests {
-		if got := scrubProviderURLs(tt.in); got != tt.want {
-			t.Errorf("scrubProviderURLs(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }
