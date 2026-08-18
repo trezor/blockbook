@@ -26,7 +26,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
-	"golang.org/x/sync/singleflight"
 )
 
 // Network type specifies the type of ethereum network
@@ -75,6 +74,7 @@ type Configuration struct {
 	RPCTimeout                        int    `json:"rpc_timeout"`
 	TraceTimeout                      string `json:"trace_timeout,omitempty"`
 	Erc20BatchSize                    int    `json:"erc20_batch_size,omitempty"`
+	Multicall3MaxCalls                int    `json:"multicall3_max_calls,omitempty"`
 	BlockAddressesToKeep              int    `json:"block_addresses_to_keep"`
 	HotAddressMinContracts            int    `json:"hot_address_min_contracts,omitempty"`
 	HotAddressLRUCacheSize            int    `json:"hot_address_lru_cache_size,omitempty"`
@@ -216,9 +216,11 @@ type EthereumRPC struct {
 	alternativeSendTxProvider *AlternativeSendTxProvider
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
+	// Multicall3AddressOverride replaces the canonical Multicall3 address for chains
+	// that deploy it at a non-canonical address (e.g. Tron). Set in code, not config.
+	Multicall3AddressOverride string
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
-	multicall3Probe   atomic.Int32
-	multicall3ProbeSF singleflight.Group
+	multicall3 multicall3Gate
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -333,17 +335,28 @@ func (b *EthereumRPC) observeEthCall(mode string, count int) {
 
 // ObserveChainDataFallback increments a metric for chain-data fallback paths.
 func (b *EthereumRPC) ObserveChainDataFallback(component, reason string) {
-	if b.metrics == nil || component == "" || reason == "" {
+	b.observeChainDataFallback(component, reason, 1)
+}
+
+// observeChainDataFallback adds count to the fallback metric (per-element, not just per-request).
+func (b *EthereumRPC) observeChainDataFallback(component, reason string, count int) {
+	if b.metrics == nil || component == "" || reason == "" || count <= 0 {
 		return
 	}
-	b.metrics.ChainDataFallbacks.With(common.Labels{"component": component, "reason": reason}).Inc()
+	b.metrics.ChainDataFallbacks.With(common.Labels{"component": component, "reason": reason}).Add(float64(count))
 }
 
 func (b *EthereumRPC) observeEthCallError(mode, errType string) {
-	if b.metrics == nil {
+	b.observeEthCallErrors(mode, errType, 1)
+}
+
+// observeEthCallErrors adds count at once; per-element loops tally locally and emit here, as
+// With() builds a label map and resolves the child counter on every call.
+func (b *EthereumRPC) observeEthCallErrors(mode, errType string, count int) {
+	if b.metrics == nil || count <= 0 {
 		return
 	}
-	b.metrics.EthCallErrors.With(common.Labels{"mode": mode, "type": errType}).Inc()
+	b.metrics.EthCallErrors.With(common.Labels{"mode": mode, "type": errType}).Add(float64(count))
 }
 
 func (b *EthereumRPC) observeEthCallBatch(size int) {
@@ -351,6 +364,15 @@ func (b *EthereumRPC) observeEthCallBatch(size int) {
 		return
 	}
 	b.metrics.EthCallBatchSize.Observe(float64(size))
+}
+
+// observeEthCallMulticallRequest counts one physical aggregate3 eth_call; the mode-labeled
+// counter reports per-sub-call volume.
+func (b *EthereumRPC) observeEthCallMulticallRequest() {
+	if b.metrics == nil {
+		return
+	}
+	b.metrics.EthCallMulticallRequests.Inc()
 }
 
 func (b *EthereumRPC) observeEthCallContractInfo(field string) {

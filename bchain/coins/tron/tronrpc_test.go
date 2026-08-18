@@ -35,6 +35,37 @@ func TestResolveTronHTTPURL_InvalidRPCURL(t *testing.T) {
 	require.Error(t, err)
 }
 
+// NewTronRPC sets Tron's non-canonical Multicall3 address on the embedded eth layer.
+func TestNewTronRPC_SetsMulticall3AddressOverride(t *testing.T) {
+	cfg := json.RawMessage(`{"coin_name":"Tron","averageBlockTimeMs":3000,"rpc_url":"http://127.0.0.1:8545/jsonrpc"}`)
+	bc, err := NewTronRPC(cfg, func(bchain.NotificationType) {})
+	require.NoError(t, err)
+	tronRPC := bc.(*TronRPC)
+	require.Equal(t, tronMulticall3Address, tronRPC.EthereumRPC.Multicall3AddressOverride)
+}
+
+func TestTronRPC_NormalizeMulticallCalls(t *testing.T) {
+	rpc := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{},
+		Parser:      NewTronParser(100, false),
+	}
+	calls := []bchain.EthereumMulticallCall{
+		{Target: "TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED", CallData: "0x1234", AllowFailure: true},
+		{Target: tronMulticall3Address},
+	}
+
+	normalized, err := rpc.normalizeMulticallCalls(calls)
+	require.NoError(t, err)
+	require.Equal(t, []bchain.EthereumMulticallCall{
+		{Target: tronMulticall3Address, CallData: "0x1234", AllowFailure: true},
+		{Target: tronMulticall3Address},
+	}, normalized)
+	require.Equal(t, "TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED", calls[0].Target)
+
+	_, err = rpc.normalizeMulticallCalls(append(calls, bchain.EthereumMulticallCall{Target: "invalid"}))
+	require.ErrorContains(t, err, "normalize multicall target 2")
+}
+
 type tronTestMempool struct {
 	txTimes map[string]uint32
 }

@@ -473,21 +473,21 @@ func gaugeValue(t *testing.T, g prometheus.Gauge) float64 {
 	return 0
 }
 
-// counterValue reads the value of the counter series carrying action=action.
-func counterValue(t *testing.T, cv *prometheus.CounterVec, action string) float64 {
+// counterVecValue reads the counter series carrying label=value, via a throwaway registry.
+func counterVecValue(t *testing.T, cv *prometheus.CounterVec, label, value string) float64 {
 	t.Helper()
 	reg := prometheus.NewRegistry()
 	if err := reg.Register(cv); err != nil {
-		t.Fatalf("register counter: %v", err)
+		t.Fatalf("register counter vec: %v", err)
 	}
 	families, err := reg.Gather()
 	if err != nil {
-		t.Fatalf("gather counter: %v", err)
+		t.Fatalf("gather counter vec: %v", err)
 	}
 	for _, mf := range families {
 		for _, m := range mf.GetMetric() {
 			for _, lp := range m.GetLabel() {
-				if lp.GetName() == "action" && lp.GetValue() == action {
+				if lp.GetName() == label && lp.GetValue() == value {
 					return m.GetCounter().GetValue()
 				}
 			}
@@ -533,7 +533,7 @@ func TestAlternativeSendTxProviderReconcileObservesMetrics(t *testing.T) {
 
 		provider.reconcileMempoolTxs()
 
-		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "mined"); got != 1 {
+		if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "mined"); got != 1 {
 			t.Errorf("mined reconciliation events = %v, want 1", got)
 		}
 		// the lifetime histogram records exactly one sample, under the same action label as the counter
@@ -554,7 +554,7 @@ func TestAlternativeSendTxProviderReconcileObservesMetrics(t *testing.T) {
 
 		provider.reconcileMempoolTxs()
 
-		if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "kept"); got != 1 {
+		if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "kept"); got != 1 {
 			t.Errorf("kept reconciliation events = %v, want 1", got)
 		}
 		// nothing was evicted, so no lifetime sample must be recorded for any terminal action
@@ -591,7 +591,7 @@ func TestAlternativeSendTxProviderGetTransactionTimeoutObservesMetrics(t *testin
 	if _, stillCached := provider.mempoolTxs[testAlternativeTxID]; stillCached {
 		t.Fatal("timed-out tx was not evicted from the cache")
 	}
-	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "timeout"); got != 1 {
+	if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "timeout"); got != 1 {
 		t.Errorf("timeout reconciliation events = %v, want 1", got)
 	}
 	if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "timeout"); got != 1 {
@@ -636,7 +636,7 @@ func TestAlternativeSendTxProviderRBFReplacementObservesMetrics(t *testing.T) {
 	if removed != testAlternativeSecondTxID {
 		t.Fatalf("replaced txid = %q, want %q", removed, testAlternativeSecondTxID)
 	}
-	if got := counterValue(t, provider.metrics.EthAlternativeMempoolEvents, "rbf_replaced"); got != 1 {
+	if got := counterVecValue(t, provider.metrics.EthAlternativeMempoolEvents, "action", "rbf_replaced"); got != 1 {
 		t.Errorf("rbf_replaced events = %v, want 1", got)
 	}
 	if got := residenceSampleCount(t, provider.metrics.EthAlternativeMempoolTxResidence, "rbf_replaced"); got != 1 {

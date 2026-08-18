@@ -190,29 +190,6 @@ func TestObserveEip1559Fees(t *testing.T) {
 	(&EthereumRPC{}).observeEip1559Fees(&bchain.Eip1559Fees{BaseFeePerGas: big.NewInt(1)})
 }
 
-// counterVecValue reads the counter series carrying label=value, via a throwaway registry.
-func counterVecValue(t *testing.T, cv *prometheus.CounterVec, label, value string) float64 {
-	t.Helper()
-	reg := prometheus.NewRegistry()
-	if err := reg.Register(cv); err != nil {
-		t.Fatalf("register counter vec: %v", err)
-	}
-	families, err := reg.Gather()
-	if err != nil {
-		t.Fatalf("gather counter vec: %v", err)
-	}
-	for _, mf := range families {
-		for _, mm := range mf.GetMetric() {
-			for _, lp := range mm.GetLabel() {
-				if lp.GetName() == label && lp.GetValue() == value {
-					return mm.GetCounter().GetValue()
-				}
-			}
-		}
-	}
-	return 0
-}
-
 func TestObserveSyncMetric(t *testing.T) {
 	gv := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{Name: "test_alt_fee_provider_last_sync"}, []string{"provider"})

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/trezor/blockbook/bchain"
 )
+
+// testMulticall3OverrideAddress is an arbitrary override address matching no real deployment.
+const testMulticall3OverrideAddress = "0x00000000000000000000000000000000000000fe"
 
 // padHex32 left-pads `s` (a hex string without 0x) with zeros to 64 chars (32 bytes).
 func padHex32(s string) string {
@@ -53,20 +55,20 @@ func TestEncodeAggregate3KnownLayout(t *testing.T) {
 		t.Fatalf("selector mismatch: got %s want 82ad56cb", got)
 	}
 	// Outer offset to array = 0x20.
-	if v := bigUintAt(raw, 4); v.Cmp(big.NewInt(0x20)) != 0 {
-		t.Fatalf("outer offset wrong: %s", v)
+	if v, _ := wordAsIndex(raw, 4); v != 0x20 {
+		t.Fatalf("outer offset wrong: %d", v)
 	}
 	// Array length = 2 at byte 4+32 = 36.
-	if v := bigUintAt(raw, 4+32); v.Cmp(big.NewInt(2)) != 0 {
-		t.Fatalf("array length wrong: %s", v)
+	if v, _ := wordAsIndex(raw, 4+32); v != 2 {
+		t.Fatalf("array length wrong: %d", v)
 	}
 	// Heads start at byte 4+64 = 68. Two offsets follow.
-	if v := bigUintAt(raw, 4+64); v.Cmp(big.NewInt(64)) != 0 {
-		t.Fatalf("first head offset wrong: %s, want 64", v)
+	if v, _ := wordAsIndex(raw, 4+64); v != 64 {
+		t.Fatalf("first head offset wrong: %d, want 64", v)
 	}
 	// Each tuple: 32(address)+32(bool)+32(0x60)+32(len)+32(data padded) = 160 bytes.
-	if v := bigUintAt(raw, 4+96); v.Cmp(big.NewInt(64+160)) != 0 {
-		t.Fatalf("second head offset wrong: %s, want %d", v, 64+160)
+	if v, _ := wordAsIndex(raw, 4+96); v != 64+160 {
+		t.Fatalf("second head offset wrong: %d, want %d", v, 64+160)
 	}
 	// Total encoded size = selector(4) + outer(32) + len(32) + heads(64) + tuples(2*160) = 452.
 	if got, want := len(raw), 4+32+32+64+2*160; got != want {
@@ -214,7 +216,7 @@ func TestDecodeAggregate3RoundTripFixture(t *testing.T) {
 		{Success: false, Data: "0x"},
 		{Success: true, Data: "0x" + strings.Repeat("ab", 64)}, // 64 bytes, exactly two padded words
 	}
-	got, err := decodeAggregate3Result(fixtureAggregate3Result(expected))
+	got, err := decodeAggregate3Result(fixtureAggregate3Result(expected), len(expected))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -233,17 +235,38 @@ func TestDecodeAggregate3RoundTripFixture(t *testing.T) {
 
 func TestDecodeAggregate3Rejects(t *testing.T) {
 	cases := []struct {
-		name string
-		hex  string
+		name  string
+		hex   string
+		calls int // sub-calls the request carried, so each case reaches its own guard
 	}{
-		{"empty", "0x"},
-		{"too short for header", "0x" + padHex32("20")},
-		{"bad outer offset", "0x" + padHex32("21") + padHex32("0")},
-		{"truncated heads", "0x" + padHex32("20") + padHex32("2") + padHex32("40")}, // declares 2 elements but only 1 head word
+		{"empty", "0x", 1},
+		{"too short for header", "0x" + padHex32("20"), 1},
+		{"bad outer offset", "0x" + padHex32("21") + padHex32("0"), 1},
+		{"truncated heads", "0x" + padHex32("20") + padHex32("2") + padHex32("40"), 2}, // declares 2 elements but only 1 head word
+		// Words ≥ 2^63 wrap negative when narrowed to int; each must be rejected, never sliced with.
+		{"array length 2^63", "0x" + padHex32("20") + padHex32("8000000000000000"), 1},
+		{"head offset 2^63", "0x" + padHex32("20") + padHex32("1") + padHex32("8000000000000000"), 1},
+		{"bytes length 2^64-1", "0x" + padHex32("20") + padHex32("1") + padHex32("20") + // 1 element at heads+0x20
+			padHex32("1") + padHex32("40") + padHex32("ffffffffffffffff"), 1}, // bool, bytes offset, absurd bytes length
+		// A count other than the one we sent must be refused before any returndata is built,
+		// or the response alone decides how many elements to allocate.
+		{"more results than calls", fixtureAggregate3Result([]bchain.EthereumMulticallResult{
+			{Success: true, Data: "0x01"}, {Success: true, Data: "0x02"},
+		}), 1},
+		{"fewer results than calls", fixtureAggregate3Result([]bchain.EthereumMulticallResult{
+			{Success: true, Data: "0x01"},
+		}), 2},
+		{"empty array for a non-empty request", "0x" + padHex32("20") + padHex32("0"), 1},
+		// Two heads aliasing one 256-byte tuple: each element passes its own bounds check
+		// (data ends exactly at the response end) but together they decode 512 of 480 bytes.
+		// Left unbounded, N aliased heads amplify one response into N copies of the tuple.
+		{"aliased heads exceed the response", "0x" +
+			padHex32("20") + padHex32("2") + padHex32("40") + padHex32("40") +
+			padHex32("1") + padHex32("40") + padHex32("100") + strings.Repeat("00", 256), 2},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := decodeAggregate3Result(tc.hex); err == nil {
+			if _, err := decodeAggregate3Result(tc.hex, tc.calls); err == nil {
 				t.Fatalf("expected error for %q", tc.name)
 			}
 		})
@@ -261,6 +284,8 @@ type mockMulticallRPC struct {
 	// answered with a stub "deployed" bytecode so existing multicall tests
 	// don't need to care about the probe.
 	getCodeHandler func(address string) (string, error)
+	// address both the probe and aggregate3 must target; empty means the canonical one.
+	target string
 
 	ethCallCalls int
 	getCodeCalls int
@@ -270,6 +295,14 @@ func (m *mockMulticallRPC) callCounts() (ethCall, getCode int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.ethCallCalls, m.getCodeCalls
+}
+
+// expectedTarget is the address this mock requires the probe and aggregate3 to call.
+func (m *mockMulticallRPC) expectedTarget() string {
+	if m.target != "" {
+		return m.target
+	}
+	return multicall3Address
 }
 
 func (m *mockMulticallRPC) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -293,7 +326,7 @@ func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, 
 			return errors.New("eth_getCode: missing args")
 		}
 		addr, _ := args[0].(string)
-		if !strings.EqualFold(addr, multicall3Address) {
+		if !strings.EqualFold(addr, m.expectedTarget()) {
 			return fmt.Errorf("unexpected eth_getCode target: %s", addr)
 		}
 		if m.getCodeHandler == nil {
@@ -320,7 +353,7 @@ func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, 
 			return errors.New("eth_call: bad args")
 		}
 		to, _ := argMap["to"].(string)
-		if !strings.EqualFold(to, multicall3Address) {
+		if !strings.EqualFold(to, m.expectedTarget()) {
 			return fmt.Errorf("unexpected eth_call target: %s", to)
 		}
 		data, _ := argMap["data"].(string)
@@ -335,6 +368,40 @@ func (m *mockMulticallRPC) CallContext(ctx context.Context, result interface{}, 
 		return nil
 	default:
 		return fmt.Errorf("unexpected method: %s", method)
+	}
+}
+
+// --- Per-chain Multicall3 address override ---
+
+func TestMulticall3ContractAddress(t *testing.T) {
+	// no override -> canonical const
+	if got := (&EthereumRPC{}).multicall3ContractAddress(); !strings.EqualFold(got, multicall3Address) {
+		t.Fatalf("no override: got %s, want canonical %s", got, multicall3Address)
+	}
+	// override wins
+	rpc := &EthereumRPC{Multicall3AddressOverride: testMulticall3OverrideAddress}
+	if got := rpc.multicall3ContractAddress(); !strings.EqualFold(got, testMulticall3OverrideAddress) {
+		t.Fatalf("override: got %s, want %s", got, testMulticall3OverrideAddress)
+	}
+}
+
+// The override must steer both the probe (eth_getCode) and the aggregate3 call: the mock
+// rejects any other target.
+func TestMulticallAggregate3_UsesConfiguredAddressOverride(t *testing.T) {
+	expected := []bchain.EthereumMulticallResult{{Success: true, Data: "0xdead"}}
+	mock := &mockMulticallRPC{
+		target:  testMulticall3OverrideAddress,
+		handler: func(string) (string, error) { return fixtureAggregate3Result(expected), nil },
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second, Multicall3AddressOverride: testMulticall3OverrideAddress}
+	got, err := rpc.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
+		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("aggregate3 error: %v", err)
+	}
+	if len(got) != 1 || !strings.EqualFold(got[0].Data, "0xdead") {
+		t.Fatalf("unexpected result: %+v", got)
 	}
 }
 
@@ -406,7 +473,7 @@ func TestProbeMulticall3_DetectsDeployedAndCachesResult(t *testing.T) {
 	if _, getCode := mock.callCounts(); getCode != 1 {
 		t.Fatalf("expected 1 eth_getCode call (cached on 2nd), got %d", getCode)
 	}
-	if state := rpc.multicall3Probe.Load(); state != multicall3Deployed {
+	if state := rpc.multicall3.state.Load(); state != multicall3Deployed {
 		t.Fatalf("expected state=Deployed, got %d", state)
 	}
 }
@@ -426,7 +493,7 @@ func TestProbeMulticall3_DetectsNotDeployedAndCachesResult(t *testing.T) {
 	if _, getCode := mock.callCounts(); getCode != 1 {
 		t.Fatalf("expected 1 eth_getCode call (cached on 2nd), got %d", getCode)
 	}
-	if state := rpc.multicall3Probe.Load(); state != multicall3NotDeployed {
+	if state := rpc.multicall3.state.Load(); state != multicall3NotDeployed {
 		t.Fatalf("expected state=NotDeployed, got %d", state)
 	}
 }
@@ -453,7 +520,7 @@ func TestProbeMulticall3_TransientErrorRetriesNextCall(t *testing.T) {
 	if got {
 		t.Fatalf("first probe should report deployed=false on transient error, got=%v", got)
 	}
-	if state := rpc.multicall3Probe.Load(); state != multicall3Unprobed {
+	if state := rpc.multicall3.state.Load(); state != multicall3Unprobed {
 		t.Fatalf("transient error must NOT cache state, got %d", state)
 	}
 	if got, err := rpc.probeMulticall3(); err != nil || !got {
@@ -462,7 +529,7 @@ func TestProbeMulticall3_TransientErrorRetriesNextCall(t *testing.T) {
 	if _, getCode := mock.callCounts(); getCode != 2 {
 		t.Fatalf("expected 2 eth_getCode calls (no caching after transient), got %d", getCode)
 	}
-	if state := rpc.multicall3Probe.Load(); state != multicall3Deployed {
+	if state := rpc.multicall3.state.Load(); state != multicall3Deployed {
 		t.Fatalf("expected state=Deployed after recovery, got %d", state)
 	}
 }
@@ -536,7 +603,7 @@ func TestEthereumTypeMulticallAggregate3_NotDeployed_ShortCircuits(t *testing.T)
 		},
 	}
 	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
-	rpc.multicall3Probe.Store(multicall3NotDeployed)
+	rpc.multicall3.state.Store(multicall3NotDeployed)
 
 	got, err := rpc.EthereumTypeMulticallAggregate3([]bchain.EthereumMulticallCall{
 		{Target: "0x00000000000000000000000000000000000000aa", CallData: "0x06fdde03"},
@@ -580,8 +647,67 @@ func TestEthereumTypeMulticallAggregate3_TransientProbeError_PropagatesAndIsDist
 		t.Fatalf("expected wrapped probe error, got %v", err)
 	}
 	// Probe state must remain unprobed so the next call retries.
-	if state := rpc.multicall3Probe.Load(); state != multicall3Unprobed {
+	if state := rpc.multicall3.state.Load(); state != multicall3Unprobed {
 		t.Fatalf("transient probe failure must not cache state, got %d", state)
+	}
+}
+
+// Repeated transient probe errors suspend probing (never latch not-deployed);
+// probing resumes once the window elapses.
+func TestProbeMulticall3_SuspendsAfterRepeatedFailures(t *testing.T) {
+	var failing atomic.Bool
+	failing.Store(true)
+	mock := &mockMulticallRPC{
+		handler: func(string) (string, error) {
+			t.Fatal("eth_call must not be issued while probing fails")
+			return "", nil
+		},
+		getCodeHandler: func(string) (string, error) {
+			if failing.Load() {
+				return "", errors.New("rpc down")
+			}
+			return "0x6080604052", nil
+		},
+	}
+	rpc := &EthereumRPC{RPC: mock, Timeout: time.Second}
+
+	// The first K-1 attempts stay transient (unprobed, retry on next call).
+	for i := 1; i < multicall3MaxProbeFailures; i++ {
+		if deployed, err := rpc.probeMulticall3(); deployed || err == nil {
+			t.Fatalf("attempt %d: want transient (false, err), got (%v, %v)", i, deployed, err)
+		}
+		if state := rpc.multicall3.state.Load(); state != multicall3Unprobed {
+			t.Fatalf("attempt %d: must not cache state yet, got %d", i, state)
+		}
+	}
+	// The K-th failure suspends probing: (false, nil), no deployment verdict cached.
+	if deployed, err := rpc.probeMulticall3(); deployed || err != nil {
+		t.Fatalf("suspending attempt: want (false, nil), got (%v, %v)", deployed, err)
+	}
+	if state := rpc.multicall3.state.Load(); state != multicall3Unprobed {
+		t.Fatalf("suspension must not cache a deployment verdict, got %d", state)
+	}
+	if rpc.multicall3.suspendedUntil.Load() <= 0 {
+		t.Fatal("want a suspension deadline stored")
+	}
+	// While suspended, further calls report unavailable without any eth_getCode.
+	if deployed, err := rpc.probeMulticall3(); deployed || err != nil {
+		t.Fatalf("suspended probe: want (false, nil), got (%v, %v)", deployed, err)
+	}
+	if _, getCode := mock.callCounts(); getCode != multicall3MaxProbeFailures {
+		t.Fatalf("want exactly %d eth_getCode probes (suspended after), got %d", multicall3MaxProbeFailures, getCode)
+	}
+	// Once the window elapses and the node recovers, the next probe retries and caches Deployed.
+	rpc.multicall3.suspendedUntil.Store(time.Now().Add(-time.Second).UnixNano())
+	failing.Store(false)
+	if deployed, err := rpc.probeMulticall3(); !deployed || err != nil {
+		t.Fatalf("post-suspension probe: want (true, nil), got (%v, %v)", deployed, err)
+	}
+	if _, getCode := mock.callCounts(); getCode != multicall3MaxProbeFailures+1 {
+		t.Fatalf("want %d eth_getCode probes after the window elapses, got %d", multicall3MaxProbeFailures+1, getCode)
+	}
+	if state := rpc.multicall3.state.Load(); state != multicall3Deployed {
+		t.Fatalf("want cached multicall3Deployed after recovery, got %d", state)
 	}
 }
 
