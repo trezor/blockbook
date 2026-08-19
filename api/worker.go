@@ -1072,6 +1072,32 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
+// computeAccountPaging pages over mempool entries followed by confirmed txids as a single
+// sequence, so that a page never exceeds itemsOnPage and no tx falls between two pages.
+func computeAccountPaging(mempoolCount, confirmedCount, page, itemsOnPage int) (pg Paging, mempoolFrom, mempoolTo, confirmedFrom, confirmedTo, normalizedPage int) {
+	pg, from, to, normalizedPage := computePaging(mempoolCount+confirmedCount, page, itemsOnPage)
+	mempoolFrom, mempoolTo = clampRange(from, to, mempoolCount)
+	confirmedFrom, confirmedTo = clampRange(from-mempoolCount, to-mempoolCount, confirmedCount)
+	return
+}
+
+// clampRange limits a window of the merged sequence to the bounds of one of its parts.
+func clampRange(from, to, length int) (int, int) {
+	if from < 0 {
+		from = 0
+	}
+	if from > length {
+		from = length
+	}
+	if to > length {
+		to = length
+	}
+	if to < from {
+		to = from
+	}
+	return from, to
+}
+
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool) (*Token, error) {
 	standard := bchain.EthereumTokenStandardMap[c.Standard]
 	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standard)
@@ -1571,6 +1597,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	var (
 		ba                       *db.AddrBalance
 		txm                      []string
+		mempoolTxs               []*Tx
 		txs                      []*Tx
 		txids                    []string
 		accountChainExtraData    *AccountChainExtraData
@@ -1647,16 +1674,21 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 						} else {
 							uBalSending.Add(&uBalSending, tx.getAddrVinValue(addrDesc))
 						}
-						if page == 0 {
-							if option == AccountDetailsTxidHistory {
-								txids = append(txids, tx.Txid)
-							} else if option >= AccountDetailsTxHistoryLight {
-								setIsOwnAddress(tx, address)
-								txs = append(txs, tx)
-							}
+						if option >= AccountDetailsTxidHistory {
+							mempoolTxs = append(mempoolTxs, tx)
 						}
 					}
 				}
+			}
+		}
+	}
+	appendMempoolTxs := func(from, to int) {
+		for _, tx := range mempoolTxs[from:to] {
+			if option == AccountDetailsTxidHistory {
+				txids = append(txids, tx.Txid)
+			} else if option >= AccountDetailsTxHistoryLight {
+				setIsOwnAddress(tx, address)
+				txs = append(txs, tx)
 			}
 		}
 	}
@@ -1670,15 +1702,17 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		if err != nil {
 			return nil, errors.Annotatef(err, "GetBestBlock")
 		}
-		var from, to int
-		pg, from, to, page = computePaging(len(txc), page, txsOnPage)
-		if len(txc) >= txsOnPage {
+		var from, to, mempoolFrom, mempoolTo int
+		pg, mempoolFrom, mempoolTo, from, to, page = computeAccountPaging(len(mempoolTxs), len(txc), page, txsOnPage)
+		if len(mempoolTxs)+len(txc) >= txsOnPage {
 			if totalResults < 0 {
 				pg.TotalPages = -1
 			} else {
-				pg, _, _, _ = computePaging(totalResults, page, txsOnPage)
+				pg, _, _, _ = computePaging(totalResults+len(mempoolTxs), page, txsOnPage)
 			}
 		}
+		// mempool txs take the first slots of the paged sequence, before confirmed history
+		appendMempoolTxs(mempoolFrom, mempoolTo)
 		for i := from; i < to; i++ {
 			txid := txc[i]
 			if option == AccountDetailsTxidHistory {
@@ -1692,15 +1726,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				txs = append(txs, tx)
 			}
 		}
-	}
-	// On page 1, mempool items are prepended before confirmed history.
-	// Keep response bounded by requested page size for txid/txs details.
-	if page == 0 && txsOnPage > 0 {
-		if option == AccountDetailsTxidHistory && len(txids) > txsOnPage {
-			txids = txids[:txsOnPage]
-		} else if option >= AccountDetailsTxHistoryLight && len(txs) > txsOnPage {
-			txs = txs[:txsOnPage]
-		}
+	} else if page == 0 {
+		// no confirmed history is queried, so there is nothing to page against
+		appendMempoolTxs(0, len(mempoolTxs))
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		totalReceived = ba.ReceivedSat()

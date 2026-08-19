@@ -1184,7 +1184,11 @@ components:
     PageSize:
       name: pageSize
       in: query
-      description: Number of history items per page. The default and maximum for REST account endpoints is 1000.
+      description: >-
+        Number of history items per page. The default and maximum for REST account endpoints
+        is 1000. Unconfirmed transactions take the first slots of the paged history and count
+        towards both pageSize and totalPages, so a page is never longer than pageSize and
+        walking all pages returns every transaction exactly once.
       schema:
         type: integer
         minimum: 1
