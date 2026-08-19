@@ -1517,9 +1517,11 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 			To:    call.To,
 		})
 		contracts = append(contracts, bchain.ContractInfo{Contract: call.From, DestructedInBlock: blockHeight})
-	} else if call.Type == "DELEGATECALL" {
+	} else if call.Type == "DELEGATECALL" || call.Type == "CALLCODE" {
 		// ignore DELEGATECALL (geth v1.11 the changed tracer behavior)
 		// 	https://github.com/ethereum/go-ethereum/issues/26726
+		// CALLCODE runs foreign code in the caller's own context too, so its traced value never
+		// leaves the caller; indexing from->to would report a fake transfer to the code address
 	} else if err == nil && (value.BitLen() > 0 || b.ChainConfig.ProcessZeroInternalTransactions) {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Value: *value,
