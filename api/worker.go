@@ -112,7 +112,9 @@ func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) err
 							glog.Warning("Tx ", t, ": not found")
 						} else {
 							if len(spentTx.Vin) > int(index) {
-								if spentTx.Vin[index].Txid == txid {
+								// the outpoint must match, not just the tx: sibling outputs
+								// sharing this address and value would match on txid alone
+								if spentTx.Vin[index].Txid == txid && spentTx.Vin[index].Vout == uint32(vout.N) {
 									vout.SpentTxID = t
 									vout.SpentHeight = int(spentHeight)
 									vout.SpentIndex = int(index)
@@ -151,6 +153,11 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	}
 	if n >= len(tx.Vout) || n < 0 {
 		return "", NewAPIError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, tx.Txid, len(tx.Vout)), false)
+	}
+	// an unspent output has no spender, and the scan below has no early exit for
+	// that case - it would walk the address index all the way to the chain tip
+	if !tx.Vout[n].Spent {
+		return "", nil
 	}
 	err = w.setSpendingTxToVout(&tx.Vout[n], tx.Txid, uint32(tx.Blockheight))
 	if err != nil {
