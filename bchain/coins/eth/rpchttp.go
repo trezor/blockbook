@@ -9,37 +9,28 @@ import (
 )
 
 const (
-	// rpcMaxIdleConnsPerHost sizes the keep-alive pool above the sync worker count
-	// (-workers, 16 on the fastest chains) plus mempool and API callers, so concurrent
-	// calls reuse sockets instead of dialing new ones. go-ethereum otherwise dials with
-	// http.DefaultTransport, whose http.DefaultMaxIdleConnsPerHost of 2 made every extra
-	// in-flight call close its socket: on a sub-second chain that burned ~340 ports/s into
-	// TIME_WAIT, exhausted the host's ephemeral range and failed dials with EADDRNOTAVAIL,
-	// which silently stalled sync (bitcoinrpc.go and tronhttp.go tune this for the same reason).
+	// go-ethereum's default of 2 idle conns per host burns a socket per extra in-flight call
+	// and exhausts the ephemeral range; sized above -workers (16) as bitcoinrpc.go already is.
 	rpcMaxIdleConnsPerHost = 100
-	// rpcMaxIdleConns bounds the pool across hosts; a Blockbook instance talks to one
-	// backend, so this only has to leave room for a redirected or fallback endpoint.
+	// Bounds the pool across hosts, leaving room for a second endpoint.
 	rpcMaxIdleConns = 200
 )
 
-// rpcHTTPClient is shared by all JSON-RPC dials of this process: net/http pools per
-// client, so a client per dial would defeat the reuse this exists for.
+// One client per process: net/http pools per client, so a client per dial would pool nothing.
 var rpcHTTPClient = newRPCHTTPClient()
 
 func newRPCHTTPClient() *http.Client {
-	// Clone keeps DefaultTransport's proxy, dial/TLS timeouts and HTTP/2 settings, which
-	// the CI runners need to reach backends through an egress proxy; only the pool grows.
+	// Clone keeps DefaultTransport's proxy, dial/TLS timeouts and HTTP/2; only the pool grows.
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = rpcMaxIdleConns
 	transport.MaxIdleConnsPerHost = rpcMaxIdleConnsPerHost
-	// No client-level timeout on purpose: every call carries its own context deadline
-	// (rpc_timeout), and a blanket timeout would also cut long debug_traceBlockByHash reads.
+	// No client timeout: per-call rpc_timeout contexts govern, and a blanket one would cut
+	// long debug_traceBlockByHash reads.
 	return &http.Client{Transport: transport}
 }
 
-// RPCDialOptions returns the go-ethereum dial options for rawURL: the pooled HTTP client
-// for http(s) endpoints, and an unlimited message size for ws(s) ones, which hold a single
-// long-lived socket and so need no pooling. Shared by every EVM coin that dials a backend.
+// RPCDialOptions returns the dial options for rawURL, shared by every EVM coin: the pooled
+// client for http(s), and an unlimited message size for ws(s), which needs no pooling.
 func RPCDialOptions(rawURL string) []rpc.ClientOption {
 	if isWebsocketRPCURL(rawURL) {
 		return []rpc.ClientOption{rpc.WithWebsocketMessageSizeLimit(0)}
@@ -47,8 +38,8 @@ func RPCDialOptions(rawURL string) []rpc.ClientOption {
 	return []rpc.ClientOption{rpc.WithHTTPClient(rpcHTTPClient)}
 }
 
-// isWebsocketRPCURL reports whether rawURL is dialed as a websocket. An unparsable or
-// scheme-less URL falls through to the HTTP client, matching go-ethereum's own dispatch.
+// isWebsocketRPCURL reports whether rawURL is dialed as a websocket; an unparsable or
+// scheme-less URL falls through to HTTP, matching go-ethereum's own dispatch.
 func isWebsocketRPCURL(rawURL string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
