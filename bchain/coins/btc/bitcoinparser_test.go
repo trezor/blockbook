@@ -165,6 +165,66 @@ func TestGetAddrDescFromAddressTestnet(t *testing.T) {
 	}
 }
 
+// signet shares the testnet address magics, so the same vectors must decode there
+func TestGetAddrDescFromAddressSignet(t *testing.T) {
+	type args struct {
+		address string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "pubkeyhash",
+			args:    args{address: "mtkbaiLiUH3fvGJeSzuN3kUgmJzqinLejJ"},
+			want:    "76a914912e2b234f941f30b18afbb4fa46171214bf66c888ac",
+			wantErr: false,
+		},
+		{
+			name:    "scripthash",
+			args:    args{address: "2Mv28xcUJdFXBTfGMtja6fVBMCEbsH3r2AW"},
+			want:    "a9141e6ec5a1d12912b396d77d98dcb000e91f517fa487",
+			wantErr: false,
+		},
+		{
+			// address from https://github.com/trezor/blockbook/issues/1305
+			name:    "scripthash_p2wpkh",
+			args:    args{address: "2MzoQhv5qzNFybSnMMN6uuueywkRV64Kirj"},
+			want:    "a91452df2355d174c913bccbf6319335d29b5a1d17d487",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_keyhash",
+			args:    args{address: "tb1qupjdck20as3y4l95cd5wepkv0grcz0p7d8rd5s"},
+			want:    "0014e064dc594fec224afcb4c368ec86cc7a07813c3e",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v1_taproot",
+			args:    args{address: "tb1pqsv2qyp8hsma46422ecfd3ek02jayumkkzjx7vkf3cqpmfd4ucpsx0cc9h"},
+			want:    "51200418a01027bc37daeaaa567096c7367aa5d27376b0a46f32c98e001da5b5e603",
+			wantErr: false,
+		},
+	}
+	parser := NewBitcoinParser(GetChainParams("signet"), &Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetAddrDescFromVout(t *testing.T) {
 	type args struct {
 		vout bchain.Vout
