@@ -451,10 +451,16 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	if err := validateXpubScanLimits(xd, gap, w.xpubConfig.MaxAddressDerivations); err != nil {
 		return nil, 0, false, err
 	}
+	// Serialize updates for this descriptor; the expensive per-tx response
+	// building in the caller runs after this returns and stays concurrent.
+	mu := xpubUpdateLock(xd.XpubDescriptor)
+	mu.Lock()
+	defer mu.Unlock()
 	var processedHash string
 	cachedXpubsMux.Lock()
 	data, inCache := cachedXpubs[xd.XpubDescriptor]
 	cachedXpubsMux.Unlock()
+	owned := !inCache // whether data.addresses is a private copy safe to mutate
 	// to load all data for xpub may take some time, do it in a loop to process a possible new block
 	for {
 		bestheight, besthash, err = w.db.GetBestBlock()
@@ -474,6 +480,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			if err != nil {
 				return nil, 0, inCache, err
 			}
+			owned = true
 		} else {
 			hash, err := w.db.GetBlockHash(data.dataHeight)
 			if err != nil {
@@ -485,6 +492,12 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			}
 		}
 		processedHash = besthash
+		// Copy-on-write before any mutation so a concurrent reader holding the
+		// previously published snapshot never has its arrays changed underneath.
+		if !owned && (data.dataHeight < bestheight || fork || option >= AccountDetailsTxidHistory) {
+			data.addresses = cloneXpubAddresses(data.addresses)
+			owned = true
+		}
 		if data.dataHeight < bestheight || fork {
 			data.dataHeight = bestheight
 			data.dataHash = besthash
