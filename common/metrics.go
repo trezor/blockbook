@@ -72,6 +72,10 @@ type Metrics struct {
 	EthAlternativeMempoolTxResidence  *prometheus.HistogramVec `metric:"eth_alternative_mempool_tx_residence_seconds"`
 	EthAlternativeMempoolCacheSize    prometheus.Gauge         `metric:"eth_alternative_mempool_cache_size"`
 	EthAlternativeNonceRequests       *prometheus.CounterVec   `metric:"eth_alternative_nonce_requests_total"`
+	SendTxRequests                    *prometheus.CounterVec   `metric:"sendtx_requests_total"`
+	EthSendTxPath                     *prometheus.CounterVec   `metric:"eth_sendtx_path_total"`
+	EthAlternativeSendTx              *prometheus.CounterVec   `metric:"eth_alternative_sendtx_total"`
+	EthAlternativeSendTxDuration      *prometheus.HistogramVec `metric:"eth_alternative_sendtx_duration_seconds"`
 	EstimatedFee                      *prometheus.GaugeVec     `metric:"estimated_fee"`
 	AvgBlockPeriod                    prometheus.Gauge         `metric:"avg_block_period"`
 	SyncBlockStats                    *prometheus.GaugeVec     `metric:"sync_block_stats"`

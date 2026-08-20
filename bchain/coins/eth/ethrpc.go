@@ -2219,19 +2219,52 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	if !disableAlternativeRPC && b.alternativeSendTxProvider != nil {
 		txid, retErr = b.alternativeSendTxProvider.SendRawTransaction(hex)
 		if retErr == nil {
+			b.observeSendTxPath("alternative", nil)
 			return txid, nil
 		}
 		if b.alternativeSendTxProvider.UseOnlyAlternativeProvider() {
+			b.observeSendTxPath("alternative", retErr)
 			return txid, retErr
 		}
 	}
 
+	// decoded once for the log lines - a send is the only moment Blockbook sees the sender and
+	// nonce of a transaction it has not indexed yet, and both are what a later "my tx vanished"
+	// or nonce-gap report has to be reconciled against
+	decoded := decodeRawTx(hex)
+	// retErr can only have been set by the alternative providers above, so a non-nil one here means
+	// they all rejected and the transaction is about to go to the public mempool although the
+	// deployment prefers a private relay - a switch of destination that is otherwise invisible
+	path := "primary"
+	if retErr != nil {
+		path = "primary_fallback"
+		glog.Warningf("eth_sendRawTransaction falling back to the primary RPC, %s, alternative providers error: %v", decoded, retErr)
+	}
+
+	start := time.Now()
 	txid, retErr = b.callRpcStringResult("eth_sendRawTransaction", hex)
+	duration := time.Since(start).Round(time.Millisecond)
+	b.observeSendTxPath(path, retErr)
+	if retErr != nil {
+		glog.Errorf("eth_sendRawTransaction to the primary RPC rejected %s after %v: %v", decoded, duration, retErr)
+		return txid, retErr
+	}
+	glog.Infof("eth_sendRawTransaction to the primary RPC accepted %s as txid %s in %v", decoded, txid, duration)
 	if b.ChainConfig.DisableMempoolSync {
 		// add transactions submitted by us to mempool if sync is disabled
 		b.Mempool.AddTransactionToMempool(txid)
 	}
-	return txid, retErr
+	return txid, nil
+}
+
+// observeSendTxPath records which broadcast path served a send and how it ended. The path is the
+// piece the coin-agnostic send metric cannot see, and it is what separates "private broadcast
+// working" from "transactions quietly leaking to the public mempool" (send_path=primary_fallback).
+func (b *EthereumRPC) observeSendTxPath(path string, err error) {
+	if b.metrics == nil || b.metrics.EthSendTxPath == nil {
+		return
+	}
+	b.metrics.EthSendTxPath.With(common.Labels{"send_path": path, "status": bchain.SendTxStatus(err)}).Inc()
 }
 
 // EthereumTypeGetRawTransaction gets raw transaction in hex format

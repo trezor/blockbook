@@ -115,6 +115,40 @@ panels:
       errors:
         promql: sum(rate({{name:eth_sync_rpc_errors}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (method, status) * 60
         legend: '{{method}} - {{status}}'
+  rpc.sendtx_requests:
+    title: Transaction sends per minute
+    description: 'Client transaction broadcasts through every API (websocket sendTransaction, REST sendtx, explorer form), split by status, with the failures broken down by rejection class. Read the class before reacting: underpriced, replacement_underpriced, nonce_too_low, nonce_too_high, insufficient_funds and already_known are the wallet''s own transaction being refused on its merits and need nothing from us, while rate_limited, unauthorized, timeout and unavailable mean the send never got a verdict from the backend or provider and is the operator''s problem. A rising "other" share means the classifier needs a new pattern, not that anything is broken. Split by transport with websocket_requests{method="sendTransaction"} and explorer_views{action=~"(api-)?sendtx"}.'
+    queries:
+      by_status:
+        promql: sum(rate({{name:sendtx_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (status) * 60
+        legend: '{{status}}/min'
+      failures_by_reason:
+        promql: sum(rate({{name:sendtx_requests_total}}{job="blockbook", coin="$coin", status="failure"}[$__rate_interval])) by (reason) * 60
+        legend: 'failure: {{reason}}/min'
+  rpc.eth_sendtx_path:
+    title: EVM send path per minute
+    description: 'Which path served each EVM broadcast. alternative = the private relay accepted it (or, with <COIN>_ALTERNATIVE_SENDTX_ONLY set, the only path attempted); primary = the public RPC, because no alternative provider is configured or the client set disableAlternativeRPC; primary_fallback = every alternative provider rejected and the public RPC was tried instead. On a chain meant to broadcast privately, any primary_fallback traffic means transactions are leaking to the public mempool - correlate with the per-provider panel to the right to see which relay dropped out.'
+    queries:
+      by_path:
+        promql: sum(rate({{name:eth_sendtx_path_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (send_path, status) * 60
+        legend: '{{send_path}} - {{status}}/min'
+  rpc.eth_alternative_sendtx_providers:
+    title: Alternative send-tx provider outcomes per minute
+    description: 'eth_sendRawTransaction calls to each configured alternative provider, by provider_host, status and rejection class. A broadcast succeeds if ANY provider accepts it, so errors here are not failed sends on their own - a single relay can be down for a long time without any user noticing, and this is the only panel that shows it. Compare against the EVM send path panel: errors here with no primary_fallback there means the remaining providers are absorbing the traffic. The label is provider_host rather than the registry''s provider (which carries a symbolic name such as infura), because these providers are configured as a list of URLs and a host is the only stable identity they have; providers sharing a host therefore share a series.'
+    queries:
+      by_provider:
+        promql: sum(rate({{name:eth_alternative_sendtx_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (provider_host, status, reason) * 60
+        legend: '{{provider_host}} - {{status}} {{reason}}/min'
+  rpc.eth_alternative_sendtx_duration:
+    title: Alternative send-tx provider latency
+    description: 'p50/p95 of an eth_sendRawTransaction call to an alternative provider, per provider_host and status. Private relays sit on the wallet''s critical path - the user waits for exactly this - so a p95 climbing toward the configured <COIN>_RPC_TIMEOUT is a user-visible regression well before it turns into failed sends. An error series pinned at the top bucket is the provider timing out rather than rejecting; read it next to the rejection classes in the panel to the left.'
+    queries:
+      p50:
+        promql: histogram_quantile(0.5, sum(rate({{name:eth_alternative_sendtx_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (provider_host, status, le))
+        legend: '{{provider_host}} {{status}} p50'
+      p95:
+        promql: histogram_quantile(0.95, sum(rate({{name:eth_alternative_sendtx_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (provider_host, status, le))
+        legend: '{{provider_host}} {{status}} p95'
   row.sync:
     title: Sync
   sync.index_resync_duration_p95:
@@ -185,7 +219,7 @@ panels:
         legend: stale cutoff (900s = 15 reload periods)
   sync.eth_alternative_mempool_reconciliation:
     title: Alternative mempool reconciliation
-    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry) and rbf_replaced remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh and kept retain a still-young or still-pending entry.
+    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). fetchback_cached, fetchback_missing and fetchback_error are the post-send fetch-back that puts a just-broadcast tx into the cache - a missing or erroring fetch-back means the tx is never surfaced as pending, so the wallet that just sent it sees nothing; mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry) and rbf_replaced remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh and kept retain a still-young or still-pending entry.
     queries:
       actions:
         promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60

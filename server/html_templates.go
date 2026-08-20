@@ -76,6 +76,13 @@ type htmlTemplates[TD any] struct {
 	postHtmlTemplateHandler  func(data *TD, w http.ResponseWriter, r *http.Request)
 }
 
+// debugErrorText renders an error for a debug-mode response with its URLs reduced to scheme and
+// host: debug messages carry raw backend error text, which is exactly where a provider API key
+// sits (the http client renders the full URL into Post "<url>": ... on a dial failure).
+func debugErrorText(format string, a ...interface{}) string {
+	return common.RedactURLs(fmt.Sprintf(format, a...))
+}
+
 func (s *htmlTemplates[TD]) jsonHandler(handler func(r *http.Request, apiVersion int) (interface{}, error), apiVersion int) func(w http.ResponseWriter, r *http.Request) {
 	type jsonError struct {
 		Text       string `json:"error"`
@@ -90,7 +97,7 @@ func (s *htmlTemplates[TD]) jsonHandler(handler func(r *http.Request, apiVersion
 				glog.Error(handlerName, " recovered from panic: ", e)
 				debug.PrintStack()
 				if s.debug {
-					data = jsonError{fmt.Sprint("Internal server error: recovered from panic ", e), http.StatusInternalServerError}
+					data = jsonError{debugErrorText("Internal server error: recovered from panic %v", e), http.StatusInternalServerError}
 				} else {
 					data = jsonError{"Internal server error", http.StatusInternalServerError}
 				}
@@ -114,10 +121,12 @@ func (s *htmlTemplates[TD]) jsonHandler(handler func(r *http.Request, apiVersion
 		data, err = handler(r, apiVersion)
 		if err != nil || data == nil {
 			if apiErr, ok := err.(*api.APIError); ok {
+				// the client sees this text on both branches, so it must not carry a backend URL
+				text := api.RedactAPIError(apiErr).Error()
 				if apiErr.Public {
-					data = jsonError{apiErr.Error(), http.StatusBadRequest}
+					data = jsonError{text, http.StatusBadRequest}
 				} else {
-					data = jsonError{apiErr.Error(), http.StatusInternalServerError}
+					data = jsonError{text, http.StatusInternalServerError}
 				}
 			} else {
 				if err != nil {
@@ -125,9 +134,9 @@ func (s *htmlTemplates[TD]) jsonHandler(handler func(r *http.Request, apiVersion
 				}
 				if s.debug {
 					if data != nil {
-						data = jsonError{fmt.Sprintf("Internal server error: %v, data %+v", err, data), http.StatusInternalServerError}
+						data = jsonError{debugErrorText("Internal server error: %v, data %+v", err, data), http.StatusInternalServerError}
 					} else {
-						data = jsonError{fmt.Sprintf("Internal server error: %v", err), http.StatusInternalServerError}
+						data = jsonError{debugErrorText("Internal server error: %v", err), http.StatusInternalServerError}
 					}
 				} else {
 					data = jsonError{"Internal server error", http.StatusInternalServerError}
@@ -149,7 +158,7 @@ func (s *htmlTemplates[TD]) htmlTemplateHandler(handler func(w http.ResponseWrit
 				debug.PrintStack()
 				t = errorInternalTpl
 				if s.debug {
-					data = s.newTemplateDataWithError(&api.APIError{Text: fmt.Sprint("Internal server error: recovered from panic ", e)}, r)
+					data = s.newTemplateDataWithError(&api.APIError{Text: debugErrorText("Internal server error: recovered from panic %v", e)}, r)
 				} else {
 					data = s.newTemplateDataWithError(&api.APIError{Text: "Internal server error"}, r)
 				}
@@ -182,7 +191,7 @@ func (s *htmlTemplates[TD]) htmlTemplateHandler(handler func(w http.ResponseWrit
 		if err != nil || (data == nil && t != noTpl) {
 			t = errorInternalTpl
 			if apiErr, ok := err.(*api.APIError); ok {
-				data = s.newTemplateDataWithError(apiErr, r)
+				data = s.newTemplateDataWithError(api.RedactAPIError(apiErr), r)
 				if apiErr.Public {
 					t = errorTpl
 				}
@@ -191,7 +200,7 @@ func (s *htmlTemplates[TD]) htmlTemplateHandler(handler func(w http.ResponseWrit
 					glog.Error(handlerName, " error: ", err)
 				}
 				if s.debug {
-					data = s.newTemplateDataWithError(&api.APIError{Text: fmt.Sprintf("Internal server error: %v, data %+v", err, data)}, r)
+					data = s.newTemplateDataWithError(&api.APIError{Text: debugErrorText("Internal server error: %v, data %+v", err, data)}, r)
 				} else {
 					data = s.newTemplateDataWithError(&api.APIError{Text: "Internal server error"}, r)
 				}

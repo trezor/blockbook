@@ -1030,7 +1030,8 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 			}
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
 			e := resultError{}
-			e.Error.Message = err.Error()
+			// the ws protocol returns the message for every error, public or not, so redact here
+			e.Error.Message = common.RedactURLs(err.Error())
 			data = e
 		}
 	} else {
