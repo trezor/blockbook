@@ -356,6 +356,56 @@ func TestShouldRestartSyncOnMissingBlockIgnoresMissingHashProbe(t *testing.T) {
 	}
 }
 
+func TestShouldRestartSyncOnMissingBlockIgnoresEmptyExpectedHash(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		bestHeight: 10,
+		hashes:     map[uint32]string{10: "h10"},
+	}
+	w := newGetBlockChainTestWorker(t, chain, "", 10)
+
+	restart, err := w.shouldRestartSyncOnMissingBlock(10, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if restart {
+		t.Fatal("restart = true, want false when there is no expected hash to compare")
+	}
+	if chain.bestHeightCalls != 0 {
+		t.Fatalf("GetBestBlockHeight calls = %d, want 0: the guard must short-circuit before probing", chain.bestHeightCalls)
+	}
+}
+
+// Reproduces the Avalanche tip race: the height is fetchable a moment later, which
+// must be retried rather than mistaken for a reorg just because Next is unset.
+func TestGetBlockChainByHeightMissDoesNotResync(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		bestHeight: 1,
+		hashes:     map[uint32]string{1: "h1"},
+		blocks: map[uint32]*bchain.Block{
+			1: {BlockHeader: bchain.BlockHeader{Hash: "h1", Height: 1}},
+		},
+		blockErrors: map[uint32][]error{
+			1: {bchain.ErrBlockNotFound, bchain.ErrBlockNotFound},
+		},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(t, chain, "", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1: %+v", len(results), results)
+	}
+	if results[0].err != nil {
+		t.Fatalf("unexpected error: %v", results[0].err)
+	}
+	if results[0].block == nil || results[0].block.Hash != "h1" {
+		t.Fatalf("unexpected block: %+v", results[0].block)
+	}
+	if calls := chain.getBlockCalls[1]; calls != 3 {
+		t.Fatalf("GetBlock height 1 calls = %d, want 3", calls)
+	}
+}
+
 func TestGetBlockChainNonRetryableErrorReturns(t *testing.T) {
 	boom := stdErrors.New("boom")
 	chain := &getBlockChainTestChain{

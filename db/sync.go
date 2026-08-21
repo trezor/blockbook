@@ -458,6 +458,11 @@ func (w *SyncWorker) sendHashHeight(hch chan<- hashHeight, abortCh <-chan error,
 }
 
 func (w *SyncWorker) shouldRestartSyncOnMissingBlock(height uint32, expectedHash string) (bool, error) {
+	// Without an expected hash (the ethereum-type path walks by height) a fetchable
+	// block is no evidence of a reorg; getBlockChain's prevHash check catches forks.
+	if expectedHash == "" {
+		return false, nil
+	}
 	// When a block hash disappears at a given height, it can indicate a
 	// reorg/rollback, but on load-balanced EVM RPCs a single lagging backend can
 	// also report an older tip. Only restart immediately when another probe can
