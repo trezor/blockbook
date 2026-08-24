@@ -678,12 +678,12 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiMultiFiatRates all currencies",
+			name:        "apiMultiFiatRates all currencies, the second timestamp resolves to a missing day",
 			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers?timestamp=1574344800,1521677000"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"ts":1574380800,"rates":{"eur":7134.1,"usd":7914.5}},{"ts":1521849600,"rates":{"eur":1303,"usd":2003}}]`,
+				`[{"ts":1574380800,"rates":{"eur":7134.1,"usd":7914.5}},{"ts":1521677000,"rates":{}}]`,
 			},
 		},
 		{
@@ -696,12 +696,12 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiFiatRates get closest rate",
+			name:        "apiFiatRates timestamp before stored history",
 			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=1357045200&currency=usd"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1521504000,"rates":{"usd":2000}}`,
+				`{"ts":1357045200,"rates":{"usd":-1}}`,
 			},
 		},
 		{
@@ -1547,7 +1547,7 @@ var websocketTestsBitcoinType = []websocketTest{
 		want: `{"id":"27","data":{"tickers":[{"ts":1521590400,"rates":{"eur":1301}}]}}`,
 	},
 	{
-		name: "websocket getFiatRatesForTimestamps multiple timestamps usd",
+		name: "websocket getFiatRatesForTimestamps multiple timestamps usd, the first resolves to a missing day",
 		req: websocketReq{
 			Method: "getFiatRatesForTimestamps",
 			Params: map[string]interface{}{
@@ -1555,10 +1555,10 @@ var websocketTestsBitcoinType = []websocketTest{
 				"timestamps": []int64{1570346615, 1574346615},
 			},
 		},
-		want: `{"id":"28","data":{"tickers":[{"ts":1574294400,"rates":{"usd":7814.5}},{"ts":1574380800,"rates":{"usd":7914.5}}]}}`,
+		want: `{"id":"28","data":{"tickers":[{"ts":1570346615,"rates":{"usd":-1}},{"ts":1574380800,"rates":{"usd":7914.5}}]}}`,
 	},
 	{
-		name: "websocket getFiatRatesForTimestamps multiple timestamps eur",
+		name: "websocket getFiatRatesForTimestamps multiple timestamps eur, the first resolves to a missing day",
 		req: websocketReq{
 			Method: "getFiatRatesForTimestamps",
 			Params: map[string]interface{}{
@@ -1566,7 +1566,7 @@ var websocketTestsBitcoinType = []websocketTest{
 				"timestamps": []int64{1570346615, 1574346615},
 			},
 		},
-		want: `{"id":"29","data":{"tickers":[{"ts":1574294400,"rates":{"eur":7100}},{"ts":1574380800,"rates":{"eur":7134.1}}]}}`,
+		want: `{"id":"29","data":{"tickers":[{"ts":1570346615,"rates":{"eur":-1}},{"ts":1574380800,"rates":{"eur":7134.1}}]}}`,
 	},
 	{
 		name: "websocket getFiatRatesForTimestamps multiple timestamps with an error",
@@ -1577,7 +1577,7 @@ var websocketTestsBitcoinType = []websocketTest{
 				"timestamps": []int64{1570346615, 1574346615, 2000000000},
 			},
 		},
-		want: `{"id":"30","data":{"tickers":[{"ts":1574294400,"rates":{"usd":7814.5}},{"ts":1574380800,"rates":{"usd":7914.5}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
+		want: `{"id":"30","data":{"tickers":[{"ts":1570346615,"rates":{"usd":-1}},{"ts":1574380800,"rates":{"usd":7914.5}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
 	},
 	{
 		name: "websocket getFiatRatesForTimestamps multiple errors",
@@ -1595,10 +1595,10 @@ var websocketTestsBitcoinType = []websocketTest{
 		req: websocketReq{
 			Method: "getFiatRatesTickersList",
 			Params: map[string]interface{}{
-				"timestamp": 1570346615,
+				"timestamp": 1574346615,
 			},
 		},
-		want: `{"id":"32","data":{"ts":1574294400,"available_currencies":["eur","usd"]}}`,
+		want: `{"id":"32","data":{"ts":1574380800,"available_currencies":["eur","usd"]}}`,
 	},
 	{
 		name: "websocket getBalanceHistory Addr2",
@@ -2076,7 +2076,8 @@ func Test_HTTPBalanceHistory_GroupByAndInvalidCurrency_BitcoinType(t *testing.T)
 			Received:   "18876",
 			Sent:       "9876",
 			SentToSelf: "9000",
-			Rates:      map[string]float32{"eur": 1300},
+			// the grouped bucket time resolves to a day before the first stored ticker, no rates are returned
+			Rates: nil,
 		},
 	}
 	if !reflect.DeepEqual(grouped, wantGrouped) {
