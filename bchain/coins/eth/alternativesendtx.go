@@ -217,15 +217,18 @@ func (p *AlternativeSendTxProvider) SendRawTransaction(hex string) (string, erro
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			host := providerLabel(p.urls[i])
+			start := time.Now()
 			// a panic here would take the process down: the calling request handler's own recover
 			// cannot reach this goroutine
 			defer func() {
 				if r := recover(); r != nil {
-					glog.Errorf("eth_sendRawTransaction to %s panicked: %v", providerLabel(p.urls[i]), r)
+					// count the attempt too: a panicking provider call would otherwise vanish from
+					// eth_alternative_sendtx_total and the broadcast would look never-tried
+					p.observeSendTx(host, time.Since(start), fmt.Errorf("panic in eth_sendRawTransaction: %v", r))
+					glog.Errorf("eth_sendRawTransaction to %s panicked: %v", host, r)
 				}
 			}()
-			host := providerLabel(p.urls[i])
-			start := time.Now()
 			r, err := p.callHttpStringResult(p.urls[i], "eth_sendRawTransaction", hex)
 			duration := time.Since(start)
 			p.observeSendTx(host, duration, err)
