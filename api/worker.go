@@ -2669,6 +2669,11 @@ const (
 	// real lag - read as out-of-sync and paged. Same value as systemInfoMinStale on purpose:
 	// under 30s is jitter for both checks.
 	systemInfoSyncedGapWindow = systemInfoMinStale
+	// systemInfoMinBlockPeriod floors the cadence the window is divided by, capping the
+	// derived tolerance at 300 blocks. 100ms is the fastest cadence any supported chain
+	// configures (Robinhood); anything smaller is a misconfigured averageBlockTimeMs or
+	// a degenerate observed average.
+	systemInfoMinBlockPeriod = 100 * time.Millisecond
 )
 
 // systemInfoInSync decides the externally reported in-sync state from the raw
@@ -2690,6 +2695,11 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 	if blockPeriod <= 0 {
 		return inSync
 	}
+	// Neither input path validates the cadence beyond > 0, and the gap tolerance below
+	// scales linearly with it, so floor it to bound what a bad value can buy.
+	if blockPeriod < systemInfoMinBlockPeriod {
+		blockPeriod = systemInfoMinBlockPeriod
+	}
 
 	threshold := systemInfoStaleBlocks * blockPeriod
 	if threshold < systemInfoMinStale {
@@ -2710,13 +2720,14 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 	// report the externally observable state as synchronized. int64 avoids underflow if the
 	// backend reports a lower tip.
 	gap := int64(backendBlocks) - int64(bestHeight)
-	// A negative gap is the steady state for RefreshSyncMetrics, which compares against
-	// is.BackendInfo.Blocks - refreshed only at the end of a resync iteration: 99.8% of a
-	// day on Avalanche, 69% on Robinhood. Being past a cached tip only means blocks were
-	// connected after that snapshot, and isFresh still gates the rescue, so clamp rather
-	// than reject. backendBlocks > 0 keeps it from rescuing before any tip was observed.
+	// A negative gap is the steady state for RefreshSyncMetrics, whose backend tip is a
+	// snapshot from the end of the previous resync iteration, so the same distance is
+	// tolerated in both directions. backendBlocks > 0 keeps the rescue from firing before
+	// any tip was observed.
 	if gap < 0 {
-		gap = 0
+		// Bounded, not clamped to zero: disconnect/reconnect churn refreshes LastSync,
+		// so an index far past a live tip would read fresh indefinitely.
+		gap = -gap
 	}
 	if !inSync && !initialSync && backendBlocks > 0 && gap <= syncedGap && isFresh {
 		return true
