@@ -10,4 +10,5 @@
 * [API](/docs/api.md) – Description of Blockbook API
 * [API (Tron specifics)](/docs/api-tron.md) – Tron-specific behavior and data extensions for API V2
 * [Sync](/docs/sync.md) – Sync-loop architecture and the `missingBlockRetry` troubleshooting knobs
+* [ERC protocols](/docs/erc-protocols.md) – Protocol-level EVM contract enrichments and how to add a new one
 * [Testing](/docs/testing.md) – Description of tests used during Blockbook development
