@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sync"
+	"time"
 
 	jsontypes "github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ethereum/go-ethereum/common"
@@ -19,6 +21,8 @@ import (
 const (
 	// MainNet is production network
 	MainNet eth.Network = 43114
+	// nodeVersionTTL is how long an info.getNodeVersion answer is reused, see cachedNodeVersion.
+	nodeVersionTTL = 60 * time.Second
 )
 
 func dialRPC(rawURL string) (*rpc.Client, error) {
@@ -57,6 +61,10 @@ var OpenRPC = func(httpURL, wsURL string) (bchain.EVMRPCClient, bchain.EVMClient
 type AvalancheRPC struct {
 	*eth.EthereumRPC
 	info *rpc.Client
+	// avm version snapshot, see cachedNodeVersion.
+	nodeVersionMu      sync.Mutex
+	nodeVersion        string
+	nodeVersionFetched time.Time
 }
 
 // NewAvalancheRPC returns new AvalancheRPC instance.
@@ -139,6 +147,23 @@ func (b *AvalancheRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		return nil, err
 	}
 
+	if v := b.cachedNodeVersion(); v != "" {
+		ci.Version = v
+	}
+
+	return ci, nil
+}
+
+// cachedNodeVersion returns the avm version, re-querying the info endpoint at most once per
+// nodeVersionTTL: GetChainInfo serves / and /api/ on every request, and this value changes
+// only when the node is restarted onto a new build. Empty means never fetched successfully.
+func (b *AvalancheRPC) cachedNodeVersion() string {
+	b.nodeVersionMu.Lock()
+	defer b.nodeVersionMu.Unlock()
+	if b.nodeVersion != "" && time.Since(b.nodeVersionFetched) < nodeVersionTTL {
+		return b.nodeVersion
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
@@ -150,11 +175,13 @@ func (b *AvalancheRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		VMVersions         map[string]string `json:"vmVersions"`
 	}
 
+	// A failed probe keeps the previous value and is not retried for a TTL - the version is
+	// a label, never a reason to fail GetChainInfo.
+	b.nodeVersionFetched = time.Now()
 	if err := b.info.CallContext(ctx, &v, "info.getNodeVersion"); err == nil {
 		if avm, ok := v.VMVersions["avm"]; ok {
-			ci.Version = avm
+			b.nodeVersion = avm
 		}
 	}
-
-	return ci, nil
+	return b.nodeVersion
 }
