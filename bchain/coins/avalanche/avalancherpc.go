@@ -64,7 +64,11 @@ type AvalancheRPC struct {
 	// avm version snapshot, see cachedNodeVersion.
 	nodeVersionMu      sync.Mutex
 	nodeVersion        string
-	nodeVersionFetched time.Time
+	nodeVersionProbing bool
+	// nodeVersionAttempt is the last probe attempt, successful or not; zero means never
+	// attempted. Suppression keys on the attempt so a node that never answers with an avm
+	// version is still probed only once per TTL.
+	nodeVersionAttempt time.Time
 }
 
 // NewAvalancheRPC returns new AvalancheRPC instance.
@@ -156,14 +160,42 @@ func (b *AvalancheRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 
 // cachedNodeVersion returns the avm version, re-querying the info endpoint at most once per
 // nodeVersionTTL: GetChainInfo serves / and /api/ on every request, and this value changes
-// only when the node is restarted onto a new build. Empty means never fetched successfully.
+// only when the node is restarted onto a new build. Empty means never probed successfully.
 func (b *AvalancheRPC) cachedNodeVersion() string {
+	return b.nodeVersionCached(time.Now(), b.probeNodeVersion)
+}
+
+// nodeVersionCached holds the TTL rules; now and probe are injected so they can be tested
+// without sleeping or a live node.
+func (b *AvalancheRPC) nodeVersionCached(now time.Time, probe func() string) string {
+	b.nodeVersionMu.Lock()
+	// One caller at a time probes and the rest return the current value straight away, so
+	// concurrent requests never queue behind an RPC that may sit until b.Timeout. A failed
+	// probe is not retried for a TTL either - the version is a label, never a reason to
+	// fail GetChainInfo, and an info endpoint that is down must not cost an RPC per request.
+	if b.nodeVersionProbing || (!b.nodeVersionAttempt.IsZero() && now.Sub(b.nodeVersionAttempt) < nodeVersionTTL) {
+		v := b.nodeVersion
+		b.nodeVersionMu.Unlock()
+		return v
+	}
+	b.nodeVersionProbing = true
+	b.nodeVersionAttempt = now
+	b.nodeVersionMu.Unlock()
+
+	probed := probe()
+
 	b.nodeVersionMu.Lock()
 	defer b.nodeVersionMu.Unlock()
-	if b.nodeVersion != "" && time.Since(b.nodeVersionFetched) < nodeVersionTTL {
-		return b.nodeVersion
+	b.nodeVersionProbing = false
+	if probed != "" {
+		b.nodeVersion = probed
 	}
+	return b.nodeVersion
+}
 
+// probeNodeVersion returns the node's avm version, or "" if the info endpoint does not
+// answer or reports no avm version.
+func (b *AvalancheRPC) probeNodeVersion() string {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
@@ -175,13 +207,9 @@ func (b *AvalancheRPC) cachedNodeVersion() string {
 		VMVersions         map[string]string `json:"vmVersions"`
 	}
 
-	// A failed probe keeps the previous value and is not retried for a TTL - the version is
-	// a label, never a reason to fail GetChainInfo.
-	b.nodeVersionFetched = time.Now()
-	if err := b.info.CallContext(ctx, &v, "info.getNodeVersion"); err == nil {
-		if avm, ok := v.VMVersions["avm"]; ok {
-			b.nodeVersion = avm
-		}
+	if err := b.info.CallContext(ctx, &v, "info.getNodeVersion"); err != nil {
+		glog.V(1).Info("avalanche: info.getNodeVersion failed: ", err)
+		return ""
 	}
-	return b.nodeVersion
+	return v.VMVersions["avm"]
 }
