@@ -2778,6 +2778,25 @@ components:
           type: integer
         confirmedNonce:
           type: boolean
+        privatePending:
+          $ref: "#/components/schemas/WsPrivatePending"
+
+    WsPrivatePending:
+      description: >-
+        Ethereum-like only: the private (alternative send-tx / relay) transactions the wallet knows
+        are in flight for the queried address. Only nonces drive behavior; txids are reserved for
+        future use. See docs/evm-send.md.
+      type: object
+      properties:
+        nonces:
+          type: array
+          items:
+            type: integer
+            format: int64
+        txids:
+          type: array
+          items:
+            type: string
 
     WsContractInfoReq:
       type: object
@@ -2921,6 +2940,8 @@ components:
               type: string
             value:
               type: string
+            privatePending:
+              $ref: "#/components/schemas/WsPrivatePending"
 
     Eip1559Fee:
       type: object

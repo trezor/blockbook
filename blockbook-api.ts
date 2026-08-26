@@ -683,6 +683,12 @@ export interface WsRes {
     /** Payload of the response, structure depends on the request. */
     data: any;
 }
+export interface WsPrivatePending {
+    /** Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel) and is treated as an occupied nonce slot alongside Blockbook's own cached private transactions: the reported pending nonce advances from the backend's own answer across the contiguous run of occupied slots. Send the whole in-flight set, not just its maximum, and do not pad or default the array - a declared nonce above a slot nothing fills does not lift the answer over that slot. */
+    nonces?: number[];
+    /** Transaction hashes of the in-flight private transactions (reserved for future use). */
+    txids?: string[];
+}
 export interface WsAccountInfoReq {
     /** Address or XPUB descriptor to query. */
     descriptor: string;
@@ -708,6 +714,8 @@ export interface WsAccountInfoReq {
     gap?: number;
     /** If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call). */
     confirmedNonce?: boolean;
+    /** Ethereum-like only: the sender's in-flight private (alternative send-tx / relay) transactions the wallet is tracking for this address. When it declares nonces, Blockbook answers the pending-nonce lookup from this authoritative wallet state instead of inferring it from recently accepted sends (see docs/evm-send.md). */
+    privatePending?: WsPrivatePending;
 }
 export interface WsContractInfoReq {
     /** Contract address to query. */
@@ -812,8 +820,8 @@ export interface WsTransactionSpecificReq {
 export interface WsEstimateFeeReq {
     /** Block confirmations targets for which fees should be estimated. */
     blocks?: number[];
-    /** Additional chain-specific parameters (e.g. for Ethereum). */
-    specific?: {conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string;};
+    /** Additional chain-specific parameters (e.g. for Ethereum). privatePending (Ethereum-like) declares the sender's in-flight private transactions so the gas estimate is routed to the alternative send-tx provider; see WsPrivatePending and docs/evm-send.md. */
+    specific?: {conservative?: boolean; txsize?: number; from?: string; to?: string; data?: string; value?: string; privatePending?: WsPrivatePending;};
 }
 export interface Eip1559Fee {
     maxFeePerGas?: string;

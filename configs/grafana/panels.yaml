@@ -219,21 +219,21 @@ panels:
         legend: stale cutoff (900s = 15 reload periods)
   sync.eth_alternative_mempool_reconciliation:
     title: Alternative mempool reconciliation
-    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). fetchback_cached, fetchback_missing and fetchback_error are the post-send fetch-back that puts a just-broadcast tx into the cache - a missing or erroring fetch-back means the tx is never surfaced as pending, so the wallet that just sent it sees nothing; mined, nonce_superseded, provider_missing, timeout (reconcile loop or read-path expiry) and rbf_replaced remove an entry; provider_error and provider_missing_pending keep an unconfirmed entry for a later cycle (a private/MEV relay no longer surfacing a still-mineable tx); skipped_fresh and kept retain a still-young or still-pending entry.
+    description: Decisions over the alternative-provider-only send-tx cache lifecycle (events/min by action). mined, nonce_superseded, provider_missing (missing from the relay for alternativeMissingTxTimeout - the dropped/cancelled exit, since the relay surfaces an accepted tx for its whole pending window), timeout, rbf_replaced and sync_removed remove an entry; skipped_fresh, skipped_backoff, kept, provider_error and provider_missing_pending retain it for a later cycle. Expect sync_removed to dominate and mined to be rare - block sync clears a confirmed private tx before the next reconcile probe would observe it as mined.
     queries:
       actions:
         promql: sum(rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (action) * 60
         legend: '{{action}}/min'
   sync.eth_alternative_mempool_cache_size:
     title: Alternative mempool cache depth
-    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. It should track the number of in-flight unconfirmed sends; a steady climb means entries are added faster than they are mined or evicted.
+    description: Transactions currently held in the alternative-provider-only send-tx cache, sampled at the end of each reconcile cycle. It counts in-flight private sends; one the relay stops surfacing (dropped, cancelled) leaves through the missing eviction (alternativeMissingTxTimeout, 2m by default), so only txs the relay keeps reporting can stay for the full cache timeout (alternativePendingTxWindow, 3h by default). A steady climb means entries are added faster than they are mined or evicted; re-baseline the panel after changing those timeouts.
     queries:
       size:
         promql: '{{name:eth_alternative_mempool_cache_size}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
   sync.eth_alternative_mempool_tx_residence:
     title: Alternative mempool tx lifetime by eviction reason
-    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing and timeout sitting near the cache timeout is healthy; provider_missing collapsing toward ~1-2 min would surface the premature-eviction regression from #1573, while mined shows how quickly relays actually confirm.
+    description: p50/p95 of how long an alternative send-tx cache entry survives before each eviction reason fires. provider_missing is the dropped/cancelled exit; residence counts age since broadcast, so a cancel N minutes after the send records ~N plus alternativeMissingTxTimeout - read the reason, not the age. Collapsing below one reconcile cycle would be the premature-eviction regression (#1573); an entry reaching the cache timeout leaves as timeout even when the relay answers null, so with the missing eviction configured off provider_missing stops firing. sync_removed, normally the dominant exit, shows how quickly relays actually confirm.
     queries:
       p50:
         promql: histogram_quantile(0.5, sum(rate({{name:eth_alternative_mempool_tx_residence_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (action, le))
@@ -243,11 +243,53 @@ panels:
         legend: '{{action}} p95'
   sync.eth_alternative_nonce_requests:
     title: Alternative send-tx provider nonce requests (req/s)
-    description: 'eth_getTransactionCount lookups routed to the alternative send-tx provider, per second, split by result. Only addresses that recently sent a private transaction through the provider are routed here (see useForNonces / #1627); every other address is served by the primary RPC and never appears, so this is the small gated subset, not total nonce traffic. success = the provider answered and its pending nonce was served (raised to the mempool floor); error = the provider failed and the lookup fell back to the primary RPC. Expect a low total that tracks recent private-send activity - a sustained climb means the gating is not shedding load off the provider''s rate quota, and a rising error share means the relay is unhealthy (read alongside the Alternative mempool panels above).'
+    description: 'eth_getTransactionCount lookups routed to the alternative send-tx provider, per second by result (error = fell back to the primary RPC). Routed on a declared privatePending hint or on the recent-sender window (15 min, see useForNonces / #1627), so it is a subset of nonce traffic tracking accounts with a pending tx - hint-declaring wallets re-declare on every account sync while anything is pending, so the rate follows pendinghood, not recent sends through this instance. A rising error share means the relay is unhealthy.'
     queries:
       by_result:
         promql: sum by (coin, result) (rate({{name:eth_alternative_nonce_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
         legend: '{{coin}} - {{result}}'
+  sync.eth_alternative_estimate_gas_requests:
+    title: Alternative send-tx provider gas estimates (req/s)
+    description: 'eth_estimateGas calls routed to the alternative send-tx provider, per second by result (error = fell back to the primary RPC). Routed on a declared privatePending hint or on the recent-sender window (15 min, see useForNonces / #1629), so it is a subset of estimateFee traffic - but a declaring wallet composing a send estimates at keystroke rate, so volume tracks senders with something pending rather than the 15-min window. Hint-less keystroke traffic still going to the relay for everyone would be the #1629 regression; a rising error share means the relay is unhealthy.'
+    queries:
+      by_result:
+        promql: sum by (coin, result) (rate({{name:eth_alternative_estimate_gas_requests_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{result}}'
+  sync.eth_alternative_mempool_oldest_age:
+    title: Alternative mempool oldest cached tx age (stuck-tx signal)
+    description: 'Age of the oldest transaction still in the alternative send-tx cache (1-min sampled at reconcile end), the live signal residence cannot give. Pinning near the cache timeout (alternativePendingTxWindow, 3h by default) at non-zero cache depth means private txs the relay still surfaces are dying underpriced rather than mining - a dropped or cancelled tx leaves much earlier through the missing eviction (alternativeMissingTxTimeout, 2m by default). Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    queries:
+      age:
+        promql: '{{name:eth_alternative_mempool_oldest_age_seconds}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  sync.eth_alternative_send_not_surfaced:
+    title: Alternative send not surfaced by the relay (req/s)
+    description: 'Relay-accepted private sends whose post-send fetch-back did not surface, per second by reason (not_found = relay returned null, error = relay call failed, dropped = fetch-back refused under load). The tx is still cached and served as pending; if the relay keeps not surfacing it, the missing eviction (alternativeMissingTxTimeout) retires it. Should be ~0 - the relay answers from one consistent store, so even the immediate post-send fetch-back sees an accepted tx; a sustained rate means the relay stopped surfacing what it accepts, the pre-alignment behavior. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    queries:
+      by_reason:
+        promql: sum by (coin, reason) (rate({{name:eth_alternative_send_not_surfaced_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{reason}}'
+  sync.eth_alternative_pending_floor_raised:
+    title: Alternative pending-nonce floor raised (req/s)
+    description: 'eth_getTransactionCount answers where the pending nonce was advanced above the backend answer, per second by source. primary (the RPC never knew the private tx) is expected while a private send is in flight; provider should be ~0 now that the relay counts a pending tx over its whole window - a sustained rate means its pending count regressed below that window again, with a revert-protected send between its 96s retention lapsing and the missing eviction firing as the benign exception. The cost is bounded: a send that never mines holds its nonce slot until the missing eviction (alternativeMissingTxTimeout) retires it. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    queries:
+      by_source:
+        promql: sum by (coin, source) (rate({{name:eth_alternative_pending_floor_raised_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{source}}'
+  sync.eth_alternative_pending_floor_stranded:
+    title: 'Alternative pending-nonce floor stranded above a hole (req/s, #1675 signal)'
+    description: 'eth_getTransactionCount answers where the cache held a private tx above a nonce hole - a slot nothing Blockbook knows of fills. The floor deliberately stops below the hole (#1675), so the stranded tx cannot mine until the hole is filled. A caller-declared nonce (privatePending) counts here as well as a cached one. Should be ~0; a sustained rate on source=provider means relay-accepted sends are not reaching the cache - cross-read with the send-not-surfaced panel. Each sample is one REQUEST, not one transaction. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    queries:
+      by_source:
+        promql: sum by (coin, source) (rate({{name:eth_alternative_pending_floor_stranded_total}}{job="blockbook", coin="$coin"}[$__rate_interval]))
+        legend: '{{coin}} - {{source}}'
+  sync.eth_alternative_mempool_death_ratio:
+    title: Alternative mempool exit death ratio (stuck / underpriced)
+    description: 'Fraction of cache EXITS that were deaths (provider_missing + timeout) versus settlements (mined, sync_removed, nonce_superseded, rbf_replaced); the keep actions are excluded from both. Derived from eth_alternative_mempool_reconciliation_events_total - no new metric. A rising ratio is the underpriced / stuck-send signal; on a healthy relay it stays near 0 with sync_removed dominating. Cancel-heavy traffic lifts it legitimately - a drop-mode cancel never mines by design, so it always exits as provider_missing or timeout. Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    queries:
+      death_ratio:
+        promql: sum by (coin) (rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin", action=~"provider_missing|timeout"}[$__rate_interval])) / clamp_min(sum by (coin) (rate({{name:eth_alternative_mempool_reconciliation_events_total}}{job="blockbook", coin="$coin", action=~"mined|sync_removed|nonce_superseded|rbf_replaced|provider_missing|timeout"}[$__rate_interval])), 1e-9)
+        legend: '{{coin}} - death ratio'
   sync.mempool_resync_throughput_p95:
     title: 95% quantile of mempool resync throughput
     description: Transactions returned by a mempool reload divided by reload duration; low values mean the backend or parser is feeding the mempool slowly.

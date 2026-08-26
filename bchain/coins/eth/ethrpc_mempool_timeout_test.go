@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/trezor/blockbook/bchain"
 )
 
 func TestConfigurationMempoolTxTimeoutDuration(t *testing.T) {
@@ -21,12 +23,31 @@ func TestConfigurationMempoolTxTimeoutDuration(t *testing.T) {
 			want: 12 * time.Hour,
 		},
 		{
-			name: "alternative provider default",
+			name: "alternative provider default is the pending window plus the sweep margin",
 			config: Configuration{
 				MempoolTxTimeoutHours: 12,
 			},
 			alternativeProviderEnabled: true,
-			want:                       10 * time.Minute,
+			want:                       defaultAlternativePendingTxWindow + mempoolRetentionMarginOverPendingWindow,
+		},
+		{
+			name: "a configured pending window carries into the mempool default",
+			config: Configuration{
+				MempoolTxTimeoutHours:      12,
+				AlternativePendingTxWindow: "1h",
+			},
+			alternativeProviderEnabled: true,
+			want:                       time.Hour + mempoolRetentionMarginOverPendingWindow,
+		},
+		{
+			name: "a cache-only override carries into the mempool default too",
+			config: Configuration{
+				MempoolTxTimeoutHours:       12,
+				AlternativePendingTxWindow:  "3h",
+				AlternativeMempoolTxTimeout: "20m",
+			},
+			alternativeProviderEnabled: true,
+			want:                       20*time.Minute + mempoolRetentionMarginOverPendingWindow,
 		},
 		{
 			name: "explicit duration overrides alternative provider default",
@@ -74,12 +95,20 @@ func TestConfigurationAlternativeMempoolTxTimeoutDuration(t *testing.T) {
 		want   time.Duration
 	}{
 		{
-			name: "default",
-			want: 5 * time.Minute,
+			name: "default is the pending window",
+			want: defaultAlternativePendingTxWindow,
 		},
 		{
-			name: "explicit duration",
+			name: "follows a configured pending window",
 			config: Configuration{
+				AlternativePendingTxWindow: "90m",
+			},
+			want: 90 * time.Minute,
+		},
+		{
+			name: "an explicit cache retention overrides the window",
+			config: Configuration{
+				AlternativePendingTxWindow:  "3h",
 				AlternativeMempoolTxTimeout: "7m",
 			},
 			want: 7 * time.Minute,
@@ -94,6 +123,92 @@ func TestConfigurationAlternativeMempoolTxTimeoutDuration(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("AlternativeMempoolTxTimeoutDuration() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfigurationAlternativeMissingTxTimeoutDuration(t *testing.T) {
+	tests := []struct {
+		name   string
+		config Configuration
+		want   time.Duration
+	}{
+		{
+			name: "default",
+			want: defaultAlternativeMissingTxTimeout,
+		},
+		{
+			name: "explicit missing timeout",
+			config: Configuration{
+				AlternativeMissingTxTimeout: "30m",
+			},
+			want: 30 * time.Minute,
+		},
+		{
+			// at or above the pending window the cache timeout fires first, which is the documented
+			// way to restore timeout-only eviction for a relay that does not surface over the window
+			name: "missing timeout at the pending window disables the early eviction",
+			config: Configuration{
+				AlternativePendingTxWindow:  "3h",
+				AlternativeMissingTxTimeout: "3h",
+			},
+			want: 3 * time.Hour,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.config.AlternativeMissingTxTimeoutDuration()
+			if err != nil {
+				t.Fatalf("AlternativeMissingTxTimeoutDuration() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("AlternativeMissingTxTimeoutDuration() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMempoolRetentionInverted covers the retention-order check: the provider cache must expire
+// before the wrapped mempool, whose timeout sweep is the only exit that does not clear the cache.
+func TestMempoolRetentionInverted(t *testing.T) {
+	tests := []struct {
+		name        string
+		alternative time.Duration
+		mempool     time.Duration
+		want        bool
+	}{
+		{
+			name:        "defaults are ordered correctly",
+			alternative: defaultAlternativePendingTxWindow,
+			mempool:     defaultAlternativePendingTxWindow + mempoolRetentionMarginOverPendingWindow,
+			want:        false,
+		},
+		{
+			name:        "cache outliving the mempool is inverted",
+			alternative: 30 * time.Minute,
+			mempool:     10 * time.Minute,
+			want:        true,
+		},
+		{
+			name:        "equal retentions are inverted",
+			alternative: 10 * time.Minute,
+			mempool:     10 * time.Minute,
+			want:        true,
+		},
+		{
+			name:        "a zero mempool retention is inverted",
+			alternative: 5 * time.Minute,
+			mempool:     0,
+			want:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mempoolRetentionInverted(tt.alternative, tt.mempool); got != tt.want {
+				t.Fatalf("mempoolRetentionInverted(%s, %s) = %v, want %v", tt.alternative, tt.mempool, got, tt.want)
 			}
 		})
 	}
@@ -125,12 +240,42 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 			}`,
 		},
 		{
+			name: "zero alternative pending window",
+			config: `{
+				"coin_name":"Ethereum",
+				"coin_shortcut":"ETH",
+				"rpc_timeout":25,
+				"alternativePendingTxWindow":"0s",
+				"block_addresses_to_keep":600
+			}`,
+		},
+		{
+			name: "unparsable alternative pending window",
+			config: `{
+				"coin_name":"Ethereum",
+				"coin_shortcut":"ETH",
+				"rpc_timeout":25,
+				"alternativePendingTxWindow":"three hours",
+				"block_addresses_to_keep":600
+			}`,
+		},
+		{
 			name: "negative blockbook mempool timeout",
 			config: `{
 				"coin_name":"Ethereum",
 				"coin_shortcut":"ETH",
 				"rpc_timeout":25,
 				"mempoolTxTimeout":"-1s",
+				"block_addresses_to_keep":600
+			}`,
+		},
+		{
+			name: "zero alternative missing timeout",
+			config: `{
+				"coin_name":"Ethereum",
+				"coin_shortcut":"ETH",
+				"rpc_timeout":25,
+				"alternativeMissingTxTimeout":"0s",
 				"block_addresses_to_keep":600
 			}`,
 		},
@@ -144,6 +289,101 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCreateMempoolRejectsInvertedRetention pins that an inverted pair fails startup rather than
+// warning: inverted, the mempool's timeout sweep drops a private transaction's address index while the
+// cache keeps serving its body as pending, the #1573 symptom arrived at silently. Only an explicit
+// mempoolTxTimeout can get there, since the default is derived from the cache retention.
+func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		config    Configuration
+		wantError bool
+	}{
+		{
+			name:      "explicit mempool timeout below the pending window",
+			config:    Configuration{MempoolTxTimeout: "10m", AlternativePendingTxWindow: "3h"},
+			wantError: true,
+		},
+		{
+			name:      "explicit mempool timeout equal to the pending window",
+			config:    Configuration{MempoolTxTimeout: "3h", AlternativePendingTxWindow: "3h"},
+			wantError: true,
+		},
+		{
+			name:   "explicit mempool timeout above the pending window",
+			config: Configuration{MempoolTxTimeout: "4h", AlternativePendingTxWindow: "3h"},
+		},
+		{
+			name:   "derived defaults are never inverted",
+			config: Configuration{AlternativePendingTxWindow: "3h"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			alternative, err := tt.config.AlternativeMempoolTxTimeoutDuration()
+			if err != nil {
+				t.Fatalf("AlternativeMempoolTxTimeoutDuration() error = %v", err)
+			}
+			b := &EthereumRPC{
+				ChainConfig:               &tt.config,
+				alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: alternative, fetchMempoolTx: true},
+			}
+			_, err = b.CreateMempool(nil)
+			if tt.wantError && err == nil {
+				t.Fatal("inverted retention pair was accepted")
+			}
+			if !tt.wantError && err != nil {
+				t.Fatalf("CreateMempool() error = %v", err)
+			}
+			if tt.wantError {
+				// a static config error must be recognizable, or startup retries it once a second for
+				// two minutes and reports it as an RPC fault
+				if !bchain.IsConfigurationError(err) {
+					t.Fatalf("CreateMempool() error = %v, want one startup can recognize as a configuration error", err)
+				}
+				// a rejected pair must not leave a mempool behind, or a second call hands it out with
+				// the provider never wired to it
+				if b.Mempool != nil {
+					t.Fatal("rejected configuration left a mempool behind")
+				}
+				if _, err := b.CreateMempool(nil); err == nil {
+					t.Fatal("a second CreateMempool accepted the same inverted pair")
+				}
+			}
+		})
+	}
+}
+
+// TestCreateMempoolWithoutFetchMempoolTxKeepsLegacyRetention pins that a URLS-only deployment
+// (broadcast through the relay, *_ALTERNATIVE_FETCH_MEMPOOL_TX unset) is outside the retention
+// coupling: the pending-tx cache is never written or read, so there is no private address index to
+// outlive - an explicit short mempoolTxTimeout must not fail startup, and the derived default must
+// stay the legacy hour-based value rather than the cache retention plus margin.
+func TestCreateMempoolWithoutFetchMempoolTxKeepsLegacyRetention(t *testing.T) {
+	t.Run("explicit short timeout is accepted", func(t *testing.T) {
+		b := &EthereumRPC{
+			ChainConfig:               &Configuration{MempoolTxTimeout: "10m", AlternativePendingTxWindow: "3h"},
+			alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: 3 * time.Hour},
+		}
+		if _, err := b.CreateMempool(nil); err != nil {
+			t.Fatalf("CreateMempool() error = %v, want a URLS-only deployment with a short explicit timeout accepted", err)
+		}
+	})
+	t.Run("derived default stays legacy", func(t *testing.T) {
+		// The derivation consults the alternative window only when the cache exists (see
+		// TestConfigurationMempoolTxTimeoutDuration for the two derivations themselves); a window
+		// this config cannot parse proves CreateMempool takes the legacy branch for a URLS-only
+		// provider rather than keying on the provider existing.
+		config := &Configuration{MempoolTxTimeoutHours: 12, AlternativePendingTxWindow: "not-a-duration"}
+		b := &EthereumRPC{
+			ChainConfig:               config,
+			alternativeSendTxProvider: &AlternativeSendTxProvider{mempoolTxsTimeout: 3 * time.Hour},
+		}
+		if _, err := b.CreateMempool(nil); err != nil {
+			t.Fatalf("CreateMempool() error = %v, want the URLS-only path to never read the alternative window", err)
+		}
+	})
 }
 
 func TestInitAlternativeProvidersUsesAlternativeMempoolTxTimeout(t *testing.T) {
@@ -160,10 +400,19 @@ func TestInitAlternativeProvidersUsesAlternativeMempoolTxTimeout(t *testing.T) {
 				CoinShortcut: "eth",
 				RPCTimeout:   1,
 			},
-			want: 5 * time.Minute,
+			want: defaultAlternativePendingTxWindow,
 		},
 		{
-			name: "explicit duration",
+			name: "configured pending window",
+			config: Configuration{
+				CoinShortcut:               "eth",
+				RPCTimeout:                 1,
+				AlternativePendingTxWindow: "90m",
+			},
+			want: 90 * time.Minute,
+		},
+		{
+			name: "explicit cache retention",
 			config: Configuration{
 				CoinShortcut:                "eth",
 				RPCTimeout:                  1,
@@ -187,6 +436,52 @@ func TestInitAlternativeProvidersUsesAlternativeMempoolTxTimeout(t *testing.T) {
 			}
 			if got := b.alternativeSendTxProvider.mempoolTxsTimeout; got != tt.want {
 				t.Fatalf("mempoolTxsTimeout = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInitAlternativeProvidersWiresMissingTxTimeout(t *testing.T) {
+	t.Setenv("ETH_ALTERNATIVE_SENDTX_URLS", "http://localhost:8545")
+
+	tests := []struct {
+		name   string
+		config Configuration
+		want   time.Duration
+	}{
+		{
+			name: "default",
+			config: Configuration{
+				CoinShortcut: "eth",
+				RPCTimeout:   1,
+			},
+			want: defaultAlternativeMissingTxTimeout,
+		},
+		{
+			name: "configured missing timeout",
+			config: Configuration{
+				CoinShortcut:                "eth",
+				RPCTimeout:                  1,
+				AlternativeMissingTxTimeout: "25m",
+			},
+			want: 25 * time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &EthereumRPC{
+				ChainConfig: &tt.config,
+			}
+			if err := b.InitAlternativeProviders(); err != nil {
+				t.Fatalf("InitAlternativeProviders() error = %v", err)
+			}
+
+			if b.alternativeSendTxProvider == nil {
+				t.Fatal("alternativeSendTxProvider is nil")
+			}
+			if got := b.alternativeSendTxProvider.missingTimeout(); got != tt.want {
+				t.Fatalf("missingTimeout() = %s, want %s", got, tt.want)
 			}
 		})
 	}

@@ -50,10 +50,27 @@ const (
 	// internal-data trace finish.
 	defaultRPCTimeoutSeconds = 15
 
-	// Alternative/private relays expire pending txs quickly, so local pending state
-	// must not inherit the legacy hour-scale public mempool timeout.
-	defaultMempoolTxTimeoutWithAlternativeProvider = 10 * time.Minute
-	defaultAlternativeMempoolTxTimeout             = 5 * time.Minute
+	// defaultAlternativePendingTxWindow is how long a transaction broadcast through a private relay is
+	// treated as still pending: the window in which builders can still include it, which Blinklabs puts
+	// at around three hours. The relay's eth_getTransactionByHash and pending eth_getTransactionCount
+	// answers now cover that same window (they used to stop after about a minute, the root cause of
+	// #1573). Sizing pending state below the window made Blockbook stop showing a live transaction and
+	// hand its nonce back out (#1573, #1675).
+	defaultAlternativePendingTxWindow = 3 * time.Hour
+	// mempoolRetentionMarginOverPendingWindow keeps the wrapped Blockbook mempool alive longer than the
+	// alternative cache, an order that is load-bearing (see mempoolRetentionInverted). It only has to
+	// cover the mempool's own sweep granularity of at most 10 minutes, and deriving the mempool default
+	// from the cache retention means changing the window cannot invert the pair.
+	mempoolRetentionMarginOverPendingWindow = 30 * time.Minute
+	// defaultAlternativeMissingTxTimeout is how long a cached private transaction may stay missing from
+	// the relay - consecutive null eth_getTransactionByHash answers - before reconcile evicts it. The
+	// relay answers from one consistent store over the whole pending window above, so a null means the
+	// transaction is gone - dropped or cancelled (a drop-mode cancel leaves no replacement behind to
+	// retire its predecessor) - and the short run requirement only absorbs a transient relay fluke
+	// rather than any node-to-node lag. For a relay without that consistency, configure
+	// alternativeMissingTxTimeout at or above the pending window, which restores eviction by cache
+	// timeout only.
+	defaultAlternativeMissingTxTimeout = 2 * time.Minute
 )
 
 // Ethereum address constants
@@ -92,7 +109,9 @@ type Configuration struct {
 	EnableEnsReverseAliases         bool   `json:"enable_ens_reverse_aliases,omitempty"`
 	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
 	MempoolTxTimeout                string `json:"mempoolTxTimeout,omitempty"`
+	AlternativePendingTxWindow      string `json:"alternativePendingTxWindow,omitempty"`
 	AlternativeMempoolTxTimeout     string `json:"alternativeMempoolTxTimeout,omitempty"`
+	AlternativeMissingTxTimeout     string `json:"alternativeMissingTxTimeout,omitempty"`
 	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
@@ -131,24 +150,60 @@ func parsePositiveDuration(name string, value string) (time.Duration, error) {
 	return d, nil
 }
 
-// MempoolTxTimeoutDuration returns the Blockbook-side EVM mempool retention.
+// MempoolTxTimeoutDuration returns the Blockbook-side EVM mempool retention; with a relay configured it
+// is the alternative cache retention plus a margin, so the mempool always outlives the store whose
+// exits are what clear it.
 func (c *Configuration) MempoolTxTimeoutDuration(alternativeSendTxProviderEnabled bool) (time.Duration, error) {
 	if c.MempoolTxTimeout != "" {
 		return parseNonNegativeDuration("mempoolTxTimeout", c.MempoolTxTimeout)
 	}
-	// Keep the shorter timeout scoped to alternative/private submission only.
 	if alternativeSendTxProviderEnabled {
-		return defaultMempoolTxTimeoutWithAlternativeProvider, nil
+		alternative, err := c.AlternativeMempoolTxTimeoutDuration()
+		if err != nil {
+			return 0, err
+		}
+		return alternative + mempoolRetentionMarginOverPendingWindow, nil
 	}
 	return time.Duration(c.MempoolTxTimeoutHours) * time.Hour, nil
 }
 
-// AlternativeMempoolTxTimeoutDuration returns the alternative-provider cache retention.
+// AlternativePendingTxWindowDuration returns how long a transaction broadcast through the alternative
+// provider is treated as still pending, i.e. can still be built into a block.
+func (c *Configuration) AlternativePendingTxWindowDuration() (time.Duration, error) {
+	if c.AlternativePendingTxWindow != "" {
+		return parsePositiveDuration("alternativePendingTxWindow", c.AlternativePendingTxWindow)
+	}
+	return defaultAlternativePendingTxWindow, nil
+}
+
+// AlternativeMempoolTxTimeoutDuration returns the alternative-provider cache retention: the pending
+// window, unless a deployment holds transactions for a different span than they can still land in.
 func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, error) {
 	if c.AlternativeMempoolTxTimeout != "" {
 		return parsePositiveDuration("alternativeMempoolTxTimeout", c.AlternativeMempoolTxTimeout)
 	}
-	return defaultAlternativeMempoolTxTimeout, nil
+	return c.AlternativePendingTxWindowDuration()
+}
+
+// AlternativeMissingTxTimeoutDuration returns how long a cached private transaction may stay missing
+// from the relay's eth_getTransactionByHash before the reconcile loop evicts it (see
+// defaultAlternativeMissingTxTimeout for what a sustained run of nulls means and how to disable the
+// early eviction for a relay that does not surface over the whole pending window).
+func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, error) {
+	if c.AlternativeMissingTxTimeout != "" {
+		return parsePositiveDuration("alternativeMissingTxTimeout", c.AlternativeMissingTxTimeout)
+	}
+	return defaultAlternativeMissingTxTimeout, nil
+}
+
+// mempoolRetentionInverted reports whether the alternative-provider cache is configured to outlive the
+// wrapped Blockbook mempool. Every cache exit clears the mempool too, but the mempool's own timeout
+// sweep is the one exit that does NOT clear the cache: inverted, it drops a private transaction's
+// address index while the cache keeps serving its body as pending, and nothing reconciles the two. Only
+// an explicit mempoolTxTimeout can invert the pair, which is why that is rejected rather than warned
+// about.
+func mempoolRetentionInverted(alternativeTimeout, mempoolTimeout time.Duration) bool {
+	return alternativeTimeout >= mempoolTimeout
 }
 
 // AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.
@@ -273,7 +328,18 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	if _, err := c.MempoolTxTimeoutDuration(false); err != nil {
 		return nil, err
 	}
+	// also with a provider: that branch derives from the two settings below, and whether a provider
+	// ends up configured is an env-var decision this early code cannot see
+	if _, err := c.MempoolTxTimeoutDuration(true); err != nil {
+		return nil, err
+	}
+	if _, err := c.AlternativePendingTxWindowDuration(); err != nil {
+		return nil, err
+	}
 	if _, err := c.AlternativeMempoolTxTimeoutDuration(); err != nil {
+		return nil, err
+	}
+	if _, err := c.AlternativeMissingTxTimeoutDuration(); err != nil {
 		return nil, err
 	}
 	if _, err := c.AverageBlockTimeDuration(); err != nil {
@@ -724,16 +790,34 @@ func (b *EthereumRPC) InitAlternativeProviders() error {
 	if err != nil {
 		return err
 	}
-	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, alternativeMempoolTxTimeout, b.metrics)
+	alternativeMissingTxTimeout, err := b.ChainConfig.AlternativeMissingTxTimeoutDuration()
+	if err != nil {
+		return err
+	}
+	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, alternativeMempoolTxTimeout, alternativeMissingTxTimeout, b.metrics)
 	return nil
 }
 
 // CreateMempool creates mempool if not already created, however does not initialize it
 func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		mempoolTxTimeout, err := b.ChainConfig.MempoolTxTimeoutDuration(b.alternativeSendTxProvider != nil)
+		// The retention coupling below exists only when the pending-tx cache does: a URLS-only
+		// deployment (no *_ALTERNATIVE_FETCH_MEMPOOL_TX) broadcasts through the relay but never
+		// writes the cache, so there is no private address index to outlive and nothing to invert -
+		// it keeps the legacy retention and must not be failed for an explicit short timeout.
+		cacheEnabled := b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.fetchMempoolTx
+		mempoolTxTimeout, err := b.ChainConfig.MempoolTxTimeoutDuration(cacheEnabled)
 		if err != nil {
 			return nil, err
+		}
+		// Checked here, not in Validate: the effective retention depends on the env-configured provider
+		// existing. Inverted, private transactions silently lose their address index while still being
+		// served as pending (#1573), so it is rejected rather than warned about - and rejected before the
+		// mempool is assigned, so a second call cannot hand out a mempool with no provider wired to it.
+		if cacheEnabled && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
+			// wrapped in ErrConfiguration so startup fails fast: this cannot resolve on a retry, and
+			// the retry loop would otherwise spend two minutes reporting it once a second as an RPC fault
+			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must be longer than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
 		}
 		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
@@ -1984,8 +2068,7 @@ func GetStringFromMap(p string, params map[string]interface{}) (string, bool) {
 
 // EthereumTypeEstimateGas returns estimation of gas consumption for given transaction parameters
 func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
+	started := time.Now()
 	msg := ethereum.CallMsg{}
 	if s, ok := GetStringFromMap("from", params); ok && len(s) > 0 {
 		msg.From = ethcommon.HexToAddress(s)
@@ -2007,17 +2090,115 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 
-	if b.alternativeSendTxProvider != nil {
+	// Route eth_estimateGas through the provider when the request declares in-flight private txs for
+	// the sender, or when useForNonces says it sent privately through this instance recently. Both
+	// mean the estimate must run against pending private state the primary RPC cannot see - a
+	// privately submitted approve that a following swap's gas depends on. The declared signal does
+	// not depend on this instance having accepted the send, so it covers the restart and
+	// load-balanced-replica gaps the heuristic leaves. Every other estimate - the bulk of them, since
+	// the wallet calls estimateFee on each send-form keystroke - goes straight to the primary and no
+	// longer burns the provider's quota (#1629); so does a missing `from`. Unlike a declared nonce,
+	// which joins the answer's floor walk, a declared estimate only picks the backend: Blockbook still
+	// simulates.
+	// The hint is an unauthenticated per-request client signal: it can route only the caller's own
+	// request to the relay and never touches shared state (see docs/evm-send.md, "Trust boundary").
+	declaredPrivatePending := estimatePrivatePendingDeclared(params)
+	if b.alternativeSendTxProvider != nil && msg.From != (ethcommon.Address{}) &&
+		(declaredPrivatePending || b.alternativeSendTxProvider.useForNonces(msg.From)) {
 		result, err := b.alternativeSendTxProvider.callHttpStringResult(
-			b.alternativeSendTxProvider.urls[0],
+			b.alternativeSendTxProvider.nonceURL(msg.From),
 			"eth_estimateGas",
-			params,
+			estimateParamsWithoutPrivatePending(params),
 		)
 		if err == nil {
-			return hexutil.DecodeUint64(result)
+			// Count success only once the result decodes: a malformed hex quantity is a provider
+			// failure, so fall through to the primary rather than return the decode error to the caller.
+			if gas, decErr := hexutil.DecodeUint64(result); decErr == nil {
+				b.observeAlternativeEstimateGasRequest("success")
+				return gas, nil
+			} else {
+				err = decErr
+			}
 		}
+		// Logged rather than swallowed: a silent provider error hides quota exhaustion (#1629).
+		b.observeAlternativeEstimateGasRequest("error")
+		glog.Warningf("Alternative provider failed for eth_estimateGas: %v, falling back to primary RPC", err)
 	}
+	// Deadline built here rather than at function entry: the provider round-trip above runs on its own
+	// context and a slow or rate-limited relay can burn most of b.Timeout, so a context created at entry
+	// could already be expired by the time the fallback reaches the healthy primary (#1629). What it
+	// gets is the rest of the request's budget, not a fresh one - both legs are configured from
+	// rpc_timeout, so a full one let a blackholing relay double the request's wall time and hold a
+	// websocket pending-request slot for twice as long, on the endpoint the wallet calls per keystroke.
+	ctx, cancel := context.WithTimeout(context.Background(), b.remainingEstimateTimeout(started))
+	defer cancel()
 	return b.Client.EstimateGas(ctx, msg)
+}
+
+// minEstimateFallbackTimeout is what the primary estimate keeps even when the relay leg consumed the
+// whole request budget - clamped to the budget itself for coins whose rpc_timeout sits below it (see
+// remainingEstimateTimeout). Without a floor a slow relay would leave the fallback pre-expired, which
+// is the failure the deadline placement above exists to avoid.
+const minEstimateFallbackTimeout = 5 * time.Second
+
+// remainingEstimateTimeout returns what is left of the request's budget since started, floored at
+// minEstimateFallbackTimeout - clamped to the budget itself, so a coin configured with rpc_timeout
+// below the floor is not handed a fallback larger than its whole budget (at rpc_timeout 2s an
+// unclamped floor let the request run 3.5x its budget).
+func (b *EthereumRPC) remainingEstimateTimeout(started time.Time) time.Duration {
+	floor := minEstimateFallbackTimeout
+	if b.Timeout < floor {
+		floor = b.Timeout
+	}
+	if remaining := b.Timeout - time.Since(started); remaining > floor {
+		return remaining
+	}
+
+	return floor
+}
+
+// observeAlternativeEstimateGasRequest records an eth_estimateGas call routed to the alternative
+// send-tx provider, labeled success (provider answered) or error (fell back to the primary RPC). Only
+// senders that declared private-pending state or sent privately recently (see useForNonces) are routed
+// here, a gated subset of estimateFee traffic.
+func (b *EthereumRPC) observeAlternativeEstimateGasRequest(result string) {
+	if b.metrics == nil || b.metrics.EthAlternativeEstimateGasRequests == nil {
+		return
+	}
+	b.metrics.EthAlternativeEstimateGasRequests.With(common.Labels{"result": result}).Inc()
+}
+
+// estimatePrivatePendingDeclared reports whether an estimateFee request declared in-flight private
+// transactions for the sender via privatePending.nonces in its specific params (see
+// server.WsPrivatePending). It is only a routing signal - unlike a nonce, the wallet cannot compute
+// gas itself, so Blockbook must still simulate the call; the declaration just says "estimate against
+// the relay's pending-private state". Only presence matters, not the values. params is a decoded
+// JSON object, so nested objects/arrays are map[string]interface{} / []interface{}.
+func estimatePrivatePendingDeclared(params map[string]interface{}) bool {
+	pp, ok := params["privatePending"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	nonces, ok := pp["nonces"].([]interface{})
+	return ok && len(nonces) > 0
+}
+
+// estimateParamsWithoutPrivatePending returns params with the privatePending key removed, so the
+// wallet's bookkeeping is not forwarded as part of the eth_estimateGas call object. It copies only
+// when the key is present, so the common (no-hint) path is zero-cost and never mutates the caller's
+// map.
+func estimateParamsWithoutPrivatePending(params map[string]interface{}) map[string]interface{} {
+	if _, ok := params["privatePending"]; !ok {
+		return params
+	}
+	out := make(map[string]interface{}, len(params))
+	for k, v := range params {
+		if k == "privatePending" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // bigIntToFloat converts a wei amount to float64 for gauge export. float64 holds integers
@@ -2076,13 +2257,38 @@ func (b *EthereumRPC) observeEip1559FeeSource(source string) {
 
 // observeAlternativeNonceRequest records an eth_getTransactionCount lookup routed to the alternative
 // send-tx provider, labeled by result: success (provider answered) or error (provider failed and the
-// lookup fell back to the primary RPC). Only recent private senders are routed here (see useForNonces),
-// so this counts the gated subset rather than every address request.
+// lookup fell back to the primary RPC). Only requests that declared private-pending state or whose
+// sender sent privately recently (see useForNonces) are routed here, a gated subset rather than every
+// address request.
 func (b *EthereumRPC) observeAlternativeNonceRequest(result string) {
 	if b.metrics == nil || b.metrics.EthAlternativeNonceRequests == nil {
 		return
 	}
 	b.metrics.EthAlternativeNonceRequests.With(common.Labels{"result": result}).Inc()
+}
+
+// observePendingFloorRaised records that raiseToPendingFloor lifted a getTransactionCount answer above
+// the backend's own pending nonce, by source: provider (the relay's pending count lagged an in-flight
+// tx - near zero now that the relay counts over its whole window, a sustained rate means it regressed)
+// or primary (the fallback RPC never knew the private tx - expected while a private send is in flight,
+// not a fault).
+func (b *EthereumRPC) observePendingFloorRaised(source string) {
+	if b.metrics == nil || b.metrics.EthAlternativePendingFloorRaised == nil {
+		return
+	}
+	b.metrics.EthAlternativePendingFloorRaised.With(common.Labels{"source": source}).Inc()
+}
+
+// observePendingFloorStranded records that the cache held a private tx for a nonce ABOVE the contiguous
+// run the floor could advance over: a slot below it is filled by nothing Blockbook knows of, and the
+// floor deliberately stops under that hole (see raiseToPendingFloor), so the tx cannot mine until the
+// hole is filled. Source labels as in observePendingFloorRaised; a sustained provider-source rate is the
+// actionable #1675 signal that relay-accepted sends are going missing from the cache.
+func (b *EthereumRPC) observePendingFloorStranded(source string) {
+	if b.metrics == nil || b.metrics.EthAlternativePendingFloorStranded == nil {
+		return
+	}
+	b.metrics.EthAlternativePendingFloorStranded.With(common.Labels{"source": source}).Inc()
 }
 
 // eip1559BaseFeeMultiplier is the headroom applied to the projected base fee when deriving
@@ -2251,7 +2457,10 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	}
 	glog.Infof("eth_sendRawTransaction to the primary RPC accepted %s as txid %s in %v", decoded, txid, duration)
 	if b.ChainConfig.DisableMempoolSync {
-		// add transactions submitted by us to mempool if sync is disabled
+		// With no newPendingTransactions feed this add is the only thing that makes an own send visible
+		// for its addresses. Reached only on success (the early return above): an empty txid indexed the zero hash instead, spending two
+		// more b.Timeout round-trips (eth_getTransactionByHash, then the pruned-index recovery's
+		// eth_getTransactionReceipt) on a path where the wallet has already waited out two.
 		b.Mempool.AddTransactionToMempool(txid)
 	}
 	return txid, nil
@@ -2313,13 +2522,16 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // is set, the confirmed (latest) nonce.
 //
 // When an alternative send-tx provider is configured, the lookup is routed through it only
-// for addresses that recently sent a transaction via that provider (see useForNonces) —
-// those may have a pending transaction the primary RPC does not know about. All other
-// addresses go straight to the primary RPC so that the hottest API endpoint does not burn
-// the provider's rate-limit quota. Whenever a provider is configured, the pending answer -
-// whether from the provider or from the primary RPC - is raised to the floor implied by
-// the alternative mempool cache (see pendingNonceFloor) so it never contradicts
-// Blockbook's own pending view of the sender's private transactions.
+// for requests that declare in-flight private transactions (privatePendingNonces, see
+// server.WsPrivatePending) and for addresses that recently sent a transaction via that
+// provider (see useForNonces) — both may have a pending transaction the primary RPC does
+// not know about. All other addresses go straight to the primary RPC so that the hottest
+// API endpoint does not burn the provider's rate-limit quota. Whenever a provider is
+// configured, the pending answer - whether from the provider or from the primary RPC - is
+// advanced across the contiguous run of nonce slots held by cached private transactions
+// and by the declared nonces (see raiseToPendingFloor), so it never contradicts Blockbook's
+// own pending view and never runs past a slot nothing fills:
+// pending <= answer <= pending + cached + declared.
 //
 // The pending nonce (eth_getTransactionCount at the "pending" tag) counts transactions
 // still queued in the mempool and is the next nonce the account will use; it is always
@@ -2331,21 +2543,42 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 // lookup fails, the pending nonce is still returned with confirmedOK=false so the caller
 // can omit it rather than failing the whole request. When confirmedOK is false the returned
 // confirmed value is 0 and must be ignored.
-func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
+func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (uint64, uint64, bool, error) {
 	ethAddress := ethcommon.BytesToAddress(addrDesc)
+	// The caller may declare the account nonces of its own in-flight private transactions (see
+	// server.WsPrivatePending). They join the cached ones in the floor below; their presence alone
+	// is what routes the lookup, so no separate declared floor is computed.
+	declared := len(privatePendingNonces) > 0
 
-	if b.alternativeSendTxProvider != nil && b.alternativeSendTxProvider.useForNonces(ethAddress) {
-		pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
-		if err == nil {
-			b.observeAlternativeNonceRequest("success")
-			// Even the provider's own answer can fall below Blockbook's advertised pending
-			// view: Blink-style relays stop counting a still-pending tx at the pending tag
-			// while Blockbook keeps exposing it until the cache timeout (see
-			// reconcileMempoolTxs).
-			return b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending), confirmed, confirmedOK, nil
+	if b.alternativeSendTxProvider != nil {
+		// Route to the provider when the caller declared in-flight private txs - a wallet knows its
+		// own submitted nonces authoritatively, where the recentSenders heuristic is defeated by a
+		// restart or by a load-balanced replica that did not accept the send - or when that
+		// heuristic says this sender sent privately through this instance recently. Replacing the
+		// primary's answer is safe because the relay's pending count is a public-mempool superset
+		// (see docs/evm-send.md).
+		if declared || b.alternativeSendTxProvider.useForNonces(ethAddress) {
+			pending, confirmed, confirmedOK, err := b.alternativeSendTxProvider.getNonces(ethAddress, withConfirmed)
+			if err == nil {
+				b.observeAlternativeNonceRequest("success")
+				// Even the provider's own answer can fall below Blockbook's advertised pending view.
+				// The relay counts a pending tx over the whole pending window, so this floor is a
+				// safety net for a lagging or misbehaving relay node rather than the routine case it
+				// was before that alignment; a sustained floor_raised{source=provider} rate means the
+				// relay's pending count regressed below its window again. A declared nonce is folded
+				// in as the same safety net, for a transaction the answering node never saw.
+				raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending, privatePendingNonces)
+				if raised > pending {
+					b.observePendingFloorRaised("provider")
+				}
+				if stranded {
+					b.observePendingFloorStranded("provider")
+				}
+				return raised, confirmed, confirmedOK, nil
+			}
+			b.observeAlternativeNonceRequest("error")
+			glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 		}
-		b.observeAlternativeNonceRequest("error")
-		glog.Warningf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 	}
 
 	pending, confirmed, confirmedOK, err := b.getNoncesRPC(ethAddress, withConfirmed)
@@ -2358,9 +2591,18 @@ func (b *EthereumRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, w
 		// entry expires at send time + timeout while the cached tx stays exposed as pending
 		// until fetch-back time + timeout (plus reconcile granularity), and in that window a
 		// primary answer below the floor would contradict the pending tx Blockbook still
-		// displays. The floor is a local scan of a usually-empty map, so it costs nothing on
-		// the hot path.
-		pending = b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending)
+		// displays. The scan is over the private sends still pending for the whole window, and
+		// decodes nothing per entry (see storedTx.slot), so it stays cheap on this hot path.
+		// Declared nonces are folded in for the same reason. Without a provider there is no
+		// private mempool to contradict, so a declared nonce is deliberately a no-op.
+		raised, stranded := b.alternativeSendTxProvider.raiseToPendingFloor(ethAddress, pending, privatePendingNonces)
+		if raised > pending {
+			b.observePendingFloorRaised("primary")
+		}
+		if stranded {
+			b.observePendingFloorStranded("primary")
+		}
+		pending = raised
 	}
 	return pending, confirmed, confirmedOK, nil
 }

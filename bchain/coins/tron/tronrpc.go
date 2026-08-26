@@ -1187,7 +1187,8 @@ func (b *TronRPC) normalizeMulticallCalls(calls []bchain.EthereumMulticallCall) 
 // EthereumTypeGetNonces returns the account nonce. Tron exposes only the latest
 // (confirmed) nonce via NonceAt in a single call, so the pending and confirmed
 // values are identical and the withConfirmed flag carries no extra cost here.
-func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
+// Tron has no alternative send-tx relay, so the privatePendingNonces hint is ignored.
+func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (uint64, uint64, bool, error) {
 	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 	n, err := b.Client.NonceAt(ctx, addrDesc, nil)

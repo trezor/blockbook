@@ -245,14 +245,14 @@ metrics:
   eth_alternative_mempool_reconciliation_events_total:
     name: blockbook_eth_alternative_mempool_reconciliation_events_total
     type: counter_vec
-    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action - fetchback_cached, fetchback_missing and fetchback_error are the post-send fetch-back that puts a just-broadcast tx into the cache (a missing or erroring fetch-back means the tx is not surfaced as pending at all), skipped_fresh and kept retain an entry for the next cycle, provider_error and provider_missing_pending keep an unconfirmed entry pending retry, and mined, nonce_superseded, provider_missing, timeout (from the reconcile loop or a read-path expiry) and rbf_replaced (fee replacement) remove it
+    help: Alternative send-transaction mempool cache lifecycle decisions, labeled by action. Retained - skipped_fresh, skipped_backoff (ageing entries are re-asked less often, see probeInterval), kept, provider_error, provider_missing_pending (a null relay answer younger than alternativeMissingTxTimeout). Removed - mined, nonce_superseded, provider_missing (missing from the relay for alternativeMissingTxTimeout, 2m by default - the relay answers from one consistent store over its whole pending window, so a run of nulls means dropped or cancelled), timeout, rbf_replaced, sync_removed (block sync indexed it, normally the dominant exit). A rising timeout share means private sends are dying rather than settling; provider_missing is the expected exit of a drop-mode cancel
     labels: [action]
   eth_alternative_mempool_tx_residence_seconds:
     name: blockbook_eth_alternative_mempool_tx_residence_seconds
     type: histogram_vec
-    help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry at the moment it leaves the cache, labeled by the removing action (mined, nonce_superseded, provider_missing, timeout or rbf_replaced) - reveals how long unconfirmed txs actually survive before each exit reason fires
+    help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry when it leaves the cache, labeled by the removing action (the exit actions of eth_alternative_mempool_reconciliation_events_total). provider_missing is the dropped/cancelled exit; residence counts age since broadcast, so a cancel N minutes after the send records ~N plus alternativeMissingTxTimeout - read the reason, not the age. Collapsing below one reconcile cycle would be the premature-eviction regression (#1573). An entry reaching the cache timeout leaves as timeout even when the relay answers null, so with the missing eviction configured off provider_missing stops firing rather than pinning at the timeout
     labels: [action]
-    buckets: [30, 60, 120, 180, 300, 450, 600, 900, 1200, 1800, 3600]
+    buckets: [1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800, 12600]
   eth_alternative_mempool_cache_size:
     name: blockbook_eth_alternative_mempool_cache_size
     type: gauge
@@ -278,10 +278,34 @@ metrics:
     help: Wall-clock duration of an eth_sendRawTransaction call to an alternative provider, labeled by provider_host and status. Private relays sit on the wallet's critical path, so this is the user-visible cost of the alternative send path; errors piling up in the buckets at the configured <COIN>_RPC_TIMEOUT are timeouts rather than rejections
     labels: [provider_host, status]
     buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20, 30]
+  eth_alternative_mempool_oldest_age_seconds:
+    name: blockbook_eth_alternative_mempool_oldest_age_seconds
+    type: gauge
+    help: Age in seconds of the oldest transaction still held in the alternative send-transaction mempool cache, sampled at the end of every reconcile cycle (0 when empty). Residence only records an age once an entry leaves, so this is the live stuck-tx signal. Pinning near the cache timeout (alternativePendingTxWindow, 3h by default) at non-zero depth means private txs the relay still surfaces are dying underpriced rather than mining - a dropped or cancelled tx leaves much earlier through the missing eviction (alternativeMissingTxTimeout, 2m by default)
+  eth_alternative_send_not_surfaced_total:
+    name: blockbook_eth_alternative_send_not_surfaced_total
+    type: counter_vec
+    help: Private sends a relay ACCEPTED but whose post-send fetch-back (eth_getTransactionByHash) did not surface, labeled by reason - not_found (relay returned null), error (relay call failed) or dropped (refused under load, on the one path that alone can expose the send). Normally the transaction stays cached and pending from its own signed bytes; a relay that keeps not surfacing it retires the entry through the missing eviction (alternativeMissingTxTimeout), with the cache timeout as the backstop. On the undecodable-raw-hex path any reason means the send is exposed nowhere despite ~30s of retries. Should be ~0 - the relay answers from one consistent store, so even the immediate post-send fetch-back sees an accepted tx; a sustained rate means the relay stopped surfacing what it accepts, the pre-alignment behavior Blockbook no longer assumes
+    labels: [reason]
+  eth_alternative_pending_floor_raised_total:
+    name: blockbook_eth_alternative_pending_floor_raised_total
+    type: counter_vec
+    help: eth_getTransactionCount answers where raiseToPendingFloor advanced the pending nonce above the backend's own, across the contiguous run of nonces the cache holds private txs for. Labeled by source - provider (the relay's pending count lagged a still-cached tx; with the relay counting pending over its whole window this should be near zero, and a sustained rate means its pending count regressed - the benign exception is a revert-protected send between its 96s retention lapsing and the missing eviction firing) or primary (the RPC never knew the private tx - expected while a private send is in flight). The cost is bounded - a send that never mines holds its nonce slot until the missing eviction (alternativeMissingTxTimeout) retires it. A nonce the caller declared on the request (privatePending) counts as in flight the same as a cached tx, except no eviction bounds it - the declaration raises only the caller's own answer, for as long as the caller keeps sending it
+    labels: [source]
+  eth_alternative_pending_floor_stranded_total:
+    name: blockbook_eth_alternative_pending_floor_stranded_total
+    type: counter_vec
+    help: eth_getTransactionCount answers where the cache held a private tx for a nonce ABOVE the contiguous run the floor could advance over, i.e. with a hole below it that nothing Blockbook knows of fills. Labeled by source as in the raised counter; each sample is one request, not one transaction. The floor deliberately stops below the hole rather than advertising past it (#1675), so the stranded tx cannot mine until the hole is filled. Should be ~0; a sustained rate on source=provider means relay-accepted sends are not reaching the cache. Counts a caller-declared nonce above the run as well as a cached one, so a client declaring odd nonces shows up here too
+    labels: [source]
   eth_alternative_nonce_requests_total:
     name: blockbook_eth_alternative_nonce_requests_total
     type: counter_vec
-    help: eth_getTransactionCount lookups actually routed to the alternative send-transaction provider, labeled by result - success (the provider answered and its pending nonce was served, raised to the mempool floor) or error (the provider failed and the lookup fell back to the primary RPC). Only addresses that recently sent a private transaction through the provider are routed here (see useForNonces), so this counts the small gated subset, not every address request - a low, mostly-success rate confirms the gating is keeping the hot eth_getTransactionCount endpoint off the provider's rate quota
+    help: eth_getTransactionCount lookups actually routed to the alternative send-transaction provider, labeled by result - success (the provider answered, its pending nonce raised to the mempool floor) or error (the lookup fell back to the primary RPC). Only addresses that sent privately through the provider within the routing window (15 min, see useForNonces) are routed here - the small gated subset, not every address request. A low, mostly-success rate confirms the gating is sparing the provider's rate quota
+    labels: [result]
+  eth_alternative_estimate_gas_requests_total:
+    name: blockbook_eth_alternative_estimate_gas_requests_total
+    type: counter_vec
+    help: eth_estimateGas calls actually routed to the alternative send-transaction provider, labeled by result - success (the provider answered) or error (the estimate fell back to the primary RPC). Only addresses that sent privately through the provider within the routing window (15 min, see useForNonces) are routed here - the small gated subset, not every estimateFee request. A low, mostly-success rate confirms the gating is keeping this hot endpoint off the provider's rate quota
     labels: [result]
   estimated_fee:
     name: blockbook_estimated_fee

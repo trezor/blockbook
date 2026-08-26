@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,6 +50,12 @@ const defaultWsPendingRequestsLimit = 48
 const maxWebsocketMempoolFiltersResponses = 4
 const maxWebsocketActiveRequests = 2048
 const maxWebsocketEstimateFeeBlocks = 32
+
+// maxPrivatePendingNonces bounds how many declared in-flight private nonces a getAccountInfo
+// request may contribute (see WsPrivatePending). An address realistically has a handful of
+// in-flight transactions; the cap keeps a malformed or hostile request from forcing unbounded work,
+// and it bounds how far the pending-nonce walk can advance in one request.
+const maxPrivatePendingNonces = 64
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
 const maxWebsocketSubscribeFiatRatesTokens = 1000
@@ -1050,6 +1057,32 @@ func unmarshalGetAccountInfoRequest(params []byte) (*WsAccountInfoReq, error) {
 	return &r, nil
 }
 
+// privatePendingNonces extracts the declared in-flight private-transaction nonces from a
+// getAccountInfo request, capped at maxPrivatePendingNonces, returning a defensive copy (or nil
+// when none are declared). The copy prevents the request struct's backing array from being
+// retained past the request and keeps the downstream filter independent of it.
+func privatePendingNonces(p *WsPrivatePending) []uint64 {
+	if p == nil || len(p.Nonces) == 0 {
+		return nil
+	}
+	if len(p.Nonces) <= maxPrivatePendingNonces {
+		out := make([]uint64, len(p.Nonces))
+		copy(out, p.Nonces)
+		return out
+	}
+	// More declared nonces than we carry downstream - a malformed or hostile request, since a real
+	// wallet has only a handful of sequential in-flight nonces. Keep the LOWEST ones: the pending
+	// nonce advances from the backend's own answer across a contiguous run (see
+	// raiseToPendingFloor), so the slots just above that answer are the only ones that can be
+	// consumed, and anything dropped here sits above them and would have stranded anyway. Sorting
+	// first also keeps the answer independent of the order the client happened to send.
+	out := make([]uint64, len(p.Nonces))
+	copy(out, p.Nonces)
+	slices.Sort(out)
+
+	return out[:maxPrivatePendingNonces]
+}
+
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
 	if err := s.api.ValidateProtocolsForChain(req.Protocols); err != nil {
 		return nil, err
@@ -1079,13 +1112,14 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		tokensToReturn = api.TokensToReturnDerived
 	}
 	filter := api.AddressFilter{
-		FromHeight:         uint32(req.FromHeight),
-		ToHeight:           uint32(req.ToHeight),
-		Contract:           req.ContractFilter,
-		Vout:               api.AddressFilterVoutOff,
-		TokensToReturn:     tokensToReturn,
-		Protocols:          req.Protocols,
-		WithConfirmedNonce: req.ConfirmedNonce,
+		FromHeight:           uint32(req.FromHeight),
+		ToHeight:             uint32(req.ToHeight),
+		Contract:             req.ContractFilter,
+		Vout:                 api.AddressFilterVoutOff,
+		TokensToReturn:       tokensToReturn,
+		Protocols:            req.Protocols,
+		WithConfirmedNonce:   req.ConfirmedNonce,
+		PrivatePendingNonces: privatePendingNonces(req.PrivatePending),
 	}
 	req.Page, req.PageSize = sanitizeAccountPagingParams(req.Page, req.PageSize, txsOnPage, txsInAPI)
 	req.Gap = validateIntValue(req.Gap, 0, 0, maxGapValue)
