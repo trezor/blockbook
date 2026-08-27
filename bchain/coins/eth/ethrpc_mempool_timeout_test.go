@@ -170,8 +170,9 @@ func TestConfigurationAlternativeMissingTxTimeoutDuration(t *testing.T) {
 	}
 }
 
-// TestMempoolRetentionInverted covers the retention-order check: the provider cache must expire
-// before the wrapped mempool, whose timeout sweep is the only exit that does not clear the cache.
+// TestMempoolRetentionInverted covers the retention-order check: the provider cache must not outlive
+// the wrapped mempool, whose timeout sweep is the only exit that does not clear the cache. Equal
+// retentions are the shipped coin-config setting and must stay accepted.
 func TestMempoolRetentionInverted(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -192,10 +193,10 @@ func TestMempoolRetentionInverted(t *testing.T) {
 			want:        true,
 		},
 		{
-			name:        "equal retentions are inverted",
+			name:        "equal retentions are not inverted",
 			alternative: 10 * time.Minute,
 			mempool:     10 * time.Minute,
-			want:        true,
+			want:        false,
 		},
 		{
 			name:        "a zero mempool retention is inverted",
@@ -294,7 +295,8 @@ func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 // TestCreateMempoolRejectsInvertedRetention pins that an inverted pair fails startup rather than
 // warning: inverted, the mempool's timeout sweep drops a private transaction's address index while the
 // cache keeps serving its body as pending, the #1573 symptom arrived at silently. Only an explicit
-// mempoolTxTimeout can get there, since the default is derived from the cache retention.
+// mempoolTxTimeout can get there, since the default is derived from the cache retention. A pair set
+// equal is not inverted and must start, since that is what the coin configs ship.
 func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
@@ -307,9 +309,12 @@ func TestCreateMempoolRejectsInvertedRetention(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "explicit mempool timeout equal to the pending window",
-			config:    Configuration{MempoolTxTimeout: "3h", AlternativePendingTxWindow: "3h"},
-			wantError: true,
+			name:   "explicit mempool timeout equal to the pending window",
+			config: Configuration{MempoolTxTimeout: "3h", AlternativePendingTxWindow: "3h"},
+		},
+		{
+			name:   "explicit mempool timeout equal to an explicit cache retention",
+			config: Configuration{MempoolTxTimeout: "12h", AlternativeMempoolTxTimeout: "12h"},
 		},
 		{
 			name:   "explicit mempool timeout above the pending window",

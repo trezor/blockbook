@@ -11,7 +11,7 @@ and its invariants are in [evm-send.md](/docs/evm-send.md); this page maps the t
 | Holds | txid + address index (+ token transfers) | full `RpcTransaction` body, sender, nonce, send generation |
 | Populated from | `newPendingTransactions` WS feed; the resync snapshot; own successful sends when `disableMempoolSync` | only sends a relay ACKed, in `ALTERNATIVE_SENDTX_ONLY` + `ALTERNATIVE_FETCH_MEMPOOL_TX` mode — from the signed bytes alone |
 | Serves | address and xpub txs (`GetAddrDescTransactions`), wallet `NewTx` pushes | tx bodies on `GetTransaction`, the pending-nonce floor |
-| Retention | `mempoolTxTimeout` — the cache retention + 30 min when the pending-tx cache is enabled, else `mempoolTxTimeoutHours` | `alternativePendingTxWindow` — 3 h, the window in which a privately broadcast tx can still be built into a block |
+| Retention | `mempoolTxTimeout` — the cache retention + 30 min when the pending-tx cache is enabled, else `mempoolTxTimeoutHours`; the coin configs set it explicitly and match `alternativeMempoolTxTimeout` to it | `alternativeMempoolTxTimeout`, defaulting to `alternativePendingTxWindow` — 3 h, the window in which a privately broadcast tx can still be built into a block |
 | Reconciled | `Resync` every ~60 s; timeout sweep at most every 10 min | `reconcileMempoolTxs` on a 1 min tick, against the relay; an entry is re-probed less often as it ages |
 
 A private transaction is in **both**: the cache holds the body and is the source of truth, the wrapped
@@ -24,11 +24,12 @@ Two couplings between the stores are load-bearing:
   is added to the wrapped mempool or it cannot be indexed at all. The body comes from the send's own
   signed bytes and the fetch-back never writes the cache, so this holds even when the relay never
   surfaces the transaction (see [evm-send.md](/docs/evm-send.md)).
-- The cache must expire **before** the wrapped mempool. Every cache exit clears the wrapped mempool
+- The cache must **not outlive** the wrapped mempool. Every cache exit clears the wrapped mempool
   too, but the mempool's own timeout sweep does not clear the cache; inverted, a private transaction
   loses its address index while still being served as pending. The mempool default is *derived* from
   the cache retention, so only an explicit `mempoolTxTimeout` can invert the pair, and `CreateMempool`
-  then refuses to start.
+  then refuses to start. Equal retentions are fine — the cache entry is written first, so it is never
+  the younger of the two — and are what the coin configs ship.
 
 ## Broadcast, ingest and eviction
 

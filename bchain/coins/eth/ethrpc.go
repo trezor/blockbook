@@ -201,9 +201,10 @@ func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, er
 // sweep is the one exit that does NOT clear the cache: inverted, it drops a private transaction's
 // address index while the cache keeps serving its body as pending, and nothing reconciles the two. Only
 // an explicit mempoolTxTimeout can invert the pair, which is why that is rejected rather than warned
-// about.
+// about. Equal timeouts are not inverted: the cache stores a transaction before handing it to the
+// mempool, so its entry is never younger, and both stores stop serving it at the same age.
 func mempoolRetentionInverted(alternativeTimeout, mempoolTimeout time.Duration) bool {
-	return alternativeTimeout >= mempoolTimeout
+	return alternativeTimeout > mempoolTimeout
 }
 
 // AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.
@@ -833,7 +834,7 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 		if cacheEnabled && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
 			// wrapped in ErrConfiguration so startup fails fast: this cannot resolve on a retry, and
 			// the retry loop would otherwise spend two minutes reporting it once a second as an RPC fault
-			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must be longer than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
+			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must not be shorter than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
 		}
 		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)

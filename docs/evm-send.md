@@ -139,7 +139,7 @@ a transaction the relay stops answering for as dropped:
 | `alternativePendingTxWindow` | 3 h | how long a relay-accepted transaction is served as pending and its nonce slot reserved |
 | `alternativeMempoolTxTimeout` | the window | the cache retention, if it should differ from the window |
 | `alternativeMissingTxTimeout` | 2 min | how long a cached transaction may stay missing from the relay (consecutive null answers) before reconcile evicts it — the dropped/cancelled exit |
-| `mempoolTxTimeout` | cache retention + 30 min | the wrapped mempool, which must outlive the cache — Blockbook refuses to start if an explicit value inverts the pair |
+| `mempoolTxTimeout` | cache retention + 30 min | the wrapped mempool, which must not expire before the cache — equal is allowed and is what the coin configs ship; Blockbook refuses to start if an explicit value inverts the pair |
 | relay routing (`useForNonces`) | 15 min | how long the sender's `eth_getTransactionCount` and `eth_estimateGas` go to the relay rather than the primary backend |
 
 The routing horizon is deliberately the odd one out. Once the send is cached, the pending-nonce floor
