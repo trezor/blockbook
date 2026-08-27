@@ -56,6 +56,8 @@ func init() {
 	SigNetParams.Net = SignetMagic
 
 	// Address encoding magics
+	// chaincfg leaves AddressMagicLen zero in signet params, which breaks base58 decoding
+	SigNetParams.AddressMagicLen = 1
 	SigNetParams.PubKeyHashAddrID = []byte{111}
 	SigNetParams.ScriptHashAddrID = []byte{196}
 	SigNetParams.Bech32HRPSegwit = "tgrs"
