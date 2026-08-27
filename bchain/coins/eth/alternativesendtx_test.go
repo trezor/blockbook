@@ -3161,3 +3161,41 @@ func TestStoredTxSlotMatchesTheBody(t *testing.T) {
 		})
 	}
 }
+
+// TestMarkMissingAndClearMissingReportTransitions pins the signals reconcile's logging is built on: a
+// missing run is announced once however many nulls follow it, and clearing one hands back the run that
+// ended. Without those, a relay that stops answering while a transaction is still mineable - a nonce gap
+// can delay inclusion by tens of hours - is indistinguishable in the log from a genuine drop.
+func TestMarkMissingAndClearMissingReportTransitions(t *testing.T) {
+	entry := storedTx{time: uint32(time.Now().Add(-time.Hour).Unix())}
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx: true,
+		mempoolTxs:     map[string]storedTx{testAlternativeTxID: entry},
+	}
+
+	missingSince, started := provider.markMissing(testAlternativeTxID, entry)
+	if !started {
+		t.Fatal("markMissing did not report opening the run")
+	}
+	if missingSince == 0 {
+		t.Fatal("markMissing returned no run start")
+	}
+
+	if kept, startedAgain := provider.markMissing(testAlternativeTxID, entry); startedAgain || kept != missingSince {
+		t.Fatalf("markMissing on a running run = (%d, %v), want (%d, false)", kept, startedAgain, missingSince)
+	}
+
+	if got := provider.clearMissing(testAlternativeTxID, entry); got != missingSince {
+		t.Fatalf("clearMissing() = %d, want the ended run %d", got, missingSince)
+	}
+	if got := provider.clearMissing(testAlternativeTxID, entry); got != 0 {
+		t.Fatalf("clearMissing() = %d with no run in progress, want 0", got)
+	}
+
+	// a replaced entry must not inherit its predecessor's run, so neither call reports one
+	replaced := storedTx{time: entry.time, gen: entry.gen + 1}
+	provider.mempoolTxs[testAlternativeTxID] = replaced
+	if _, started := provider.markMissing(testAlternativeTxID, entry); started {
+		t.Fatal("markMissing opened a run on a stale snapshot")
+	}
+}

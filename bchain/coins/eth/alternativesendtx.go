@@ -948,6 +948,16 @@ func (st storedTx) slot() (ethcommon.Address, uint64, bool) {
 	return txSenderAndNonce(st.tx)
 }
 
+// slotLabel renders a cached entry's sender and nonce for a log line, empty when the body cannot be
+// decoded, so the nonce gap that keeps a transaction pending is visible in the log itself.
+func slotLabel(st storedTx) string {
+	from, nonce, ok := st.slot()
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf(" (from %s, nonce %d)", from.Hex(), nonce)
+}
+
 // txSenderAndNonce decodes the sender address and account nonce of a cached RPC transaction, reporting
 // ok=false when either is missing or unparsable so callers skip the entry rather than act on a zero value.
 func txSenderAndNonce(tx *bchain.RpcTransaction) (ethcommon.Address, uint64, bool) {
@@ -1168,11 +1178,20 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			// long after the drop", and the retention boundary - where Blink's 3h window makes a
 			// final null the EXPECTED answer for a tx stuck the whole window - does not pollute it.
 			if timedOut {
+				glog.Warningf("alternative mempool: evicting %s at the cache timeout, last answer was null%s, age %s", tx.txid, slotLabel(tx.tx), age.Round(time.Second))
 				p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 				continue
 			}
-			missingSince := p.markMissing(tx.txid, tx.tx)
+			missingSince, startedMissing := p.markMissing(tx.txid, tx.tx)
+			// Logged on the transition, not per probe: this line and the two below are the record of when
+			// the relay stopped answering for a transaction that may still be mineable - a nonce gap has
+			// delayed inclusion by tens of hours - so a relay outliving or undercutting its advertised
+			// window can be told apart from a genuine drop without reading metrics.
+			if startedMissing {
+				glog.Warningf("alternative mempool: %s no longer surfaced by the alternative provider%s, age %s; evicting after %s of null answers unless it reappears", tx.txid, slotLabel(tx.tx), age.Round(time.Second), p.missingTimeout())
+			}
 			if missingSince != 0 && time.Since(time.Unix(int64(missingSince), 0)) >= p.missingTimeout() {
+				glog.Warningf("alternative mempool: evicting %s%s, null answers for %s, age %s", tx.txid, slotLabel(tx.tx), time.Since(time.Unix(int64(missingSince), 0)).Round(time.Second), age.Round(time.Second))
 				p.evictMempoolTx("provider_missing", tx.txid, tx.tx.time)
 				continue
 			}
@@ -1180,9 +1199,14 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			continue
 		}
 		// surfaced (again): a transient gap must not accumulate toward the missing eviction
-		p.clearMissing(tx.txid, tx.tx)
+		if missingSince := p.clearMissing(tx.txid, tx.tx); missingSince != 0 {
+			glog.Warningf("alternative mempool: %s surfaced by the alternative provider again after %s of null answers%s, age %s", tx.txid, time.Since(time.Unix(int64(missingSince), 0)).Round(time.Second), slotLabel(tx.tx), age.Round(time.Second))
+		}
 
 		if timedOut {
+			// the relay was still answering at the cache timeout, i.e. the retention - not the relay -
+			// is what stopped serving this transaction as pending
+			glog.Infof("alternative mempool: evicting %s at the cache timeout while still surfaced by the alternative provider%s, age %s", tx.txid, slotLabel(tx.tx), age.Round(time.Second))
 			p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 			continue
 		}
@@ -1218,33 +1242,38 @@ func (p *AlternativeSendTxProvider) markProbed(txid string, snapshot storedTx) {
 }
 
 // markMissing stamps the start of the entry's current run of null relay answers - keeping an already
-// running one - and returns the run's start, 0 when the entry is gone or replaced. Guarded like
+// running one - and returns the run's start, 0 when the entry is gone or replaced, plus whether this
+// call opened the run so the caller logs the transition once instead of once per probe. Guarded like
 // markProbed, so a replacement cached in the meantime never inherits its predecessor's run.
-func (p *AlternativeSendTxProvider) markMissing(txid string, snapshot storedTx) uint32 {
+func (p *AlternativeSendTxProvider) markMissing(txid string, snapshot storedTx) (uint32, bool) {
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
 	current, found := p.mempoolTxs[txid]
 	if !found || current.gen != snapshot.gen || current.time != snapshot.time {
-		return 0
+		return 0, false
 	}
-	if current.missingSince == 0 {
+	started := current.missingSince == 0
+	if started {
 		current.missingSince = uint32(time.Now().Unix())
 		p.mempoolTxs[txid] = current
 	}
-	return current.missingSince
+	return current.missingSince, started
 }
 
 // clearMissing resets the entry's missing run once the relay surfaces the tx again, so transient gaps
-// do not accumulate toward the missing eviction. Guarded like markProbed.
-func (p *AlternativeSendTxProvider) clearMissing(txid string, snapshot storedTx) {
+// do not accumulate toward the missing eviction. It returns the run it ended, 0 when there was none, so
+// the caller can log a relay that resumed answering. Guarded like markProbed.
+func (p *AlternativeSendTxProvider) clearMissing(txid string, snapshot storedTx) uint32 {
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
 	current, found := p.mempoolTxs[txid]
 	if !found || current.gen != snapshot.gen || current.time != snapshot.time || current.missingSince == 0 {
-		return
+		return 0
 	}
+	missingSince := current.missingSince
 	current.missingSince = 0
 	p.mempoolTxs[txid] = current
+	return missingSince
 }
 
 func (p *AlternativeSendTxProvider) observeMempoolReconciliation(action string) {
