@@ -63,6 +63,8 @@
                 "alternative_estimate_fee": "infura",
                 "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/4663/suggestedGasFees\", \"periodSeconds\": 10}",
                 "mempoolTxTimeoutHours": 12,
+                "mempoolTxTimeout": "12h",
+                "alternativeMempoolTxTimeout": "12h",
                 "processInternalTransactions": true,
                 "trace_timeout": "10s",
                 "queryBackendOnMempoolResync": false,
