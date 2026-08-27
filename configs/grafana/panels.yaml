@@ -257,7 +257,7 @@ panels:
         legend: '{{coin}} - {{result}}'
   sync.eth_alternative_mempool_oldest_age:
     title: Alternative mempool oldest cached tx age (stuck-tx signal)
-    description: 'Age of the oldest transaction still in the alternative send-tx cache (1-min sampled at reconcile end), the live signal residence cannot give. Pinning near the cache timeout (alternativePendingTxWindow, 3h by default) at non-zero cache depth means private txs the relay still surfaces are dying underpriced rather than mining - a dropped or cancelled tx leaves much earlier through the missing eviction (alternativeMissingTxTimeout, 2m by default). Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
+    description: 'Age of the oldest transaction still in the alternative send-tx cache (1-min sampled at reconcile end), the live signal residence cannot give. Pinning near the cache timeout (alternativeMempoolTxTimeout - 3h by default, but 12h/48h on the coins that raised it) at non-zero cache depth means private txs the relay still surfaces are dying underpriced rather than mining - a dropped or cancelled tx leaves much earlier through the missing eviction (alternativeMissingTxTimeout, 2m by default). Empty is expected on coins without a configured relay (only arb/base/bsc/eth).'
     queries:
       age:
         promql: '{{name:eth_alternative_mempool_oldest_age_seconds}}{job="blockbook", coin="$coin"}'

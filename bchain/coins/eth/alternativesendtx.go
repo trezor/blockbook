@@ -1171,12 +1171,14 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			// missingTimeout means the tx was dropped or cancelled - a drop-mode cancel leaves no
 			// replacement behind to retire it - and the entry is evicted, releasing its nonce slot.
 			// Requiring a short run rather than a single null absorbs a transient relay fluke; a relay
-			// without that consistency is accommodated by configuring alternativeMissingTxTimeout at
-			// the pending window, which restores timeout-only eviction.
-			// An entry at the cache timeout leaves as timeout whatever the final probe answered:
-			// provider_missing is reserved for the missing-run rule, so its residence reads as "how
-			// long after the drop", and the retention boundary - where Blink's 3h window makes a
-			// final null the EXPECTED answer for a tx stuck the whole window - does not pollute it.
+			// that stops answering while a tx is still mineable is accommodated by configuring
+			// alternativeMissingTxTimeout at or above the cache retention, which restores timeout-only
+			// eviction.
+			// An entry at the cache timeout leaves as timeout whatever the final probe answered, so
+			// provider_missing stays the missing-run rule's own exit and its residence reads as "how
+			// long after the drop". With the retention configured past the relay's advertised window, an
+			// entry reaching the timeout was surfaced for nearly all of it - a null on the final probe is
+			// a coincidence, not the window closing - which is what the two timeout logs tell apart.
 			if timedOut {
 				glog.Warningf("alternative mempool: evicting %s at the cache timeout, last answer was null%s, age %s", tx.txid, slotLabel(tx.tx), age.Round(time.Second))
 				p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
