@@ -5,7 +5,7 @@
 Supported environment to develop Blockbook is Linux. Although it is possible build and run Blockbook on macOS
 or Windows our build process is not prepared for it. But you can still build Blockbook [manually](#manual-build).
 
-The only dependency required to build Blockbook is Docker. You can see how to install Docker [here](https://docs.docker.com/install/linux/docker-ce/debian/).
+The only dependency required to build Blockbook is Docker. You can see how to install Docker [here](https://docs.docker.com/engine/install/debian/).
 Manual build require additional dependencies that are described in appropriate section.
 
 ## Build in Docker environment
@@ -15,8 +15,9 @@ defines few targets used for building, testing and packaging of Blockbook. With 
 package templates in *build/docker* and *build/templates* respectively, they are only inputs that make build process.
 
 Docker build images are created at first execution of Makefile and that information is persisted. (Actually there are
-created two files in repository – .bin-image and .deb-image – that are used as tags.) Sometimes it is necessary to
-rebuild Docker images, it is possible by executing `make build-images`.
+created two files in repository – .bin-image and .deb-image – that are used as tags.) The images are rebuilt
+automatically when their definitions in *build/docker* change – *build/tools/image_status.sh* compares the image
+creation time with the last commit touching that directory. A rebuild can also be forced by executing `make build-images`.
 
 ### Building binary
 
@@ -54,6 +55,8 @@ Makefile targets follow simple pattern, there are a few prefixes that define wha
 
 * *deb-&lt;coin&gt;* – Build both Blockbook and back-end packages for given coin.
 
+* *deb-blockbook-all* – Build Blockbook packages for all coins.
+
 * *all-&lt;coin&gt;* – Similar to deb-&lt;coin&gt; but clean repository and rebuild Docker image before package build. It is useful
   for production deployment.
 
@@ -67,7 +70,7 @@ For example we want to build some packages for Bitcoin and Bitcoin Testnet.
 # make all-bitcoin deb-blockbook-bitcoin_testnet
 ...
 # ls build/*.deb
-build/backend-bitcoin_0.21.0-satoshilabs-1_amd64.deb  build/blockbook-bitcoin_0.3.5_amd64.deb  build/blockbook-bitcoin-testnet_0.3.5_amd64.deb
+build/backend-bitcoin_29.2-satoshilabs-1_amd64.deb  build/blockbook-bitcoin_0.6.0_amd64.deb  build/blockbook-bitcoin-testnet_0.6.0_amd64.deb
 ```
 
 We have built one back-end package, for Bitcoin, and two Blockbook packages, for Bitcoin and Bitcoin Testnet. The `all-bitcoin` initially cleaned the build directory and rebuilt the Docker build image.
@@ -117,6 +120,17 @@ to avoid unintended exposure. Example: `BB_RPC_BIND_HOST_ethereum=0.0.0.0 make d
 `BB_RPC_ALLOW_IP_<coin alias>`: Overrides backend RPC allow list for UTXO configs (e.g. `rpcallowip`). Defaults to
 `127.0.0.1` so binding to `0.0.0.0` does not implicitly open access. Example:
 `BB_RPC_ALLOW_IP_bitcoin=10.0.0.0/24 make deb-bitcoin`.
+
+`BB_STAGING`: Comma/space separated list of work-in-progress coins whose `BB_*` variables exist repo-wide but whose
+*configs/coins/&lt;coin&gt;.json* is only on a feature branch. Each listed coin is skipped where its config is absent, so
+sibling branches do not fail on the orphan variables. Like `BB_BUILD_ENV` it takes no coin alias suffix.
+
+`BB_DEV_API_URL_HTTP_<test name>` / `BB_DEV_API_URL_WS_<test name>`: Override the Blockbook API endpoints used by API and
+e2e tests. They are keyed by test identity (*coin.test_name*, falling back to the config filename), not by coin alias –
+see [testing.md](/docs/testing.md).
+
+The canonical list of the alias-suffixed `BB_*` prefixes is *build/bb-build-var-prefixes.txt*, shared by the Makefile,
+*build/tools/templates.go* and the CI workflows.
 
 ### Naming conventions and versioning
 
@@ -176,11 +190,16 @@ All configuration keys described below are in coin definition file in *configs/c
 
 URL from where is archive downloaded is defined in *backend.binary_url*.
 
+Some back-ends are not distributed as an archive but as a Docker image. Then *backend.binary_url* is empty and
+*backend.docker_image* defines the image – the build creates a container from it instead of downloading an archive.
+See arbitrum.json, base.json or zcash.json.
+
 **verify archive**
 
-There are three different approaches how is archive verification done. Some projects use PGP sign of archive, some
-have signed sha256 sums and some don't care about verification at all. So there is option *backend.verification_type* that
-could be *gpg*, *gpg-sha256* or *sha256* and chooses particular method.
+There are four different approaches how is archive verification done. Some projects use PGP sign of archive, some
+have signed sha256 sums, some are distributed as Docker images and some don't care about verification at all. So there is
+option *backend.verification_type* that could be *gpg*, *gpg-sha256*, *sha256* or *docker* and chooses particular
+method.
 
 *gpg* type require file with digital sign and maintainer's public key imported in Docker build image (see below). Sign
 file is downloaded from URL defined in *backend.verification_source*. Than is passed to gpg in order to verify archive.
@@ -193,6 +212,10 @@ sha256sum in order to verify archive.
 hexadecimal string that is compared with output of sha256sum. Although this solution is not secure, it avoid download
 errors and other surprises at least.
 
+*docker* type is used for back-ends distributed as Docker images. In *backend.verification_source* is defined the image
+digest (hexadecimal string without the `sha256:` prefix) that is compared with the first entry of image's *RepoDigests*.
+Because the digest covers the image content, a retagged image does not pass the check.
+
 *gpg* and *gpg-sha256* types require maintainer's public key imported in Docker build image. It is not expected that
 maintainer's key will change requently while sing or checksum files are changed every release, so it is ideal to
 store maintainer's key within image definition. Public keys are stored in *build/docker/deb/gpg-keys* directory. Docker
@@ -201,7 +224,8 @@ image must be rebuilt by calling `make build-images`.
 **extract archive**
 
 Extraction command is defined in *backend.extract_command*. Content of archive must be extracted to `./backend` directory.
-See bitcoin.json and vertcoin.json for different approaches.
+See bitcoin.json and vertcoin.json for different approaches. For Docker image back-ends the command copies required files
+out of the created container instead (`docker cp extract:<path> backend/<path>`), see arbitrum.json or zcash.json.
 
 **prepare distribution**
 
@@ -218,10 +242,10 @@ Configuration is described in [config.md](/docs/config.md).
 Instructions below are focused on Debian 11 on amd64. If you want to use another Linux distribution or operating system
 like macOS or Windows, please adapt the instructions to your target system.
 
-Setup go environment (use newer version of go as available)
+Setup go environment (*go.mod* defines the minimum version, *build/docker/bin/Dockerfile* the version we build with)
 
 ```
-wget https://golang.org/dl/go1.22.8.linux-amd64.tar.gz && tar xf go1.22.8.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.25.4.linux-amd64.tar.gz && tar xf go1.25.4.linux-amd64.tar.gz
 sudo mv go /opt/go
 sudo ln -s /opt/go/bin/go /usr/bin/go
 # see `go help gopath` for details
@@ -293,7 +317,7 @@ in local directory *data* and established ZeroMQ and RPC connections to back-end
 file passed to *-blockchaincfg* option.
 
 Blockbook logs to stderr (option *-logtostderr*) or to directory specified by parameter *-log_dir* . Verbosity of logs can be tuned
-by command line parameters *-v* and *-vmodule*, for details see https://godoc.org/github.com/golang/glog.
+by command line parameters *-v* and *-vmodule*, for details see https://pkg.go.dev/github.com/golang/glog.
 
 You can check that Blockbook is running by simple HTTP request: `curl https://localhost:9130`. Returned data is JSON with some
 run-time information. If the port is closed, Blockbook is syncing data.
