@@ -36,6 +36,7 @@
 | Ritocoin                         | 9160             | 9060               | 8060        | 38360                                               |
 | Decred                           | 9161             | 9061               | 8061        | 38361                                               |
 | SnowGem                          | 9162             | 9062               | 8062        | 38362                                               |
+| Ethereum PoW                     | 9163             | 9063               | 8063        | 38363 p2p, 8163 http                                |
 | BNB Smart Chain                  | 9164             | 9064               | 8064        | 38364 p2p, 8164 http                                |
 | BNB Smart Chain Archive          | 9165             | 9065               | 8065        | 38365 p2p, 8165 http                                |
 | Flo                              | 9166             | 9066               | 8066        | 38366                                               |
