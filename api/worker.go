@@ -20,6 +20,7 @@ import (
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
+	"golang.org/x/sync/singleflight"
 )
 
 // Worker is handle to api worker
@@ -37,6 +38,11 @@ type Worker struct {
 	fiatRates            *fiat.FiatRates
 	metrics              *common.Metrics
 	xpubConfig           XpubConfig
+	// contractProbeCache remembers contracts the chain reported as holding no token. The
+	// index never records that verdict, so without the cache every request re-probes them.
+	contractProbeCache *negativeProbeCache
+	// contractProbeGroup collapses concurrent probes of the same contract into one read.
+	contractProbeGroup singleflight.Group
 }
 
 var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
@@ -76,6 +82,7 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		fiatRates:            fiatRates,
 		metrics:              metrics,
 		xpubConfig:           xpubCfg,
+		contractProbeCache:   newNegativeProbeCache(contractProbeCacheCapacity),
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
@@ -706,41 +713,48 @@ func (w *Worker) GetContractInfo(contract string, standardFromContext bchain.Tok
 }
 
 func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
-	var err error
-	validContract := true
+	return w.getProbedContractDescriptorInfo(cd, standardFromContext, nil)
+}
+
+// getProbedContractDescriptorInfo serves contract metadata from the index, falling back to a
+// chain read. probes carries what a batched pre-pass already resolved; nil reads the chain
+// per contract.
+func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName, probes contractInfoProbes) (*bchain.ContractInfo, bool, error) {
 	contractInfo, err := w.db.GetContractInfo(cd, standardFromContext)
 	if err != nil {
 		return nil, false, err
 	}
 	if contractInfo == nil {
+		bestHeight, reorgGen := w.contractProbeCacheState()
+		// a contract the chain already reported as holding no token: nothing left to read,
+		// and nothing to warn about either
+		if w.contractProbeCache.contains(string(cd), bestHeight, reorgGen) {
+			return w.unknownContractInfo(cd), false, nil
+		}
 		// log warning only if the contract should have been known from processing of the internal data
 		if bchain.ProcessInternalTransactions {
 			glog.Warningf("Contract %v %v not found in DB", cd, standardFromContext)
 		}
-		contractInfo, err = w.chain.GetContractInfo(cd)
+		contractInfo, err = w.resolveContractInfo(cd, probes)
 		if err != nil {
+			// a failed read says nothing about the contract, so it must not be cached
 			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
+		} else if contractInfo == nil {
+			w.contractProbeCache.add(string(cd), bestHeight, w.negativeProbeTTLBlocks(contractProbeNegativeTTL), reorgGen)
 		}
 		if contractInfo == nil {
-			contractInfo = &bchain.ContractInfo{Standard: bchain.UnknownTokenStandard, Decimals: w.chainParser.AmountDecimals()}
-			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(cd)
-			if len(addresses) > 0 {
-				contractInfo.Contract = addresses[0]
-			}
-
-			validContract = false
-		} else {
-			if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
-				contractInfo.Standard = standardFromContext
-				contractInfo.Type = standardFromContext
-			}
-			if err = w.db.StoreContractInfo(contractInfo); err != nil {
-				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
-			}
+			return w.unknownContractInfo(cd), false, nil
 		}
-	} else if (contractInfo.Standard == bchain.UnhandledTokenStandard || len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
+		if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
+			contractInfo.Standard = standardFromContext
+			contractInfo.Type = standardFromContext
+		}
+		if err = w.db.StoreContractInfo(contractInfo); err != nil {
+			glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
+		}
+	} else if contractNeedsChainRefresh(contractInfo) {
 		// fix contract name/symbol that was parsed as a string consisting of zeroes
-		blockchainContractInfo, err := w.chain.GetContractInfo(cd)
+		blockchainContractInfo, err := w.resolveContractInfo(cd, probes)
 		if err != nil {
 			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
 		} else {
@@ -779,7 +793,8 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 	if contractInfo.Decimals == 0 && contractInfo.Standard == bchain.UnhandledTokenStandard {
 		contractInfo.Decimals = w.chainParser.AmountDecimals()
 	}
-	return contractInfo, validContract, nil
+	// unresolved contracts already returned above, with validContract false
+	return contractInfo, true, nil
 }
 
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
@@ -1072,9 +1087,9 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool) (*Token, error) {
+func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool, probes contractInfoProbes) (*Token, error) {
 	standard := bchain.EthereumTokenStandardMap[c.Standard]
-	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standard)
+	ci, validContract, err := w.getProbedContractDescriptorInfo(c.Contract, standard, probes)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getEthereumContractBalance %v", c.Contract)
 	}
@@ -1314,6 +1329,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 		if details > AccountDetailsBasic {
+			// Resolve the metadata of contracts the index does not describe in one batched
+			// call; the loop below would otherwise pay up to three serialized eth_calls per
+			// contract, interleaved with the balance work.
+			probes := w.prefetchContractInfos(ca.Contracts, filterDesc)
 			d.tokens = make([]Token, len(ca.Contracts))
 			var j int
 			for i := range ca.Contracts {
@@ -1332,7 +1351,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				if erc20Balances != nil {
 					erc20Balance, erc20Batched = erc20Balances[string(c.Contract)]
 				}
-				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance, erc20Batched)
+				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance, erc20Batched, probes)
 				if err != nil {
 					return nil, nil, err
 				}

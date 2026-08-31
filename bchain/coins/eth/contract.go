@@ -446,55 +446,219 @@ func erc20BalanceOfCallData(addrDesc bchain.AddressDescriptor) string {
 	return contractBalanceOfSignature + padded[len(addr):] + addr
 }
 
+// fetchContractInfo reads name/symbol/decimals, short-circuiting as soon as name() shows
+// the address holds no token.
+//
+// The returned pair is a verdict, not just a result: (nil, nil) means the chain
+// conclusively reports no token at the address, a non-nil error means the read itself
+// failed and says nothing about the contract. Callers must not persist or cache a
+// "not a token" conclusion drawn from an error.
 func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, error) {
-	var contract bchain.ContractInfo
 	b.observeEthCallContractInfo("name")
 	data, err := b.EthereumTypeRpcCall(contractNameSignature, address, "")
 	if err != nil {
-		// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
-		// and returning error "execution reverted" for some non contract addresses
+		// since geth v1.9.15 a call to a non-contract address reverts instead of returning
+		// empty data, so a deterministic error is the usual "not a token" signal
 		// https://github.com/ethereum/go-ethereum/issues/21249#issuecomment-648647672
-		// glog.Warning(errors.Annotatef(err, "Contract NameSignature %v", address))
-		return nil, nil
-		// return nil, errors.Annotatef(err, "erc20NameSignature %v", address)
+		if isNonRetriableEthCallError(err) {
+			return nil, nil
+		}
+		return nil, errors.Annotatef(err, "contract name() %v", address)
 	}
 	name := strings.TrimSpace(parseSimpleStringProperty(data))
-	if name != "" {
-		b.observeEthCallContractInfo("symbol")
-		data, err = b.EthereumTypeRpcCall(contractSymbolSignature, address, "")
-		if err != nil {
-			// glog.Warning(errors.Annotatef(err, "Contract SymbolSignature %v", address))
-			return nil, nil
-			// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
-		}
-		symbol := strings.TrimSpace(parseSimpleStringProperty(data))
-		b.observeEthCallContractInfo("decimals")
-		data, _ = b.EthereumTypeRpcCall(contractDecimalsSignature, address, "")
-		// if err != nil {
-		// 	glog.Warning(errors.Annotatef(err, "Contract DecimalsSignature %v", address))
-		// 	// return nil, errors.Annotatef(err, "erc20DecimalsSignature %v", address)
-		// }
-		contract = bchain.ContractInfo{
-			Contract: address,
-			Name:     name,
-			Symbol:   symbol,
-		}
-		d := parseSimpleNumericProperty(data)
-		if d != nil {
-			contract.Decimals = int(uint8(d.Uint64()))
-		} else {
-			contract.Decimals = EtherAmountDecimalPoint
-		}
-	} else {
+	if name == "" {
 		return nil, nil
 	}
-	return &contract, nil
+	b.observeEthCallContractInfo("symbol")
+	data, err = b.EthereumTypeRpcCall(contractSymbolSignature, address, "")
+	if err != nil {
+		// a contract whose symbol() reverts has never been surfaced as a token
+		if isNonRetriableEthCallError(err) {
+			return nil, nil
+		}
+		return nil, errors.Annotatef(err, "contract symbol() %v", address)
+	}
+	symbol := strings.TrimSpace(parseSimpleStringProperty(data))
+	b.observeEthCallContractInfo("decimals")
+	// decimals() is optional; an unreadable value falls back to the coin default
+	data, _ = b.EthereumTypeRpcCall(contractDecimalsSignature, address, "")
+	return &bchain.ContractInfo{
+		Contract: address,
+		Name:     name,
+		Symbol:   symbol,
+		Decimals: contractDecimalsOrDefault(parseSimpleNumericProperty(data)),
+	}, nil
+}
+
+// contractDecimalsOrDefault narrows a decimals() return to the stored width, falling back
+// to the coin default when the call yielded nothing usable.
+func contractDecimalsOrDefault(d *big.Int) int {
+	if d == nil {
+		return EtherAmountDecimalPoint
+	}
+	return int(uint8(d.Uint64()))
 }
 
 // GetContractInfo returns information about a contract
 func (b *EthereumRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
 	address := EIP55Address(contractDesc)
 	return b.fetchContractInfo(address)
+}
+
+// contractInfoSignatures are the metadata reads issued per contract, in the order the
+// aggregate3 sub-calls are laid out.
+var contractInfoSignatures = [...]string{contractNameSignature, contractSymbolSignature, contractDecimalsSignature}
+
+// contractInfoCallsPerContract is how many aggregate3 slots one contract occupies.
+const contractInfoCallsPerContract = len(contractInfoSignatures)
+
+// multicall3StarvationCanary closes every aggregate3 chunk. A call to a codeless address
+// succeeds for almost no gas, so it can only fail once the chunk ran out - which is what
+// tells a sub-call's bare revert (a real "not a token") apart from a starved one. The
+// element itself cannot: both come back as a failure with empty returndata.
+const multicall3StarvationCanary = "0x0000000000000000000000000000000000000000"
+
+// EthereumTypeGetContractInfos resolves metadata for many contracts at once, in input order.
+// One aggregate3 eth_call carries name/symbol/decimals for a chunk of contracts; without
+// Multicall3 each contract falls back to the sequential path, which bills a single call for
+// the common "not a token" case instead of three.
+func (b *EthereumRPC) EthereumTypeGetContractInfos(contractDescs []bchain.AddressDescriptor) []bchain.EthereumContractInfoResult {
+	if len(contractDescs) == 0 {
+		return nil
+	}
+	results := make([]bchain.EthereumContractInfoResult, len(contractDescs))
+	deployed, err := b.probeMulticall3()
+	if err != nil {
+		// visible so an eth_getCode-restricting provider is not silent
+		b.ObserveChainDataFallback("contract_info_multicall", "probe_error")
+	}
+	if !deployed {
+		for i := range contractDescs {
+			results[i] = b.contractInfoSequential(contractDescs[i])
+		}
+		return results
+	}
+	for _, i := range b.contractInfosMulticall3(contractDescs, results) {
+		results[i] = b.contractInfoSequential(contractDescs[i])
+	}
+	return results
+}
+
+// contractInfoSequential resolves one contract with the short-circuiting eth_calls - the
+// path for chains without Multicall3 and for elements aggregate3 left ambiguous.
+func (b *EthereumRPC) contractInfoSequential(contractDesc bchain.AddressDescriptor) bchain.EthereumContractInfoResult {
+	info, err := b.fetchContractInfo(EIP55Address(contractDesc))
+	if info != nil {
+		info.Contract = b.contractAddress(contractDesc)
+	}
+	return bchain.EthereumContractInfoResult{Info: info, Err: err}
+}
+
+// contractAddress renders the descriptor in the coin's own address form (EIP-55 on
+// Ethereum, Base58 on Tron) so a batched result carries the same address the
+// single-contract path stores.
+func (b *EthereumRPC) contractAddress(contractDesc bchain.AddressDescriptor) string {
+	if b.Parser != nil {
+		if addresses, _, err := b.Parser.GetAddressesFromAddrDesc(contractDesc); err == nil && len(addresses) > 0 {
+			return addresses[0]
+		}
+	}
+	return EIP55Address(contractDesc)
+}
+
+// contractInfosMulticall3 fills results from gas-bounded aggregate3 chunks and returns the
+// indexes it could not settle; the caller re-reads those with independent eth_calls.
+func (b *EthereumRPC) contractInfosMulticall3(contractDescs []bchain.AddressDescriptor, results []bchain.EthereumContractInfoResult) (holes []int) {
+	valid := make([]int, 0, len(contractDescs))
+	for i := range contractDescs {
+		if len(contractDescs[i]) == EthereumTypeAddressDescriptorLen {
+			valid = append(valid, i)
+			continue
+		}
+		// a malformed descriptor would fail the whole chunk at encode time
+		holes = append(holes, i)
+	}
+	// the canary takes a slot of its own, so the chunk still fits the configured budget
+	perChunk := (b.multicall3MaxCalls() - 1) / contractInfoCallsPerContract
+	if perChunk < 1 {
+		perChunk = 1
+	}
+	starved := 0
+	for start := 0; start < len(valid); start += perChunk {
+		end := start + perChunk
+		if end > len(valid) {
+			end = len(valid)
+		}
+		chunk := valid[start:end]
+		res, err := b.EthereumTypeMulticallAggregate3(contractInfoCalls(contractDescs, chunk), nil)
+		if err != nil {
+			// chunk failures are usually systemic: stop at the first and leave the rest to the
+			// sequential path, one fallback event and one log line per request
+			holes = append(holes, valid[start:]...)
+			b.ObserveChainDataFallback("contract_info_multicall", "error")
+			glog.Warningf("contract info multicall3 failed at chunk [%d:%d), falling back for %d contract(s): %v", start, end, len(valid)-start, err)
+			break
+		}
+		if len(res) != len(chunk)*contractInfoCallsPerContract+1 {
+			// aggregate3 verifies the count itself; refuse to index into a short response
+			holes = append(holes, chunk...)
+			continue
+		}
+		b.observeEthCallContractInfos(len(chunk))
+		// the canary is the last slot; see multicall3StarvationCanary
+		gasStarved := !res[len(res)-1].Success
+		for j, i := range chunk {
+			slots := res[j*contractInfoCallsPerContract : (j+1)*contractInfoCallsPerContract]
+			if gasStarved && (emptyAggregate3Failure(slots[0]) || emptyAggregate3Failure(slots[1])) {
+				// re-read rather than record a verdict the caller would go on to cache
+				holes = append(holes, i)
+				starved++
+				continue
+			}
+			results[i] = contractInfoFromAggregate3(b.contractAddress(contractDescs[i]), slots)
+		}
+	}
+	// element-level holes, counted apart from a failing chunk's one "error" event
+	b.observeChainDataFallback("contract_info_multicall", "elem_fallback", starved)
+	return holes
+}
+
+// contractInfoCalls lays out the sub-calls for one chunk: the metadata reads of every
+// contract in order, closed by the starvation canary.
+func contractInfoCalls(contractDescs []bchain.AddressDescriptor, chunk []int) []bchain.EthereumMulticallCall {
+	calls := make([]bchain.EthereumMulticallCall, 0, len(chunk)*contractInfoCallsPerContract+1)
+	for _, i := range chunk {
+		target := hexutil.Encode(contractDescs[i])
+		for _, signature := range contractInfoSignatures {
+			// a reverting metadata getter yields Success=false, not a failed batch
+			calls = append(calls, bchain.EthereumMulticallCall{Target: target, CallData: signature, AllowFailure: true})
+		}
+	}
+	return append(calls, bchain.EthereumMulticallCall{Target: multicall3StarvationCanary, AllowFailure: true})
+}
+
+// contractInfoFromAggregate3 turns one contract's slots into the verdict fetchContractInfo
+// would have reached from the same three eth_calls.
+func contractInfoFromAggregate3(address string, slots []bchain.EthereumMulticallResult) bchain.EthereumContractInfoResult {
+	var name string
+	if slots[0].Success {
+		name = strings.TrimSpace(parseSimpleStringProperty(slots[0].Data))
+	}
+	// a failed or blank name() is how the chain reports that there is no token here, and a
+	// reverting symbol() has never been surfaced as one either
+	if name == "" || !slots[1].Success {
+		return bchain.EthereumContractInfoResult{}
+	}
+	var decimals *big.Int
+	if slots[2].Success {
+		decimals = parseSimpleNumericProperty(slots[2].Data)
+	}
+	return bchain.EthereumContractInfoResult{Info: &bchain.ContractInfo{
+		Contract: address,
+		Name:     name,
+		Symbol:   strings.TrimSpace(parseSimpleStringProperty(slots[1].Data)),
+		Decimals: contractDecimalsOrDefault(decimals),
+	}}
 }
 
 // ErrInvalidErc20Balance means a balanceOf eth_call yielded no usable balance: either it returned

@@ -57,47 +57,6 @@ type erc4626MulticallCaller interface {
 	EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) ([]bchain.EthereumMulticallResult, error)
 }
 
-// erc4626BlockTimeProvider exposes the chain's configured average block time
-// so the API can convert chain-time settings (negative-cache TTL) into a
-// per-coin block count at request time. Implemented by EVM coins via
-// EthereumRPC.AverageBlockTimeDuration.
-type erc4626BlockTimeProvider interface {
-	AverageBlockTimeDuration() (time.Duration, error)
-}
-
-// erc4626BlocksForDuration converts a wall-clock duration to the equivalent
-// per-chain block count, rounding up so a duration of "at least N" is honored.
-// Returns 0 when either input is non-positive — callers treat 0 as
-// "configuration unavailable, skip the time-derived behavior."
-func erc4626BlocksForDuration(d, blockTime time.Duration) uint32 {
-	if d <= 0 || blockTime <= 0 {
-		return 0
-	}
-	n := (d + blockTime - 1) / blockTime
-	if n < 1 {
-		return 1
-	}
-	return uint32(n)
-}
-
-// erc4626NegativeProbeTTLBlocks resolves the negative-cache TTL to a per-coin
-// block count using the chain's configured averageBlockTimeMs. Returns 0 if
-// the chain doesn't expose a block time (e.g. non-EVM); the caller treats 0
-// as "do not negative-cache for this request" — safe fallback that just
-// forfeits the optimization.
-func (w *Worker) erc4626NegativeProbeTTLBlocks() uint32 {
-	provider, ok := w.chain.(erc4626BlockTimeProvider)
-	if !ok {
-		return 0
-	}
-	bt, err := provider.AverageBlockTimeDuration()
-	if err != nil {
-		glog.Warningf("erc4626: averageBlockTime unavailable, negative cache disabled: %v", err)
-		return 0
-	}
-	return erc4626BlocksForDuration(erc4626NegativeProbeTTLDuration, bt)
-}
-
 type erc4626ContractInfoFetcher func(contract string, standard bchain.TokenStandardName) (*bchain.ContractInfo, bool, error)
 
 // erc4626VaultPersister anchors the row to the observation height so a
@@ -115,7 +74,7 @@ func (w *Worker) enrichErc4626Tokens(tokens Tokens, bestHeight uint32, bestHash 
 	reorgGen := w.db.ReorgGeneration()
 	// Resolve the wall-clock negative-cache TTL into a per-coin block count
 	// once per request. 0 falls back to "do not negative-cache" (no-op).
-	negativeTTLBlocks := w.erc4626NegativeProbeTTLBlocks()
+	negativeTTLBlocks := w.negativeProbeTTLBlocks(erc4626NegativeProbeTTLDuration)
 	setVault := func(addr, asset string) error {
 		return w.db.SetContractInfoErc4626Vault(addr, asset, bestHeight, bestHash, reorgGen)
 	}
@@ -127,7 +86,7 @@ func enrichErc4626TokensWithDeps(
 	getContractInfo erc4626ContractInfoFetcher,
 	mc erc4626MulticallCaller,
 	setVault erc4626VaultPersister,
-	negativeCache *erc4626NegativeCache,
+	negativeCache *negativeProbeCache,
 	bestHeight uint32,
 	negativeTTLBlocks uint32,
 	reorgGen uint64,
@@ -154,11 +113,11 @@ func enrichErc4626TokensWithDeps(
 			continue
 		}
 		if ci.IsErc4626 {
-			negativeCache.remove(token.Contract)
+			negativeCache.remove(erc4626ContractKey(token.Contract))
 			token.Protocols = append(token.Protocols, contractInfoProtocolErc4626)
 			continue
 		}
-		if negativeCache.contains(token.Contract, bestHeight, reorgGen) {
+		if negativeCache.contains(erc4626ContractKey(token.Contract), bestHeight, reorgGen) {
 			continue
 		}
 		candidates = append(candidates, candidate{token: token, contract: token.Contract})
@@ -199,11 +158,11 @@ func enrichErc4626TokensWithDeps(
 				}
 			}
 			if assetContract == "" || !totalAssetsResult.Success {
-				negativeCache.add(c.contract, bestHeight, negativeTTLBlocks, reorgGen)
+				negativeCache.add(erc4626ContractKey(c.contract), bestHeight, negativeTTLBlocks, reorgGen)
 				continue
 			}
 			if _, derr := erc4626DecodeUint(totalAssetsResult.Data); derr != nil {
-				negativeCache.add(c.contract, bestHeight, negativeTTLBlocks, reorgGen)
+				negativeCache.add(erc4626ContractKey(c.contract), bestHeight, negativeTTLBlocks, reorgGen)
 				continue
 			}
 			// Persistence is best-effort; on error or silent refusal (reorg
@@ -212,7 +171,7 @@ func enrichErc4626TokensWithDeps(
 			if err := setVault(c.contract, assetContract); err != nil {
 				glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", c.contract, assetContract, err)
 			}
-			negativeCache.remove(c.contract)
+			negativeCache.remove(erc4626ContractKey(c.contract))
 			c.token.Protocols = append(c.token.Protocols, contractInfoProtocolErc4626)
 		}
 	}
