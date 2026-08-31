@@ -220,7 +220,9 @@ type EthereumRPC struct {
 	// that deploy it at a non-canonical address (e.g. Tron). Set in code, not config.
 	Multicall3AddressOverride string
 	// net_version / web3_clientVersion snapshot, see backendidentity.go.
-	identity backendIdentityCache
+	identity TTLValue[backendIdentity]
+	// chain id latched by the first identity fetch, see validateBackendChainID.
+	validatedChainID uint64
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
 	multicall3 multicall3Gate
 }

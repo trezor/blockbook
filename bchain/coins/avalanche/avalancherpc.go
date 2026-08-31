@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"sync"
 	"time"
 
 	jsontypes "github.com/ava-labs/avalanchego/utils/json"
@@ -62,13 +61,7 @@ type AvalancheRPC struct {
 	*eth.EthereumRPC
 	info *rpc.Client
 	// avm version snapshot, see cachedNodeVersion.
-	nodeVersionMu      sync.Mutex
-	nodeVersion        string
-	nodeVersionProbing bool
-	// nodeVersionAttempt is the last probe attempt, successful or not; zero means never
-	// attempted. Suppression keys on the attempt so a node that never answers with an avm
-	// version is still probed only once per TTL.
-	nodeVersionAttempt time.Time
+	nodeVersion eth.TTLValue[string]
 }
 
 // NewAvalancheRPC returns new AvalancheRPC instance.
@@ -165,32 +158,20 @@ func (b *AvalancheRPC) cachedNodeVersion() string {
 	return b.nodeVersionCached(time.Now(), b.probeNodeVersion)
 }
 
-// nodeVersionCached holds the TTL rules; now and probe are injected so they can be tested
-// without sleeping or a live node.
+// nodeVersionCached holds the avalanche policy on top of eth.TTLValue; now and probe are
+// injected so it can be tested without sleeping or a live node. The version is a label, never
+// a reason to fail GetChainInfo, so a failed probe just keeps the last known value.
 func (b *AvalancheRPC) nodeVersionCached(now time.Time, probe func() string) string {
-	b.nodeVersionMu.Lock()
-	// One caller at a time probes and the rest return the current value straight away, so
-	// concurrent requests never queue behind an RPC that may sit until b.Timeout. A failed
-	// probe is not retried for a TTL either - the version is a label, never a reason to
-	// fail GetChainInfo, and an info endpoint that is down must not cost an RPC per request.
-	if b.nodeVersionProbing || (!b.nodeVersionAttempt.IsZero() && now.Sub(b.nodeVersionAttempt) < nodeVersionTTL) {
-		v := b.nodeVersion
-		b.nodeVersionMu.Unlock()
-		return v
+	v, _, _ := b.nodeVersion.Get(now, nodeVersionTTL, func() (string, error) {
+		if p := probe(); p != "" {
+			return p, nil
+		}
+		return "", errors.New("info endpoint reported no avm version")
+	})
+	if v == nil {
+		return ""
 	}
-	b.nodeVersionProbing = true
-	b.nodeVersionAttempt = now
-	b.nodeVersionMu.Unlock()
-
-	probed := probe()
-
-	b.nodeVersionMu.Lock()
-	defer b.nodeVersionMu.Unlock()
-	b.nodeVersionProbing = false
-	if probed != "" {
-		b.nodeVersion = probed
-	}
-	return b.nodeVersion
+	return *v
 }
 
 // probeNodeVersion returns the node's avm version, or "" if the info endpoint does not
