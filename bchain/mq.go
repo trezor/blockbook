@@ -26,6 +26,12 @@ type MQ struct {
 	subs      SubscriptionTopics
 }
 
+type CurveConfig struct {
+	PublicKey  string `json:"public_key"`
+	PrivateKey string `json:"private_key"`
+	ServerKey  string `json:"server_key"`
+}
+
 // NotificationType is type of notification
 type NotificationType int
 
@@ -40,7 +46,7 @@ const (
 
 // NewMQ creates new Bitcoind ZeroMQ listener
 // callback function receives messages
-func NewMQ(binding string, callback func(NotificationType), subs SubscriptionTopics) (*MQ, error) {
+func NewMQ(binding string, curve *CurveConfig, callback func(NotificationType), subs SubscriptionTopics) (*MQ, error) {
 	context, err := zmq.NewContext()
 	if err != nil {
 		return nil, err
@@ -59,6 +65,32 @@ func NewMQ(binding string, callback func(NotificationType), subs SubscriptionTop
 			return nil, err
 		}
 	}
+
+	if curve != nil {
+		err = socket.SetCurveServerkey(curve.ServerKey)
+		if err != nil {
+			return nil, err
+		}
+		publicKey := curve.PublicKey
+		secretKey := curve.PrivateKey
+		if publicKey == "" || secretKey == "" {
+			// generate new keypair
+			publicKey, secretKey, err = zmq.NewCurveKeypair()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		err = socket.SetCurvePublickey(publicKey)
+		if err != nil {
+			return nil, err
+		}
+		err = socket.SetCurveSecretkey(secretKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// for now do not use raw subscriptions - we would have to handle skipped/lost notifications from zeromq
 	// on each notification we do sync or syncmempool respectively
 	// socket.SetSubscribe("rawblock")
