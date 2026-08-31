@@ -598,17 +598,10 @@ func TestParseInputDataTruncatesOversizedCalldata(t *testing.T) {
 	signatures := []bchain.FourByteSignature{
 		{Name: "cancelMultipleMakerOrders", Parameters: []string{"uint256[]"}},
 	}
-	// Build canonical ABI calldata for a uint256[] of zero elements: selector,
-	// offset word (0x20), count word, then `count` zero words. With enough
-	// elements the hex length exceeds maxParseInputDataLen and the parser must
-	// return the method id only, flagged Truncated, without materializing values.
+	// Canonical ABI calldata for a uint256[] of zero elements: selector,
+	// offset word (0x20), count word, then `count` zero-value words.
 	buildCalldata := func(count int) string {
-		var b strings.Builder
-		b.WriteString("0x9e53a69a")
-		b.WriteString(fmt.Sprintf("%064x", 0x20)) // offset to the array
-		b.WriteString(fmt.Sprintf("%064x", count)) // element count
-		b.WriteString(strings.Repeat(strings.Repeat("0", 64), count))
-		return b.String()
+		return fmt.Sprintf("0x9e53a69a%064x%064x%s", 0x20, count, strings.Repeat("0", 64*count))
 	}
 
 	oversized := buildCalldata(3000)

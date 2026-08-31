@@ -49,9 +49,7 @@ type EthereumParsedInputData struct {
 	Name     string                     `json:"name" ts_doc:"Parsed function name if recognized."`
 	Function string                     `json:"function,omitempty" ts_doc:"Full function signature (including parameter types)."`
 	Params   []EthereumParsedInputParam `json:"params,omitempty" ts_doc:"List of parsed parameters for this function call."`
-	// Truncated is set when the input data was too large to decode within the
-	// parse budget; only MethodId is populated so clients can tell an elided
-	// decode from an unknown selector.
+	// Truncated: parse budget exceeded, only MethodId is populated
 	Truncated bool `json:"parsedDataTruncated,omitempty" ts_doc:"True when input data exceeded the parse-size budget and parameters were not decoded."`
 }
 
