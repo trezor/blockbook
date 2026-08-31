@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-hoodi",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.5.2",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.5.2/erigon_v3.5.2_linux_amd64.tar.gz",
+        "version": "3.5.5",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.5.5/erigon_v3.5.5_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "cf35a980f7e59a514803def5d21de7aeb6a1b9e5c4b1a35adb3dc59acc2413bc",
+        "verification_source": "2e875794234dc06fdcd0c716b38e936b8c820e90e16cee2d43fdfaf74df09ced",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain hoodi --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode full --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --discovery.v4 --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr {{.Env.RPCBindHost}} --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --rpc.logs.maxresults 200000 --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.5.2/erigon_v3.5.2_linux_arm64.tar.gz",
-                "verification_source": "383b9b5030eb99abd62bc7eac8ca24242aa5a6cf5ee19a24733d4c33b642c3b1"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.5.5/erigon_v3.5.5_linux_arm64.tar.gz",
+                "verification_source": "1e2e917b15338047f4a41cfd2cfd486b272c856fd549a68e3fe63d64762f8113"
             }
         }
     },
