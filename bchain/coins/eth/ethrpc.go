@@ -835,7 +835,11 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 		if cacheEnabled && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
 			// wrapped in ErrConfiguration so startup fails fast: this cannot resolve on a retry, and
 			// the retry loop would otherwise spend two minutes reporting it once a second as an RPC fault
-			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must not be shorter than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
+			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must not be shorter than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativeMempoolTxTimeout (or alternativePendingTxWindow when no explicit cache retention is set)", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
+		}
+		if cacheEnabled && b.alternativeSendTxProvider.mempoolTxsTimeout < mempoolTxTimeout {
+			// the shipped configs keep the two equal; a gap usually means one side drifted in a later edit
+			glog.Infof("alternative-provider cache retention %s is shorter than mempoolTxTimeout %s: private transactions stop being served as pending before their address index expires", b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout)
 		}
 		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
