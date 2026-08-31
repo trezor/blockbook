@@ -28,7 +28,7 @@ type backendIdentity struct {
 
 // getBackendIdentity returns the backend chain id and client version, from cache when fresh.
 func (b *EthereumRPC) getBackendIdentity() (*backendIdentity, error) {
-	return identityFromCache(b.identity.Get(time.Now(), backendIdentityTTL, b.fetchBackendIdentity))
+	return identityFromCache(b.identity.Get(time.Now()))
 }
 
 // identityFromCache maps the cache state onto GetChainInfo's contract: no identity at all, or
@@ -75,12 +75,13 @@ func (b *EthereumRPC) fetchBackendIdentity() (backendIdentity, error) {
 // flip: an endpoint answering for a different chain would have the whole index built against
 // the wrong backend, so the refresh keeps failing instead of adopting the new id as healthy.
 func (b *EthereumRPC) validateBackendChainID(id uint64) error {
-	// unsynchronized on purpose: only identity fetches touch it, and TTLValue single-flights them
-	if b.validatedChainID != 0 && b.validatedChainID != id {
-		err := errors.Errorf("backend chain id changed from %d to %d, the RPC endpoint answers for a different chain", b.validatedChainID, id)
+	if b.validatedChainID.CompareAndSwap(0, id) {
+		return nil
+	}
+	if latched := b.validatedChainID.Load(); latched != id {
+		err := errors.Errorf("backend chain id changed from %d to %d, the RPC endpoint answers for a different chain", latched, id)
 		glog.Error(err)
 		return err
 	}
-	b.validatedChainID = id
 	return nil
 }

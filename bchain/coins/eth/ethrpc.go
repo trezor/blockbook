@@ -220,9 +220,9 @@ type EthereumRPC struct {
 	// that deploy it at a non-canonical address (e.g. Tron). Set in code, not config.
 	Multicall3AddressOverride string
 	// net_version / web3_clientVersion snapshot, see backendidentity.go.
-	identity TTLValue[backendIdentity]
+	identity *common.TTLValue[backendIdentity]
 	// chain id latched by the first identity fetch, see validateBackendChainID.
-	validatedChainID uint64
+	validatedChainID atomic.Uint64
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
 	multicall3 multicall3Gate
 }
@@ -288,6 +288,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		BaseChain:   &bchain.BaseChain{},
 		ChainConfig: &c,
 	}
+	s.identity = common.NewTTLValue(backendIdentityTTL, s.fetchBackendIdentity)
 	// 1-slot buffer ensures we only queue one "refresh tip" signal at a time.
 	s.newBlockNotifyCh = make(chan struct{}, 1)
 
