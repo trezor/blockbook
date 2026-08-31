@@ -2002,6 +2002,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EthereumParsedInputParam"
+        parsedDataTruncated:
+          type: boolean
+          description: True when input data exceeded the parse-size budget and parameters were not decoded.
 
     EthereumSpecific:
       type: object
