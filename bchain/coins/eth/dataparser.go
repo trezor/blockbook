@@ -96,6 +96,11 @@ func GetSignatureFromData(data string) uint32 {
 
 const ErrorTy byte = 255
 
+// maxParseInputDataLen bounds the hex length of calldata that ParseInputData will
+// decode. Real calls rarely exceed a few KB; ~64 KB of calldata is generous while
+// keeping parse work and per-signature allocations away from the chain gas limit.
+const maxParseInputDataLen = 128 * 1024
+
 func processParam(data string, index int, dataOffset int, t *abi.Type, processed []bool) ([]string, int, bool) {
 	var retval []string
 	d := index << 6
@@ -259,6 +264,13 @@ func (p *EthereumParser) ParseInputData(signatures *[]bchain.FourByteSignature, 
 	}
 	parsed := bchain.EthereumParsedInputData{
 		MethodId: data[:10],
+	}
+	// Decode work grows with calldata length, which is bounded only by chain gas;
+	// cap it here so a single large-array tx cannot force unbounded parsing on
+	// every unauthenticated detail request.
+	if len(data) > maxParseInputDataLen {
+		parsed.Truncated = true
+		return &parsed
 	}
 	defer func() {
 		if r := recover(); r != nil {

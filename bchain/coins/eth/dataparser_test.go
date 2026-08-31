@@ -3,7 +3,9 @@
 package eth
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/trezor/blockbook/bchain"
@@ -588,5 +590,43 @@ func Test_getEnsRecord(t *testing.T) {
 				t.Errorf("getEnsRecord() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseInputDataTruncatesOversizedCalldata(t *testing.T) {
+	parser := NewEthereumParser(1, false)
+	signatures := []bchain.FourByteSignature{
+		{Name: "cancelMultipleMakerOrders", Parameters: []string{"uint256[]"}},
+	}
+	// Build canonical ABI calldata for a uint256[] of zero elements: selector,
+	// offset word (0x20), count word, then `count` zero words. With enough
+	// elements the hex length exceeds maxParseInputDataLen and the parser must
+	// return the method id only, flagged Truncated, without materializing values.
+	buildCalldata := func(count int) string {
+		var b strings.Builder
+		b.WriteString("0x9e53a69a")
+		b.WriteString(fmt.Sprintf("%064x", 0x20)) // offset to the array
+		b.WriteString(fmt.Sprintf("%064x", count)) // element count
+		b.WriteString(strings.Repeat(strings.Repeat("0", 64), count))
+		return b.String()
+	}
+
+	oversized := buildCalldata(3000)
+	if len(oversized) <= maxParseInputDataLen {
+		t.Fatalf("test calldata not oversized: len=%d, limit=%d", len(oversized), maxParseInputDataLen)
+	}
+	got := parser.ParseInputData(&signatures, oversized)
+	want := &bchain.EthereumParsedInputData{MethodId: "0x9e53a69a", Truncated: true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ParseInputData(oversized) = %#v, want %#v", got, want)
+	}
+
+	// Negative control: a small array under the budget still decodes every value.
+	small := parser.ParseInputData(&signatures, buildCalldata(2))
+	if small.Truncated {
+		t.Errorf("ParseInputData(small) unexpectedly truncated: %#v", small)
+	}
+	if len(small.Params) != 1 || len(small.Params[0].Values) != 2 {
+		t.Errorf("ParseInputData(small) = %#v, want 1 param with 2 values", small)
 	}
 }
