@@ -307,6 +307,8 @@ func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
 		{name: "waiting entry is not re-asked within its interval", age: 30 * time.Minute, sinceProbe: 90 * time.Second, wantProbes: 0, wantAction: "skipped_backoff"},
 		{name: "waiting entry is re-asked once its interval elapses", age: 30 * time.Minute, sinceProbe: 6 * time.Minute, wantProbes: 1, wantAction: "provider_missing_pending"},
 		{name: "hour-old entry backs off further", age: 2 * time.Hour, sinceProbe: 6 * time.Minute, wantProbes: 0, wantAction: "skipped_backoff"},
+		{name: "multi-hour entry is not re-asked within the hourly interval", age: 5 * time.Hour, sinceProbe: 20 * time.Minute, wantProbes: 0, wantAction: "skipped_backoff"},
+		{name: "multi-hour entry is re-asked once an hour elapses", age: 5 * time.Hour, sinceProbe: 61 * time.Minute, wantProbes: 1, wantAction: "provider_missing_pending"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -314,7 +316,8 @@ func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
 			})
 			var removed string
 			provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-			provider.mempoolTxsTimeout = 3 * time.Hour
+			// the shipped retention, so the multi-hour cases exercise the backoff and not the timeout
+			provider.mempoolTxsTimeout = 48 * time.Hour
 			provider.metrics = newReconcileTestMetrics()
 			entry := provider.mempoolTxs[testAlternativeTxID]
 			entry.time = uint32(time.Now().Add(-tt.age).Unix())

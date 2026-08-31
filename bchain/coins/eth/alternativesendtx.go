@@ -82,15 +82,20 @@ const alternativeNonceRoutingTimeout = 15 * time.Minute
 // (about to mine, or its nonce about to be consumed), so it is probed every cycle. An entry that has
 // waited an hour is waiting on a builder, where probing every cycle buys a quarter-hour of eviction
 // latency at sixty times the relay quota: a fresh dial per probe plus, through
-// transactionSupersededByNonce, an eth_getTransactionCount per URL.
+// transactionSupersededByNonce, an eth_getTransactionCount per URL. Past the relay's 3h pending window
+// the retention can hold an entry for tens of hours more (the configs match it to mempoolTxTimeout),
+// so the 15m rung alone would spend ~190 probes on one stuck tx; hourly caps that long tail. The
+// timeout eviction is unaffected - reconcile checks it before the backoff gate.
 func probeInterval(age time.Duration) time.Duration {
 	switch {
 	case age < 10*time.Minute:
 		return alternativeMempoolTxCheckPeriod
 	case age < time.Hour:
 		return 5 * time.Minute
-	default:
+	case age < 3*time.Hour:
 		return 15 * time.Minute
+	default:
+		return time.Hour
 	}
 }
 
