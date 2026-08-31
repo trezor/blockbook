@@ -128,7 +128,7 @@ type AlternativeSendTxProvider struct {
 	mempoolTxsTimeout            time.Duration
 	missingTxTimeout             time.Duration
 	rpcTimeout                   time.Duration
-	mempool                      *bchain.MempoolEthereumType
+	mempool                      wrappedMempool
 	metrics                      *common.Metrics
 	removeTransactionFromMempool func(string)
 	watchMempoolTxsOnce          sync.Once
@@ -178,9 +178,20 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 	return provider
 }
 
+// wrappedMempool is the slice of MempoolEthereumType the cache path drives, narrowed so tests can
+// record the remove/add ordering the retention coupling depends on.
+type wrappedMempool interface {
+	AddTransactionToMempool(txid string) bool
+	RemoveTransactionFromMempool(txid string)
+}
+
 // SetupMempool sets up connection to the mempool
 func (p *AlternativeSendTxProvider) SetupMempool(mempool *bchain.MempoolEthereumType, removeTransactionFromMempool func(string)) {
-	p.mempool = mempool
+	// assigned only when non-nil: a nil concrete pointer stored in the interface field would pass the
+	// nil checks and panic on the first call
+	if mempool != nil {
+		p.mempool = mempool
+	}
 	p.removeTransactionFromMempool = removeTransactionFromMempool
 	if p.fetchMempoolTx {
 		p.watchMempoolTxsOnce.Do(func() {
@@ -881,7 +892,8 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 		return
 	}
 
-	if !p.insertMempoolTx(txid, tx, gen, from, nonce, decoded) {
+	inserted, replaced := p.insertMempoolTx(txid, tx, gen, from, nonce, decoded)
+	if !inserted {
 		// a newer replacement already occupies this nonce slot
 		return
 	}
@@ -894,6 +906,12 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 	}
 
 	if p.mempool != nil {
+		// A re-send restamped the cache entry while AddTransactionToMempool keeps an existing entry's
+		// original time - the mempool sweep would then drop the address index before the cache stops
+		// serving the tx as pending (#1573). Remove first so the re-add restamps the wrapped entry too.
+		if replaced {
+			p.mempool.RemoveTransactionFromMempool(txid)
+		}
 		p.mempool.AddTransactionToMempool(txid)
 		// A concurrent higher-generation send for this slot can evict txid from both stores during the
 		// add above, which then re-inserts it into the wrapped mempool only - and reconcile walks just
@@ -909,10 +927,12 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 }
 
 // insertMempoolTx inserts the entry unless a strictly newer send for the same (from, nonce) slot has
-// already cached its own, reporting whether it inserted. Deliberately a separate function so the unlock
-// is deferred: a panic leaving mempoolTxsMux held would deadlock every send, read, reconcile and
-// nonce-floor lookup instead of crashing the process, since the fetch-back goroutine recovers panics.
-func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcTransaction, gen uint64, from ethcommon.Address, nonce uint64, decoded bool) bool {
+// already cached its own, reporting whether it inserted and whether it overwrote an existing entry for
+// this txid - a re-send restamping the cache timestamp, which the caller must mirror into the wrapped
+// mempool. Deliberately a separate function so the unlock is deferred: a panic leaving mempoolTxsMux
+// held would deadlock every send, read, reconcile and nonce-floor lookup instead of crashing the
+// process, since the fetch-back goroutine recovers panics.
+func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcTransaction, gen uint64, from ethcommon.Address, nonce uint64, decoded bool) (inserted, replaced bool) {
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
 	if p.mempoolTxs == nil {
@@ -928,12 +948,13 @@ func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcT
 				continue
 			}
 			if f, n, ok := st.slot(); ok && f == from && n == nonce && st.gen > gen {
-				return false
+				return false, false
 			}
 		}
 	}
+	_, replaced = p.mempoolTxs[txid]
 	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen, from: from, nonce: nonce, decoded: decoded}
-	return true
+	return true, replaced
 }
 
 // slot returns the nonce slot the entry fills, from the copy decoded at insert. It falls back to

@@ -28,8 +28,9 @@ Two couplings between the stores are load-bearing:
   too, but the mempool's own timeout sweep does not clear the cache; inverted, a private transaction
   loses its address index while still being served as pending. The mempool default is *derived* from
   the cache retention, so only an explicit `mempoolTxTimeout` can invert the pair, and `CreateMempool`
-  then refuses to start. Equal retentions are fine — the cache entry is written first, so it is never
-  the younger of the two — and are what the coin configs ship.
+  then refuses to start. Equal retentions are fine — every cache write creates or, on a re-send of the
+  same txid, restamps the wrapped mempool entry, so the cache is never the younger of the two — and are
+  what the coin configs ship.
 
 ## Broadcast, ingest and eviction
 

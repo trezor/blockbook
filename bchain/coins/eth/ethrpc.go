@@ -201,8 +201,9 @@ func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, er
 // sweep is the one exit that does NOT clear the cache: inverted, it drops a private transaction's
 // address index while the cache keeps serving its body as pending, and nothing reconciles the two. Only
 // an explicit mempoolTxTimeout can invert the pair, which is why that is rejected rather than warned
-// about. Equal timeouts are not inverted: the cache stores a transaction before handing it to the
-// mempool, so its entry is never younger, and both stores stop serving it at the same age.
+// about. Equal timeouts are not inverted: every cache write creates or - on a re-send of the same txid -
+// restamps the wrapped mempool entry (see cacheMempoolTransaction), so the cache entry is never the
+// younger one and both stores stop serving it at the same age.
 func mempoolRetentionInverted(alternativeTimeout, mempoolTimeout time.Duration) bool {
 	return alternativeTimeout > mempoolTimeout
 }

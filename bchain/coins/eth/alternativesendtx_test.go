@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,6 +91,55 @@ func assertReconcileOutcome(t *testing.T, provider *AlternativeSendTxProvider, r
 	}
 	if !found {
 		t.Fatal("transaction was removed from alternative mempool cache, want kept")
+	}
+}
+
+// fakeWrappedMempool records the order of wrapped-mempool calls so tests can assert the re-send
+// restamp (remove before re-add) that keeps the two stores expiring together.
+type fakeWrappedMempool struct {
+	ops []string
+}
+
+func (f *fakeWrappedMempool) AddTransactionToMempool(txid string) bool {
+	f.ops = append(f.ops, "add:"+txid)
+	return true
+}
+
+func (f *fakeWrappedMempool) RemoveTransactionFromMempool(txid string) {
+	f.ops = append(f.ops, "remove:"+txid)
+}
+
+// A re-send of the same raw tx restamps the cache entry, but AddTransactionToMempool keeps an existing
+// wrapped entry's original time - without the remove + re-add the mempool sweep drops the address index
+// while the cache still serves the tx as pending, the #1573 inversion the equal retentions in the coin
+// configs leave no margin for.
+func TestAlternativeSendTxProviderRecacheRestampsWrappedMempoolEntry(t *testing.T) {
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        make(map[string]storedTx),
+	}
+	mempool := &fakeWrappedMempool{}
+	provider.mempool = mempool
+
+	tx := &bchain.RpcTransaction{
+		Hash:         testAlternativeTxID,
+		From:         "0x2222222222222222222222222222222222222222",
+		AccountNonce: "0x1",
+	}
+	provider.cacheMempoolTransaction(testAlternativeTxID, tx, 1)
+	if want := []string{"add:" + testAlternativeTxID}; !reflect.DeepEqual(mempool.ops, want) {
+		t.Fatalf("first cache ops = %v, want %v", mempool.ops, want)
+	}
+
+	provider.cacheMempoolTransaction(testAlternativeTxID, tx, 2)
+	want := []string{
+		"add:" + testAlternativeTxID,
+		"remove:" + testAlternativeTxID,
+		"add:" + testAlternativeTxID,
+	}
+	if !reflect.DeepEqual(mempool.ops, want) {
+		t.Fatalf("re-cache ops = %v, want %v", mempool.ops, want)
 	}
 }
 
