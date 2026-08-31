@@ -1164,6 +1164,9 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		if err != nil {
 			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
 			if timedOut {
+				// the third boundary exit: without its own line the surfacing record would go silent
+				// during a relay outage, when the generic warning above also fires for retained entries
+				glog.Warningf("alternative mempool: evicting %s at the cache timeout, provider unreachable%s, age %s", tx.txid, slotLabel(tx.tx), age.Round(time.Second))
 				p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 				continue
 			}
@@ -1211,7 +1214,14 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			// delayed inclusion by tens of hours - so a relay outliving or undercutting its advertised
 			// window can be told apart from a genuine drop without reading metrics.
 			if startedMissing {
-				glog.Warningf("alternative mempool: %s no longer surfaced by the alternative provider%s, age %s; evicting after %s of null answers unless it reappears", tx.txid, slotLabel(tx.tx), age.Round(time.Second), p.missingTimeout())
+				// The eviction check only reruns at the next due probe, which the age backoff can push
+				// well past missingTimeout - name the real horizon, or this line and the eviction log
+				// below contradict each other.
+				horizon := p.missingTimeout()
+				if interval := probeInterval(age); interval > horizon {
+					horizon = interval
+				}
+				glog.Warningf("alternative mempool: %s no longer surfaced by the alternative provider%s, age %s; evicting at the next probe, no sooner than %s from now, unless it reappears", tx.txid, slotLabel(tx.tx), age.Round(time.Second), horizon)
 			}
 			if missingSince != 0 && time.Since(time.Unix(int64(missingSince), 0)) >= p.missingTimeout() {
 				glog.Warningf("alternative mempool: evicting %s%s, null answers for %s, age %s", tx.txid, slotLabel(tx.tx), time.Since(time.Unix(int64(missingSince), 0)).Round(time.Second), age.Round(time.Second))
