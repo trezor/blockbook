@@ -215,6 +215,46 @@ func TestMempoolRetentionInverted(t *testing.T) {
 	}
 }
 
+func TestMempoolRetentionDrifted(t *testing.T) {
+	tests := []struct {
+		name            string
+		alternative     time.Duration
+		mempool         time.Duration
+		mempoolExplicit bool
+		want            bool
+	}{
+		{
+			name:            "aligned explicit pair has not drifted",
+			alternative:     48 * time.Hour,
+			mempool:         48 * time.Hour,
+			mempoolExplicit: true,
+			want:            false,
+		},
+		{
+			name:            "explicit mempool retention outgrowing the cache is drift",
+			alternative:     48 * time.Hour,
+			mempool:         72 * time.Hour,
+			mempoolExplicit: true,
+			want:            true,
+		},
+		{
+			name:            "the derived margin over the cache retention is not drift",
+			alternative:     defaultAlternativePendingTxWindow,
+			mempool:         defaultAlternativePendingTxWindow + mempoolRetentionMarginOverPendingWindow,
+			mempoolExplicit: false,
+			want:            false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mempoolRetentionDrifted(tt.alternative, tt.mempool, tt.mempoolExplicit); got != tt.want {
+				t.Fatalf("mempoolRetentionDrifted(%s, %s, %v) = %v, want %v", tt.alternative, tt.mempool, tt.mempoolExplicit, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNewEthereumRPCRejectsInvalidMempoolTimeouts(t *testing.T) {
 	tests := []struct {
 		name   string

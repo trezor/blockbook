@@ -85,7 +85,8 @@ const alternativeNonceRoutingTimeout = 15 * time.Minute
 // transactionSupersededByNonce, an eth_getTransactionCount per URL. Past the relay's 3h pending window
 // the retention can hold an entry for tens of hours more (the configs match it to mempoolTxTimeout),
 // so the 15m rung alone would spend ~190 probes on one stuck tx; hourly caps that long tail. The
-// timeout eviction is unaffected - reconcile checks it before the backoff gate.
+// timeout eviction is unaffected - reconcile checks it before the backoff gate - but the missing-run
+// eviction waits for the next due probe, and its transition log names this interval as the horizon.
 func probeInterval(age time.Duration) time.Duration {
 	switch {
 	case age < 10*time.Minute:
@@ -184,19 +185,15 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 }
 
 // wrappedMempool is the slice of MempoolEthereumType the cache path drives, narrowed so tests can
-// record the remove/add ordering the retention coupling depends on.
+// observe the calls the retention coupling depends on.
 type wrappedMempool interface {
-	AddTransactionToMempool(txid string) bool
+	AddOrRefreshTransactionInMempool(txid string) bool
 	RemoveTransactionFromMempool(txid string)
 }
 
 // SetupMempool sets up connection to the mempool
 func (p *AlternativeSendTxProvider) SetupMempool(mempool *bchain.MempoolEthereumType, removeTransactionFromMempool func(string)) {
-	// assigned only when non-nil: a nil concrete pointer stored in the interface field would pass the
-	// nil checks and panic on the first call
-	if mempool != nil {
-		p.mempool = mempool
-	}
+	p.mempool = mempool
 	p.removeTransactionFromMempool = removeTransactionFromMempool
 	if p.fetchMempoolTx {
 		p.watchMempoolTxsOnce.Do(func() {
@@ -897,8 +894,7 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 		return
 	}
 
-	inserted, replaced := p.insertMempoolTx(txid, tx, gen, from, nonce, decoded)
-	if !inserted {
+	if !p.insertMempoolTx(txid, tx, gen, from, nonce, decoded) {
 		// a newer replacement already occupies this nonce slot
 		return
 	}
@@ -911,13 +907,10 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 	}
 
 	if p.mempool != nil {
-		// A re-send restamped the cache entry while AddTransactionToMempool keeps an existing entry's
-		// original time - the mempool sweep would then drop the address index before the cache stops
-		// serving the tx as pending (#1573). Remove first so the re-add restamps the wrapped entry too.
-		if replaced {
-			p.mempool.RemoveTransactionFromMempool(txid)
-		}
-		p.mempool.AddTransactionToMempool(txid)
+		// AddOrRefresh, not Add: a re-send restamps the cache entry, and the wrapped entry must age
+		// with it or the mempool sweep drops the address index while the cache still serves the tx as
+		// pending (#1573).
+		p.mempool.AddOrRefreshTransactionInMempool(txid)
 		// A concurrent higher-generation send for this slot can evict txid from both stores during the
 		// add above, which then re-inserts it into the wrapped mempool only - and reconcile walks just
 		// the provider cache, so that orphan would linger as "Unconfirmed" until the wrapped mempool
@@ -932,12 +925,10 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 }
 
 // insertMempoolTx inserts the entry unless a strictly newer send for the same (from, nonce) slot has
-// already cached its own, reporting whether it inserted and whether it overwrote an existing entry for
-// this txid - a re-send restamping the cache timestamp, which the caller must mirror into the wrapped
-// mempool. Deliberately a separate function so the unlock is deferred: a panic leaving mempoolTxsMux
-// held would deadlock every send, read, reconcile and nonce-floor lookup instead of crashing the
-// process, since the fetch-back goroutine recovers panics.
-func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcTransaction, gen uint64, from ethcommon.Address, nonce uint64, decoded bool) (inserted, replaced bool) {
+// already cached its own, reporting whether it inserted. Deliberately a separate function so the unlock
+// is deferred: a panic leaving mempoolTxsMux held would deadlock every send, read, reconcile and
+// nonce-floor lookup instead of crashing the process, since the fetch-back goroutine recovers panics.
+func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcTransaction, gen uint64, from ethcommon.Address, nonce uint64, decoded bool) bool {
 	p.mempoolTxsMux.Lock()
 	defer p.mempoolTxsMux.Unlock()
 	if p.mempoolTxs == nil {
@@ -953,13 +944,12 @@ func (p *AlternativeSendTxProvider) insertMempoolTx(txid string, tx *bchain.RpcT
 				continue
 			}
 			if f, n, ok := st.slot(); ok && f == from && n == nonce && st.gen > gen {
-				return false, false
+				return false
 			}
 		}
 	}
-	_, replaced = p.mempoolTxs[txid]
 	p.mempoolTxs[txid] = storedTx{tx: tx, time: uint32(time.Now().Unix()), gen: gen, from: from, nonce: nonce, decoded: decoded}
-	return true, replaced
+	return true
 }
 
 // slot returns the nonce slot the entry fills, from the copy decoded at insert. It falls back to
@@ -1167,14 +1157,14 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 		p.markProbed(tx.txid, tx.tx)
 		known, mined, err := p.providerKnowsTransaction(tx.txid)
 		if err != nil {
-			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
 			if timedOut {
 				// the third boundary exit: without its own line the surfacing record would go silent
-				// during a relay outage, when the generic warning above also fires for retained entries
-				glog.Warningf("alternative mempool: evicting %s at the cache timeout, provider unreachable%s, age %s", tx.txid, slotLabel(tx.tx), age.Round(time.Second))
+				// during a relay outage, exactly when the relay's behavior is most in question
+				glog.Warningf("alternative mempool: evicting %s at the cache timeout, provider unreachable (%v)%s, age %s", tx.txid, err, slotLabel(tx.tx), age.Round(time.Second))
 				p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 				continue
 			}
+			glog.Warningf("eth_getTransactionByHash from alternative provider failed for %s: %v", tx.txid, err)
 			p.observeMempoolReconciliation("provider_error")
 			continue
 		}
@@ -1222,10 +1212,7 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 				// The eviction check only reruns at the next due probe, which the age backoff can push
 				// well past missingTimeout - name the real horizon, or this line and the eviction log
 				// below contradict each other.
-				horizon := p.missingTimeout()
-				if interval := probeInterval(age); interval > horizon {
-					horizon = interval
-				}
+				horizon := max(p.missingTimeout(), probeInterval(age))
 				glog.Warningf("alternative mempool: %s no longer surfaced by the alternative provider%s, age %s; evicting at the next probe, no sooner than %s from now, unless it reappears", tx.txid, slotLabel(tx.tx), age.Round(time.Second), horizon)
 			}
 			if missingSince != 0 && time.Since(time.Unix(int64(missingSince), 0)) >= p.missingTimeout() {

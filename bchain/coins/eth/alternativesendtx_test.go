@@ -9,7 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -94,14 +94,14 @@ func assertReconcileOutcome(t *testing.T, provider *AlternativeSendTxProvider, r
 	}
 }
 
-// fakeWrappedMempool records the order of wrapped-mempool calls so tests can assert the re-send
-// restamp (remove before re-add) that keeps the two stores expiring together.
+// fakeWrappedMempool records the wrapped-mempool calls so tests can assert the cache path drives the
+// store the retention coupling depends on.
 type fakeWrappedMempool struct {
 	ops []string
 }
 
-func (f *fakeWrappedMempool) AddTransactionToMempool(txid string) bool {
-	f.ops = append(f.ops, "add:"+txid)
+func (f *fakeWrappedMempool) AddOrRefreshTransactionInMempool(txid string) bool {
+	f.ops = append(f.ops, "addOrRefresh:"+txid)
 	return true
 }
 
@@ -109,10 +109,10 @@ func (f *fakeWrappedMempool) RemoveTransactionFromMempool(txid string) {
 	f.ops = append(f.ops, "remove:"+txid)
 }
 
-// A re-send of the same raw tx restamps the cache entry, but AddTransactionToMempool keeps an existing
-// wrapped entry's original time - without the remove + re-add the mempool sweep drops the address index
-// while the cache still serves the tx as pending, the #1573 inversion the equal retentions in the coin
-// configs leave no margin for.
+// A re-send of the same raw tx restamps the cache entry, so the wrapped mempool entry must be restamped
+// too or its sweep drops the address index while the cache still serves the tx as pending - the #1573
+// inversion the equal retentions in the coin configs leave no margin for. The restamp semantics live in
+// AddOrRefreshTransactionInMempool (tested in bchain); this pins that every cache write reaches it.
 func TestAlternativeSendTxProviderRecacheRestampsWrappedMempoolEntry(t *testing.T) {
 	provider := &AlternativeSendTxProvider{
 		fetchMempoolTx:    true,
@@ -128,18 +128,13 @@ func TestAlternativeSendTxProviderRecacheRestampsWrappedMempoolEntry(t *testing.
 		AccountNonce: "0x1",
 	}
 	provider.cacheMempoolTransaction(testAlternativeTxID, tx, 1)
-	if want := []string{"add:" + testAlternativeTxID}; !reflect.DeepEqual(mempool.ops, want) {
-		t.Fatalf("first cache ops = %v, want %v", mempool.ops, want)
-	}
-
 	provider.cacheMempoolTransaction(testAlternativeTxID, tx, 2)
 	want := []string{
-		"add:" + testAlternativeTxID,
-		"remove:" + testAlternativeTxID,
-		"add:" + testAlternativeTxID,
+		"addOrRefresh:" + testAlternativeTxID,
+		"addOrRefresh:" + testAlternativeTxID,
 	}
-	if !reflect.DeepEqual(mempool.ops, want) {
-		t.Fatalf("re-cache ops = %v, want %v", mempool.ops, want)
+	if !slices.Equal(mempool.ops, want) {
+		t.Fatalf("wrapped mempool ops = %v, want %v", mempool.ops, want)
 	}
 }
 
