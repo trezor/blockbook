@@ -274,6 +274,10 @@ type EthereumRPC struct {
 	// Multicall3AddressOverride replaces the canonical Multicall3 address for chains
 	// that deploy it at a non-canonical address (e.g. Tron). Set in code, not config.
 	Multicall3AddressOverride string
+	// net_version / web3_clientVersion snapshot, see backendidentity.go.
+	identity *common.TTLValue[backendIdentity]
+	// chain id latched by the first identity fetch, see validateBackendChainID.
+	validatedChainID atomic.Uint64
 	// Multicall3 deployment state; lazily probed on first call. See multicall.go.
 	multicall3 multicall3Gate
 }
@@ -350,6 +354,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		BaseChain:   &bchain.BaseChain{},
 		ChainConfig: &c,
 	}
+	s.identity = common.NewTTLValue(backendIdentityTTL, s.fetchBackendIdentity)
 	// 1-slot buffer ensures we only queue one "refresh tip" signal at a time.
 	s.newBlockNotifyCh = make(chan struct{}, 1)
 
@@ -1087,18 +1092,7 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	netStart := time.Now()
-	id, err := b.Client.NetworkID(ctx)
-	b.observeSyncRPCLatency("net_version", netStart, err)
-	if err != nil {
-		return nil, err
-	}
-	var ver string
-	web3Start := time.Now()
-	err = b.RPC.CallContext(ctx, &ver, "web3_clientVersion")
-	b.observeSyncRPCLatency("web3_clientVersion", web3Start, err)
+	identity, err := b.getBackendIdentity()
 	if err != nil {
 		return nil, err
 	}
@@ -1106,10 +1100,10 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		Blocks:           int(h.Number().Int64()),
 		Bestblockhash:    h.Hash(),
 		Difficulty:       h.Difficulty().String(),
-		Version:          ver,
+		Version:          identity.clientVersion,
 		ConsensusVersion: b.consensusMonitor.get(),
 	}
-	idi := int(id.Uint64())
+	idi := int(identity.chainID)
 	if idi == int(b.MainNetChainID) {
 		rv.Chain = "mainnet"
 	} else {

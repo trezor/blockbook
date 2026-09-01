@@ -5,20 +5,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"time"
 
-	jsontypes "github.com/ava-labs/avalanchego/utils/json"
-	"github.com/ethereum/go-ethereum/common"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/common"
 )
 
 const (
 	// MainNet is production network
 	MainNet eth.Network = 43114
+	// nodeVersionTTL is how long an info.getNodeVersion answer is reused, see probeNodeVersion.
+	nodeVersionTTL = 60 * time.Second
 )
 
 func dialRPC(rawURL string) (*rpc.Client, error) {
@@ -57,6 +60,8 @@ var OpenRPC = func(httpURL, wsURL string) (bchain.EVMRPCClient, bchain.EVMClient
 type AvalancheRPC struct {
 	*eth.EthereumRPC
 	info *rpc.Client
+	// avm version snapshot, see probeNodeVersion.
+	nodeVersion *common.TTLValue[string]
 }
 
 // NewAvalancheRPC returns new AvalancheRPC instance.
@@ -69,6 +74,7 @@ func NewAvalancheRPC(config json.RawMessage, pushHandler func(bchain.Notificatio
 	s := &AvalancheRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),
 	}
+	s.nodeVersion = common.NewTTLValue(nodeVersionTTL, s.probeNodeVersion)
 
 	return s, nil
 }
@@ -104,7 +110,7 @@ func (b *AvalancheRPC) Initialize() error {
 	b.info = infoClient
 	b.MainNetChainID = MainNet
 	b.NewBlock = &AvalancheNewBlock{channel: make(chan *Header)}
-	b.NewTx = &AvalancheNewTx{channel: make(chan common.Hash)}
+	b.NewTx = &AvalancheNewTx{channel: make(chan ethcommon.Hash)}
 
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
@@ -139,22 +145,29 @@ func (b *AvalancheRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		return nil, err
 	}
 
+	// the avm version is a label, never a reason to fail GetChainInfo - nil means never probed
+	if v, _, _ := b.nodeVersion.Get(time.Now()); v != nil {
+		ci.Version = *v
+	}
+
+	return ci, nil
+}
+
+// probeNodeVersion fetches the node's avm version from the info endpoint; GetChainInfo
+// prefers it over the parent's web3_clientVersion.
+func (b *AvalancheRPC) probeNodeVersion() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
 	var v struct {
-		Version            string            `json:"version"`
-		DatabaseVersion    string            `json:"databaseVersion"`
-		RPCProtocolVersion jsontypes.Uint32  `json:"rpcProtocolVersion"`
-		GitCommit          string            `json:"gitCommit"`
-		VMVersions         map[string]string `json:"vmVersions"`
+		VMVersions map[string]string `json:"vmVersions"`
 	}
-
-	if err := b.info.CallContext(ctx, &v, "info.getNodeVersion"); err == nil {
-		if avm, ok := v.VMVersions["avm"]; ok {
-			ci.Version = avm
-		}
+	if err := b.info.CallContext(ctx, &v, "info.getNodeVersion"); err != nil {
+		glog.V(1).Info("avalanche: info.getNodeVersion failed: ", err)
+		return "", err
 	}
-
-	return ci, nil
+	if v.VMVersions["avm"] == "" {
+		return "", errors.New("info endpoint reported no avm version")
+	}
+	return v.VMVersions["avm"], nil
 }
