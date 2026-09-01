@@ -109,10 +109,8 @@ func (f *fakeWrappedMempool) RemoveTransactionFromMempool(txid string) {
 	f.ops = append(f.ops, "remove:"+txid)
 }
 
-// A re-send of the same raw tx restamps the cache entry, so the wrapped mempool entry must be restamped
-// too or its sweep drops the address index while the cache still serves the tx as pending - the #1573
-// inversion the equal retentions in the coin configs leave no margin for. The restamp semantics live in
-// AddOrRefreshTransactionInMempool (tested in bchain); this pins that every cache write reaches it.
+// Pins that every cache write reaches AddOrRefreshTransactionInMempool (restamp semantics tested in
+// bchain): the equal retentions shipped in the coin configs leave no margin for a missed restamp (#1573).
 func TestAlternativeSendTxProviderRecacheRestampsWrappedMempoolEntry(t *testing.T) {
 	provider := &AlternativeSendTxProvider{
 		fetchMempoolTx:    true,
@@ -3211,9 +3209,7 @@ func TestStoredTxSlotMatchesTheBody(t *testing.T) {
 }
 
 // TestMarkMissingAndClearMissingReportTransitions pins the signals reconcile's logging is built on: a
-// missing run is announced once however many nulls follow it, and clearing one hands back the run that
-// ended. Without those, a relay that stops answering while a transaction is still mineable - a nonce gap
-// can delay inclusion by tens of hours - is indistinguishable in the log from a genuine drop.
+// missing run is announced once however many nulls follow it, and clearing one hands back the ended run.
 func TestMarkMissingAndClearMissingReportTransitions(t *testing.T) {
 	entry := storedTx{time: uint32(time.Now().Add(-time.Hour).Unix())}
 	provider := &AlternativeSendTxProvider{

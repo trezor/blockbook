@@ -83,10 +83,8 @@ const alternativeNonceRoutingTimeout = 15 * time.Minute
 // waited an hour is waiting on a builder, where probing every cycle buys a quarter-hour of eviction
 // latency at sixty times the relay quota: a fresh dial per probe plus, through
 // transactionSupersededByNonce, an eth_getTransactionCount per URL. Past the relay's 3h pending window
-// the retention can hold an entry for tens of hours more (the configs match it to mempoolTxTimeout),
-// so the 15m rung alone would spend ~190 probes on one stuck tx; hourly caps that long tail. The
-// timeout eviction is unaffected - reconcile checks it before the backoff gate - but the missing-run
-// eviction waits for the next due probe, and its transition log names this interval as the horizon.
+// the retention can hold an entry for tens of hours more, so probing backs off to hourly there; only
+// the missing-run eviction waits on the next due probe, the timeout eviction bypasses the gate.
 func probeInterval(age time.Duration) time.Duration {
 	switch {
 	case age < 10*time.Minute:
@@ -907,9 +905,8 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 	}
 
 	if p.mempool != nil {
-		// AddOrRefresh, not Add: a re-send restamps the cache entry, and the wrapped entry must age
-		// with it or the mempool sweep drops the address index while the cache still serves the tx as
-		// pending (#1573).
+		// AddOrRefresh, not Add: a re-send restamps the cache entry, and the wrapped entry must age with
+		// it or the mempool sweep drops the address index while the cache still serves the tx (#1573).
 		p.mempool.AddOrRefreshTransactionInMempool(txid)
 		// A concurrent higher-generation send for this slot can evict txid from both stores during the
 		// add above, which then re-inserts it into the wrapped mempool only - and reconcile walks just
@@ -1195,23 +1192,18 @@ func (p *AlternativeSendTxProvider) reconcileMempoolTxs() {
 			// eviction.
 			// An entry at the cache timeout leaves as timeout whatever the final probe answered, so
 			// provider_missing stays the missing-run rule's own exit and its residence reads as "how
-			// long after the drop". With the retention configured past the relay's advertised window, an
-			// entry reaching the timeout was surfaced for nearly all of it - a null on the final probe is
-			// a coincidence, not the window closing - which is what the two timeout logs tell apart.
+			// long after the drop".
 			if timedOut {
 				glog.Warningf("alternative mempool: evicting %s at the cache timeout, last answer was null%s, age %s", tx.txid, slotLabel(tx.tx), age.Round(time.Second))
 				p.evictMempoolTx("timeout", tx.txid, tx.tx.time)
 				continue
 			}
 			missingSince, startedMissing := p.markMissing(tx.txid, tx.tx)
-			// Logged on the transition, not per probe: this line and the two below are the record of when
-			// the relay stopped answering for a transaction that may still be mineable - a nonce gap has
-			// delayed inclusion by tens of hours - so a relay outliving or undercutting its advertised
-			// window can be told apart from a genuine drop without reading metrics.
+			// Logged on the transition, not per probe: the record of when the relay stopped answering for
+			// a tx that may still be mineable, telling a relay undercutting its window from a real drop.
 			if startedMissing {
-				// The eviction check only reruns at the next due probe, which the age backoff can push
-				// well past missingTimeout - name the real horizon, or this line and the eviction log
-				// below contradict each other.
+				// the eviction check reruns only at the next due probe, which the age backoff can push
+				// well past missingTimeout - name that real horizon, not missingTimeout alone
 				horizon := max(p.missingTimeout(), probeInterval(age))
 				glog.Warningf("alternative mempool: %s no longer surfaced by the alternative provider%s, age %s; evicting at the next probe, no sooner than %s from now, unless it reappears", tx.txid, slotLabel(tx.tx), age.Round(time.Second), horizon)
 			}
