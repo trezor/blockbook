@@ -736,13 +736,13 @@ func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, st
 			glog.Warningf("Contract %v %v not found in DB", cd, standardFromContext)
 		}
 		contractInfo, err = w.resolveContractInfo(cd, probes)
-		if err != nil {
-			// a failed read says nothing about the contract, so it must not be cached
-			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
-		} else if contractInfo == nil {
-			w.contractProbeCache.add(string(cd), bestHeight, w.negativeProbeTTLBlocks(contractProbeNegativeTTL), reorgGen)
-		}
 		if contractInfo == nil {
+			if err != nil {
+				// a failed read says nothing about the contract, so it must not be cached
+				glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
+			} else {
+				w.contractProbeCache.add(string(cd), bestHeight, w.negativeProbeTTLBlocks(defaultNegativeProbeTTL), reorgGen)
+			}
 			return w.unknownContractInfo(cd), false, nil
 		}
 		if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
@@ -1331,8 +1331,12 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if details > AccountDetailsBasic {
 			// Resolve the metadata of contracts the index does not describe in one batched
 			// call; the loop below would otherwise pay up to three serialized eth_calls per
-			// contract, interleaved with the balance work.
-			probes := w.prefetchContractInfos(ca.Contracts, filterDesc)
+			// contract, interleaved with the balance work. A single-contract filter is never
+			// worth a batch - the per-contract path reads it just as cheaply.
+			var probes contractInfoProbes
+			if len(filterDesc) == 0 {
+				probes = w.prefetchContractInfos(ca.Contracts)
+			}
 			d.tokens = make([]Token, len(ca.Contracts))
 			var j int
 			for i := range ca.Contracts {

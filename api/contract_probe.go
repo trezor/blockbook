@@ -1,23 +1,13 @@
 package api
 
 import (
-	"bytes"
-	"time"
-
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/db"
 )
 
-const (
-	// contractProbeCacheCapacity bounds the negative cache. Eviction is not a correctness
-	// event: an evicted entry costs the one probe every request pays for it today.
-	contractProbeCacheCapacity = 8192
-
-	// contractProbeNegativeTTL is how long a conclusive "no token at this address" stays
-	// cached, so an address that gains token code later (CREATE2 redeploy, proxy upgrade)
-	// is still picked up.
-	contractProbeNegativeTTL = 15 * time.Minute
-)
+// contractProbeCacheCapacity bounds the negative cache. Eviction is not a correctness
+// event: an evicted entry costs the one probe every request pays for it today.
+const contractProbeCacheCapacity = 8192
 
 // contractInfoProbes carries the verdicts a batched pre-pass already resolved, keyed by
 // address descriptor, so the per-contract path does not read the same contract again.
@@ -32,9 +22,6 @@ type contractInfoBatchResolver interface {
 // contractProbeCacheState samples the height and reorg generation that scope negative cache
 // entries. A zero height (nothing indexed yet) disables the cache for this request.
 func (w *Worker) contractProbeCacheState() (bestHeight uint32, reorgGen uint64) {
-	if w.is == nil || w.db == nil {
-		return 0, 0
-	}
 	_, bestHeight, _, _ = w.is.GetSyncState()
 	return bestHeight, w.db.ReorgGeneration()
 }
@@ -87,7 +74,7 @@ func contractNeedsChainRefresh(contractInfo *bchain.ContractInfo) bool {
 // prefetchContractInfos resolves in one batched call the metadata of every contract the token
 // loop would otherwise probe one at a time, up to three serialized eth_calls each. Contracts
 // the index already describes, and those a recent probe found to hold no token, are left out.
-func (w *Worker) prefetchContractInfos(contracts []db.AddrContract, filterDesc bchain.AddressDescriptor) contractInfoProbes {
+func (w *Worker) prefetchContractInfos(contracts []db.AddrContract) contractInfoProbes {
 	resolver, ok := w.chain.(contractInfoBatchResolver)
 	if !ok {
 		return nil
@@ -96,9 +83,6 @@ func (w *Worker) prefetchContractInfos(contracts []db.AddrContract, filterDesc b
 	unresolved := make([]bchain.AddressDescriptor, 0, len(contracts))
 	for i := range contracts {
 		cd := contracts[i].Contract
-		if len(filterDesc) > 0 && !bytes.Equal(filterDesc, cd) {
-			continue
-		}
 		// read with an unknown standard: promoting it is the per-contract path's job
 		contractInfo, err := w.db.GetContractInfo(cd, bchain.UnknownTokenStandard)
 		if err != nil {

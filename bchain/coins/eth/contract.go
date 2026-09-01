@@ -501,16 +501,25 @@ func contractDecimalsOrDefault(d *big.Int) int {
 
 // GetContractInfo returns information about a contract
 func (b *EthereumRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
-	address := EIP55Address(contractDesc)
-	return b.fetchContractInfo(address)
+	info, err := b.fetchContractInfo(EIP55Address(contractDesc))
+	if info != nil {
+		// single owner of the address form a ContractInfo carries; the batched path and
+		// coins with their own rendering (Tron's Base58) inherit it from here
+		info.Contract = b.contractAddress(contractDesc)
+	}
+	return info, err
 }
 
-// contractInfoSignatures are the metadata reads issued per contract, in the order the
+// contractInfoFields pairs each metadata read with its metric label, in the order the
 // aggregate3 sub-calls are laid out.
-var contractInfoSignatures = [...]string{contractNameSignature, contractSymbolSignature, contractDecimalsSignature}
+var contractInfoFields = [...]struct{ field, signature string }{
+	{"name", contractNameSignature},
+	{"symbol", contractSymbolSignature},
+	{"decimals", contractDecimalsSignature},
+}
 
 // contractInfoCallsPerContract is how many aggregate3 slots one contract occupies.
-const contractInfoCallsPerContract = len(contractInfoSignatures)
+const contractInfoCallsPerContract = len(contractInfoFields)
 
 // multicall3StarvationCanary closes every aggregate3 chunk. A call to a codeless address
 // succeeds for almost no gas, so it can only fail once the chunk ran out - which is what
@@ -547,10 +556,7 @@ func (b *EthereumRPC) EthereumTypeGetContractInfos(contractDescs []bchain.Addres
 // contractInfoSequential resolves one contract with the short-circuiting eth_calls - the
 // path for chains without Multicall3 and for elements aggregate3 left ambiguous.
 func (b *EthereumRPC) contractInfoSequential(contractDesc bchain.AddressDescriptor) bchain.EthereumContractInfoResult {
-	info, err := b.fetchContractInfo(EIP55Address(contractDesc))
-	if info != nil {
-		info.Contract = b.contractAddress(contractDesc)
-	}
+	info, err := b.GetContractInfo(contractDesc)
 	return bchain.EthereumContractInfoResult{Info: info, Err: err}
 }
 
@@ -599,11 +605,6 @@ func (b *EthereumRPC) contractInfosMulticall3(contractDescs []bchain.AddressDesc
 			glog.Warningf("contract info multicall3 failed at chunk [%d:%d), falling back for %d contract(s): %v", start, end, len(valid)-start, err)
 			break
 		}
-		if len(res) != len(chunk)*contractInfoCallsPerContract+1 {
-			// aggregate3 verifies the count itself; refuse to index into a short response
-			holes = append(holes, chunk...)
-			continue
-		}
 		b.observeEthCallContractInfos(len(chunk))
 		// the canary is the last slot; see multicall3StarvationCanary
 		gasStarved := !res[len(res)-1].Success
@@ -629,9 +630,9 @@ func contractInfoCalls(contractDescs []bchain.AddressDescriptor, chunk []int) []
 	calls := make([]bchain.EthereumMulticallCall, 0, len(chunk)*contractInfoCallsPerContract+1)
 	for _, i := range chunk {
 		target := hexutil.Encode(contractDescs[i])
-		for _, signature := range contractInfoSignatures {
+		for _, f := range contractInfoFields {
 			// a reverting metadata getter yields Success=false, not a failed batch
-			calls = append(calls, bchain.EthereumMulticallCall{Target: target, CallData: signature, AllowFailure: true})
+			calls = append(calls, bchain.EthereumMulticallCall{Target: target, CallData: f.signature, AllowFailure: true})
 		}
 	}
 	return append(calls, bchain.EthereumMulticallCall{Target: multicall3StarvationCanary, AllowFailure: true})

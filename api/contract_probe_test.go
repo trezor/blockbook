@@ -4,7 +4,6 @@ package api
 
 import (
 	"errors"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -87,14 +86,9 @@ func (c *contractProbeChainNoBatch) AverageBlockTimeDuration() (time.Duration, e
 func setupContractProbeWorker(t *testing.T, chain bchain.BlockChain) (*Worker, *db.RocksDB, *eth.EthereumParser) {
 	t.Helper()
 	parser := eth.NewEthereumParser(1, true)
-	tmp, err := os.MkdirTemp("", "contract-probe")
+	database, err := db.NewRocksDB(t.TempDir(), 100000, -1, parser, nil, false)
 	require.NoError(t, err)
-	database, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, false)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, database.Close())
-		require.NoError(t, os.RemoveAll(tmp))
-	})
+	t.Cleanup(func() { require.NoError(t, database.Close()) })
 	is, err := database.LoadInternalState(&common.Config{CoinName: "eth-unittest"})
 	require.NoError(t, err)
 	database.SetInternalState(is)
@@ -108,9 +102,9 @@ func setupContractProbeWorker(t *testing.T, chain bchain.BlockChain) (*Worker, *
 	return w, database, parser
 }
 
-func newContractProbeChain(t *testing.T, parser *eth.EthereumParser) *contractProbeChain {
+func newContractProbeChain(t *testing.T) *contractProbeChain {
 	t.Helper()
-	fake, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	fake, err := dbtestdata.NewFakeBlockChainEthereumType(eth.NewEthereumParser(1, true))
 	require.NoError(t, err)
 	return &contractProbeChain{BlockChain: fake, tokens: map[string]*bchain.ContractInfo{}}
 }
@@ -125,8 +119,7 @@ func addrDesc(t *testing.T, parser *eth.EthereumParser, address string) bchain.A
 // A contract the chain reports as holding no token is never written to the index, so without
 // the negative cache every request re-probes it. This is the regression the cache exists for.
 func TestGetContractDescriptorInfo_NotATokenIsProbedOnce(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	w, _, parser := setupContractProbeWorker(t, chain)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 
@@ -148,8 +141,7 @@ func TestGetContractDescriptorInfo_NotATokenIsProbedOnce(t *testing.T) {
 // A read that failed says nothing about the contract: caching it would blank a live token out
 // of the response for the whole TTL.
 func TestGetContractDescriptorInfo_FailedReadIsNotCached(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	chain.err = errors.New("dial tcp: connection refused")
 	w, _, parser := setupContractProbeWorker(t, chain)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
@@ -167,8 +159,7 @@ func TestGetContractDescriptorInfo_FailedReadIsNotCached(t *testing.T) {
 // The negative is a safety valve, not a permanent verdict: a contract that gains token code
 // later has to be picked up once the TTL passes.
 func TestGetContractDescriptorInfo_NegativeCacheExpires(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 
@@ -176,7 +167,7 @@ func TestGetContractDescriptorInfo_NegativeCacheExpires(t *testing.T) {
 	require.NoError(t, err)
 	_, bestHeight, _, _ := database.GetInternalState().GetSyncState()
 	// 15 minutes of 12s blocks, plus one to pass the expiry
-	database.GetInternalState().UpdateBestHeight(bestHeight + blocksForDuration(contractProbeNegativeTTL, 12*time.Second) + 1)
+	database.GetInternalState().UpdateBestHeight(bestHeight + blocksForDuration(defaultNegativeProbeTTL, 12*time.Second) + 1)
 	_, _, err = w.getContractDescriptorInfo(cd, bchain.ERC20TokenStandard)
 	require.NoError(t, err)
 
@@ -186,8 +177,7 @@ func TestGetContractDescriptorInfo_NegativeCacheExpires(t *testing.T) {
 
 // A resolved token heals through the index instead of the cache, and stays resolved.
 func TestGetContractDescriptorInfo_ResolvedTokenIsStored(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 	chain.tokens[string(cd)] = &bchain.ContractInfo{
@@ -216,13 +206,12 @@ func TestGetContractDescriptorInfo_ResolvedTokenIsStored(t *testing.T) {
 // The pre-pass covers exactly the contracts the loop would have probed: the ones the index
 // does not describe.
 func TestPrefetchContractInfos_BatchesUnknownContracts(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
 	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b))
 	require.NoError(t, err)
 
-	probes := w.prefetchContractInfos(ca.Contracts, nil)
+	probes := w.prefetchContractInfos(ca.Contracts)
 
 	single, batch := chain.counts()
 	require.Equal(t, 1, batch, "one batched call for the whole address")
@@ -236,15 +225,14 @@ func TestPrefetchContractInfos_BatchesUnknownContracts(t *testing.T) {
 // Contracts a recent probe already settled stay out of the batch; one contract left is not
 // worth a batched call at all.
 func TestPrefetchContractInfos_SkipsCachedNegatives(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
 	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b))
 	require.NoError(t, err)
 	bestHeight, reorgGen := w.contractProbeCacheState()
 	w.contractProbeCache.add(string(addrDesc(t, parser, dbtestdata.EthAddrContract0d)), bestHeight, 100, reorgGen)
 
-	require.Nil(t, w.prefetchContractInfos(ca.Contracts, nil))
+	require.Nil(t, w.prefetchContractInfos(ca.Contracts))
 
 	_, batch := chain.counts()
 	require.Equal(t, 0, batch)
@@ -253,14 +241,13 @@ func TestPrefetchContractInfos_SkipsCachedNegatives(t *testing.T) {
 // A conclusive not-a-token from the batch is as cacheable as one from a single read - that is
 // what keeps the batch from being re-run on every request.
 func TestGetProbedContractDescriptorInfo_CachesBatchedNegative(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
 	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b))
 	require.NoError(t, err)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 
-	probes := w.prefetchContractInfos(ca.Contracts, nil)
+	probes := w.prefetchContractInfos(ca.Contracts)
 	_, valid, err := w.getProbedContractDescriptorInfo(cd, bchain.ERC20TokenStandard, probes)
 	require.NoError(t, err)
 	require.False(t, valid)
@@ -275,15 +262,14 @@ func TestGetProbedContractDescriptorInfo_CachesBatchedNegative(t *testing.T) {
 
 // A batched read that failed is not a verdict either, so the contract stays probeable.
 func TestGetProbedContractDescriptorInfo_BatchedErrorIsNotCached(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	chain.err = errors.New("context deadline exceeded")
 	w, database, parser := setupContractProbeWorker(t, chain)
 	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b))
 	require.NoError(t, err)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 
-	probes := w.prefetchContractInfos(ca.Contracts, nil)
+	probes := w.prefetchContractInfos(ca.Contracts)
 	_, _, err = w.getProbedContractDescriptorInfo(cd, bchain.ERC20TokenStandard, probes)
 	require.NoError(t, err)
 	_, _, err = w.getContractDescriptorInfo(cd, bchain.ERC20TokenStandard)
@@ -296,8 +282,7 @@ func TestGetProbedContractDescriptorInfo_BatchedErrorIsNotCached(t *testing.T) {
 // The whole point of the pre-pass: an address whose contracts the index does not describe
 // costs one batched call, not up to three serialized eth_calls per contract.
 func TestGetEthereumTypeAddressBalances_ResolvesMetadataInOneBatch(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	chain := newContractProbeChain(t, parser)
+	chain := newContractProbeChain(t)
 	w, _, parser := setupContractProbeWorker(t, chain)
 	cd := addrDesc(t, parser, dbtestdata.EthAddr7b)
 	cdCd := addrDesc(t, parser, dbtestdata.EthAddrContractCd)
@@ -323,13 +308,12 @@ func TestGetEthereumTypeAddressBalances_ResolvesMetadataInOneBatch(t *testing.T)
 
 // Without a batched resolve the per-contract path still works, and still caches its verdicts.
 func TestPrefetchContractInfos_NoBatchResolver(t *testing.T) {
-	parser := eth.NewEthereumParser(1, true)
-	inner := newContractProbeChain(t, parser)
+	inner := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, &contractProbeChainNoBatch{BlockChain: inner.BlockChain, inner: inner})
 	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b))
 	require.NoError(t, err)
 
-	require.Nil(t, w.prefetchContractInfos(ca.Contracts, nil))
+	require.Nil(t, w.prefetchContractInfos(ca.Contracts))
 
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 	for i := 0; i < 2; i++ {

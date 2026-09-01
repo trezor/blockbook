@@ -449,13 +449,13 @@ func (b *EthereumRPC) observeEthCallContractInfo(field string) {
 }
 
 // observeEthCallContractInfos records one read per metadata field for count contracts: the
-// aggregate3 path always issues all three instead of short-circuiting on name().
+// aggregate3 path always issues all of them instead of short-circuiting on name().
 func (b *EthereumRPC) observeEthCallContractInfos(count int) {
 	if b.metrics == nil || count <= 0 {
 		return
 	}
-	for _, field := range []string{"name", "symbol", "decimals"} {
-		b.metrics.EthCallContractInfo.With(common.Labels{"field": field}).Add(float64(count))
+	for _, f := range contractInfoFields {
+		b.metrics.EthCallContractInfo.With(common.Labels{"field": f.field}).Add(float64(count))
 	}
 }
 

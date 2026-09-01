@@ -86,6 +86,13 @@ func (c *lruCache[V]) remove(key string) {
 	delete(c.items, key)
 }
 
+// defaultNegativeProbeTTL is how long a conclusive "the chain says no" verdict stays
+// cached before re-probing, so a contract that changes later (CREATE2 redeploy, proxy
+// upgrade) is still picked up. Expressed as wall-clock time rather than a block count
+// so the user-visible TTL is ~the same regardless of the chain's block cadence; it is
+// resolved to a per-coin block count via negativeProbeTTLBlocks at request time.
+const defaultNegativeProbeTTL = 15 * time.Minute
+
 // negativeProbeCache is an in-memory LRU of recent "the chain says no" probe results
 // (not a vault, no token at this address). Not persisted; entries expire after the
 // per-add ttlBlocks and on reorgGen mismatch (so a pre-reorg negative misses after

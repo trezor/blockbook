@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -18,14 +17,6 @@ const (
 	erc4626ZeroAddress = "0x0000000000000000000000000000000000000000"
 	// Two sub-calls per candidate (asset + totalAssets); chunk to bound aggregate3 payload size.
 	erc4626ProbeChunkCandidates = 64
-
-	// erc4626NegativeProbeTTLDuration is how long a "definitively not a vault"
-	// result stays in the in-memory negative cache before re-probing. Keeping
-	// it expressed as wall-clock time (rather than a fixed block count) means
-	// the user-visible TTL is ~the same regardless of the chain's block
-	// cadence; the per-coin block count is derived from the chain's
-	// configured averageBlockTimeMs at request time.
-	erc4626NegativeProbeTTLDuration = 15 * time.Minute
 )
 
 var (
@@ -74,7 +65,7 @@ func (w *Worker) enrichErc4626Tokens(tokens Tokens, bestHeight uint32, bestHash 
 	reorgGen := w.db.ReorgGeneration()
 	// Resolve the wall-clock negative-cache TTL into a per-coin block count
 	// once per request. 0 falls back to "do not negative-cache" (no-op).
-	negativeTTLBlocks := w.negativeProbeTTLBlocks(erc4626NegativeProbeTTLDuration)
+	negativeTTLBlocks := w.negativeProbeTTLBlocks(defaultNegativeProbeTTL)
 	setVault := func(addr, asset string) error {
 		return w.db.SetContractInfoErc4626Vault(addr, asset, bestHeight, bestHash, reorgGen)
 	}
@@ -100,6 +91,7 @@ func enrichErc4626TokensWithDeps(
 	type candidate struct {
 		token    *Token
 		contract string
+		cacheKey string
 	}
 	var candidates []candidate
 
@@ -112,15 +104,16 @@ func enrichErc4626TokensWithDeps(
 		if err != nil || ci == nil {
 			continue
 		}
+		cacheKey := erc4626ContractKey(token.Contract)
 		if ci.IsErc4626 {
-			negativeCache.remove(erc4626ContractKey(token.Contract))
+			negativeCache.remove(cacheKey)
 			token.Protocols = append(token.Protocols, contractInfoProtocolErc4626)
 			continue
 		}
-		if negativeCache.contains(erc4626ContractKey(token.Contract), bestHeight, reorgGen) {
+		if negativeCache.contains(cacheKey, bestHeight, reorgGen) {
 			continue
 		}
-		candidates = append(candidates, candidate{token: token, contract: token.Contract})
+		candidates = append(candidates, candidate{token: token, contract: token.Contract, cacheKey: cacheKey})
 	}
 
 	if len(candidates) == 0 || mc == nil {
@@ -158,11 +151,11 @@ func enrichErc4626TokensWithDeps(
 				}
 			}
 			if assetContract == "" || !totalAssetsResult.Success {
-				negativeCache.add(erc4626ContractKey(c.contract), bestHeight, negativeTTLBlocks, reorgGen)
+				negativeCache.add(c.cacheKey, bestHeight, negativeTTLBlocks, reorgGen)
 				continue
 			}
 			if _, derr := erc4626DecodeUint(totalAssetsResult.Data); derr != nil {
-				negativeCache.add(erc4626ContractKey(c.contract), bestHeight, negativeTTLBlocks, reorgGen)
+				negativeCache.add(c.cacheKey, bestHeight, negativeTTLBlocks, reorgGen)
 				continue
 			}
 			// Persistence is best-effort; on error or silent refusal (reorg
@@ -171,7 +164,7 @@ func enrichErc4626TokensWithDeps(
 			if err := setVault(c.contract, assetContract); err != nil {
 				glog.Warningf("SetContractInfoErc4626Vault contract %v asset %v: %v", c.contract, assetContract, err)
 			}
-			negativeCache.remove(erc4626ContractKey(c.contract))
+			negativeCache.remove(c.cacheKey)
 			c.token.Protocols = append(c.token.Protocols, contractInfoProtocolErc4626)
 		}
 	}
