@@ -716,9 +716,8 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 	return w.getProbedContractDescriptorInfo(cd, standardFromContext, nil)
 }
 
-// getProbedContractDescriptorInfo serves contract metadata from the index, falling back to a
-// chain read. probes carries what a batched pre-pass already resolved; nil reads the chain
-// per contract.
+// getProbedContractDescriptorInfo serves contract metadata from the index, falling back to a chain
+// read. probes carries what a batched pre-pass resolved; nil means read the chain per contract.
 func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName, probes contractInfoProbes) (*bchain.ContractInfo, bool, error) {
 	contractInfo, err := w.db.GetContractInfo(cd, standardFromContext)
 	if err != nil {
@@ -726,8 +725,7 @@ func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, st
 	}
 	if contractInfo == nil {
 		bestHeight, reorgGen := w.contractProbeCacheState()
-		// a contract the chain already reported as holding no token: nothing left to read,
-		// and nothing to warn about either
+		// already reported as holding no token: nothing left to read, and nothing to warn about
 		if w.contractProbeCache.contains(string(cd), bestHeight, reorgGen) {
 			return w.unknownContractInfo(cd), false, nil
 		}
@@ -1329,10 +1327,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 		if details > AccountDetailsBasic {
-			// Resolve the metadata of contracts the index does not describe in one batched
-			// call; the loop below would otherwise pay up to three serialized eth_calls per
-			// contract, interleaved with the balance work. A single-contract filter is never
-			// worth a batch - the per-contract path reads it just as cheaply.
+			// a single-contract filter is never worth a batch - the per-contract path is as cheap
 			var probes contractInfoProbes
 			if len(filterDesc) == 0 {
 				probes = w.prefetchContractInfos(ca.Contracts)

@@ -86,27 +86,17 @@ func (c *lruCache[V]) remove(key string) {
 	delete(c.items, key)
 }
 
-// defaultNegativeProbeTTL is how long a conclusive "the chain says no" verdict stays
-// cached before re-probing, so a contract that changes later (CREATE2 redeploy, proxy
-// upgrade) is still picked up. Expressed as wall-clock time rather than a block count
-// so the user-visible TTL is ~the same regardless of the chain's block cadence; it is
-// resolved to a per-coin block count via negativeProbeTTLBlocks at request time.
+// defaultNegativeProbeTTL bounds how long a "the chain says no" verdict is trusted, so a later
+// change (CREATE2 redeploy, proxy upgrade) is still picked up. Wall-clock so it is chain-agnostic.
 const defaultNegativeProbeTTL = 15 * time.Minute
 
-// negativeProbeCache is an in-memory LRU of recent "the chain says no" probe results
-// (not a vault, no token at this address). Not persisted; entries expire after the
-// per-add ttlBlocks and on reorgGen mismatch (so a pre-reorg negative misses after
-// disconnect). Keys are normalized by the caller, which knows what identifies its probe.
-//
-// ttlBlocks is supplied per add() rather than fixed at construction so the
-// caller can derive it from the chain's averageBlockTimeMs at request time.
-// That keeps the user-visible TTL roughly the same wall-clock duration
-// across chains regardless of block cadence.
 type negativeProbeCacheEntry struct {
 	expireAt uint64
 	reorgGen uint64
 }
 
+// negativeProbeCache is an in-memory LRU of "the chain says no" verdicts, keyed by whatever the
+// caller uses to identify a probe; entries expire on ttlBlocks and on a reorgGen mismatch.
 type negativeProbeCache struct {
 	lru *lruCache[negativeProbeCacheEntry]
 }
@@ -151,17 +141,14 @@ func (c *negativeProbeCache) remove(key string) {
 	c.lru.remove(key)
 }
 
-// blockTimeProvider exposes the chain's configured average block time so the API can
-// convert chain-time settings (negative-cache TTLs) into a per-coin block count at
-// request time. Implemented by EVM coins via EthereumRPC.AverageBlockTimeDuration.
+// blockTimeProvider exposes the chain's configured average block time, so wall-clock settings can
+// be converted to a per-coin block count at request time. Implemented by EVM coins.
 type blockTimeProvider interface {
 	AverageBlockTimeDuration() (time.Duration, error)
 }
 
-// blocksForDuration converts a wall-clock duration to the equivalent
-// per-chain block count, rounding up so a duration of "at least N" is honored.
-// Returns 0 when either input is non-positive — callers treat 0 as
-// "configuration unavailable, skip the time-derived behavior."
+// blocksForDuration converts a wall-clock duration to a block count, rounding up so "at least d" is
+// honored. Returns 0 on non-positive input - callers read 0 as "unavailable, skip the behavior".
 func blocksForDuration(d, blockTime time.Duration) uint32 {
 	if d <= 0 || blockTime <= 0 {
 		return 0
@@ -173,10 +160,8 @@ func blocksForDuration(d, blockTime time.Duration) uint32 {
 	return uint32(n)
 }
 
-// negativeProbeTTLBlocks resolves a negative-cache TTL to a per-coin block count using
-// the chain's configured averageBlockTimeMs. Returns 0 if the chain doesn't expose a
-// block time (e.g. non-EVM); the caller treats 0 as "do not negative-cache for this
-// request" - a safe fallback that just forfeits the optimization.
+// negativeProbeTTLBlocks resolves a TTL to a per-coin block count. Returns 0 when the chain exposes
+// no block time (e.g. non-EVM); the caller then just forfeits the negative cache for this request.
 func (w *Worker) negativeProbeTTLBlocks(ttl time.Duration) uint32 {
 	provider, ok := w.chain.(blockTimeProvider)
 	if !ok {

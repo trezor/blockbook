@@ -115,10 +115,8 @@ type EthereumMulticallResult struct {
 	Data    string
 }
 
-// EthereumContractInfoResult is one contract's metadata verdict from a batched probe.
-// Info==nil with Err==nil means the chain conclusively reports no token at the address;
-// a non-nil Err means the read failed and says nothing about the contract, so callers
-// must not persist or cache the outcome.
+// EthereumContractInfoResult is one contract's metadata verdict from a batched probe. Info==nil with
+// Err==nil is a conclusive "no token here"; a non-nil Err says nothing, so it must not be cached.
 type EthereumContractInfoResult struct {
 	Info *ContractInfo
 	Err  error

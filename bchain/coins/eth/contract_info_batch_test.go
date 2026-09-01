@@ -109,8 +109,8 @@ func (m *mockContractInfoRPC) CallContext(ctx context.Context, result interface{
 	}
 }
 
-// tokenMetadataSingle answers the sequential probe: contracts in tokens are ERC20s, anything
-// else reverts on name() the way a non-token contract does.
+// tokenMetadataSingle answers the sequential probe; a contract not in tokens reverts on name(), the
+// way a non-token contract does.
 func tokenMetadataSingle(tokens map[string]string) func(to, selector string) (string, error) {
 	return func(to, selector string) (string, error) {
 		name, ok := tokens[strings.ToLower(to)]
@@ -143,8 +143,8 @@ func descs(addrs ...common.Address) []bchain.AddressDescriptor {
 	return out
 }
 
-// One aggregate3 call resolves every contract, and a contract whose name() reverts comes back
-// as a conclusive "not a token" (nil info, nil error) rather than an error.
+// One aggregate3 call resolves every contract; a reverting name() comes back as a conclusive
+// "not a token" (nil info, nil error) rather than an error.
 func TestEthereumTypeGetContractInfos_OneMulticall(t *testing.T) {
 	fixture := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
 		{Success: true, Data: abiString("Token A")},
@@ -188,8 +188,7 @@ func TestEthereumTypeGetContractInfos_OneMulticall(t *testing.T) {
 	}
 }
 
-// Without Multicall3 every contract falls back to the sequential probe, which still
-// short-circuits: a non-token costs one eth_call, not three.
+// Without Multicall3 the sequential probe still short-circuits: a non-token costs one eth_call.
 func TestEthereumTypeGetContractInfos_SequentialWithoutMulticall3(t *testing.T) {
 	mock := &mockContractInfoRPC{
 		code:   "0x",
@@ -219,8 +218,8 @@ func TestEthereumTypeGetContractInfos_SequentialWithoutMulticall3(t *testing.T) 
 	}
 }
 
-// A failing canary means the chunk ran out of gas, so an empty failure may be a starved call
-// rather than a revert; those contracts are re-read instead of being called not-a-token.
+// A failing canary means the chunk ran out of gas, so an empty failure may be starvation rather than
+// a revert; those contracts are re-read instead of being called not-a-token.
 func TestEthereumTypeGetContractInfos_StarvedChunkReReads(t *testing.T) {
 	fixture := fixtureAggregate3Result([]bchain.EthereumMulticallResult{
 		{Success: false, Data: "0x"},
@@ -270,8 +269,8 @@ func TestEthereumTypeGetContractInfos_ChunkErrorFallsBack(t *testing.T) {
 	}
 }
 
-// The chunk size bounds contracts, not sub-calls: three metadata reads plus the canary have to
-// fit in the configured aggregate3 budget.
+// Multicall3MaxCalls bounds sub-calls, so a chunk holds (max-1)/3 contracts: three metadata reads
+// each, plus the canary.
 func TestEthereumTypeGetContractInfos_ChunksByConfiguredMaxCalls(t *testing.T) {
 	full := func(name string) []bchain.EthereumMulticallResult {
 		return []bchain.EthereumMulticallResult{
@@ -377,8 +376,8 @@ func Test_contractInfoFromAggregate3(t *testing.T) {
 	}
 }
 
-// The (info, err) pair fetchContractInfo returns is what tells a cacheable "not a token"
-// from a read that simply failed, so each eth_call outcome has to land on the right side.
+// The (info, err) pair is what tells a cacheable "not a token" from a read that simply failed, so
+// every eth_call outcome has to land on the right side.
 func Test_fetchContractInfo_Verdicts(t *testing.T) {
 	tests := []struct {
 		name      string
