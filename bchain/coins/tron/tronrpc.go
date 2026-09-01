@@ -1191,20 +1191,6 @@ func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withC
 	return 0, 0, false, nil
 }
 
-// GetContractInfo returns information about a contract
-func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
-	contract, err := b.EthereumRPC.GetContractInfo(contractDesc)
-	if err != nil {
-		return nil, err
-	}
-	if contract == nil {
-		return nil, nil
-	}
-	contract.Contract = ToTronAddressFromAddress(contract.Contract)
-	glog.Infof("Getting contract info for: %s", contract.Contract)
-	return contract, nil
-}
-
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	resp, _, err := b.getTransactionByIDWithFallback(txid)
 	if err != nil {

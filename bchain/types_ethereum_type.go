@@ -115,6 +115,13 @@ type EthereumMulticallResult struct {
 	Data    string
 }
 
+// EthereumContractInfoResult is one contract's metadata verdict from a batched probe. Info==nil with
+// Err==nil is a conclusive "no token here"; a non-nil Err says nothing, so it must not be cached.
+type EthereumContractInfoResult struct {
+	Info *ContractInfo
+	Err  error
+}
+
 // Ethereum token standard names
 const (
 	ERC20TokenStandard   TokenStandardName = "ERC20"
