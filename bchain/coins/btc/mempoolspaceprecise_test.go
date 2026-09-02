@@ -4,6 +4,7 @@ package btc
 
 import (
 	"encoding/json"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -96,6 +97,29 @@ func Test_mempoolSpacePreciseFeeProvider(t *testing.T) {
 	}
 }
 
+func Test_feePerVBToFeePerKB(t *testing.T) {
+	tests := []struct {
+		fee  float64
+		want int
+	}{
+		{2.605, 2605},
+		{0.1, 100},
+		{0.001, 1},
+		// not sane positive fees, must convert to 0
+		{0.0004, 0},
+		{0, 0},
+		{-1, 0},
+		{1e100, 0},
+		{math.NaN(), 0},
+		{math.Inf(1), 0},
+	}
+	for _, tt := range tests {
+		if got := feePerVBToFeePerKB(tt.fee); got != tt.want {
+			t.Errorf("feePerVBToFeePerKB(%v) = %d, want %d", tt.fee, got, tt.want)
+		}
+	}
+}
+
 func Test_mempoolSpacePreciseFeeProviderInvalidData(t *testing.T) {
 	tests := []struct {
 		name string
@@ -109,6 +133,22 @@ func Test_mempoolSpacePreciseFeeProviderInvalidData(t *testing.T) {
 			name: "negative field",
 			data: mempoolSpacePreciseFeeResult{FastestFee: 2.605, HalfHourFee: -1, HourFee: 0.843, EconomyFee: 0.2, MinimumFee: 0.1},
 		},
+		{
+			name: "huge field overflowing int",
+			data: mempoolSpacePreciseFeeResult{FastestFee: 1e100, HalfHourFee: 1.603, HourFee: 0.843, EconomyFee: 0.2, MinimumFee: 0.1},
+		},
+		{
+			name: "field rounding to zero",
+			data: mempoolSpacePreciseFeeResult{FastestFee: 2.605, HalfHourFee: 1.603, HourFee: 0.843, EconomyFee: 0.2, MinimumFee: 0.0004},
+		},
+		{
+			name: "NaN field",
+			data: mempoolSpacePreciseFeeResult{FastestFee: math.NaN(), HalfHourFee: 1.603, HourFee: 0.843, EconomyFee: 0.2, MinimumFee: 0.1},
+		},
+		{
+			name: "Inf field",
+			data: mempoolSpacePreciseFeeResult{FastestFee: math.Inf(1), HalfHourFee: 1.603, HourFee: 0.843, EconomyFee: 0.2, MinimumFee: 0.1},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -118,6 +158,21 @@ func Test_mempoolSpacePreciseFeeProviderInvalidData(t *testing.T) {
 			}
 			if _, err := m.estimateFee(1); err == nil {
 				t.Error("expected estimateFee to return error when no data was processed")
+			}
+
+			// a rejected poll must keep the previously processed table
+			if !m.processData(&mempoolSpacePreciseFeeResult{FastestFee: 2.605, HalfHourFee: 1.603, HourFee: 0.843, EconomyFee: 0.2, MinimumFee: 0.1}) {
+				t.Fatal("expected valid data to be processed successfully")
+			}
+			if m.processData(&tt.data) {
+				t.Error("expected processData to reject invalid data")
+			}
+			got, err := m.estimateFee(1)
+			if err != nil {
+				t.Errorf("estimateFee returned error: %v", err)
+			}
+			if want := big.NewInt(2605); got.Cmp(want) != 0 {
+				t.Errorf("estimateFee(1) = %v, want %v", got, want)
 			}
 		})
 	}

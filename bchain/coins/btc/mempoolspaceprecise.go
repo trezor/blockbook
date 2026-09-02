@@ -95,29 +95,40 @@ func (p *mempoolSpacePreciseFeeProvider) downloader() {
 }
 
 func (p *mempoolSpacePreciseFeeProvider) processData(data *mempoolSpacePreciseFeeResult) bool {
-	if data.MinimumFee <= 0 || data.EconomyFee <= 0 || data.HourFee <= 0 || data.HalfHourFee <= 0 || data.FastestFee <= 0 {
-		glog.Errorf("processData: invalid data %+v", data)
-		return false
-	}
-	p.mux.Lock()
-	defer p.mux.Unlock()
 	// Block targets follow the mempool.space UI semantics, so Suite's targets 1/3/6/36
 	// map to fastest/halfHour/hour/economy and users see the same numbers as on mempool.space
-	p.fees = []alternativeFeeProviderFee{
+	fees := []alternativeFeeProviderFee{
 		{blocks: 1, feePerKB: feePerVBToFeePerKB(data.FastestFee)},    // ~10 minutes
 		{blocks: 3, feePerKB: feePerVBToFeePerKB(data.HalfHourFee)},   // ~30 minutes
 		{blocks: 6, feePerKB: feePerVBToFeePerKB(data.HourFee)},       // ~1 hour
 		{blocks: 500, feePerKB: feePerVBToFeePerKB(data.EconomyFee)},  // no priority
 		{blocks: 1008, feePerKB: feePerVBToFeePerKB(data.MinimumFee)}, // purge floor
 	}
+	// Validate after conversion and keep the previous table on a malformed poll,
+	// so the node fallback kicks in once the last good data goes stale
+	for _, fee := range fees {
+		if fee.feePerKB <= 0 {
+			glog.Errorf("processData: invalid data %+v", data)
+			return false
+		}
+	}
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	p.fees = fees
 	p.lastSync = time.Now()
 	return true
 }
 
 // feePerVBToFeePerKB converts exactly, without rounding to significant digits,
-// so that the served values are identical to the ones on mempool.space
+// so that the served values are identical to the ones on mempool.space.
+// Returns 0 for values that are not sane positive fees (negative, NaN, Inf or huge),
+// as their float to int conversion is implementation-dependent.
 func feePerVBToFeePerKB(fee float64) int {
-	return int(math.Round(fee * 1000))
+	feePerKB := math.Round(fee * 1000)
+	if !(feePerKB >= 1 && feePerKB <= 1e9) {
+		return 0
+	}
+	return int(feePerKB)
 }
 
 func (p *mempoolSpacePreciseFeeProvider) getData(res interface{}) error {
