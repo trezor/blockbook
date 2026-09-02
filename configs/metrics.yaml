@@ -250,9 +250,9 @@ metrics:
   eth_alternative_mempool_tx_residence_seconds:
     name: blockbook_eth_alternative_mempool_tx_residence_seconds
     type: histogram_vec
-    help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry when it leaves the cache, labeled by the removing action (the exit actions of eth_alternative_mempool_reconciliation_events_total). provider_missing is the dropped/cancelled exit; residence counts age since broadcast, so a cancel N minutes after the send records ~N plus alternativeMissingTxTimeout - read the reason, not the age. Collapsing below one reconcile cycle would be the premature-eviction regression (#1573). An entry reaching the cache timeout leaves as timeout even when the relay answers null, so with the missing eviction configured off provider_missing stops firing rather than pinning at the timeout
+    help: Age in seconds (time since broadcast) of an alternative send-transaction cache entry when it leaves the cache, labeled by the removing action (the exit actions of eth_alternative_mempool_reconciliation_events_total). provider_missing is the dropped/cancelled exit; residence counts age since broadcast, so a cancel N minutes after the send records ~N plus alternativeMissingTxTimeout - read the reason, not the age. Collapsing below one reconcile cycle would be the premature-eviction regression (#1573). An entry reaching the cache timeout leaves as timeout even when the relay answers null, so with the missing eviction configured off provider_missing stops firing rather than pinning at the timeout. Buckets run to 48h because the coin configs raise alternativeMempoolTxTimeout that far - a nonce-gapped private tx has been mined ~40h after broadcast, so where its exit lands is the evidence for whether the relay kept surfacing it that long
     labels: [action]
-    buckets: [1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800, 12600]
+    buckets: [1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600, 5400, 7200, 9000, 10800, 12600, 21600, 43200, 86400, 129600, 172800]
   eth_alternative_mempool_cache_size:
     name: blockbook_eth_alternative_mempool_cache_size
     type: gauge

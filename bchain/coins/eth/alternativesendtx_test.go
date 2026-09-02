@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,6 +91,48 @@ func assertReconcileOutcome(t *testing.T, provider *AlternativeSendTxProvider, r
 	}
 	if !found {
 		t.Fatal("transaction was removed from alternative mempool cache, want kept")
+	}
+}
+
+// fakeWrappedMempool records the wrapped-mempool calls so tests can assert the cache path drives the
+// store the retention coupling depends on.
+type fakeWrappedMempool struct {
+	ops []string
+}
+
+func (f *fakeWrappedMempool) AddOrRefreshTransactionInMempool(txid string) bool {
+	f.ops = append(f.ops, "addOrRefresh:"+txid)
+	return true
+}
+
+func (f *fakeWrappedMempool) RemoveTransactionFromMempool(txid string) {
+	f.ops = append(f.ops, "remove:"+txid)
+}
+
+// Pins that every cache write reaches AddOrRefreshTransactionInMempool (restamp semantics tested in
+// bchain): the equal retentions shipped in the coin configs leave no margin for a missed restamp (#1573).
+func TestAlternativeSendTxProviderRecacheRestampsWrappedMempoolEntry(t *testing.T) {
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs:        make(map[string]storedTx),
+	}
+	mempool := &fakeWrappedMempool{}
+	provider.mempool = mempool
+
+	tx := &bchain.RpcTransaction{
+		Hash:         testAlternativeTxID,
+		From:         "0x2222222222222222222222222222222222222222",
+		AccountNonce: "0x1",
+	}
+	provider.cacheMempoolTransaction(testAlternativeTxID, tx, 1)
+	provider.cacheMempoolTransaction(testAlternativeTxID, tx, 2)
+	want := []string{
+		"addOrRefresh:" + testAlternativeTxID,
+		"addOrRefresh:" + testAlternativeTxID,
+	}
+	if !slices.Equal(mempool.ops, want) {
+		t.Fatalf("wrapped mempool ops = %v, want %v", mempool.ops, want)
 	}
 }
 
@@ -257,6 +300,8 @@ func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
 		{name: "waiting entry is not re-asked within its interval", age: 30 * time.Minute, sinceProbe: 90 * time.Second, wantProbes: 0, wantAction: "skipped_backoff"},
 		{name: "waiting entry is re-asked once its interval elapses", age: 30 * time.Minute, sinceProbe: 6 * time.Minute, wantProbes: 1, wantAction: "provider_missing_pending"},
 		{name: "hour-old entry backs off further", age: 2 * time.Hour, sinceProbe: 6 * time.Minute, wantProbes: 0, wantAction: "skipped_backoff"},
+		{name: "multi-hour entry is not re-asked within the hourly interval", age: 5 * time.Hour, sinceProbe: 20 * time.Minute, wantProbes: 0, wantAction: "skipped_backoff"},
+		{name: "multi-hour entry is re-asked once an hour elapses", age: 5 * time.Hour, sinceProbe: 61 * time.Minute, wantProbes: 1, wantAction: "provider_missing_pending"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			server := newMethodAwareTxProviderTestServer(t, map[string]string{
@@ -264,7 +309,8 @@ func TestAlternativeSendTxProviderReconcileBacksOffByAge(t *testing.T) {
 			})
 			var removed string
 			provider := newTestAlternativeSendTxProvider(server.URL, &removed)
-			provider.mempoolTxsTimeout = 3 * time.Hour
+			// the shipped retention, so the multi-hour cases exercise the backoff and not the timeout
+			provider.mempoolTxsTimeout = 48 * time.Hour
 			provider.metrics = newReconcileTestMetrics()
 			entry := provider.mempoolTxs[testAlternativeTxID]
 			entry.time = uint32(time.Now().Add(-tt.age).Unix())
@@ -3159,5 +3205,41 @@ func TestStoredTxSlotMatchesTheBody(t *testing.T) {
 				t.Errorf("fallback slot() = (%v, %d, %v), want (%v, %d, %v)", fbFrom, fbNonce, fbOK, from, nonce, decoded)
 			}
 		})
+	}
+}
+
+// TestMarkMissingAndClearMissingReportTransitions pins the signals reconcile's logging is built on: a
+// missing run is announced once however many nulls follow it, and clearing one hands back the ended run.
+func TestMarkMissingAndClearMissingReportTransitions(t *testing.T) {
+	entry := storedTx{time: uint32(time.Now().Add(-time.Hour).Unix())}
+	provider := &AlternativeSendTxProvider{
+		fetchMempoolTx: true,
+		mempoolTxs:     map[string]storedTx{testAlternativeTxID: entry},
+	}
+
+	missingSince, started := provider.markMissing(testAlternativeTxID, entry)
+	if !started {
+		t.Fatal("markMissing did not report opening the run")
+	}
+	if missingSince == 0 {
+		t.Fatal("markMissing returned no run start")
+	}
+
+	if kept, startedAgain := provider.markMissing(testAlternativeTxID, entry); startedAgain || kept != missingSince {
+		t.Fatalf("markMissing on a running run = (%d, %v), want (%d, false)", kept, startedAgain, missingSince)
+	}
+
+	if got := provider.clearMissing(testAlternativeTxID, entry); got != missingSince {
+		t.Fatalf("clearMissing() = %d, want the ended run %d", got, missingSince)
+	}
+	if got := provider.clearMissing(testAlternativeTxID, entry); got != 0 {
+		t.Fatalf("clearMissing() = %d with no run in progress, want 0", got)
+	}
+
+	// a replaced entry must not inherit its predecessor's run, so neither call reports one
+	replaced := storedTx{time: entry.time, gen: entry.gen + 1}
+	provider.mempoolTxs[testAlternativeTxID] = replaced
+	if _, started := provider.markMissing(testAlternativeTxID, entry); started {
+		t.Fatal("markMissing opened a run on a stale snapshot")
 	}
 }

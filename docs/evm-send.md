@@ -119,7 +119,8 @@ Key invariants:
   double-counting.
 - **Removals are not pushed to the wallet.** Blockbook pushes only *added* txs; a wallet learns a
   pending tx is gone on its next account re-fetch (the initiating device also removes it
-  optimistically). The cache timeout, at the pending window's length, is only the backstop: in
+  optimistically). The cache timeout — `alternativeMempoolTxTimeout`, the pending window by default
+  and raised well past it in the coin configs — is only the backstop: in
   practice `sync_removed` retires an entry, with `nonce_superseded` covering a replacement submitted
   outside Blockbook.
 
@@ -139,7 +140,7 @@ a transaction the relay stops answering for as dropped:
 | `alternativePendingTxWindow` | 3 h | how long a relay-accepted transaction is served as pending and its nonce slot reserved |
 | `alternativeMempoolTxTimeout` | the window | the cache retention, if it should differ from the window |
 | `alternativeMissingTxTimeout` | 2 min | how long a cached transaction may stay missing from the relay (consecutive null answers) before reconcile evicts it — the dropped/cancelled exit |
-| `mempoolTxTimeout` | cache retention + 30 min | the wrapped mempool, which must outlive the cache — Blockbook refuses to start if an explicit value inverts the pair |
+| `mempoolTxTimeout` | cache retention + 30 min | the wrapped mempool, which must not expire before the cache — equal is allowed and is what the coin configs ship; Blockbook refuses to start if an explicit value inverts the pair |
 | relay routing (`useForNonces`) | 15 min | how long the sender's `eth_getTransactionCount` and `eth_estimateGas` go to the relay rather than the primary backend |
 
 The routing horizon is deliberately the odd one out. Once the send is cached, the pending-nonce floor
@@ -155,8 +156,8 @@ sustained rate on either means the relay's answers regressed below its window. R
 sends are the benign exception: between their 96 s retention lapsing and the missing eviction
 firing, a nonce lookup routed to the relay can raise the floor from the still-cached tx, ticking
 `floor_raised{source="provider"}` without any regression. For a relay that does
-not surface accepted transactions over its window at all, set `alternativeMissingTxTimeout` at the
-pending window — that restores the old timeout-only eviction instead of re-living
+not surface accepted transactions over its window at all, set `alternativeMissingTxTimeout` at or
+above the cache retention — that restores the old timeout-only eviction instead of re-living
 [#1573](https://github.com/trezor/blockbook/issues/1573).
 
 ## Wallet-declared `privatePending` hint (nonce + gas routing)

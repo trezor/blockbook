@@ -68,7 +68,7 @@ const (
 	// transaction is gone - dropped or cancelled (a drop-mode cancel leaves no replacement behind to
 	// retire its predecessor) - and the short run requirement only absorbs a transient relay fluke
 	// rather than any node-to-node lag. For a relay without that consistency, configure
-	// alternativeMissingTxTimeout at or above the pending window, which restores eviction by cache
+	// alternativeMissingTxTimeout at or above the cache retention, which restores eviction by cache
 	// timeout only.
 	defaultAlternativeMissingTxTimeout = 2 * time.Minute
 )
@@ -188,7 +188,7 @@ func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, er
 // AlternativeMissingTxTimeoutDuration returns how long a cached private transaction may stay missing
 // from the relay's eth_getTransactionByHash before the reconcile loop evicts it (see
 // defaultAlternativeMissingTxTimeout for what a sustained run of nulls means and how to disable the
-// early eviction for a relay that does not surface over the whole pending window).
+// early eviction for a relay that does not surface transactions for as long as they stay cached).
 func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, error) {
 	if c.AlternativeMissingTxTimeout != "" {
 		return parsePositiveDuration("alternativeMissingTxTimeout", c.AlternativeMissingTxTimeout)
@@ -201,9 +201,17 @@ func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, er
 // sweep is the one exit that does NOT clear the cache: inverted, it drops a private transaction's
 // address index while the cache keeps serving its body as pending, and nothing reconciles the two. Only
 // an explicit mempoolTxTimeout can invert the pair, which is why that is rejected rather than warned
-// about.
+// about. Equal timeouts are not inverted: every cache write restamps the wrapped mempool entry
+// (AddOrRefreshTransactionInMempool), so the cache entry is never the younger one.
 func mempoolRetentionInverted(alternativeTimeout, mempoolTimeout time.Duration) bool {
-	return alternativeTimeout >= mempoolTimeout
+	return alternativeTimeout > mempoolTimeout
+}
+
+// mempoolRetentionDrifted reports whether an explicit mempoolTxTimeout leaves the cache retention
+// behind - safe, but the shipped configs keep the pair equal, so a gap usually means a later edit moved
+// one side; a derived mempool retention is the cache's plus a margin and never drifts.
+func mempoolRetentionDrifted(alternativeTimeout, mempoolTimeout time.Duration, mempoolExplicit bool) bool {
+	return mempoolExplicit && alternativeTimeout < mempoolTimeout
 }
 
 // AverageBlockTimeDuration returns AverageBlockTimeMs as a time.Duration.
@@ -830,10 +838,16 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 		// existing. Inverted, private transactions silently lose their address index while still being
 		// served as pending (#1573), so it is rejected rather than warned about - and rejected before the
 		// mempool is assigned, so a second call cannot hand out a mempool with no provider wired to it.
-		if cacheEnabled && mempoolRetentionInverted(b.alternativeSendTxProvider.mempoolTxsTimeout, mempoolTxTimeout) {
-			// wrapped in ErrConfiguration so startup fails fast: this cannot resolve on a retry, and
-			// the retry loop would otherwise spend two minutes reporting it once a second as an RPC fault
-			return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must be longer than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativePendingTxWindow", bchain.ErrConfiguration, mempoolTxTimeout, b.alternativeSendTxProvider.mempoolTxsTimeout)
+		if cacheEnabled {
+			cacheRetention := b.alternativeSendTxProvider.mempoolTxsTimeout
+			if mempoolRetentionInverted(cacheRetention, mempoolTxTimeout) {
+				// wrapped in ErrConfiguration so startup fails fast: this cannot resolve on a retry, and
+				// the retry loop would otherwise spend two minutes reporting it once a second as an RPC fault
+				return nil, fmt.Errorf("%w: mempoolTxTimeout=%s must not be shorter than the alternative-provider cache retention of %s, or the wrapped mempool drops a private transaction's address index while the provider cache still serves it as pending; raise mempoolTxTimeout or lower alternativeMempoolTxTimeout (or alternativePendingTxWindow when no explicit cache retention is set)", bchain.ErrConfiguration, mempoolTxTimeout, cacheRetention)
+			}
+			if mempoolRetentionDrifted(cacheRetention, mempoolTxTimeout, b.ChainConfig.MempoolTxTimeout != "") {
+				glog.Infof("alternative-provider cache retention %s is shorter than mempoolTxTimeout %s: private transactions stop being served as pending before their address index expires", cacheRetention, mempoolTxTimeout)
+			}
 		}
 		b.Mempool = bchain.NewMempoolEthereumType(chain, mempoolTxTimeout, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeout=", mempoolTxTimeout, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
