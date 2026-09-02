@@ -101,6 +101,9 @@ Good examples of coin configuration are
         * `block_addresses_to_keep` – Number of blocks that are to be kept in blockaddresses column.
         * `additional_params` – Object of coin-specific params.
           * Tron-specific endpoint configuration is documented in [Tron Config](/docs/tron-config.md).
+          * Alternative fee provider configuration (BitcoinType):
+            * `alternative_estimate_fee` – Set to `mempoolspaceprecise` (mempool.space [recommended fees with sub-sat/vB precision](https://mempool.space/docs/api/rest#get-recommended-fees-precise); params `url`, `periodSeconds`), `mempoolspace` (mempool.space recommended fees; params `url`, `periodSeconds`), `mempoolspaceblock` (mempool.space projected mempool blocks; params `url`, `periodSeconds`, optional `feeRangeIndex` 0-6 percentile index instead of median, optional `fallbackFeePerKB` for targets beyond the projected blocks) or `whatthefee` (whatthefee.io) to serve provider fees instead of node `estimatesmartfee`. On provider error or stale data (>10 minutes), estimates fall back to the node.
+            * `alternative_estimate_fee_params` – JSON string with the provider params, e.g. `"{\"url\": \"https://mempool.space/api/v1/fees/precise\", \"periodSeconds\": 20}"`.
           * Alternative EIP-1559 fee provider configuration:
             * `alternative_estimate_fee` – Set to `infura` (Infura Gas API, requires `INFURA_API_KEY`) or `1inch` (1inch gas-price API, requires `ONE_INCH_API_KEY`) to use provider fee suggestions instead of native node fee estimation. Startup fails fast if the selected provider's API-key env var is missing.
             * `alternative_estimate_fee_params` – JSON string with `url`, `periodSeconds` and optional `staleSeconds`. `periodSeconds` controls how often Blockbook polls the provider.
