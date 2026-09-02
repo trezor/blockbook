@@ -119,7 +119,8 @@ Key invariants:
   double-counting.
 - **Removals are not pushed to the wallet.** Blockbook pushes only *added* txs; a wallet learns a
   pending tx is gone on its next account re-fetch (the initiating device also removes it
-  optimistically). The cache timeout, at the pending window's length, is only the backstop: in
+  optimistically). The cache timeout — `alternativeMempoolTxTimeout`, the pending window by default
+  and raised well past it in the coin configs — is only the backstop: in
   practice `sync_removed` retires an entry, with `nonce_superseded` covering a replacement submitted
   outside Blockbook.
 
@@ -155,8 +156,8 @@ sustained rate on either means the relay's answers regressed below its window. R
 sends are the benign exception: between their 96 s retention lapsing and the missing eviction
 firing, a nonce lookup routed to the relay can raise the floor from the still-cached tx, ticking
 `floor_raised{source="provider"}` without any regression. For a relay that does
-not surface accepted transactions over its window at all, set `alternativeMissingTxTimeout` at the
-pending window — that restores the old timeout-only eviction instead of re-living
+not surface accepted transactions over its window at all, set `alternativeMissingTxTimeout` at or
+above the cache retention — that restores the old timeout-only eviction instead of re-living
 [#1573](https://github.com/trezor/blockbook/issues/1573).
 
 ## Wallet-declared `privatePending` hint (nonce + gas routing)

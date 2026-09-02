@@ -68,7 +68,7 @@ const (
 	// transaction is gone - dropped or cancelled (a drop-mode cancel leaves no replacement behind to
 	// retire its predecessor) - and the short run requirement only absorbs a transient relay fluke
 	// rather than any node-to-node lag. For a relay without that consistency, configure
-	// alternativeMissingTxTimeout at or above the pending window, which restores eviction by cache
+	// alternativeMissingTxTimeout at or above the cache retention, which restores eviction by cache
 	// timeout only.
 	defaultAlternativeMissingTxTimeout = 2 * time.Minute
 )
@@ -188,7 +188,7 @@ func (c *Configuration) AlternativeMempoolTxTimeoutDuration() (time.Duration, er
 // AlternativeMissingTxTimeoutDuration returns how long a cached private transaction may stay missing
 // from the relay's eth_getTransactionByHash before the reconcile loop evicts it (see
 // defaultAlternativeMissingTxTimeout for what a sustained run of nulls means and how to disable the
-// early eviction for a relay that does not surface over the whole pending window).
+// early eviction for a relay that does not surface transactions for as long as they stay cached).
 func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, error) {
 	if c.AlternativeMissingTxTimeout != "" {
 		return parsePositiveDuration("alternativeMissingTxTimeout", c.AlternativeMissingTxTimeout)

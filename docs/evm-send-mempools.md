@@ -19,7 +19,8 @@ mempool the index built from it. A public transaction is only ever in the mempoo
 
 Two couplings between the stores are load-bearing:
 
-- `AddTransactionToMempool` builds its address index through `GetTransactionForMempool` →
+- `AddOrRefreshTransactionInMempool` — restamping an existing entry, delegating a first add to
+  `AddTransactionToMempool` — builds its address index through `GetTransactionForMempool` →
   `GetTransaction`, which reads the cache first, so a private transaction must be cached *before* it
   is added to the wrapped mempool or it cannot be indexed at all. The body comes from the send's own
   signed bytes and the fetch-back never writes the cache, so this holds even when the relay never
@@ -51,8 +52,8 @@ flowchart TD
     ws["eth_subscribe newPendingTransactions<br/>skipped when disableMempoolSync"]
     snap["startup and Resync snapshot<br/>eth_getBlockByNumber pending<br/>only when queryBackendOnMempoolResync"]
 
-    alt[("MEV / private cache<br/>full tx bodies<br/>timeout 3 h")]
-    pub[("Blockbook mempool<br/>txids + address index<br/>cache retention + 30 min with the cache")]
+    alt[("MEV / private cache<br/>full tx bodies<br/>timeout alternativeMempoolTxTimeout,<br/>the pending window by default")]
+    pub[("Blockbook mempool<br/>txids + address index<br/>mempoolTxTimeout, at or above<br/>the cache retention")]
 
     altrec["reconcileMempoolTxs, 1 min tick<br/>evicts mined, nonce_superseded, timeout and<br/>entries missing from the relay past<br/>alternativeMissingTxTimeout"]
     pubrec["Mempool Resync, every 60 s<br/>timeout sweep at most every 10 min<br/>plus backend-missing removal"]
@@ -73,7 +74,7 @@ flowchart TD
     acc -- "yes" --> reg --> ackevict --> cache --> handle
     ackevict -. "predecessor" .-> altrm
     cache -- "1. cache the body" --> alt
-    cache -- "2. AddTransactionToMempool,<br/>index built by reading the cache,<br/>then push NewTx" --> pub
+    cache -- "2. AddOrRefreshTransactionInMempool,<br/>index built by reading the cache<br/>(a re-send restamps), then push NewTx" --> pub
     handle -. "probe only,<br/>never writes" .-> alt
     primary -. "only when disableMempoolSync" .-> pub
     ws --> pub
@@ -113,7 +114,7 @@ flowchart TD
     e["cached entry, 1 min tick"]
     f{"age under 1 min?"}
     keepFresh["keep: skipped_fresh"]
-    b{"probed within its interval?<br/>1 min under 10 min old,<br/>5 min under 1 h, then 15 min"}
+    b{"probed within its interval?<br/>1 min under 10 min old, 5 min under 1 h,<br/>15 min under 3 h, then hourly"}
     keepBackoff["keep: skipped_backoff"]
     q["relay eth_getTransactionByHash"]
     qerr{"past the cache timeout?"}
