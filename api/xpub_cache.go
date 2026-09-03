@@ -17,6 +17,20 @@ func xpubUpdateLock(descriptor string) *sync.Mutex {
 	return &xpubUpdateLocks[h.Sum32()%xpubUpdateShards]
 }
 
+// xpubTxidLoadNeeded reports whether xpubCheckAndLoadTxids would mutate any
+// address, i.e. some used address has incomplete or stale txids.
+func xpubTxidLoadNeeded(data *xpubData) bool {
+	for _, da := range data.addresses {
+		for i := range da {
+			ad := &da[i]
+			if ad.balance != nil && (!ad.complete || ad.balance.Txs != ad.txs) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Private copy of the address slices so the update phase leaves any previously
 // published snapshot immutable for concurrent readers. Shallow is enough: each
 // entry's txids/balance are only ever reassigned, never mutated in place.

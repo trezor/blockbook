@@ -3,7 +3,6 @@
 package api
 
 import (
-	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -16,7 +15,7 @@ import (
 
 // setupXpubRaceWorker builds a Bitcoin-type worker backed by the shared test
 // fixtures (two connected blocks) so getXpubData exercises the real cache path.
-func setupXpubRaceWorker(t *testing.T) (*Worker, func()) {
+func setupXpubRaceWorker(t *testing.T) *Worker {
 	t.Helper()
 	parser := btc.NewBitcoinParser(
 		btc.GetChainParams("test"),
@@ -31,15 +30,11 @@ func setupXpubRaceWorker(t *testing.T) (*Worker, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmp, err := os.MkdirTemp("", "xpubracedb")
+	d, err := db.NewRocksDB(t.TempDir(), 100000, -1, parser, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, false)
-	if err != nil {
-		os.RemoveAll(tmp)
-		t.Fatal(err)
-	}
+	t.Cleanup(func() { d.Close() })
 	is, err := d.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
 	if err != nil {
 		t.Fatal(err)
@@ -74,15 +69,12 @@ func setupXpubRaceWorker(t *testing.T) (*Worker, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return w, func() {
-		d.Close()
-		os.RemoveAll(tmp)
-	}
+	return w
 }
 
 func resetXpubCache() {
 	cachedXpubsMux.Lock()
-	cachedXpubs = nil
+	cachedXpubs = make(map[string]xpubData)
 	cachedXpubsMux.Unlock()
 }
 
@@ -98,8 +90,7 @@ func TestGetXpubAddressConcurrent(t *testing.T) {
 		defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	}
 
-	w, cleanup := setupXpubRaceWorker(t)
-	defer cleanup()
+	w := setupXpubRaceWorker(t)
 
 	const gap = 1000
 	filter := &AddressFilter{Vout: AddressFilterVoutOff}
