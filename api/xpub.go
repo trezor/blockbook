@@ -801,7 +801,8 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 				return nil, err
 			}
 			if len(utxos) > 0 {
-				t := w.tokenFromXpubAddress(data, ad, ci, i, AccountDetailsTokens)
+				// ci is the position in data.addresses, the derivation path needs the configured change index
+				t := w.tokenFromXpubAddress(data, ad, int(xd.ChangeIndexes[ci]), i, AccountDetailsTokens)
 				for j := range utxos {
 					a := &utxos[j]
 					a.Address = t.Name
