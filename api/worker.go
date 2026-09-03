@@ -1083,19 +1083,8 @@ func computeAccountPaging(mempoolCount, confirmedCount, page, itemsOnPage int) (
 
 // clampRange limits a window of the merged sequence to the bounds of one of its parts.
 func clampRange(from, to, length int) (int, int) {
-	if from < 0 {
-		from = 0
-	}
-	if from > length {
-		from = length
-	}
-	if to > length {
-		to = length
-	}
-	if to < from {
-		to = from
-	}
-	return from, to
+	from = min(max(from, 0), length)
+	return from, min(max(to, from), length)
 }
 
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool) (*Token, error) {
@@ -1598,6 +1587,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		ba                       *db.AddrBalance
 		txm                      []string
 		mempoolTxs               []*Tx
+		mempoolTxCount           int
 		txs                      []*Tx
 		txids                    []string
 		accountChainExtraData    *AccountChainExtraData
@@ -1639,10 +1629,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			}
 		}
 	}
-	// if there are only unconfirmed transactions, there is no paging
+	// address only in mempool; the paged sequence is then the pending txs alone
 	if ba == nil {
 		ba = &db.AddrBalance{}
-		page = 0
 	}
 	addresses := w.newAddressesMapForAliases()
 	// process mempool, only if toHeight is not specified
@@ -1675,7 +1664,12 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 							uBalSending.Add(&uBalSending, tx.getAddrVinValue(addrDesc))
 						}
 						if option >= AccountDetailsTxidHistory {
-							mempoolTxs = append(mempoolTxs, tx)
+							// entries past (page+1)*txsOnPage can never fall into the page window;
+							// not retaining them bounds memory on addresses with a huge pending set
+							if filter.Vout == AddressFilterVoutQueryNotNecessary || len(mempoolTxs) < (page+1)*txsOnPage {
+								mempoolTxs = append(mempoolTxs, tx)
+							}
+							mempoolTxCount++
 						}
 					}
 				}
@@ -1703,12 +1697,14 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			return nil, errors.Annotatef(err, "GetBestBlock")
 		}
 		var from, to, mempoolFrom, mempoolTo int
-		pg, mempoolFrom, mempoolTo, from, to, page = computeAccountPaging(len(mempoolTxs), len(txc), page, txsOnPage)
-		if len(mempoolTxs)+len(txc) >= txsOnPage {
+		pg, mempoolFrom, mempoolTo, from, to, page = computeAccountPaging(mempoolTxCount, len(txc), page, txsOnPage)
+		// len(txc) >= txsOnPage means txc may have been truncated by maxResults, so the exact
+		// TotalPages must come from totalResults; the mempool is always fetched in full
+		if len(txc) >= txsOnPage {
 			if totalResults < 0 {
 				pg.TotalPages = -1
 			} else {
-				pg, _, _, _ = computePaging(totalResults+len(mempoolTxs), page, txsOnPage)
+				pg, _, _, _ = computePaging(totalResults+mempoolTxCount, page, txsOnPage)
 			}
 		}
 		// mempool txs take the first slots of the paged sequence, before confirmed history

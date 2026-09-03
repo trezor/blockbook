@@ -1187,8 +1187,12 @@ components:
       description: >-
         Number of history items per page. The default and maximum for REST account endpoints
         is 1000. Unconfirmed transactions take the first slots of the paged history and count
-        towards both pageSize and totalPages, so a page is never longer than pageSize and
-        walking all pages returns every transaction exactly once.
+        towards both pageSize and totalPages, so a page is never longer than pageSize and, as
+        long as the account's pending set does not change between page requests, walking all
+        pages returns every transaction exactly once. A pending transaction that is replaced
+        or evicted mid-walk shifts the following pages; for a walk that is consistent under
+        mempool churn, set the to parameter to the current best height, which pages only the
+        confirmed history.
       schema:
         type: integer
         minimum: 1

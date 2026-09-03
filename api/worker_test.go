@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -492,8 +491,7 @@ func TestAddEthereumFeesToBalanceHistory(t *testing.T) {
 func BenchmarkTxInputResolution(b *testing.B) {
 	for _, fanIn := range []int{8, 32, 128, 512, 2048} {
 		b.Run("fanIn="+strconv.Itoa(fanIn), func(b *testing.B) {
-			worker, subjectTx, cleanup := buildHighFanInWorker(b, fanIn)
-			defer cleanup()
+			worker, subjectTx := buildHighFanInWorker(b, fanIn)
 			addresses := make(map[string]struct{})
 
 			tx, err := worker.GetTransactionFromBchainTx(subjectTx, 2, false, false, addresses)
@@ -512,12 +510,38 @@ func BenchmarkTxInputResolution(b *testing.B) {
 	}
 }
 
+// newIndexedWorkerDB indexes the blocks into a RocksDB in a test temp directory and
+// returns the database with its loaded internal state, both closed via tb.Cleanup.
+func newIndexedWorkerDB(tb testing.TB, parser bchain.BlockChainParser, blocks []*bchain.Block) (*db.RocksDB, *common.InternalState) {
+	tb.Helper()
+	database, err := db.NewRocksDB(tb.TempDir(), 100000, -1, parser, nil, false)
+	require.NoError(tb, err)
+	tb.Cleanup(func() { require.NoError(tb, database.Close()) })
+
+	is, err := database.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
+	require.NoError(tb, err)
+	database.SetInternalState(is)
+
+	bulk, err := database.InitBulkConnect()
+	require.NoError(tb, err)
+	for i, block := range blocks {
+		require.NoError(tb, bulk.ConnectBlock(block, i == len(blocks)-1))
+	}
+	require.NoError(tb, bulk.Close())
+	var syncHeight uint32
+	if len(blocks) > 0 {
+		syncHeight = blocks[len(blocks)-1].Height
+	}
+	is.FinishedSync(syncHeight)
+	return database, is
+}
+
 // buildHighFanInWorker indexes a previous transaction with fanIn outputs and a
 // subject transaction whose fanIn inputs each spend one of them (all referencing the
 // same previous tx, concentrating resolution on a single large record), and returns
 // a Worker plus the subject tx. Only db + parser are needed: GetTransactionFromBchainTx
 // for a confirmed Bitcoin-type tx (specificJSON=false) does not touch the chain.
-func buildHighFanInWorker(tb testing.TB, fanIn int) (*Worker, *bchain.Tx, func()) {
+func buildHighFanInWorker(tb testing.TB, fanIn int) (*Worker, *bchain.Tx) {
 	tb.Helper()
 	parser := btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{BlockAddressesToKeep: 1})
 	script := dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, parser)
@@ -537,28 +561,8 @@ func buildHighFanInWorker(tb testing.TB, fanIn int) (*Worker, *bchain.Tx, func()
 		{BlockHeader: bchain.BlockHeader{Hash: fanInHash(1_000_002), Height: 2, Time: 1_700_000_002}, Txs: []bchain.Tx{*subjectTx}},
 	}
 
-	tmp, err := os.MkdirTemp("", "vin-resolution")
-	require.NoError(tb, err)
-	database, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, false)
-	require.NoError(tb, err)
-	cleanup := func() {
-		require.NoError(tb, database.Close())
-		require.NoError(tb, os.RemoveAll(tmp))
-	}
-
-	is, err := database.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
-	require.NoError(tb, err)
-	database.SetInternalState(is)
-
-	bulk, err := database.InitBulkConnect()
-	require.NoError(tb, err)
-	for i, block := range blocks {
-		require.NoError(tb, bulk.ConnectBlock(block, i == len(blocks)-1))
-	}
-	require.NoError(tb, bulk.Close())
-	is.FinishedSync(uint32(len(blocks)))
-
-	return &Worker{db: database, chainParser: parser, chainType: bchain.ChainBitcoinType, is: is}, subjectTx, cleanup
+	database, is := newIndexedWorkerDB(tb, parser, blocks)
+	return &Worker{db: database, chainParser: parser, chainType: bchain.ChainBitcoinType, is: is}, subjectTx
 }
 
 func fanInTx(txid string, height uint32, vin []bchain.Vin, vout []bchain.Vout) *bchain.Tx {

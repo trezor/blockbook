@@ -4,13 +4,11 @@ package api
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
-	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
@@ -58,7 +56,7 @@ func (c *pagingChain) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, er
 // buildPagingWorker indexes confirmedTxs blocks, each with one tx paying Addr1, and puts
 // pendingTxs txs for the same address in the mempool. Returns the worker and the txids of
 // the pending and the confirmed txs, both newest first - the order the API returns them in.
-func buildPagingWorker(t *testing.T, confirmedTxs, pendingTxs int) (*Worker, []string, []string, func()) {
+func buildPagingWorker(t *testing.T, confirmedTxs, pendingTxs int) (*Worker, []string, []string) {
 	t.Helper()
 	parser := btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{BlockAddressesToKeep: 1})
 	script := dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, parser)
@@ -95,26 +93,7 @@ func buildPagingWorker(t *testing.T, confirmedTxs, pendingTxs int) (*Worker, []s
 		pending = append(pending, txid)
 	}
 
-	tmp, err := os.MkdirTemp("", "account-paging")
-	require.NoError(t, err)
-	database, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, false)
-	require.NoError(t, err)
-	cleanup := func() {
-		require.NoError(t, database.Close())
-		require.NoError(t, os.RemoveAll(tmp))
-	}
-
-	is, err := database.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
-	require.NoError(t, err)
-	database.SetInternalState(is)
-
-	bulk, err := database.InitBulkConnect()
-	require.NoError(t, err)
-	for i, block := range blocks {
-		require.NoError(t, bulk.ConnectBlock(block, i == len(blocks)-1))
-	}
-	require.NoError(t, bulk.Close())
-	is.FinishedSync(uint32(len(blocks)))
+	database, is := newIndexedWorkerDB(t, parser, blocks)
 
 	// caching is switched off, so pending txs are always served by pagingChain
 	txCache, err := db.NewTxCache(database, chain, newRefreshTestMetrics(t), is, false)
@@ -129,15 +108,14 @@ func buildPagingWorker(t *testing.T, confirmedTxs, pendingTxs int) (*Worker, []s
 		txCache:     txCache,
 		is:          is,
 	}
-	return w, pending, confirmed, cleanup
+	return w, pending, confirmed
 }
 
 // TestGetAddressPagesMempoolWithConfirmed is the regression test for issue #1099: a page
 // must never be longer than requested, and walking the pages must return every tx once.
 func TestGetAddressPagesMempoolWithConfirmed(t *testing.T) {
 	const confirmedTxs, pendingTxs, txsOnPage = 3, 1, 2
-	w, pending, confirmed, cleanup := buildPagingWorker(t, confirmedTxs, pendingTxs)
-	defer cleanup()
+	w, pending, confirmed := buildPagingWorker(t, confirmedTxs, pendingTxs)
 
 	want := append(append([]string{}, pending...), confirmed...)
 	filter := &AddressFilter{Vout: AddressFilterVoutOff}
@@ -164,8 +142,7 @@ func TestGetAddressPagesMempoolWithConfirmed(t *testing.T) {
 // txs, which must stay exactly as it was before mempool entries joined the paged sequence.
 func TestGetAddressPagesWithoutMempoolUnchanged(t *testing.T) {
 	const confirmedTxs, txsOnPage = 5, 2
-	w, _, confirmed, cleanup := buildPagingWorker(t, confirmedTxs, 0)
-	defer cleanup()
+	w, _, confirmed := buildPagingWorker(t, confirmedTxs, 0)
 
 	filter := &AddressFilter{Vout: AddressFilterVoutOff}
 	var walked []string
@@ -183,20 +160,37 @@ func TestGetAddressPagesWithoutMempoolUnchanged(t *testing.T) {
 }
 
 // TestGetAddressMempoolOnlyAccount covers an address that is only in the mempool, where
-// there is no confirmed history to page against.
+// the paged sequence consists of the pending txs alone.
 func TestGetAddressMempoolOnlyAccount(t *testing.T) {
-	w, pending, _, cleanup := buildPagingWorker(t, 0, 2)
-	defer cleanup()
+	const pendingTxs, txsOnPage = 3, 1
+	w, pending, _ := buildPagingWorker(t, 0, pendingTxs)
+	filter := &AddressFilter{Vout: AddressFilterVoutOff}
 
-	addr, err := w.GetAddress(dbtestdata.Addr1, 1, 25, AccountDetailsTxidHistory, &AddressFilter{Vout: AddressFilterVoutOff}, "")
+	addr, err := w.GetAddress(dbtestdata.Addr1, 1, 25, AccountDetailsTxidHistory, filter, "")
 	require.NoError(t, err)
 	require.Equal(t, pending, addr.Txids)
-	require.Equal(t, 2, addr.UnconfirmedTxs)
+	require.Equal(t, pendingTxs, addr.UnconfirmedTxs)
+	require.Equal(t, 1, addr.TotalPages)
+
+	// every advertised page must be reachable even without confirmed history
+	var walked []string
+	for page := 1; ; page++ {
+		addr, err := w.GetAddress(dbtestdata.Addr1, page, txsOnPage, AccountDetailsTxidHistory, filter, "")
+		require.NoError(t, err)
+		require.LessOrEqual(t, len(addr.Txids), txsOnPage,
+			"page %d returned %d txids, more than the requested pageSize %d", page, len(addr.Txids), txsOnPage)
+		require.Equal(t, pendingTxs, addr.TotalPages, "pending txs must be counted into the total page count")
+		walked = append(walked, addr.Txids...)
+		if page >= addr.TotalPages {
+			break
+		}
+	}
+	require.Equal(t, pending, walked, "walking all pages must return every pending tx exactly once")
 }
 
 // buildXpubPagingWorker indexes the shared bitcoin-type test blocks, which contain
 // addresses derived from dbtestdata.Xpub, and puts one pending tx in the mempool.
-func buildXpubPagingWorker(t *testing.T) (*Worker, string, func()) {
+func buildXpubPagingWorker(t *testing.T) (*Worker, string) {
 	t.Helper()
 	// the xpub magics are what makes the derived addresses match the indexed test data
 	parser := btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{
@@ -222,25 +216,10 @@ func buildXpubPagingWorker(t *testing.T) (*Worker, string, func()) {
 	}
 	mempool := &pagingMempool{entries: []bchain.Outpoint{{Txid: pendingTxid, Vout: 0}}}
 
-	tmp, err := os.MkdirTemp("", "xpub-paging")
-	require.NoError(t, err)
-	database, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, false)
-	require.NoError(t, err)
-	cleanup := func() {
-		require.NoError(t, database.Close())
-		require.NoError(t, os.RemoveAll(tmp))
-	}
-
-	is, err := database.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
-	require.NoError(t, err)
-	database.SetInternalState(is)
-
-	bulk, err := database.InitBulkConnect()
-	require.NoError(t, err)
-	require.NoError(t, bulk.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(parser), false))
-	require.NoError(t, bulk.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock2(parser), true))
-	require.NoError(t, bulk.Close())
-	is.FinishedSync(225494)
+	database, is := newIndexedWorkerDB(t, parser, []*bchain.Block{
+		dbtestdata.GetTestBitcoinTypeBlock1(parser),
+		dbtestdata.GetTestBitcoinTypeBlock2(parser),
+	})
 
 	metrics := newRefreshTestMetrics(t)
 	txCache, err := db.NewTxCache(database, chain, metrics, is, false)
@@ -262,15 +241,14 @@ func buildXpubPagingWorker(t *testing.T) (*Worker, string, func()) {
 		metrics:     metrics,
 		xpubConfig:  DefaultXpubConfig(),
 	}
-	return w, pendingTxid, cleanup
+	return w, pendingTxid
 }
 
 // TestGetXpubAddressPagesMempoolWithConfirmed is the xpub endpoint from issue #1099: with a
 // pending tx, pageSize was exceeded and a confirmed tx fell between page 1 and page 2.
 func TestGetXpubAddressPagesMempoolWithConfirmed(t *testing.T) {
 	const txsOnPage = 1
-	w, pendingTxid, cleanup := buildXpubPagingWorker(t)
-	defer cleanup()
+	w, pendingTxid := buildXpubPagingWorker(t)
 
 	// the confirmed history alone, in the order the API returns it
 	confirmedOnly, err := w.GetXpubAddress(dbtestdata.Xpub, 1, 100, AccountDetailsTxidHistory,

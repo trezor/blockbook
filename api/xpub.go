@@ -668,18 +668,11 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			sort.Stable(txc)
 			txCount = len(txcMap)
 		}
-		totalResults := txCount
-		if filtered {
-			totalResults = -1
-		}
 		var from, to, mempoolFrom, mempoolTo int
 		pg, mempoolFrom, mempoolTo, from, to, page = computeAccountPaging(len(mempoolEntries), len(txc), page, txsOnPage)
-		if len(mempoolEntries)+len(txc) >= txsOnPage {
-			if totalResults < 0 {
-				pg.TotalPages = -1
-			} else {
-				pg, _, _, _ = computePaging(totalResults+len(mempoolEntries), page, txsOnPage)
-			}
+		// filtered txc is not the whole history, so an exact TotalPages cannot be computed
+		if filtered && len(txc) >= txsOnPage {
+			pg.TotalPages = -1
 		}
 		// mempool txs take the first slots of the paged sequence, before confirmed history
 		for _, entry := range mempoolEntries[mempoolFrom:mempoolTo] {
