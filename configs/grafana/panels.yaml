@@ -181,7 +181,7 @@ panels:
         legend: '{{type}}'
   sync.index_sync_yields:
     title: Index sync yields
-    description: The retry loop gave control back to outer resync because a deadline elapsed or chain-state probes kept failing.
+    description: Sync gave control back to outer resync because a deadline elapsed, chain-state probes kept failing, or the sequential loop fell too far behind the backend tip.
     queries:
       yields:
         promql: sum(increase({{name:index_sync_yields}}{job="blockbook", coin="$coin"}[$__interval])) by (reason)

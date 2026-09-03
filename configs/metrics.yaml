@@ -213,7 +213,7 @@ metrics:
   index_sync_yields:
     name: blockbook_index_sync_yields
     type: counter_vec
-    help: 'Number of times sync yielded to the outer resync machinery for non-reorg reasons (reason=deadline: MaxStallDuration elapsed in retry loop; reason=probe_failed: chain-state probe failed for the configured streak)'
+    help: 'Number of times sync yielded to the outer resync machinery for non-reorg reasons (reason=deadline: MaxStallDuration elapsed in retry loop; reason=probe_failed: chain-state probe failed for the configured streak; reason=fell_behind: sequential sync lagged too far behind the backend tip and yielded for parallel catch-up)'
     labels: [reason]
   index_db_size:
     name: blockbook_index_db_size

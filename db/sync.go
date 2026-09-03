@@ -1077,7 +1077,7 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			if bestHeight, bestErr := w.chain.GetBestBlockHeight(); bestErr == nil && bestHeight > height && bestHeight-height > fallBehindGap {
 				glog.Warningf("getBlockChain: sequential sync at %d is %d blocks behind backend tip %d; yielding to resync for parallel catch-up",
 					height, bestHeight-height, bestHeight)
-				w.metrics.IndexSyncYields.With(common.Labels{"reason": "fell-behind"}).Inc()
+				w.metrics.IndexSyncYields.With(common.Labels{"reason": "fell_behind"}).Inc()
 				select {
 				case out <- blockResult{err: errResync}:
 				case <-done:
