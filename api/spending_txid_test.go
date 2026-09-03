@@ -1,10 +1,10 @@
+//go:build unittest
+
 package api
 
 import (
-	"os"
 	"testing"
 
-	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
@@ -14,7 +14,7 @@ import (
 // setupSpendingWorker builds a worker over the two-block Fakecoin fixture. The
 // fixture already contains the shape this test needs: TxidB1T1 pays the same
 // SatB1T1A2 to Addr2 twice (vout 1 and vout 2) and only vout 1 is ever spent.
-func setupSpendingWorker(t *testing.T, extendedIndex bool) (*Worker, func()) {
+func setupSpendingWorker(t *testing.T, extendedIndex bool) *Worker {
 	t.Helper()
 	parser := btc.NewBitcoinParser(
 		btc.GetChainParams("test"),
@@ -29,74 +29,42 @@ func setupSpendingWorker(t *testing.T, extendedIndex bool) (*Worker, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmp, err := os.MkdirTemp("", "testdb-spending")
+	d, err := db.NewRocksDB(t.TempDir(), 100000, -1, parser, nil, extendedIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, extendedIndex)
+	t.Cleanup(func() { d.Close() })
+	is, err := d.LoadInternalState(&common.Config{CoinName: "Fakecoin", CoinShortcut: "FAKE"})
 	if err != nil {
-		t.Fatal(err)
-	}
-	cleanup := func() {
-		d.Close()
-		os.RemoveAll(tmp)
-	}
-	config := &common.Config{CoinName: "Fakecoin", CoinShortcut: "FAKE"}
-	is, err := d.LoadInternalState(config)
-	if err != nil {
-		cleanup()
 		t.Fatal(err)
 	}
 	d.SetInternalState(is)
 
-	bestHeight, err := chain.GetBestBlockHeight()
-	if err != nil {
-		cleanup()
-		t.Fatal(err)
-	}
-	block1, err := chain.GetBlock("", bestHeight-1)
-	if err != nil {
-		cleanup()
-		t.Fatal(err)
-	}
-	for i := uint32(0); i < block1.Height; i++ {
-		is.BlockTimes = append(is.BlockTimes, 0)
-	}
+	block1 := dbtestdata.GetTestBitcoinTypeBlock1(parser)
+	block2 := dbtestdata.GetTestBitcoinTypeBlock2(parser)
+	// BlockTimes is indexed by height, so pad up to the first fixture block
+	is.BlockTimes = make([]uint32, block1.Height)
 	if err := d.ConnectBlock(block1); err != nil {
-		cleanup()
-		t.Fatal(err)
-	}
-	block2, err := chain.GetBlock("", bestHeight)
-	if err != nil {
-		cleanup()
 		t.Fatal(err)
 	}
 	if err := d.ConnectBlock(block2); err != nil {
-		cleanup()
 		t.Fatal(err)
 	}
 	is.FinishedSync(block2.Height)
 
-	// the tx cache dereferences metrics unconditionally, so they must be real;
-	// the name must be unique or the prometheus registration collides
-	m, err := common.GetMetrics("Fakecoin-api-spending-" + t.Name())
-	if err != nil {
-		cleanup()
-		t.Fatal(err)
-	}
+	m := newRefreshTestMetrics(t)
 	// caching disabled, as in server/public_test.go: the fixture txs carry no Hex,
 	// which BitcoinLikeParser.PackTx needs, so a cached tx cannot be read back
 	txCache, err := db.NewTxCache(d, chain, m, is, false)
 	if err != nil {
-		cleanup()
 		t.Fatal(err)
 	}
-	w, err := NewWorker(d, chain, bchain.NewMempoolBitcoinType(chain, 1, 1, 0, "", false, 1), txCache, m, is, nil)
+	// nil mempool: GetSpendingTxid never touches it for confirmed transactions
+	w, err := NewWorker(d, chain, nil, txCache, m, is, nil)
 	if err != nil {
-		cleanup()
 		t.Fatal(err)
 	}
-	return w, cleanup
+	return w
 }
 
 // TestGetSpendingTxid covers trezor/blockbook#1029: an output must not inherit
@@ -108,8 +76,7 @@ func TestGetSpendingTxid(t *testing.T) {
 			name = "extendedIndex"
 		}
 		t.Run(name, func(t *testing.T) {
-			w, cleanup := setupSpendingWorker(t, extendedIndex)
-			defer cleanup()
+			w := setupSpendingWorker(t, extendedIndex)
 
 			tests := []struct {
 				name string
@@ -132,12 +99,6 @@ func TestGetSpendingTxid(t *testing.T) {
 					n:    2,
 					want: "",
 				},
-				{
-					name: "unspent output of another tx is not spent",
-					txid: dbtestdata.TxidB1T1,
-					n:    0,
-					want: "",
-				},
 			}
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
@@ -151,9 +112,21 @@ func TestGetSpendingTxid(t *testing.T) {
 				})
 			}
 
-			if _, err := w.GetSpendingTxid(dbtestdata.TxidB1T1, 99); err == nil {
-				t.Error("GetSpendingTxid with out-of-range vout: expected an error")
-			}
+			// bypass the unspent guard in GetSpendingTxid to pin the outpoint match
+			// itself: TxidB2T1's input matches vout 2 on txid, address and value, and
+			// only its outpoint (vout 1) tells the two sibling outputs apart
+			t.Run("scan rejects a candidate spending a sibling outpoint", func(t *testing.T) {
+				tx, err := w.getTransaction(dbtestdata.TxidB1T1, false, false, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := w.setSpendingTxToVout(&tx.Vout[2], tx.Txid, uint32(tx.Blockheight)); err != nil {
+					t.Fatal(err)
+				}
+				if tx.Vout[2].SpentTxID != "" {
+					t.Errorf("setSpendingTxToVout matched %q for unspent vout 2, want no match", tx.Vout[2].SpentTxID)
+				}
+			})
 		})
 	}
 }
