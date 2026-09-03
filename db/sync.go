@@ -495,8 +495,14 @@ func (w *SyncWorker) onRetryableMiss(retries *int, threshold int, label string, 
 		return false, nil
 	}
 	if *retries == threshold {
-		glog.Warningf("%s: block %d %s still missing after %d retries (last: %v); rechecking chain state",
-			label, height, hash, *retries, err)
+		// Without a hash shouldRestartSyncOnMissingBlock is a no-op; don't claim a recheck.
+		if hash == "" {
+			glog.Warningf("%s: block %d still missing after %d retries (last: %v); waiting for backend tip",
+				label, height, *retries, err)
+		} else {
+			glog.Warningf("%s: block %d %s still missing after %d retries (last: %v); rechecking chain state",
+				label, height, hash, *retries, err)
+		}
 	}
 	return w.shouldRestartSyncOnMissingBlock(height, hash)
 }

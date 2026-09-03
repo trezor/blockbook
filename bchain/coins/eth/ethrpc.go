@@ -1450,6 +1450,11 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 	})
 	b.observeEthSyncRpcError(method, err)
 	if err != nil {
+		// juju's Annotatef has no Unwrap; keep the sentinel bare so getBlockChain's
+		// end-of-chain exit and retry accounting still see ErrBlockNotFound.
+		if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+			return nil, nil, err
+		}
 		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
