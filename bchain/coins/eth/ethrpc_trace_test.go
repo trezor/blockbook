@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -142,8 +141,8 @@ func TestProcessCallTraceIgnoresFakeCallcodeTransfers(t *testing.T) {
 	b.processCallTrace(trace, d, nil, 1)
 
 	want := []bchain.EthereumInternalTransfer{
-		{Value: *hexToBig(t, threeEth), From: sender, To: attacker},
-		{Value: *hexToBig(t, halfEther), From: attacker, To: victim1},
+		{Value: *hexutil.MustDecodeBig(threeEth), From: sender, To: attacker},
+		{Value: *hexutil.MustDecodeBig(halfEther), From: attacker, To: victim1},
 	}
 	if len(d.Transfers) != len(want) {
 		t.Fatalf("transfers = %+v, want only the real CALL transfers %+v", d.Transfers, want)
@@ -154,13 +153,4 @@ func TestProcessCallTraceIgnoresFakeCallcodeTransfers(t *testing.T) {
 			t.Errorf("transfer[%d] = %+v, want %+v", i, d.Transfers[i], want[i])
 		}
 	}
-}
-
-func hexToBig(t *testing.T, hex string) *big.Int {
-	t.Helper()
-	v, err := hexutil.DecodeBig(hex)
-	if err != nil {
-		t.Fatalf("DecodeBig(%q) error = %v", hex, err)
-	}
-	return v
 }

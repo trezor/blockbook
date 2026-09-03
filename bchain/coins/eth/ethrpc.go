@@ -1517,17 +1517,20 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 			To:    call.To,
 		})
 		contracts = append(contracts, bchain.ContractInfo{Contract: call.From, DestructedInBlock: blockHeight})
-	} else if call.Type == "DELEGATECALL" || call.Type == "CALLCODE" {
-		// ignore DELEGATECALL (geth v1.11 the changed tracer behavior)
-		// 	https://github.com/ethereum/go-ethereum/issues/26726
-		// CALLCODE runs foreign code in the caller's own context too, so its traced value never
-		// leaves the caller; indexing from->to would report a fake transfer to the code address
-	} else if err == nil && (value.BitLen() > 0 || b.ChainConfig.ProcessZeroInternalTransactions) {
-		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
-			Value: *value,
-			From:  call.From,
-			To:    call.To,
-		})
+	} else if call.Type == "DELEGATECALL" || call.Type == "CALLCODE" || call.Type == "STATICCALL" {
+		// DELEGATECALL and CALLCODE run foreign code in the caller's own context, so their
+		// traced value never leaves the caller (geth v1.11 tracer change, issues #26726, #1225);
+		// STATICCALL cannot transfer value at all
+	} else if call.Type == "CALL" {
+		if err == nil && (value.BitLen() > 0 || b.ChainConfig.ProcessZeroInternalTransactions) {
+			d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
+				Value: *value,
+				From:  call.From,
+				To:    call.To,
+			})
+		}
+	} else if err == nil && value.BitLen() > 0 {
+		glog.Warningf("processCallTrace: unknown call type %q with value in block %d, not indexed", call.Type, blockHeight)
 	}
 	if call.Error != "" {
 		d.Error = call.Error
