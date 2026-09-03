@@ -279,6 +279,9 @@ const (
 
 const addrContractsCacheMinSize = 300_000 // limit for caching address contracts in memory to speed up indexing
 
+// addrContractsCacheStorePeriod is how often the cache is packed to disk during block connect.
+const addrContractsCacheStorePeriod = 5 * time.Minute
+
 // RocksDB handle
 type RocksDB struct {
 	path            string
@@ -316,7 +319,9 @@ type RocksDB struct {
 	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
 	addrContractsCacheBytes int64
 	hotAddrTracker          *addressHotness
-	setBlockTimesWG         sync.WaitGroup
+	// lastAddrContractsCacheStore is only read/written from the block-connect goroutine.
+	lastAddrContractsCacheStore time.Time
+	setBlockTimesWG             sync.WaitGroup
 }
 
 const (
@@ -446,7 +451,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		if r.bulkAddrContractsCacheMaxBytes == 0 {
 			r.bulkAddrContractsCacheMaxBytes = r.addrContractsCacheMaxBytes
 		}
-		go r.periodicStoreAddrContractsCache()
+		r.lastAddrContractsCacheStore = time.Now()
 	}
 	return r, nil
 }
@@ -745,6 +750,9 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	}
 	if err := d.WriteBatch(wb); err != nil {
 		return err
+	}
+	if chainType == bchain.ChainEthereumType {
+		d.storeAddrContractsCacheIfDue()
 	}
 	// Fractional seconds: the integer average truncates to 0 on sub-second chains, which
 	// silently excludes them from any rule gated on this gauge being > 0. SetBlockTime
