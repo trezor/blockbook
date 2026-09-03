@@ -32,6 +32,11 @@ func parseSimpleNumericProperty(data string) *big.Int {
 	return nil
 }
 
+// maxParsedStringBytes caps how many bytes any decoded contract string (name/symbol/tokenURI) may
+// hold. A malicious contract can make a free eth_call return an arbitrarily large string; without
+// this ceiling the live, unstored tokenURI path would decode the whole blob on every request.
+const maxParsedStringBytes = 64 << 10
+
 func parseSimpleStringProperty(data string) string {
 	if has0xPrefix(data) {
 		data = data[2:]
@@ -41,6 +46,9 @@ func parseSimpleStringProperty(data string) string {
 		if n != nil {
 			l := n.Int64()
 			if l > 0 && int(l) <= ((len(data)-128)>>1) {
+				if l > maxParsedStringBytes {
+					l = maxParsedStringBytes
+				}
 				b, err := hex.DecodeString(data[128 : 128+2*l])
 				if err == nil {
 					return string(b)
@@ -49,7 +57,7 @@ func parseSimpleStringProperty(data string) string {
 		}
 	}
 	// allow string properties as UTF-8 data
-	b, err := hex.DecodeString(data)
+	b, err := hex.DecodeString(data[:min(len(data), 2*maxParsedStringBytes)])
 	if err == nil {
 		i := min(bytes.Index(b, []byte{0}), 32)
 		if i > 0 {
