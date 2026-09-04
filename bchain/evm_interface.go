@@ -29,6 +29,7 @@ type EVMRPCClient interface {
 // EVMHeader provides access to the necessary header data for evm chain sync
 type EVMHeader interface {
 	Hash() string
+	ParentHash() string
 	Number() *big.Int
 	Difficulty() *big.Int
 }

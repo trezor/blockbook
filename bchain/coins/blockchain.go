@@ -439,6 +439,11 @@ func (c *blockChainWithMetrics) EthereumTypeGetTransactionReceipt(txid string) (
 	return c.b.EthereumTypeGetTransactionReceipt(txid)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetBestTip() (v *bchain.EVMTip, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetBestTip", s, err) }(time.Now())
+	return c.b.EthereumTypeGetBestTip()
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics

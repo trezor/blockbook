@@ -64,6 +64,7 @@ func (h stubHeader) Hash() string {
 	}
 	return string(rune(h.n))
 }
+func (h stubHeader) ParentHash() string   { return "" }
 func (h stubHeader) Number() *big.Int     { return big.NewInt(h.n) }
 func (h stubHeader) Difficulty() *big.Int { return big.NewInt(0) }
 

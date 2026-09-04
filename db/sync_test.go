@@ -164,6 +164,7 @@ type getBlockChainTestChain struct {
 	chainType         bchain.ChainType // zero value keeps existing tests on the bitcoin-type path
 	bestHeight        uint32
 	bestHash          string
+	tip               *bchain.EVMTip // nil: snapshot is derived from bestHash/bestHeight with no parent
 	bestHeightErr     error
 	bestHeightCalls   int
 	hashes            map[uint32]string
@@ -189,6 +190,13 @@ func (c *getBlockChainTestChain) GetChainParser() bchain.BlockChainParser {
 
 func (c *getBlockChainTestChain) GetBestBlockHash() (string, error) {
 	return c.bestHash, nil
+}
+
+func (c *getBlockChainTestChain) EthereumTypeGetBestTip() (*bchain.EVMTip, error) {
+	if c.tip != nil {
+		return c.tip, nil
+	}
+	return &bchain.EVMTip{Hash: c.bestHash, Height: c.bestHeight}, nil
 }
 
 func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
@@ -438,30 +446,37 @@ func TestStartHashForHeight(t *testing.T) {
 	}
 }
 
-// One steady-state EVM cycle: the fork check is the only header lookup, the tip hash comes
-// from the cached header and the end-of-chain probe is not sent.
-func TestResyncIndexEthereumTypeUsesCachedTipHash(t *testing.T) {
-	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
-	defer closeAndDestroyRocksDB(t, d)
+// evmTestHash builds a valid 32-byte hex block hash from a one-byte pattern.
+func evmTestHash(b string) string {
+	return "0x" + strings.Repeat(b, 32)
+}
 
-	h1 := "0x" + strings.Repeat("11", 32)
-	h2 := "0x" + strings.Repeat("22", 32)
-	block1 := &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: h1, Height: 1, Time: 1}}
-	block2 := &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: h2, Prev: h1, Height: 2, Time: 2}}
-	if err := d.ConnectBlock(block1); err != nil {
-		t.Fatalf("ConnectBlock: %v", err)
-	}
-	chain := &getBlockChainTestChain{
+func evmTestBlock(hash, prev string, height uint32) *bchain.Block {
+	return &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: hash, Prev: prev, Height: height, Time: int64(height)}}
+}
+
+func newResyncTestChain(tip *bchain.EVMTip, blocks ...*bchain.Block) *getBlockChainTestChain {
+	c := &getBlockChainTestChain{
 		chainType:         bchain.ChainEthereumType,
-		bestHeight:        2,
-		bestHash:          h2,
-		hashes:            map[uint32]string{1: h1, 2: h2},
-		blocks:            map[uint32]*bchain.Block{1: block1, 2: block2},
+		tip:               tip,
+		hashes:            map[uint32]string{},
+		blocks:            map[uint32]*bchain.Block{},
 		blockErrors:       map[uint32][]error{},
 		getBlockCalls:     map[uint32]int{},
 		getBlockHashCalls: map[uint32]int{},
 	}
-	w := &SyncWorker{
+	for _, b := range blocks {
+		c.hashes[b.Height] = b.Hash
+		c.blocks[b.Height] = b
+		if b.Height > c.bestHeight {
+			c.bestHeight, c.bestHash = b.Height, b.Hash
+		}
+	}
+	return c
+}
+
+func newResyncTestWorker(t *testing.T, d *RocksDB, chain *getBlockChainTestChain) *SyncWorker {
+	return &SyncWorker{
 		db:           d,
 		chain:        chain,
 		syncWorkers:  1,
@@ -472,28 +487,120 @@ func TestResyncIndexEthereumTypeUsesCachedTipHash(t *testing.T) {
 			RetryDelay:          time.Millisecond,
 		},
 	}
+}
 
-	if err := w.resyncIndex(nil, false); err != nil {
-		t.Fatalf("resyncIndex: %v", err)
-	}
+func assertBestBlock(t *testing.T, d *RocksDB, wantHeight uint32, wantHash string) {
+	t.Helper()
 	height, hash, err := d.GetBestBlock()
 	if err != nil {
 		t.Fatalf("GetBestBlock: %v", err)
 	}
-	if height != 2 || hash != h2 {
-		t.Fatalf("best block = %d %s, want 2 %s", height, hash, h2)
+	if height != wantHeight || hash != wantHash {
+		t.Fatalf("best block = %d %s, want %d %s", height, hash, wantHeight, wantHash)
 	}
-	if calls := chain.getBlockHashCalls[1]; calls != 1 {
-		t.Fatalf("GetBlockHash(1) calls = %d, want 1 (fork check is kept)", calls)
+}
+
+func assertCalls(t *testing.T, what string, calls map[uint32]int, height uint32, want int) {
+	t.Helper()
+	if got := calls[height]; got != want {
+		t.Fatalf("%s(%d) calls = %d, want %d", what, height, got, want)
 	}
-	if calls := chain.getBlockHashCalls[2]; calls != 0 {
-		t.Fatalf("GetBlockHash(2) calls = %d, want 0 (tip hash comes from the cached header)", calls)
+}
+
+// One steady-state EVM cycle with a tip snapshot that carries no parent hash: the fork check
+// is the only header lookup, the tip hash comes from the cache and the tail probe is not sent.
+func TestResyncIndexEthereumTypeUsesCachedTipHash(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	h1, h2 := evmTestHash("11"), evmTestHash("22")
+	block1, block2 := evmTestBlock(h1, "", 1), evmTestBlock(h2, h1, 2)
+	if err := d.ConnectBlock(block1); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
 	}
-	if calls := chain.getBlockCalls[2]; calls != 1 {
-		t.Fatalf("GetBlock(2) calls = %d, want 1", calls)
+	chain := newResyncTestChain(nil, block1, block2)
+	w := newResyncTestWorker(t, d, chain)
+
+	if err := w.resyncIndex(nil, false); err != nil {
+		t.Fatalf("resyncIndex: %v", err)
 	}
-	if calls := chain.getBlockCalls[3]; calls != 0 {
-		t.Fatalf("GetBlock(3) calls = %d, want 0 (tail probe is skipped)", calls)
+	assertBestBlock(t, d, 2, h2)
+	assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, 1, 1) // fork check kept without parent linkage
+	assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, 2, 0) // tip hash from the cached header
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 2, 1)
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 3, 0) // tail probe skipped
+}
+
+// The pushed tip links to the local best block: no header lookup at all, only the block fetch.
+func TestResyncIndexEthereumTypeLinkedTipSkipsForkCheck(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	h1, h2 := evmTestHash("11"), evmTestHash("22")
+	block1, block2 := evmTestBlock(h1, "", 1), evmTestBlock(h2, h1, 2)
+	if err := d.ConnectBlock(block1); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := newResyncTestChain(&bchain.EVMTip{Hash: h2, ParentHash: h1, Height: 2}, block1, block2)
+	w := newResyncTestWorker(t, d, chain)
+
+	if err := w.resyncIndex(nil, false); err != nil {
+		t.Fatalf("resyncIndex: %v", err)
+	}
+	assertBestBlock(t, d, 2, h2)
+	assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, 1, 0)
+	assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, 2, 0)
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 2, 1)
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 3, 0)
+}
+
+// A tip more than one block ahead cannot prove linkage, so both header lookups stay.
+func TestResyncIndexEthereumTypeGapAboveOneKeepsForkCheck(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	h1, h2, h3 := evmTestHash("11"), evmTestHash("22"), evmTestHash("33")
+	block1, block2, block3 := evmTestBlock(h1, "", 1), evmTestBlock(h2, h1, 2), evmTestBlock(h3, h2, 3)
+	if err := d.ConnectBlock(block1); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := newResyncTestChain(&bchain.EVMTip{Hash: h3, ParentHash: h2, Height: 3}, block1, block2, block3)
+	w := newResyncTestWorker(t, d, chain)
+
+	if err := w.resyncIndex(nil, false); err != nil {
+		t.Fatalf("resyncIndex: %v", err)
+	}
+	assertBestBlock(t, d, 3, h3)
+	assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, 1, 1)
+	assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, 2, 1)
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 2, 1)
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 3, 1)
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 4, 0)
+}
+
+// The tip is one block ahead but its parent is not our best block: the fork check runs,
+// the orphaned local block is disconnected and the canonical branch is connected.
+func TestResyncIndexEthereumTypeParentMismatchHandlesFork(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	h1, h2, h2b, h3b := evmTestHash("11"), evmTestHash("22"), evmTestHash("bb"), evmTestHash("cc")
+	block1, block2 := evmTestBlock(h1, "", 1), evmTestBlock(h2, h1, 2)
+	block2b, block3b := evmTestBlock(h2b, h1, 2), evmTestBlock(h3b, h2b, 3)
+	for _, b := range []*bchain.Block{block1, block2} {
+		if err := d.ConnectBlock(b); err != nil {
+			t.Fatalf("ConnectBlock: %v", err)
+		}
+	}
+	chain := newResyncTestChain(&bchain.EVMTip{Hash: h3b, ParentHash: h2b, Height: 3}, block1, block2b, block3b)
+	w := newResyncTestWorker(t, d, chain)
+
+	if err := w.resyncIndex(nil, false); err != nil {
+		t.Fatalf("resyncIndex: %v", err)
+	}
+	assertBestBlock(t, d, 3, h3b)
+	if calls := chain.getBlockHashCalls[2]; calls == 0 {
+		t.Fatal("GetBlockHash(2) was not called: fork check must run when the parent does not link")
 	}
 }
 

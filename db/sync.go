@@ -245,9 +245,22 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 }
 
 func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
-	remoteBestHash, err := w.chain.GetBestBlockHash()
-	if err != nil {
-		return err
+	isEthereumType := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
+	// EVM reads one snapshot of the cached tip so hash, parent and height describe the same header.
+	var tip *bchain.EVMTip
+	var remoteBestHash string
+	var err error
+	if isEthereumType {
+		tip, err = w.chain.EthereumTypeGetBestTip()
+		if err != nil {
+			return err
+		}
+		remoteBestHash = tip.Hash
+	} else {
+		remoteBestHash, err = w.chain.GetBestBlockHash()
+		if err != nil {
+			return err
+		}
 	}
 	localBestHeight, localBestHash, err := w.db.GetBestBlock()
 	if err != nil {
@@ -259,26 +272,32 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return syncNotNeeded
 	}
 	if localBestHash != "" {
-		remoteHash, err := w.chain.GetBlockHash(localBestHeight)
-		// for some coins (eth) remote can be at lower best height after rollback
-		if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
-			return err
-		}
-		if remoteHash != localBestHash {
-			// forked - the remote hash differs from the local hash at the same height
-			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
-			return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
+		// A pushed tip whose parent is the local best block proves the indexed chain is still
+		// canonical, so the fork-check RPC is skipped; every other case keeps it.
+		linked := tip != nil && tip.Height == localBestHeight+1 && tip.ParentHash == localBestHash
+		if !linked {
+			remoteHash, err := w.chain.GetBlockHash(localBestHeight)
+			// for some coins (eth) remote can be at lower best height after rollback
+			if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
+				return err
+			}
+			if remoteHash != localBestHash {
+				// forked - the remote hash differs from the local hash at the same height
+				glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
+				return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
+			}
 		}
 		w.startHeight = localBestHeight + 1
 	} else {
 		// database is empty, start genesis
 		glog.Info("resync: genesis from block ", w.startHeight)
 	}
-	isEthereumType := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
 	useParallel := w.syncWorkers > 1 && (initialSync || isEthereumType)
 	var remoteBestHeight uint32
-	if isEthereumType || useParallel {
-		// Cached on EVM; bitcoin-type chains only pay this RPC on the parallel path, as before.
+	if tip != nil {
+		remoteBestHeight = tip.Height
+	} else if useParallel {
+		// Bitcoin-type chains only pay this RPC on the parallel path, as before.
 		remoteBestHeight, err = w.chain.GetBestBlockHeight()
 		if err != nil {
 			return err

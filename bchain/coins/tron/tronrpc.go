@@ -286,6 +286,20 @@ func (b *TronRPC) GetBestBlockHash() (string, error) {
 	return strip0xPrefix(header.Hash()), nil
 }
 
+// EthereumTypeGetBestTip returns the cached tip in Tron API format (without 0x prefix),
+// matching GetBestBlockHash so the sync worker can compare it with indexed hashes.
+func (b *TronRPC) EthereumTypeGetBestTip() (*bchain.EVMTip, error) {
+	header, err := b.getBestHeader()
+	if err != nil {
+		return nil, err
+	}
+	return &bchain.EVMTip{
+		Hash:       strip0xPrefix(header.Hash()),
+		ParentHash: strip0xPrefix(header.ParentHash()),
+		Height:     uint32(header.Number().Uint64()),
+	}, nil
+}
+
 // GetBlockHash returns block hash in Tron API format (without 0x prefix).
 func (b *TronRPC) GetBlockHash(height uint32) (string, error) {
 	if b.isBlockSolidified(uint64(height)) && b.solidityNodeHTTP != nil {
