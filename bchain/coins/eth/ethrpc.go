@@ -1522,6 +1522,11 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	}
 	b.observeEthSyncRpcError(method, err)
 	if err != nil {
+		// juju's Annotatef has no Unwrap, so annotating a sentinel hides it from
+		// errors.Is and disables getBlockChain's end-of-chain exit and retry accounting.
+		if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+			return nil, err
+		}
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	} else if len(raw) == 0 || (len(raw) == 4 && string(raw) == "null") {
 		return nil, bchain.ErrBlockNotFound
@@ -1548,6 +1553,11 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 	})
 	b.observeEthSyncRpcError(method, err)
 	if err != nil {
+		// juju's Annotatef has no Unwrap; keep the sentinel bare so getBlockChain's
+		// end-of-chain exit and retry accounting still see ErrBlockNotFound.
+		if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+			return nil, nil, err
+		}
 		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
