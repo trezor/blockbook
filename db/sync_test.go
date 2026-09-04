@@ -167,6 +167,18 @@ type getBlockChainTestChain struct {
 	blockErrors     map[uint32][]error
 	getBlockCalls   map[uint32]int
 	getBlockHashErr error
+	chainType       bchain.ChainType
+}
+
+type getBlockChainTestParser struct {
+	bchain.BlockChainParser
+	chainType bchain.ChainType
+}
+
+func (p *getBlockChainTestParser) GetChainType() bchain.ChainType { return p.chainType }
+
+func (c *getBlockChainTestChain) GetChainParser() bchain.BlockChainParser {
+	return &getBlockChainTestParser{chainType: c.chainType}
 }
 
 func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
@@ -556,6 +568,130 @@ func TestNewSyncWorkerClampsMaxStallDuration(t *testing.T) {
 			}
 			if got := w.missingBlockRetry.MaxStallDuration; got != tc.want {
 				t.Fatalf("MaxStallDuration = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParallelSyncWorkerCount(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured int
+		gap        uint32
+		want       uint32
+	}{
+		{name: "large gap uses configured pool", configured: 16, gap: 140000, want: 16},
+		{name: "pool capped by gap", configured: 16, gap: 4, want: 4},
+		{name: "configured below gap", configured: 8, gap: 100, want: 8},
+		{name: "minimum configured pool", configured: 2, gap: 4, want: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parallelSyncWorkerCount(tt.configured, tt.gap); got != tt.want {
+				t.Fatalf("parallelSyncWorkerCount(%d, %d) = %d, want %d", tt.configured, tt.gap, got, tt.want)
+			}
+		})
+	}
+}
+
+func makeSequentialTestBlocks(n uint32) map[uint32]*bchain.Block {
+	blocks := make(map[uint32]*bchain.Block, n)
+	for h := uint32(1); h <= n; h++ {
+		blocks[h] = &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: "h" + strconv.Itoa(int(h)), Height: h}}
+	}
+	return blocks
+}
+
+func TestGetBlockChainYieldsWhenFallingBehind(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		bestHeight:    100000,
+		chainType:     bchain.ChainEthereumType,
+		hashes:        map[uint32]string{},
+		blocks:        makeSequentialTestBlocks(fallBehindCheckBlocks),
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(t, chain, "h1", 1)
+	w.syncWorkers = 16
+
+	results := runGetBlockChain(w)
+	if len(results) != fallBehindCheckBlocks+1 {
+		t.Fatalf("got %d results, want %d", len(results), fallBehindCheckBlocks+1)
+	}
+	for i := 0; i < fallBehindCheckBlocks; i++ {
+		if results[i].err != nil {
+			t.Fatalf("result %d error = %v, want block", i, results[i].err)
+		}
+	}
+	if !stdErrors.Is(results[fallBehindCheckBlocks].err, errResync) {
+		t.Fatalf("last error = %v, want errResync", results[fallBehindCheckBlocks].err)
+	}
+	if chain.bestHeightCalls != 1 {
+		t.Fatalf("GetBestBlockHeight calls = %d, want 1", chain.bestHeightCalls)
+	}
+}
+
+func TestGetBlockChainNoYieldNearTip(t *testing.T) {
+	const tip = fallBehindCheckBlocks + 50
+	chain := &getBlockChainTestChain{
+		bestHeight:    tip,
+		chainType:     bchain.ChainEthereumType,
+		hashes:        map[uint32]string{},
+		blocks:        makeSequentialTestBlocks(tip),
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(t, chain, "h1", 1)
+	w.syncWorkers = 16
+
+	results := runGetBlockChain(w)
+	if len(results) != tip {
+		t.Fatalf("got %d results, want %d", len(results), tip)
+	}
+	for i, res := range results {
+		if res.err != nil {
+			t.Fatalf("result %d error = %v, want block", i, res.err)
+		}
+	}
+}
+
+func TestGetBlockChainFallBehindYieldGating(t *testing.T) {
+	tests := []struct {
+		name        string
+		syncWorkers int
+		chainType   bchain.ChainType
+	}{
+		{name: "single worker never yields", syncWorkers: 1, chainType: bchain.ChainEthereumType},
+		{name: "non-EVM chain never yields", syncWorkers: 16, chainType: bchain.ChainBitcoinType},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const available = fallBehindCheckBlocks + 20
+			endErr := stdErrors.New("boom")
+			chain := &getBlockChainTestChain{
+				bestHeight: 100000,
+				chainType:  tt.chainType,
+				hashes:     map[uint32]string{},
+				blocks:     makeSequentialTestBlocks(available),
+				blockErrors: map[uint32][]error{
+					available + 1: {endErr},
+				},
+				getBlockCalls: map[uint32]int{},
+			}
+			w := newGetBlockChainTestWorker(t, chain, "h1", 1)
+			w.syncWorkers = tt.syncWorkers
+
+			results := runGetBlockChain(w)
+			if len(results) != available+1 {
+				t.Fatalf("got %d results, want %d", len(results), available+1)
+			}
+			for i := 0; i < available; i++ {
+				if results[i].err != nil {
+					t.Fatalf("result %d error = %v, want block", i, results[i].err)
+				}
+			}
+			if !stdErrors.Is(results[available].err, endErr) {
+				t.Fatalf("last error = %v, want %v", results[available].err, endErr)
 			}
 		})
 	}

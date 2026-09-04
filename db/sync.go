@@ -105,6 +105,46 @@ func ApplyMissingBlockRetryOverride(o *bchain.MissingBlockRetry) MissingBlockRet
 	return cfg
 }
 
+// Steady-state EVM parallel sync tuning. The sequential connect loop cannot
+// re-evaluate the parallel gate while it runs, so on chains that outpace it the
+// fall-behind check is the only way back to the parallel path.
+const (
+	// minParallelGap is the trigger threshold for the parallel path; below it the
+	// per-round pool setup costs more than sequential connect.
+	minParallelGap = 4
+	// fallBehindCheckBlocks is how many connected blocks the sequential producer
+	// waits between backend tip probes.
+	fallBehindCheckBlocks = 100
+	// fallBehindWorkerFactor and fallBehindMinYieldGap size the yield threshold
+	// well above minParallelGap so tip races do not thrash between the paths.
+	fallBehindWorkerFactor = 4
+	fallBehindMinYieldGap  = 64
+)
+
+// parallelSyncWorkerCount caps the configured pool at the number of blocks to
+// connect; ParallelConnectBlocks needs exactly one write channel per worker, so
+// a pool larger than the range would leave the height window non-contiguous.
+func parallelSyncWorkerCount(configured int, gap uint32) uint32 {
+	workers := uint32(configured)
+	if workers > gap {
+		workers = gap
+	}
+	return workers
+}
+
+// sequentialFallBehindGap returns the fall-behind yield threshold for the
+// sequential loop, or 0 when the parallel path is not available.
+func (w *SyncWorker) sequentialFallBehindGap() uint32 {
+	if w.syncWorkers <= 1 || w.chain.GetChainParser().GetChainType() != bchain.ChainEthereumType {
+		return 0
+	}
+	gap := uint32(w.syncWorkers) * fallBehindWorkerFactor
+	if gap < fallBehindMinYieldGap {
+		gap = fallBehindMinYieldGap
+	}
+	return gap
+}
+
 // NewSyncWorker creates new SyncWorker and returns its handle
 func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState) (*SyncWorker, error) {
 	return NewSyncWorkerWithConfig(db, chain, syncWorkers, syncChunk, minStartHeight, dryRun, chanOsSignal, metrics, is, nil)
@@ -309,8 +349,12 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 				}
 			}
 			if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
-				syncWorkers := uint32(4)
-				if remoteBestHeight-w.startHeight >= syncWorkers {
+				// The trigger threshold is deliberately independent of the pool size:
+				// gating on the configured worker count would push small steady-state
+				// rounds onto the slower sequential path.
+				gap := remoteBestHeight - w.startHeight
+				if gap >= minParallelGap {
+					syncWorkers := parallelSyncWorkerCount(w.syncWorkers, gap)
 					glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, syncWorkers)
 					// Parallel sync also returns errResync when a requested hash no longer
 					// exists at its height; restart to realign with the canonical chain.
@@ -931,6 +975,8 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 	hash := w.startHash
 	height := w.startHeight
 	prevHash := ""
+	fallBehindGap := w.sequentialFallBehindGap()
+	blocksSinceTipCheck := 0
 	cfg := w.missingBlockRetry
 	retryDelay := cfg.RetryDelay
 	if retryDelay <= 0 || retryDelay > 250*time.Millisecond {
@@ -1023,6 +1069,23 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 		hash = block.Next
 		height++
 		out <- blockResult{block: block}
+		blocksSinceTipCheck++
+		if fallBehindGap > 0 && blocksSinceTipCheck >= fallBehindCheckBlocks {
+			blocksSinceTipCheck = 0
+			// A probe error is ignored: yielding is an optimization, the loop can
+			// keep connecting and re-probe after the next batch.
+			if bestHeight, bestErr := w.chain.GetBestBlockHeight(); bestErr == nil && bestHeight > height && bestHeight-height > fallBehindGap {
+				glog.Warningf("getBlockChain: sequential sync at %d is %d blocks behind backend tip %d; yielding to resync for parallel catch-up",
+					height, bestHeight-height, bestHeight)
+				w.metrics.IndexSyncYields.With(common.Labels{"reason": "fell_behind"}).Inc()
+				select {
+				case out <- blockResult{err: errResync}:
+				case <-done:
+				case <-w.chanOsSignal:
+				}
+				return
+			}
+		}
 	}
 }
 
