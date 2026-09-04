@@ -274,7 +274,17 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		// database is empty, start genesis
 		glog.Info("resync: genesis from block ", w.startHeight)
 	}
-	w.startHash, err = w.chain.GetBlockHash(w.startHeight)
+	isEthereumType := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
+	useParallel := w.syncWorkers > 1 && (initialSync || isEthereumType)
+	var remoteBestHeight uint32
+	if isEthereumType || useParallel {
+		// Cached on EVM; bitcoin-type chains only pay this RPC on the parallel path, as before.
+		remoteBestHeight, err = w.chain.GetBestBlockHeight()
+		if err != nil {
+			return err
+		}
+	}
+	w.startHash, err = w.startHashForHeight(w.startHeight, remoteBestHash, remoteBestHeight, isEthereumType)
 	if err != nil {
 		return err
 	}
@@ -282,11 +292,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	// use parallel routine to load majority of blocks
 	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
 	// or in case of ChainEthereumType if the tip is farther
-	if w.syncWorkers > 1 && (initialSync || w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType) {
-		remoteBestHeight, err := w.chain.GetBestBlockHeight()
-		if err != nil {
-			return err
-		}
+	if useParallel {
 		if remoteBestHeight < w.startHeight {
 			glog.Warning("resync: observed remote best height ", remoteBestHeight, " less than sync start height ", w.startHeight, ", falling back to sequential sync")
 		} else {
@@ -308,7 +314,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 					return w.resyncIndex(onNewBlock, initialSync)
 				}
 			}
-			if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
+			if isEthereumType {
 				syncWorkers := uint32(4)
 				if remoteBestHeight-w.startHeight >= syncWorkers {
 					glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, syncWorkers)
@@ -334,6 +340,15 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return w.resyncIndex(onNewBlock, initialSync)
 	}
 	return err
+}
+
+// startHashForHeight resolves the hash of the first block to connect. When the block is the
+// cached EVM tip, its hash is already known and the eth_getBlockByNumber lookup is skipped.
+func (w *SyncWorker) startHashForHeight(height uint32, tipHash string, tipHeight uint32, tipCached bool) (string, error) {
+	if tipCached && tipHash != "" && tipHeight == height {
+		return tipHash, nil
+	}
+	return w.chain.GetBlockHash(height)
 }
 
 func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -950,11 +965,24 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			return
 		default:
 		}
+		// EVM serves the tip height from the cached feed header, so the end-of-chain check is
+		// free and can run before the tail probe instead of after its null response.
+		tipCached := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
 		retries := 0
 		loopStart := time.Now()
 		var block *bchain.Block
 		var err error
 		for {
+			if tipCached && hash == "" && retries == 0 {
+				bestHeight, bestErr := w.chain.GetBestBlockHeight()
+				if bestErr != nil {
+					out <- blockResult{err: bestErr}
+					return
+				}
+				if height > bestHeight {
+					return
+				}
+			}
 			block, err = w.chain.GetBlock(hash, height)
 			if err == nil {
 				break

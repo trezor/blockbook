@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -18,6 +19,7 @@ import (
 
 	jujuErrors "github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 )
 
@@ -159,14 +161,34 @@ func TestConnectBlocksHonorsClosedShutdownBeforeStart(t *testing.T) {
 
 type getBlockChainTestChain struct {
 	bchain.BlockChain
-	bestHeight      uint32
-	bestHeightErr   error
-	bestHeightCalls int
-	hashes          map[uint32]string
-	blocks          map[uint32]*bchain.Block
-	blockErrors     map[uint32][]error
-	getBlockCalls   map[uint32]int
-	getBlockHashErr error
+	chainType         bchain.ChainType // zero value keeps existing tests on the bitcoin-type path
+	bestHeight        uint32
+	bestHash          string
+	bestHeightErr     error
+	bestHeightCalls   int
+	hashes            map[uint32]string
+	blocks            map[uint32]*bchain.Block
+	blockErrors       map[uint32][]error
+	getBlockCalls     map[uint32]int
+	getBlockHashCalls map[uint32]int
+	getBlockHashErr   error
+}
+
+type chainTypeTestParser struct {
+	bchain.BlockChainParser
+	chainType bchain.ChainType
+}
+
+func (p *chainTypeTestParser) GetChainType() bchain.ChainType {
+	return p.chainType
+}
+
+func (c *getBlockChainTestChain) GetChainParser() bchain.BlockChainParser {
+	return &chainTypeTestParser{chainType: c.chainType}
+}
+
+func (c *getBlockChainTestChain) GetBestBlockHash() (string, error) {
+	return c.bestHash, nil
 }
 
 func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
@@ -178,6 +200,9 @@ func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
 }
 
 func (c *getBlockChainTestChain) GetBlockHash(height uint32) (string, error) {
+	if c.getBlockHashCalls != nil {
+		c.getBlockHashCalls[height]++
+	}
 	if c.getBlockHashErr != nil {
 		return "", c.getBlockHashErr
 	}
@@ -299,6 +324,176 @@ func TestGetBlockChainRetriesKnownHashAboveObservedBestHeight(t *testing.T) {
 	}
 	if calls := chain.getBlockCalls[1]; calls != 2 {
 		t.Fatalf("GetBlock height 1 calls = %d, want 2", calls)
+	}
+}
+
+func TestGetBlockChainEthereumTypeSkipsTailProbe(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		chainType:     bchain.ChainEthereumType,
+		bestHeight:    0,
+		hashes:        map[uint32]string{},
+		blocks:        map[uint32]*bchain.Block{},
+		blockErrors:   map[uint32][]error{},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(t, chain, "", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 0 {
+		t.Fatalf("got %d results, want 0: %+v", len(results), results)
+	}
+	if calls := chain.getBlockCalls[1]; calls != 0 {
+		t.Fatalf("GetBlock height 1 calls = %d, want 0 (probe above cached tip must be skipped)", calls)
+	}
+	if chain.bestHeightCalls != 1 {
+		t.Fatalf("GetBestBlockHeight calls = %d, want 1", chain.bestHeightCalls)
+	}
+}
+
+func TestGetBlockChainEthereumTypeRetriesKnownHashAboveObservedBestHeight(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		chainType:  bchain.ChainEthereumType,
+		bestHeight: 0,
+		hashes:     map[uint32]string{1: "h1"},
+		blocks: map[uint32]*bchain.Block{
+			1: {BlockHeader: bchain.BlockHeader{Hash: "h1", Height: 1}},
+		},
+		blockErrors: map[uint32][]error{
+			1: {bchain.ErrBlockNotFound},
+		},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(t, chain, "h1", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 1 || results[0].err != nil || results[0].block == nil || results[0].block.Hash != "h1" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if calls := chain.getBlockCalls[1]; calls != 2 {
+		t.Fatalf("GetBlock height 1 calls = %d, want 2 (known hash above tip is still retried)", calls)
+	}
+}
+
+func TestGetBlockChainEthereumTypeRetriesGenuineMissBelowTip(t *testing.T) {
+	chain := &getBlockChainTestChain{
+		chainType:  bchain.ChainEthereumType,
+		bestHeight: 2,
+		hashes:     map[uint32]string{1: "h1", 2: "h2"},
+		blocks: map[uint32]*bchain.Block{
+			1: {BlockHeader: bchain.BlockHeader{Hash: "h1", Height: 1}},
+			2: {BlockHeader: bchain.BlockHeader{Hash: "h2", Prev: "h1", Height: 2}},
+		},
+		blockErrors: map[uint32][]error{
+			2: {bchain.ErrBlockNotFound},
+		},
+		getBlockCalls: map[uint32]int{},
+	}
+	w := newGetBlockChainTestWorker(t, chain, "h1", 1)
+
+	results := runGetBlockChain(w)
+	if len(results) != 2 || results[0].err != nil || results[1].err != nil {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if results[1].block == nil || results[1].block.Hash != "h2" {
+		t.Fatalf("unexpected second block: %+v", results[1].block)
+	}
+	if calls := chain.getBlockCalls[2]; calls != 2 {
+		t.Fatalf("GetBlock height 2 calls = %d, want 2 (miss at or below tip keeps retrying)", calls)
+	}
+	if calls := chain.getBlockCalls[3]; calls != 0 {
+		t.Fatalf("GetBlock height 3 calls = %d, want 0", calls)
+	}
+}
+
+func TestStartHashForHeight(t *testing.T) {
+	tests := []struct {
+		name      string
+		tipCached bool
+		tipHeight uint32
+		wantHash  string
+		wantCalls int
+	}{
+		{name: "cached tip is the start block", tipCached: true, tipHeight: 5, wantHash: "tip", wantCalls: 0},
+		{name: "cached tip ahead of start block", tipCached: true, tipHeight: 6, wantHash: "h5", wantCalls: 1},
+		{name: "tip not cached", tipCached: false, tipHeight: 5, wantHash: "h5", wantCalls: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chain := &getBlockChainTestChain{
+				hashes:            map[uint32]string{5: "h5"},
+				getBlockHashCalls: map[uint32]int{},
+			}
+			w := &SyncWorker{chain: chain}
+			got, err := w.startHashForHeight(5, "tip", tt.tipHeight, tt.tipCached)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.wantHash {
+				t.Fatalf("startHash = %q, want %q", got, tt.wantHash)
+			}
+			if calls := chain.getBlockHashCalls[5]; calls != tt.wantCalls {
+				t.Fatalf("GetBlockHash calls = %d, want %d", calls, tt.wantCalls)
+			}
+		})
+	}
+}
+
+// One steady-state EVM cycle: the fork check is the only header lookup, the tip hash comes
+// from the cached header and the end-of-chain probe is not sent.
+func TestResyncIndexEthereumTypeUsesCachedTipHash(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	h1 := "0x" + strings.Repeat("11", 32)
+	h2 := "0x" + strings.Repeat("22", 32)
+	block1 := &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: h1, Height: 1, Time: 1}}
+	block2 := &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: h2, Prev: h1, Height: 2, Time: 2}}
+	if err := d.ConnectBlock(block1); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := &getBlockChainTestChain{
+		chainType:         bchain.ChainEthereumType,
+		bestHeight:        2,
+		bestHash:          h2,
+		hashes:            map[uint32]string{1: h1, 2: h2},
+		blocks:            map[uint32]*bchain.Block{1: block1, 2: block2},
+		blockErrors:       map[uint32][]error{},
+		getBlockCalls:     map[uint32]int{},
+		getBlockHashCalls: map[uint32]int{},
+	}
+	w := &SyncWorker{
+		db:           d,
+		chain:        chain,
+		syncWorkers:  1,
+		chanOsSignal: make(chan os.Signal),
+		metrics:      getTestMetrics(t),
+		missingBlockRetry: MissingBlockRetryConfig{
+			TipRecheckThreshold: 2,
+			RetryDelay:          time.Millisecond,
+		},
+	}
+
+	if err := w.resyncIndex(nil, false); err != nil {
+		t.Fatalf("resyncIndex: %v", err)
+	}
+	height, hash, err := d.GetBestBlock()
+	if err != nil {
+		t.Fatalf("GetBestBlock: %v", err)
+	}
+	if height != 2 || hash != h2 {
+		t.Fatalf("best block = %d %s, want 2 %s", height, hash, h2)
+	}
+	if calls := chain.getBlockHashCalls[1]; calls != 1 {
+		t.Fatalf("GetBlockHash(1) calls = %d, want 1 (fork check is kept)", calls)
+	}
+	if calls := chain.getBlockHashCalls[2]; calls != 0 {
+		t.Fatalf("GetBlockHash(2) calls = %d, want 0 (tip hash comes from the cached header)", calls)
+	}
+	if calls := chain.getBlockCalls[2]; calls != 1 {
+		t.Fatalf("GetBlock(2) calls = %d, want 1", calls)
+	}
+	if calls := chain.getBlockCalls[3]; calls != 0 {
+		t.Fatalf("GetBlock(3) calls = %d, want 0 (tail probe is skipped)", calls)
 	}
 }
 
