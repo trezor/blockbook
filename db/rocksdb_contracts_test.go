@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
@@ -482,5 +483,33 @@ func Test_packUnpackContractInfo(t *testing.T) {
 				t.Errorf("packUnpackContractInfo() = %+v, want %+v", *got, tt.contractInfo)
 			}
 		})
+	}
+}
+
+// A contract whose name()/symbol() return a multi-megabyte string must not bloat the index: the
+// pack chokepoint clamps both to maxContractNameSymbolBytes without leaving a split trailing rune.
+func Test_packContractInfo_ClampsNameSymbol(t *testing.T) {
+	ci := bchain.ContractInfo{
+		Standard: bchain.ERC20TokenStandard,
+		Type:     bchain.ERC20TokenStandard,
+		// last byte within the cap starts a 4-byte rune, so a naive byte cut would split it
+		Name:   strings.Repeat("a", maxContractNameSymbolBytes-1) + "🟢" + strings.Repeat("b", 5<<20),
+		Symbol: strings.Repeat("🟢", 5<<20),
+	}
+	got, err := unpackContractInfo(packContractInfo(&ci))
+	if err != nil {
+		t.Fatalf("unpackContractInfo() err = %v", err)
+	}
+	if len(got.Name) > maxContractNameSymbolBytes {
+		t.Errorf("Name len = %d, want <= %d", len(got.Name), maxContractNameSymbolBytes)
+	}
+	if len(got.Symbol) > maxContractNameSymbolBytes {
+		t.Errorf("Symbol len = %d, want <= %d", len(got.Symbol), maxContractNameSymbolBytes)
+	}
+	if !utf8.ValidString(got.Name) || !utf8.ValidString(got.Symbol) {
+		t.Errorf("clamp left invalid UTF-8: name valid=%v symbol valid=%v", utf8.ValidString(got.Name), utf8.ValidString(got.Symbol))
+	}
+	if !strings.HasPrefix(got.Name, strings.Repeat("a", maxContractNameSymbolBytes-1)) {
+		t.Errorf("clamp dropped legitimate leading bytes of Name")
 	}
 }
