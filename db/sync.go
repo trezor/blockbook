@@ -303,10 +303,6 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			return err
 		}
 	}
-	w.startHash, err = w.startHashForHeight(w.startHeight, remoteBestHash, remoteBestHeight, isEthereumType)
-	if err != nil {
-		return err
-	}
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
 	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
@@ -353,6 +349,12 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 				}
 			}
 		}
+	}
+	// Only the sequential path needs the start hash; the parallel and bulk paths above
+	// resolve every hash themselves, so looking it up earlier duplicated one RPC.
+	w.startHash, err = w.startHashForHeight(w.startHeight, remoteBestHash, remoteBestHeight, isEthereumType)
+	if err != nil {
+		return err
 	}
 	err = w.connectBlocks(onNewBlock, initialSync)
 	if stdErrors.Is(err, errFork) || stdErrors.Is(err, errResync) {
