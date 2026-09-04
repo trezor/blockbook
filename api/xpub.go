@@ -431,6 +431,39 @@ func setIsOwnAddresses(txs []*Tx, xpubAddresses map[string]struct{}) {
 	}
 }
 
+// getXpubDataCached returns the published snapshot without taking the
+// per-descriptor lock when the request cannot mutate it: same tip, same gap,
+// nothing to load. Keeps warm reads of a hot descriptor parallel.
+func (w *Worker) getXpubDataCached(xd *bchain.XpubDescriptor, option AccountDetails, filter *AddressFilter, gap int) (*xpubData, uint32, bool) {
+	cachedXpubsMux.Lock()
+	data, inCache := cachedXpubs[xd.XpubDescriptor]
+	cachedXpubsMux.Unlock()
+	if !inCache || data.gap != gap {
+		return nil, 0, false
+	}
+	bestheight, besthash, err := w.db.GetBestBlock()
+	if err != nil || besthash != data.dataHash {
+		return nil, 0, false
+	}
+	if option >= AccountDetailsTxidHistory {
+		if xpubTxidLoadNeeded(&data) {
+			return nil, 0, false
+		}
+		if data.mergedTxids == nil && isUnfilteredXpubTxidFilter(filter) {
+			return nil, 0, false
+		}
+	}
+	// bump accessed so the evictor does not drop a hot entry served fast-path only
+	now := time.Now().Unix()
+	cachedXpubsMux.Lock()
+	if current, ok := cachedXpubs[xd.XpubDescriptor]; ok {
+		current.accessed = now
+		cachedXpubs[xd.XpubDescriptor] = current
+	}
+	cachedXpubsMux.Unlock()
+	return &data, bestheight, true
+}
+
 func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, gap int) (*xpubData, uint32, bool, error) {
 	if w.chainType != bchain.ChainBitcoinType {
 		return nil, 0, false, ErrUnsupportedXpub
@@ -451,10 +484,19 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	if err := validateXpubScanLimits(xd, gap, w.xpubConfig.MaxAddressDerivations); err != nil {
 		return nil, 0, false, err
 	}
+	if data, bestheight, ok := w.getXpubDataCached(xd, option, filter, gap); ok {
+		return data, bestheight, true, nil
+	}
+	// Serialize updates for this descriptor; the expensive per-tx response
+	// building in the caller runs after this returns and stays concurrent.
+	mu := xpubUpdateLock(xd.XpubDescriptor)
+	mu.Lock()
+	defer mu.Unlock()
 	var processedHash string
 	cachedXpubsMux.Lock()
 	data, inCache := cachedXpubs[xd.XpubDescriptor]
 	cachedXpubsMux.Unlock()
+	owned := !inCache // whether data.addresses is a private copy safe to mutate
 	// to load all data for xpub may take some time, do it in a loop to process a possible new block
 	for {
 		bestheight, besthash, err = w.db.GetBestBlock()
@@ -474,6 +516,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			if err != nil {
 				return nil, 0, inCache, err
 			}
+			owned = true
 		} else {
 			hash, err := w.db.GetBlockHash(data.dataHeight)
 			if err != nil {
@@ -485,7 +528,14 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			}
 		}
 		processedHash = besthash
-		if data.dataHeight < bestheight || fork {
+		needsRescan := data.dataHeight < bestheight || fork
+		// Copy-on-write before any mutation so a concurrent reader holding the
+		// previously published snapshot never has its arrays changed underneath.
+		if !owned && (needsRescan || (option >= AccountDetailsTxidHistory && xpubTxidLoadNeeded(&data))) {
+			data.addresses = cloneXpubAddresses(data.addresses)
+			owned = true
+		}
+		if needsRescan {
 			data.dataHeight = bestheight
 			data.dataHash = besthash
 			data.balanceSat = *new(big.Int)
