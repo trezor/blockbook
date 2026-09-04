@@ -1734,6 +1734,66 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 	return data, contracts, nil
 }
 
+// blockAuxData is what GetBlock needs beyond the block body: logs (with ENS records) and
+// internal transfers. internalErr is stored with the block instead of failing it.
+type blockAuxData struct {
+	logs         map[string][]*bchain.RpcLog
+	ens          []bchain.AddressAliasRecord
+	internalData []bchain.EthereumInternalData
+	contracts    []bchain.ContractInfo
+	internalErr  error
+}
+
+// getBlockAuxData runs the log fetch and the internal-data trace in parallel; a log
+// failure aborts the block and cancels the trace.
+func (b *EthereumRPC) getBlockAuxData(head *rpcHeader, height uint32, transactions []bchain.RpcTransaction) (*blockAuxData, error) {
+	ctxInternal, cancelInternal := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancelInternal()
+	type logsResult struct {
+		logs map[string][]*bchain.RpcLog
+		ens  []bchain.AddressAliasRecord
+		err  error
+	}
+	type internalResult struct {
+		data      []bchain.EthereumInternalData
+		contracts []bchain.ContractInfo
+		err       error
+	}
+	// Buffered so neither goroutine leaks when the log failure returns early.
+	logsCh := make(chan logsResult, 1)
+	internalCh := make(chan internalResult, 1)
+	go func() {
+		// processEventsForBlock/getEnsRecord parse attacker-controlled on-chain log data and
+		// nothing above this goroutine recovers, so a panic here would crash-loop the process
+		// on an uncommitted block. Turn it into an error the sync loop can handle.
+		defer func() {
+			if r := recover(); r != nil {
+				glog.Error("GetBlock: recovered from panic in processEventsForBlock: ", r)
+				debug.PrintStack()
+				logsCh <- logsResult{err: fmt.Errorf("recovered from panic in processEventsForBlock: %v", r)}
+			}
+		}()
+		logs, ens, err := b.processEventsForBlock(head.Number)
+		logsCh <- logsResult{logs: logs, ens: ens, err: err}
+	}()
+	go func() {
+		data, contracts, err := b.getInternalDataForBlock(ctxInternal, head.Hash, height, transactions)
+		internalCh <- internalResult{data: data, contracts: contracts, err: err}
+	}()
+	logsRes := <-logsCh
+	if logsRes.err != nil {
+		return nil, logsRes.err
+	}
+	internalRes := <-internalCh
+	return &blockAuxData{
+		logs:         logsRes.logs,
+		ens:          logsRes.ens,
+		internalData: internalRes.data,
+		contracts:    internalRes.contracts,
+		internalErr:  internalRes.err,
+	}, nil
+}
+
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	raw, err := b.getBlockRaw(hash, height, true)
@@ -1753,69 +1813,28 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// Run event/log processing and internal data extraction in parallel; allow early return on log failure.
-	ctxInternal, cancelInternal := context.WithTimeout(context.Background(), b.Timeout) // Cancel trace RPC on log error or timeout.
-	defer cancelInternal()                                                              // Ensure timer resources are released on any return path.
-	type logsResult struct {                                                            // Bundles processEventsForBlock outputs for channel return.
-		logs map[string][]*bchain.RpcLog
-		ens  []bchain.AddressAliasRecord
-		err  error
+	// Logs and internal transfers only come from transactions, so an empty block
+	// skips both of those RPCs.
+	aux := &blockAuxData{}
+	if len(body.Transactions) > 0 {
+		aux, err = b.getBlockAuxData(&head, bbh.Height, body.Transactions)
+		if err != nil {
+			return nil, err
+		}
 	}
-	type internalResult struct { // Bundles getInternalDataForBlock outputs for channel return.
-		data      []bchain.EthereumInternalData
-		contracts []bchain.ContractInfo
-		err       error
-	}
-	logsCh := make(chan logsResult, 1)         // Buffered so send won't block if we return early.
-	internalCh := make(chan internalResult, 1) // Buffered to avoid goroutine leak on early return.
-	go func() {
-		// Defense-in-depth: processEventsForBlock/getEnsRecord parse attacker-controlled
-		// on-chain log data. This goroutine has no other recover() on its stack, so an
-		// unrecovered panic here would terminate the whole process and — because the
-		// block is not yet committed — crash-loop on restart. Recover into an error so
-		// block sync surfaces/handles it instead of the process dying.
-		defer func() {
-			if r := recover(); r != nil {
-				glog.Error("GetBlock: recovered from panic in processEventsForBlock: ", r)
-				debug.PrintStack()
-				logsCh <- logsResult{err: fmt.Errorf("recovered from panic in processEventsForBlock: %v", r)}
-			}
-		}()
-		logs, ens, err := b.processEventsForBlock(head.Number)
-		logsCh <- logsResult{logs: logs, ens: ens, err: err} // Send result without shared state.
-	}()
-	go func() {
-		data, contracts, err := b.getInternalDataForBlock(ctxInternal, head.Hash, bbh.Height, body.Transactions) // ctxInternal allows cancellation on log errors.
-		internalCh <- internalResult{data: data, contracts: contracts, err: err}                                 // Send result without shared state.
-	}()
-	logsRes := <-logsCh
-	if logsRes.err != nil {
-		// Short-circuit on log failure to preserve existing error behavior.
-		return nil, logsRes.err
-	}
-	internalRes := <-internalCh
-	// Rebind results to keep downstream logic unchanged.
-	logs := logsRes.logs
-	ens := logsRes.ens
-	internalData := internalRes.data
-	contracts := internalRes.contracts
-	internalErr := internalRes.err
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
 	// pass internalData error and ENS records in blockSpecificData to be stored
-	if internalErr != nil || len(ens) > 0 || len(contracts) > 0 {
+	if aux.internalErr != nil || len(aux.ens) > 0 || len(aux.contracts) > 0 {
 		blockSpecificData = &bchain.EthereumBlockSpecificData{}
-		if internalErr != nil {
-			blockSpecificData.InternalDataError = internalErr.Error()
-			// glog.Info("InternalDataError ", bbh.Height, ": ", internalErr.Error())
+		if aux.internalErr != nil {
+			blockSpecificData.InternalDataError = aux.internalErr.Error()
 		}
-		if len(ens) > 0 {
-			blockSpecificData.AddressAliasRecords = ens
-			// glog.Info("ENS", ens)
+		if len(aux.ens) > 0 {
+			blockSpecificData.AddressAliasRecords = aux.ens
 		}
-		if len(contracts) > 0 {
-			blockSpecificData.Contracts = contracts
-			// glog.Info("Contracts", contracts)
+		if len(aux.contracts) > 0 {
+			blockSpecificData.Contracts = aux.contracts
 		}
 	}
 
@@ -1824,7 +1843,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
 		tx := &body.Transactions[i]
-		btx, err := b.Parser.EthTxToTx(tx, &bchain.RpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
+		btx, err := b.Parser.EthTxToTx(tx, &bchain.RpcReceipt{Logs: aux.logs[tx.Hash]}, &aux.internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
