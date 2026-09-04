@@ -1497,6 +1497,11 @@ func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 		return 0, err
 	}
 	bn := bh.Number().Uint64()
+	// The cached tip is advanced asynchronously, so a block fetched straight from the
+	// backend can be ahead of it; report the mined minimum instead of underflowing.
+	if bn < n {
+		return 1, nil
+	}
 	// transaction in the best block has 1 confirmation
 	return uint32(bn - n + 1), nil
 }
