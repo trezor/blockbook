@@ -106,6 +106,11 @@ func (h *TronHeader) Hash() string {
 	return h.HashBlock.Hex()
 }
 
+// ParentHash returns the parent hash the node reported in the header
+func (h *TronHeader) ParentHash() string {
+	return h.Header.ParentHash.Hex()
+}
+
 func (h *TronHeader) Number() *big.Int {
 	return h.Header.Number
 }

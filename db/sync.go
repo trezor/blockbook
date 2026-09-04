@@ -245,9 +245,22 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 }
 
 func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
-	remoteBestHash, err := w.chain.GetBestBlockHash()
-	if err != nil {
-		return err
+	isEthereumType := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
+	// EVM reads one snapshot of the cached tip so hash, parent and height describe the same header.
+	var tip *bchain.EVMTip
+	var remoteBestHash string
+	var err error
+	if isEthereumType {
+		tip, err = w.chain.EthereumTypeGetBestTip()
+		if err != nil {
+			return err
+		}
+		remoteBestHash = tip.Hash
+	} else {
+		remoteBestHash, err = w.chain.GetBestBlockHash()
+		if err != nil {
+			return err
+		}
 	}
 	localBestHeight, localBestHash, err := w.db.GetBestBlock()
 	if err != nil {
@@ -259,34 +272,42 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return syncNotNeeded
 	}
 	if localBestHash != "" {
-		remoteHash, err := w.chain.GetBlockHash(localBestHeight)
-		// for some coins (eth) remote can be at lower best height after rollback
-		if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
-			return err
-		}
-		if remoteHash != localBestHash {
-			// forked - the remote hash differs from the local hash at the same height
-			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
-			return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
+		// A pushed tip whose parent is the local best block proves the indexed chain is still
+		// canonical, so the fork-check RPC is skipped; every other case keeps it.
+		linked := tip != nil && tip.Height == localBestHeight+1 && tip.ParentHash == localBestHash
+		if !linked {
+			remoteHash, err := w.chain.GetBlockHash(localBestHeight)
+			// for some coins (eth) remote can be at lower best height after rollback
+			if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
+				return err
+			}
+			if remoteHash != localBestHash {
+				// forked - the remote hash differs from the local hash at the same height
+				glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
+				return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
+			}
 		}
 		w.startHeight = localBestHeight + 1
 	} else {
 		// database is empty, start genesis
 		glog.Info("resync: genesis from block ", w.startHeight)
 	}
-	w.startHash, err = w.chain.GetBlockHash(w.startHeight)
-	if err != nil {
-		return err
+	useParallel := w.syncWorkers > 1 && (initialSync || isEthereumType)
+	var remoteBestHeight uint32
+	if tip != nil {
+		remoteBestHeight = tip.Height
+	} else if useParallel {
+		// Bitcoin-type chains only pay this RPC on the parallel path, as before.
+		remoteBestHeight, err = w.chain.GetBestBlockHeight()
+		if err != nil {
+			return err
+		}
 	}
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
 	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
 	// or in case of ChainEthereumType if the tip is farther
-	if w.syncWorkers > 1 && (initialSync || w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType) {
-		remoteBestHeight, err := w.chain.GetBestBlockHeight()
-		if err != nil {
-			return err
-		}
+	if useParallel {
 		if remoteBestHeight < w.startHeight {
 			glog.Warning("resync: observed remote best height ", remoteBestHeight, " less than sync start height ", w.startHeight, ", falling back to sequential sync")
 		} else {
@@ -308,7 +329,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 					return w.resyncIndex(onNewBlock, initialSync)
 				}
 			}
-			if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
+			if isEthereumType {
 				syncWorkers := uint32(4)
 				if remoteBestHeight-w.startHeight >= syncWorkers {
 					glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, syncWorkers)
@@ -329,11 +350,26 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			}
 		}
 	}
+	// Only the sequential path needs the start hash; the parallel and bulk paths above
+	// resolve every hash themselves, so looking it up earlier duplicated one RPC.
+	w.startHash, err = w.startHashForHeight(w.startHeight, remoteBestHash, remoteBestHeight, isEthereumType)
+	if err != nil {
+		return err
+	}
 	err = w.connectBlocks(onNewBlock, initialSync)
 	if stdErrors.Is(err, errFork) || stdErrors.Is(err, errResync) {
 		return w.resyncIndex(onNewBlock, initialSync)
 	}
 	return err
+}
+
+// startHashForHeight resolves the hash of the first block to connect. When the block is the
+// cached EVM tip, its hash is already known and the eth_getBlockByNumber lookup is skipped.
+func (w *SyncWorker) startHashForHeight(height uint32, tipHash string, tipHeight uint32, tipCached bool) (string, error) {
+	if tipCached && tipHash != "" && tipHeight == height {
+		return tipHash, nil
+	}
+	return w.chain.GetBlockHash(height)
 }
 
 func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -950,11 +986,24 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			return
 		default:
 		}
+		// EVM serves the tip height from the cached feed header, so the end-of-chain check is
+		// free and can run before the tail probe instead of after its null response.
+		tipCached := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
 		retries := 0
 		loopStart := time.Now()
 		var block *bchain.Block
 		var err error
 		for {
+			if tipCached && hash == "" && retries == 0 {
+				bestHeight, bestErr := w.chain.GetBestBlockHeight()
+				if bestErr != nil {
+					out <- blockResult{err: bestErr}
+					return
+				}
+				if height > bestHeight {
+					return
+				}
+			}
 			block, err = w.chain.GetBlock(hash, height)
 			if err == nil {
 				break
