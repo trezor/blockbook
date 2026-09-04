@@ -161,6 +161,7 @@ func TestConnectBlocksHonorsClosedShutdownBeforeStart(t *testing.T) {
 
 type getBlockChainTestChain struct {
 	bchain.BlockChain
+	mu                sync.Mutex       // parallel sync calls GetBlock from several workers at once
 	chainType         bchain.ChainType // zero value keeps existing tests on the bitcoin-type path
 	bestHeight        uint32
 	bestHash          string
@@ -200,6 +201,8 @@ func (c *getBlockChainTestChain) EthereumTypeGetBestTip() (*bchain.EVMTip, error
 }
 
 func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.bestHeightCalls++
 	if c.bestHeightErr != nil {
 		return 0, c.bestHeightErr
@@ -208,6 +211,8 @@ func (c *getBlockChainTestChain) GetBestBlockHeight() (uint32, error) {
 }
 
 func (c *getBlockChainTestChain) GetBlockHash(height uint32) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.getBlockHashCalls != nil {
 		c.getBlockHashCalls[height]++
 	}
@@ -221,6 +226,8 @@ func (c *getBlockChainTestChain) GetBlockHash(height uint32) (string, error) {
 }
 
 func (c *getBlockChainTestChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.getBlockCalls[height]++
 	if errs := c.blockErrors[height]; len(errs) > 0 {
 		err := errs[0]
@@ -576,6 +583,35 @@ func TestResyncIndexEthereumTypeGapAboveOneKeepsForkCheck(t *testing.T) {
 	assertCalls(t, "GetBlock", chain.getBlockCalls, 2, 1)
 	assertCalls(t, "GetBlock", chain.getBlockCalls, 3, 1)
 	assertCalls(t, "GetBlock", chain.getBlockCalls, 4, 0)
+}
+
+// A gap of four or more takes the parallel path, which resolves every block hash itself,
+// so resyncIndex must not look the first one up beforehand.
+func TestResyncIndexEthereumTypeParallelPathResolvesStartHashOnce(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	hashes := []string{"", evmTestHash("11"), evmTestHash("22"), evmTestHash("33"), evmTestHash("44"), evmTestHash("55"), evmTestHash("66")}
+	blocks := make([]*bchain.Block, 0, 6)
+	for h := uint32(1); h <= 6; h++ {
+		blocks = append(blocks, evmTestBlock(hashes[h], hashes[h-1], h))
+	}
+	if err := d.ConnectBlock(blocks[0]); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := newResyncTestChain(&bchain.EVMTip{Hash: hashes[6], ParentHash: hashes[5], Height: 6}, blocks...)
+	w := newResyncTestWorker(t, d, chain)
+	w.syncWorkers = 2
+
+	// After the parallel connect resyncIndex re-runs and reports the tip as reached.
+	if err := w.resyncIndex(nil, false); !stdErrors.Is(err, syncNotNeeded) {
+		t.Fatalf("resyncIndex error = %v, want %v", err, syncNotNeeded)
+	}
+	assertBestBlock(t, d, 6, hashes[6])
+	for h := uint32(2); h <= 6; h++ {
+		assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, h, 1)
+		assertCalls(t, "GetBlock", chain.getBlockCalls, h, 1)
+	}
 }
 
 // The tip is one block ahead but its parent is not our best block: the fork check runs,
