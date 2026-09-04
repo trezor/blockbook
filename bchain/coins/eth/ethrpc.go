@@ -1149,6 +1149,20 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 	return b.bestHeader, nil
 }
 
+// EthereumTypeGetBestTip snapshots the cached tip header under one lock acquisition,
+// so the sync worker never pairs a hash with the height of a different header.
+func (b *EthereumRPC) EthereumTypeGetBestTip() (*bchain.EVMTip, error) {
+	h, err := b.getBestHeader()
+	if err != nil {
+		return nil, err
+	}
+	return &bchain.EVMTip{
+		Hash:       h.Hash(),
+		ParentHash: h.ParentHash(),
+		Height:     uint32(h.Number().Uint64()),
+	}, nil
+}
+
 // UpdateBestHeader keeps track of the latest block header confirmed on chain.
 // Non-monotonic: callers (Tron's ZeroMQ feed) own their ordering/reorg handling.
 func (b *EthereumRPC) UpdateBestHeader(h bchain.EVMHeader) {
