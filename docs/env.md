@@ -81,9 +81,9 @@ Blockbook reads these from its process environment. When installed from the Debi
 
 -   `<coin shortcut>_STAKING_POOL_CONTRACT` - The pool name and contract used for Ethereum staking. The format of the variable is `<pool name>/<pool contract>`. If missing, staking support is disabled.
 
--   `INFURA_API_KEY` - API key for the Infura alternative EIP-1559 fee provider. Archive EVM configs using Infura poll every `periodSeconds` (a required config value; the shipped archive configs set it to 10s) and keep serving the last successful fee data for the configured `staleSeconds` stale window (default 600s / 10 minutes) before falling back to native fee estimation.
+-   `INFURA_API_KEY` - API key for the Infura alternative EIP-1559 fee provider. Fees are fetched on demand when a client requests an estimate and cached for `periodSeconds` (a required config value; the shipped archive configs set it to 10s), capping upstream traffic at one request per period; the last successful fee data keeps being served for the configured `staleSeconds` stale window (default 600s / 10 minutes) before falling back to native fee estimation.
 
--   `ONE_INCH_API_KEY` - API key for the 1inch alternative EIP-1559 fee provider (used by `ethereum_archive`). Required at startup when a config selects `alternative_estimate_fee: 1inch`; the provider polls and caches fees on the same `periodSeconds`/`staleSeconds` schedule as Infura.
+-   `ONE_INCH_API_KEY` - API key for the 1inch alternative EIP-1559 fee provider (used by `ethereum_archive`). Required at startup when a config selects `alternative_estimate_fee: 1inch`; the provider fetches on demand and caches fees on the same `periodSeconds`/`staleSeconds` schedule as Infura.
 
 -   `COINGECKO_API_KEY`, `<network>_COINGECKO_API_KEY`, or `<coin shortcut>_COINGECKO_API_KEY` - API key for making requests to CoinGecko in the paid tier.
     If any of these variables is set, it must be non-empty (empty value is treated as a configuration error and Blockbook fails on startup).
