@@ -312,8 +312,8 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return syncNotNeeded
 	}
 	if localBestHash != "" {
-		// A pushed tip whose parent is the local best block proves the indexed chain is still
-		// canonical, so the fork-check RPC is skipped; every other case keeps it.
+		// A pushed tip whose parent is the local best block extends the indexed chain, so the fork
+		// check would only re-confirm it; a sibling that later wins is caught by the next cycle.
 		linked := tip != nil && tip.Height == localBestHeight+1 && tip.ParentHash == localBestHash
 		if !linked {
 			remoteHash, err := w.chain.GetBlockHash(localBestHeight)
