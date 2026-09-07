@@ -454,3 +454,115 @@ func withTemporarilyUnsetEnv(t *testing.T, keys ...string) {
 		}
 	})
 }
+
+func renderBlockchainCfg(t *testing.T, config *Config) []byte {
+	t.Helper()
+
+	templ := config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "blockchaincfg.json")))
+
+	var rendered bytes.Buffer
+	if err := templ.ExecuteTemplate(&rendered, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(blockchaincfg) error = %v", err)
+	}
+	return rendered.Bytes()
+}
+
+func TestAdditionalParamsDevOverlayAppliesOnlyToDevBuilds(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	tests := []struct {
+		buildEnv       string
+		wantFeePeriod  float64
+		wantFiatPeriod float64
+	}{
+		{buildEnv: buildEnvProd, wantFeePeriod: 10, wantFiatPeriod: 900},
+		{buildEnv: buildEnvDev, wantFeePeriod: 300, wantFiatPeriod: 3600},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.buildEnv, func(t *testing.T) {
+			withTemporarilyUnsetEnv(t, buildEnvVar)
+			t.Setenv(buildEnvVar, tt.buildEnv)
+
+			config, err := LoadConfig(configsDir, "ethereum_archive")
+			if err != nil {
+				t.Fatalf("LoadConfig() error = %v", err)
+			}
+
+			rendered := renderBlockchainCfg(t, config)
+
+			var renderedCfg struct {
+				FeeParams  string          `json:"alternative_estimate_fee_params"`
+				FiatParams string          `json:"fiat_rates_params"`
+				DevOverlay json.RawMessage `json:"additional_params_dev"`
+			}
+			if err := json.Unmarshal(rendered, &renderedCfg); err != nil {
+				t.Fatalf("json.Unmarshal(blockchaincfg) error = %v", err)
+			}
+			if renderedCfg.DevOverlay != nil {
+				t.Fatalf("additional_params_dev leaked into the rendered config: %s", renderedCfg.DevOverlay)
+			}
+
+			for name, params := range map[string]struct {
+				raw  string
+				want float64
+			}{
+				"alternative_estimate_fee_params": {raw: renderedCfg.FeeParams, want: tt.wantFeePeriod},
+				"fiat_rates_params":               {raw: renderedCfg.FiatParams, want: tt.wantFiatPeriod},
+			} {
+				var decoded map[string]interface{}
+				if err := json.Unmarshal([]byte(params.raw), &decoded); err != nil {
+					t.Fatalf("json.Unmarshal(%s = %q) error = %v", name, params.raw, err)
+				}
+				if got := decoded["periodSeconds"]; got != params.want {
+					t.Fatalf("%s periodSeconds = %v, want %v", name, got, params.want)
+				}
+			}
+
+			// The overlay retunes one field, so the rest of the setting must survive intact.
+			if !strings.Contains(renderedCfg.FeeParams, "gas.api.infura.io/v3/${api_key}/networks/1/suggestedGasFees") {
+				t.Fatalf("fee provider url lost in overlay merge: %q", renderedCfg.FeeParams)
+			}
+		})
+	}
+}
+
+func TestAllCoinConfigsRenderInBothBuildEnvs(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	entries, err := os.ReadDir(filepath.Join(configsDir, "coins"))
+	if err != nil {
+		t.Fatalf("ReadDir(coins) error = %v", err)
+	}
+
+	for _, entry := range entries {
+		coin := strings.TrimSuffix(entry.Name(), ".json")
+		if entry.IsDir() || coin == entry.Name() {
+			continue
+		}
+
+		t.Run(coin, func(t *testing.T) {
+			for _, buildEnv := range []string{buildEnvDev, buildEnvProd} {
+				withTemporarilyUnsetEnv(t, buildEnvVar)
+				t.Setenv(buildEnvVar, buildEnv)
+
+				config, err := LoadConfig(configsDir, coin)
+				if err != nil {
+					t.Fatalf("LoadConfig(%s) in %s error = %v", coin, buildEnv, err)
+				}
+				if isEmpty(config, "blockbook") {
+					continue
+				}
+
+				var renderedCfg map[string]json.RawMessage
+				if err := json.Unmarshal(renderBlockchainCfg(t, config), &renderedCfg); err != nil {
+					t.Fatalf("json.Unmarshal(blockchaincfg for %s in %s) error = %v", coin, buildEnv, err)
+				}
+				if _, ok := renderedCfg["additional_params_dev"]; ok {
+					t.Fatalf("additional_params_dev leaked into the rendered config of %s in %s", coin, buildEnv)
+				}
+			}
+		})
+	}
+}

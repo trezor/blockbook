@@ -93,6 +93,9 @@ type Config struct {
 			Slip44                 uint32 `json:"slip44,omitempty"`
 
 			AdditionalParams map[string]json.RawMessage `json:"additional_params"`
+			// Overrides merged over AdditionalParams only when BB_BUILD_ENV=dev, so a value
+			// tuned for a dev instance cannot reach a production package.
+			AdditionalParamsDev map[string]json.RawMessage `json:"additional_params_dev,omitempty"`
 		} `json:"block_chain"`
 	} `json:"blockbook"`
 	Meta struct {
@@ -411,6 +414,18 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	err = d.Decode(&config.Env)
 	if err != nil {
 		return nil, err
+	}
+
+	blockChain := &config.Blockbook.BlockChain
+	// Validate in every build env so a typo in a dev override fails a production build too.
+	if err := validateAdditionalParamsOverlay(blockChain.AdditionalParams, blockChain.AdditionalParamsDev); err != nil {
+		return nil, fmt.Errorf("%s: %w", coin, err)
+	}
+	if buildEnv == buildEnvDev {
+		blockChain.AdditionalParams, err = mergeAdditionalParams(blockChain.AdditionalParams, blockChain.AdditionalParamsDev)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", coin, err)
+		}
 	}
 
 	config.Meta.BuildDatetime = time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700")

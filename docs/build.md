@@ -88,10 +88,16 @@ command: `make NO_CACHE=true all-bitcoin`.
 
 `PORTABLE`: By default, the RocksDB binaries shipped with Blockbook are optimized for the platform you're compiling on (-march=native or the equivalent). If you want to build a portable binary, use `make PORTABLE=1 all-bitcoin`.
 
-`BB_BUILD_ENV`: Selects which RPC URL override family is active during package/config generation. Defaults to `dev`.
-Accepted values are `dev` and `prod`.
+`BB_BUILD_ENV`: Selects which environment the package is generated for. Defaults to `dev`. Accepted values are `dev`
+and `prod`. It selects the active RPC URL override family, and in a `dev` build it also merges each coin's
+`blockbook.block_chain.additional_params_dev` block over `additional_params` (see
+[config guide](/docs/config.md)) so a dev instance can poll a paid fee or fiat-rates provider less often.
 Generated dev Blockbook services include `-prof=:<blockbook_internal + 20000>` automatically, while generated prod
 services do not include `-prof`.
+
+**Because the default is `dev`, a package intended for production must be built with `BB_BUILD_ENV=prod`.** The
+`Build / Deploy` workflow already does this: `mode=build` passes its `env` input through, and `mode=deploy` (dev-only)
+pins `dev`.
 
 `BB_DEV_RPC_URL_HTTP_<coin alias>` / `BB_PROD_RPC_URL_HTTP_<coin alias>`: Override `ipc.rpc_url_template` while generating
 package definitions so you can target hosted HTTP RPC endpoints without editing coin JSON. The root `Makefile` forwards
