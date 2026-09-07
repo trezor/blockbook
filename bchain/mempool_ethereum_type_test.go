@@ -60,3 +60,21 @@ func TestNewMempoolEthereumTypeUsesDuration(t *testing.T) {
 		t.Fatalf("mempoolTimeoutTime = %s, want %s", m.mempoolTimeoutTime, 10*time.Minute)
 	}
 }
+
+// A restamped entry ages from the newest add, so the timeout sweep cannot drop it while the
+// alternative-provider cache - which also ages from the newest send - still serves it as pending.
+func TestMempoolEthereumTypeAddOrRefreshRestampsExistingEntry(t *testing.T) {
+	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
+	old := uint32(time.Now().Add(-time.Hour).Unix())
+	m.txEntries["tx1"] = txEntry{addrIndexes: []addrIndex{{addrDesc: "addr1"}}, time: old}
+
+	if !m.AddOrRefreshTransactionInMempool("tx1") {
+		t.Fatal("AddOrRefreshTransactionInMempool() = false, want true")
+	}
+	if got := m.txEntries["tx1"].time; got == old {
+		t.Fatalf("entry time = %d, want restamped past %d", got, old)
+	}
+	if got := m.txEntries["tx1"].addrIndexes; len(got) != 1 {
+		t.Fatalf("addrIndexes = %+v, want the original index kept", got)
+	}
+}

@@ -2108,12 +2108,13 @@ func (d *RocksDB) storeAddrContractsCache() {
 	glog.Info("storeAddrContractsCache: store ", len(d.addrContractsCache), " entries in ", time.Since(start))
 }
 
-func (d *RocksDB) periodicStoreAddrContractsCache() {
-	period := time.Duration(5) * time.Minute
-	timer := time.NewTimer(period)
-	for {
-		<-timer.C
-		timer.Reset(period)
-		d.storeAddrContractsCache()
+// storeAddrContractsCacheIfDue periodically flushes the cache from the block-connect
+// goroutine. Cached records are mutated without addrContractsCacheMux while a block is
+// connected, so packing them from any other goroutine would race with that mutation.
+func (d *RocksDB) storeAddrContractsCacheIfDue() {
+	if time.Since(d.lastAddrContractsCacheStore) < addrContractsCacheStorePeriod {
+		return
 	}
+	d.lastAddrContractsCacheStore = time.Now()
+	d.storeAddrContractsCache()
 }

@@ -219,10 +219,7 @@ func resolveTronHTTPURL(explicitURL, rpcURL, defaultPort string) (string, error)
 
 // OpenRPC opens an RPC connection to the Tron backend (wsURL is unused – Tron has no WS subscriptions)
 var OpenRPC = func(url, _ string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
-	opts := []rpc.ClientOption{}
-	opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
-
-	r, err := rpc.DialOptions(context.Background(), url, opts...)
+	r, err := rpc.DialOptions(context.Background(), url, eth.RPCDialOptions(url)...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1187,33 +1184,11 @@ func (b *TronRPC) normalizeMulticallCalls(calls []bchain.EthereumMulticallCall) 
 	return normalizedCalls, nil
 }
 
-// EthereumTypeGetNonces returns the account nonce. Tron exposes only the latest
-// (confirmed) nonce via NonceAt in a single call, so the pending and confirmed
-// values are identical and the withConfirmed flag carries no extra cost here.
-func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool) (uint64, uint64, bool, error) {
-	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
-	defer cancel()
-	n, err := b.Client.NonceAt(ctx, addrDesc, nil)
-	if err != nil {
-		return 0, 0, false, err
-	}
-	// the single NonceAt call already yields the latest nonce, so confirmed is
-	// available whenever it was requested
-	return n, n, withConfirmed, nil
-}
-
-// GetContractInfo returns information about a contract
-func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
-	contract, err := b.EthereumRPC.GetContractInfo(contractDesc)
-	if err != nil {
-		return nil, err
-	}
-	if contract == nil {
-		return nil, nil
-	}
-	contract.Contract = ToTronAddressFromAddress(contract.Contract)
-	glog.Infof("Getting contract info for: %s", contract.Contract)
-	return contract, nil
+// EthereumTypeGetNonces: Tron has no account nonces (replay protection is
+// ref-block + expiration); pending is reported as 0 to mirror java-tron's
+// eth_getTransactionCount stub and a confirmed nonce is never claimed.
+func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (uint64, uint64, bool, error) {
+	return 0, 0, false, nil
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {

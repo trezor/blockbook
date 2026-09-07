@@ -1,6 +1,8 @@
 package db
 
 import (
+	"unicode/utf8"
+
 	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -10,9 +12,26 @@ import (
 
 var cachedContracts = newContractInfoLRU(cachedContractsLRUMaxSize)
 
+// maxContractNameSymbolBytes bounds the token name/symbol persisted per contract. A malicious
+// contract can return a multi-megabyte name()/symbol() over a free eth_call; capping here (the sole
+// pack chokepoint for every write path) keeps one cheap deployment from bloating the index forever.
+const maxContractNameSymbolBytes = 256
+
+// clampUTF8 truncates s to at most max bytes without leaving a split trailing rune.
+func clampUTF8(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	s = s[:max]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
 func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
-	buf := packString(contractInfo.Name)
-	buf = append(buf, packString(contractInfo.Symbol)...)
+	buf := packString(clampUTF8(contractInfo.Name, maxContractNameSymbolBytes))
+	buf = append(buf, packString(clampUTF8(contractInfo.Symbol, maxContractNameSymbolBytes))...)
 	buf = append(buf, packString(string(contractInfo.Standard))...)
 	varBuf := make([]byte, vlq.MaxLen64)
 	l := packVaruint(uint(contractInfo.Decimals), varBuf)

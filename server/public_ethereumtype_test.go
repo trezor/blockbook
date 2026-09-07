@@ -255,6 +255,23 @@ var websocketTestsEthereumType = []websocketTest{
 		},
 		want: `{"id":"7","data":{"error":{"message":"No tickers found"}}}`,
 	},
+	{
+		// Pins the privatePending plumbing between the request and the chain: the fake chain walks
+		// the pending nonce across the declared slots (75 is the address's own base nonce), so
+		// nonce 77 in the answer proves the declared nonces crossed the AddressFilter -> worker
+		// seam. Both forwarding sites are invisible to every other test - the chain parameter is an
+		// optional variadic, so dropping either one compiles and changes nothing else.
+		name: "websocket getAccountInfo privatePending nonces reach the chain",
+		req: websocketReq{
+			Method: "getAccountInfo",
+			Params: map[string]interface{}{
+				"descriptor":     "0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D",
+				"details":        "basic",
+				"privatePending": map[string]interface{}{"nonces": []uint64{75, 76}, "txids": []string{"0xdead"}},
+			},
+		},
+		want: `{"id":"8","data":{"address":"0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D","balance":"123450075","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"nonce":"77"}}`,
+	},
 }
 
 func initEthereumTypeDB(d *db.RocksDB) error {

@@ -20,6 +20,7 @@ import (
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
+	"golang.org/x/sync/singleflight"
 )
 
 // Worker is handle to api worker
@@ -37,6 +38,11 @@ type Worker struct {
 	fiatRates            *fiat.FiatRates
 	metrics              *common.Metrics
 	xpubConfig           XpubConfig
+	// contractProbeCache remembers contracts the chain reported as holding no token. The
+	// index never records that verdict, so without the cache every request re-probes them.
+	contractProbeCache *negativeProbeCache
+	// contractProbeGroup collapses concurrent probes of the same contract into one read.
+	contractProbeGroup singleflight.Group
 }
 
 var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
@@ -76,6 +82,7 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		fiatRates:            fiatRates,
 		metrics:              metrics,
 		xpubConfig:           xpubCfg,
+		contractProbeCache:   newNegativeProbeCache(contractProbeCacheCapacity),
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
@@ -112,7 +119,9 @@ func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) err
 							glog.Warning("Tx ", t, ": not found")
 						} else {
 							if len(spentTx.Vin) > int(index) {
-								if spentTx.Vin[index].Txid == txid {
+								// the outpoint must match, not just the tx: sibling outputs
+								// sharing this address and value would match on txid alone
+								if spentTx.Vin[index].Txid == txid && spentTx.Vin[index].Vout == uint32(vout.N) {
 									vout.SpentTxID = t
 									vout.SpentHeight = int(spentHeight)
 									vout.SpentIndex = int(index)
@@ -151,6 +160,11 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	}
 	if n >= len(tx.Vout) || n < 0 {
 		return "", NewAPIError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, tx.Txid, len(tx.Vout)), false)
+	}
+	// an unspent output has no spender, and the scan below has no early exit for
+	// that case - it would walk the address index all the way to the chain tip
+	if !tx.Vout[n].Spent {
+		return "", nil
 	}
 	err = w.setSpendingTxToVout(&tx.Vout[n], tx.Txid, uint32(tx.Blockheight))
 	if err != nil {
@@ -706,41 +720,46 @@ func (w *Worker) GetContractInfo(contract string, standardFromContext bchain.Tok
 }
 
 func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
-	var err error
-	validContract := true
+	return w.getProbedContractDescriptorInfo(cd, standardFromContext, nil)
+}
+
+// getProbedContractDescriptorInfo serves contract metadata from the index, falling back to a chain
+// read. probes carries what a batched pre-pass resolved; nil means read the chain per contract.
+func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName, probes contractInfoProbes) (*bchain.ContractInfo, bool, error) {
 	contractInfo, err := w.db.GetContractInfo(cd, standardFromContext)
 	if err != nil {
 		return nil, false, err
 	}
 	if contractInfo == nil {
+		bestHeight, reorgGen := w.contractProbeCacheState()
+		// already reported as holding no token: nothing left to read, and nothing to warn about
+		if w.contractProbeCache.contains(string(cd), bestHeight, reorgGen) {
+			return w.unknownContractInfo(cd), false, nil
+		}
 		// log warning only if the contract should have been known from processing of the internal data
 		if bchain.ProcessInternalTransactions {
 			glog.Warningf("Contract %v %v not found in DB", cd, standardFromContext)
 		}
-		contractInfo, err = w.chain.GetContractInfo(cd)
-		if err != nil {
-			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
-		}
+		contractInfo, err = w.resolveContractInfo(cd, probes)
 		if contractInfo == nil {
-			contractInfo = &bchain.ContractInfo{Standard: bchain.UnknownTokenStandard, Decimals: w.chainParser.AmountDecimals()}
-			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(cd)
-			if len(addresses) > 0 {
-				contractInfo.Contract = addresses[0]
+			if err != nil {
+				// a failed read says nothing about the contract, so it must not be cached
+				glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
+			} else {
+				w.contractProbeCache.add(string(cd), bestHeight, w.negativeProbeTTLBlocks(defaultNegativeProbeTTL), reorgGen)
 			}
-
-			validContract = false
-		} else {
-			if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
-				contractInfo.Standard = standardFromContext
-				contractInfo.Type = standardFromContext
-			}
-			if err = w.db.StoreContractInfo(contractInfo); err != nil {
-				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
-			}
+			return w.unknownContractInfo(cd), false, nil
 		}
-	} else if (contractInfo.Standard == bchain.UnhandledTokenStandard || len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
+		if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
+			contractInfo.Standard = standardFromContext
+			contractInfo.Type = standardFromContext
+		}
+		if err = w.db.StoreContractInfo(contractInfo); err != nil {
+			glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
+		}
+	} else if contractNeedsChainRefresh(contractInfo) {
 		// fix contract name/symbol that was parsed as a string consisting of zeroes
-		blockchainContractInfo, err := w.chain.GetContractInfo(cd)
+		blockchainContractInfo, err := w.resolveContractInfo(cd, probes)
 		if err != nil {
 			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
 		} else {
@@ -779,7 +798,8 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 	if contractInfo.Decimals == 0 && contractInfo.Standard == bchain.UnhandledTokenStandard {
 		contractInfo.Decimals = w.chainParser.AmountDecimals()
 	}
-	return contractInfo, validContract, nil
+	// unresolved contracts already returned above, with validContract false
+	return contractInfo, true, nil
 }
 
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
@@ -1087,9 +1107,9 @@ func clampRange(from, to, length int) (int, int) {
 	return from, min(max(to, from), length)
 }
 
-func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool) (*Token, error) {
+func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool, probes contractInfoProbes) (*Token, error) {
 	standard := bchain.EthereumTokenStandardMap[c.Standard]
-	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standard)
+	ci, validContract, err := w.getProbedContractDescriptorInfo(c.Contract, standard, probes)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getEthereumContractBalance %v", c.Contract)
 	}
@@ -1292,7 +1312,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if b != nil {
 			ba.BalanceSat = *b
 		}
-		nPending, nConfirmed, confirmedNonceOK, err = w.chain.EthereumTypeGetNonces(addrDesc, filter.WithConfirmedNonce)
+		nPending, nConfirmed, confirmedNonceOK, err = w.chain.EthereumTypeGetNonces(addrDesc, filter.WithConfirmedNonce, filter.PrivatePendingNonces...)
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonces %v", addrDesc)
 		}
@@ -1329,6 +1349,11 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 		if details > AccountDetailsBasic {
+			// a single-contract filter is never worth a batch - the per-contract path is as cheap
+			var probes contractInfoProbes
+			if len(filterDesc) == 0 {
+				probes = w.prefetchContractInfos(ca.Contracts)
+			}
 			d.tokens = make([]Token, len(ca.Contracts))
 			var j int
 			for i := range ca.Contracts {
@@ -1347,7 +1372,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				if erc20Balances != nil {
 					erc20Balance, erc20Batched = erc20Balances[string(c.Contract)]
 				}
-				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance, erc20Batched)
+				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance, erc20Batched, probes)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -2684,10 +2709,20 @@ const (
 	// and the floor is what lets a fast chain's configured cadence be corrected downwards
 	// without tightening this check.
 	systemInfoMinStale = 30 * time.Second
-	// systemInfoSyncedGap is how far the indexed height may trail the backend tip and
-	// still count as synchronized. It covers the one-block window between the tip
+	// systemInfoSyncedGap is the floor for how far the indexed height may trail the backend
+	// tip and still count as synchronized. It covers the one-block window between the tip
 	// advancing and that block being connected, which would otherwise flap the status.
 	systemInfoSyncedGap = 1
+	// systemInfoSyncedGapWindow turns that floor into wall clock. One block is 12s of slack
+	// on Ethereum but 0.25s on Arbitrum, where an excursion peaking at 211 blocks - 53s of
+	// real lag - read as out-of-sync and paged. Same value as systemInfoMinStale on purpose:
+	// under 30s is jitter for both checks.
+	systemInfoSyncedGapWindow = systemInfoMinStale
+	// systemInfoMinBlockPeriod floors the cadence the window is divided by, capping the
+	// derived tolerance at 300 blocks. 100ms is the fastest cadence any supported chain
+	// configures (Robinhood); anything smaller is a misconfigured averageBlockTimeMs or
+	// a degenerate observed average.
+	systemInfoMinBlockPeriod = 100 * time.Millisecond
 )
 
 // systemInfoInSync decides the externally reported in-sync state from the raw
@@ -2709,6 +2744,11 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 	if blockPeriod <= 0 {
 		return inSync
 	}
+	// Neither input path validates the cadence beyond > 0, and the gap tolerance below
+	// scales linearly with it, so floor it to bound what a bad value can buy.
+	if blockPeriod < systemInfoMinBlockPeriod {
+		blockPeriod = systemInfoMinBlockPeriod
+	}
 
 	threshold := systemInfoStaleBlocks * blockPeriod
 	if threshold < systemInfoMinStale {
@@ -2716,13 +2756,29 @@ func systemInfoInSync(inSync bool, initialSync bool, chainType bchain.ChainType,
 	}
 	isFresh := !lastBlockTime.Add(threshold).Before(now)
 
-	// A sync loop can stay inside ResyncIndex while new blocks keep arriving. If the
-	// indexed height is at (or within one block of) the backend tip and the index was
-	// updated recently, report the externally observable state as synchronized. int64
-	// avoids underflow if the backend momentarily reports a lower tip; gap >= 0 keeps an
-	// "ahead of tip" read from qualifying.
+	// Tolerate the blocks the chain produces inside the window, never fewer than one.
+	// Derived from the constant, not from threshold above: 12 block times divided by the
+	// block time is 12 blocks on every chain, which would stretch Bitcoin to two hours.
+	syncedGap := int64(systemInfoSyncedGap)
+	if lag := int64(systemInfoSyncedGapWindow / blockPeriod); lag > syncedGap {
+		syncedGap = lag
+	}
+
+	// A sync loop can stay inside ResyncIndex while new blocks keep arriving. If the indexed
+	// height is at (or close behind) the backend tip and the index was updated recently,
+	// report the externally observable state as synchronized. int64 avoids underflow if the
+	// backend reports a lower tip.
 	gap := int64(backendBlocks) - int64(bestHeight)
-	if !inSync && !initialSync && gap >= 0 && gap <= systemInfoSyncedGap && isFresh {
+	// A negative gap is the steady state for RefreshSyncMetrics, whose backend tip is a
+	// snapshot from the end of the previous resync iteration, so the same distance is
+	// tolerated in both directions. backendBlocks > 0 keeps the rescue from firing before
+	// any tip was observed.
+	if gap < 0 {
+		// Bounded, not clamped to zero: disconnect/reconnect churn refreshes LastSync,
+		// so an index far past a live tip would read fresh indefinitely.
+		gap = -gap
+	}
+	if !inSync && !initialSync && backendBlocks > 0 && gap <= syncedGap && isFresh {
 		return true
 	}
 

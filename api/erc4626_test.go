@@ -632,8 +632,8 @@ func TestEnrichErc4626Tokens_RecentNegativeSkipsReprobe(t *testing.T) {
 	store := fakeContractInfoStore{
 		strings.ToLower(fakeFungible): {Contract: fakeFungible, Standard: erc4626Standard},
 	}
-	negativeCache := newErc4626NegativeCache(4)
-	negativeCache.add(fakeFungible, 100, 2, 0)
+	negativeCache := newNegativeProbeCache(4)
+	negativeCache.add(erc4626ContractKey(fakeFungible), 100, 2, 0)
 	mc := &fakeMulticaller{
 		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
 			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
@@ -662,7 +662,7 @@ func TestEnrichErc4626Tokens_NegativeCacheExpiresAndReprobes(t *testing.T) {
 	store := fakeContractInfoStore{
 		strings.ToLower(fakeFungible): {Contract: fakeFungible, Standard: erc4626Standard},
 	}
-	negativeCache := newErc4626NegativeCache(4)
+	negativeCache := newNegativeProbeCache(4)
 	mc := &fakeMulticaller{
 		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
 			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {

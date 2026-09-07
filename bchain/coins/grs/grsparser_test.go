@@ -123,6 +123,14 @@ func TestGetAddrDesc(t *testing.T) {
 				parser: NewGroestlcoinParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 		},
+		{
+			// signet shares the testnet address magics, so the same vectors must decode there
+			name: "grs-signet",
+			args: args{
+				tx:     testTx2,
+				parser: NewGroestlcoinParser(GetChainParams("signet"), &btc.Configuration{}),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

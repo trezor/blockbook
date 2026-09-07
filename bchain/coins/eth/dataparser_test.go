@@ -3,7 +3,9 @@
 package eth
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/trezor/blockbook/bchain"
@@ -59,6 +61,24 @@ func Test_parseSimpleStringProperty(t *testing.T) {
 				t.Errorf("parseSimpleStringProperty = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// A malicious contract can make a free eth_call return an arbitrarily large ABI string;
+// parseSimpleStringProperty must cap the decode at maxParsedStringBytes instead of honoring the
+// attacker-declared length.
+func Test_parseSimpleStringProperty_CapsOversizedString(t *testing.T) {
+	const declared = maxParsedStringBytes * 4
+	offset := "0000000000000000000000000000000000000000000000000000000000000020"
+	lengthWord := fmt.Sprintf("%064x", declared)
+	payload := strings.Repeat("41", declared) // 'A' repeated `declared` times
+
+	got := parseSimpleStringProperty("0x" + offset + lengthWord + payload)
+	if len(got) != maxParsedStringBytes {
+		t.Fatalf("decoded length = %d, want ceiling %d", len(got), maxParsedStringBytes)
+	}
+	if strings.Trim(got, "A") != "" {
+		t.Errorf("decoded string contains unexpected bytes, want all 'A'")
 	}
 }
 

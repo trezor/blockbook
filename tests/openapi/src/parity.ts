@@ -97,6 +97,7 @@ const _WsReq: Compat<Bb.WsReq, Schemas["WsRequest"], "WsRequest"> = true;
 const _WsRes: Compat<Bb.WsRes, Schemas["WsResponse"], "WsResponse"> = true;
 
 const _WsAccountInfoReq: Compat<Bb.WsAccountInfoReq, Schemas["WsAccountInfoReq"], "WsAccountInfoReq"> = true;
+const _WsPrivatePending: Compat<Bb.WsPrivatePending, Schemas["WsPrivatePending"], "WsPrivatePending"> = true;
 const _WsContractInfoReq: Compat<Bb.WsContractInfoReq, Schemas["WsContractInfoReq"], "WsContractInfoReq"> = true;
 const _WsBackendInfo: Compat<Bb.WsBackendInfo, Schemas["WsBackendInfo"], "WsBackendInfo"> = true;
 const _WsInfoRes: Compat<Bb.WsInfoRes, Schemas["WsInfoRes"], "WsInfoRes"> = true;
@@ -150,7 +151,7 @@ void [
   _BackendInfo, _InternalStateColumn, _BlockbookInfo, _SystemInfo,
   _FiatTicker, _FiatTickers, _AvailableVsCurrencies,
   _WsReq, _WsRes,
-  _WsAccountInfoReq, _WsContractInfoReq, _WsBackendInfo, _WsInfoRes,
+  _WsAccountInfoReq, _WsPrivatePending, _WsContractInfoReq, _WsBackendInfo, _WsInfoRes,
   _WsBlockHashReq, _WsBlockHashRes, _WsBlockReq, _WsBlockFilterReq, _WsBlockFiltersBatchReq,
   _WsAccountUtxoReq, _WsBalanceHistoryReq, _WsTransactionReq, _WsTransactionSpecificReq,
   _WsEstimateFeeReq, _Eip1559Fee, _Eip1559Fees, _WsEstimateFeeRes,

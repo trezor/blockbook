@@ -19,11 +19,17 @@ const (
 // chain parameters
 var (
 	TestNet4Params chaincfg.Params
+	SigNetParams   chaincfg.Params
 )
 
 func init() {
 	TestNet4Params = chaincfg.TestNet3Params
 	TestNet4Params.Net = Testnet4Magic
+
+	// chaincfg builds signet params from a challenge and leaves AddressMagicLen
+	// zero, which makes base58 address decoding fail on the version byte.
+	SigNetParams = chaincfg.SigNetParams
+	SigNetParams.AddressMagicLen = 1
 }
 
 // BitcoinParser handle
@@ -55,7 +61,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 	case "regtest":
 		return &chaincfg.RegressionNetParams
 	case "signet":
-		return &chaincfg.SigNetParams
+		return &SigNetParams
 	}
 	return &chaincfg.MainNetParams
 }

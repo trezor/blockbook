@@ -1317,7 +1317,8 @@ func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (t
 			res, err := s.chain.SendRawTransaction(hex, false)
 			if err != nil {
 				data.SendTxHex = hex
-				data.Error = &api.APIError{Text: err.Error(), Public: true}
+				// rendered straight into the page, so it bypasses the handler-level redaction
+				data.Error = &api.APIError{Text: common.RedactURLs(err.Error()), Public: true}
 				return sendTransactionTpl, data, nil
 			}
 			data.Status = "Transaction sent, result " + res

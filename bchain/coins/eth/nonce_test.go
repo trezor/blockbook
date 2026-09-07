@@ -304,59 +304,80 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FallbackToPrimaryOnProviderEr
 }
 
 func TestEthereumTypeGetNonces_AlternativeProvider_FallbackRaisedToCacheFloor(t *testing.T) {
-	// the provider lookup fails and the primary answers 4, but the alternative mempool cache
-	// still holds a pending private tx with nonce 0x7 from the sender - the fallback must
-	// report at least 8, otherwise a wallet building on the primary answer would replace the
-	// sender's in-flight private transaction
-	server := newNonceRPCServer(t, nil, map[string]bool{"pending": true})
-	stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
-	sender := ethcommon.BytesToAddress(nonceTestAddr)
-	provider := newRecentSenderProvider(server, sender)
-	provider.fetchMempoolTx = true
-	provider.mempoolTxs = map[string]storedTx{
-		testAlternativeTxID: {
-			tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: "0x7"},
-			time: uint32(time.Now().Unix()),
-		},
-	}
-	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: provider}
+	// the provider lookup fails and the primary answers 4: with the cache holding the sender's tx at
+	// nonce 4 the fallback must report 5, or a wallet building on the primary answer replaces that
+	// in-flight tx. The gap case is the other half of #1675 - nothing fills nonce 4, so the floor must
+	// NOT jump over the hole to the cached 0x7, or every later send queues behind it.
+	for _, tt := range []struct {
+		name        string
+		cachedNonce string
+		want        uint64
+	}{
+		{name: "contiguous with the primary answer", cachedNonce: "0x4", want: 5},
+		{name: "gap below the cached tx", cachedNonce: "0x7", want: 4},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newNonceRPCServer(t, nil, map[string]bool{"pending": true})
+			stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+			sender := ethcommon.BytesToAddress(nonceTestAddr)
+			provider := newRecentSenderProvider(server, sender)
+			provider.fetchMempoolTx = true
+			provider.mempoolTxs = map[string]storedTx{
+				testAlternativeTxID: {
+					tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: tt.cachedNonce},
+					time: uint32(time.Now().Unix()),
+				},
+			}
+			b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: provider}
 
-	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
-	if err != nil {
-		t.Fatalf("provider failure must fall back to the primary RPC, got error: %v", err)
-	}
-	if pending != 8 {
-		t.Errorf("pending = %d, want 8 (cache floor: highest cached nonce 0x7 + 1)", pending)
+			pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+			if err != nil {
+				t.Fatalf("provider failure must fall back to the primary RPC, got error: %v", err)
+			}
+			if pending != tt.want {
+				t.Errorf("pending = %d, want %d", pending, tt.want)
+			}
+		})
 	}
 }
 
 func TestEthereumTypeGetNonces_AlternativeProvider_ProviderAnswerRaisedToCacheFloor(t *testing.T) {
-	// Blink-style relays stop counting a still-pending tx at the pending tag while Blockbook
-	// keeps exposing it until the cache timeout: the provider answers 4 although the cache
-	// holds a pending private tx with nonce 0x7 from the sender - the answer must be raised
-	// to 8 so it never contradicts Blockbook's own pending view
-	server := newNonceRPCServer(t, map[string]string{"pending": "0x4"}, nil)
-	stub := &nonceBatchStub{results: map[string]string{"pending": "0x2"}}
-	sender := ethcommon.BytesToAddress(nonceTestAddr)
-	provider := newRecentSenderProvider(server, sender)
-	provider.fetchMempoolTx = true
-	provider.mempoolTxs = map[string]storedTx{
-		testAlternativeTxID: {
-			tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: "0x7"},
-			time: uint32(time.Now().Unix()),
-		},
-	}
-	b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: provider}
+	// a relay stops counting a still-pending tx once past its own pending window while Blockbook
+	// exposes it until the cache timeout: the provider answers 4 with the cache holding nonce 4, so
+	// the answer must become 5 and never contradict Blockbook's pending view. A gap stays at 4 (#1675).
+	for _, tt := range []struct {
+		name        string
+		cachedNonce string
+		want        uint64
+	}{
+		{name: "contiguous with the provider answer", cachedNonce: "0x4", want: 5},
+		{name: "gap below the cached tx", cachedNonce: "0x7", want: 4},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			server := newNonceRPCServer(t, map[string]string{"pending": "0x4"}, nil)
+			stub := &nonceBatchStub{results: map[string]string{"pending": "0x2"}}
+			sender := ethcommon.BytesToAddress(nonceTestAddr)
+			provider := newRecentSenderProvider(server, sender)
+			provider.fetchMempoolTx = true
+			provider.mempoolTxs = map[string]storedTx{
+				testAlternativeTxID: {
+					tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: tt.cachedNonce},
+					time: uint32(time.Now().Unix()),
+				},
+			}
+			b := &EthereumRPC{RPC: stub, Timeout: time.Second, alternativeSendTxProvider: provider}
 
-	pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if pending != 8 {
-		t.Errorf("pending = %d, want 8 (cache floor over the provider answer)", pending)
-	}
-	if len(stub.queried) != 0 {
-		t.Errorf("primary RPC queried tags %v, want none for a successful provider lookup", stub.queried)
+			pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if pending != tt.want {
+				t.Errorf("pending = %d, want %d", pending, tt.want)
+			}
+			if len(stub.queried) != 0 {
+				t.Errorf("primary RPC queried tags %v, want none for a successful provider lookup", stub.queried)
+			}
+		})
 	}
 }
 
@@ -439,7 +460,7 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FloorAppliedWithoutRouting(t 
 		rpcTimeout:        time.Second,
 		mempoolTxs: map[string]storedTx{
 			testAlternativeTxID: {
-				tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: "0x7"},
+				tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: "0x4"},
 				time: uint32(time.Now().Unix()),
 			},
 		},
@@ -450,8 +471,64 @@ func TestEthereumTypeGetNonces_AlternativeProvider_FloorAppliedWithoutRouting(t 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if pending != 8 {
-		t.Errorf("pending = %d, want 8 (floor applied although the sender is not routed)", pending)
+	if pending != 5 {
+		t.Errorf("pending = %d, want 5 (floor applied although the sender is not routed)", pending)
+	}
+}
+
+// TestEthereumTypeGetNonces_AlternativeProvider_ObservesFloorMetrics pins which floor counter a request
+// lands on: raised when the cache fills the slots above the backend's answer, stranded when it holds one
+// above a slot nothing fills. A gap is BOTH not-raised and stranded, the answer staying the backend's -
+// the point of the #1675 clamp.
+func TestEthereumTypeGetNonces_AlternativeProvider_ObservesFloorMetrics(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		cachedNonce  string
+		wantPending  uint64
+		wantRaised   float64
+		wantStranded float64
+	}{
+		{name: "contiguous raises the floor", cachedNonce: "0x4", wantPending: 5, wantRaised: 1},
+		{name: "gap strands the cached tx", cachedNonce: "0x7", wantPending: 4, wantStranded: 1},
+		{name: "already consumed nonce does neither", cachedNonce: "0x2", wantPending: 4},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sender := ethcommon.BytesToAddress(nonceTestAddr)
+			stub := &nonceBatchStub{results: map[string]string{"pending": "0x4"}}
+			m := &common.Metrics{
+				EthAlternativePendingFloorRaised: prometheus.NewCounterVec(
+					prometheus.CounterOpts{Name: "test_alt_floor_raised_total"}, []string{"source"}),
+				EthAlternativePendingFloorStranded: prometheus.NewCounterVec(
+					prometheus.CounterOpts{Name: "test_alt_floor_stranded_total"}, []string{"source"}),
+			}
+			provider := &AlternativeSendTxProvider{
+				urls:              []string{"http://127.0.0.1:1"},
+				fetchMempoolTx:    true,
+				mempoolTxsTimeout: time.Hour,
+				rpcTimeout:        time.Second,
+				mempoolTxs: map[string]storedTx{
+					testAlternativeTxID: {
+						tx:   &bchain.RpcTransaction{Hash: testAlternativeTxID, From: sender.Hex(), AccountNonce: tt.cachedNonce},
+						time: uint32(time.Now().Unix()),
+					},
+				},
+			}
+			b := &EthereumRPC{RPC: stub, Timeout: time.Second, metrics: m, alternativeSendTxProvider: provider}
+
+			pending, _, _, err := b.EthereumTypeGetNonces(nonceTestAddr, false)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if pending != tt.wantPending {
+				t.Errorf("pending = %d, want %d", pending, tt.wantPending)
+			}
+			if got := counterVecValue(t, m.EthAlternativePendingFloorRaised, "source", "primary"); got != tt.wantRaised {
+				t.Errorf("floor_raised{primary} = %v, want %v", got, tt.wantRaised)
+			}
+			if got := counterVecValue(t, m.EthAlternativePendingFloorStranded, "source", "primary"); got != tt.wantStranded {
+				t.Errorf("floor_stranded{primary} = %v, want %v", got, tt.wantStranded)
+			}
+		})
 	}
 }
 

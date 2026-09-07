@@ -1454,8 +1454,11 @@ func TestWebsocketShutdownWaitsForInFlightWork(t *testing.T) {
 	go func() {
 		// Simulate a DB-touching goroutine that takes some time.
 		time.Sleep(50 * time.Millisecond)
-		s.workDone()
+		// Signal completion before workDone(): workDone() is what releases
+		// Shutdown, so closing afterwards races with the check below and the
+		// non-blocking select can observe finished as still open.
 		close(finished)
+		s.workDone()
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

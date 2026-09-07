@@ -57,10 +57,11 @@ func TestSystemInfoInSync(t *testing.T) {
 			blockPeriod:   2 * time.Second,
 		},
 		{
+			// 20 blocks at 2s is 40s of lag, past the 15 the window allows there.
 			name:          "does not report synced while local height is behind",
 			chainType:     bchain.ChainEthereumType,
 			bestHeight:    90,
-			backendBlocks: 100,
+			backendBlocks: 110,
 			lastBlockTime: now.Add(-10 * time.Second),
 			startSync:     oldStart,
 			blockPeriod:   2 * time.Second,
@@ -108,11 +109,177 @@ func TestSystemInfoInSync(t *testing.T) {
 			blockPeriod:   250 * time.Millisecond,
 		},
 		{
-			name:          "does not report synced more than one block behind tip",
+			// Was "more than one block behind": the tolerance is now the blocks produced in
+			// 30s, so at 2s the limit is 15 and it takes 16 to fall out.
+			name:          "does not report synced past the tolerated window on a two-second chain",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 116,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   2 * time.Second,
+		},
+		{
+			// The boundary is 30s/250ms = 120 blocks, not 1. This is the shape that spent
+			// 203 min/week in the blockbookApiInSync alert on arb-b4.
+			name:          "reports synced trailing the sub-second tip inside the window",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100000,
+			backendBlocks: 100120,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+			want:          true,
+		},
+		{
+			name:          "does not report synced one block past the window on a sub-second chain",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100000,
+			backendBlocks: 100121,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+		},
+		{
+			// 100ms is the fastest cadence any supported chain configures (Robinhood) and
+			// sits exactly on the systemInfoMinBlockPeriod floor: its full 30s window,
+			// 300 blocks, must survive the floor untouched.
+			name:          "reports synced trailing a 100ms tip inside the window",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100000,
+			backendBlocks: 100300,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   100 * time.Millisecond,
+			want:          true,
+		},
+		{
+			name:          "does not report synced one block past the window on a 100ms chain",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100000,
+			backendBlocks: 100301,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   100 * time.Millisecond,
+		},
+		{
+			// A cadence below any supported chain's is a config typo (25ms where Arbitrum
+			// means 250) or a degenerate observed average. Unfloored it would buy 30s/25ms
+			// = 1200 blocks of tolerance; the floor caps what it can buy at 300.
+			name:          "caps the tolerance bought by an implausibly fast cadence",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100000,
+			backendBlocks: 100301,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   25 * time.Millisecond,
+		},
+		{
+			// Regression anchor: the 2026-08-09 arb-b4 excursion peaked at 211 blocks, 53s
+			// of real lag, and must still read out-of-sync.
+			name:          "does not report synced during the measured 211-block arbitrum lag",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100000,
+			backendBlocks: 100211,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+		},
+		{
+			name:          "widens the ethereum tolerance to two blocks",
 			chainType:     bchain.ChainEthereumType,
 			bestHeight:    98,
 			backendBlocks: 100,
 			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   12 * time.Second,
+			want:          true,
+		},
+		{
+			// 30s/12s is 2.5, and the truncation has to round down, not up.
+			name:          "does not widen the ethereum tolerance to three blocks",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    97,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   12 * time.Second,
+		},
+		{
+			name:          "keeps the one-block tolerance on a ten-minute chain",
+			chainType:     bchain.ChainBitcoinType,
+			bestHeight:    99,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   600 * time.Second,
+			want:          true,
+		},
+		{
+			// The UTXO constraint. Also the guard against deriving the window from the
+			// computed threshold, which would be 12 block times here - two hours of lag.
+			name:          "does not widen the tolerance on a ten-minute chain",
+			chainType:     bchain.ChainBitcoinType,
+			bestHeight:    98,
+			backendBlocks: 100,
+			lastBlockTime: now.Add(-10 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   600 * time.Second,
+		},
+		{
+			// RefreshSyncMetrics compares against a backend height cached at the end of the
+			// previous resync iteration, so the index is routinely past it.
+			name:          "reports synced when the index is ahead of the cached backend tip",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 98,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+			want:          true,
+		},
+		{
+			// isFresh still gates the tolerated path.
+			name:          "does not rescue an index ahead of a stale cached tip",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 98,
+			lastBlockTime: now.Add(-45 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+		},
+		{
+			// Ahead of the tip is tolerated to the same bound as behind it.
+			name:          "reports synced ahead of the tip up to the tolerated window",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100120,
+			backendBlocks: 100000,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+			want:          true,
+		},
+		{
+			// Freshness cannot end the ahead direction - a fork-suspect disconnect and
+			// reconnect loop refreshes LastSync on every writeHeight - so an index far
+			// past the tip (rolled back, replaced or wrong-chain backend) must fall out
+			// of the rescue on the gap bound alone.
+			name:          "does not rescue an index far ahead of a fresh tip",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100121,
+			backendBlocks: 100000,
+			lastBlockTime: now.Add(-1 * time.Second),
+			startSync:     oldStart,
+			blockPeriod:   250 * time.Millisecond,
+		},
+		{
+			// Without the backendBlocks > 0 guard the clamp turns gap into 0 at cold start
+			// and rescues before any backend height was ever observed.
+			name:          "does not rescue before a backend height is known",
+			chainType:     bchain.ChainEthereumType,
+			bestHeight:    100,
+			backendBlocks: 0,
+			lastBlockTime: now.Add(-1 * time.Second),
 			startSync:     oldStart,
 			blockPeriod:   2 * time.Second,
 		},

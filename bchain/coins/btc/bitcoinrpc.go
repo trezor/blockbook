@@ -243,6 +243,13 @@ func (b *BitcoinRPC) Initialize() error {
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
 		}
+	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspaceprecise" {
+		glog.Info("Using MempoolSpacePreciseFee")
+		if b.alternativeFeeProvider, err = NewMempoolSpacePreciseFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {
+			glog.Error("MempoolSpacePreciseFee error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			b.alternativeFeeProvider = nil
+		}
 	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspaceblock" {
 		glog.Info("Using MempoolSpaceBlockFee")
 		if b.alternativeFeeProvider, err = NewMempoolSpaceBlockFee(b, b.ChainConfig.AlternativeEstimateFeeParams, b.metrics); err != nil {

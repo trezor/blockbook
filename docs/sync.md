@@ -171,7 +171,7 @@ When an override is applied, blockbook logs one `sync: missingBlockRetry overrid
 Related Prometheus counters for observing the budget at runtime:
 
 - `blockbook_index_block_not_found_retries` — every transient `ErrBlockNotFound` observed during sync.
-- `blockbook_index_sync_yields{reason="deadline"|"probe_failed"}` — wall-clock cap fired vs chain-state probe failed three times.
+- `blockbook_index_sync_yields{reason="deadline"|"probe_failed"|"fell_behind"}` — wall-clock cap fired, chain-state probe failed three times, or sequential sync fell too far behind the backend tip and yielded for parallel catch-up.
 - `blockbook_index_reorg_events{type="fork"|"resync"|"disconnect"}` — real reorg signals (not stall yields).
 
 For the [tip feed](#tip-feed-and-the-stall-watchdog) (EVM and Tron only):

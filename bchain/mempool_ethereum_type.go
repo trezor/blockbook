@@ -157,7 +157,9 @@ func (m *MempoolEthereumType) removeTransactionsMissingFromBackend(backendTxs ma
 	return removed
 }
 
-// AddTransactionToMempool adds transactions to mempool, returns true if tx added to mempool, false if not added (for example duplicate call)
+// AddTransactionToMempool adds transactions to mempool, returns true if tx added to mempool, false if not added (for example duplicate call).
+// An existing entry keeps its original time - the resync path re-adds every backend tx and the timeout
+// sweep depends on the first-seen stamp; use AddOrRefreshTransactionInMempool to age from the newest add.
 func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
 	m.mux.Lock()
 	_, exists := m.txEntries[txid]
@@ -178,6 +180,23 @@ func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
 		m.mux.Unlock()
 	}
 	return !exists
+}
+
+// AddOrRefreshTransactionInMempool is AddTransactionToMempool for a caller whose own store ages from
+// the newest submission (the alternative-provider cache): an existing entry is restamped in place, so
+// the timeout sweep cannot drop it while that store still serves the transaction as pending.
+func (m *MempoolEthereumType) AddOrRefreshTransactionInMempool(txid string) bool {
+	m.mux.Lock()
+	entry, exists := m.txEntries[txid]
+	if exists {
+		entry.time = uint32(time.Now().Unix())
+		m.txEntries[txid] = entry
+	}
+	m.mux.Unlock()
+	if exists {
+		return true
+	}
+	return m.AddTransactionToMempool(txid)
 }
 
 // RemoveTransactionFromMempool removes transaction from mempool

@@ -47,7 +47,13 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 		if tx != nil {
 			// number of confirmations is not stored in cache, they change all the time
 			_, bestheight, _, _ := c.is.GetSyncState()
-			tx.Confirmations = bestheight - h + 1
+			// Ethereum-type txs are cached at their chain height, which can be above the
+			// indexed height; report the mined minimum instead of underflowing.
+			if bestheight < h {
+				tx.Confirmations = 1
+			} else {
+				tx.Confirmations = bestheight - h + 1
+			}
 			c.metrics.TxCacheEfficiency.With(common.Labels{"status": "hit"}).Inc()
 			return tx, int(h), nil
 		}
