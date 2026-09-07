@@ -174,7 +174,7 @@ func TestGetEip1559FeesRespectsTTL(t *testing.T) {
 func TestGetEip1559FeesFailurePacingAndOnchainFallback(t *testing.T) {
 	var fetchCalls int32
 	provider := &alternativeFeeProvider{
-		ttl:               time.Second,
+		ttl:               time.Minute,
 		staleSyncDuration: 10 * time.Minute,
 		fetch: func() (*bchain.Eip1559Fees, error) {
 			atomic.AddInt32(&fetchCalls, 1)
@@ -195,6 +195,24 @@ func TestGetEip1559FeesFailurePacingAndOnchainFallback(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&fetchCalls); got != 1 {
 		t.Fatalf("fetch calls = %d, want 1 (failures must be paced, not retried per request)", got)
+	}
+
+	// failures are retried at most once per ttl, not once per the 5s floor — the
+	// one-request-per-periodSeconds cap must hold during an outage too
+	provider.mux.Lock()
+	provider.lastFailure = time.Now().Add(-10 * time.Second)
+	provider.mux.Unlock()
+	provider.GetEip1559Fees()
+	if got := atomic.LoadInt32(&fetchCalls); got != 1 {
+		t.Fatalf("fetch calls = %d, want 1 (retry before the ttl elapsed since the last failure)", got)
+	}
+
+	provider.mux.Lock()
+	provider.lastFailure = time.Now().Add(-2 * time.Minute)
+	provider.mux.Unlock()
+	provider.GetEip1559Fees()
+	if got := atomic.LoadInt32(&fetchCalls); got != 2 {
+		t.Fatalf("fetch calls = %d, want 2 (retry once the ttl elapsed since the last failure)", got)
 	}
 }
 

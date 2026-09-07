@@ -32,7 +32,9 @@ type feeProviderParams struct {
 // a few seconds; http.DefaultClient has no timeout.
 var feeHTTPClient = &http.Client{Timeout: 5 * time.Second}
 
-// feeFetchRetryDelay paces upstream retries after a failed fetch. Without it an
+// feeFetchRetryDelay is the floor for pacing upstream retries after a failed
+// fetch (the effective delay is max of this and the ttl, so the documented
+// one-request-per-periodSeconds cap holds during outages too). Without it an
 // outage would be retried at client-request rate — hammering a possibly throttled
 // provider and adding fetch latency to every request instead of one per delay.
 const feeFetchRetryDelay = 5 * time.Second
@@ -138,10 +140,14 @@ func (p *alternativeFeeProvider) cachedWithin(d time.Duration) *bchain.Eip1559Fe
 // singleflight group so at most one fetch is in flight. Errors are logged, not
 // returned — the read path falls back to stale/on-chain data.
 func (p *alternativeFeeProvider) refresh() {
+	retryDelay := p.freshDuration()
+	if retryDelay < feeFetchRetryDelay {
+		retryDelay = feeFetchRetryDelay
+	}
 	p.mux.Lock()
 	// a caller queued behind a just-completed flight must not refetch, and a
-	// failed fetch is not retried more often than feeFetchRetryDelay
-	if p.fetch == nil || time.Since(p.lastSync) < p.freshDuration() || time.Since(p.lastFailure) < feeFetchRetryDelay {
+	// failed fetch is retried at most once per ttl (with a feeFetchRetryDelay floor)
+	if p.fetch == nil || time.Since(p.lastSync) < p.freshDuration() || time.Since(p.lastFailure) < retryDelay {
 		p.mux.Unlock()
 		return
 	}
