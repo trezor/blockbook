@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -13,6 +14,7 @@ import (
 type mockTraceRPC struct {
 	method string
 	args   []interface{}
+	trace  []rpcTraceResult // canned debug_traceBlockByHash reply
 }
 
 func (m *mockTraceRPC) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -23,7 +25,7 @@ func (m *mockTraceRPC) CallContext(ctx context.Context, result interface{}, meth
 	m.method = method
 	m.args = append([]interface{}{}, args...)
 	if out, ok := result.(*[]rpcTraceResult); ok {
-		*out = []rpcTraceResult{}
+		*out = append([]rpcTraceResult{}, m.trace...)
 	}
 	return nil
 }
@@ -152,5 +154,56 @@ func TestProcessCallTraceIgnoresFakeCallcodeTransfers(t *testing.T) {
 			d.Transfers[i].Value.Cmp(&want[i].Value) != 0 || d.Transfers[i].Type != want[i].Type {
 			t.Errorf("transfer[%d] = %+v, want %+v", i, d.Transfers[i], want[i])
 		}
+	}
+}
+
+// Erigon reports a per-tx tracer failure (e.g. timeout) as an envelope carrying "error" instead of
+// "result" and keeps tracing the rest of the block (issue #1760).
+func TestGetInternalDataForBlockFailsOnPerTxTraceError(t *testing.T) {
+	txs := []bchain.RpcTransaction{
+		{Hash: "0x01", From: "0xaaaa", To: "0xbbbb"},
+		{Hash: "0x02", From: "0xcccc", To: "0xdddd"},
+	}
+	rpcClient := &mockTraceRPC{trace: []rpcTraceResult{
+		{Result: rpcCallTrace{Type: "CALL", From: "0xaaaa", To: "0xbbbb", Value: "0x1"}},
+		{Error: "execution timeout"},
+	}}
+	b := &EthereumRPC{RPC: rpcClient, ChainConfig: &Configuration{ProcessInternalTransactions: true}}
+	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() { bchain.ProcessInternalTransactions = false })
+
+	_, _, err := b.getInternalDataForBlock(context.Background(), "0xabc", 1, txs)
+	if err == nil {
+		t.Fatal("expected error for failed per-tx trace, got nil")
+	}
+	for _, want := range []string{"0x02", "execution timeout"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not mention %q", err, want)
+		}
+	}
+}
+
+// The Polygon state-sync tx is already exempt from the trace-length check; a failed trace of it must
+// not queue every block that contains one for healing.
+func TestGetInternalDataForBlockIgnoresBridgingTxTraceError(t *testing.T) {
+	const zero = "0x0000000000000000000000000000000000000000"
+	txs := []bchain.RpcTransaction{
+		{Hash: "0x01", From: "0xaaaa", To: "0xbbbb"},
+		{Hash: "0x02", From: zero, To: zero},
+	}
+	rpcClient := &mockTraceRPC{trace: []rpcTraceResult{
+		{Result: rpcCallTrace{Type: "CALL", From: "0xaaaa", To: "0xbbbb", Value: "0x1"}},
+		{Error: "state sync trace failed"},
+	}}
+	b := &EthereumRPC{RPC: rpcClient, ChainConfig: &Configuration{ProcessInternalTransactions: true}}
+	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() { bchain.ProcessInternalTransactions = false })
+
+	data, _, err := b.getInternalDataForBlock(context.Background(), "0xabc", 1, txs)
+	if err != nil {
+		t.Fatalf("getInternalDataForBlock() error = %v", err)
+	}
+	if len(data) != 2 || data[1].Error != "" || len(data[1].Transfers) != 0 {
+		t.Fatalf("bridging tx should decode to empty internal data, got %+v", data)
 	}
 }

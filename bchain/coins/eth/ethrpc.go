@@ -1593,6 +1593,13 @@ type rpcCallTrace struct {
 
 type rpcTraceResult struct {
 	Result rpcCallTrace `json:"result"`
+	// tracer failure for the whole tx (typically a timeout), distinct from the EVM revert in Result.Error
+	Error string `json:"error"`
+}
+
+// isBridgingTx identifies the Polygon state-sync tx, which bor traces separately and unreliably
+func isBridgingTx(tx *bchain.RpcTransaction) bool {
+	return tx.To == "0x0000000000000000000000000000000000000000" && tx.From == "0x0000000000000000000000000000000000000000"
 }
 
 func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *bchain.ContractInfo {
@@ -1682,8 +1689,7 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 				for i := range transactions {
 					tx := &transactions[i]
 					// bridging transactions in Polygon do not create trace and cause mismatch between the trace size and block size, it is necessary to adjust the trace size
-					// bridging transaction that from and to zero address
-					if tx.To == "0x0000000000000000000000000000000000000000" && tx.From == "0x0000000000000000000000000000000000000000" {
+					if isBridgingTx(tx) {
 						if i >= len(trace) {
 							trace = append(trace, rpcTraceResult{})
 						} else {
@@ -1702,6 +1708,12 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 			}
 		}
 		for i, result := range trace {
+			// a failed per-tx trace must not be committed as an empty one; the error queues the block for HealInternalData
+			if result.Error != "" && !isBridgingTx(&transactions[i]) {
+				e := fmt.Sprintf("trace of tx %s failed: %s", transactions[i].Hash, result.Error)
+				glog.Error("debug_traceBlockByHash block ", blockHash, ", error: ", e)
+				return data, contracts, errors.New(e)
+			}
 			r := &result.Result
 			d := &data[i]
 			if r.Type == "CREATE" || r.Type == "CREATE2" {
