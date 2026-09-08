@@ -142,6 +142,48 @@ Good examples of coin configuration are
                 }
             }
             ```
+        * `additional_params_dev` – Overrides merged over `additional_params` **only** when the package is generated
+           with `BB_BUILD_ENV=dev` (see [environment variables](/docs/env.md#build-time-variables)). This is how a dev
+           instance runs a different value than production for a setting that costs money per request — above all the
+           `periodSeconds` of a paid fee or fiat-rates provider. A `BB_BUILD_ENV=prod` build ignores the block entirely,
+           so `additional_params` is always the production truth and a value tuned for dev cannot reach production.
+
+           The merge is sparse, so an override retunes one field and inherits the rest — the provider `url` is never
+           duplicated and so cannot drift from the production value:
+
+           | `additional_params` value | `additional_params_dev` value | Result |
+           | --- | --- | --- |
+           | JSON object | JSON object | merged field by field, recursively |
+           | JSON object encoded in a string (the `*_params` settings) | JSON object, or a string encoding one | the base object is decoded, merged, and re-encoded **as a string**, so the setting keeps the form the runtime expects |
+           | anything else | anything | the override replaces the value outright |
+
+           A setting named in `additional_params_dev` must already be declared in `additional_params`, or package
+           generation fails — that catches a typo, and it keeps `additional_params` a complete inventory of every
+           setting with its production value. The check runs for a `prod` build too, even though the merge does not.
+           To turn a knob on only in dev, declare it with its production value in `additional_params` and override it.
+           Fields *inside* one setting's parameters may be added freely (for example a dev-only `staleSeconds`).
+
+           ```json
+           "additional_params": {
+               "alternative_estimate_fee": "infura",
+               "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/1/suggestedGasFees\", \"periodSeconds\": 10}",
+               "fiat_rates_params": "{\"coin\": \"ethereum\", \"periodSeconds\": 900}"
+           },
+           "additional_params_dev": {
+               "alternative_estimate_fee_params": {
+                   "periodSeconds": 300
+               },
+               "fiat_rates_params": {
+                   "periodSeconds": 3600
+               }
+           }
+           ```
+
+           Note that re-encoding normalizes whitespace and sorts the keys inside a string-encoded setting, so the dev
+           render of such a value is not textually similar to the production one. Every consumer unmarshals it, so only
+           the rendered text differs. Two settings must not be overridden: `block_filter_scripts` and
+           `block_golomb_filter_p` are read straight from `additional_params` by the OpenAPI e2e suite
+           (`tests/openapi/src/config.ts`), which knows nothing about the overlay.
 
 * `meta` – Common package metadata.
     * `package_maintainer` – Full name of package maintainer.
