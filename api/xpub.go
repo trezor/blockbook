@@ -602,6 +602,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		txs            []*Tx
 		txids          []string
 		pg             Paging
+		mempoolEntries bchain.MempoolTxidEntries
 		filtered       bool
 		uBalSat        big.Int
 		unconfirmedTxs int
@@ -639,7 +640,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	// process mempool, only if ToHeight is not specified
 	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
 		txmMap = make(map[string]*Tx)
-		mempoolEntries := make(bchain.MempoolTxidEntries, 0)
+		mempoolEntries = make(bchain.MempoolTxidEntries, 0)
 		for _, da := range data.addresses {
 			for i := range da {
 				ad := &da[i]
@@ -676,8 +677,8 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 						}
 						uBalSat.Add(&uBalSat, tx.getAddrVoutValue(ad.addrDesc))
 						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(ad.addrDesc))
-						// mempool txs are returned only on the first page, uniquely and filtered
-						if page == 0 && !foundTx && (txidFilter == nil || txidFilter(&txid, ad)) {
+						// mempool txs enter the paged sequence once, uniquely and filtered
+						if !foundTx && (txidFilter == nil || txidFilter(&txid, ad)) {
 							mempoolEntries = append(mempoolEntries, bchain.MempoolTxidEntry{Txid: txid.txid, Time: uint32(tx.Blocktime)})
 						}
 					}
@@ -686,13 +687,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		}
 		// sort the entries by time descending
 		sort.Sort(mempoolEntries)
-		for _, entry := range mempoolEntries {
-			if option == AccountDetailsTxidHistory {
-				txids = append(txids, entry.Txid)
-			} else if option >= AccountDetailsTxHistoryLight {
-				txs = append(txs, txmMap[entry.Txid])
-			}
-		}
 	}
 	if option >= AccountDetailsTxidHistory {
 		if txidFilter == nil {
@@ -724,17 +718,18 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			sort.Stable(txc)
 			txCount = len(txcMap)
 		}
-		totalResults := txCount
-		if filtered {
-			totalResults = -1
+		var from, to, mempoolFrom, mempoolTo int
+		pg, mempoolFrom, mempoolTo, from, to, page = computeAccountPaging(len(mempoolEntries), len(txc), page, txsOnPage)
+		// filtered txc is not the whole history, so an exact TotalPages cannot be computed
+		if filtered && len(txc) >= txsOnPage {
+			pg.TotalPages = -1
 		}
-		var from, to int
-		pg, from, to, page = computePaging(len(txc), page, txsOnPage)
-		if len(txc) >= txsOnPage {
-			if totalResults < 0 {
-				pg.TotalPages = -1
-			} else {
-				pg, _, _, _ = computePaging(totalResults, page, txsOnPage)
+		// mempool txs take the first slots of the paged sequence, before confirmed history
+		for _, entry := range mempoolEntries[mempoolFrom:mempoolTo] {
+			if option == AccountDetailsTxidHistory {
+				txids = append(txids, entry.Txid)
+			} else if option >= AccountDetailsTxHistoryLight {
+				txs = append(txs, txmMap[entry.Txid])
 			}
 		}
 		// get confirmed transactions
