@@ -255,6 +255,116 @@ func TestERC721SelfTransferConnectDisconnectRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDisconnectBlockRange_MultiHopTransferRestoresHoldings verifies that a token moving
+// A->B->C inside one disconnected block is rolled back to A only. B already has history
+// with the collection, so its contract entry survives the disconnect and would keep a
+// phantom token if the transfers were undone in forward order.
+func TestDisconnectBlockRange_MultiHopTransferRestoresHoldings(t *testing.T) {
+	parser := ethereumTestnetParser()
+	funder, a, b, c := dbtestdata.EthAddr7b, dbtestdata.EthAddr83, dbtestdata.EthAddrA3, dbtestdata.EthAddr5d
+	txHistoryB := "80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05211"
+	txFundA := "80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05212"
+	txHop1 := "80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05213"
+	txHop2 := "80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05214"
+
+	nft := func(from, to string, id int64) *bchain.TokenTransfer {
+		return &bchain.TokenTransfer{Standard: bchain.NonFungibleToken, Contract: dbtestdata.EthAddrContractCd, From: from, To: to, Value: *big.NewInt(id)}
+	}
+	multi := func(from, to string, amount int64) *bchain.TokenTransfer {
+		return &bchain.TokenTransfer{Standard: bchain.MultiToken, Contract: dbtestdata.EthAddrContract6f, From: from, To: to,
+			MultiTokenValues: []bchain.MultiTokenValue{{Id: *big.NewInt(1), Value: *big.NewInt(amount)}}}
+	}
+	type txSpec struct{ txid, from string }
+
+	tests := []struct {
+		name      string
+		contract  string
+		transfers map[string]bchain.TokenTransfers
+		reorgTxs  []txSpec
+	}{
+		{
+			name:     "ERC721 across two transactions",
+			contract: dbtestdata.EthAddrContractCd,
+			transfers: map[string]bchain.TokenTransfers{
+				txHistoryB: {nft(funder, b, 7)},
+				txFundA:    {nft(funder, a, 42)},
+				txHop1:     {nft(a, b, 42)},
+				txHop2:     {nft(b, c, 42)},
+			},
+			reorgTxs: []txSpec{{txHop1, a}, {txHop2, b}},
+		},
+		{
+			name:     "ERC721 within one transaction",
+			contract: dbtestdata.EthAddrContractCd,
+			transfers: map[string]bchain.TokenTransfers{
+				txHistoryB: {nft(funder, b, 7)},
+				txFundA:    {nft(funder, a, 42)},
+				txHop1:     {nft(a, b, 42), nft(b, c, 42)},
+			},
+			reorgTxs: []txSpec{{txHop1, a}},
+		},
+		{
+			name:     "ERC1155 across two transactions",
+			contract: dbtestdata.EthAddrContract6f,
+			transfers: map[string]bchain.TokenTransfers{
+				txHistoryB: {multi(funder, b, 3)},
+				txFundA:    {multi(funder, a, 5)},
+				txHop1:     {multi(a, b, 5)},
+				txHop2:     {multi(b, c, 5)},
+			},
+			reorgTxs: []txSpec{{txHop1, a}, {txHop2, b}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := setupRocksDB(t, &txTokenTransferTestParser{EthereumParser: parser, transfers: tt.transfers})
+			defer closeAndDestroyRocksDB(t, d)
+
+			makeBlock := func(height uint32, hash string, txs []txSpec) *bchain.Block {
+				block := &bchain.Block{BlockHeader: bchain.BlockHeader{Height: height, Hash: hash, Time: 1534858022}}
+				for _, tx := range txs {
+					block.Txs = append(block.Txs, bchain.Tx{
+						Txid: tx.txid,
+						Vin:  []bchain.Vin{{Addresses: []string{tx.from}}},
+						Vout: []bchain.Vout{{ScriptPubKey: bchain.ScriptPubKey{Addresses: []string{tt.contract}}}},
+					})
+				}
+				return block
+			}
+			snapshot := func(stage string) map[string][]byte {
+				packed := make(map[string][]byte)
+				for _, addr := range []string{a, b, c} {
+					acs, err := d.getUnpackedAddrDescContracts(addressToAddrDesc(addr, parser))
+					if err != nil {
+						t.Fatalf("%s: %v", stage, err)
+					}
+					if acs != nil {
+						packed[addr] = packUnpackedAddrContracts(acs)
+					}
+				}
+				return packed
+			}
+
+			if err := d.ConnectBlock(makeBlock(4321000, "0xc7b98df95acfd11c51ba25611a39e004fe56c8fdfc1582af99354fcd09c17b11", []txSpec{{txHistoryB, funder}, {txFundA, funder}})); err != nil {
+				t.Fatal(err)
+			}
+			before := snapshot("before reorged block")
+			if err := d.ConnectBlock(makeBlock(4321001, "0x2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee", tt.reorgTxs)); err != nil {
+				t.Fatal(err)
+			}
+			if err := d.DisconnectBlockRangeEthereumType(4321001, 4321001); err != nil {
+				t.Fatal(err)
+			}
+			after := snapshot("after disconnect")
+			for _, addr := range []string{a, b, c} {
+				if !bytes.Equal(before[addr], after[addr]) {
+					t.Errorf("address %s contracts after disconnect = %s, want %s", addr, hex.EncodeToString(after[addr]), hex.EncodeToString(before[addr]))
+				}
+			}
+		})
+	}
+}
+
 func Test_unpackedAddrContracts_findContractIndex_LazyMap(t *testing.T) {
 	acs := &unpackedAddrContracts{}
 	minContracts := 192
