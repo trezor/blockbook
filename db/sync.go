@@ -601,6 +601,25 @@ func isRetryableGetBlockError(err error) bool {
 	return cause != nil && isRetryable(cause)
 }
 
+// waitWorkersOrAbort returns once every worker has exited, or as soon as a worker reports
+// an abort after the hash queue closed. Without the abort branch a worker that exits on a
+// tail block without producing it parks the writer and its siblings forever (#1767).
+func waitWorkersOrAbort(wg *sync.WaitGroup, abortCh <-chan error, terminate func()) error {
+	workersDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(workersDone)
+	}()
+	select {
+	case <-workersDone:
+		return nil
+	case abortErr := <-abortCh:
+		terminate()
+		<-workersDone
+		return abortErr
+	}
+}
+
 // ParallelConnectBlocks uses parallel goroutines to get data from blockchain daemon but keeps Blockbook in
 func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, lower, higher uint32, syncWorkers uint32) error {
 	var err error
@@ -614,6 +633,8 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	hchClosed.Store(false)
 	writeBlockDone := make(chan struct{})
 	terminating := make(chan struct{})
+	// The connect loop and the worker wait can both decide to stop the round; guard the close.
+	terminate := sync.OnceFunc(func() { close(terminating) })
 	// abortCh is used by workers to signal a resync-worthy reorg or a terminal worker error.
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
@@ -651,9 +672,6 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 				break WriteBlockLoop
 			}
 		}
-		if err != nil {
-			glog.Error("sync: ParallelConnectBlocks.Close error ", err)
-		}
 		glog.Info("WriteBlock exiting...")
 	}
 	for i := 0; i < int(syncWorkers); i++ {
@@ -672,13 +690,13 @@ ConnectLoop:
 				glog.Error("sync: parallel connect aborted, worker error ", abortErr)
 			}
 			err = abortErr
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("connectBlocksParallel interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		default:
 			hash, err = w.chain.GetBlockHash(h)
@@ -696,7 +714,7 @@ ConnectLoop:
 				} else {
 					glog.Error("sync: parallel connect aborted while queueing block hash, worker error ", err)
 				}
-				close(terminating)
+				terminate()
 				break ConnectLoop
 			}
 			h++
@@ -706,7 +724,16 @@ ConnectLoop:
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
 	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	if abortErr := waitWorkersOrAbort(&wg, abortCh, terminate); abortErr != nil {
+		if stdErrors.Is(abortErr, errResync) {
+			glog.Warning("sync: parallel connect aborted at tail, restarting sync")
+		} else {
+			glog.Error("sync: parallel connect aborted at tail, worker error ", abortErr)
+		}
+		if err == nil {
+			err = abortErr
+		}
+	}
 	// Hardening: a worker can report a terminal tail error after ConnectLoop has
 	// already ended (for example once hchClosed=true). Drain once so we return
 	// that error instead of silently succeeding.
@@ -855,6 +882,8 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	hchClosed.Store(false)
 	writeBlockDone := make(chan struct{})
 	terminating := make(chan struct{})
+	// The connect loop and the worker wait can both decide to stop the round; guard the close.
+	terminate := sync.OnceFunc(func() { close(terminating) })
 	// abortCh is used by workers to signal a resync-worthy reorg or a terminal worker error.
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
@@ -912,13 +941,13 @@ ConnectLoop:
 				glog.Error("sync: bulk connect aborted, worker error ", abortErr)
 			}
 			err = abortErr
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("BulkConnectBlocks interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		default:
 			hash, err = w.chain.GetBlockHash(h)
@@ -936,7 +965,7 @@ ConnectLoop:
 				} else {
 					glog.Error("sync: bulk connect aborted while queueing block hash, worker error ", err)
 				}
-				close(terminating)
+				terminate()
 				break ConnectLoop
 			}
 			if h > 0 && h%1000 == 0 {
@@ -958,7 +987,16 @@ ConnectLoop:
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
 	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	if abortErr := waitWorkersOrAbort(&wg, abortCh, terminate); abortErr != nil {
+		if stdErrors.Is(abortErr, errResync) {
+			glog.Warning("sync: bulk connect aborted at tail, restarting sync")
+		} else {
+			glog.Error("sync: bulk connect aborted at tail, worker error ", abortErr)
+		}
+		if err == nil {
+			err = abortErr
+		}
+	}
 	// Hardening: capture a late worker error reported after the connect loop
 	// exits so the caller can retry instead of treating sync as successful.
 	select {
