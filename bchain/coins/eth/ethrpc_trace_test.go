@@ -207,3 +207,55 @@ func TestGetInternalDataForBlockIgnoresBridgingTxTraceError(t *testing.T) {
 		t.Fatalf("bridging tx should decode to empty internal data, got %+v", data)
 	}
 }
+
+func TestRpcTraceErrorUnmarshalAcceptsStringAndObject(t *testing.T) {
+	tests := []struct {
+		name, raw, want string
+	}{
+		{"geth string", `{"error":"execution timeout"}`, "execution timeout"},
+		{"erigon object", `{"error":{"code":-32000,"message":"execution timeout"}}`, "execution timeout"},
+		{"erigon object without message", `{"error":{"code":-32000}}`, "error code -32000"},
+		{"null", `{"error":null}`, ""},
+		{"absent", `{"result":{"type":"CALL"}}`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var r rpcTraceResult
+			if err := json.Unmarshal([]byte(tt.raw), &r); err != nil {
+				t.Fatalf("Unmarshal(%s) error = %v", tt.raw, err)
+			}
+			if string(r.Error) != tt.want {
+				t.Fatalf("Error = %q, want %q", r.Error, tt.want)
+			}
+		})
+	}
+}
+
+// Erigon's actual wire shape for a per-tx tracer failure, as written by rpc.HandleError.
+func TestGetInternalDataForBlockFailsOnErigonTraceErrorObject(t *testing.T) {
+	const raw = `[
+		{"txHash":"0x01","result":{"type":"CALL","from":"0xaaaa","to":"0xbbbb","value":"0x1"}},
+		{"txHash":"0x02","result":null,"error":{"code":-32000,"message":"execution timeout"}}
+	]`
+	rpcClient := &mockTraceRPC{}
+	if err := json.Unmarshal([]byte(raw), &rpcClient.trace); err != nil {
+		t.Fatalf("Unmarshal error = %v", err)
+	}
+	txs := []bchain.RpcTransaction{
+		{Hash: "0x01", From: "0xaaaa", To: "0xbbbb"},
+		{Hash: "0x02", From: "0xcccc", To: "0xdddd"},
+	}
+	b := &EthereumRPC{RPC: rpcClient, ChainConfig: &Configuration{ProcessInternalTransactions: true}}
+	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() { bchain.ProcessInternalTransactions = false })
+
+	_, _, err := b.getInternalDataForBlock(context.Background(), "0xabc", 1, txs)
+	if err == nil {
+		t.Fatal("expected error for failed per-tx trace, got nil")
+	}
+	for _, want := range []string{"0x02", "execution timeout"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not mention %q", err, want)
+		}
+	}
+}

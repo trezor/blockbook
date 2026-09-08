@@ -1594,7 +1594,30 @@ type rpcCallTrace struct {
 type rpcTraceResult struct {
 	Result rpcCallTrace `json:"result"`
 	// tracer failure for the whole tx (typically a timeout), distinct from the EVM revert in Result.Error
-	Error string `json:"error"`
+	Error rpcTraceError `json:"error"`
+}
+
+// rpcTraceError tolerates both envelope shapes: geth forks send a plain string, Erigon a {code,message} object
+type rpcTraceError string
+
+func (e *rpcTraceError) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*e = rpcTraceError(s)
+		return nil
+	}
+	var o struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(b, &o); err != nil {
+		return err
+	}
+	if o.Message == "" {
+		o.Message = fmt.Sprintf("error code %d", o.Code)
+	}
+	*e = rpcTraceError(o.Message)
+	return nil
 }
 
 // isBridgingTx identifies the Polygon state-sync tx, which bor traces separately and unreliably
