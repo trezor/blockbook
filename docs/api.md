@@ -15,14 +15,19 @@ For a local Blockbook public server, open the Swagger UI at the matching coin
 port, for example:
 
 - `http://localhost:9130/api-docs/` - Bitcoin
-- `http://localhost:9116/api-docs/` - Ethereum
+- `http://localhost:9136/api-docs/` - Ethereum
+- `http://localhost:9116/api-docs/` - Ethereum Archive
 
-The Swagger UI is served from local pinned assets, does not use the external
-Swagger validator, and has "Try it out" disabled so the docs page cannot submit
-requests such as transaction broadcasts. Use the OpenAPI file with Swagger UI,
-Swagger Editor, Redocly, or any OpenAPI client generator to browse REST
-endpoints, schemas, examples, and the documented WebSocket request/response
-envelope.
+The port of every coin is in [ports.md](/docs/ports.md).
+
+The Swagger UI loads its assets (`swagger-ui-dist` 5.32.6) from a CDN, pinned by
+version and subresource integrity hash, so the docs page needs outbound network
+access to render - the OpenAPI file itself is always served by Blockbook. The UI
+does not use the external Swagger validator and has "Try it out" disabled so the
+docs page cannot submit requests such as transaction broadcasts. Use the OpenAPI
+file with Swagger UI, Swagger Editor, Redocly, or any OpenAPI client generator
+to browse REST endpoints, schemas, examples, and the documented WebSocket
+request/response envelope.
 
 For local validation and generated TypeScript smoke tests, use the OpenAPI test
 harness:
@@ -30,6 +35,11 @@ harness:
 ```sh
 contrib/tests/run-openapi-tests.sh
 ```
+
+The specification describes the generic API. Tron diverges from it in ways the
+specification does not capture - most visibly, API V2 returns `txid`,
+`blockHash` and similar identifiers without the `0x` prefix. See
+[api-tron.md](/docs/api-tron.md) before integrating against a Tron Blockbook.
 
 The legacy API V1 is kept only for Bitcoin-type compatibility and is not being
 extended. New integrations should use API V2.

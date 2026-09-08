@@ -15,11 +15,11 @@
 
 Officially supported platform is **Debian Linux** and **AMD64** architecture.
 
-Memory and disk requirements for initial synchronization of **Bitcoin mainnet** are around 32 GB RAM and over 180 GB of disk space. After initial synchronization, fully synchronized instance uses about 10 GB RAM.
+Memory and disk requirements for initial synchronization of **Bitcoin mainnet** are around 32 GB RAM and over 1 TB of disk space. After initial synchronization, fully synchronized instance uses about 10 GB RAM.
 Other coins should have lower requirements, depending on the size of their block chain. Note that fast SSD disks are highly
 recommended.
 
-User installation guide is [here](<https://wiki.trezor.io/User_manual:Running_a_local_instance_of_Trezor_Wallet_backend_(Blockbook)>).
+User guide is [here](https://trezor.io/learn/advanced/what-is-blockbook).
 
 Developer build guide is [here](/docs/build.md).
 
@@ -27,9 +27,9 @@ Contribution guide is [here](CONTRIBUTING.md).
 
 ## Implemented coins
 
-Blockbook currently supports over 30 coins. The Trezor team implemented
+Blockbook currently supports over 50 coins. The Trezor team implemented
 
--   Bitcoin, Bitcoin Cash, Zcash, Dash, Litecoin, Bitcoin Gold, Ethereum, Ethereum Classic, Dogecoin, Namecoin, Vertcoin, DigiByte, Liquid
+-   Bitcoin, Bitcoin Cash, Zcash, Dash, Litecoin, Bitcoin Gold, Ethereum, Ethereum Classic, Dogecoin, Namecoin, Vertcoin, DigiByte, Liquid, Tron, Robinhood Chain, HyperEVM
 
 the rest of coins were implemented by the community.
 
