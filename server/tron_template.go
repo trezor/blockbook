@@ -23,6 +23,7 @@ type tronTxExtraTemplateData struct {
 	StakeAmountValue       *api.Amount `json:"-"`
 	UnstakeAmountValue     *api.Amount `json:"-"`
 	ClaimedVoteRewardValue *api.Amount `json:"-"`
+	WithdrawnUnfreezeValue *api.Amount `json:"-"`
 }
 
 type tronAccountExtraTemplateData struct {
@@ -64,6 +65,7 @@ func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
 		StakeAmountValue:       parseTronSunAmount(extra.StakeAmount),
 		UnstakeAmountValue:     parseTronSunAmount(extra.UnstakeAmount),
 		ClaimedVoteRewardValue: parseTronSunAmount(extra.ClaimedVoteReward),
+		WithdrawnUnfreezeValue: parseTronSunAmount(extra.WithdrawnUnfreeze),
 	}
 	return rv
 }

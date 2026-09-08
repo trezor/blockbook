@@ -141,6 +141,61 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 		require.Equal(t, "88000000", extra.UnstakeAmount)
 	})
 
+	t.Run("stake 2.0 unfreeze also reports the expired unstake it swept back", func(t *testing.T) {
+		contract := tronTxContract{Type: "UnfreezeBalanceV2Contract"}
+		contract.Parameter.Value.UnfreezeBalance = int64Ptr(400000000)
+		txByID := &tronGetTransactionByIDResponse{}
+		txByID.RawData.Contract = []tronTxContract{contract}
+
+		txInfo := &tronGetTransactionInfoByIDResponse{
+			WithdrawExpireAmount: int64Ptr(600000000),
+		}
+
+		extra := tronBuildExtraData(txByID, txInfo)
+		require.Equal(t, "unfreeze", extra.Operation)
+		require.Equal(t, "400000000", extra.UnstakeAmount)
+		require.Equal(t, "600000000", extra.WithdrawnUnfreeze)
+	})
+
+	t.Run("cancel all unfreeze reports its swept expired unstake", func(t *testing.T) {
+		contract := tronTxContract{Type: "CancelAllUnfreezeV2Contract"}
+		txByID := &tronGetTransactionByIDResponse{}
+		txByID.RawData.Contract = []tronTxContract{contract}
+
+		txInfo := &tronGetTransactionInfoByIDResponse{
+			WithdrawExpireAmount: int64Ptr(12345),
+		}
+
+		extra := tronBuildExtraData(txByID, txInfo)
+		require.Equal(t, "cancelUnfreeze", extra.Operation)
+		require.Equal(t, "12345", extra.WithdrawnUnfreeze)
+	})
+
+	t.Run("withdraw reports the swept amount only once", func(t *testing.T) {
+		contract := tronTxContract{Type: "WithdrawExpireUnfreezeContract"}
+		txByID := &tronGetTransactionByIDResponse{}
+		txByID.RawData.Contract = []tronTxContract{contract}
+
+		txInfo := &tronGetTransactionInfoByIDResponse{
+			WithdrawExpireAmount: int64Ptr(88000000),
+		}
+
+		extra := tronBuildExtraData(txByID, txInfo)
+		require.Equal(t, "withdraw", extra.Operation)
+		require.Equal(t, "88000000", extra.WithdrawnUnfreeze)
+		require.Empty(t, extra.UnstakeAmount)
+	})
+
+	t.Run("plain transfer carries no withdrawn unfreeze", func(t *testing.T) {
+		contract := tronTxContract{Type: "TransferContract"}
+		txByID := &tronGetTransactionByIDResponse{}
+		txByID.RawData.Contract = []tronTxContract{contract}
+		txInfo := &tronGetTransactionInfoByIDResponse{}
+
+		extra := tronBuildExtraData(txByID, txInfo)
+		require.Empty(t, extra.WithdrawnUnfreeze)
+	})
+
 	t.Run("delegate amount and receiver", func(t *testing.T) {
 		contract := tronTxContract{Type: "DelegateResourceContract"}
 		contract.Parameter.Value.Balance = int64Ptr(42000000)
