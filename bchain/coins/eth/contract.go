@@ -14,7 +14,6 @@ import (
 )
 
 const erc20TransferMethodSignature = "0xa9059cbb"                  // transfer(address,uint256)
-const erc721TransferFromMethodSignature = "0x23b872dd"             // transferFrom(address,address,uint256)
 const erc721SafeTransferFromMethodSignature = "0x42842e0e"         // safeTransferFrom(address,address,uint256)
 const erc721SafeTransferFromWithDataMethodSignature = "0xb88d4fde" // safeTransferFrom(address,address,uint256,bytes)
 const erc721TokenURIMethodSignature = "0xc87b56dd"                 // tokenURI(uint256)
@@ -316,8 +315,9 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			Value:    t,
 		})
 	} else if len(tx.Payload) >= 10+192 &&
-		(strings.HasPrefix(tx.Payload, erc721TransferFromMethodSignature) ||
-			strings.HasPrefix(tx.Payload, erc721SafeTransferFromMethodSignature) ||
+		// transferFrom(address,address,uint256) 0x23b872dd is deliberately absent: ERC-20 shares the
+		// selector and is the common case, so without a receipt the standard cannot be told apart
+		(strings.HasPrefix(tx.Payload, erc721SafeTransferFromMethodSignature) ||
 			strings.HasPrefix(tx.Payload, erc721SafeTransferFromWithDataMethodSignature)) {
 		from, err := addressFromPaddedHex(tx.Payload[10 : 10+64])
 		if err != nil {
