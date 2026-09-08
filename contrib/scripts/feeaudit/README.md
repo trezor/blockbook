@@ -43,6 +43,32 @@ KEY=~/.config/1inch.key contrib/scripts/feeaudit/run-long.sh
 contrib/scripts/feeaudit/dashboard/build-dashboard.sh ~/feeaudit/<timestamp> out.html
 ```
 
+### Multi-day capture
+
+The driver is sized by segment count, so five days is 120 hourly segments. Run it detached
+from the terminal and, on a laptop, hold off sleep; the websockets die the moment the
+machine dozes. A server under `tmux` or `nohup` is the better host.
+
+```sh
+# macOS laptop
+SEGMENTS=120 OUT=~/feeaudit/5d KEY=~/.config/1inch.key \
+  nohup caffeinate -is contrib/scripts/feeaudit/run-long.sh > ~/feeaudit/5d.log 2>&1 &
+
+# Linux server
+SEGMENTS=120 OUT=~/feeaudit/5d KEY=~/.config/1inch.key \
+  nohup contrib/scripts/feeaudit/run-long.sh > ~/feeaudit/5d.log 2>&1 &
+```
+
+Follow progress with `tail -f ~/feeaudit/5d.log`; each finished segment prints its sample
+and block counts. Interrupting the driver once (`kill -INT <pid>`) finishes the segment in
+flight and writes it before exiting. Expect about 4 MB of TSV per hour, so roughly 500 MB
+for five days. A dropped websocket is redialled with backoff inside the segment, so a
+Cloudflare hiccup costs seconds, not the rest of the hour.
+
+The dashboard extractor loads every row into memory. Five days is about a million sample
+rows and as many blocks, which needs a few GB of RAM but no code change; the series are
+bucketed to 700 points regardless of length.
+
 Before trusting a run on a new chain, check the offline fee-history reconstruction against
 a real node once (verified wei-for-wei on coreth and op-reth):
 

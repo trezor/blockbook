@@ -693,6 +693,39 @@ var dialer = websocket.Dialer{
 // live opens one websocket per chain, takes a quote on every new block, and
 // fetches the blocks that follow so each quote can be scored against them.
 func (c *collector) live(ctx context.Context, depth int, minQuote time.Duration, gap time.Duration) {
+	go c.drainWanted(ctx, gap)
+
+	// Cloudflare drops long-lived websockets now and then (code 1006). A dropped
+	// session must not silence the chain for the rest of the window, so redial with
+	// a backoff that resets once a session has held for a while.
+	backoff := time.Second
+	for ctx.Err() == nil {
+		start := time.Now()
+		c.session(ctx, depth, minQuote)
+		if ctx.Err() != nil {
+			return
+		}
+		if time.Since(start) > time.Minute {
+			backoff = time.Second
+		} else if backoff < 30*time.Second {
+			backoff *= 2
+		}
+		c.note("reconnecting in %s", backoff)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+	}
+}
+
+// session runs one websocket connection until it fails or ctx ends.
+func (c *collector) session(parent context.Context, depth int, minQuote time.Duration) {
+	// Per-session context so the ping and close goroutines die with the connection
+	// instead of piling up across redials.
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+
 	wsURL := (&url.URL{Scheme: "wss", Host: host(c.chain), Path: "/websocket"}).String()
 	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
@@ -736,8 +769,6 @@ func (c *collector) live(ctx context.Context, depth int, minQuote time.Duration,
 		<-ctx.Done()
 		conn.Close()
 	}()
-
-	go c.drainWanted(ctx, gap)
 
 	var pendingHeight int
 	var pendingBase float64
