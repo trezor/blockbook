@@ -1,0 +1,144 @@
+<title>EVM Gas Price Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  color-scheme: light;
+  --ground:#f6f7f6; --panel:#ffffff; --panel-2:#eef1ed;
+  --ink:#10130f; --ink-2:#5a615a; --ink-3:#858c84;
+  --rule:#e2e5e1; --rule-strong:#cdd2cb; --band:#f0e4d8;
+  --accent:#0f6f66;
+  --s-served:#2a78d6; --s-oneinch:#eb6834; --s-onchain:#1baf7a; --s-onchainnew:#eda100;
+  --s-real:#5a615a;
+  --ok:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --ground:#121513; --panel:#1a1e1c; --panel-2:#232825;
+    --ink:#eef1ec; --ink-2:#a8b0a7; --ink-3:#7d857c;
+    --rule:#2b302d; --rule-strong:#3c433e; --band:#33281f;
+    --accent:#3fb3a4;
+    --s-served:#3987e5; --s-oneinch:#d95926; --s-onchain:#199e70; --s-onchainnew:#c98500;
+    --s-real:#a8b0a7;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --ground:#121513; --panel:#1a1e1c; --panel-2:#232825;
+  --ink:#eef1ec; --ink-2:#a8b0a7; --ink-3:#7d857c;
+  --rule:#2b302d; --rule-strong:#3c433e; --band:#33281f;
+  --accent:#3fb3a4;
+  --s-served:#3987e5; --s-oneinch:#d95926; --s-onchain:#199e70; --s-onchainnew:#c98500;
+  --s-real:#a8b0a7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.45;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0;text-wrap:balance}
+
+/* ---- masthead ---- */
+header.top{padding:34px 0 18px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
+h1{font-size:clamp(26px,3.6vw,36px);font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.lede{font-size:15.5px;color:var(--ink-2);max-width:74ch;margin-top:12px}
+.meta{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:14px;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:500}
+
+/* ---- sticky controls ---- */
+.controls{position:sticky;top:0;z-index:20;background:var(--ground);
+  border-bottom:1px solid var(--rule);padding:12px 0 12px;margin-bottom:20px}
+.ctlrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.ctlgrp{display:flex;align-items:center;gap:9px}
+.ctlgrp>.lab{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:5px 11px;border-radius:3px;
+  border:1px solid var(--rule-strong);background:var(--panel);color:var(--ink-2);cursor:pointer}
+.chip:hover{background:var(--panel-2);color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--rule-strong);border-radius:3px;overflow:hidden}
+.seg .chip{border:0;border-right:1px solid var(--rule-strong);border-radius:0}
+.seg .chip:last-child{border-right:0}
+
+/* ---- kpi strip ---- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:8px;margin-bottom:20px}
+.kpi{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:12px 13px;
+  position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--kc,var(--rule-strong))}
+.kpi .k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.04em;
+  color:var(--ink-2);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.kpi .k i{width:8px;height:8px;border-radius:2px;flex:none;background:var(--kc)}
+.kpi .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500;letter-spacing:-.02em;
+  line-height:1;font-variant-numeric:tabular-nums}
+.kpi .s{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-3);margin-top:6px}
+
+/* ---- charts ---- */
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px;
+  padding:16px 16px 10px;margin-bottom:14px}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap}
+.panel h3{font-size:14.5px;font-weight:600}
+.panel .cap{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-3);margin-top:4px}
+.chartbox{overflow-x:auto;margin-top:10px}
+svg{display:block}
+svg text{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.grid line{stroke:var(--rule);stroke-width:1}
+.axis text{fill:var(--ink-3);font-size:10px}
+.axttl{fill:var(--ink-3);font-size:10px}
+.rowlab{fill:var(--ink);font-size:12px}
+.rowval{font-size:11px;font-variant-numeric:tabular-nums}
+
+.legend{display:flex;flex-wrap:wrap;gap:7px 18px;margin-top:12px;
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.swatch{width:11px;height:11px;border-radius:2px;flex:none}
+.swatch.line{height:0;width:15px;border-radius:0;border-top:2px dashed var(--s-real)}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+
+/* ---- table ---- */
+.tablebox{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-family:"IBM Plex Mono",monospace;font-size:12px;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+th{text-align:right;padding:9px 12px;font-weight:600;color:var(--ink-2);font-size:10px;
+  letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--rule-strong)}
+th:first-child,td:first-child{text-align:left}
+td{padding:8px 12px;border-bottom:1px solid var(--rule)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+/* Numeric columns are right-aligned in the header but td carried no alignment, so the
+   headings sat over the wrong edge of their own column. Align the data to match. */
+#tbl td{text-align:right}
+#tbl td:first-child{text-align:left}
+/* speed table: the target sits under the number it was measured against */
+#speedTbl td .sub{display:block;margin-top:2px;font-size:10px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums}
+#speedTbl td.na{color:var(--ink-3)}
+#speedTbl td.grp{font-weight:600;color:var(--ink)}
+#speedTbl tbody tr.sel td{background:var(--panel-2)}
+#speedTbl tbody tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+/* Every column is left-aligned here, header and cell alike. The global th rule aligns
+   right, but these cells stack a percentage over a longer target label, so a right edge
+   would leave both lines ragged - and a header aligned opposite its column reads as a
+   layout bug. */
+#speedTbl th,#speedTbl td{text-align:left}
+.dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:7px;vertical-align:-1px}
+
+#tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .08s;z-index:60;
+  background:var(--ink);color:var(--ground);padding:9px 11px;border-radius:3px;
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;line-height:1.55;
+  box-shadow:0 6px 24px rgba(0,0,0,.24);max-width:300px}
+#tip .r{display:flex;justify-content:space-between;gap:14px}
+#tip i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
+
+footer{margin-top:34px;padding-top:20px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-3);line-height:1.7;max-width:88ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
