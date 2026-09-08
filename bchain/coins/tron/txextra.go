@@ -47,6 +47,8 @@ func tronOperationFromContractType(contractType string) string {
 		return "unfreeze"
 	case "WithdrawExpireUnfreezeContract":
 		return "withdraw"
+	case "CancelAllUnfreezeV2Contract":
+		return "cancelUnfreeze"
 	case "WithdrawBalanceContract":
 		return "voteRewardAmount"
 	case "DelegateResourceContract":
@@ -117,8 +119,6 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
 		case "UnfreezeBalanceV2Contract":
 			extra.UnstakeAmount = tronInt64PtrToString(v.UnfreezeBalance)
-		case "WithdrawExpireUnfreezeContract":
-			extra.UnstakeAmount = tronInt64PtrToString(txInfo.WithdrawExpireAmount)
 		case "WithdrawBalanceContract":
 			extra.ClaimedVoteReward = tronInt64PtrToString(txInfo.WithdrawAmount)
 		case "DelegateResourceContract", "UnDelegateResourceContract":
@@ -126,6 +126,10 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			extra.DelegateTo = ToTronAddressFromAddress(v.ReceiverAddress)
 		}
 	}
+
+	// Not tied to one contract type: java-tron sweeps matured unstake records into the
+	// spendable balance on any Stake 2.0 unfreeze or cancel, not just on a withdraw.
+	extra.WithdrawnUnfreeze = tronInt64PtrToString(txInfo.WithdrawExpireAmount)
 
 	extra.AssetIssueID = strings.TrimSpace(txInfo.AssetIssueID)
 	extra.TotalFee = tronInt64PtrToString(txInfo.Fee)
@@ -143,6 +147,12 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 	}
 
 	return extra
+}
+
+// tronReceiptResultSuccess reports whether receipt.result marks a successful
+// execution - empty is the non-VM shape, java-tron sets SUCCESS only for VM txs
+func tronReceiptResultSuccess(result string) bool {
+	return result == "" || result == "SUCCESS"
 }
 
 func tronBuildRpcReceipt(txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
