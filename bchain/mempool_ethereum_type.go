@@ -91,7 +91,10 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 	}
 	entry := txEntry{addrIndexes: addrIndexes, time: txTime}
 	if csd, ok := tx.CoinSpecificData.(EthereumSpecificData); ok && csd.Tx != nil && len(mtx.Vin) > 0 {
-		if nonce, err := strconv.ParseUint(strings.TrimPrefix(csd.Tx.AccountNonce, "0x"), 16, 64); err == nil {
+		nonce, err := strconv.ParseUint(strings.TrimPrefix(csd.Tx.AccountNonce, "0x"), 16, 64)
+		if err != nil {
+			glog.Warning("cannot parse nonce ", csd.Tx.AccountNonce, " of tx ", txid, ": ", err)
+		} else {
 			entry.from = string(mtx.Vin[0].AddrDesc)
 			entry.nonce = nonce
 		}

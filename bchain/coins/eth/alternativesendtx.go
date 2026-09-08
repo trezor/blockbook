@@ -1485,11 +1485,13 @@ func (p *AlternativeSendTxProvider) removeMempoolTx(txid string) bool {
 }
 
 // RemoveTransaction removes a transaction from the alternative mempool cache. It is the entry point for
-// removals carrying no reconcile decision of their own - block sync indexing a mined transaction, the
-// read path finding one mined or unknown - and meters them as sync_removed, which nothing else would.
-// In practice block sync is the sole source: the read path serves cached entries without asking the
-// node, so its mined/unknown branches run only on a cache miss, where there is nothing to remove. Reached again as removeMempoolTx's
-// delegate, where the entry is already gone, so nothing is metered twice.
+// removals carrying no reconcile decision of their own - block sync indexing a mined transaction or
+// retiring the sender's entries at or below its nonce, the read path finding one mined - and meters
+// them as sync_removed, which nothing else would. A null answer on the read path never removes
+// anything (#1709). In practice block sync is the sole source: the read path serves cached entries
+// without asking the node, so its mined branch runs only on a cache miss, where there is nothing to
+// remove. Reached again as removeMempoolTx's delegate, where the entry is already gone, so nothing is
+// metered twice.
 func (p *AlternativeSendTxProvider) RemoveTransaction(txid string) bool {
 	return p.removeTransaction(txid, "sync_removed")
 }
