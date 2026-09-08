@@ -36,8 +36,8 @@ serialisation whitespace.
 go run contrib/scripts/feeaudit/main.go -chains eth,pol -duration 30m \
     -oneinch-key-file ~/.config/1inch.key -out /path/to/capture
 
-# long run: 12 x 59 min over all chains, TSVs under ~/feeaudit/<timestamp>/seg-NN/
-KEY=~/.config/1inch.key contrib/scripts/feeaudit/run-long.sh
+# long run: N hours, one segment per hour, TSVs under ~/feeaudit/<timestamp>/seg-NN/
+KEY=~/.config/1inch.key contrib/scripts/feeaudit/run-long.sh 12
 
 # then
 contrib/scripts/feeaudit/dashboard/build-dashboard.sh ~/feeaudit/<timestamp> out.html
@@ -45,18 +45,18 @@ contrib/scripts/feeaudit/dashboard/build-dashboard.sh ~/feeaudit/<timestamp> out
 
 ### Multi-day capture
 
-The driver is sized by segment count, so five days is 120 hourly segments. Run it detached
+The driver takes the number of hours to run as its only argument. Run it detached
 from the terminal and, on a laptop, hold off sleep; the websockets die the moment the
 machine dozes. A server under `tmux` or `nohup` is the better host.
 
 ```sh
 # macOS laptop
-SEGMENTS=120 OUT=~/feeaudit/5d KEY=~/.config/1inch.key \
-  nohup caffeinate -is contrib/scripts/feeaudit/run-long.sh > ~/feeaudit/5d.log 2>&1 &
+OUT=~/feeaudit/5d KEY=~/.config/1inch.key \
+  nohup caffeinate -is contrib/scripts/feeaudit/run-long.sh 120 > ~/feeaudit/5d.log 2>&1 &
 
 # Linux server
-SEGMENTS=120 OUT=~/feeaudit/5d KEY=~/.config/1inch.key \
-  nohup contrib/scripts/feeaudit/run-long.sh > ~/feeaudit/5d.log 2>&1 &
+OUT=~/feeaudit/5d KEY=~/.config/1inch.key \
+  nohup contrib/scripts/feeaudit/run-long.sh 120 > ~/feeaudit/5d.log 2>&1 &
 ```
 
 Follow progress with `tail -f ~/feeaudit/5d.log`; each finished segment prints its sample

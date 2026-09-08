@@ -3,9 +3,22 @@
 # each writing its own TSV, because the harness holds every block in memory and
 # only writes on exit: one 12h process would grow unbounded and lose everything
 # if it died, while twelve hourly ones lose at most the segment in flight.
+#
+#   run-long.sh [hours]        default 12; five days is 120
+#
+# Environment: OUT (output root), CHAINS, MIN_QUOTE, KEY (1inch key file),
+# SEG_DUR (segment length, default 59m; only change together with SEGMENTS).
 set -euo pipefail
 
-SEGMENTS=${SEGMENTS:-12}
+usage() { echo "usage: $0 [hours]" >&2; exit 2; }
+case "${1:-}" in
+    -h|--help) usage ;;
+    "") ;;
+    *[!0-9]*) echo "hours must be a whole number, got '$1'" >&2; usage ;;
+esac
+
+# One segment per hour; SEGMENTS is kept for callers that already set it.
+SEGMENTS=${1:-${SEGMENTS:-12}}
 SEG_DUR=${SEG_DUR:-59m}
 CHAINS=${CHAINS:-eth,bsc,pol,arb,op,base,avax,hype,rhc}
 MIN_QUOTE=${MIN_QUOTE:-15s}
@@ -28,7 +41,7 @@ trap 'echo "stopping after this segment"; [ -n "$child" ] && kill -INT "$child" 
 STOP=0
 
 echo "writing to $root"
-echo "$SEGMENTS segments x $SEG_DUR, chains=$CHAINS, min-quote=$MIN_QUOTE"
+echo "$SEGMENTS segments x $SEG_DUR (~$SEGMENTS h), chains=$CHAINS, min-quote=$MIN_QUOTE"
 
 for i in $(seq -w 1 "$SEGMENTS"); do
     seg="$root/seg-$i"
