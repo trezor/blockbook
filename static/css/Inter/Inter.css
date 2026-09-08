@@ -1,0 +1,15 @@
+/*
+ * Inter v4.1 by Rasmus Andersson - https://rsms.me/inter/
+ * Licensed under the SIL Open Font License, Version 1.1 (see OFL.txt).
+ *
+ * Single variable font file covering the full 100-900 weight range.
+ * Only the upright faces are bundled; nothing in the explorer uses italics.
+ */
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('./InterVariable.woff2') format('woff2');
+}

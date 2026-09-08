@@ -1,10 +1,10 @@
-@import "TTHoves/TTHoves.css";
+@import "Inter/Inter.css";
 
 * {
     margin: 0;
     padding: 0;
     outline: none;
-    font-family: "TT Hoves", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-family: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 html,
