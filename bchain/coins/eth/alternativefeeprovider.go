@@ -176,15 +176,19 @@ func (p *alternativeFeeProvider) GetEip1559Fees() (*bchain.Eip1559Fees, error) {
 		p.observeCache("fresh")
 		return fees, nil
 	}
-	_, _, shared := p.sf.Do("fees", func() (interface{}, error) {
+	// singleflight's shared flag is true for the leader too whenever anyone
+	// waited on it, so mark the leader from inside the closure instead
+	fetched := false
+	p.sf.Do("fees", func() (interface{}, error) {
+		fetched = true
 		p.refresh()
 		return nil, nil
 	})
 	if fees := p.cachedWithin(p.freshDuration()); fees != nil {
-		if shared {
-			p.observeCache("coalesced")
-		} else {
+		if fetched {
 			p.observeCache("fetched")
+		} else {
+			p.observeCache("coalesced")
 		}
 		return fees, nil
 	}

@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // TestInitAlternativeFeeProviderFailFast verifies that when a coin config
@@ -111,6 +113,9 @@ func TestGetEip1559FeesCoalescesConcurrentRequests(t *testing.T) {
 	})
 
 	provider := newTestInfuraProvider(time.Minute)
+	// unregistered collector: GetMetrics registers globally and would collide across tests
+	cache := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_fee_cache"}, []string{"provider", "result"})
+	provider.metrics = &common.Metrics{AlternativeFeeProviderCache: cache}
 
 	const n = 20
 	var wg sync.WaitGroup
@@ -137,6 +142,14 @@ func TestGetEip1559FeesCoalescesConcurrentRequests(t *testing.T) {
 		if fees.Medium.MaxPriorityFeePerGas.Cmp(big.NewInt(2e9)) != 0 {
 			t.Fatalf("request %d got medium priority fee %s, want 2 gwei", i, fees.Medium.MaxPriorityFeePerGas)
 		}
+	}
+	// exactly the leader is labelled fetched; singleflight's shared flag would
+	// have labelled it coalesced too, hiding the upstream fetch from the metric
+	if m := gatherMetric(t, cache, map[string]string{"result": "fetched"}); m == nil || m.GetCounter().GetValue() != 1 {
+		t.Fatalf("cache result fetched = %v, want 1", m.GetCounter().GetValue())
+	}
+	if m := gatherMetric(t, cache, map[string]string{"result": "coalesced"}); m == nil || m.GetCounter().GetValue() != n-1 {
+		t.Fatalf("cache result coalesced = %v, want %d", m.GetCounter().GetValue(), n-1)
 	}
 }
 
