@@ -1074,6 +1074,11 @@ func (b *BitcoinRPC) EstimateFee(blocks int) (big.Int, error) {
 		return b.EstimateSmartFee(blocks, true)
 	}
 
+	// Core-0.14-lineage estimatefee never estimates 1 block (always -1); the node's own
+	// estimatesmartfee bumps the target to 2, so mirror that here.
+	if blocks == 1 {
+		blocks = 2
+	}
 	glog.V(1).Info("rpc: estimatefee ", blocks)
 
 	res := ResEstimateFee{}
@@ -1090,6 +1095,10 @@ func (b *BitcoinRPC) EstimateFee(blocks int) (big.Int, error) {
 	r, err = b.Parser.AmountToBigInt(res.Result)
 	if err != nil {
 		return r, err
+	}
+	// the node signals "not enough data" with -1; never hand a negative fee to clients
+	if r.Sign() < 0 {
+		return r, errors.Errorf("estimatefee: no fee estimate available for %d blocks", blocks)
 	}
 	return r, nil
 }
