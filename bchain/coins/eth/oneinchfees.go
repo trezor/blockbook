@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
@@ -70,25 +69,21 @@ func NewOneInchFeesProvider(chain bchain.BlockChain, params string, metrics *com
 		return nil, errors.New("NewOneInchFeesProvider: missing ONE_INCH_API_KEY env variable.")
 	}
 	p.chain = chain
+	// Fees are fetched on demand: cached for periodSeconds, kept through
+	// throttling bursts for the configured stale window (defaults to 10 minutes).
+	p.ttl = time.Duration(p.params.PeriodSeconds) * time.Second
 	p.staleSyncDuration = feeStaleDuration(p.params.PeriodSeconds, p.params.StaleSeconds)
-	go p.FeeDownloader()
+	p.fetch = p.fetchFees
+	go p.warmUp()
 	return p, nil
 }
 
-func (p *oneInchFeeProvider) FeeDownloader() {
-	period := time.Duration(p.params.PeriodSeconds) * time.Second
-	timer := time.NewTimer(period)
-	for {
-		var data oneInchFeeFeesResult
-		err := p.getData(&data)
-		if err != nil {
-			glog.Error("oneInchFeeProvider.FeeDownloader", err)
-		} else {
-			p.processData(&data)
-		}
-		<-timer.C
-		timer.Reset(period)
+func (p *oneInchFeeProvider) fetchFees() (*bchain.Eip1559Fees, error) {
+	var data oneInchFeeFeesResult
+	if err := p.getData(&data); err != nil {
+		return nil, err
 	}
+	return oneInchFeesFromData(&data), nil
 }
 
 func bigIntFromString(s string) *big.Int {
@@ -104,7 +99,7 @@ func oneInchFeesFromResult(result *oneInchFeeFeeResult) *bchain.Eip1559Fee {
 	return &fee
 }
 
-func (p *oneInchFeeProvider) processData(data *oneInchFeeFeesResult) bool {
+func oneInchFeesFromData(data *oneInchFeeFeesResult) *bchain.Eip1559Fees {
 	fees := bchain.Eip1559Fees{}
 	fees.BaseFeePerGas = bigIntFromString(data.BaseFee)
 	// 1inch's tiers are tighter than Infura's. Remap so the suite's low/medium/high map
@@ -116,11 +111,7 @@ func (p *oneInchFeeProvider) processData(data *oneInchFeeFeesResult) bool {
 	fees.Low = oneInchFeesFromResult(&data.Medium)
 	fees.Medium = oneInchFeesFromResult(&data.High)
 	fees.High = oneInchFeesFromResult(&data.Instant)
-	p.mux.Lock()
-	defer p.mux.Unlock()
-	p.observeSync(time.Now())
-	p.eip1559Fees = &fees
-	return true
+	return &fees
 }
 
 func (p *oneInchFeeProvider) getData(res interface{}) error {
