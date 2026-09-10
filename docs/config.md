@@ -51,6 +51,11 @@ Good examples of coin configuration are
        `BB_DEV_MQ_URL_<coin alias>` or `BB_PROD_MQ_URL_<coin alias>` variable (for example,
        `BB_BUILD_ENV=dev BB_DEV_MQ_URL_bitcoin=tcp://backend_hostname:28332`), which is used as-is during template
        generation. See note on templates below.
+    * `message_queue_curve` – Optional ZMQ CURVE credentials. The object has three Z85 keys: `server_key` is the 
+       publisher's public key (required to enable CURVE); `public_key` and `secret_key` are Blockbook's client keypair 
+       (omit either and Blockbook generates a fresh pair at connect time). Bitcoin Core itself does not publish 
+       CurveZMQ — stock `bitcoind` `zmqpub*` sockets are unauthenticated — so this is meant for a CurveZMQ proxy 
+       or a patched backend in front of Blockbook, not for talking to Core directly.
 
 * `backend` – Definition of back-end package, configuration and service.
     * `package_name` – Name of package. See convention note in [build guide](/docs/build.md#on-naming-conventions-and-versioning).
