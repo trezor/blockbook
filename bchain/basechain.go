@@ -50,6 +50,11 @@ func (b *BaseChain) LongTermFeeRate() (*LongTermFeeRate, error) {
 	return nil, errors.New("not supported")
 }
 
+// EthereumTypeGetBestTip is not supported
+func (b *BaseChain) EthereumTypeGetBestTip() (*EVMTip, error) {
+	return nil, errors.New("not supported")
+}
+
 // EthereumTypeGetBalance is not supported
 func (b *BaseChain) EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error) {
 	return nil, errors.New("not supported")

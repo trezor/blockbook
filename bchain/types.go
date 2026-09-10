@@ -367,7 +367,16 @@ type BlockChain interface {
 	EthereumTypeRpcCall(data, to, from string) (string, error)
 	EthereumTypeGetRawTransaction(txid string) (string, error)
 	EthereumTypeGetTransactionReceipt(txid string) (*RpcReceipt, error)
+	EthereumTypeGetBestTip() (*EVMTip, error)
 	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
+}
+
+// EVMTip is one snapshot of the cached EVM tip header, so hash, parent and height
+// always describe the same block.
+type EVMTip struct {
+	Hash       string
+	ParentHash string
+	Height     uint32
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
