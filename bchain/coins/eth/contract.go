@@ -2,7 +2,7 @@ package eth
 
 import (
 	"context"
-	"encoding/hex"
+	"encoding/binary"
 	"math/big"
 	"strings"
 
@@ -35,18 +35,70 @@ const (
 	evmWordHex   = evmWordBytes * 2
 )
 
+// hexNibbles maps an ASCII byte to its hex value, or 0xff if it is not a hex digit.
+var hexNibbles = func() (t [256]byte) {
+	for i := range t {
+		t[i] = 0xff
+	}
+	for c := '0'; c <= '9'; c++ {
+		t[c] = byte(c - '0')
+	}
+	for c := 'a'; c <= 'f'; c++ {
+		t[c] = byte(c-'a') + 10
+		t[c-'a'+'A'] = byte(c-'a') + 10
+	}
+	return t
+}()
+
+// hexDecodeInto decodes exactly len(dst)*2 hex digits from s into dst without
+// allocating. It returns false when s has a different length or is not hex.
+func hexDecodeInto(dst []byte, s string) bool {
+	if len(s) != 2*len(dst) {
+		return false
+	}
+	for i := range dst {
+		hi, lo := hexNibbles[s[2*i]], hexNibbles[s[2*i+1]]
+		if hi|lo > 0xf {
+			return false
+		}
+		dst[i] = hi<<4 | lo
+	}
+	return true
+}
+
+// setBigFromHexWord parses the hex number s into v. A full 32-byte ABI word,
+// with or without 0x prefix, is decoded directly, which is roughly ten times
+// cheaper than big.Int.SetString. Any other input falls back to SetString with
+// the given base so that callers keep their behaviour for unusual data.
+func setBigFromHexWord(v *big.Int, s string, base int) bool {
+	h := s
+	if has0xPrefix(h) {
+		h = h[2:]
+	}
+	var b [evmWordBytes]byte
+	if hexDecodeInto(b[:], h) {
+		v.SetBytes(b[:])
+		return true
+	}
+	_, ok := v.SetString(s, base)
+	return ok
+}
+
 // addressFromPaddedHex returns the EIP-55 address stored in a 32-byte ABI word
-// (log topic or calldata slot). The address is the last 20 bytes, so decoding
-// only that slice avoids a big.Int round trip for every transfer; shorter or
-// odd inputs still take the numeric path.
+// (log topic or calldata slot). The address is the last 20 bytes, which are
+// decoded directly instead of through a big.Int round trip; the padding in
+// front of them is not validated, the same way BigToAddress discards the high
+// bytes. Inputs shorter than 20 bytes, or with invalid hex in the address
+// bytes, take the numeric path.
 func addressFromPaddedHex(s string) (string, error) {
 	if has0xPrefix(s) {
 		s = s[2:]
 	}
 	const addrHexLen = EthereumTypeAddressDescriptorLen * 2
 	if len(s) >= addrHexLen {
-		if b, err := hex.DecodeString(s[len(s)-addrHexLen:]); err == nil {
-			return ethcommon.BytesToAddress(b).String(), nil
+		var a ethcommon.Address
+		if hexDecodeInto(a[:], s[len(s)-addrHexLen:]) {
+			return a.String(), nil
 		}
 	}
 	var t big.Int
@@ -67,14 +119,12 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 	var value big.Int
 	if tl == 3 {
 		standard = bchain.FungibleToken
-		_, ok := value.SetString(l.Data, 0)
-		if !ok {
+		if !setBigFromHexWord(&value, l.Data, 0) {
 			return nil, errors.New("ERC20 log Data is not a number")
 		}
 	} else if tl == 4 {
 		standard = bchain.NonFungibleToken
-		_, ok := value.SetString(l.Topics[3], 0)
-		if !ok {
+		if !setBigFromHexWord(&value, l.Topics[3], 0) {
 			return nil, errors.New("ERC721 log Topics[3] is not a number")
 		}
 	} else {
@@ -122,12 +172,10 @@ func processERC1155TransferSingleEvent(l *bchain.RpcLog) (transfer *bchain.Token
 	if has0xPrefix(l.Data) {
 		data = data[2:]
 	}
-	_, ok := id.SetString(data[:64], 16)
-	if !ok {
+	if !setBigFromHexWord(&id, data[:evmWordHex], 16) {
 		return nil, errors.New("ERC1155 log Data id is not a number")
 	}
-	_, ok = value.SetString(data[64:128], 16)
-	if !ok {
+	if !setBigFromHexWord(&value, data[evmWordHex:2*evmWordHex], 16) {
 		return nil, errors.New("ERC1155 log Data value is not a number")
 	}
 	return &bchain.TokenTransfer{
@@ -143,12 +191,16 @@ func parseEVMLogWordUint64(data string, offset int) (uint64, error) {
 	if offset < 0 || offset > len(data) || len(data)-offset < evmWordHex {
 		return 0, errors.New("ERC1155 TransferBatch, invalid data length")
 	}
-	var b big.Int
-	_, ok := b.SetString(data[offset:offset+evmWordHex], 16)
-	if !ok || !b.IsUint64() {
+	var b [evmWordBytes]byte
+	if !hexDecodeInto(b[:], data[offset:offset+evmWordHex]) {
 		return 0, errors.New("ERC1155 TransferBatch, not a number")
 	}
-	return b.Uint64(), nil
+	for _, c := range b[:evmWordBytes-8] {
+		if c != 0 {
+			return 0, errors.New("ERC1155 TransferBatch, not a number")
+		}
+	}
+	return binary.BigEndian.Uint64(b[evmWordBytes-8:]), nil
 }
 
 func erc1155BatchOffsetHex(offsetBytes uint64) (int, error) {
@@ -251,13 +303,11 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 	for i := 0; i < count; i++ {
 		var id, value big.Int
 		o := offsetIds + evmWordHex + evmWordHex*i
-		_, ok := id.SetString(data[o:o+evmWordHex], 16)
-		if !ok {
+		if !setBigFromHexWord(&id, data[o:o+evmWordHex], 16) {
 			return nil, errors.New("ERC1155 log Data id is not a number")
 		}
 		o = offsetValues + evmWordHex + evmWordHex*i
-		_, ok = value.SetString(data[o:o+evmWordHex], 16)
-		if !ok {
+		if !setBigFromHexWord(&value, data[o:o+evmWordHex], 16) {
 			return nil, errors.New("ERC1155 log Data value is not a number")
 		}
 		idValues[i] = bchain.MultiTokenValue{Id: id, Value: value}
@@ -311,8 +361,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, err
 		}
 		var t big.Int
-		_, ok := t.SetString(tx.Payload[10+64:], 16)
-		if !ok {
+		if !setBigFromHexWord(&t, tx.Payload[10+64:], 16) {
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
@@ -335,8 +384,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, err
 		}
 		var t big.Int
-		_, ok := t.SetString(tx.Payload[10+128:10+192], 16)
-		if !ok {
+		if !setBigFromHexWord(&t, tx.Payload[10+128:10+192], 16) {
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
