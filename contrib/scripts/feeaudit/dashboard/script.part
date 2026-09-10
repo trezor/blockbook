@@ -1,0 +1,671 @@
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const el = (t, a = {}) => { const n = document.createElementNS(NS, t);
+  for (const k in a) if (a[k] !== null && a[k] !== undefined) n.setAttribute(k, a[k]); return n; };
+
+const PROV = { served: "Infura", oneinch: "1inch", onchain: "on-chain now",
+               onchainNew: "on-chain #1768" };
+const PLONG = { served: "Infura Gas API (what we serve today)", oneinch: "1inch Gas API",
+                onchain: "Blockbook's own algorithm as deployed today (reconstructed)",
+                onchainNew: "Blockbook's own algorithm after PR 1768 (reconstructed)" };
+const PCOL = { served: "var(--s-served)", oneinch: "var(--s-oneinch)",
+               onchain: "var(--s-onchain)", onchainNew: "var(--s-onchainnew)" };
+const REAL = "var(--s-real)";
+
+let chain = DATA.chains[0], tier = "medium", logScale = true;
+
+const stat = (c, t, p) => DATA.stats.find(s => s.chain === c && s.tier === t && s.provider === p);
+const provsFor = c => DATA.providers.filter(p => stat(c, tier, p));
+const fmt = v => v === 0 ? "0" : Math.abs(v) >= 100 ? v.toFixed(1)
+  : Math.abs(v) >= 1 ? v.toFixed(3) : Math.abs(v) >= 0.001 ? v.toFixed(5) : v.toExponential(1);
+// fmt carries 5 decimals because tooltips compare near-identical quotes; prose wants
+// three significant figures instead.
+const sig = v => Number(v.toPrecision(3)).toString();
+const fmtSecs = v => v >= 1 ? `${+v.toFixed(1)}s` : `${Math.round(v*1000)}ms`;
+const mult = m => (m >= 100 ? m.toFixed(0) : m >= 10 ? m.toFixed(1) : m.toFixed(2)) + "×";
+const sev = m => m >= 10 ? "var(--crit)" : m >= 3 ? "var(--serious)" : m >= 1.5 ? "var(--warn)" : "var(--ok)";
+
+/* ---------------------------------------------------------------- tooltip */
+const tipEl = document.getElementById("tip");
+function showTip(e, html) {
+  tipEl.innerHTML = html; tipEl.style.opacity = "1";
+  const r = tipEl.getBoundingClientRect();
+  let x = e.clientX + 16, y = e.clientY + 16;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 16;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 16;
+  tipEl.style.left = x + "px"; tipEl.style.top = y + "px";
+}
+const hideTip = () => { tipEl.style.opacity = "0"; };
+function bindTip(node, html) {
+  node.addEventListener("mousemove", e => showTip(e, typeof html === "function" ? html(e) : html));
+  node.addEventListener("mouseenter", e => showTip(e, typeof html === "function" ? html(e) : html));
+  node.addEventListener("mouseleave", hideTip);
+}
+
+/* ------------------------------------------------------- shared line chart */
+// One renderer for both time series. Series arrive as {key,label,color,dashed,pts:[[x,y]]}
+// on a shared x (block height); zeros are legal and land on the axis floor under a log
+// scale, because "no tip was needed" is a real reading, not missing data.
+function lineChart(svgId, series, opts) {
+  const svg = document.getElementById(svgId);
+  svg.replaceChildren();
+  const live = series.filter(s => s.pts.length);
+  if (!live.length) return;
+
+  const W = Math.max(520, Math.min(1140, svg.parentElement.clientWidth || 900));
+  const H = opts.height || 300;
+  const padL = 64, padR = 74, padT = 12, padB = 40;
+  const xs = live.flatMap(s => s.pts.map(p => p[0]));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const ys = live.flatMap(s => s.pts.map(p => p[1]));
+  const pos = ys.filter(v => v > 0);
+  const useLog = logScale && pos.length > 0;
+  const lo = useLog ? Math.min(...pos) / 3 : 0;
+  const hi = useLog ? Math.max(...pos) * 1.9 : Math.max(...ys) * 1.12 || 1;
+
+  const X = v => x1 === x0 ? padL : padL + ((v - x0) / (x1 - x0)) * (W - padL - padR);
+  const Y = v => {
+    if (!useLog) return padT + (1 - v / hi) * (H - padT - padB);
+    const t = (Math.log10(Math.max(v, lo)) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo));
+    return padT + (1 - t) * (H - padT - padB);
+  };
+
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", opts.aria || "");
+
+  // Congestion bands sit behind everything: the whole point of the long run was to
+  // catch a rising base fee, and a quote is only interesting relative to when it was made.
+  (DATA.spikes[chain] || []).forEach(w => {
+    const a = Math.max(w.h0, x0), b = Math.min(w.h1, x1);
+    if (b <= a) return;
+    svg.appendChild(el("rect", { x: X(a), y: padT, width: Math.max(2, X(b) - X(a)),
+      height: H - padT - padB, fill: "var(--band)" }));
+    const t = el("text", { class: "axis", x: X(a) + 4, y: padT + 11, fill: "var(--ink-3)" });
+    t.textContent = "congested"; svg.appendChild(t);
+  });
+
+  // y grid
+  const g = el("g", { class: "grid" });
+  const ticks = [];
+  if (useLog) {
+    for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) {
+      const v = 10 ** e; if (v >= lo && v <= hi) ticks.push(v);
+    }
+    if (ticks.length < 3) { const mid = Math.sqrt(lo * hi); ticks.push(mid); ticks.sort((a, b) => a - b); }
+  } else {
+    for (let i = 0; i <= 4; i++) ticks.push(hi * i / 4);
+  }
+  ticks.forEach(v => {
+    g.appendChild(el("line", { x1: padL, x2: W - padR, y1: Y(v), y2: Y(v) }));
+    const t = el("text", { class: "axis", x: padL - 7, y: Y(v) + 3, "text-anchor": "end" });
+    t.textContent = v === 0 ? "0" : (v >= 1 ? (v >= 100 ? v.toFixed(0) : v.toFixed(2)) : v.toExponential(0));
+    g.appendChild(t);
+  });
+  svg.appendChild(g);
+
+  // x axis: block heights, labelled sparsely
+  const ax = el("g", { class: "axis" });
+  [0, .25, .5, .75, 1].forEach(f => {
+    const v = Math.round(x0 + (x1 - x0) * f);
+    const t = el("text", { x: X(v), y: H - 18, "text-anchor": f === 0 ? "start" : f === 1 ? "end" : "middle" });
+    t.textContent = v.toLocaleString(); ax.appendChild(t);
+  });
+  const xt = el("text", { class: "axttl", x: (padL + W - padR) / 2, y: H - 4, "text-anchor": "middle" });
+  xt.textContent = "block height →"; ax.appendChild(xt);
+  const yt = el("text", { class: "axttl", x: padL - 7, y: padT - 1, "text-anchor": "end" });
+  yt.textContent = opts.unit || "Gwei"; ax.appendChild(yt);
+  svg.appendChild(ax);
+
+  live.forEach(s => {
+    const d = s.pts.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join(" ");
+    svg.appendChild(el("path", { d, fill: "none", stroke: s.color,
+      "stroke-width": s.dashed ? 1.75 : 2, "stroke-dasharray": s.dashed ? "5 4" : null,
+      "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    const last = s.pts[s.pts.length - 1];
+    const lab = el("text", { x: W - padR + 6, y: Y(last[1]) + 3.5, "font-size": "10", fill: s.color });
+    lab.textContent = s.label; svg.appendChild(lab);
+  });
+
+  // crosshair: one hit column per pixel-ish, reading every series at the nearest height
+  const cross = el("line", { x1: 0, x2: 0, y1: padT, y2: H - padB,
+    stroke: "var(--ink-3)", "stroke-width": 1, "stroke-dasharray": "2 3", opacity: 0 });
+  svg.appendChild(cross);
+  const hit = el("rect", { x: padL, y: padT, width: W - padL - padR, height: H - padT - padB,
+    fill: "transparent" });
+  hit.addEventListener("mouseleave", () => { cross.setAttribute("opacity", 0); hideTip(); });
+  hit.addEventListener("mousemove", e => {
+    const box = svg.getBoundingClientRect();
+    const px = (e.clientX - box.left) * (W / box.width);
+    const h = Math.round(x0 + ((px - padL) / (W - padL - padR)) * (x1 - x0));
+    cross.setAttribute("x1", X(h)); cross.setAttribute("x2", X(h)); cross.setAttribute("opacity", 1);
+    const rows = live.map(s => {
+      let best = null, bd = Infinity;
+      for (const p of s.pts) { const d = Math.abs(p[0] - h); if (d < bd) { bd = d; best = p; } }
+      return best && bd <= Math.max(4, (x1 - x0) / 40)
+        ? `<div class="r"><span><i style="background:${s.color}"></i>${s.label}</span><b>${fmt(best[1])}</b></div>` : "";
+    }).join("");
+    showTip(e, `<b>block ${h.toLocaleString()}</b>${rows}`);
+  });
+  svg.appendChild(hit);
+}
+
+/* ------------------------------------------------------- the two series */
+function priceSeries() {
+  const b = DATA.blocks[chain], q = DATA.quotes[chain]?.[tier] || {};
+  const out = [];
+  if (b) out.push({ key: "real", label: "actual", color: REAL, dashed: true,
+    pts: b.h.map((h, i) => [h, b.price[i]]) });
+  provsFor(chain).forEach(p => {
+    const d = q[p]; if (!d) return;
+    out.push({ key: p, label: PROV[p], color: PCOL[p], pts: d.h.map((h, i) => [h, d.price[i]]) });
+  });
+  return out;
+}
+function tipSeries() {
+  const b = DATA.blocks[chain], q = DATA.quotes[chain]?.[tier] || {};
+  const out = [];
+  if (b) out.push({ key: "real", label: "actual", color: REAL, dashed: true,
+    pts: b.h.map((h, i) => [h, b.tip[i]]) });
+  provsFor(chain).forEach(p => {
+    const d = q[p]; if (!d) return;
+    out.push({ key: p, label: PROV[p], color: PCOL[p], pts: d.h.map((h, i) => [h, d.tip[i]]) });
+  });
+  return out;
+}
+
+function baseSeries() {
+  const b = DATA.blocks[chain], q = DATA.quotes[chain]?.[tier] || {};
+  const out = [];
+  if (b) out.push({ key: "real", label: "actual", color: REAL, dashed: true,
+    pts: b.h.map((h, i) => [h, b.base[i]]) });
+  provsFor(chain).forEach(p => {
+    const d = q[p]; if (!d || !d.rbase) return;
+    out.push({ key: p, label: PROV[p], color: PCOL[p], pts: d.h.map((h, i) => [h, d.rbase[i]]) });
+  });
+  return out;
+}
+
+/* -------------------------------------------- all three tiers, this chain */
+function tiersChart() {
+  const svg = document.getElementById("chartTiers");
+  svg.replaceChildren();
+  const provs = DATA.providers.filter(p => DATA.tiers.some(t => stat(chain, t, p)));
+  const W = Math.max(320, Math.min(560, svg.parentElement.clientWidth || 480)), H = 250;
+  const padL = 62, padR = 52, padT = 12, padB = 34;
+  const cells = [];
+  DATA.tiers.forEach(t => provs.forEach(p => { const s = stat(chain, t, p); if (s) cells.push(s); }));
+  if (!cells.length) return;
+  const maxV = Math.max(1.2, ...cells.map(s => s.paid)) * 1.12;
+  const useLog = maxV > 12;
+  const X = v => {
+    if (!useLog) return padL + (v / maxV) * (W - padL - padR);
+    return padL + (Math.log10(Math.max(v, 1)) / Math.log10(maxV)) * (W - padL - padR);
+  };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
+
+  const ticks = useLog ? [1, 3, 10, 30, 100, 300].filter(v => v <= maxV) : [1, 2, 3, 4, 5].filter(v => v <= maxV);
+  const g = el("g", { class: "grid" });
+  ticks.forEach(v => g.appendChild(el("line", { x1: X(v), x2: X(v), y1: padT, y2: H - padB })));
+  svg.appendChild(g);
+  const ax = el("g", { class: "axis" });
+  ticks.forEach(v => { const t = el("text", { x: X(v), y: H - padB + 14, "text-anchor": "middle" });
+    t.textContent = v + "×"; ax.appendChild(t); });
+  svg.appendChild(ax);
+
+  const rowH = (H - padT - padB) / DATA.tiers.length;
+  const barH = Math.min(13, (rowH - 8) / Math.max(1, provs.length));
+  DATA.tiers.forEach((t, ti) => {
+    const y0 = padT + ti * rowH + 4;
+    const lab = el("text", { x: padL - 8, y: y0 + barH + 2, "text-anchor": "end",
+      "font-size": "11.5", fill: "var(--ink)", "font-weight": "500" });
+    lab.textContent = DATA.tierLabels[t]; svg.appendChild(lab);
+    provs.forEach((p, pi) => {
+      const s = stat(chain, t, p); if (!s) return;
+      const y = y0 + pi * (barH + 2);
+      const w = Math.max(2, X(s.paid) - padL);
+      const bar = el("rect", { x: padL, y, width: w, height: barH, rx: 3, fill: PCOL[p],
+        "fill-opacity": t === tier ? 1 : .34 });
+      bindTip(bar, `<b>${DATA.chainLabels[chain]} ${DATA.tierLabels[t]}</b> — ${PROV[p]}<br>
+        pays ${mult(s.paid)} the going rate<br>tip ${fmt(s.tip)} Gwei · needed ${fmt(s.mkt)}<br>
+        next block ${s.incl1.toFixed(0)}% · within 8 ${s.inclAll.toFixed(0)}%`);
+      bar.style.cursor = "pointer";
+      bar.addEventListener("click", () => { tier = t; render(); });
+      svg.appendChild(bar);
+      const vl = el("text", { x: padL + w + 6, y: y + barH - 2, "font-size": "10",
+        fill: "var(--ink-2)" });
+      vl.textContent = mult(s.paid); svg.appendChild(vl);
+    });
+  });
+}
+
+/* ------------------------------------- what each source costs, by network */
+// Deliberately not a price-against-reliability scatter: in an uncongested window
+// nearly every source lands 100% of quotes inside eight blocks, so that axis is
+// degenerate and spends the whole plot area displaying one outlier. Reliability
+// becomes a flag instead, and the vertical space goes to networks.
+const GATE = 95;
+const DOT_R = 4.4;
+const PITCH = DOT_R * 2 + 2;
+// Slot ladder, nearest the row centre first. Four sources is the maximum on any row,
+// so four slots suffice; a fifth would widen the stack past what the row height clears.
+const DODGE = [0, PITCH, -PITCH, PITCH * 2];
+// The stack runs from -PITCH to +2*PITCH, so the row must clear that span plus a
+// mark diameter - otherwise the extreme slots of adjacent rows collide, which is
+// invisible until you count every dot pair in the chart rather than each row alone.
+const DOT_ROW_H = 3 * PITCH + 2 * DOT_R + 6;
+function costByNetwork() {
+  const svg = document.getElementById("chartScatter");
+  svg.replaceChildren();
+  const rows = DATA.chains
+    .map(c => ({ c, cells: DATA.providers.map(p => stat(c, tier, p)).filter(Boolean) }))
+    .filter(r => r.cells.length);
+  if (!rows.length) return;
+  // Ordered by what we ship today, worst first, so the operationally urgent
+  // networks are at the top. Independent of the current selection, so rows do not
+  // jump around when you switch network.
+  rows.sort((a, b) => {
+    const av = (a.cells.find(s => s.provider === "served") || a.cells[0]).paid;
+    const bv = (b.cells.find(s => s.provider === "served") || b.cells[0]).paid;
+    return bv - av;
+  });
+
+  const W = Math.max(320, Math.min(560, svg.parentElement.clientWidth || 480));
+  const padL = 80, padR = 46, padT = 14, padB = 40;
+  const rowH = Math.max(26, DOT_ROW_H);
+  const H = padT + rows.length * rowH + padB;
+  const hi = Math.max(...rows.flatMap(r => r.cells.map(s => s.paid))) * 1.5;
+  const X = v => padL + (Math.log10(Math.max(v, 1)) / Math.log10(hi)) * (W - padL - padR);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "What each fee source costs on each network, as a multiple of the going rate");
+
+  const ticks = [1, 3, 10, 30, 100, 300, 1000].filter(v => v <= hi);
+  const g = el("g", { class: "grid" });
+  ticks.forEach(v => g.appendChild(el("line", { x1: X(v), x2: X(v), y1: padT, y2: H - padB })));
+  svg.appendChild(g);
+  const ax = el("g", { class: "axis" });
+  ticks.forEach(v => { const t = el("text", { x: X(v), y: H - padB + 15, "text-anchor": "middle" });
+    t.textContent = v + "×"; ax.appendChild(t); });
+  const xl = el("text", { class: "axttl", x: (padL + W - padR) / 2, y: H - 8, "text-anchor": "middle" });
+  xl.textContent = "paid, multiple of going rate →"; ax.appendChild(xl);
+  svg.appendChild(ax);
+
+  rows.forEach((r, i) => {
+    const yc = padT + i * rowH + rowH / 2;
+    const here = r.c === chain;
+    const lab = el("text", { x: padL - 10, y: yc + 3.5, "text-anchor": "end", "font-size": "11.5",
+      fill: here ? "var(--ink)" : "var(--ink-2)", "font-weight": here ? "600" : "400" });
+    lab.textContent = DATA.chainLabels[r.c];
+    lab.style.cursor = "pointer";
+    lab.addEventListener("click", () => { chain = r.c; render(); });
+    svg.appendChild(lab);
+
+    if (here) svg.appendChild(el("rect", { x: padL - 4, y: yc - rowH / 2 + 2,
+      width: W - padL - padR + 8, height: rowH - 4, rx: 3,
+      fill: "var(--ink)", "fill-opacity": .045 }));
+
+    // connector from cheapest to dearest, so the spread on a row reads at a glance
+    const xsAll = r.cells.map(s => X(s.paid));
+    if (Math.max(...xsAll) - Math.min(...xsAll) > 2) {
+      svg.appendChild(el("line", { x1: Math.min(...xsAll), x2: Math.max(...xsAll), y1: yc, y2: yc,
+        stroke: "var(--rule-strong)", "stroke-width": 1.5, opacity: here ? .9 : .45 }));
+    }
+
+    // Dodge marks that would otherwise sit on top of each other. The slot pitch is
+    // 2*r plus a 2px surface gap, so neighbouring slots clear rather than merely
+    // differ - a smaller step than the mark diameter still overlaps.
+    const placed = [];
+    r.cells.forEach(s => {
+      const cx = X(s.paid);
+      let dy = 0;
+      for (const cand of DODGE) {
+        if (!placed.some(p => Math.abs(p.cx - cx) < DOT_R * 2 + 2 && Math.abs(p.dy - cand) < DOT_R * 2 + 2)) {
+          dy = cand; break;
+        }
+      }
+      placed.push({ cx, dy });
+      const cy = yc + dy;
+      const gated = s.inclAll < GATE;
+      svg.appendChild(el("circle", { cx, cy, r: DOT_R + 2.1, fill: "var(--panel)",
+        opacity: here ? 1 : .85 }));
+      if (gated) svg.appendChild(el("circle", { cx, cy, r: DOT_R + 2.6, fill: "none",
+        stroke: "var(--crit)", "stroke-width": 1.75, opacity: here ? 1 : .6 }));
+      const dot = el("circle", { cx, cy, r: DOT_R, fill: PCOL[s.provider],
+        "fill-opacity": here ? 1 : .42, stroke: "var(--panel)", "stroke-width": 1.2 });
+      dot.style.cursor = "pointer";
+      bindTip(dot, `<b>${DATA.chainLabels[s.chain]}</b> — ${PLONG[s.provider]}<br>
+        pays ${mult(s.paid)} the going rate<br>tip ${fmt(s.tip)} Gwei · needed ${fmt(s.mkt)}<br>
+        mined next block ${s.incl1.toFixed(0)}% · within 8 ${s.inclAll.toFixed(0)}%` +
+        (gated ? `<br><span style="color:var(--crit)">below the 95% reliability gate</span>` : ""));
+      dot.addEventListener("click", () => { chain = s.chain; render(); });
+      svg.appendChild(dot);
+    });
+
+    // label the cheapest on the selected row only, to keep the panel uncluttered
+    if (here) {
+      const best = r.cells.reduce((a, b) => (b.paid < a.paid ? b : a));
+      const t = el("text", { x: X(best.paid) + 11, y: yc - 9, "font-size": "9.5",
+        fill: "var(--ink-2)" });
+      t.textContent = PROV[best.provider] + " " + mult(best.paid); svg.appendChild(t);
+    }
+  });
+}
+
+/* ---------------------------------------------------------------- chrome */
+/* --------------------------------- what changed when the base fee climbed */
+// A dumbbell rather than paired bars: the question is not how big each number is
+// but how far it moved between calm and congested, and a connector shows that
+// directly. Sources that did not move draw as a single dot, which is the finding.
+function congestionChart() {
+  const svg = document.getElementById("chartCong");
+  svg.replaceChildren();
+  const rows = DATA.congestion.filter(c => c.chain === chain && c.tier === tier);
+  const host = document.getElementById("congPanel");
+  if (!rows.length) { host.style.display = "none"; return; }
+  host.style.display = "";
+
+  const W = Math.max(520, Math.min(1140, svg.parentElement.clientWidth || 900));
+  const rowH = 46, padT = 30, padB = 34, padL = 96, padR = 150;
+  const H = padT + rows.length * rowH + padB;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Next-block inclusion, calm against congested");
+
+  const X = v => padL + (v / 100) * (W - padL - padR);
+  const grid = el("g", { class: "grid" });
+  [0, 25, 50, 75, 100].forEach(v => {
+    grid.appendChild(el("line", { x1: X(v), x2: X(v), y1: padT - 8, y2: H - padB + 4 }));
+    const t = el("text", { class: "axis", x: X(v), y: H - padB + 17, "text-anchor": "middle" });
+    t.textContent = v + "%"; grid.appendChild(t);
+  });
+  svg.appendChild(grid);
+  const xt = el("text", { class: "axttl", x: (padL + W - padR) / 2, y: H - 4, "text-anchor": "middle" });
+  xt.textContent = "share of quotes mined in the very next block"; svg.appendChild(xt);
+
+  rows.sort((a, b) => (a.spike.incl1 - a.calm.incl1) - (b.spike.incl1 - b.calm.incl1));
+  rows.forEach((r, i) => {
+    const y = padT + i * rowH + rowH / 2;
+    const col = PCOL[r.provider];
+    const lab = el("text", { class: "rowlab", x: padL - 12, y: y + 4, "text-anchor": "end" });
+    lab.textContent = PROV[r.provider]; svg.appendChild(lab);
+
+    const a = X(r.calm.incl1), b = X(r.spike.incl1);
+    svg.appendChild(el("line", { x1: a, x2: b, y1: y, y2: y, stroke: col,
+      "stroke-width": 3, opacity: .32, "stroke-linecap": "round" }));
+    // Hollow = calm, filled = congested, so direction reads without the legend.
+    const c1 = el("circle", { cx: a, cy: y, r: 5.5, fill: "var(--panel)",
+      stroke: col, "stroke-width": 2 });
+    const c2 = el("circle", { cx: b, cy: y, r: 6, fill: col,
+      stroke: "var(--panel)", "stroke-width": 2 });
+    bindTip(c1, `<b>${PROV[r.provider]} — calm</b><div class="r"><span>next block</span><b>${r.calm.incl1}%</b></div><div class="r"><span>paid</span><b>${mult(r.calm.paid)}</b></div><div class="r"><span>n</span><b>${r.calm.n.toLocaleString()}</b></div>`);
+    bindTip(c2, `<b>${PROV[r.provider]} — congested</b><div class="r"><span>next block</span><b>${r.spike.incl1}%</b></div><div class="r"><span>paid</span><b>${mult(r.spike.paid)}</b></div><div class="r"><span>n</span><b>${r.spike.n.toLocaleString()}</b></div>`);
+    svg.appendChild(c1); svg.appendChild(c2);
+
+    const d = r.spike.incl1 - r.calm.incl1;
+    const note = el("text", { class: "rowval", x: W - padR + 12, y: y + 4 });
+    note.textContent = d === 0 ? "no change"
+      : `${d > 0 ? "+" : ""}${d.toFixed(0)} pts · pays ${mult(r.spike.paid)}`;
+    note.setAttribute("fill", d < -5 ? "var(--crit)" : d < 0 ? "var(--warn)" : "var(--ink-2)");
+    svg.appendChild(note);
+  });
+
+  const w = (DATA.spikes[chain] || [])[0];
+  document.getElementById("congCap").textContent = w
+    ? `base fee peaked at ${sig(w.peak)} Gwei against a ${sig(w.med)} Gwei median — ${(w.peak / w.med).toFixed(0)}× — for ${Math.round((w.t1 - w.t0) / 60)} minutes`
+    : "short bursts rather than one sustained window";
+}
+
+/* --------------------------------- does the displayed ETA hold? */
+// Deliberately not filtered by the network selector: the interesting comparison is across
+// networks, and the targets differ per source, so each cell carries the bar it was measured
+// against. A source that declares a slower ETA has an easier test to pass.
+function speedTable() {
+  const body = document.querySelector("#speedTbl tbody");
+  if (!body) return;
+  const rows = [];
+  DATA.chains.forEach(c => DATA.tiers.forEach(t => {
+    const cells = ["served", "oneinch", "onchain", "onchainNew"].map(p =>
+      DATA.speed.find(s => s.chain === c && s.tier === t && s.provider === p));
+    if (cells.some(Boolean)) rows.push({ c, t, cells });
+  }));
+  body.replaceChildren();
+  let lastChain = null;
+  rows.forEach(({ c, t, cells }) => {
+    const tr = document.createElement("tr");
+    if (c === chain) tr.className = "sel";
+    const net = document.createElement("td");
+    // Name the network once per group so the eye reads three tiers as one block.
+    net.textContent = c === lastChain ? "" : DATA.chainLabels[c];
+    if (c !== lastChain) net.className = "grp";
+    lastChain = c;
+    tr.appendChild(net);
+    const tier = document.createElement("td");
+    tier.textContent = DATA.tierLabels[t];
+    tr.appendChild(tier);
+    cells.forEach(s => {
+      const td = document.createElement("td");
+      if (!s) { td.textContent = "—"; td.className = "na"; tr.appendChild(td); return; }
+      const col = s.pct >= 99 ? "var(--ok)" : s.pct >= 95 ? "var(--warn)" : "var(--crit)";
+      td.innerHTML = `<b style="color:${col}">${s.pct.toFixed(1)}%</b>` +
+        `<span class="sub">${fmtSecs(s.seconds)} · ${s.blocks} blk` +
+        `${s.source === "provider" ? " · own" : ""}</span>`;
+      bindTip(td, `<b>${DATA.chainLabels[c]} — ${DATA.tierLabels[t]} — ${PROV[s.provider]}</b>` +
+        `<div class="r"><span>confirmed in time</span><b>${s.pct}%</b></div>` +
+        `<div class="r"><span>target</span><b>${fmtSecs(s.seconds)} (${s.blocks} blocks)</b></div>` +
+        `<div class="r"><span>target set by</span><b>${s.source === "provider"
+          ? "the provider's own maxWaitTimeEstimate" : "Suite's 4/2/1 fallback"}</b></div>` +
+        `<div class="r"><span>quotes</span><b>${s.n.toLocaleString()}</b></div>`);
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  const own = DATA.speed.filter(s => s.source === "provider");
+  const looser = own.filter(s => {
+    const fb = DATA.speed.find(x => x.chain === s.chain && x.tier === s.tier && x.provider === "onchain");
+    return fb && s.blocks > fb.blocks;
+  }).length;
+  document.getElementById("speedNote").innerHTML =
+    `The bar is not the same for everyone. Infura ships its own <span class="mono">maxWaitTimeEstimate</span>,
+     which Suite prefers; the other two ship none, so Suite falls back to 4/2/1 blocks. On
+     ${looser} of ${own.length} network-tier pairs Infura's self-declared target is the slower one —
+     on HyperEVM it claims 16 blocks for Economy where the fallback would claim 4. Passing an easier
+     test is not the same as being faster, so read the percentage together with the target beside it.
+     Ethereum is the one network where all three are judged identically, because Infura's declared
+     48/24/12 s is exactly the 4/2/1 fallback.`;
+}
+
+function buildControls() {
+  const cs = document.getElementById("chainSel");
+  DATA.chains.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = DATA.chainLabels[c];
+    b.addEventListener("click", () => { chain = c; render(); });
+    cs.appendChild(b);
+  });
+  const ts = document.getElementById("tierSel");
+  DATA.tiers.forEach(t => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = DATA.tierLabels[t];
+    b.addEventListener("click", () => { tier = t; render(); });
+    ts.appendChild(b);
+  });
+  const ss = document.getElementById("scaleSel");
+  [["log", true], ["linear", false]].forEach(([label, v]) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = label;
+    b.addEventListener("click", () => { logScale = v; render(); });
+    ss.appendChild(b);
+  });
+}
+function syncControls() {
+  document.querySelectorAll("#chainSel .chip").forEach((b, i) =>
+    b.setAttribute("aria-pressed", String(DATA.chains[i] === chain)));
+  document.querySelectorAll("#tierSel .chip").forEach((b, i) =>
+    b.setAttribute("aria-pressed", String(DATA.tiers[i] === tier)));
+  document.querySelectorAll("#scaleSel .chip").forEach((b, i) =>
+    b.setAttribute("aria-pressed", String((i === 0) === logScale)));
+}
+
+function kpis() {
+  const host = document.getElementById("kpis");
+  host.replaceChildren();
+  const provs = provsFor(chain);
+  const ref = provs.map(p => stat(chain, tier, p)).find(Boolean);
+  const going = ref ? ref.base + ref.mkt : 0;
+
+  const real = document.createElement("div");
+  real.className = "kpi"; real.style.setProperty("--kc", REAL);
+  real.innerHTML = `<div class="k"><i></i>actually charged</div>
+    <div class="v">${fmt(going)}</div>
+    <div class="s">Gwei/gas · base ${fmt(ref ? ref.base : 0)} + tip ${fmt(ref ? ref.mkt : 0)}</div>`;
+  host.appendChild(real);
+
+  provs.forEach(p => {
+    const s = stat(chain, tier, p);
+    const d = document.createElement("div");
+    d.className = "kpi"; d.style.setProperty("--kc", PCOL[p]);
+    d.innerHTML = `<div class="k"><i></i>${PROV[p]}</div>
+      <div class="v" style="color:${sev(s.paid)}">${mult(s.paid)}</div>
+      <div class="s">${fmt(s.price)} Gwei · tip ${fmt(s.tip)}</div>`;
+    d.title = PLONG[p];
+    host.appendChild(d);
+  });
+}
+
+function table() {
+  const tb = document.querySelector("#tbl tbody");
+  tb.replaceChildren();
+  provsFor(chain).forEach(p => {
+    const s = stat(chain, tier, p);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><span class="dot" style="background:${PCOL[p]}"></span>${PLONG[p]}</td>
+      <td>${fmt(s.tip)}</td><td>${fmt(s.rbase ?? s.base)}</td><td>${fmt(s.price)}</td><td>${fmt(s.maxfee)}</td>
+      <td>${fmt(s.base + s.mkt)}</td>
+      <td style="color:${sev(s.paid)}">${mult(s.paid)}</td>
+      <td>${s.incl1.toFixed(0)}%</td><td>${s.inclAll.toFixed(0)}%</td>
+      <td>${s.waitMax} blk</td><td>${s.n}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// The base fee is consensus-determined, so a source that disagrees with the chain is
+// wrong about a settled fact. Report the typical size of that error and, separately,
+// whether it leans one way: a source off by +/-X every block has a signed median of
+// zero and is still off by X.
+function baseNote() {
+  const host = document.getElementById("baseNote");
+  const provs = provsFor(chain).map(p => stat(chain, tier, p))
+    .filter(s => s && s.baseLagAbs !== undefined);
+  if (!provs.length) { host.textContent = ""; return; }
+  const b = DATA.blocks[chain];
+  const steps = [];
+  if (b) for (let i = 1; i < b.base.length; i++) steps.push(Math.abs(b.base[i] - b.base[i - 1]));
+  steps.sort((x, y) => x - y);
+  const step = steps.length ? steps[Math.floor(steps.length / 2)] : 0;
+
+  const parts = provs.map(s => {
+    if (s.baseLagAbs === 0) return `<b>${PROV[s.provider]}</b> matches the chain exactly`;
+    const rel = step > 0 ? s.baseLagAbs / step : 0;
+    const bias = Math.abs(s.baseLag) < s.baseLagAbs / 3
+      ? "scattering either side" : s.baseLag > 0 ? "reading high" : "reading low";
+    return `<b>${PROV[s.provider]}</b> off by ${fmt(s.baseLagAbs)} Gwei, ${bias}` +
+      (step > 0 ? ` (${rel < 0.5 ? "well under" : "about " + rel.toFixed(1) + "×"} one block's drift)` : "");
+  });
+  const exact = provs.filter(s => s.baseLagAbs === 0).map(s => s.provider);
+  host.innerHTML = `Typical distance from the chain's own value — ${parts.join("; ")}. ` +
+    (exact.includes("onchain")
+      ? `Blockbook's on-chain path is exact by construction: it reads the base fee off the block
+         rather than asking anyone. `
+      : "") +
+    `A vendor API cannot do better than the poll interval, so its error is latency, not judgement —
+     harmless while the base fee is flat, and costly when it is climbing, because the quote gets
+     priced against a cheaper block than the one it lands in.`;
+}
+
+function legend(id, series) {
+  document.getElementById(id).innerHTML = series.map(s => s.key === "real"
+    ? `<span><i class="swatch line"></i>${s.label} — what the block charged</span>`
+    : `<span><i class="swatch" style="background:${s.color}"></i>${PLONG[s.key]}</span>`).join("");
+}
+
+/* ---------------------------------------------------------------- render */
+function render() {
+  syncControls();
+  const name = DATA.chainLabels[chain], tl = DATA.tierLabels[tier], unit = DATA.native[chain];
+  const b = DATA.blocks[chain];
+
+  const ps = priceSeries(), ts = tipSeries();
+  document.getElementById("t1").textContent = `Gas price — ${name}, ${tl} tier`;
+  document.getElementById("c1cap").textContent =
+    "total paid per unit of gas: base fee plus tip, capped at maxFeePerGas" +
+    (unit ? ` · fees denominated in ${unit}` : "");
+  document.getElementById("t2").textContent = `Priority fee — ${name}, ${tl} tier`;
+  document.getElementById("c2cap").textContent =
+    "the tip alone — the only part a fee source estimates; the base fee is fixed by the block";
+  document.getElementById("c3cap").textContent = `${name} · ${tl} tier · medians over the window`;
+
+  lineChart("chartPrice", ps, { height: 306, unit: "Gwei",
+    aria: `${name} ${tl}: gas price actually charged versus each fee source` });
+  lineChart("chartTip", ts, { height: 268, unit: "Gwei",
+    aria: `${name} ${tl}: priority fee actually needed versus each fee source` });
+
+  const bs = baseSeries();
+  document.getElementById("t3b").textContent = `Base fee — ${name}`;
+  document.getElementById("c3bcap").textContent =
+    "fixed by the protocol from the parent block, so this is the one number nobody estimates — " +
+    "any gap is a stale reading, not a wrong guess";
+  lineChart("chartBase", bs, { height: 268, unit: "Gwei",
+    aria: `${name}: base fee reported by each source versus the block's real base fee` });
+  legend("leg1", ps); legend("leg2", ts); legend("leg3", bs);
+  baseNote();
+  tiersChart(); costByNetwork(); congestionChart(); speedTable(); kpis(); table();
+
+  document.getElementById("meta").innerHTML = [
+    ["networks", DATA.chains.length],
+    ["blocks read", (DATA.blockCount || 0).toLocaleString()],
+    ["quote samples", DATA.samples.toLocaleString()],
+    ["sources", DATA.providers.map(p => PROV[p]).join(" · ")],
+    ["window", `${DATA.hours} h`],
+    ["this view", `${b ? b.h.length.toLocaleString() : 0} plotted points of ${name}`],
+  ].map(([k, v]) => `${k} <b>${v}</b>`).join("");
+}
+
+document.getElementById("foot").innerHTML =
+  `Measured from public Blockbook endpoints only. Quotes come from the websocket
+   <span class="mono">estimateFee</span>, anchored to the block height at which they were asked.
+   The dashed &ldquo;actual&rdquo; line is read back from <span class="mono">/api/v2/block</span>:
+   it is each block's 10th-percentile effective gas price, a threshold chosen because zero-tip
+   private and MEV bundles occupy real gas while telling you nothing about what a public
+   transaction needs to bid. The on-chain series reconstructs
+   <span class="mono">eth_feeHistory</span> offline and was verified wei-for-wei against nodes on
+   seven of these chains.<br><br>
+   <b>Neither on-chain series was ever served.</b> All 52,129 served quotes fingerprint as the
+   provider path, so no public host answered from Blockbook&rsquo;s own algorithm during the capture.
+   Both on-chain lines are reconstructions from the same recorded block data: &ldquo;on-chain now&rdquo;
+   is the deployed estimator (mean of percentiles 20/70/90/99 over four blocks), &ldquo;on-chain
+   #1768&rdquo; the replacement from
+   <a href="https://github.com/trezor/blockbook/pull/1768">PR&nbsp;1768</a> (low = p20 window max,
+   normal = p70 window median, high = p70 window max, forced non-decreasing). The estimator reads
+   only reward percentiles and the base fee, both recorded per block, so its output is arithmetic on
+   known inputs rather than a model &mdash; but it is computed, not observed. Only Infura&rsquo;s
+   quotes are real readings.<br><br>
+   Inclusion is simulated for every source alike: no quote here was ever broadcast, so each figure is
+   &ldquo;would this have cleared&rdquo;, not &ldquo;did it clear&rdquo;. Sample counts differ slightly
+   because a reconstructed quote is dropped where the four-block lookback or eight-block outcome
+   window is missing &mdash; material only on HyperEVM, which was fetched sparsely.<br><br>
+   A quote is scored by replaying it under the EIP-1559 rule against the blocks that followed:
+   eligible only where <span class="mono">maxFeePerGas ≥ baseFee</span>, paying
+   <span class="mono">min(maxFeePerGas, baseFee + tip)</span>. Read price and reliability together —
+   the cheapest source is often cheapest because it leaves no head-room for the base fee to rise.
+   This window did include one real congestion event — Ethereum ran 15&times; over its median base
+   fee for half an hour — so the reliability column is no longer purely theoretical. It is still a
+   single episode on one chain, and the other networks stayed quiet throughout.
+   Generated by <span class="mono">contrib/scripts/feeaudit</span>.`;
+
+buildControls(); render();
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+</script>

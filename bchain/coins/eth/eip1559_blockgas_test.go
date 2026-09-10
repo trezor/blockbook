@@ -37,8 +37,9 @@ func (s *feeHistoryRPCStub) CallContext(ctx context.Context, result interface{},
 func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 	// baseFeePerGas[blocks-1]=[3]=0x64=100 is the projected next-block base fee (4-element array, as a
 	// no-distinct-pending-block backend returns). Per-tier reward percentiles over 2 blocks.
+	// Three reward columns, matching eip1559RewardPercentiles {20, 70, 99}.
 	raw := `{"oldestBlock":"0x1",` +
-		`"reward":[["0x1","0x2","0x3","0x4"],["0x3","0x4","0x5","0x6"]],` +
+		`"reward":[["0x1","0x2","0x4"],["0x2","0x6","0x8"]],` +
 		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
 		`"gasUsedRatio":[0.5,0.5,0.5]}`
 	b := &EthereumRPC{
@@ -56,16 +57,16 @@ func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 	if fees.BaseFeePerGas.Int64() != 100 {
 		t.Errorf("BaseFeePerGas = %v, want 100", fees.BaseFeePerGas)
 	}
-	// tip = average of the tier's reward percentile; maxFeePerGas = 2*baseFee + tip.
+	// tip = the tier's reward column reduced over the window; maxFeePerGas = 2*baseFee + tip.
 	cases := []struct {
 		name    string
 		fee     *bchain.Eip1559Fee
 		wantTip int64
 	}{
-		{"low", fees.Low, 2},         // avg(1,3)
-		{"medium", fees.Medium, 3},   // avg(2,4)
-		{"high", fees.High, 4},       // avg(3,5)
-		{"instant", fees.Instant, 5}, // avg(4,6)
+		{"low", fees.Low, 2},         // p20 column (1,2), window max
+		{"medium", fees.Medium, 4},   // p70 column (2,6), window median
+		{"high", fees.High, 6},       // p70 column (2,6), window max
+		{"instant", fees.Instant, 8}, // p99 column (4,8), window max
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -89,13 +90,13 @@ func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 
 // TestEthereumTypeGetEip1559FeesOnChainShortRewardRow asserts the on-chain tier loop tolerates a
 // non-compliant eth_feeHistory whose reward rows are shorter than the requested percentile count: it
-// must not panic on h.Reward[j][i], and the per-tier average must divide only by the rows that
-// actually contributed a value (so a skipped short row does not deflate the tip).
+// must not panic indexing the row, and a tier whose column is missing reduces over the rows that
+// did carry it. It also covers the monotonic clamp, since dropping the row leaves instant below high.
 func TestEthereumTypeGetEip1559FeesOnChainShortRewardRow(t *testing.T) {
-	// Row 0 has all 4 percentiles; row 1 has only 2. For tiers high(i=2) and instant(i=3) row 1 is
-	// short and must be skipped, leaving the average over row 0 alone.
+	// Row 0 has all 3 percentiles; row 1 has only 2, so the instant tier's p99 column comes from
+	// row 0 alone - which lands it below high and must then be lifted by the clamp.
 	raw := `{"oldestBlock":"0x1",` +
-		`"reward":[["0x1","0x2","0x3","0x4"],["0x3","0x4"]],` +
+		`"reward":[["0x1","0x2","0x4"],["0x2","0x6"]],` +
 		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
 		`"gasUsedRatio":[0.5,0.5,0.5]}`
 	b := &EthereumRPC{
@@ -115,10 +116,10 @@ func TestEthereumTypeGetEip1559FeesOnChainShortRewardRow(t *testing.T) {
 		fee     *bchain.Eip1559Fee
 		wantTip int64
 	}{
-		{"low", fees.Low, 2},         // avg(1,3) over both rows
-		{"medium", fees.Medium, 3},   // avg(2,4) over both rows
-		{"high", fees.High, 3},       // row 1 short -> avg(3) over row 0 only
-		{"instant", fees.Instant, 4}, // row 1 short -> avg(4) over row 0 only
+		{"low", fees.Low, 2},         // p20 (1,2), max
+		{"medium", fees.Medium, 4},   // p70 (2,6), median
+		{"high", fees.High, 6},       // p70 (2,6), max
+		{"instant", fees.Instant, 6}, // p99 present only in row 0 (4); clamped up to high
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -303,4 +304,83 @@ func TestAttachBlockGas(t *testing.T) {
 			t.Errorf("GasLimit = %v, want 2", got.GasLimit)
 		}
 	})
+}
+
+// TestEthereumTypeGetEip1559FeesLadderMonotonic covers the case the clamp exists for: mixing
+// reducers across tiers can invert the ladder on a spiky window, because a window maximum of the
+// 20th percentile can exceed a window median of the 70th. Economy must never be quoted above Normal.
+func TestEthereumTypeGetEip1559FeesLadderMonotonic(t *testing.T) {
+	// One spiky block dominates the p20 column while the p70 column stays flat and low.
+	raw := `{"oldestBlock":"0x1",` +
+		`"reward":[["0x9","0x1","0x1"],["0x1","0x1","0x1"]],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"gasUsedRatio":[0.5,0.5,0.5]}`
+	b := &EthereumRPC{
+		RPC:         &feeHistoryRPCStub{raw: raw},
+		Timeout:     time.Second,
+		ChainConfig: &Configuration{Eip1559Fees: true},
+	}
+	fees, err := b.EthereumTypeGetEip1559Fees()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tiers := []*bchain.Eip1559Fee{fees.Low, fees.Medium, fees.High, fees.Instant}
+	names := []string{"low", "medium", "high", "instant"}
+	for i, f := range tiers {
+		if f == nil {
+			t.Fatalf("%s tier is nil", names[i])
+		}
+		// low is the unclamped window max of 9; every tier above is lifted to match it.
+		if f.MaxPriorityFeePerGas.Int64() != 9 {
+			t.Errorf("%s tip = %v, want 9", names[i], f.MaxPriorityFeePerGas)
+		}
+		if i > 0 && f.MaxPriorityFeePerGas.Cmp(tiers[i-1].MaxPriorityFeePerGas) < 0 {
+			t.Errorf("%s tip %v below %s %v: ladder inverted",
+				names[i], f.MaxPriorityFeePerGas, names[i-1], tiers[i-1].MaxPriorityFeePerGas)
+		}
+		// Clamped tiers must not share a big.Int with the tier they were lifted to.
+		if i > 0 && f.MaxPriorityFeePerGas == tiers[i-1].MaxPriorityFeePerGas {
+			t.Errorf("%s and %s share a MaxPriorityFeePerGas pointer", names[i], names[i-1])
+		}
+	}
+}
+
+func TestMedianAndMaxBigInt(t *testing.T) {
+	bi := func(v ...int64) []*big.Int {
+		out := make([]*big.Int, len(v))
+		for i, x := range v {
+			out[i] = big.NewInt(x)
+		}
+		return out
+	}
+	// A reward above math.MaxInt64 must survive: the old int64 accumulator wrapped negative here.
+	huge, _ := new(big.Int).SetString("18446744073709551615", 10) // 2^64-1
+	cases := []struct {
+		name string
+		in   []*big.Int
+		med  string
+		max  string
+	}{
+		{"empty", nil, "0", "0"},
+		{"single", bi(7), "7", "7"},
+		{"odd", bi(5, 1, 9), "5", "9"},
+		{"even averages the middles", bi(1, 2, 6, 8), "4", "8"},
+		{"above int64", []*big.Int{huge, big.NewInt(1)}, "9223372036854775808", "18446744073709551615"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := medianBigInt(c.in).String(); got != c.med {
+				t.Errorf("medianBigInt = %s, want %s", got, c.med)
+			}
+			if got := maxBigInt(c.in).String(); got != c.max {
+				t.Errorf("maxBigInt = %s, want %s", got, c.max)
+			}
+		})
+	}
+	// The reducers must not reorder or otherwise disturb the caller's slice.
+	in := bi(3, 1, 2)
+	medianBigInt(in)
+	if in[0].Int64() != 3 || in[1].Int64() != 1 || in[2].Int64() != 2 {
+		t.Errorf("medianBigInt mutated its input: %v", in)
+	}
 }
