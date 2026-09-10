@@ -13,6 +13,41 @@ import (
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
+func Test_addressFromPaddedHex(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "padded topic", input: "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8", want: "0x2aaCF811aC1A60081EA39F7783c0D26c500871a8"},
+		{name: "padded no prefix", input: "0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8", want: "0x2aaCF811aC1A60081EA39F7783c0D26c500871a8"},
+		{name: "uppercase 0X prefix", input: "0X0000000000000000000000005DC6288B35E0807A3D6FEB89B3A2FF4AB773168E", want: "0x5Dc6288b35E0807A3d6fEB89b3a2Ff4aB773168e"},
+		{name: "bare address", input: "0x5dc6288b35e0807a3d6feb89b3a2ff4ab773168e", want: "0x5Dc6288b35E0807A3d6fEB89b3a2Ff4aB773168e"},
+		{name: "odd length over 20 bytes keeps low 20 bytes", input: "f5dc6288b35e0807a3d6feb89b3a2ff4ab773168e", want: "0x5Dc6288b35E0807A3d6fEB89b3a2Ff4aB773168e"},
+		{name: "zero word", input: "0x0000000000000000000000000000000000000000000000000000000000000000", want: "0x0000000000000000000000000000000000000000"},
+		{name: "short value is left-padded", input: "0x1a2b3c", want: "0x00000000000000000000000000000000001A2b3c"},
+		{name: "invalid hex in address bytes", input: "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871zz", wantErr: true},
+		{name: "invalid short", input: "0xzz", wantErr: true},
+		{name: "prefix only", input: "0x", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := addressFromPaddedHex(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("addressFromPaddedHex(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("addressFromPaddedHex(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+			// callers store the result unmodified, so it must already be EIP-55
+			if got != "" && got != EIP55AddressFromAddress(got) {
+				t.Errorf("addressFromPaddedHex(%q) = %q is not EIP-55 checksummed", tt.input, got)
+			}
+		})
+	}
+}
+
 func Test_contractGetTransfersFromLog(t *testing.T) {
 	tests := []struct {
 		name string

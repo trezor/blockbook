@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"encoding/hex"
 	"math/big"
 	"strings"
 
@@ -34,19 +35,25 @@ const (
 	evmWordHex   = evmWordBytes * 2
 )
 
+// addressFromPaddedHex returns the EIP-55 address stored in a 32-byte ABI word
+// (log topic or calldata slot). The address is the last 20 bytes, so decoding
+// only that slice avoids a big.Int round trip for every transfer; shorter or
+// odd inputs still take the numeric path.
 func addressFromPaddedHex(s string) (string, error) {
-	var t big.Int
-	var ok bool
 	if has0xPrefix(s) {
-		_, ok = t.SetString(s[2:], 16)
-	} else {
-		_, ok = t.SetString(s, 16)
+		s = s[2:]
 	}
-	if !ok {
+	const addrHexLen = EthereumTypeAddressDescriptorLen * 2
+	if len(s) >= addrHexLen {
+		if b, err := hex.DecodeString(s[len(s)-addrHexLen:]); err == nil {
+			return ethcommon.BytesToAddress(b).String(), nil
+		}
+	}
+	var t big.Int
+	if _, ok := t.SetString(s, 16); !ok {
 		return "", errors.New("Data is not a number")
 	}
-	a := ethcommon.BigToAddress(&t)
-	return a.String(), nil
+	return ethcommon.BigToAddress(&t).String(), nil
 }
 
 func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err error) {
@@ -85,8 +92,8 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 	return &bchain.TokenTransfer{
 		Standard: standard,
 		Contract: EIP55AddressFromAddress(l.Address),
-		From:     EIP55AddressFromAddress(from),
-		To:       EIP55AddressFromAddress(to),
+		From:     from,
+		To:       to,
 		Value:    value,
 	}, nil
 }
@@ -126,8 +133,8 @@ func processERC1155TransferSingleEvent(l *bchain.RpcLog) (transfer *bchain.Token
 	return &bchain.TokenTransfer{
 		Standard:         bchain.MultiToken,
 		Contract:         EIP55AddressFromAddress(l.Address),
-		From:             EIP55AddressFromAddress(from),
-		To:               EIP55AddressFromAddress(to),
+		From:             from,
+		To:               to,
 		MultiTokenValues: []bchain.MultiTokenValue{{Id: id, Value: value}},
 	}, nil
 }
@@ -258,8 +265,8 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 	return &bchain.TokenTransfer{
 		Standard:         bchain.MultiToken,
 		Contract:         EIP55AddressFromAddress(l.Address),
-		From:             EIP55AddressFromAddress(from),
-		To:               EIP55AddressFromAddress(to),
+		From:             from,
+		To:               to,
 		MultiTokenValues: idValues,
 	}, nil
 }
@@ -312,7 +319,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			Standard: bchain.FungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
 			From:     EIP55AddressFromAddress(tx.From),
-			To:       EIP55AddressFromAddress(to),
+			To:       to,
 			Value:    t,
 		})
 	} else if len(tx.Payload) >= 10+192 &&
@@ -335,8 +342,8 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 		r = append(r, &bchain.TokenTransfer{
 			Standard: bchain.NonFungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
-			From:     EIP55AddressFromAddress(from),
-			To:       EIP55AddressFromAddress(to),
+			From:     from,
+			To:       to,
 			Value:    t,
 		})
 	}
