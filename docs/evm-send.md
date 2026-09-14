@@ -257,6 +257,14 @@ does not hold would be deleted at the next tick — so indexing on the hint woul
 works and futile where it would matter. Tron also has no alternative send-tx provider, which is the
 private-mempool case the whole hint exists for. The declaration is accepted and ignored, at no cost.
 
+A wallet does reach this path: Tron transactions serialize `"nonce":0` (the field has no `omitempty`
+and `TronParser.GetEthereumTxData` zeroes it), so a hint builder keyed on a numeric nonce does not
+skip a Tron account on shape alone, and Tron's parser reports `ChainEthereumType`, so the handler
+gate passes. Two things then make it inert rather than wrong: a Tron txid is bare 64-hex, which
+`privatePendingTxids` drops for want of the `0x` prefix, and `TronRPC` ignores whatever survives.
+Invalid entries are dropped silently, never rejected, so a declaration in the wrong shape costs the
+request nothing.
+
 Note the deliberate trade-off against pre-#1629 behavior: `estimateFee` is no longer routed to the
 relay for *every* sender, so a wallet that sent privately, omitted the hint, and is served by a
 different replica than the one that accepted the send has its estimate simulated on the primary RPC
