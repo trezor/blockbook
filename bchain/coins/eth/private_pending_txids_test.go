@@ -194,3 +194,46 @@ func TestAddPendingTransactionsSkipsUndecodableBody(t *testing.T) {
 		t.Fatalf("sender mempool txids = %v, want none", got)
 	}
 }
+
+// hangingRPC accepts every call and never answers, so each lookup burns its full context deadline.
+type hangingRPC struct {
+	pendingTxRPC
+	calls int
+}
+
+func (m *hangingRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	m.calls++
+	<-ctx.Done()
+
+	return ctx.Err()
+}
+
+// The per-txid deadlines add up rather than sharing one budget, and the lookups sit in front of the
+// account info the caller is waiting for - which is why maxPrivatePendingTxids is small. Asserts a
+// lower bound only, so a slow machine cannot make it flaky; it fails if the calls ever become
+// concurrent or stop honoring the timeout.
+func TestHungBackendCostsOneTimeoutPerDeclaredTxid(t *testing.T) {
+	const perCall = 150 * time.Millisecond
+	rpc := &hangingRPC{pendingTxRPC: pendingTxRPC{txs: map[string]*bchain.RpcTransaction{}}}
+	b := &EthereumRPC{RPC: rpc, Parser: NewEthereumParser(1, false), Timeout: perCall, mempoolInitialized: true}
+	b.Mempool = bchain.NewMempoolEthereumType(b, time.Hour, false)
+
+	txids := []string{
+		"0x00000000000000000000000000000000000000000000000000000000000000a1",
+		"0x00000000000000000000000000000000000000000000000000000000000000a2",
+		"0x00000000000000000000000000000000000000000000000000000000000000a3",
+	}
+	start := time.Now()
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), txids)
+	elapsed := time.Since(start)
+
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if rpc.calls != len(txids) {
+		t.Fatalf("backend calls = %d, want one per declared txid (%d)", rpc.calls, len(txids))
+	}
+	if elapsed < time.Duration(len(txids))*perCall {
+		t.Fatalf("elapsed %s, want at least %s - the deadlines must not share one budget", elapsed, time.Duration(len(txids))*perCall)
+	}
+}
