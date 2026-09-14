@@ -746,3 +746,93 @@ func TestGetBlockChainFallBehindYieldGating(t *testing.T) {
 		})
 	}
 }
+
+// parallelTailTestChain serves a fixed range and fails one height forever. Unlike
+// getBlockChainTestChain it is safe for concurrent getBlockWorkers.
+type parallelTailTestChain struct {
+	bchain.BlockChain
+	mu         sync.Mutex
+	failHeight uint32
+	failErr    error
+	calls      map[uint32]int
+}
+
+func (c *parallelTailTestChain) GetChainParser() bchain.BlockChainParser {
+	return &getBlockChainTestParser{chainType: bchain.ChainEthereumType}
+}
+
+func (c *parallelTailTestChain) GetBlockHash(height uint32) (string, error) {
+	return "h" + strconv.Itoa(int(height)), nil
+}
+
+func (c *parallelTailTestChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	c.mu.Lock()
+	c.calls[height]++
+	c.mu.Unlock()
+	if height == c.failHeight {
+		return nil, c.failErr
+	}
+	return &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: hash, Height: height}}, nil
+}
+
+// Regression for #1767: a worker that exits on a tail block without producing it must not
+// leave the coordinator waiting forever on siblings parked behind the missing height.
+func TestParallelConnectBlocksReturnsWhenTailWorkerExitsWithoutBlock(t *testing.T) {
+	wantErr := stdErrors.New("rpc -32000: logs unavailable")
+	chain := &parallelTailTestChain{failHeight: 1, failErr: wantErr, calls: map[uint32]int{}}
+	w := &SyncWorker{
+		chain: chain,
+		missingBlockRetry: MissingBlockRetryConfig{
+			TipRecheckThreshold: 2,
+			RetryDelay:          time.Millisecond,
+		},
+		metrics: getTestMetrics(t),
+	}
+	done := make(chan error, 1)
+	go func() { done <- w.ParallelConnectBlocks(nil, 1, 4, 4) }()
+	select {
+	case err := <-done:
+		if !stdErrors.Is(err, wantErr) {
+			t.Fatalf("ParallelConnectBlocks error = %v, want %v", err, wantErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ParallelConnectBlocks did not return: coordinator wedged on a tail worker exit")
+	}
+}
+
+func TestWaitWorkersOrAbort(t *testing.T) {
+	t.Run("workers finish without abort", func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go wg.Done()
+		terminated := false
+		if err := waitWorkersOrAbort(&wg, make(chan error, 1), func() { terminated = true }); err != nil {
+			t.Fatalf("error = %v, want nil", err)
+		}
+		if terminated {
+			t.Fatal("terminate called although all workers exited cleanly")
+		}
+	})
+	t.Run("abort unparks a blocked worker", func(t *testing.T) {
+		var wg sync.WaitGroup
+		terminating := make(chan struct{})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-terminating
+		}()
+		abortCh := make(chan error, 1)
+		wantErr := stdErrors.New("worker failed")
+		abortCh <- wantErr
+		done := make(chan error, 1)
+		go func() { done <- waitWorkersOrAbort(&wg, abortCh, func() { close(terminating) }) }()
+		select {
+		case err := <-done:
+			if !stdErrors.Is(err, wantErr) {
+				t.Fatalf("error = %v, want %v", err, wantErr)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("waitWorkersOrAbort did not return after abort")
+		}
+	})
+}
