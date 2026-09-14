@@ -333,7 +333,7 @@
         "chainExtraData": {
           "contractType": "WithdrawExpireUnfreezeContract",
           "operation": "withdraw",
-          "unstakeAmount": "100000000000",
+          "withdrawnUnfreeze": "100000000000",
           "bandwidthUsage": "253"
         }
       }

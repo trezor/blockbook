@@ -8,13 +8,16 @@ type TronVoteExtra struct {
 
 // TronChainExtraData contains normalized Tron-specific transaction metadata.
 type TronChainExtraData struct {
-	ContractType      string          `json:"contractType,omitempty"`
-	Operation         string          `json:"operation,omitempty"`
-	Note              string          `json:"note,omitempty"`
-	Resource          string          `json:"resource,omitempty"`
-	StakeAmount       string          `json:"stakeAmount,omitempty"`
-	UnstakeAmount     string          `json:"unstakeAmount,omitempty"`
-	ClaimedVoteReward string          `json:"claimedVoteReward,omitempty"`
+	ContractType      string `json:"contractType,omitempty"`
+	Operation         string `json:"operation,omitempty"`
+	Note              string `json:"note,omitempty"`
+	Resource          string `json:"resource,omitempty"`
+	StakeAmount       string `json:"stakeAmount,omitempty"`
+	UnstakeAmount     string `json:"unstakeAmount,omitempty"`
+	ClaimedVoteReward string `json:"claimedVoteReward,omitempty"`
+	// WithdrawnUnfreeze is the matured unstake that java-tron swept back into the
+	// spendable balance in this transaction, on any Stake 2.0 unfreeze or cancel.
+	WithdrawnUnfreeze string          `json:"withdrawnUnfreeze,omitempty"`
 	DelegateAmount    string          `json:"delegateAmount,omitempty"`
 	DelegateTo        string          `json:"delegateTo,omitempty"`
 	AssetIssueID      string          `json:"assetIssueID,omitempty"`
