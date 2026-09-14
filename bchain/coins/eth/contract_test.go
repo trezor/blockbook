@@ -317,8 +317,21 @@ func Test_contractGetTransfersFromTx(t *testing.T) {
 			},
 		},
 		{
-			name: "ERC721 transferFrom",
+			// 0x23b872dd is shared by ERC-20 and ERC-721, so no standard can be derived from calldata
+			name: "transferFrom with the shared ERC-20/ERC-721 selector yields nothing",
 			args: (b2.Txs[2].CoinSpecificData.(bchain.EthereumSpecificData)).Tx,
+			want: bchain.TokenTransfers{},
+		},
+		{
+			name: "ERC721 safeTransferFrom",
+			args: &bchain.RpcTransaction{
+				From: "0x837e3f699d85a4b0b99894567e9233dfb1dcb081",
+				To:   "0xcda9fc258358ecaa88845f19af595e908bb7efe9",
+				Payload: erc721SafeTransferFromMethodSignature +
+					"000000000000000000000000837e3f699d85a4b0b99894567e9233dfb1dcb081" +
+					"0000000000000000000000007b62eb7fe80350dc7ec945c0b73242cb9877fb1b" +
+					"0000000000000000000000000000000000000000000000000000000000000001",
+			},
 			want: bchain.TokenTransfers{
 				{
 					Standard: bchain.NonFungibleToken,
@@ -326,6 +339,28 @@ func Test_contractGetTransfersFromTx(t *testing.T) {
 					From:     "0x837e3f699d85a4b0b99894567e9233dfb1dcb081",
 					To:       "0x7b62eb7fe80350dc7ec945c0b73242cb9877fb1b",
 					Value:    *big.NewInt(1),
+				},
+			},
+		},
+		{
+			name: "ERC721 safeTransferFrom with data",
+			args: &bchain.RpcTransaction{
+				From: "0x837e3f699d85a4b0b99894567e9233dfb1dcb081",
+				To:   "0xcda9fc258358ecaa88845f19af595e908bb7efe9",
+				Payload: erc721SafeTransferFromWithDataMethodSignature +
+					"000000000000000000000000837e3f699d85a4b0b99894567e9233dfb1dcb081" +
+					"0000000000000000000000007b62eb7fe80350dc7ec945c0b73242cb9877fb1b" +
+					"0000000000000000000000000000000000000000000000000000000000000002" +
+					"0000000000000000000000000000000000000000000000000000000000000080" +
+					"0000000000000000000000000000000000000000000000000000000000000000",
+			},
+			want: bchain.TokenTransfers{
+				{
+					Standard: bchain.NonFungibleToken,
+					Contract: "0xcda9fc258358ecaa88845f19af595e908bb7efe9",
+					From:     "0x837e3f699d85a4b0b99894567e9233dfb1dcb081",
+					To:       "0x7b62eb7fe80350dc7ec945c0b73242cb9877fb1b",
+					Value:    *big.NewInt(2),
 				},
 			},
 		},
