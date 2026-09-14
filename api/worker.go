@@ -2855,7 +2855,8 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	var backendError string
 	if err != nil {
 		glog.Error("GetChainInfo error ", err)
-		backendError = errors.Annotatef(err, "GetChainInfo").Error()
+		// served verbatim on /api/ and /, and a dial error carries the full backend url
+		backendError = common.RedactURLs(errors.Annotatef(err, "GetChainInfo").Error())
 		ci = &bchain.ChainInfo{}
 		// set not in sync in case of backend error
 		inSync = false
