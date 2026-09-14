@@ -1611,6 +1611,11 @@ func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *b
 }
 
 func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInternalData, contracts []bchain.ContractInfo, blockHeight uint32) []bchain.ContractInfo {
+	if call.Error != "" {
+		// a failed frame moves no value and its whole subtree is reverted (#1621)
+		d.Error = call.Error
+		return contracts
+	}
 	value, err := hexutil.DecodeBig(call.Value)
 	if err != nil {
 		value = new(big.Int)
@@ -1645,9 +1650,6 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 		}
 	} else if err == nil && value.BitLen() > 0 {
 		glog.Warningf("processCallTrace: unknown call type %q with value in block %d, not indexed", call.Type, blockHeight)
-	}
-	if call.Error != "" {
-		d.Error = call.Error
 	}
 	for i := range call.Calls {
 		contracts = b.processCallTrace(&call.Calls[i], d, contracts, blockHeight)
@@ -1711,10 +1713,12 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 			} else if r.Type == "SELFDESTRUCT" {
 				d.Type = bchain.SELFDESTRUCT
 			}
-			for j := range r.Calls {
-				contracts = b.processCallTrace(&r.Calls[j], d, contracts, blockHeight)
-			}
-			if r.Error != "" {
+			if r.Error == "" {
+				for j := range r.Calls {
+					contracts = b.processCallTrace(&r.Calls[j], d, contracts, blockHeight)
+				}
+			} else {
+				// a reverted root undoes every child frame, so none of them is a real transfer
 				baseError := PackInternalTransactionError(r.Error)
 				if len(baseError) > 1 {
 					// n, _ := ethNumber(transactions[i].BlockNumber)

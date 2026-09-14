@@ -178,6 +178,10 @@ func buildInternalDataFromTronInfos(
 		}
 
 		for _, itx := range info.InternalTransactions {
+			if itx.Rejected {
+				// java-tron flags a failed call and its whole subtree as rejected; the value never moved (#1621)
+				continue
+			}
 
 			t, err := tronNoteHexToInternalType(itx.Note)
 			if err != nil {
@@ -233,6 +237,10 @@ func detectTopType(internalTxs []tronInternalTransaction) (
 	var destructedContract string
 
 	for _, itx := range internalTxs {
+		if itx.Rejected {
+			// a rejected create/suicide never happened, so it must not shape the tx type
+			continue
+		}
 		t, err := tronNoteHexToInternalType(itx.Note)
 		if err != nil {
 			return bchain.CALL, "", err
