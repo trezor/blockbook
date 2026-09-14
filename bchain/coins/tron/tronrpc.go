@@ -1206,8 +1206,11 @@ func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withC
 	return 0, 0, false, nil
 }
 
-// EthereumTypeAddPendingTransactions: Tron pending bodies come from the HTTP full node, not
-// eth_getTransactionByHash, and there is no private relay to lose them to - a declared txid is a no-op.
+// EthereumTypeAddPendingTransactions: the declared txids are accepted and ignored. Tron's mempool
+// mirrors the node's pending list on every resync - reconcileMempoolWithPendingList deletes whatever
+// the list omits - so a transaction the node holds is already indexed without a declaration, and one
+// it does not hold would be removed at the next tick. There is no private relay here either, which is
+// the case the hint exists for.
 func (b *TronRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
 	return 0, nil
 }
