@@ -58,9 +58,12 @@ const maxWebsocketEstimateFeeBlocks = 32
 const maxPrivatePendingNonces = 64
 
 // maxPrivatePendingTxids bounds how many declared in-flight txids a getAccountInfo request may have
-// looked up (see WsPrivatePending): each txid this instance's mempool does not know costs one
-// backend round trip, so the cap is what keeps a malformed or hostile request from fanning out.
-const maxPrivatePendingTxids = 64
+// looked up (see WsPrivatePending). It is far below maxPrivatePendingNonces because the two cost
+// different things: a declared nonce is arithmetic, a declared txid the mempool does not know is a
+// sequential backend round trip under the chain's RPC timeout, in front of the answer the caller is
+// waiting for. A wallet has a handful of transactions in flight, so 8 covers the real case while
+// bounding what a malformed or hostile request can spend.
+const maxPrivatePendingTxids = 8
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
 const maxWebsocketSubscribeFiatRatesTokens = 1000

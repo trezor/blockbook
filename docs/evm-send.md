@@ -217,8 +217,15 @@ The field appears in two places, matching the two consumers of the routing machi
 
   Ignored without effect: a mined hash (the mempool does not check, so the read path applies the
   guard), one no backend knows, one sent by somebody else, and anything that is not a 0x-prefixed
-  32 byte hash. The list is capped (`maxPrivatePendingTxids`), since each unknown hash costs one
-  backend round trip.
+  32 byte hash.
+
+  The list is capped at `maxPrivatePendingTxids`, well below the nonce cap, because the two cost
+  different things. The lookups run **in front of** the answer the caller is waiting for, one after
+  another, and each gets its own fresh `rpc_timeout` deadline rather than sharing one budget — so a
+  backend that accepts connections and never answers costs the cap times the timeout, 8 x 25 s on the
+  stock EVM configs, before the account info is served. On a healthy backend the same eight lookups
+  are a few hundred milliseconds and a wallet declares one or two hashes, not eight. The cap is what
+  keeps the pathological case finite; it is not a throughput budget.
 
 The hint is **additive and backward-compatible**: absent the field, behavior is exactly as before
 (the `recentSenders` heuristic remains the fallback, and is still consulted when no hint is
