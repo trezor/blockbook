@@ -417,6 +417,96 @@ func TestValidateRPCEnvVarsToleratesStagingCoin(t *testing.T) {
 	}
 }
 
+func TestBlockchainCfgOmitsMessageQueueCurveWhenUnset(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"bitcoin",
+		prodMQURLPrefix+"bitcoin",
+	)
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if config.IPC.MessageQueueCurve != nil {
+		t.Fatal("expected bitcoin coin definition to omit message_queue_curve")
+	}
+
+	rendered := renderBlockchainCfg(t, config)
+	var parsed map[string]json.RawMessage
+	if err := json.Unmarshal(rendered, &parsed); err != nil {
+		t.Fatalf("json.Unmarshal(blockchaincfg) error = %v", err)
+	}
+	if _, ok := parsed["message_queue_curve"]; ok {
+		t.Fatalf("did not expect message_queue_curve in rendered blockchaincfg:\n%s", rendered)
+	}
+}
+
+func TestBlockchainCfgRendersMessageQueueCurveFromCoinIPC(t *testing.T) {
+	const raw = `{
+		"ipc": {
+			"message_queue_binding_template": "tcp://127.0.0.1:38330",
+			"message_queue_curve": {
+				"public_key": "client-public",
+				"secret_key": "client-secret",
+				"server_key": "server-public"
+			}
+		}
+	}`
+
+	var decoded Config
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal(coin ipc) error = %v", err)
+	}
+	if decoded.IPC.MessageQueueCurve == nil {
+		t.Fatal("expected ipc.message_queue_curve to decode")
+	}
+
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+	withTemporarilyUnsetEnv(t,
+		buildEnvVar,
+		devMQURLPrefix+"bitcoin",
+		prodMQURLPrefix+"bitcoin",
+	)
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	config.IPC.MessageQueueCurve = decoded.IPC.MessageQueueCurve
+
+	rendered := renderBlockchainCfg(t, config)
+	var parsed struct {
+		MessageQueueCurve *MessageQueueCurve `json:"message_queue_curve"`
+	}
+	if err := json.Unmarshal(rendered, &parsed); err != nil {
+		t.Fatalf("json.Unmarshal(blockchaincfg) error = %v", err)
+	}
+	if parsed.MessageQueueCurve == nil {
+		t.Fatalf("expected message_queue_curve in rendered blockchaincfg:\n%s", rendered)
+	}
+	if parsed.MessageQueueCurve.PublicKey != "client-public" ||
+		parsed.MessageQueueCurve.SecretKey != "client-secret" ||
+		parsed.MessageQueueCurve.ServerKey != "server-public" {
+		t.Fatalf("message_queue_curve = %+v", parsed.MessageQueueCurve)
+	}
+}
+
+func renderBlockchainCfg(t *testing.T, config *Config) []byte {
+	t.Helper()
+
+	templ := config.ParseTemplate()
+	templ = template.Must(templ.ParseFiles(filepath.Join("..", "templates", "blockbook", "blockchaincfg.json")))
+
+	var blockchainCfg bytes.Buffer
+	if err := templ.ExecuteTemplate(&blockchainCfg, "main", config); err != nil {
+		t.Fatalf("ExecuteTemplate(blockchaincfg) error = %v", err)
+	}
+	return blockchainCfg.Bytes()
+}
+
 func TestStagingAliasesParsesListAndVariants(t *testing.T) {
 	t.Setenv(stagingEnvVar, "robinhood_archive, foo-bar")
 

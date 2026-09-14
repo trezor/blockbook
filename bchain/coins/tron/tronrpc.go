@@ -44,9 +44,10 @@ const (
 
 type TronConfiguration struct {
 	eth.Configuration
-	MessageQueueBinding     string `json:"message_queue_binding"`
-	FullNodeHTTPURLTemplate string `json:"tron_fullnode_http_url_template"`
-	SolidityHTTPURLTemplate string `json:"tron_solidity_http_url_template"`
+	MessageQueueBinding     string              `json:"message_queue_binding"`
+	MessageQueueCurve       *bchain.CurveConfig `json:"message_queue_curve,omitempty"`
+	FullNodeHTTPURLTemplate string              `json:"tron_fullnode_http_url_template"`
+	SolidityHTTPURLTemplate string              `json:"tron_solidity_http_url_template"`
 }
 
 type tronResourceCode int64
@@ -611,7 +612,7 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 				TxReceive:      "",
 			}
 
-			mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.handleMQNotification, tronTopics)
+			mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.ChainConfig.MessageQueueCurve, b.handleMQNotification, tronTopics)
 			if err != nil {
 				return err
 			}
