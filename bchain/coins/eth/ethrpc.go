@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	stdErrors "errors"
@@ -1980,28 +1981,39 @@ func (b *EthereumRPC) recoverMinedTransaction(txid string) (*bchain.RpcTransacti
 	return nil, nil
 }
 
+// rpcTransactionByHash returns the raw transaction body, from the alternative provider's cache when
+// it holds it, otherwise from eth_getTransactionByHash. found is false on a null answer; what a null
+// means is the caller's call.
+func (b *EthereumRPC) rpcTransactionByHash(txid string) (tx *bchain.RpcTransaction, found bool, err error) {
+	var cached bool
+	if b.alternativeSendTxProvider != nil {
+		tx, cached = b.alternativeSendTxProvider.GetTransaction(txid)
+	}
+	if !cached {
+		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+		defer cancel()
+		tx = &bchain.RpcTransaction{}
+		if err = b.RPC.CallContext(ctx, tx, "eth_getTransactionByHash", ethcommon.HexToHash(txid)); err != nil {
+			return nil, false, err
+		}
+	}
+	if *tx == (bchain.RpcTransaction{}) {
+		return tx, false, nil
+	}
+	return tx, true, nil
+}
+
 // GetTransaction returns a transaction by the transaction ID.
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	var tx *bchain.RpcTransaction
-	var txFound bool
-	var err error
 	hash := ethcommon.HexToHash(txid)
-	if b.alternativeSendTxProvider != nil {
-		tx, txFound = b.alternativeSendTxProvider.GetTransaction(txid)
-	}
-	if !txFound {
-		tx = &bchain.RpcTransaction{}
-		err = b.RPC.CallContext(ctx, tx, "eth_getTransactionByHash", hash)
-		if err != nil {
-			return nil, err
-		}
+	tx, found, err := b.rpcTransactionByHash(txid)
+	if err != nil {
+		return nil, err
 	}
 	// recoveredReceipt is set only when the transaction was reconstructed via the pruned-index
 	// fallback below; the mined branch reuses it instead of fetching the receipt again.
 	var recoveredReceipt *bchain.RpcReceipt
-	if *tx == (bchain.RpcTransaction{}) {
+	if !found {
 		// eth_getTransactionByHash returned null. Some archive backends (observed on
 		// QuikNode Base) prune the transaction-by-hash index beyond a recent window
 		// while still serving block bodies and receipts, so a mined transaction older
@@ -2327,6 +2339,67 @@ func (b *EthereumRPC) observeAlternativeNonceRequest(result string) {
 		return
 	}
 	b.metrics.EthAlternativeNonceRequests.With(common.Labels{"result": result}).Inc()
+}
+
+// observePrivatePendingTxid records the outcome of one wallet-declared txid (see
+// EthereumTypeAddPendingTransactions).
+func (b *EthereumRPC) observePrivatePendingTxid(result string) {
+	if b.metrics == nil || b.metrics.EthPrivatePendingTxids == nil {
+		return
+	}
+	b.metrics.EthPrivatePendingTxids.With(common.Labels{"result": result}).Inc()
+}
+
+// EthereumTypeAddPendingTransactions indexes the transactions a wallet declared as its own in-flight
+// sends (server.WsPrivatePending.Txids) that this instance's mempool never saw - accepted by another
+// replica, lost to a restart, or on a chain without the pending-tx subscription. One backend round
+// trip per unknown txid; a body is indexed only when the backend (or the relay cache) returns it
+// without a block and it is sent from addrDesc. A known txid costs nothing and keeps its first-seen
+// time, so the mempool timeout stays the only server-side expiry (see docs/evm-send.md).
+func (b *EthereumRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
+	if b.Mempool == nil || !b.mempoolInitialized {
+		return 0, nil
+	}
+	added := 0
+	for _, txid := range txids {
+		if b.Mempool.GetTransactionTime(txid) != 0 {
+			b.observePrivatePendingTxid("already_indexed")
+			continue
+		}
+		tx, found, err := b.rpcTransactionByHash(txid)
+		if err != nil {
+			b.observePrivatePendingTxid("error")
+			glog.Warning("privatePending txid ", txid, ": ", err)
+			continue
+		}
+		if !found {
+			b.observePrivatePendingTxid("not_found")
+			continue
+		}
+		if tx.BlockNumber != "" {
+			b.observePrivatePendingTxid("mined")
+			continue
+		}
+		from, err := b.Parser.GetAddrDescFromAddress(tx.From)
+		if err != nil || !bytes.Equal(from, addrDesc) {
+			b.observePrivatePendingTxid("foreign")
+			continue
+		}
+		btx, err := b.Parser.EthTxToTx(tx, nil, nil, 0, 0, true)
+		if err != nil {
+			b.observePrivatePendingTxid("error")
+			glog.Warning("privatePending txid ", txid, ": ", err)
+			continue
+		}
+		if b.Mempool.AddPendingTransactionToMempool(txid, btx) {
+			added++
+			b.observePrivatePendingTxid("indexed")
+		} else {
+			// the subscription got there first
+			b.observePrivatePendingTxid("already_indexed")
+		}
+	}
+	return added, nil
 }
 
 // observePendingFloorRaised records that raiseToPendingFloor lifted a getTransactionCount answer above

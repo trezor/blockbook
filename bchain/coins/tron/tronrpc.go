@@ -1191,6 +1191,12 @@ func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withC
 	return 0, 0, false, nil
 }
 
+// EthereumTypeAddPendingTransactions: Tron pending bodies come from the HTTP full node, not
+// eth_getTransactionByHash, and there is no private relay to lose them to - a declared txid is a no-op.
+func (b *TronRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
+	return 0, nil
+}
+
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	resp, _, err := b.getTransactionByIDWithFallback(txid)
 	if err != nil {

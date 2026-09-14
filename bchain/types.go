@@ -358,6 +358,9 @@ type BlockChain interface {
 	// EthereumType specific
 	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
 	EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfirmed bool, privatePendingNonces ...uint64) (pending uint64, confirmed uint64, confirmedOK bool, err error)
+	// EthereumTypeAddPendingTransactions indexes the wallet-declared txids that the backend (or the
+	// relay cache) returns as pending and sent from addrDesc; returns how many were newly indexed.
+	EthereumTypeAddPendingTransactions(addrDesc AddressDescriptor, txids []string) (int, error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetEip1559Fees() (*Eip1559Fees, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)

@@ -233,3 +233,33 @@ func GetTestEthereumTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 		CoinSpecificData: Block2SpecificData,
 	}
 }
+
+// EthPendingTxid is a transaction that exists only in the backend's pool: EthAddr7b -> EthAddr55,
+// nonce 0x9. It is not in any test block, so only a privatePending declaration can surface it.
+const EthPendingTxid = "0x1111111111111111111111111111111111111111111111111111111111111111"
+
+// GetTestEthereumTypePendingTx returns the pending transaction as EthTxToTx builds one: no block,
+// no confirmations, and the raw body kept in CoinSpecificData so the mempool can read its nonce.
+func GetTestEthereumTypePendingTx() *bchain.Tx {
+	rpcTx := &bchain.RpcTransaction{
+		Hash:             EthPendingTxid,
+		From:             EthAddr7bEIP55,
+		To:               "0x" + EthAddr55,
+		Value:            "0x1bc16d674ec80000",
+		AccountNonce:     "0x9",
+		GasLimit:         "0x5208",
+		GasPrice:         "0x430e23400",
+		BlockNumber:      "",
+		TransactionIndex: "0x0",
+	}
+	return &bchain.Tx{
+		Txid: EthPendingTxid,
+		Vin:  []bchain.Vin{{Addresses: []string{EthAddr7bEIP55}}},
+		Vout: []bchain.Vout{{
+			N:            0,
+			ValueSat:     *big.NewInt(2000000000000000000),
+			ScriptPubKey: bchain.ScriptPubKey{Addresses: []string{"0x" + EthAddr55}},
+		}},
+		CoinSpecificData: bchain.EthereumSpecificData{Tx: rpcTx},
+	}
+}
