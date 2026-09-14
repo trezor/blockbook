@@ -302,6 +302,11 @@ metrics:
     type: counter_vec
     help: eth_getTransactionCount lookups actually routed to the alternative send-transaction provider, labeled by result - success (the provider answered, its pending nonce raised to the mempool floor) or error (the lookup fell back to the primary RPC). Only addresses that sent privately through the provider within the routing window (15 min, see useForNonces) are routed here - the small gated subset, not every address request. A low, mostly-success rate confirms the gating is sparing the provider's rate quota
     labels: [result]
+  eth_private_pending_txids_total:
+    name: blockbook_eth_private_pending_txids_total
+    type: counter_vec
+    help: Transaction hashes declared in the websocket getAccountInfo privatePending.txids hint, labeled by outcome - indexed (unknown to this mempool, the backend or relay cache returned it as pending and sent from the queried address, so it was added to the address index), already_indexed (no backend call), mined, not_found (the backend answered null), foreign (pending but not sent from the queried address) or error (backend or decode failure). indexed fires when a wallet lands on a replica that never saw its send - multi-replica deployments, restarts, private relays, disableMempoolSync chains - and should be small next to already_indexed. A sustained not_found rate means wallets keep declaring hashes no backend knows; foreign should stay near zero and points at a misbehaving client
+    labels: [result]
   eth_alternative_estimate_gas_requests_total:
     name: blockbook_eth_alternative_estimate_gas_requests_total
     type: counter_vec

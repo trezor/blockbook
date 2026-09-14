@@ -1,10 +1,12 @@
 package dbtestdata
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"math/big"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
@@ -12,15 +14,49 @@ import (
 
 type fakeBlockChainEthereumType struct {
 	*fakeBlockChain
+	mempool *bchain.MempoolEthereumType
+	// pendingTxs holds what a privatePending declaration has indexed, so the history page can load it
+	pendingTxs map[string]*bchain.Tx
+	pendingMux sync.Mutex
 }
 
 // NewFakeBlockChainEthereumType returns mocked blockchain RPC interface used for tests
 func NewFakeBlockChainEthereumType(parser bchain.BlockChainParser) (bchain.BlockChain, error) {
-	return &fakeBlockChainEthereumType{&fakeBlockChain{&bchain.BaseChain{Parser: parser}}}, nil
+	return &fakeBlockChainEthereumType{
+		fakeBlockChain: &fakeBlockChain{&bchain.BaseChain{Parser: parser}},
+		pendingTxs:     make(map[string]*bchain.Tx),
+	}, nil
 }
 
 func (c *fakeBlockChainEthereumType) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
-	return bchain.NewMempoolEthereumType(chain, time.Hour, false), nil
+	c.mempool = bchain.NewMempoolEthereumType(chain, time.Hour, false)
+	return c.mempool, nil
+}
+
+// EthereumTypeAddPendingTransactions mirrors the production contract over a fixed fixture: only
+// EthPendingTxid is pending on the backend, and only for its own sender - everything else is unknown.
+func (c *fakeBlockChainEthereumType) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
+	if c.mempool == nil {
+		return 0, nil
+	}
+	sender, err := c.Parser.GetAddrDescFromAddress(EthAddr7bEIP55)
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for _, txid := range txids {
+		if txid != EthPendingTxid || !bytes.Equal(sender, addrDesc) {
+			continue
+		}
+		tx := GetTestEthereumTypePendingTx()
+		c.pendingMux.Lock()
+		c.pendingTxs[txid] = tx
+		c.pendingMux.Unlock()
+		if c.mempool.AddPendingTransactionToMempool(txid, tx) {
+			added++
+		}
+	}
+	return added, nil
 }
 
 func (c *fakeBlockChainEthereumType) GetChainInfo() (v *bchain.ChainInfo, err error) {
@@ -91,6 +127,12 @@ func (c *fakeBlockChainEthereumType) GetBlockInfo(hash string) (v *bchain.BlockI
 }
 
 func (c *fakeBlockChainEthereumType) GetTransaction(txid string) (v *bchain.Tx, err error) {
+	c.pendingMux.Lock()
+	pending, isPending := c.pendingTxs[txid]
+	c.pendingMux.Unlock()
+	if isPending {
+		return pending, nil
+	}
 	v = getTxInBlock(GetTestEthereumTypeBlock1(c.Parser), txid)
 	if v == nil {
 		v = getTxInBlock(GetTestEthereumTypeBlock2(c.Parser), txid)

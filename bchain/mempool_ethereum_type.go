@@ -55,6 +55,16 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 		}
 		return txEntry{}, false
 	}
+	entry, mtx := m.txEntryFromTx(txid, tx, txTime)
+	if m.OnNewTx != nil {
+		m.OnNewTx(mtx)
+	}
+	return entry, true
+}
+
+// txEntryFromTx builds the address index of an already fetched transaction. Parser only - no RPC,
+// no lock - so a caller that fetched the body itself can index it without a second round trip.
+func (m *MempoolEthereumType) txEntryFromTx(txid string, tx *Tx, txTime uint32) (txEntry, *MempoolTx) {
 	mtx := m.txToMempoolTx(tx)
 	parser := m.chain.GetChainParser()
 	addrIndexes := make([]addrIndex, 0, len(mtx.Vout)+len(mtx.Vin))
@@ -86,9 +96,6 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 			addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
 		}
 	}
-	if m.OnNewTx != nil {
-		m.OnNewTx(mtx)
-	}
 	entry := txEntry{addrIndexes: addrIndexes, time: txTime}
 	if csd, ok := tx.CoinSpecificData.(EthereumSpecificData); ok && csd.Tx != nil && len(mtx.Vin) > 0 {
 		nonce, err := strconv.ParseUint(strings.TrimPrefix(csd.Tx.AccountNonce, "0x"), 16, 64)
@@ -99,7 +106,33 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 			entry.nonce = nonce
 		}
 	}
-	return entry, true
+	return entry, mtx
+}
+
+// addEntry inserts entry into both indexes. The caller must hold m.mux.
+func (m *MempoolEthereumType) addEntry(txid string, entry txEntry) {
+	m.txEntries[txid] = entry
+	for _, si := range entry.addrIndexes {
+		m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+	}
+}
+
+// AddPendingTransactionToMempool indexes a transaction the caller already fetched and verified to be
+// pending - the mempool does not check, a mined body would be listed as pending. Returns true when
+// newly added; an existing entry is left untouched, including its first-seen time.
+func (m *MempoolEthereumType) AddPendingTransactionToMempool(txid string, tx *Tx) bool {
+	entry, mtx := m.txEntryFromTx(txid, tx, uint32(time.Now().Unix()))
+	m.mux.Lock()
+	if _, exists := m.txEntries[txid]; exists {
+		m.mux.Unlock()
+		return false
+	}
+	m.addEntry(txid, entry)
+	m.mux.Unlock()
+	if m.OnNewTx != nil {
+		m.OnNewTx(mtx)
+	}
+	return true
 }
 
 // RemoveSenderTransactionsUpToNonce retires every entry sent by from with a nonce at or below the
@@ -209,10 +242,7 @@ func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
 			return false
 		}
 		m.mux.Lock()
-		m.txEntries[txid] = entry
-		for _, si := range entry.addrIndexes {
-			m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
-		}
+		m.addEntry(txid, entry)
 		m.mux.Unlock()
 	}
 	return !exists
