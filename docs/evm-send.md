@@ -243,9 +243,19 @@ already in the index is never restamped by a further declaration, which is what 
 finite — otherwise a wallet declaring a permanently dropped transaction would hold it pending
 forever. After the timeout the next declaration re-verifies the hash against the backend at one
 round trip; once the backend stops returning it the entry is not re-added, the page stops listing it,
-and the wallet stops declaring it. On `queryBackendOnMempoolResync` chains (ethereum-classic, tron)
-an entry the backend snapshot does not contain is swept at the next resync and re-indexed on the next
+and the wallet stops declaring it. On ethereum-classic, which runs `queryBackendOnMempoolResync`, an
+entry the backend snapshot does not contain is swept at the next resync and re-indexed on the next
 declaration.
+
+**Tron indexes nothing on the hint.** `TronRPC` overrides the method as a no-op, and the reason is
+not merely that its transaction bodies come from the HTTP full node rather than
+`eth_getTransactionByHash`. Its mempool is a mirror of the node's pending list: every resync adds
+everything the list contains and `reconcileMempoolWithPendingList` removes everything it does not,
+with none of the just-added grace `removeTransactionsMissingFromBackend` gives. A transaction the
+node holds is therefore already indexed within the resync period without any declaration, and one it
+does not hold would be deleted at the next tick — so indexing on the hint would be redundant where it
+works and futile where it would matter. Tron also has no alternative send-tx provider, which is the
+private-mempool case the whole hint exists for. The declaration is accepted and ignored, at no cost.
 
 Note the deliberate trade-off against pre-#1629 behavior: `estimateFee` is no longer routed to the
 relay for *every* sender, so a wallet that sent privately, omitted the hint, and is served by a
