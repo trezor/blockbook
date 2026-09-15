@@ -114,6 +114,11 @@ func (h *AvalancheHeader) Hash() string {
 	return h.Header.Hash().Hex()
 }
 
+// ParentHash returns the parent block hash as a hex string
+func (h *AvalancheHeader) ParentHash() string {
+	return h.Header.ParentHash.Hex()
+}
+
 // Number returns the block number
 func (h *AvalancheHeader) Number() *big.Int {
 	return h.Header.Number

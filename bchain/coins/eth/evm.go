@@ -102,6 +102,11 @@ func (h *EthereumHeader) Hash() string {
 	return h.Header.Hash().Hex()
 }
 
+// ParentHash returns the parent block hash as a hex string
+func (h *EthereumHeader) ParentHash() string {
+	return h.Header.ParentHash.Hex()
+}
+
 // Number returns the block number
 func (h *EthereumHeader) Number() *big.Int {
 	return h.Header.Number
