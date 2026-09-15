@@ -745,7 +745,6 @@ func (s *WebsocketServer) outputLoop(c *websocketChannel) {
 }
 
 func (s *WebsocketServer) onConnect(c *websocketChannel) {
-	glog.Info("Client connected ", c.id, ", ", c.ip)
 	s.metrics.WebsocketClients.Inc()
 }
 
@@ -758,7 +757,6 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 		s.websocketLimiter.release(c.ipKey, time.Now())
 	}
 	s.unregisterChannel(c)
-	glog.Info("Client disconnected ", c.id, ", ", c.ip)
 	s.metrics.WebsocketConnectionRequests.Observe(float64(atomic.LoadUint64(&c.requests)))
 	s.metrics.WebsocketClients.Dec()
 }
