@@ -922,10 +922,9 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 }
 
 // cacheDeclaredPendingTx keeps a relay-fetched body for a wallet-declared txid (see
-// EthereumRPC.EthereumTypeAddPendingTransactions). Blockbook is about to advertise the transaction as
-// pending, and every later read of it - the account page's own body lookup included - would otherwise
-// go back to the node that never had it. Generation 0 and no slot eviction: a declaration must never
-// displace a send this instance accepted itself. Reconcile then retires the entry like any other.
+// EthereumRPC.EthereumTypeAddPendingTransactions): the transaction is about to be advertised as pending,
+// and every later read would otherwise go back to the node that never had it. Generation 0 and no slot
+// eviction - a declaration must never displace a send this instance accepted itself.
 func (p *AlternativeSendTxProvider) cacheDeclaredPendingTx(txid string, tx *bchain.RpcTransaction) {
 	if !p.fetchMempoolTx {
 		return

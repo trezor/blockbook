@@ -2,10 +2,9 @@ package bchain
 
 import (
 	"errors"
-	"strconv"
-	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/glog"
 )
 
@@ -98,7 +97,7 @@ func (m *MempoolEthereumType) txEntryFromTx(txid string, tx *Tx, txTime uint32) 
 	}
 	entry := txEntry{addrIndexes: addrIndexes, time: txTime}
 	if csd, ok := tx.CoinSpecificData.(EthereumSpecificData); ok && csd.Tx != nil && len(mtx.Vin) > 0 {
-		nonce, err := strconv.ParseUint(strings.TrimPrefix(csd.Tx.AccountNonce, "0x"), 16, 64)
+		nonce, err := hexutil.DecodeUint64(csd.Tx.AccountNonce)
 		if err != nil {
 			glog.Warning("cannot parse nonce ", csd.Tx.AccountNonce, " of tx ", txid, ": ", err)
 		} else {
@@ -144,7 +143,7 @@ func (m *MempoolEthereumType) RemoveSenderTransactionsUpToNonce(from AddressDesc
 	// collect first - removeEntryFromMempool compacts the outpoint slice being scanned
 	var candidates []string
 	for _, o := range m.addrDescToTx[string(from)] {
-		if entry, ok := m.txEntries[o.Txid]; ok && entry.from != "" && entry.from == string(from) && entry.nonce <= nonce {
+		if entry, ok := m.txEntries[o.Txid]; ok && entry.from == string(from) && entry.nonce <= nonce {
 			candidates = append(candidates, o.Txid)
 		}
 	}
