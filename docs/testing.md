@@ -150,8 +150,6 @@ fixture file. So data in fixture file must be related together.
    *txid* is key and *transaction object* is value of *txDetails* object in fixture file.
 * `GetTransactionForMempool` – Calls *BlockChain.GetTransactionForMempool* that should be version of
    *BlockChain.GetTransaction* optimized for mempool. Implementation of test is similar.
-* `GetMempoolEntry` – Calls *BlockChain.GetMempoolEntry* and checks result. Because mempool is living structure it
-   tries to load entry for random transaction in mempool repeatedly.
 * `EstimateSmartFee` – Calls *BlockChain.EstimateSmartFee* for few numbers of blocks and checks if returned fee is
    non-negative.
 * `EstimateFee` – Calls *BlockChain.EstimateFee*; implementation is same as *EstimateSmartFee*.
