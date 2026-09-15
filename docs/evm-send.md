@@ -215,6 +215,15 @@ The field appears in two places, matching the two consumers of the routing machi
   pool, which never received it — and the relay is the only place its body exists. Only a clean miss
   falls through to it; a primary RPC that is erroring is not worth a second wait.
 
+  A relay-sourced body is kept in the pending-tx cache before it is indexed. The mempool index holds
+  hashes, so the account page fetches each body back through `GetTransaction` — which would return to
+  the node that never had it, log `GetTransaction in mempool: ... not found`, and drop the
+  transaction from the very response the declaration was meant to populate. The entry goes in at
+  generation 0 and evicts nothing: a declaration must never displace a send this instance accepted
+  itself, and reconcile then retires it like any other cached transaction. That cache is also why the
+  leg requires `*_ALTERNATIVE_FETCH_MEMPOOL_TX`; without it the relay is not asked at all, since the
+  answer would have nowhere to live.
+
   Without this, a wallet that lands on a replica which never saw its send gets a history page
   without the transaction and prunes it locally, permanently. That replica's index holds only what
   it learned since its own start — the pending block read at `InitializeMempool` plus subscription

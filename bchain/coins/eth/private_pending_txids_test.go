@@ -187,12 +187,23 @@ func newCountingRelayServer(t *testing.T, response string) (*httptest.Server, *a
 	return server, &calls
 }
 
+// newDeclaredRelayProvider is a provider whose only store is the relay at url - the shape of an
+// instance that never accepted the send it is asked about.
+func newDeclaredRelayProvider(url string) *AlternativeSendTxProvider {
+	return &AlternativeSendTxProvider{
+		urls:              []string{url},
+		rpcTimeout:        time.Second,
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+	}
+}
+
 // A send relayed through another replica is in no local store - not this instance's cache, not its
 // node's pool - so the declaration falls through to the relay, the only place the body exists.
 func TestAddPendingTransactionsFallsBackToRelay(t *testing.T) {
 	b, rpc := newDeclaredTestRPC()
 	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
-	b.alternativeSendTxProvider = &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+	b.alternativeSendTxProvider = newDeclaredRelayProvider(server.URL)
 
 	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
 	if err != nil || added != 1 {
@@ -209,12 +220,51 @@ func TestAddPendingTransactionsFallsBackToRelay(t *testing.T) {
 	}
 }
 
+// Indexing a hash is not enough: the index holds hashes, and the account page fetches each body back.
+// Without the relay answer kept, that read returns to the node that never had it and the transaction
+// is dropped from the very response the declaration was meant to populate.
+func TestAddPendingTransactionsKeepsRelayBodyReadable(t *testing.T) {
+	b, _ := newDeclaredTestRPC()
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	b.alternativeSendTxProvider = newDeclaredRelayProvider(server.URL)
+
+	if _, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid}); err != nil {
+		t.Fatalf("EthereumTypeAddPendingTransactions() error = %v", err)
+	}
+
+	tx, err := b.GetTransaction(declaredTxid)
+	if err != nil || tx == nil || tx.Txid != declaredTxid {
+		t.Fatalf("GetTransaction() = (%v, %v), want the indexed transaction", tx, err)
+	}
+	if got := relayCalls.Load(); got != 1 {
+		t.Fatalf("relay calls = %d, want 1 - the read must be served from the cache", got)
+	}
+}
+
+// The relay leg exists to fill the pending-tx cache; without that cache the fetched body has nowhere
+// to live, so an indexed hash would be advertised as pending and then fail every read of it.
+func TestAddPendingTransactionsSkipsRelayWithoutPendingTxCache(t *testing.T) {
+	b, _ := newDeclaredTestRPC()
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	provider := newDeclaredRelayProvider(server.URL)
+	provider.fetchMempoolTx = false
+	b.alternativeSendTxProvider = provider
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if got := relayCalls.Load(); got != 0 {
+		t.Fatalf("relay calls = %d, want none without the pending-tx cache", got)
+	}
+}
+
 // The relay is the fallback, not the first stop: a body the node serves must not spend a relay
 // round trip in front of the response the caller is waiting for.
 func TestAddPendingTransactionsSkipsRelayWhenBackendAnswers(t *testing.T) {
 	b, _ := newDeclaredTestRPC(pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"))
 	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
-	b.alternativeSendTxProvider = &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+	b.alternativeSendTxProvider = newDeclaredRelayProvider(server.URL)
 
 	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
 	if err != nil || added != 1 {
