@@ -2,6 +2,9 @@ package eth
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -162,6 +165,63 @@ func TestAddPendingTransactionsUsesAlternativeProviderCache(t *testing.T) {
 	}
 	if len(rpc.calls) != 0 {
 		t.Fatalf("backend calls = %v, want none - the relay cache holds the body", rpc.calls)
+	}
+}
+
+// declaredRelayTxResponse is what the relay answers for a transaction pending only in its own pool.
+const declaredRelayTxResponse = `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + declaredTxid + `","from":"` + declaredSender + `","to":"` + declaredRecipient + `","nonce":"0x5","gas":"0x5208","value":"0x0","input":"0x"}}`
+
+// newCountingRelayServer serves one canned response and counts the requests it answered.
+func newCountingRelayServer(t *testing.T, response string) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		// the handler runs in a different goroutine, t.Fatalf must not be called from here
+		if _, err := w.Write([]byte(response)); err != nil {
+			t.Errorf("Write() error = %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, &calls
+}
+
+// A send relayed through another replica is in no local store - not this instance's cache, not its
+// node's pool - so the declaration falls through to the relay, the only place the body exists.
+func TestAddPendingTransactionsFallsBackToRelay(t *testing.T) {
+	b, rpc := newDeclaredTestRPC()
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	b.alternativeSendTxProvider = &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 1 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (1, nil)", added, err)
+	}
+	if got := mempoolTxids(t, b, declaredSender); !sameTxids(got, declaredTxid) {
+		t.Fatalf("sender mempool txids = %v, want [%s]", got, declaredTxid)
+	}
+	if rpc.calls["eth_getTransactionByHash"] != 1 {
+		t.Fatalf("backend calls = %v, want the node asked once before the relay", rpc.calls)
+	}
+	if got := relayCalls.Load(); got != 1 {
+		t.Fatalf("relay calls = %d, want 1", got)
+	}
+}
+
+// The relay is the fallback, not the first stop: a body the node serves must not spend a relay
+// round trip in front of the response the caller is waiting for.
+func TestAddPendingTransactionsSkipsRelayWhenBackendAnswers(t *testing.T) {
+	b, _ := newDeclaredTestRPC(pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"))
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	b.alternativeSendTxProvider = &AlternativeSendTxProvider{urls: []string{server.URL}, rpcTimeout: time.Second}
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 1 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (1, nil)", added, err)
+	}
+	if got := relayCalls.Load(); got != 0 {
+		t.Fatalf("relay calls = %d, want none when the node knows the transaction", got)
 	}
 }
 
