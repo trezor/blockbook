@@ -2383,12 +2383,25 @@ func (b *EthereumRPC) observePrivatePendingTxid(result string) {
 	b.metrics.EthPrivatePendingTxids.With(common.Labels{"result": result}).Inc()
 }
 
+// declaredPendingTxBody resolves one wallet-declared hash, reporting whether the relay answered it.
+// A transaction broadcast privately through another replica is in no local store - not this
+// instance's cache, and not its node's pool - so the relay is the only place its body exists.
+// Only a clean miss falls through: a primary RPC that is erroring is not worth a second wait.
+func (b *EthereumRPC) declaredPendingTxBody(txid string) (tx *bchain.RpcTransaction, found bool, fromRelay bool, err error) {
+	tx, found, err = b.rpcTransactionByHash(txid)
+	if err != nil || found || b.alternativeSendTxProvider == nil {
+		return tx, found, false, err
+	}
+	tx, found, err = b.alternativeSendTxProvider.getTransactionFromProviders(txid)
+	return tx, found, found, err
+}
+
 // EthereumTypeAddPendingTransactions indexes the transactions a wallet declared as its own in-flight
 // sends (server.WsPrivatePending.Txids) that this instance's mempool never saw - accepted by another
 // replica, lost to a restart, or on a chain without the pending-tx subscription. One backend round
-// trip per unknown txid; a body is indexed only when the backend (or the relay cache) returns it
-// without a block and it is sent from addrDesc. A known txid costs nothing and keeps its first-seen
-// time, so the mempool timeout stays the only server-side expiry (see docs/evm-send.md).
+// trip per unknown txid, plus a relay one when the backend does not know it; a body is indexed only
+// when it comes back without a block and is sent from addrDesc. A known txid costs nothing and keeps
+// its first-seen time, so the mempool timeout stays the only server-side expiry (see docs/evm-send.md).
 func (b *EthereumRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
 	if b.Mempool == nil || !b.mempoolInitialized {
 		return 0, nil
@@ -2399,7 +2412,7 @@ func (b *EthereumRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.Address
 			b.observePrivatePendingTxid("already_indexed")
 			continue
 		}
-		tx, found, err := b.rpcTransactionByHash(txid)
+		tx, found, fromRelay, err := b.declaredPendingTxBody(txid)
 		if err != nil {
 			b.observePrivatePendingTxid("error")
 			glog.Warning("privatePending txid ", txid, ": ", err)
@@ -2426,7 +2439,12 @@ func (b *EthereumRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.Address
 		}
 		if b.Mempool.AddPendingTransactionToMempool(txid, btx) {
 			added++
-			b.observePrivatePendingTxid("indexed")
+			// separate label: it is what says whether the relay round trip earns its place
+			if fromRelay {
+				b.observePrivatePendingTxid("indexed_relay")
+			} else {
+				b.observePrivatePendingTxid("indexed")
+			}
 		} else {
 			// the subscription got there first
 			b.observePrivatePendingTxid("already_indexed")

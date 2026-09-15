@@ -204,10 +204,16 @@ The field appears in two places, matching the two consumers of the routing machi
 
 - **`getAccountInfo` → `privatePending.txids`** restores the transactions themselves. The wallet
   declares the hashes of its own in-flight sends; each hash this instance's mempool index does not
-  already hold is looked up once (the relay cache first, then `eth_getTransactionByHash`) and, when
-  it comes back without a block and sent from the queried address, indexed as pending **before the
-  account info is built** — so the same response already lists it and `subscribeAddresses` clients
-  are notified. A known hash costs nothing: the index answers, no backend call is made.
+  already hold is looked up — the relay cache, then `eth_getTransactionByHash`, then the relay
+  itself when the node returns null — and, when it comes back without a block and sent from the
+  queried address, indexed as pending **before the account info is built** — so the same response
+  already lists it and `subscribeAddresses` clients are notified. A known hash costs nothing: the
+  index answers, no backend call is made.
+
+  The relay leg is what makes the hint work across replicas: a transaction broadcast privately
+  through another instance is in no local store — not this instance's cache, and not its node's
+  pool, which never received it — and the relay is the only place its body exists. Only a clean miss
+  falls through to it; a primary RPC that is erroring is not worth a second wait.
 
   Without this, a wallet that lands on a replica which never saw its send gets a history page
   without the transaction and prunes it locally, permanently. That replica's index holds only what
@@ -223,7 +229,8 @@ The field appears in two places, matching the two consumers of the routing machi
   different things. The lookups run **in front of** the answer the caller is waiting for, one after
   another, and each gets its own fresh `rpc_timeout` deadline rather than sharing one budget — so a
   backend that accepts connections and never answers costs the cap times the timeout, 8 x 25 s on the
-  stock EVM configs, before the account info is served. On a healthy backend the same eight lookups
+  stock EVM configs, before the account info is served, and a hash neither store knows pays the node
+  and the relay in sequence. On a healthy backend the same eight lookups
   are a few hundred milliseconds and a wallet declares one or two hashes, not eight. The cap is what
   keeps the pathological case finite; it is not a throughput budget.
 
@@ -316,12 +323,14 @@ Prometheus counters for the cache lifecycle:
   rather than pinning at the timeout.
 - `blockbook_eth_alternative_mempool_cache_size` — current cache depth.
 - `blockbook_eth_private_pending_txids_total{result}` — declared txids by outcome: `indexed` (this
-  instance did not know it, the backend or relay returned it as pending from the queried address),
-  `already_indexed` (no backend call), `mined`, `not_found` (null answer), `foreign` (pending but
-  sent by somebody else) and `error`. `already_indexed` should dominate on a healthy instance;
-  `indexed` marks the replica gap this hint exists to close, so a rate that tracks send volume means
-  wallets are routinely landing where their transaction is unknown. A sustained `not_found` means
-  wallets declare hashes no backend knows; `foreign` should stay near zero.
+  instance did not know it, its node or the relay cache returned it as pending from the queried
+  address), `indexed_relay` (the same, but only the relay itself knew it), `already_indexed` (no
+  backend call), `mined`, `not_found` (null answer), `foreign` (pending but sent by somebody else)
+  and `error`. `already_indexed` should dominate on a healthy instance; `indexed` marks the replica
+  gap this hint exists to close, so a rate that tracks send volume means wallets are routinely
+  landing where their transaction is unknown. `indexed_relay` is what says whether the relay leg
+  earns its round trip — at zero it never does. A sustained `not_found` means wallets declare hashes
+  neither the node nor the relay knows; `foreign` should stay near zero.
 
 Signals for *hanging* private transactions — a tx stuck Unconfirmed, or a nonce pinned above a dead
 on-chain gap:
