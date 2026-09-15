@@ -26,10 +26,7 @@ func NewFakeBlockChainTronType(parser bchain.BlockChainParser) (bchain.BlockChai
 	bchain.EthereumTokenStandardMap = []bchain.TokenStandardName{TRC20TokenType, TRC721TokenType, TRC1155TokenType}
 
 	return &fakeBlockChainTronType{
-		fakeBlockChainEthereumType: &fakeBlockChainEthereumType{
-			fakeBlockChain: &fakeBlockChain{&bchain.BaseChain{Parser: parser}},
-			pendingTxs:     make(map[string]*bchain.Tx),
-		},
+		fakeBlockChainEthereumType: &fakeBlockChainEthereumType{fakeBlockChain: &fakeBlockChain{&bchain.BaseChain{Parser: parser}}},
 	}, nil
 }
 

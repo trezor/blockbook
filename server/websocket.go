@@ -57,12 +57,10 @@ const maxWebsocketEstimateFeeBlocks = 32
 // and it bounds how far the pending-nonce walk can advance in one request.
 const maxPrivatePendingNonces = 64
 
-// maxPrivatePendingTxids bounds how many declared in-flight txids a getAccountInfo request may have
-// looked up (see WsPrivatePending). It is far below maxPrivatePendingNonces because the two cost
-// different things: a declared nonce is arithmetic, a declared txid the mempool does not know is a
-// sequential backend round trip under the chain's RPC timeout, in front of the answer the caller is
-// waiting for. A wallet has a handful of transactions in flight, so 8 covers the real case while
-// bounding what a malformed or hostile request can spend.
+// maxPrivatePendingTxids bounds the declared in-flight txids a getAccountInfo request may look up (see
+// WsPrivatePending). Far below maxPrivatePendingNonces because the costs differ: a declared nonce is
+// arithmetic, an unknown txid is a sequential backend round trip in front of the answer the caller is
+// waiting for. A wallet has a handful in flight, so 8 covers the real case.
 const maxPrivatePendingTxids = 8
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
@@ -1099,11 +1097,17 @@ func privatePendingTxids(p *WsPrivatePending) []string {
 	if p == nil || len(p.Txids) == 0 {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(p.Txids))
-	out := make([]string, 0, len(p.Txids))
+	// sized by the cap, not by the request: the input is caller-controlled and the result is bounded
+	capacity := min(len(p.Txids), maxPrivatePendingTxids)
+	seen := make(map[string]struct{}, capacity)
+	out := make([]string, 0, capacity)
 	for _, txid := range p.Txids {
+		// the free length check first, so junk never reaches the allocating ToLower
+		if len(txid) != 66 {
+			continue
+		}
 		txid = strings.ToLower(txid)
-		if !isEthereumTypeTxid(txid) {
+		if !isHexTxidShape(txid) {
 			continue
 		}
 		if _, duplicate := seen[txid]; duplicate {
@@ -1121,9 +1125,10 @@ func privatePendingTxids(p *WsPrivatePending) []string {
 	return out
 }
 
-// isEthereumTypeTxid reports whether s is a 0x-prefixed 32 byte hash, the only shape that can match
-// a mempool entry - anything else would be a guaranteed-miss backend lookup.
-func isEthereumTypeTxid(s string) bool {
+// isHexTxidShape reports whether s is a 0x-prefixed 32 byte hash - the spelling every EVM chain that
+// reaches this path uses, and the only shape that can match a mempool entry. Anything else would be a
+// guaranteed-miss backend lookup.
+func isHexTxidShape(s string) bool {
 	if len(s) != 66 || !strings.HasPrefix(s, "0x") {
 		return false
 	}

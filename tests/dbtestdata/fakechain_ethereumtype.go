@@ -6,7 +6,6 @@ import (
 	"errors"
 	"math/big"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
@@ -15,17 +14,11 @@ import (
 type fakeBlockChainEthereumType struct {
 	*fakeBlockChain
 	mempool *bchain.MempoolEthereumType
-	// pendingTxs holds what a privatePending declaration has indexed, so the history page can load it
-	pendingTxs map[string]*bchain.Tx
-	pendingMux sync.Mutex
 }
 
 // NewFakeBlockChainEthereumType returns mocked blockchain RPC interface used for tests
 func NewFakeBlockChainEthereumType(parser bchain.BlockChainParser) (bchain.BlockChain, error) {
-	return &fakeBlockChainEthereumType{
-		fakeBlockChain: &fakeBlockChain{&bchain.BaseChain{Parser: parser}},
-		pendingTxs:     make(map[string]*bchain.Tx),
-	}, nil
+	return &fakeBlockChainEthereumType{fakeBlockChain: &fakeBlockChain{&bchain.BaseChain{Parser: parser}}}, nil
 }
 
 func (c *fakeBlockChainEthereumType) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
@@ -48,11 +41,7 @@ func (c *fakeBlockChainEthereumType) EthereumTypeAddPendingTransactions(addrDesc
 		if txid != EthPendingTxid || !bytes.Equal(sender, addrDesc) {
 			continue
 		}
-		tx := GetTestEthereumTypePendingTx()
-		c.pendingMux.Lock()
-		c.pendingTxs[txid] = tx
-		c.pendingMux.Unlock()
-		if c.mempool.AddPendingTransactionToMempool(txid, tx) {
+		if c.mempool.AddPendingTransactionToMempool(txid, GetTestEthereumTypePendingTx()) {
 			added++
 		}
 	}
@@ -127,11 +116,9 @@ func (c *fakeBlockChainEthereumType) GetBlockInfo(hash string) (v *bchain.BlockI
 }
 
 func (c *fakeBlockChainEthereumType) GetTransaction(txid string) (v *bchain.Tx, err error) {
-	c.pendingMux.Lock()
-	pending, isPending := c.pendingTxs[txid]
-	c.pendingMux.Unlock()
-	if isPending {
-		return pending, nil
+	// pending in the backend's pool, in no block
+	if txid == EthPendingTxid {
+		return GetTestEthereumTypePendingTx(), nil
 	}
 	v = getTxInBlock(GetTestEthereumTypeBlock1(c.Parser), txid)
 	if v == nil {

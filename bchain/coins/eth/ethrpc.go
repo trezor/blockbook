@@ -1926,20 +1926,26 @@ func (b *EthereumRPC) removeTransactionFromMempool(txid string) {
 // removeSupersededFromMempool retires the pending entries a mined transaction's nonce
 // invalidates: the sender's slots at or below it can never mine (#1709).
 func (b *EthereumRPC) removeSupersededFromMempool(tx *bchain.RpcTransaction) {
-	if !b.mempoolInitialized || tx.From == "" || tx.AccountNonce == "" {
+	if !b.mempoolInitialized {
 		return
 	}
-	nonce, err := ethNumber(tx.AccountNonce)
-	if err != nil || nonce < 0 {
+	// txSenderAndNonce also rejects a body with no sender or an unparsable nonce
+	_, nonce, ok := txSenderAndNonce(tx)
+	if !ok {
 		return
 	}
+	// not from.Bytes(): Tron embeds this type and its descriptors are not raw EVM addresses
 	from, err := b.Parser.GetAddrDescFromAddress(tx.From)
 	if err != nil {
 		return
 	}
-	for _, txid := range b.Mempool.RemoveSenderTransactionsUpToNonce(from, uint64(nonce)) {
-		// also clears the alternative provider's copy
-		b.removeTransactionFromMempool(txid)
+	removed := b.Mempool.RemoveSenderTransactionsUpToNonce(from, nonce)
+	if b.alternativeSendTxProvider == nil {
+		return
+	}
+	for _, txid := range removed {
+		// the mempool entry is already gone; this clears the provider's copy
+		b.alternativeSendTxProvider.RemoveTransaction(txid)
 	}
 }
 
@@ -2038,7 +2044,6 @@ func (b *EthereumRPC) rpcTransactionByHash(txid string) (tx *bchain.RpcTransacti
 
 // GetTransaction returns a transaction by the transaction ID.
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	hash := ethcommon.HexToHash(txid)
 	tx, found, err := b.rpcTransactionByHash(txid)
 	if err != nil {
 		return nil, err
@@ -2052,10 +2057,8 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		// while still serving block bodies and receipts, so a mined transaction older
 		// than that window is invisible to this call even though it is fully retained.
 		// Recover it from its receipt (which carries the block hash and index) before
-		// treating it as not found.
-		// A null is not evidence the transaction is gone (queued sub-pool, another node behind a
-		// balancer, private relay), so it must not evict the mempool entry; mined nonces and the
-		// timeout retire entries instead (#1709).
+		// treating it as not found. A null is also not evidence the transaction is gone, so it
+		// never evicts the mempool entry - mined nonces and the timeout do that (#1709).
 		if recovered, receipt := b.recoverMinedTransaction(txid); recovered != nil {
 			tx = recovered
 			recoveredReceipt = receipt
@@ -2081,7 +2084,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			BaseFeePerGas string `json:"baseFeePerGas"`
 		}
 		if err := json.Unmarshal(raw, &ht); err != nil {
-			return nil, errors.Annotatef(err, "hash %v", hash)
+			return nil, errors.Annotatef(err, "hash %v", ethcommon.HexToHash(txid))
 		}
 		var time int64
 		if time, err = ethNumber(ht.Time); err != nil {
@@ -2383,11 +2386,10 @@ func (b *EthereumRPC) observePrivatePendingTxid(result string) {
 	b.metrics.EthPrivatePendingTxids.With(common.Labels{"result": result}).Inc()
 }
 
-// declaredPendingTxBody resolves one wallet-declared hash, reporting whether the relay answered it.
-// A transaction broadcast privately through another replica is in no local store - not this
-// instance's cache, and not its node's pool - so the relay is the only place its body exists.
-// Only a clean miss falls through: a primary RPC that is erroring is not worth a second wait. The
-// leg needs the pending-tx cache, which is where the relay's answer has to live to be readable again.
+// declaredPendingTxBody resolves one wallet-declared hash, reporting whether the relay answered it: a
+// transaction broadcast privately through another replica is in no local store, so the relay is the
+// only place its body exists. Only a clean miss falls through - a primary RPC that is erroring is not
+// worth a second wait - and the relay leg needs the pending-tx cache to keep the answer readable.
 func (b *EthereumRPC) declaredPendingTxBody(txid string) (tx *bchain.RpcTransaction, found bool, fromRelay bool, err error) {
 	tx, found, err = b.rpcTransactionByHash(txid)
 	if err != nil || found {
@@ -2400,66 +2402,64 @@ func (b *EthereumRPC) declaredPendingTxBody(txid string) (tx *bchain.RpcTransact
 	return tx, found, found, err
 }
 
-// EthereumTypeAddPendingTransactions indexes the transactions a wallet declared as its own in-flight
-// sends (server.WsPrivatePending.Txids) that this instance's mempool never saw - accepted by another
-// replica, lost to a restart, or on a chain without the pending-tx subscription. One backend round
-// trip per unknown txid, plus a relay one when the backend does not know it; a body is indexed only
-// when it comes back without a block and is sent from addrDesc. A relay-sourced body is kept in the
-// pending-tx cache, because the index holds hashes and every later read fetches the body again. A
-// known txid costs nothing and keeps its first-seen time, so the mempool timeout stays the only
-// server-side expiry (see docs/evm-send.md).
+// addDeclaredPendingTx indexes one wallet-declared txid, returning its metric label and whether it was
+// newly indexed. A body is taken only when it comes back without a block and is sent from addrDesc.
+func (b *EthereumRPC) addDeclaredPendingTx(addrDesc bchain.AddressDescriptor, txid string) (string, bool) {
+	if b.Mempool.GetTransactionTime(txid) != 0 {
+		return "already_indexed", false
+	}
+	tx, found, fromRelay, err := b.declaredPendingTxBody(txid)
+	if err != nil {
+		glog.Warning("privatePending txid ", txid, ": ", err)
+		return "error", false
+	}
+	if !found {
+		return "not_found", false
+	}
+	if tx.BlockNumber != "" {
+		return "mined", false
+	}
+	from, err := b.Parser.GetAddrDescFromAddress(tx.From)
+	if err != nil || !bytes.Equal(from, addrDesc) {
+		return "foreign", false
+	}
+	btx, err := b.Parser.EthTxToTx(tx, nil, nil, 0, 0, true)
+	if err != nil {
+		glog.Warning("privatePending txid ", txid, ": ", err)
+		return "error", false
+	}
+	if fromRelay {
+		// before indexing, so a subscriber woken by the insert cannot read the transaction back
+		// before the body that answers that read is in place
+		b.alternativeSendTxProvider.cacheDeclaredPendingTx(txid, tx)
+	}
+	if !b.Mempool.AddPendingTransactionToMempool(txid, btx) {
+		// the subscription got there first
+		return "already_indexed", false
+	}
+	// separate label: it is what says whether the relay round trip earns its place
+	if fromRelay {
+		return "indexed_relay", true
+	}
+	return "indexed", true
+}
+
+// EthereumTypeAddPendingTransactions indexes the wallet-declared in-flight sends
+// (server.WsPrivatePending.Txids) this instance's mempool never saw - another replica accepted them, a
+// restart lost them, or the chain has no pending-tx subscription. Costs one backend round trip per
+// unknown txid, plus a relay one when the backend does not know it; a known txid costs nothing and
+// keeps its first-seen time, so the mempool timeout stays the only server-side expiry (docs/evm-send.md).
 func (b *EthereumRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
-	if b.Mempool == nil || !b.mempoolInitialized {
+	if !b.mempoolInitialized {
 		return 0, nil
 	}
 	added := 0
 	for _, txid := range txids {
-		if b.Mempool.GetTransactionTime(txid) != 0 {
-			b.observePrivatePendingTxid("already_indexed")
-			continue
-		}
-		tx, found, fromRelay, err := b.declaredPendingTxBody(txid)
-		if err != nil {
-			b.observePrivatePendingTxid("error")
-			glog.Warning("privatePending txid ", txid, ": ", err)
-			continue
-		}
-		if !found {
-			b.observePrivatePendingTxid("not_found")
-			continue
-		}
-		if tx.BlockNumber != "" {
-			b.observePrivatePendingTxid("mined")
-			continue
-		}
-		from, err := b.Parser.GetAddrDescFromAddress(tx.From)
-		if err != nil || !bytes.Equal(from, addrDesc) {
-			b.observePrivatePendingTxid("foreign")
-			continue
-		}
-		btx, err := b.Parser.EthTxToTx(tx, nil, nil, 0, 0, true)
-		if err != nil {
-			b.observePrivatePendingTxid("error")
-			glog.Warning("privatePending txid ", txid, ": ", err)
-			continue
-		}
-		if fromRelay {
-			// before indexing, so a subscriber woken by the insert cannot read the transaction back
-			// before the body that answers that read is in place
-			b.alternativeSendTxProvider.cacheDeclaredPendingTx(txid, tx)
-		}
-		if b.Mempool.AddPendingTransactionToMempool(txid, btx) {
+		result, indexed := b.addDeclaredPendingTx(addrDesc, txid)
+		if indexed {
 			added++
-			// separate label: it is what says whether the relay round trip earns its place
-			if fromRelay {
-				b.observePrivatePendingTxid("indexed_relay")
-			} else {
-				b.observePrivatePendingTxid("indexed")
-			}
-		} else {
-			// the subscription got there first
-			b.observePrivatePendingTxid("already_indexed")
 		}
+		b.observePrivatePendingTxid(result)
 	}
 	return added, nil
 }
