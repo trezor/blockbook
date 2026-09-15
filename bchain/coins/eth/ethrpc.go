@@ -1869,6 +1869,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		}
 		btxs[i] = *btx
 		b.removeTransactionFromMempool(tx.Hash)
+		b.removeSupersededFromMempool(tx)
 	}
 	bbk := bchain.Block{
 		BlockHeader:      *bbh,
@@ -1921,6 +1922,26 @@ func (b *EthereumRPC) removeTransactionFromMempool(txid string) {
 	}
 }
 
+// removeSupersededFromMempool retires the pending entries a mined transaction's nonce
+// invalidates: the sender's slots at or below it can never mine (#1709).
+func (b *EthereumRPC) removeSupersededFromMempool(tx *bchain.RpcTransaction) {
+	if !b.mempoolInitialized || tx.From == "" || tx.AccountNonce == "" {
+		return
+	}
+	nonce, err := ethNumber(tx.AccountNonce)
+	if err != nil || nonce < 0 {
+		return
+	}
+	from, err := b.Parser.GetAddrDescFromAddress(tx.From)
+	if err != nil {
+		return
+	}
+	for _, txid := range b.Mempool.RemoveSenderTransactionsUpToNonce(from, uint64(nonce)) {
+		// also clears the alternative provider's copy
+		b.removeTransactionFromMempool(txid)
+	}
+}
+
 // callContextWithTimeout issues a single JSON-RPC call under its own fresh b.Timeout
 // deadline, so sequential calls in a recovery sequence do not share (and progressively
 // shrink) one deadline budget.
@@ -1970,7 +1991,7 @@ func (b *EthereumRPC) recoverMinedTransaction(txid string) (*bchain.RpcTransacti
 		return nil, nil
 	}
 	if receipt.BlockHash == "" {
-		// No receipt: the transaction is genuinely unknown to the backend.
+		// No receipt: not mined - pending or unknown to the backend - so nothing to recover.
 		return nil, nil
 	}
 	// Fast path: fetch the single tx by (blockHash, index) - an O(1), ~900x smaller lookup
@@ -2020,11 +2041,13 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		// than that window is invisible to this call even though it is fully retained.
 		// Recover it from its receipt (which carries the block hash and index) before
 		// treating it as not found.
+		// A null is not evidence the transaction is gone (queued sub-pool, another node behind a
+		// balancer, private relay), so it must not evict the mempool entry; mined nonces and the
+		// timeout retire entries instead (#1709).
 		if recovered, receipt := b.recoverMinedTransaction(txid); recovered != nil {
 			tx = recovered
 			recoveredReceipt = receipt
 		} else {
-			b.removeTransactionFromMempool(txid)
 			return nil, bchain.ErrTxNotFound
 		}
 	}

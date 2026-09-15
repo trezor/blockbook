@@ -59,8 +59,8 @@ flowchart TD
     pubrec["Mempool Resync, every 60 s<br/>timeout sweep at most every 10 min<br/>plus backend-missing removal"]
 
     readalt["GetTransaction read path<br/>entry past the cache timeout"]
-    blk["GetBlock: tx in a connected block"]
-    readmined["GetTransaction: mined or unknown"]
+    blk["GetBlock: tx in a connected block, plus the<br/>sender's entries at or below its nonce"]
+    readmined["GetTransaction: mined<br/>(a null answer evicts nothing)"]
 
     altrm[("removeMempoolTx<br/>cache delete decides the race<br/>release nonce routing<br/>metered by its caller, on its bool")]
     bothrm[("removeTransactionFromMempool<br/>clears BOTH stores")]

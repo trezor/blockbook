@@ -38,7 +38,7 @@ flowchart TD
     end
 
     readpath["GetTransaction read path<br/>expired entry → evict"]
-    syncrm["block sync indexing its block, or the<br/>read path finding it mined or unknown"]
+    syncrm["block sync indexing its block or a later<br/>nonce of its sender, or the read path finding it mined"]
     remove[("clear cache + wrapped mempool<br/>+ release nonce routing")]
 
     send --> route
@@ -111,8 +111,9 @@ Key invariants:
   generation; an older submission's slow fetch-back neither caches itself over, nor evicts, a newer
   replacement that already holds the nonce slot.
 - **Every exit clears both stores and is metered exactly once.** The reconcile and RBF evictions go
-  through `removeMempoolTx`; `sync_removed` — block sync, and the read path finding a transaction
-  mined or unknown — goes through `RemoveTransaction` directly. Neither meters anything itself:
+  through `removeMempoolTx`; `sync_removed` — block sync (the mined transaction and the sender's
+  entries at or below its nonce), and the read path finding a transaction mined — goes through
+  `RemoveTransaction` directly. A null answer on the read path evicts nothing (#1709). Neither meters anything itself:
   `removeMempoolTx` passes an empty action, so its callers do the metering, gated on the bool it
   returns, and `RemoveTransaction` passes `sync_removed`, which nothing else would record. The gating
   is what keeps concurrent reconcile / read-path / RBF evictions of the same entry from
@@ -244,9 +245,9 @@ Prometheus counters for the cache lifecycle:
   (`mined`, `nonce_superseded`, `provider_missing`, `timeout`, `rbf_replaced`, `sync_removed`) plus
   the kept actions (`skipped_fresh`, `skipped_backoff`, `provider_missing_pending`, `kept`,
   `provider_error`). `sync_removed` — block sync indexing the tx's block — should dominate, `mined`
-  should be rare. The read path's mined-or-unknown removal also meters here, but it can fire only on
-  a cache miss (a cached entry is served without asking the node), so block sync is effectively the
-  sole source.
+  should be rare. The read path's mined removal also meters here, but it can fire only on a cache
+  miss (a cached entry is served without asking the node), so block sync is effectively the sole
+  source.
 - `blockbook_eth_alternative_mempool_tx_residence_seconds{action}` — entry lifetime per eviction
   reason. `provider_missing` is the dropped/cancelled exit; residence counts age since broadcast,
   so a cancel N minutes after the send records ~N plus `alternativeMissingTxTimeout` — read the

@@ -15,6 +15,10 @@ type txEntry struct {
 	addrIndexes []addrIndex
 	time        uint32
 	filter      string
+	// EthereumType only: sender addrDesc and account nonce, so a mined nonce can retire the
+	// entry without asking the backend whether it is still in the pool.
+	from  string
+	nonce uint64
 }
 
 type txidio struct {

@@ -319,7 +319,7 @@ func (m *MempoolBitcoinType) dispatchResyncPayloads(txids []string, cache map[st
 			select {
 			// store as many processed transactions as possible
 			case tio := <-m.chanAddrIndex:
-				onNewEntry(tio.txid, txEntry{tio.io, txTime, tio.filter})
+				onNewEntry(tio.txid, txEntry{addrIndexes: tio.io, time: txTime, filter: tio.filter})
 				dispatched--
 			// send transaction to be processed
 			case m.chanTx <- txPayload{txid: txid, tx: tx}:
@@ -330,7 +330,7 @@ func (m *MempoolBitcoinType) dispatchResyncPayloads(txids []string, cache map[st
 	}
 	for i := 0; i < dispatched; i++ {
 		tio := <-m.chanAddrIndex
-		onNewEntry(tio.txid, txEntry{tio.io, txTime, tio.filter})
+		onNewEntry(tio.txid, txEntry{addrIndexes: tio.io, time: txTime, filter: tio.filter})
 	}
 }
 
