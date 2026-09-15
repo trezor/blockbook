@@ -1206,6 +1206,13 @@ func (b *TronRPC) EthereumTypeGetNonces(addrDesc bchain.AddressDescriptor, withC
 	return 0, 0, false, nil
 }
 
+// EthereumTypeAddPendingTransactions is a no-op on Tron: the mempool mirrors the node's pending list on
+// every resync, so a declaration can neither add nor keep anything, and there is no private relay here -
+// the case the hint exists for.
+func (b *TronRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
+	return 0, nil
+}
+
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	resp, _, err := b.getTransactionByIDWithFallback(txid)
 	if err != nil {

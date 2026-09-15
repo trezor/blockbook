@@ -1,0 +1,349 @@
+package eth
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/trezor/blockbook/bchain"
+)
+
+const (
+	declaredSender    = "0x3333333333333333333333333333333333333333"
+	declaredRecipient = "0x4444444444444444444444444444444444444444"
+	declaredTxid      = "0x00000000000000000000000000000000000000000000000000000000000000aa"
+)
+
+// newDeclaredTestRPC wires a real MempoolEthereumType over a backend that serves only the given
+// transactions, without indexing any of them - the shape of an instance that never saw the send.
+func newDeclaredTestRPC(txs ...*bchain.RpcTransaction) (*EthereumRPC, *countingRPC) {
+	rpc := &countingRPC{pendingTxRPC: pendingTxRPC{txs: map[string]*bchain.RpcTransaction{}}, calls: map[string]int{}}
+	b := &EthereumRPC{RPC: rpc, Parser: NewEthereumParser(1, false), Timeout: time.Second, mempoolInitialized: true}
+	b.Mempool = bchain.NewMempoolEthereumType(b, time.Hour, false)
+	for _, tx := range txs {
+		rpc.txs[tx.Hash] = tx
+	}
+	return b, rpc
+}
+
+// countingRPC counts the backend calls per method, so a test can assert that an already indexed
+// txid costs nothing and that a mined one costs no receipt lookup.
+type countingRPC struct {
+	pendingTxRPC
+	calls map[string]int
+}
+
+func (m *countingRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	m.calls[method]++
+	return m.pendingTxRPC.CallContext(ctx, result, method, args...)
+}
+
+func addrDescOf(t *testing.T, b *EthereumRPC, address string) bchain.AddressDescriptor {
+	t.Helper()
+	addrDesc, err := b.Parser.GetAddrDescFromAddress(address)
+	if err != nil {
+		t.Fatalf("GetAddrDescFromAddress(%s) error = %v", address, err)
+	}
+	return addrDesc
+}
+
+// A declared txid this instance never saw is fetched once and indexed as pending, so the address
+// page that triggered the declaration already lists it (#1773).
+func TestAddPendingTransactionsIndexesUnknownPendingTx(t *testing.T) {
+	b, rpc := newDeclaredTestRPC(pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"))
+	var notified int
+	b.Mempool.OnNewTx = func(*bchain.MempoolTx) { notified++ }
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 1 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (1, nil)", added, err)
+	}
+	if got := mempoolTxids(t, b, declaredSender); !sameTxids(got, declaredTxid) {
+		t.Fatalf("sender mempool txids = %v, want [%s]", got, declaredTxid)
+	}
+	if got := mempoolTxids(t, b, declaredRecipient); !sameTxids(got, declaredTxid) {
+		t.Fatalf("recipient mempool txids = %v, want [%s]", got, declaredTxid)
+	}
+	if notified != 1 {
+		t.Fatalf("OnNewTx fired %d times, want 1 (address subscribers must be notified)", notified)
+	}
+	if rpc.calls["eth_getTransactionByHash"] != 1 || rpc.calls["eth_getTransactionReceipt"] != 0 {
+		t.Fatalf("backend calls = %v, want exactly one eth_getTransactionByHash", rpc.calls)
+	}
+}
+
+// An already indexed txid is answered from the index: no backend call, and the first-seen time is
+// kept so a wallet that keeps declaring it cannot postpone the mempool timeout indefinitely.
+func TestAddPendingTransactionsSkipsKnownTxidWithoutRpc(t *testing.T) {
+	b, rpc := newDeclaredTestRPC(pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"))
+	if !b.Mempool.AddTransactionToMempool(declaredTxid) {
+		t.Fatal("AddTransactionToMempool() = false, want the entry indexed")
+	}
+	firstSeen := b.Mempool.GetTransactionTime(declaredTxid)
+	rpc.calls = map[string]int{}
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if len(rpc.calls) != 0 {
+		t.Fatalf("backend calls = %v, want none for an already indexed txid", rpc.calls)
+	}
+	if got := b.Mempool.GetTransactionTime(declaredTxid); got != firstSeen {
+		t.Fatalf("entry time = %d, want the first-seen %d (a declaration must not restamp)", got, firstSeen)
+	}
+}
+
+// The mempool does not check whether a body is mined, so the mined guard lives here: a confirmed
+// transaction must never be indexed as pending.
+func TestAddPendingTransactionsIgnoresMinedTx(t *testing.T) {
+	mined := pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5")
+	mined.BlockNumber = "0x42"
+	b, rpc := newDeclaredTestRPC(mined)
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if got := mempoolTxids(t, b, declaredSender); len(got) != 0 {
+		t.Fatalf("sender mempool txids = %v, want none (a mined tx must not be indexed)", got)
+	}
+	if rpc.calls["eth_getTransactionReceipt"] != 0 {
+		t.Fatalf("backend calls = %v, want no receipt lookup on the mined branch", rpc.calls)
+	}
+}
+
+// A hash no backend knows costs one lookup and changes nothing; the wallet stops declaring it once
+// its own page no longer lists it.
+func TestAddPendingTransactionsIgnoresUnknownTx(t *testing.T) {
+	b, rpc := newDeclaredTestRPC()
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if got := mempoolTxids(t, b, declaredSender); len(got) != 0 {
+		t.Fatalf("sender mempool txids = %v, want none", got)
+	}
+	if rpc.calls["eth_getTransactionByHash"] != 1 {
+		t.Fatalf("backend calls = %v, want exactly one lookup", rpc.calls)
+	}
+}
+
+// The declaration names the wallet's own sends, so a pending transaction sent by somebody else is
+// not indexed - a client can name a transaction, never inject one into a stranger's history.
+func TestAddPendingTransactionsIgnoresForeignSender(t *testing.T) {
+	b, _ := newDeclaredTestRPC(pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"))
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredRecipient), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if got := mempoolTxids(t, b, declaredSender); len(got) != 0 {
+		t.Fatalf("sender mempool txids = %v, want none", got)
+	}
+}
+
+// A transaction pending only in the relay's pool is served from the provider's cache, so the
+// instance that accepted the send indexes it without asking the public node at all.
+func TestAddPendingTransactionsUsesAlternativeProviderCache(t *testing.T) {
+	b, rpc := newDeclaredTestRPC()
+	b.alternativeSendTxProvider = &AlternativeSendTxProvider{
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+		mempoolTxs: map[string]storedTx{
+			declaredTxid: {tx: pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"), time: uint32(time.Now().Unix())},
+		},
+	}
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 1 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (1, nil)", added, err)
+	}
+	if len(rpc.calls) != 0 {
+		t.Fatalf("backend calls = %v, want none - the relay cache holds the body", rpc.calls)
+	}
+}
+
+// declaredRelayTxResponse is what the relay answers for a transaction pending only in its own pool.
+const declaredRelayTxResponse = `{"jsonrpc":"2.0","id":1,"result":{"hash":"` + declaredTxid + `","from":"` + declaredSender + `","to":"` + declaredRecipient + `","nonce":"0x5","gas":"0x5208","value":"0x0","input":"0x"}}`
+
+// newCountingRelayServer serves one canned response and counts the requests it answered.
+func newCountingRelayServer(t *testing.T, response string) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		// the handler runs in a different goroutine, t.Fatalf must not be called from here
+		if _, err := w.Write([]byte(response)); err != nil {
+			t.Errorf("Write() error = %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, &calls
+}
+
+// newDeclaredRelayProvider is a provider whose only store is the relay at url - the shape of an
+// instance that never accepted the send it is asked about.
+func newDeclaredRelayProvider(url string) *AlternativeSendTxProvider {
+	return &AlternativeSendTxProvider{
+		urls:              []string{url},
+		rpcTimeout:        time.Second,
+		fetchMempoolTx:    true,
+		mempoolTxsTimeout: time.Hour,
+	}
+}
+
+// A send relayed through another replica is in no local store - not this instance's cache, not its
+// node's pool - so the declaration falls through to the relay, the only place the body exists.
+func TestAddPendingTransactionsFallsBackToRelay(t *testing.T) {
+	b, rpc := newDeclaredTestRPC()
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	b.alternativeSendTxProvider = newDeclaredRelayProvider(server.URL)
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 1 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (1, nil)", added, err)
+	}
+	if got := mempoolTxids(t, b, declaredSender); !sameTxids(got, declaredTxid) {
+		t.Fatalf("sender mempool txids = %v, want [%s]", got, declaredTxid)
+	}
+	if rpc.calls["eth_getTransactionByHash"] != 1 {
+		t.Fatalf("backend calls = %v, want the node asked once before the relay", rpc.calls)
+	}
+	if got := relayCalls.Load(); got != 1 {
+		t.Fatalf("relay calls = %d, want 1", got)
+	}
+}
+
+// Indexing a hash is not enough: the index holds hashes, and the account page fetches each body back.
+// Without the relay answer kept, that read returns to the node that never had it and the transaction
+// is dropped from the very response the declaration was meant to populate.
+func TestAddPendingTransactionsKeepsRelayBodyReadable(t *testing.T) {
+	b, _ := newDeclaredTestRPC()
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	b.alternativeSendTxProvider = newDeclaredRelayProvider(server.URL)
+
+	if _, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid}); err != nil {
+		t.Fatalf("EthereumTypeAddPendingTransactions() error = %v", err)
+	}
+
+	tx, err := b.GetTransaction(declaredTxid)
+	if err != nil || tx == nil || tx.Txid != declaredTxid {
+		t.Fatalf("GetTransaction() = (%v, %v), want the indexed transaction", tx, err)
+	}
+	if got := relayCalls.Load(); got != 1 {
+		t.Fatalf("relay calls = %d, want 1 - the read must be served from the cache", got)
+	}
+}
+
+// The relay leg exists to fill the pending-tx cache; without that cache the fetched body has nowhere
+// to live, so an indexed hash would be advertised as pending and then fail every read of it.
+func TestAddPendingTransactionsSkipsRelayWithoutPendingTxCache(t *testing.T) {
+	b, _ := newDeclaredTestRPC()
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	provider := newDeclaredRelayProvider(server.URL)
+	provider.fetchMempoolTx = false
+	b.alternativeSendTxProvider = provider
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if got := relayCalls.Load(); got != 0 {
+		t.Fatalf("relay calls = %d, want none without the pending-tx cache", got)
+	}
+}
+
+// The relay is the fallback, not the first stop: a body the node serves must not spend a relay
+// round trip in front of the response the caller is waiting for.
+func TestAddPendingTransactionsSkipsRelayWhenBackendAnswers(t *testing.T) {
+	b, _ := newDeclaredTestRPC(pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"))
+	server, relayCalls := newCountingRelayServer(t, declaredRelayTxResponse)
+	b.alternativeSendTxProvider = newDeclaredRelayProvider(server.URL)
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 1 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (1, nil)", added, err)
+	}
+	if got := relayCalls.Load(); got != 0 {
+		t.Fatalf("relay calls = %d, want none when the node knows the transaction", got)
+	}
+}
+
+// Before the mempool exists there is nothing to index into, and the declaration must not fail the
+// request that carried it.
+func TestAddPendingTransactionsBeforeMempoolInitialized(t *testing.T) {
+	b, rpc := newDeclaredTestRPC(pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5"))
+	b.mempoolInitialized = false
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if len(rpc.calls) != 0 {
+		t.Fatalf("backend calls = %v, want none before the mempool is initialized", rpc.calls)
+	}
+}
+
+// A body the parser rejects is skipped, not propagated: the account request must still be answered.
+func TestAddPendingTransactionsSkipsUndecodableBody(t *testing.T) {
+	broken := pendingTx(declaredTxid, declaredSender, declaredRecipient, "0x5")
+	broken.Value = "not-a-number"
+	b, _ := newDeclaredTestRPC(broken)
+
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), []string{declaredTxid})
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if got := mempoolTxids(t, b, declaredSender); len(got) != 0 {
+		t.Fatalf("sender mempool txids = %v, want none", got)
+	}
+}
+
+// hangingRPC accepts every call and never answers, so each lookup burns its full context deadline.
+type hangingRPC struct {
+	pendingTxRPC
+	calls int
+}
+
+func (m *hangingRPC) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	m.calls++
+	<-ctx.Done()
+
+	return ctx.Err()
+}
+
+// The per-txid deadlines add up rather than sharing one budget, and the lookups sit in front of the
+// account info the caller is waiting for - which is why maxPrivatePendingTxids is small. Asserts a
+// lower bound only, so a slow machine cannot make it flaky; it fails if the calls ever become
+// concurrent or stop honoring the timeout.
+func TestHungBackendCostsOneTimeoutPerDeclaredTxid(t *testing.T) {
+	const perCall = 150 * time.Millisecond
+	rpc := &hangingRPC{pendingTxRPC: pendingTxRPC{txs: map[string]*bchain.RpcTransaction{}}}
+	b := &EthereumRPC{RPC: rpc, Parser: NewEthereumParser(1, false), Timeout: perCall, mempoolInitialized: true}
+	b.Mempool = bchain.NewMempoolEthereumType(b, time.Hour, false)
+
+	txids := []string{
+		"0x00000000000000000000000000000000000000000000000000000000000000a1",
+		"0x00000000000000000000000000000000000000000000000000000000000000a2",
+		"0x00000000000000000000000000000000000000000000000000000000000000a3",
+	}
+	start := time.Now()
+	added, err := b.EthereumTypeAddPendingTransactions(addrDescOf(t, b, declaredSender), txids)
+	elapsed := time.Since(start)
+
+	if err != nil || added != 0 {
+		t.Fatalf("EthereumTypeAddPendingTransactions() = (%d, %v), want (0, nil)", added, err)
+	}
+	if rpc.calls != len(txids) {
+		t.Fatalf("backend calls = %d, want one per declared txid (%d)", rpc.calls, len(txids))
+	}
+	if elapsed < time.Duration(len(txids))*perCall {
+		t.Fatalf("elapsed %s, want at least %s - the deadlines must not share one budget", elapsed, time.Duration(len(txids))*perCall)
+	}
+}
