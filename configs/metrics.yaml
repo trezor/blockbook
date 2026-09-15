@@ -448,8 +448,13 @@ metrics:
   alternative_fee_provider_last_sync_timestamp_seconds:
     name: blockbook_alternative_fee_provider_last_sync_timestamp_seconds
     type: gauge_vec
-    help: Unix time of the last successful refresh of the cached EVM alternative-provider fees, labeled by provider (infura or 1inch). Plot time() - this for cache age; the pull path falls back to on-chain once the cache is older than the provider's stale window (default 600s / 10m, configurable per coin via staleSeconds, independent of the poll period). Exported as a timestamp rather than a computed *_age_seconds gauge on purpose - it is only written on a successful refresh, so age keeps rising when a provider wedges and it is restart-safe
+    help: Unix time of the last successful refresh of the cached EVM alternative-provider fees, labeled by provider (infura or 1inch). Plot time() - this for cache age; the pull path falls back to on-chain once the cache is older than the provider's stale window (default 600s / 10m, configurable per coin via staleSeconds, independent of the periodSeconds cache TTL). Fees are fetched on demand, so on a quiet instance the age legitimately grows - alert on it only together with alternative_fee_provider_cache showing demand (fetched/coalesced/stale/miss rates). Exported as a timestamp rather than a computed *_age_seconds gauge on purpose - it is only written on a successful refresh, so age keeps rising when a provider wedges and it is restart-safe
     labels: [provider]
+  alternative_fee_provider_cache:
+    name: blockbook_alternative_fee_provider_cache
+    type: counter_vec
+    help: EVM alternative-provider fee estimates served, by provider and cache result - fresh (cache hit within the periodSeconds TTL), fetched (this request triggered the upstream fetch), coalesced (waited on another request's fetch), stale (fetch failed, served last value within the stale window), miss (nothing to serve, caller falls back to on-chain estimation). Distinguishes an idle instance (no traffic at all) from a broken provider (stale/miss dominating) now that fees are fetched on demand
+    labels: [provider, result]
   eth_eip1559_fee:
     name: blockbook_eth_eip1559_fee
     type: gauge_vec
@@ -462,7 +467,7 @@ metrics:
   eth_eip1559_fee_source_total:
     name: blockbook_eth_eip1559_fee_source_total
     type: counter_vec
-    help: Served EIP-1559 pull-path estimates by source observed at the serve boundary - provider (alternative provider cache hit), onchain_fallback (provider configured but cache stale/unready, served from eth_feeHistory) or onchain (no provider configured). Complements alternative_fee_provider_requests (background fetch) and alternative_fee_provider_last_sync_timestamp_seconds (cache age), which together explain why a fallback happened
+    help: Served EIP-1559 pull-path estimates by source observed at the serve boundary - provider (alternative provider cache hit), onchain_fallback (provider configured but cache stale/unready, served from eth_feeHistory) or onchain (no provider configured). Complements alternative_fee_provider_requests (on-demand upstream fetch) and alternative_fee_provider_last_sync_timestamp_seconds (cache age), which together explain why a fallback happened
     labels: [source]
   eth_block_gas_used_ratio:
     name: blockbook_eth_block_gas_used_ratio

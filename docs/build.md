@@ -91,7 +91,8 @@ command: `make NO_CACHE=true all-bitcoin`.
 `BB_BUILD_ENV`: Selects which environment the package is generated for. Defaults to `dev`. Accepted values are `dev`
 and `prod`. It selects the active RPC URL override family, and in a `dev` build it also merges each coin's
 `blockbook.block_chain.additional_params_dev` block over `additional_params` (see
-[config guide](/docs/config.md)) so a dev instance can poll a paid fee or fiat-rates provider less often.
+[config guide](/docs/config.md)) so a dev instance can spend fewer requests on a paid fee or fiat-rates
+provider.
 Generated dev Blockbook services include `-prof=:<blockbook_internal + 20000>` automatically, while generated prod
 services do not include `-prof`.
 

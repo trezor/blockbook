@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
@@ -97,27 +96,21 @@ func NewInfuraFeesProvider(chain bchain.BlockChain, params string, metrics *comm
 	}
 	p.params.URL = strings.Replace(p.params.URL, "${api_key}", p.apiKey, -1)
 	p.chain = chain
-	// Keep cached Infura fees through throttling bursts for the configured stale
-	// window (defaults to 10 minutes), independent of the poll cadence.
+	// Fees are fetched on demand: cached for periodSeconds, kept through
+	// throttling bursts for the configured stale window (defaults to 10 minutes).
+	p.ttl = time.Duration(p.params.PeriodSeconds) * time.Second
 	p.staleSyncDuration = feeStaleDuration(p.params.PeriodSeconds, p.params.StaleSeconds)
-	go p.FeeDownloader()
+	p.fetch = p.fetchFees
+	go p.warmUp()
 	return p, nil
 }
 
-func (p *infuraFeeProvider) FeeDownloader() {
-	period := time.Duration(p.params.PeriodSeconds) * time.Second
-	timer := time.NewTimer(period)
-	for {
-		var data infuraFeesResult
-		err := p.getData(&data)
-		if err != nil {
-			glog.Error("infuraFeeProvider.FeeDownloader ", err)
-		} else {
-			p.processData(&data)
-		}
-		<-timer.C
-		timer.Reset(period)
+func (p *infuraFeeProvider) fetchFees() (*bchain.Eip1559Fees, error) {
+	var data infuraFeesResult
+	if err := p.getData(&data); err != nil {
+		return nil, err
 	}
+	return infuraFeesFromData(&data), nil
 }
 
 func bigIntFromFloatString(s string) *big.Int {
@@ -148,7 +141,7 @@ func rangeFromString(feeRange []string) []*big.Int {
 	return result
 }
 
-func (p *infuraFeeProvider) processData(data *infuraFeesResult) bool {
+func infuraFeesFromData(data *infuraFeesResult) *bchain.Eip1559Fees {
 	fees := bchain.Eip1559Fees{}
 	fees.BaseFeePerGas = bigIntFromFloatString(data.BaseFee)
 	fees.High = infuraFeesFromResult(&data.High)
@@ -160,11 +153,7 @@ func (p *infuraFeeProvider) processData(data *infuraFeesResult) bool {
 	fees.HistoricalBaseFeeRange = rangeFromString(data.HistoricalBaseFeeRange)
 	fees.PriorityFeeTrend = data.PriorityFeeTrend
 	fees.BaseFeeTrend = data.BaseFeeTrend
-	p.mux.Lock()
-	defer p.mux.Unlock()
-	p.observeSync(time.Now())
-	p.eip1559Fees = &fees
-	return true
+	return &fees
 }
 
 func (p *infuraFeeProvider) getData(res interface{}) error {

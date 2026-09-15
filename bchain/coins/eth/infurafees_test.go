@@ -3,6 +3,9 @@ package eth
 import (
 	"testing"
 	"time"
+
+	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
 )
 
 func TestFeeStaleDurationDefaultsToTenMinutes(t *testing.T) {
@@ -32,11 +35,15 @@ func TestFeeStaleDurationClampsToPeriod(t *testing.T) {
 func TestInfuraFeeProviderUsesCachedFeesDuringStaleWindow(t *testing.T) {
 	provider := &infuraFeeProvider{
 		alternativeFeeProvider: &alternativeFeeProvider{
+			ttl:               10 * time.Second,
 			staleSyncDuration: feeStaleDuration(10, 0),
+			fetch: func() (*bchain.Eip1559Fees, error) {
+				return nil, errors.New("provider down")
+			},
 		},
 	}
 
-	provider.processData(&infuraFeesResult{
+	provider.eip1559Fees = infuraFeesFromData(&infuraFeesResult{
 		BaseFee: "10",
 		Low: infuraFeeResult{
 			MaxPriorityFeePerGas: "1",

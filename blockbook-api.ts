@@ -97,6 +97,8 @@ export interface EthereumParsedInputData {
     function?: string;
     /** List of parsed parameters for this function call. */
     params?: EthereumParsedInputParam[];
+    /** True when input data exceeded the parse-size budget and parameters were not decoded. */
+    parsedDataTruncated?: boolean;
 }
 export interface EthereumSpecific {
     /** High-level type of the Ethereum tx (e.g., 'call', 'create'). */

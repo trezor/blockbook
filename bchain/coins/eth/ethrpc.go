@@ -2341,7 +2341,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	if !b.ChainConfig.Eip1559Fees {
 		return nil, nil
 	}
-	// if there is an alternative provider, use it
+	// if there is an alternative provider, use it (fetches on demand, cached for periodSeconds)
 	if b.alternativeFeeProvider != nil {
 		fees, err := b.alternativeFeeProvider.GetEip1559Fees()
 		if err != nil {

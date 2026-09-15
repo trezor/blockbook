@@ -49,6 +49,8 @@ type EthereumParsedInputData struct {
 	Name     string                     `json:"name" ts_doc:"Parsed function name if recognized."`
 	Function string                     `json:"function,omitempty" ts_doc:"Full function signature (including parameter types)."`
 	Params   []EthereumParsedInputParam `json:"params,omitempty" ts_doc:"List of parsed parameters for this function call."`
+	// Truncated: parse budget exceeded, only MethodId is populated
+	Truncated bool `json:"parsedDataTruncated,omitempty" ts_doc:"True when input data exceeded the parse-size budget and parameters were not decoded."`
 }
 
 // EthereumInternalTransactionType - type of ethereum transaction from internal data
@@ -281,4 +283,52 @@ type Eip1559Fees struct {
 	HistoricalBaseFeeRange     []*big.Int  `json:"historicalBaseFeeRange,omitempty"`
 	PriorityFeeTrend           string      `json:"priorityFeeTrend,omitempty"`
 	BaseFeeTrend               string      `json:"baseFeeTrend,omitempty"`
+}
+
+func copyBigInt(b *big.Int) *big.Int {
+	if b == nil {
+		return nil
+	}
+	return new(big.Int).Set(b)
+}
+
+func copyBigIntSlice(s []*big.Int) []*big.Int {
+	if s == nil {
+		return nil
+	}
+	c := make([]*big.Int, len(s))
+	for i := range s {
+		c[i] = copyBigInt(s[i])
+	}
+	return c
+}
+
+// Copy returns a deep copy so callers may adjust a fee tier per request without
+// mutating a value shared across requests (e.g. a provider cache).
+func (f *Eip1559Fee) Copy() *Eip1559Fee {
+	if f == nil {
+		return nil
+	}
+	c := *f
+	c.MaxFeePerGas = copyBigInt(f.MaxFeePerGas)
+	c.MaxPriorityFeePerGas = copyBigInt(f.MaxPriorityFeePerGas)
+	return &c
+}
+
+// Copy returns a deep copy so callers may adjust fees per request without
+// mutating a value shared across requests (e.g. a provider cache).
+func (f *Eip1559Fees) Copy() *Eip1559Fees {
+	if f == nil {
+		return nil
+	}
+	c := *f
+	c.BaseFeePerGas = copyBigInt(f.BaseFeePerGas)
+	c.Low = f.Low.Copy()
+	c.Medium = f.Medium.Copy()
+	c.High = f.High.Copy()
+	c.Instant = f.Instant.Copy()
+	c.LatestPriorityFeeRange = copyBigIntSlice(f.LatestPriorityFeeRange)
+	c.HistoricalPriorityFeeRange = copyBigIntSlice(f.HistoricalPriorityFeeRange)
+	c.HistoricalBaseFeeRange = copyBigIntSlice(f.HistoricalBaseFeeRange)
+	return &c
 }

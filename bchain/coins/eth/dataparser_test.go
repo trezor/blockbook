@@ -610,3 +610,34 @@ func Test_getEnsRecord(t *testing.T) {
 		})
 	}
 }
+
+func TestParseInputDataTruncatesOversizedCalldata(t *testing.T) {
+	parser := NewEthereumParser(1, false)
+	signatures := []bchain.FourByteSignature{
+		{Name: "cancelMultipleMakerOrders", Parameters: []string{"uint256[]"}},
+	}
+	// Canonical ABI calldata for a uint256[] of zero elements: selector,
+	// offset word (0x20), count word, then `count` zero-value words.
+	buildCalldata := func(count int) string {
+		return fmt.Sprintf("0x9e53a69a%064x%064x%s", 0x20, count, strings.Repeat("0", 64*count))
+	}
+
+	oversized := buildCalldata(3000)
+	if len(oversized) <= maxParseInputDataLen {
+		t.Fatalf("test calldata not oversized: len=%d, limit=%d", len(oversized), maxParseInputDataLen)
+	}
+	got := parser.ParseInputData(&signatures, oversized)
+	want := &bchain.EthereumParsedInputData{MethodId: "0x9e53a69a", Truncated: true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ParseInputData(oversized) = %#v, want %#v", got, want)
+	}
+
+	// Negative control: a small array under the budget still decodes every value.
+	small := parser.ParseInputData(&signatures, buildCalldata(2))
+	if small.Truncated {
+		t.Errorf("ParseInputData(small) unexpectedly truncated: %#v", small)
+	}
+	if len(small.Params) != 1 || len(small.Params[0].Values) != 2 {
+		t.Errorf("ParseInputData(small) = %#v, want 1 param with 2 values", small)
+	}
+}
