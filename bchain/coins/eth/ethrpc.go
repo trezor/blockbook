@@ -2386,11 +2386,15 @@ func (b *EthereumRPC) observePrivatePendingTxid(result string) {
 // declaredPendingTxBody resolves one wallet-declared hash, reporting whether the relay answered it.
 // A transaction broadcast privately through another replica is in no local store - not this
 // instance's cache, and not its node's pool - so the relay is the only place its body exists.
-// Only a clean miss falls through: a primary RPC that is erroring is not worth a second wait.
+// Only a clean miss falls through: a primary RPC that is erroring is not worth a second wait. The
+// leg needs the pending-tx cache, which is where the relay's answer has to live to be readable again.
 func (b *EthereumRPC) declaredPendingTxBody(txid string) (tx *bchain.RpcTransaction, found bool, fromRelay bool, err error) {
 	tx, found, err = b.rpcTransactionByHash(txid)
-	if err != nil || found || b.alternativeSendTxProvider == nil {
+	if err != nil || found {
 		return tx, found, false, err
+	}
+	if b.alternativeSendTxProvider == nil || !b.alternativeSendTxProvider.fetchMempoolTx {
+		return nil, false, false, nil
 	}
 	tx, found, err = b.alternativeSendTxProvider.getTransactionFromProviders(txid)
 	return tx, found, found, err
@@ -2400,8 +2404,10 @@ func (b *EthereumRPC) declaredPendingTxBody(txid string) (tx *bchain.RpcTransact
 // sends (server.WsPrivatePending.Txids) that this instance's mempool never saw - accepted by another
 // replica, lost to a restart, or on a chain without the pending-tx subscription. One backend round
 // trip per unknown txid, plus a relay one when the backend does not know it; a body is indexed only
-// when it comes back without a block and is sent from addrDesc. A known txid costs nothing and keeps
-// its first-seen time, so the mempool timeout stays the only server-side expiry (see docs/evm-send.md).
+// when it comes back without a block and is sent from addrDesc. A relay-sourced body is kept in the
+// pending-tx cache, because the index holds hashes and every later read fetches the body again. A
+// known txid costs nothing and keeps its first-seen time, so the mempool timeout stays the only
+// server-side expiry (see docs/evm-send.md).
 func (b *EthereumRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (int, error) {
 	if b.Mempool == nil || !b.mempoolInitialized {
 		return 0, nil
@@ -2436,6 +2442,11 @@ func (b *EthereumRPC) EthereumTypeAddPendingTransactions(addrDesc bchain.Address
 			b.observePrivatePendingTxid("error")
 			glog.Warning("privatePending txid ", txid, ": ", err)
 			continue
+		}
+		if fromRelay {
+			// before indexing, so a subscriber woken by the insert cannot read the transaction back
+			// before the body that answers that read is in place
+			b.alternativeSendTxProvider.cacheDeclaredPendingTx(txid, tx)
 		}
 		if b.Mempool.AddPendingTransactionToMempool(txid, btx) {
 			added++

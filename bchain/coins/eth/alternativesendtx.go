@@ -921,6 +921,19 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 	}
 }
 
+// cacheDeclaredPendingTx keeps a relay-fetched body for a wallet-declared txid (see
+// EthereumRPC.EthereumTypeAddPendingTransactions). Blockbook is about to advertise the transaction as
+// pending, and every later read of it - the account page's own body lookup included - would otherwise
+// go back to the node that never had it. Generation 0 and no slot eviction: a declaration must never
+// displace a send this instance accepted itself. Reconcile then retires the entry like any other.
+func (p *AlternativeSendTxProvider) cacheDeclaredPendingTx(txid string, tx *bchain.RpcTransaction) {
+	if !p.fetchMempoolTx {
+		return
+	}
+	from, nonce, decoded := txSenderAndNonce(tx)
+	p.insertMempoolTx(normalizeTxid(txid), tx, 0, from, nonce, decoded)
+}
+
 // insertMempoolTx inserts the entry unless a strictly newer send for the same (from, nonce) slot has
 // already cached its own, reporting whether it inserted. Deliberately a separate function so the unlock
 // is deferred: a panic leaving mempoolTxsMux held would deadlock every send, read, reconcile and
