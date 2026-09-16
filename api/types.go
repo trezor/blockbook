@@ -350,7 +350,7 @@ type Tx struct {
 	Hex                    string            `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
 	Rbf                    bool              `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
 	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
-	ChainExtraData         *TxChainExtraData `json:"chainExtraData,omitempty" ts_type:"{ payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any }" ts_doc:"Additional normalized chain-specific transaction data. Use payloadType as discriminator for payload."`
+	ChainExtraData         *TxChainExtraData `json:"chainExtraData,omitempty" ts_type:"TxChainExtraData" ts_doc:"Additional normalized chain-specific transaction data. Use payloadType as discriminator for payload."`
 	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
 	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
 	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
@@ -457,7 +457,7 @@ type Address struct {
 	Erc20Contract  *ContractInfoResult    `json:"erc20Contract,omitempty" ts_doc:"@deprecated: replaced by contractInfo"`
 	AddressAliases AddressAliasesMap      `json:"addressAliases,omitempty" ts_doc:"Aliases assigned to this address."`
 	StakingPools   []StakingPool          `json:"stakingPools,omitempty" ts_doc:"List of staking pool data if address interacts with staking."`
-	ChainExtraData *AccountChainExtraData `json:"chainExtraData,omitempty" ts_type:"{ payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any }" ts_doc:"Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload."`
+	ChainExtraData *AccountChainExtraData `json:"chainExtraData,omitempty" ts_type:"AccountChainExtraData" ts_doc:"Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload."`
 	// helpers for explorer
 	Filter        string              `json:"-" ts_doc:"Filter used internally for data retrieval."`
 	XPubAddresses map[string]struct{} `json:"-" ts_doc:"Set of derived XPUB addresses (internal usage)."`
