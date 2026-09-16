@@ -67,8 +67,8 @@ ERC-2612 (`permit` — gasless approvals) is a good next candidate: detectable b
    accepted, and hook the enrichment into `enrichTokenProtocols` and `GetContractInfoData`.
 6. **Extend the response types** — a `Erc2612Token` struct in `api/types.go` and a field on
    `ContractInfoProtocols`. Typed clients get a precise shape rather than a loose map.
-7. **Update the API surface by hand**: `openapi.yaml` and `blockbook-api.ts` are edited
-   together, plus the protocol ID table in [RocksDB](/docs/rocksdb.md).
+7. **Update the API surface**: edit `openapi.yaml` by hand, regenerate `blockbook-api.ts`
+   with `make typescriptify`, and update the protocol ID table in [RocksDB](/docs/rocksdb.md).
 8. **Test** against `db/rocksdb_protocols_test.go` (storage and disconnect) and
    `api/erc4626_test.go` (probe and enrichment) as templates.
 
