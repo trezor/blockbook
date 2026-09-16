@@ -356,6 +356,12 @@ func (w *Worker) getConfirmationETA(tx *Tx) (int64, uint32) {
 	return etaSeconds, etaBlocks
 }
 
+// isReplaceableInput reports whether an unconfirmed input lets the tx be replaced: UTXO inputs opt in via
+// the BIP125 sequence, while any EVM tx is replaceable at its nonce and Suite gates cancel/speed-up on it.
+func (w *Worker) isReplaceableInput(sequence uint32) bool {
+	return w.chainType == bchain.ChainEthereumType || sequence < 0xffffffff-1
+}
+
 // GetTransactionFromBchainTx reads transaction data from txid
 func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	var err error
@@ -386,8 +392,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vin.N = i
 		vin.Vout = bchainVin.Vout
 		vin.Sequence = int64(bchainVin.Sequence)
-		// detect explicit Replace-by-Fee transactions as defined by BIP125
-		if bchainTx.Confirmations == 0 && bchainVin.Sequence < 0xffffffff-1 {
+		if bchainTx.Confirmations == 0 && w.isReplaceableInput(bchainVin.Sequence) {
 			rbf = true
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
@@ -610,8 +615,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		vin.N = i
 		vin.Vout = bchainVin.Vout
 		vin.Sequence = int64(bchainVin.Sequence)
-		// detect explicit Replace-by-Fee transactions as defined by BIP125
-		if bchainVin.Sequence < 0xffffffff-1 {
+		if w.isReplaceableInput(bchainVin.Sequence) {
 			rbf = true
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
