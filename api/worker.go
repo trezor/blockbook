@@ -1286,8 +1286,21 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	var confirmedNonceOK bool
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
-	// Load cached contract list and totals from the index; this drives token lookups.
-	ca, err := w.db.GetAddrDescContracts(addrDesc)
+	var filterDesc bchain.AddressDescriptor
+	var err error
+	if filter.Contract != "" {
+		// Optional contract filter narrows token balances and tx paging to a single contract.
+		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
+		if err != nil {
+			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+		}
+	}
+	// Load contract list and totals from the index; NFT holdings are emitted only at
+	// tokenBalances and above, so skip decoding them below that (and for filtered-out contracts).
+	ca, err := w.db.GetAddrDescContractsOpt(addrDesc, db.AddrContractsReadOptions{
+		Holdings: details >= AccountDetailsTokenBalances,
+		Contract: filterDesc,
+	})
 	if err != nil {
 		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
@@ -1295,14 +1308,6 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	b, err := w.chain.EthereumTypeGetBalance(addrDesc)
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
-	}
-	var filterDesc bchain.AddressDescriptor
-	if filter.Contract != "" {
-		// Optional contract filter narrows token balances and tx paging to a single contract.
-		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
-		if err != nil {
-			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
-		}
 	}
 	if ca != nil {
 		// Address has indexed contract/tx data; include totals and nonce.
