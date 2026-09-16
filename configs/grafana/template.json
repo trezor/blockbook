@@ -7174,9 +7174,19 @@
             "selected": false,
             "text": "Avalanche Archive",
             "value": "Avalanche Archive"
+          },
+          {
+            "selected": false,
+            "text": "HyperEVM Archive",
+            "value": "HyperEVM Archive"
+          },
+          {
+            "selected": false,
+            "text": "Robinhood Archive",
+            "value": "Robinhood Archive"
           }
         ],
-        "query": "Bitcoin,Ethereum Archive,Polygon Archive,BNB Smart Chain Archive,Arbitrum Archive,Base Archive,Optimism Archive,Litecoin,Namecoin,Vertcoin,Zcash,Bgold,Bcash,Dash,DigiByte,Dogecoin,Ethereum Classic,Testnet,Ethereum Testnet  Sepolia Archive,Tron,Avalanche Archive",
+        "query": "Bitcoin,Ethereum Archive,Polygon Archive,BNB Smart Chain Archive,Arbitrum Archive,Base Archive,Optimism Archive,Litecoin,Namecoin,Vertcoin,Zcash,Bgold,Bcash,Dash,DigiByte,Dogecoin,Ethereum Classic,Testnet,Ethereum Testnet  Sepolia Archive,Tron,Avalanche Archive,HyperEVM Archive,Robinhood Archive",
         "skipUrlSync": false,
         "type": "custom"
       }
