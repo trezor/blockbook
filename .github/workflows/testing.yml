@@ -40,6 +40,11 @@ jobs:
           BB_BUILD_ENV: dev
         run: make test
 
+      - name: Check generated TypeScript API types
+        # blockbook-api.ts must be exactly what build/tools/typescriptify emits; the generator
+        # links RocksDB, so it runs in the build image here rather than in the Lint job.
+        run: make check-typescriptify
+
   connectivity-tests:
     name: Connectivity Tests
     runs-on: [self-hosted, bb-dev-selfhosted]
