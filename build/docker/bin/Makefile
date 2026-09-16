@@ -39,6 +39,17 @@ test-connectivity: prepare-sources
 test-all: prepare-sources
 	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` -timeout 30m $(ARGS)
 
+# Regenerates blockbook-api.ts from the Go structs and hands it back to the mounted checkout.
+typescriptify: prepare-sources
+	cd $(BLOCKBOOK_SRC) && go run ./build/tools/typescriptify
+	cp $(BLOCKBOOK_SRC)/blockbook-api.ts /src/blockbook-api.ts
+	chown $(PACKAGER) /src/blockbook-api.ts
+
+# Fails when the committed blockbook-api.ts is not what the generator produces.
+check-typescriptify: prepare-sources
+	cd $(BLOCKBOOK_SRC) && go run ./build/tools/typescriptify
+	diff -u /src/blockbook-api.ts $(BLOCKBOOK_SRC)/blockbook-api.ts || (echo "blockbook-api.ts is stale, run 'make typescriptify'" 1>&2 && exit 1)
+
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
 	rm -rf $(BLOCKBOOK_SRC)
