@@ -32,3 +32,44 @@ func TestDecodeBatchRawTransactions(t *testing.T) {
 		t.Fatalf("expected txid %s, got %s", txid, got[txid].Txid)
 	}
 }
+
+func TestCoreWarningsUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"legacy empty string", `""`, ""},
+		{"legacy string", `"beware"`, "beware"},
+		{"core 25 empty array", `[]`, ""},
+		{"core 25 single element", `["beware"]`, "beware"},
+		{"core 25 multiple elements", `["a","b"]`, "a b"},
+		{"null", `null`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var w coreWarnings
+			if err := json.Unmarshal([]byte(tt.in), &w); err != nil {
+				t.Fatalf("Unmarshal(%s): %v", tt.in, err)
+			}
+			if string(w) != tt.want {
+				t.Errorf("Unmarshal(%s) = %q, want %q", tt.in, string(w), tt.want)
+			}
+		})
+	}
+}
+
+// TestGetBlockChainInfoWarningsArray guards the actual regression: Bitcoin Core
+// 25.0+ returns getblockchaininfo "warnings" as an array, which must decode
+// through the struct field rather than failing with "cannot unmarshal array
+// into Go struct field .result.warnings of type string".
+func TestGetBlockChainInfoWarningsArray(t *testing.T) {
+	const data = `{"result":{"chain":"main","warnings":["disk space is low"]}}`
+	var res ResGetBlockChainInfo
+	if err := json.Unmarshal([]byte(data), &res); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if got := string(res.Result.Warnings); got != "disk space is low" {
+		t.Errorf("warnings = %q, want %q", got, "disk space is low")
+	}
+}

@@ -207,8 +207,11 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 					ID: "fail01",
 					InternalTransactions: []tronInternalTransaction{
 						{
-							Note:     "63616c6c",
-							Rejected: true,
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:              "63616c6c",
+							Rejected:          true,
+							CallValueInfo:     []tronCallValueInfo{{CallValue: 700000}},
 						},
 					},
 					Receipt: tronReceipt{Result: "SUCCESS"},
@@ -216,6 +219,60 @@ func TestBuildInternalDataFromTronInfos(t *testing.T) {
 			},
 			txs:               []bchain.RpcTransaction{{Hash: "0xfail01"}},
 			wantType:          bchain.CALL,
+			wantTransfers:     0,
+			wantDataErrSubstr: "rejected",
+		},
+
+		{
+			// issue #1621: a SUCCESS receipt with one rejected positive call must keep only the real transfer
+			name: "Rejected call next to a successful one",
+			infos: []tronTxInfo{
+				{
+					ID: "fail02",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:              "63616c6c",
+							Rejected:          true,
+							CallValueInfo:     []tronCallValueInfo{{CallValue: 999999}},
+						},
+						{
+							CallerAddress:     "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
+							TransferToAddress: "41da727d310b98700af4cec797e43991899668d6f3",
+							Note:              "63616c6c",
+							CallValueInfo:     []tronCallValueInfo{{CallValue: 700000}},
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:               []bchain.RpcTransaction{{Hash: "0xfail02"}},
+			wantType:          bchain.CALL,
+			wantTransfers:     1,
+			wantValue:         700000,
+			wantDataErrSubstr: "rejected",
+		},
+
+		{
+			name: "Rejected create does not shape the tx type",
+			infos: []tronTxInfo{
+				{
+					ID: "fail03",
+					InternalTransactions: []tronInternalTransaction{
+						{
+							CallerAddress:     "4139dd12a54e2bab7c82aa14a1e158b34263d2d510",
+							TransferToAddress: "41ed56e617db5eab11b61a9eaefc98c77a6798d257",
+							Note:              "637265617465", // create
+							Rejected:          true,
+						},
+					},
+					Receipt: tronReceipt{Result: "SUCCESS"},
+				},
+			},
+			txs:               []bchain.RpcTransaction{{Hash: "0xfail03"}},
+			wantType:          bchain.CALL,
+			wantContracts:     0,
 			wantDataErrSubstr: "rejected",
 		},
 

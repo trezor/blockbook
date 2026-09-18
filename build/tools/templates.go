@@ -44,6 +44,14 @@ type Backend struct {
 	Platforms                       map[string]Backend `json:"platforms,omitempty"`
 }
 
+// MessageQueueCurve is optional ZMQ CURVE key material from a coin definition
+// (`ipc.message_queue_curve`). Copied into blockchaincfg.json as message_queue_curve.
+type MessageQueueCurve struct {
+	PublicKey string `json:"public_key,omitempty"`
+	SecretKey string `json:"secret_key,omitempty"`
+	ServerKey string `json:"server_key,omitempty"`
+}
+
 // Config contains the structure of the config
 type Config struct {
 	Coin struct {
@@ -64,12 +72,13 @@ type Config struct {
 		BlockbookPublic     int `json:"blockbook_public"`
 	} `json:"ports"`
 	IPC struct {
-		RPCURLTemplate              string `json:"rpc_url_template"`
-		RPCURLWSTemplate            string `json:"rpc_url_ws_template"`
-		RPCUser                     string `json:"rpc_user"`
-		RPCPass                     string `json:"rpc_pass"`
-		RPCTimeout                  int    `json:"rpc_timeout"`
-		MessageQueueBindingTemplate string `json:"message_queue_binding_template"`
+		RPCURLTemplate              string             `json:"rpc_url_template"`
+		RPCURLWSTemplate            string             `json:"rpc_url_ws_template"`
+		RPCUser                     string             `json:"rpc_user"`
+		RPCPass                     string             `json:"rpc_pass"`
+		RPCTimeout                  int                `json:"rpc_timeout"`
+		MessageQueueBindingTemplate string             `json:"message_queue_binding_template"`
+		MessageQueueCurve           *MessageQueueCurve `json:"message_queue_curve,omitempty"`
 	} `json:"ipc"`
 	Backend   Backend `json:"backend"`
 	Blockbook struct {
@@ -93,6 +102,9 @@ type Config struct {
 			Slip44                 uint32 `json:"slip44,omitempty"`
 
 			AdditionalParams map[string]json.RawMessage `json:"additional_params"`
+			// Overrides merged over AdditionalParams only when BB_BUILD_ENV=dev, so a value
+			// tuned for a dev instance cannot reach a production package.
+			AdditionalParamsDev map[string]json.RawMessage `json:"additional_params_dev,omitempty"`
 		} `json:"block_chain"`
 	} `json:"blockbook"`
 	Meta struct {
@@ -127,8 +139,8 @@ const (
 	devBlockbookPprofPortOffset = 20000
 )
 
-func jsonToString(msg json.RawMessage) (string, error) {
-	d, err := msg.MarshalJSON()
+func jsonToString(msg any) (string, error) {
+	d, err := json.Marshal(msg)
 	if err != nil {
 		return "", err
 	}
@@ -411,6 +423,18 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	err = d.Decode(&config.Env)
 	if err != nil {
 		return nil, err
+	}
+
+	blockChain := &config.Blockbook.BlockChain
+	// Validate in every build env so a typo in a dev override fails a production build too.
+	if err := validateAdditionalParamsOverlay(blockChain.AdditionalParams, blockChain.AdditionalParamsDev); err != nil {
+		return nil, fmt.Errorf("%s: %w", coin, err)
+	}
+	if buildEnv == buildEnvDev {
+		blockChain.AdditionalParams, err = mergeAdditionalParams(blockChain.AdditionalParams, blockChain.AdditionalParamsDev)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", coin, err)
+		}
 	}
 
 	config.Meta.BuildDatetime = time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700")

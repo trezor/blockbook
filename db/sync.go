@@ -214,7 +214,7 @@ func (w *SyncWorker) updateBackendInfo() {
 	var backendError string
 	if err != nil {
 		glog.Error("GetChainInfo error ", err)
-		backendError = errors.Annotatef(err, "GetChainInfo").Error()
+		backendError = common.RedactURLs(errors.Annotatef(err, "GetChainInfo").Error())
 		ci = &bchain.ChainInfo{}
 	}
 	w.is.SetBackendInfo(&common.BackendInfo{
@@ -285,9 +285,22 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 }
 
 func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
-	remoteBestHash, err := w.chain.GetBestBlockHash()
-	if err != nil {
-		return err
+	isEthereumType := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
+	// EVM reads one snapshot of the cached tip so hash, parent and height describe the same header.
+	var tip *bchain.EVMTip
+	var remoteBestHash string
+	var err error
+	if isEthereumType {
+		tip, err = w.chain.EthereumTypeGetBestTip()
+		if err != nil {
+			return err
+		}
+		remoteBestHash = tip.Hash
+	} else {
+		remoteBestHash, err = w.chain.GetBestBlockHash()
+		if err != nil {
+			return err
+		}
 	}
 	localBestHeight, localBestHash, err := w.db.GetBestBlock()
 	if err != nil {
@@ -299,34 +312,42 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return syncNotNeeded
 	}
 	if localBestHash != "" {
-		remoteHash, err := w.chain.GetBlockHash(localBestHeight)
-		// for some coins (eth) remote can be at lower best height after rollback
-		if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
-			return err
-		}
-		if remoteHash != localBestHash {
-			// forked - the remote hash differs from the local hash at the same height
-			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
-			return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
+		// A pushed tip whose parent is the local best block extends the indexed chain, so the fork
+		// check would only re-confirm it; a sibling that later wins is caught by the next cycle.
+		linked := tip != nil && tip.Height == localBestHeight+1 && tip.ParentHash == localBestHash
+		if !linked {
+			remoteHash, err := w.chain.GetBlockHash(localBestHeight)
+			// for some coins (eth) remote can be at lower best height after rollback
+			if err != nil && !stdErrors.Is(err, bchain.ErrBlockNotFound) {
+				return err
+			}
+			if remoteHash != localBestHash {
+				// forked - the remote hash differs from the local hash at the same height
+				glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
+				return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
+			}
 		}
 		w.startHeight = localBestHeight + 1
 	} else {
 		// database is empty, start genesis
 		glog.Info("resync: genesis from block ", w.startHeight)
 	}
-	w.startHash, err = w.chain.GetBlockHash(w.startHeight)
-	if err != nil {
-		return err
+	useParallel := w.syncWorkers > 1 && (initialSync || isEthereumType)
+	var remoteBestHeight uint32
+	if tip != nil {
+		remoteBestHeight = tip.Height
+	} else if useParallel {
+		// Bitcoin-type chains only pay this RPC on the parallel path, as before.
+		remoteBestHeight, err = w.chain.GetBestBlockHeight()
+		if err != nil {
+			return err
+		}
 	}
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
 	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
 	// or in case of ChainEthereumType if the tip is farther
-	if w.syncWorkers > 1 && (initialSync || w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType) {
-		remoteBestHeight, err := w.chain.GetBestBlockHeight()
-		if err != nil {
-			return err
-		}
+	if useParallel {
 		if remoteBestHeight < w.startHeight {
 			glog.Warning("resync: observed remote best height ", remoteBestHeight, " less than sync start height ", w.startHeight, ", falling back to sequential sync")
 		} else {
@@ -348,7 +369,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 					return w.resyncIndex(onNewBlock, initialSync)
 				}
 			}
-			if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
+			if isEthereumType {
 				// The trigger threshold is deliberately independent of the pool size:
 				// gating on the configured worker count would push small steady-state
 				// rounds onto the slower sequential path.
@@ -373,11 +394,26 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			}
 		}
 	}
+	// Only the sequential path needs the start hash; the parallel and bulk paths above
+	// resolve every hash themselves, so looking it up earlier duplicated one RPC.
+	w.startHash, err = w.startHashForHeight(w.startHeight, remoteBestHash, remoteBestHeight, isEthereumType)
+	if err != nil {
+		return err
+	}
 	err = w.connectBlocks(onNewBlock, initialSync)
 	if stdErrors.Is(err, errFork) || stdErrors.Is(err, errResync) {
 		return w.resyncIndex(onNewBlock, initialSync)
 	}
 	return err
+}
+
+// startHashForHeight resolves the hash of the first block to connect. When the block is the
+// cached EVM tip, its hash is already known and the eth_getBlockByNumber lookup is skipped.
+func (w *SyncWorker) startHashForHeight(height uint32, tipHash string, tipHeight uint32, tipCached bool) (string, error) {
+	if tipCached && tipHash != "" && tipHeight == height {
+		return tipHash, nil
+	}
+	return w.chain.GetBlockHash(height)
 }
 
 func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -601,6 +637,25 @@ func isRetryableGetBlockError(err error) bool {
 	return cause != nil && isRetryable(cause)
 }
 
+// waitWorkersOrAbort returns once every worker has exited, or as soon as a worker reports
+// an abort after the hash queue closed. Without the abort branch a worker that exits on a
+// tail block without producing it parks the writer and its siblings forever (#1767).
+func waitWorkersOrAbort(wg *sync.WaitGroup, abortCh <-chan error, terminate func()) error {
+	workersDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(workersDone)
+	}()
+	select {
+	case <-workersDone:
+		return nil
+	case abortErr := <-abortCh:
+		terminate()
+		<-workersDone
+		return abortErr
+	}
+}
+
 // ParallelConnectBlocks uses parallel goroutines to get data from blockchain daemon but keeps Blockbook in
 func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, lower, higher uint32, syncWorkers uint32) error {
 	var err error
@@ -614,6 +669,8 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	hchClosed.Store(false)
 	writeBlockDone := make(chan struct{})
 	terminating := make(chan struct{})
+	// The connect loop and the worker wait can both decide to stop the round; guard the close.
+	terminate := sync.OnceFunc(func() { close(terminating) })
 	// abortCh is used by workers to signal a resync-worthy reorg or a terminal worker error.
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
@@ -651,9 +708,6 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 				break WriteBlockLoop
 			}
 		}
-		if err != nil {
-			glog.Error("sync: ParallelConnectBlocks.Close error ", err)
-		}
 		glog.Info("WriteBlock exiting...")
 	}
 	for i := 0; i < int(syncWorkers); i++ {
@@ -672,13 +726,13 @@ ConnectLoop:
 				glog.Error("sync: parallel connect aborted, worker error ", abortErr)
 			}
 			err = abortErr
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("connectBlocksParallel interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		default:
 			hash, err = w.chain.GetBlockHash(h)
@@ -696,7 +750,7 @@ ConnectLoop:
 				} else {
 					glog.Error("sync: parallel connect aborted while queueing block hash, worker error ", err)
 				}
-				close(terminating)
+				terminate()
 				break ConnectLoop
 			}
 			h++
@@ -706,7 +760,16 @@ ConnectLoop:
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
 	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	if abortErr := waitWorkersOrAbort(&wg, abortCh, terminate); abortErr != nil {
+		if stdErrors.Is(abortErr, errResync) {
+			glog.Warning("sync: parallel connect aborted at tail, restarting sync")
+		} else {
+			glog.Error("sync: parallel connect aborted at tail, worker error ", abortErr)
+		}
+		if err == nil {
+			err = abortErr
+		}
+	}
 	// Hardening: a worker can report a terminal tail error after ConnectLoop has
 	// already ended (for example once hchClosed=true). Drain once so we return
 	// that error instead of silently succeeding.
@@ -855,6 +918,8 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	hchClosed.Store(false)
 	writeBlockDone := make(chan struct{})
 	terminating := make(chan struct{})
+	// The connect loop and the worker wait can both decide to stop the round; guard the close.
+	terminate := sync.OnceFunc(func() { close(terminating) })
 	// abortCh is used by workers to signal a resync-worthy reorg or a terminal worker error.
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
@@ -912,13 +977,13 @@ ConnectLoop:
 				glog.Error("sync: bulk connect aborted, worker error ", abortErr)
 			}
 			err = abortErr
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		case <-w.chanOsSignal:
 			glog.Info("BulkConnectBlocks interrupted at height ", h)
 			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
-			close(terminating)
+			terminate()
 			break ConnectLoop
 		default:
 			hash, err = w.chain.GetBlockHash(h)
@@ -936,7 +1001,7 @@ ConnectLoop:
 				} else {
 					glog.Error("sync: bulk connect aborted while queueing block hash, worker error ", err)
 				}
-				close(terminating)
+				terminate()
 				break ConnectLoop
 			}
 			if h > 0 && h%1000 == 0 {
@@ -958,7 +1023,16 @@ ConnectLoop:
 	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
 	// wait for workers and close bch that will stop writer loop
-	wg.Wait()
+	if abortErr := waitWorkersOrAbort(&wg, abortCh, terminate); abortErr != nil {
+		if stdErrors.Is(abortErr, errResync) {
+			glog.Warning("sync: bulk connect aborted at tail, restarting sync")
+		} else {
+			glog.Error("sync: bulk connect aborted at tail, worker error ", abortErr)
+		}
+		if err == nil {
+			err = abortErr
+		}
+	}
 	// Hardening: capture a late worker error reported after the connect loop
 	// exits so the caller can retry instead of treating sync as successful.
 	select {
@@ -1007,11 +1081,24 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			return
 		default:
 		}
+		// EVM serves the tip height from the cached feed header, so the end-of-chain check is
+		// free and can run before the tail probe instead of after its null response.
+		tipCached := w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
 		retries := 0
 		loopStart := time.Now()
 		var block *bchain.Block
 		var err error
 		for {
+			if tipCached && hash == "" && retries == 0 {
+				bestHeight, bestErr := w.chain.GetBestBlockHeight()
+				if bestErr != nil {
+					out <- blockResult{err: bestErr}
+					return
+				}
+				if height > bestHeight {
+					return
+				}
+			}
 			block, err = w.chain.GetBlock(hash, height)
 			if err == nil {
 				break

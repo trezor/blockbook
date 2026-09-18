@@ -112,6 +112,7 @@ type Metrics struct {
 	FiatRatesUnable                    *prometheus.CounterVec   `metric:"fiat_rates_unable_total"`
 	AlternativeFeeProviderRequests     *prometheus.CounterVec   `metric:"alternative_fee_provider_requests"`
 	AlternativeFeeProviderLastSync     *prometheus.GaugeVec     `metric:"alternative_fee_provider_last_sync_timestamp_seconds"`
+	AlternativeFeeProviderCache        *prometheus.CounterVec   `metric:"alternative_fee_provider_cache"`
 	EthEip1559Fee                      *prometheus.GaugeVec     `metric:"eth_eip1559_fee"`
 	EthEip1559BaseFee                  prometheus.Gauge         `metric:"eth_eip1559_base_fee"`
 	EthEip1559FeeSource                *prometheus.CounterVec   `metric:"eth_eip1559_fee_source_total"`

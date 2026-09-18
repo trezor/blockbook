@@ -54,7 +54,10 @@ How each source is built:
   returns the provider's `maxFeePerGas` **unchanged**. For Infura, this is `suggestedMaxFeePerGas`,
   padded well above the base fee (~2.5× for the high tier); for 1inch, it is the provider's own
   computed `maxFeePerGas`. Blockbook does not rewrite it — the wallet overrides it (see the Suite
-  section).
+  section). The cache is refilled on demand at most once per `periodSeconds` and stays usable for
+  `staleSeconds` afterwards; because the provider is billed per request, dev instances cache for far
+  longer via the coin config's `additional_params_dev` block, which only a `BB_BUILD_ENV=dev` build
+  applies (see [config.md](/docs/config.md)).
 
 ---
 
