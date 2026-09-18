@@ -1086,7 +1086,7 @@ type parallelTailTestChain struct {
 }
 
 func (c *parallelTailTestChain) GetChainParser() bchain.BlockChainParser {
-	return &getBlockChainTestParser{chainType: bchain.ChainEthereumType}
+	return &chainTypeTestParser{chainType: bchain.ChainEthereumType}
 }
 
 func (c *parallelTailTestChain) GetBlockHash(height uint32) (string, error) {
