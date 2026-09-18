@@ -876,3 +876,28 @@ func TestRefreshSyncMetricsKeepsLastGoodOnBackendError(t *testing.T) {
 		t.Errorf("backend_best_height = %v, want the retained 700", got)
 	}
 }
+
+// Suite hides its EVM cancel/speed-up actions when a pending transaction is not rbf, so the
+// flag must stay true for EVM regardless of the (unset) input sequence.
+func TestIsReplaceableInput(t *testing.T) {
+	tests := []struct {
+		name      string
+		chainType bchain.ChainType
+		sequence  uint32
+		want      bool
+	}{
+		{name: "evm with zero sequence", chainType: bchain.ChainEthereumType, sequence: 0, want: true},
+		{name: "evm with final sequence", chainType: bchain.ChainEthereumType, sequence: 0xffffffff, want: true},
+		{name: "utxo opted in per BIP125", chainType: bchain.ChainBitcoinType, sequence: 0xfffffffd, want: true},
+		{name: "utxo final sequence", chainType: bchain.ChainBitcoinType, sequence: 0xffffffff, want: false},
+		{name: "utxo max minus one is not opted in", chainType: bchain.ChainBitcoinType, sequence: 0xfffffffe, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &Worker{chainType: tt.chainType}
+			if got := w.isReplaceableInput(tt.sequence); got != tt.want {
+				t.Errorf("isReplaceableInput(%#x) = %v, want %v", tt.sequence, got, tt.want)
+			}
+		})
+	}
+}
