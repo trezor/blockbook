@@ -214,7 +214,7 @@ func (w *SyncWorker) updateBackendInfo() {
 	var backendError string
 	if err != nil {
 		glog.Error("GetChainInfo error ", err)
-		backendError = errors.Annotatef(err, "GetChainInfo").Error()
+		backendError = common.RedactURLs(errors.Annotatef(err, "GetChainInfo").Error())
 		ci = &bchain.ChainInfo{}
 	}
 	w.is.SetBackendInfo(&common.BackendInfo{

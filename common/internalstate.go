@@ -34,6 +34,7 @@ type InternalStateColumn struct {
 
 // BackendInfo is used to get information about blockchain
 type BackendInfo struct {
+	// served to clients on /api/ and /, so producers store it with URLs redacted (RedactURLs)
 	BackendError     string      `json:"error,omitempty" ts_doc:"Error message if something went wrong in the backend."`
 	Chain            string      `json:"chain,omitempty" ts_doc:"Name of the chain - e.g. 'main'."`
 	Blocks           int         `json:"blocks,omitempty" ts_doc:"Number of fully verified blocks in the chain."`
