@@ -1515,14 +1515,20 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height
 				return err
 			}
 		}
-		// internal data
+		// internal data - the contract registry rollback relies on this forward walk
 		err := d.disconnectInternalData(blockTx.btxID, height, addresses, contracts, registryRollback)
 		if err != nil {
 			return err
 
 		}
-		// contracts
-		for j := range blockTx.contracts {
+		wb.DeleteCF(d.cfh[cfTransactions], blockTx.btxID)
+		wb.DeleteCF(d.cfh[cfInternalData], blockTx.btxID)
+	}
+	// token holdings are undone in reverse chronological order, otherwise a token that
+	// moved A->B->C within the block ends up recorded at both A and B
+	for i := len(blockTxs) - 1; i >= 0; i-- {
+		blockTx := &blockTxs[i]
+		for j := len(blockTx.contracts) - 1; j >= 0; j-- {
 			c := &blockTx.contracts[j]
 			if err := d.disconnectAddress(blockTx.btxID, false, c.from, c, addresses, contracts); err != nil {
 				return err
@@ -1533,8 +1539,6 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height
 				}
 			}
 		}
-		wb.DeleteCF(d.cfh[cfTransactions], blockTx.btxID)
-		wb.DeleteCF(d.cfh[cfInternalData], blockTx.btxID)
 	}
 	for a := range addresses {
 		key := packAddressKey([]byte(a), height)
