@@ -13,6 +13,111 @@ import (
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
+func Test_addressFromPaddedHex(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "padded topic", input: "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8", want: "0x2aaCF811aC1A60081EA39F7783c0D26c500871a8"},
+		{name: "padded no prefix", input: "0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8", want: "0x2aaCF811aC1A60081EA39F7783c0D26c500871a8"},
+		{name: "uppercase 0X prefix", input: "0X0000000000000000000000005DC6288B35E0807A3D6FEB89B3A2FF4AB773168E", want: "0x5Dc6288b35E0807A3d6fEB89b3a2Ff4aB773168e"},
+		{name: "bare address", input: "0x5dc6288b35e0807a3d6feb89b3a2ff4ab773168e", want: "0x5Dc6288b35E0807A3d6fEB89b3a2Ff4aB773168e"},
+		{name: "odd length over 20 bytes keeps low 20 bytes", input: "f5dc6288b35e0807a3d6feb89b3a2ff4ab773168e", want: "0x5Dc6288b35E0807A3d6fEB89b3a2Ff4aB773168e"},
+		{name: "zero word", input: "0x0000000000000000000000000000000000000000000000000000000000000000", want: "0x0000000000000000000000000000000000000000"},
+		{name: "short value is left-padded", input: "0x1a2b3c", want: "0x00000000000000000000000000000000001A2b3c"},
+		{name: "padding is not validated", input: "0xzzzzzzzzzzzzzzzzzzzzzzzz2aacf811ac1a60081ea39f7783c0d26c500871a8", want: "0x2aaCF811aC1A60081EA39F7783c0D26c500871a8"},
+		{name: "invalid hex in address bytes", input: "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871zz", wantErr: true},
+		{name: "invalid short", input: "0xzz", wantErr: true},
+		{name: "prefix only", input: "0x", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := addressFromPaddedHex(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("addressFromPaddedHex(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("addressFromPaddedHex(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+			// callers store the result unmodified, so it must already be EIP-55
+			if got != "" && got != EIP55AddressFromAddress(got) {
+				t.Errorf("addressFromPaddedHex(%q) = %q is not EIP-55 checksummed", tt.input, got)
+			}
+		})
+	}
+}
+
+func Test_setBigFromHexWord(t *testing.T) {
+	const word = "00000000000000000000000000000000000000000000000000000000000f4240"
+	tests := []struct {
+		name  string
+		input string
+		base  int
+		want  string
+		ok    bool
+	}{
+		{name: "word with prefix", input: "0x" + word, base: 0, want: "1000000", ok: true},
+		{name: "word without prefix", input: word, base: 16, want: "1000000", ok: true},
+		{name: "uppercase word", input: "0X" + strings.ToUpper(word), base: 0, want: "1000000", ok: true},
+		{name: "max word", input: strings.Repeat("f", 64), base: 16, want: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)).String(), ok: true},
+		{name: "zero word", input: "0x" + strings.Repeat("0", 64), base: 0, want: "0", ok: true},
+		{name: "short value falls back to SetString base 0", input: "0x1a2b", base: 0, want: "6699", ok: true},
+		{name: "short value falls back to SetString base 16", input: "1a2b", base: 16, want: "6699", ok: true},
+		{name: "long value falls back to SetString", input: "0x1" + word, base: 0, want: new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1000000)).String(), ok: true},
+		{name: "invalid hex in word", input: "0x" + word[:62] + "zz", base: 0, ok: false},
+		{name: "prefix only", input: "0x", base: 0, ok: false},
+		{name: "empty", input: "", base: 16, ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var v big.Int
+			ok := setBigFromHexWord(&v, tt.input, tt.base)
+			if ok != tt.ok {
+				t.Fatalf("setBigFromHexWord(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && v.String() != tt.want {
+				t.Errorf("setBigFromHexWord(%q) = %s, want %s", tt.input, v.String(), tt.want)
+			}
+			// must agree with the generic big.Int parser on every accepted input
+			var ref big.Int
+			if _, refOk := ref.SetString(tt.input, tt.base); refOk != tt.ok || (ok && ref.Cmp(&v) != 0) {
+				t.Errorf("setBigFromHexWord(%q) disagrees with big.Int.SetString: %v/%s vs %v/%s", tt.input, ok, v.String(), refOk, ref.String())
+			}
+		})
+	}
+}
+
+func Test_parseEVMLogWordUint64(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		offset  int
+		want    uint64
+		wantErr bool
+	}{
+		{name: "small", data: strings.Repeat("0", 63) + "3", want: 3},
+		{name: "max uint64", data: strings.Repeat("0", 48) + strings.Repeat("f", 16), want: ^uint64(0)},
+		{name: "overflow", data: strings.Repeat("0", 47) + "1" + strings.Repeat("0", 16), wantErr: true},
+		{name: "second word", data: strings.Repeat("0", 64) + strings.Repeat("0", 62) + "40", offset: 64, want: 64},
+		{name: "invalid hex", data: strings.Repeat("0", 62) + "zz", wantErr: true},
+		{name: "too short", data: strings.Repeat("0", 63), wantErr: true},
+		{name: "negative offset", data: strings.Repeat("0", 64), offset: -1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseEVMLogWordUint64(tt.data, tt.offset)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseEVMLogWordUint64(%q, %d) error = %v, wantErr %v", tt.data, tt.offset, err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("parseEVMLogWordUint64(%q, %d) = %d, want %d", tt.data, tt.offset, got, tt.want)
+			}
+		})
+	}
+}
+
 func Test_contractGetTransfersFromLog(t *testing.T) {
 	tests := []struct {
 		name string
