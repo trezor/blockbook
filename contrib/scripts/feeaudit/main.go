@@ -25,6 +25,12 @@
 //
 //	go run contrib/scripts/feeaudit/main.go -chains eth,pol -duration 30m -oneinch-key-file ~/.config/1inch.key
 //
+// A second Blockbook for the same chain, such as a dev instance running a new
+// estimator, is named as chain@label=host. Its quotes are scored against the same
+// blocks and reported as provider <label> beside the public host's "served":
+//
+//	go run contrib/scripts/feeaudit/main.go -chains eth,eth@dev=blockbook-dev1.corp.sldev.cz:9136 -insecure
+//
 // The counterfactual is only worth anything if the reconstruction is right, so
 // check it against a real node before trusting a run (verified against coreth and
 // op-reth, wei-for-wei):
@@ -34,6 +40,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -42,7 +49,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -60,7 +66,75 @@ import (
 // it the control group for the on-chain path.
 var defaultChains = []string{"eth", "bsc", "pol", "arb", "op", "base", "avax", "hype", "rhc"}
 
-func host(chain string) string { return chain + ".trezor.io" }
+// target is one Blockbook to sample. The plain form "eth" is the public host and
+// the reference for its chain: its blocks are the ground truth and it carries the
+// 1inch and on-chain columns. "eth@dev=host:port" samples a second host for the
+// same chain; its quotes appear as provider "dev" beside the reference's "served",
+// so two deployments are scored against identical blocks.
+type target struct {
+	chain string
+	label string // "" for the public host
+	host  string // host[:port], optionally prefixed with http:// or https://
+}
+
+// reservedProviders are the provider names the analysis assigns itself.
+var reservedProviders = map[string]bool{"served": true, "1inch": true, "onchain": true}
+
+func parseTarget(s string) (target, error) {
+	t := target{chain: s}
+	if at := strings.IndexByte(s, '@'); at >= 0 {
+		rest := s[at+1:]
+		eq := strings.IndexByte(rest, '=')
+		if eq <= 0 || eq == len(rest)-1 {
+			return t, fmt.Errorf("%q: want chain@label=host", s)
+		}
+		t.chain, t.label, t.host = s[:at], rest[:eq], rest[eq+1:]
+		if reservedProviders[t.label] {
+			return t, fmt.Errorf("%q: label %q is taken by the analysis", s, t.label)
+		}
+	}
+	if t.chain == "" {
+		return t, fmt.Errorf("%q: empty chain", s)
+	}
+	if t.host == "" {
+		t.host = t.chain + ".trezor.io"
+	}
+	return t, nil
+}
+
+// name is the log prefix: "eth" or "eth@dev".
+func (t target) name() string {
+	if t.label == "" {
+		return t.chain
+	}
+	return t.chain + "@" + t.label
+}
+
+// provider is the column the host's quotes are reported under.
+func (t target) provider() string {
+	if t.label == "" {
+		return "served"
+	}
+	return t.label
+}
+
+// baseURL is the REST or websocket origin. A dev instance that terminates no TLS
+// can be given as http://host:port; everything else is TLS.
+func (t target) baseURL(ws bool) string {
+	h, plain := strings.TrimPrefix(t.host, "https://"), false
+	if strings.HasPrefix(t.host, "http://") {
+		h, plain = t.host[len("http://"):], true
+	}
+	switch {
+	case ws && plain:
+		return "ws://" + h
+	case ws:
+		return "wss://" + h
+	case plain:
+		return "http://" + h
+	}
+	return "https://" + h
+}
 
 // suiteClamp mirrors EVM_GAS_PRICE_PER_CHAIN_IN_GWEI in trezor-suite
 // packages/connect/src/data/defaultFeeLevels.ts. Suite applies these to whatever
@@ -108,6 +182,12 @@ const eip1559BaseFeeMultiplier = 2
 const feeHistoryBlocks = 4
 
 const gwei = 1e9
+
+// userAgent is sent on every request. Cloudflare in front of the public hosts
+// answers 403 to Go's default agent, curl and python-requests alike (seen
+// 2026-09-20 on websocket and REST); a Mozilla-prefixed agent that still names
+// the tool is what it lets through.
+const userAgent = "Mozilla/5.0 (compatible; feeaudit/1.0; +https://github.com/trezor/blockbook)"
 
 // ---------------------------------------------------------------- wire types
 
@@ -410,9 +490,17 @@ type quote struct {
 }
 
 type collector struct {
-	chain   string
-	http    *http.Client
-	verbose bool
+	target target
+	chain  string // target.chain, the key for clamps, 1inch and the TSV chain column
+	name   string // target.name(), the log prefix
+	// reference marks the first target of a chain: the one whose blocks are the
+	// ground truth and which carries the 1inch and on-chain columns. Further hosts
+	// for the same chain contribute their served quotes only, so those columns are
+	// not written twice.
+	reference bool
+	http      *http.Client
+	dialer    websocket.Dialer
+	verbose   bool
 
 	mu     sync.Mutex
 	blocks map[int]*blockStats
@@ -429,21 +517,34 @@ type collector struct {
 	oneInchErr  string
 }
 
-func newCollector(chain string, verbose bool) *collector {
-	return &collector{
-		chain:   chain,
-		verbose: verbose,
-		blocks:  map[int]*blockStats{},
-		want:    map[int]bool{},
+// newCollector wires one target. insecure skips certificate verification, which
+// is only ever applied to a labelled host: dev instances present self-signed
+// certificates, the public hosts must never be trusted on those terms.
+func newCollector(t target, reference, insecure, verbose bool) *collector {
+	c := &collector{
+		target:    t,
+		chain:     t.chain,
+		name:      t.name(),
+		reference: reference,
+		verbose:   verbose,
+		blocks:    map[int]*blockStats{},
+		want:      map[int]bool{},
+		dialer:    dialer,
 		// Blockbook is behind Cloudflare, which drops REST callers that loop hard;
 		// one fetch per block per chain stays well inside that.
 		http: &http.Client{Timeout: 45 * time.Second},
 	}
+	if insecure && t.label != "" {
+		tlsCfg := &tls.Config{InsecureSkipVerify: true}
+		c.http.Transport = &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: tlsCfg}
+		c.dialer.TLSClientConfig = tlsCfg
+	}
+	return c
 }
 
 func (c *collector) logf(format string, a ...interface{}) {
 	if c.verbose {
-		fmt.Printf("  [%s] %s\n", c.chain, fmt.Sprintf(format, a...))
+		fmt.Printf("  [%s] %s\n", c.name, fmt.Sprintf(format, a...))
 	}
 }
 
@@ -452,11 +553,16 @@ func (c *collector) note(format string, a ...interface{}) {
 	c.mu.Lock()
 	c.errs = append(c.errs, msg)
 	c.mu.Unlock()
-	fmt.Fprintf(os.Stderr, "  [%s] %s\n", c.chain, msg)
+	fmt.Fprintf(os.Stderr, "  [%s] %s\n", c.name, msg)
 }
 
 func (c *collector) getJSON(u string, out interface{}) error {
-	resp, err := c.http.Get(u)
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -481,7 +587,7 @@ func (c *collector) tipHeight() (int, error) {
 			InSync     bool `json:"inSync"`
 		} `json:"blockbook"`
 	}
-	if err := c.getJSON("https://"+host(c.chain)+"/api/v2/", &st); err != nil {
+	if err := c.getJSON(c.target.baseURL(false)+"/api/v2/", &st); err != nil {
 		return 0, err
 	}
 	return st.Blockbook.BestHeight, nil
@@ -495,7 +601,7 @@ func (c *collector) fetchBlock(h int) error {
 	if done {
 		return nil
 	}
-	base := fmt.Sprintf("https://%s/api/v2/block/%d", host(c.chain), h)
+	base := fmt.Sprintf("%s/api/v2/block/%d", c.target.baseURL(false), h)
 	var agg restBlock
 	page := 1
 	for {
@@ -599,6 +705,7 @@ func (c *collector) pollOneInch(ctx context.Context, key func() string, period t
 		}
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("User-Agent", userAgent)
 		resp, err := c.http.Do(req)
 		if err == nil {
 			body, _ := io.ReadAll(resp.Body)
@@ -614,7 +721,7 @@ func (c *collector) pollOneInch(ctx context.Context, key func() string, period t
 					// Log the recovery too: silence on success would otherwise be
 					// indistinguishable from silence on a repeated failure.
 					if recovered {
-						fmt.Printf("  [%s] 1inch recovered\n", c.chain)
+						fmt.Printf("  [%s] 1inch recovered\n", c.name)
 					}
 				} else {
 					c.setOneInchErr("decode: " + err.Error())
@@ -642,7 +749,7 @@ func (c *collector) setOneInchErr(msg string) {
 	c.oneInch = nil
 	c.mu.Unlock()
 	if changed {
-		fmt.Fprintf(os.Stderr, "  [%s] 1inch unavailable: %s\n", c.chain, msg)
+		fmt.Fprintf(os.Stderr, "  [%s] 1inch unavailable: %s\n", c.name, msg)
 	}
 }
 
@@ -655,7 +762,7 @@ func (c *collector) backfill(ctx context.Context, n int) {
 		c.note("tip: %v", err)
 		return
 	}
-	fmt.Printf("[%s] backfilling %d blocks ending at %d\n", c.chain, n, tip)
+	fmt.Printf("[%s] backfilling %d blocks ending at %d\n", c.name, n, tip)
 	for i := 0; i < n; i++ {
 		select {
 		case <-ctx.Done():
@@ -726,14 +833,14 @@ func (c *collector) session(parent context.Context, depth int, minQuote time.Dur
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
-	wsURL := (&url.URL{Scheme: "wss", Host: host(c.chain), Path: "/websocket"}).String()
-	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
+	wsURL := c.target.baseURL(true) + "/websocket"
+	conn, _, err := c.dialer.DialContext(ctx, wsURL, http.Header{"User-Agent": {userAgent}})
 	if err != nil {
 		c.note("dial %s: %v", wsURL, err)
 		return
 	}
 	defer conn.Close()
-	fmt.Printf("[%s] connected to %s\n", c.chain, wsURL)
+	fmt.Printf("[%s] connected to %s\n", c.name, wsURL)
 
 	var wmu sync.Mutex
 	send := func(id, method string, params interface{}) error {
@@ -900,8 +1007,9 @@ type sample struct {
 	chain  string
 	height int
 	tier   string
-	// provider is which answer this row is: "served" (what the host returned),
-	// "1inch", or "onchain" (what Blockbook's own algorithm would have said).
+	// provider is which answer this row is: "served" (what the public host
+	// returned), the label of a second host for the chain, "1inch", or "onchain"
+	// (what Blockbook's own algorithm would have said).
 	provider string
 	source   string // fingerprint of the served quote; empty on the other rows
 	baseFee  float64
@@ -1057,9 +1165,9 @@ func (c *collector) samples(depth int, synthetic bool) []sample {
 			if t := q.fees.tier(i); t != nil && !synthetic {
 				maxFee, _ := parseWei(t.MaxFeePerGas)
 				tip, _ := parseWei(t.MaxPriorityFeePerGas)
-				emit(q, i, "served", q.source, tierFee{maxFee: maxFee, priorityFee: tip}, q.baseFee)
+				emit(q, i, c.target.provider(), q.source, tierFee{maxFee: maxFee, priorityFee: tip}, q.baseFee)
 			}
-			if cf != nil {
+			if cf != nil && c.reference {
 				// The on-chain path reads the base fee off the chain, so its reported
 				// value is the block's own by construction.
 				emit(q, i, "onchain", "", cf[i], onchainBase)
@@ -1070,7 +1178,7 @@ func (c *collector) samples(depth int, synthetic bool) []sample {
 		}
 	}
 	if dropped > 0 {
-		fmt.Printf("[%s] dropped %d tier-samples whose %d-block outcome window was incomplete\n", c.chain, dropped, depth)
+		fmt.Printf("[%s] dropped %d tier-samples whose %d-block outcome window was incomplete\n", c.name, dropped, depth)
 	}
 	return out
 }
@@ -1157,6 +1265,9 @@ func writeBlocksTSV(dir string, collectors []*collector) (string, error) {
 	}, "\t"))
 	rows := 0
 	for _, c := range collectors {
+		if !c.reference {
+			continue
+		}
 		c.mu.Lock()
 		heights := make([]int, 0, len(c.blocks))
 		for h := range c.blocks {
@@ -1204,8 +1315,17 @@ func report(all []sample) {
 			chains = append(chains, s.chain)
 		}
 	}
-	// "served" first so each tier reads as "what we ship, then the alternatives".
-	providers := []string{"served", "1inch", "onchain"}
+	// "served" first so each tier reads as "what we ship, then the alternatives";
+	// a second host for a chain follows it, in the order the rows arrived.
+	providers := []string{"served"}
+	var extra []string
+	for _, s := range all {
+		if !reservedProviders[s.provider] && !seen[s.provider] {
+			seen[s.provider] = true
+			extra = append(extra, s.provider)
+		}
+	}
+	providers = append(append(providers, extra...), "1inch", "onchain")
 
 	fmt.Printf("\n%-6s %-8s %-8s %5s %11s %11s %8s %8s %7s %7s %6s\n",
 		"chain", "tier", "provider", "n", "tip_gwei", "mktTip_gwei", "paid", "shown", "incl1", "inclAll", "clamp")
@@ -1255,6 +1375,9 @@ func report(all []sample) {
 		}
 	}
 	fmt.Println("\nprovider: served = what the host returned now | 1inch = what it would return on the 1inch provider")
+	if len(extra) > 0 {
+		fmt.Printf("          %s = what the host given as chain@%s=host returned now\n", strings.Join(extra, ", "), extra[0])
+	}
 	fmt.Println("          onchain = what Blockbook's own eth_feeHistory algorithm would have said")
 	fmt.Println("tip_gwei = quoted priority fee after Suite's clamps | mktTip = the tip that actually sufficed")
 	fmt.Println("paid     = effective price really paid / the going rate (EIP-1559 refunds the rest)")
@@ -1313,7 +1436,7 @@ func (c *collector) validate(rpcURL string) error {
 		if err := c.fetchBlock(h); err != nil {
 			// The public node is usually a block or two ahead of Blockbook's index;
 			// a height it has not reached yet is a race, not a disagreement.
-			fmt.Printf("  [%s] h=%d skipped, not indexed yet\n", c.chain, h)
+			fmt.Printf("  [%s] h=%d skipped, not indexed yet\n", c.name, h)
 			continue
 		}
 		compared++
@@ -1330,10 +1453,10 @@ func (c *collector) validate(rpcURL string) error {
 			if want.Cmp(got) != 0 {
 				ok = false
 				fmt.Printf("  [%s] h=%d p%v MISMATCH node=%s reconstructed=%s\n",
-					c.chain, h, feeHistoryPercentiles[i], want, got)
+					c.name, h, feeHistoryPercentiles[i], want, got)
 			}
 		}
-		fmt.Printf("  [%s] h=%d txs=%d checked %d percentiles\n", c.chain, h, len(b.txs), len(row))
+		fmt.Printf("  [%s] h=%d txs=%d checked %d percentiles\n", c.name, h, len(b.txs), len(row))
 	}
 	if !ok {
 		return fmt.Errorf("reconstruction does not match the node")
@@ -1342,14 +1465,14 @@ func (c *collector) validate(rpcURL string) error {
 		return fmt.Errorf("no block could be compared; Blockbook is behind %s", rpcURL)
 	}
 	fmt.Printf("[%s] reconstruction matches %s over %d of %d blocks\n",
-		c.chain, rpcURL, compared, len(out.Result.Reward))
+		c.name, rpcURL, compared, len(out.Result.Reward))
 	return nil
 }
 
 // ---------------------------------------------------------------- main
 
 func main() {
-	chains := flag.String("chains", strings.Join(defaultChains, ","), "comma-separated Blockbook chains (host is <chain>.trezor.io)")
+	chains := flag.String("chains", strings.Join(defaultChains, ","), "comma-separated Blockbook chains (host is <chain>.trezor.io); chain@label=host adds a second host for a chain, reported as provider <label>")
 	duration := flag.Duration("duration", 30*time.Minute, "live sampling window; ignored when -backfill is set")
 	backfill := flag.Int("backfill", 0, "instead of sampling live, analyse the last N blocks (no served quotes, on-chain algorithm only)")
 	depth := flag.Int("depth", 8, "how many following blocks a quote is given to be included")
@@ -1362,6 +1485,7 @@ func main() {
 	// stays out of shell history and the process list.
 	keyFile := flag.String("oneinch-key-file", "", "file holding a 1inch API key; enables the 1inch column (falls back to $ONE_INCH_API_KEY)")
 	oneInchPeriod := flag.Duration("oneinch-period", 10*time.Second, "how often to poll api.1inch.dev, matching the provider's configured periodSeconds")
+	insecure := flag.Bool("insecure", false, "skip TLS verification for chain@label=host entries (dev instances use self-signed certificates); never applies to the public hosts")
 	flag.Parse()
 
 	oneInchKey := func() string { return strings.TrimSpace(os.Getenv("ONE_INCH_API_KEY")) }
@@ -1383,18 +1507,26 @@ func main() {
 		fmt.Println("no 1inch key given (-oneinch-key-file or $ONE_INCH_API_KEY); comparing served vs on-chain only")
 	}
 
-	names := splitAndTrim(*chains)
-	if len(names) == 0 {
+	var targets []target
+	for _, entry := range splitAndTrim(*chains) {
+		t, err := parseTarget(entry)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "-chains: %v\n", err)
+			os.Exit(2)
+		}
+		targets = append(targets, t)
+	}
+	if len(targets) == 0 {
 		fmt.Fprintln(os.Stderr, "-chains must name at least one chain")
 		os.Exit(2)
 	}
 
 	if *validateRPC != "" {
-		if len(names) != 1 {
+		if len(targets) != 1 {
 			fmt.Fprintln(os.Stderr, "-validate needs exactly one -chains entry, matching the node's chain")
 			os.Exit(2)
 		}
-		if err := newCollector(names[0], *verbose).validate(*validateRPC); err != nil {
+		if err := newCollector(targets[0], true, *insecure, *verbose).validate(*validateRPC); err != nil {
 			fmt.Fprintf(os.Stderr, "validation failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -1421,10 +1553,14 @@ func main() {
 		}()
 	}
 
-	collectors := make([]*collector, 0, len(names))
+	collectors := make([]*collector, 0, len(targets))
+	referenced := map[string]bool{}
 	var wg sync.WaitGroup
-	for i, name := range names {
-		c := newCollector(name, *verbose)
+	for i, t := range targets {
+		// The first target named for a chain is its reference, whether or not it is
+		// the public host, so a dev-only run still gets blocks and the on-chain column.
+		c := newCollector(t, !referenced[t.chain], *insecure, *verbose)
+		referenced[t.chain] = true
 		collectors = append(collectors, c)
 		wg.Add(1)
 		go func(c *collector, i int) {
@@ -1439,7 +1575,7 @@ func main() {
 				c.backfill(ctx, *backfill)
 				return
 			}
-			if oneInchEnabled {
+			if oneInchEnabled && c.reference {
 				go c.pollOneInch(ctx, oneInchKey, *oneInchPeriod)
 			}
 			c.live(ctx, *depth, *minQuote, *gap)

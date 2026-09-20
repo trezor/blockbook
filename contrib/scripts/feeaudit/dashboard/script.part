@@ -3,13 +3,17 @@ const NS = "http://www.w3.org/2000/svg";
 const el = (t, a = {}) => { const n = document.createElementNS(NS, t);
   for (const k in a) if (a[k] !== null && a[k] !== undefined) n.setAttribute(k, a[k]); return n; };
 
-const PROV = { served: "Infura", oneinch: "1inch", onchain: "on-chain now",
-               onchainNew: "on-chain #1768" };
-const PLONG = { served: "Infura Gas API (what we serve today)", oneinch: "1inch Gas API",
+// A capture may carry a second host sampled as chain@label=host (a dev instance);
+// its rows arrive under that label, so every lookup falls back to something sensible.
+const withDefault = (m, f) => new Proxy(m, { get: (o, k) => k in o ? o[k] : f(k) });
+const PROV = withDefault({ served: "Infura", oneinch: "1inch", onchain: "on-chain now",
+               onchainNew: "on-chain #1768" }, p => p);
+const PLONG = withDefault({ served: "Infura Gas API (what we serve today)", oneinch: "1inch Gas API",
                 onchain: "Blockbook's own algorithm as deployed today (reconstructed)",
-                onchainNew: "Blockbook's own algorithm after PR 1768 (reconstructed)" };
-const PCOL = { served: "var(--s-served)", oneinch: "var(--s-oneinch)",
-               onchain: "var(--s-onchain)", onchainNew: "var(--s-onchainnew)" };
+                onchainNew: "Blockbook's own algorithm after PR 1768 (reconstructed)" },
+                p => `Blockbook at the host sampled as "${p}" (measured)`);
+const PCOL = withDefault({ served: "var(--s-served)", oneinch: "var(--s-oneinch)",
+               onchain: "var(--s-onchain)", onchainNew: "var(--s-onchainnew)" }, () => "var(--s-extra)");
 const REAL = "var(--s-real)";
 
 let chain = DATA.chains[0], tier = "medium", logScale = true;
@@ -428,7 +432,7 @@ function speedTable() {
   if (!body) return;
   const rows = [];
   DATA.chains.forEach(c => DATA.tiers.forEach(t => {
-    const cells = ["served", "oneinch", "onchain", "onchainNew"].map(p =>
+    const cells = DATA.providers.map(p =>
       DATA.speed.find(s => s.chain === c && s.tier === t && s.provider === p));
     if (cells.some(Boolean)) rows.push({ c, t, cells });
   }));

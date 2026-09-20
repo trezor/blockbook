@@ -17,6 +17,8 @@ USD = {"eth":2480.91,"arb":2480.91,"op":2480.91,"base":2480.91,"rhc":2480.91,
 TIERS = ["low","medium","high"]
 TIER_LABEL = {"low":"Economy","medium":"Normal","high":"High"}
 PKEY = {"served":"served","1inch":"oneinch","onchain":"onchain","onchainNew":"onchainNew"}
+# A second host sampled as chain@label=host reports under its label, which passes through.
+pkey = lambda p: PKEY.get(p, p)
 # What Suite actually shows as the tier ETA. A provider that ships maxWaitTimeEstimate
 # wins over Suite's own fallback (EthereumFeeLevels.ts defaultBlocks {low:4,medium:2,high:1}),
 # so the bar is not the same for every source - which is itself worth showing, because a
@@ -178,7 +180,7 @@ print(f"replayed {len(replayed)} on-chain rows over the post-#1768 algorithm")
 qraw = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
 for row in srows:
     if row["tier"] not in TIERS: continue
-    qraw[row["chain"]][row["tier"]][PKEY[row["provider"]]].append(row)
+    qraw[row["chain"]][row["tier"]][pkey(row["provider"])].append(row)
 
 def qbase(x):
     return block_base.get((x["chain"], int(x["height"])), float(x["base_gwei"]))
@@ -264,10 +266,12 @@ for c in qraw:
                               pct=r(100 * ok / len(rws), 1), n=len(rws)))
 
 chains = [c for c in CHAIN_LABEL if c in q]
+# Labelled hosts slot in after "served", in the order their rows arrived.
+extra = list(dict.fromkeys(s["provider"] for s in stats if s["provider"] not in PKEY.values()))
 out = dict(chains=chains, chainLabels={c: CHAIN_LABEL[c] for c in chains},
            native={c: NATIVE.get(c, "") for c in chains}, usd={c: USD.get(c, 0) for c in chains},
            tiers=TIERS, tierLabels=TIER_LABEL,
-           providers=[p for p in ["served","oneinch","onchain","onchainNew"]
+           providers=[p for p in ["served", *extra, "oneinch", "onchain", "onchainNew"]
                       if any(s["provider"] == p for s in stats)],
            blocks=blocks, quotes=q, stats=stats, spikes=spikes, congestion=congestion, speed=speed,
            samples=len(srows), blockCount=len(brows),

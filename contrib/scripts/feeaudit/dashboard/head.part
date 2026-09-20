@@ -9,7 +9,7 @@
   --ink:#10130f; --ink-2:#5a615a; --ink-3:#858c84;
   --rule:#e2e5e1; --rule-strong:#cdd2cb; --band:#f0e4d8;
   --accent:#0f6f66;
-  --s-served:#2a78d6; --s-oneinch:#eb6834; --s-onchain:#1baf7a; --s-onchainnew:#eda100;
+  --s-served:#2a78d6; --s-oneinch:#eb6834; --s-onchain:#1baf7a; --s-onchainnew:#eda100; --s-extra:#8b5cf6;
   --s-real:#5a615a;
   --ok:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
 }
@@ -20,7 +20,7 @@
     --ink:#eef1ec; --ink-2:#a8b0a7; --ink-3:#7d857c;
     --rule:#2b302d; --rule-strong:#3c433e; --band:#33281f;
     --accent:#3fb3a4;
-    --s-served:#3987e5; --s-oneinch:#d95926; --s-onchain:#199e70; --s-onchainnew:#c98500;
+    --s-served:#3987e5; --s-oneinch:#d95926; --s-onchain:#199e70; --s-onchainnew:#c98500; --s-extra:#a78bfa;
     --s-real:#a8b0a7;
   }
 }
@@ -30,7 +30,7 @@
   --ink:#eef1ec; --ink-2:#a8b0a7; --ink-3:#7d857c;
   --rule:#2b302d; --rule-strong:#3c433e; --band:#33281f;
   --accent:#3fb3a4;
-  --s-served:#3987e5; --s-oneinch:#d95926; --s-onchain:#199e70; --s-onchainnew:#c98500;
+  --s-served:#3987e5; --s-oneinch:#d95926; --s-onchain:#199e70; --s-onchainnew:#c98500; --s-extra:#a78bfa;
   --s-real:#a8b0a7;
 }
 *{box-sizing:border-box}

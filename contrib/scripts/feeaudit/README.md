@@ -11,7 +11,7 @@ backend access. Background on why the estimate is hard to get right is in
 | path | role |
 |---|---|
 | `main.go` | collector: websocket `estimateFee` quotes anchored to block heights, REST block fetches for the paid prices, offline `eth_feeHistory` reconstruction for the on-chain counterfactual, optional 1inch polling. Writes `feeaudit.tsv` (one row per quote and tier) and `blocks.tsv` (one row per block). |
-| `run-long.sh` | driver for a multi-hour capture. Runs hourly segments so a crash loses at most one hour. |
+| `run-long.sh` | driver for a multi-hour capture. Runs hourly segments so a crash loses at most one hour. `CHAINS` takes the same entries as `-chains`, `FEEAUDIT_FLAGS` passes extra flags such as `-insecure`. |
 | `../feewait/main.go` | dumps the per-tier `maxWaitTimeEstimate` each host serves. Those readings are the `WAIT_MS` constants in `dashboard/build_data.py`, so re-read them when the provider config changes. |
 | `dashboard/build_data.py` | reduces the TSVs to the chart payload: bucketed series, congestion windows, ETA hit rates, and a replay of the post-PR-1768 tier spec over the recorded reward percentiles (the "on-chain #1768" column). |
 | `dashboard/head.part`, `body.part`, `script.part` | the static page, split around the spot where the payload is spliced in. |
@@ -68,6 +68,35 @@ Cloudflare hiccup costs seconds, not the rest of the hour.
 The dashboard extractor loads every row into memory. Five days is about a million sample
 rows and as many blocks, which needs a few GB of RAM but no code change; the series are
 bucketed to 700 points regardless of length.
+
+### Compare a dev instance against production
+
+A chain can be sampled from more than one Blockbook. The plain entry (`eth`) is the public
+host and the reference: its blocks are the ground truth and it carries the 1inch and on-chain
+columns. `chain@label=host` adds a second host for the same chain; its quotes are scored
+against the same blocks and reported as provider `<label>` beside the reference's `served`,
+in the console report, the TSV and the dashboard. Dev hosts present self-signed certificates,
+so pass `-insecure`, which relaxes verification for labelled hosts only.
+
+```sh
+# three days: eth.trezor.io (Infura) vs a dev Blockbook running the on-chain estimator vs 1inch
+OUT=~/feeaudit/dev3d KEY=~/.config/1inch.key \
+  CHAINS='eth,eth@dev=blockbook-dev1.corp.sldev.cz:9136' FEEAUDIT_FLAGS=-insecure \
+  nohup caffeinate -is contrib/scripts/feeaudit/run-long.sh 72 > ~/feeaudit/dev3d.log 2>&1 &
+
+contrib/scripts/feeaudit/dashboard/build-dashboard.sh ~/feeaudit/dev3d dev3d.html
+```
+
+The `source` column of the dev rows fingerprints what the dev host actually served:
+`onchain` when the estimator under test answered, `provider` if the deployment still has an
+alternative provider configured. The dashboard's replayed "on-chain #1768" column is computed
+from the recorded reward percentiles; the dev column is the same algorithm measured live, so
+the two should agree wherever the dev host was at the tip when asked.
+
+Cloudflare in front of the public hosts rejects Go's default User-Agent, curl and
+python-requests with HTTP 403 on both websocket and REST (observed 2026-09-20); the collector
+sends a Mozilla-prefixed agent that still names the tool. A run that logs `bad handshake` on
+every dial and gets no samples is hitting this, not a Blockbook fault.
 
 Before trusting a run on a new chain, check the offline fee-history reconstruction against
 a real node once (verified wei-for-wei on coreth and op-reth):
