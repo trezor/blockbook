@@ -35,12 +35,13 @@ func (s *feeHistoryRPCStub) CallContext(ctx context.Context, result interface{},
 }
 
 func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
-	// baseFeePerGas[blocks-1]=[3]=0x64=100 is the projected next-block base fee (4-element array, as a
-	// no-distinct-pending-block backend returns). Per-tier reward percentiles over 2 blocks.
+	// baseFeePerGas[blocks-1]=[7]=0x64=100 is the projected next-block base fee (8-element array, as a
+	// no-distinct-pending-block backend returns). Per-tier reward percentiles over 2 blocks, fewer
+	// than any tier's window, so every tier reads both rows.
 	// Three reward columns, matching eip1559RewardPercentiles {20, 70, 99}.
 	raw := `{"oldestBlock":"0x1",` +
 		`"reward":[["0x1","0x2","0x4"],["0x2","0x6","0x8"]],` +
-		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"],` +
 		`"gasUsedRatio":[0.5,0.5,0.5]}`
 	b := &EthereumRPC{
 		RPC:         &feeHistoryRPCStub{raw: raw},
@@ -97,7 +98,7 @@ func TestEthereumTypeGetEip1559FeesOnChainShortRewardRow(t *testing.T) {
 	// row 0 alone - which lands it below high and must then be lifted by the clamp.
 	raw := `{"oldestBlock":"0x1",` +
 		`"reward":[["0x1","0x2","0x4"],["0x2","0x6"]],` +
-		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"],` +
 		`"gasUsedRatio":[0.5,0.5,0.5]}`
 	b := &EthereumRPC{
 		RPC:         &feeHistoryRPCStub{raw: raw},
@@ -226,7 +227,7 @@ func TestEip1559FeeSourceMetric(t *testing.T) {
 	}
 	raw := `{"oldestBlock":"0x1",` +
 		`"reward":[["0x1","0x2","0x3","0x4"]],` +
-		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"],` +
 		`"gasUsedRatio":[0.5,0.5,0.5]}`
 	b := &EthereumRPC{
 		RPC:         &feeHistoryRPCStub{raw: raw},
@@ -313,7 +314,7 @@ func TestEthereumTypeGetEip1559FeesLadderMonotonic(t *testing.T) {
 	// One spiky block dominates the p20 column while the p70 column stays flat and low.
 	raw := `{"oldestBlock":"0x1",` +
 		`"reward":[["0x9","0x1","0x1"],["0x1","0x1","0x1"]],` +
-		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"],` +
 		`"gasUsedRatio":[0.5,0.5,0.5]}`
 	b := &EthereumRPC{
 		RPC:         &feeHistoryRPCStub{raw: raw},
@@ -342,6 +343,48 @@ func TestEthereumTypeGetEip1559FeesLadderMonotonic(t *testing.T) {
 		if i > 0 && f.MaxPriorityFeePerGas == tiers[i-1].MaxPriorityFeePerGas {
 			t.Errorf("%s and %s share a MaxPriorityFeePerGas pointer", names[i], names[i-1])
 		}
+	}
+}
+
+// TestEthereumTypeGetEip1559FeesPerTierWindow asserts each tier reads only its own number of
+// newest rows: Economy reaches back the full 8 blocks, the upper tiers stop at 4. Rows are
+// oldest-first, so the spike is planted in row 0 and the newer rows are priced so no tier is
+// clamped, keeping the window the only thing under test.
+func TestEthereumTypeGetEip1559FeesPerTierWindow(t *testing.T) {
+	// Row 0 (oldest): p20 spike of 4 and a p70 spike of 9. Rows 1-5: p20=1, p70=5, p99=6.
+	raw := `{"oldestBlock":"0x1",` +
+		`"reward":[["0x4","0x9","0x1"],["0x1","0x5","0x6"],["0x1","0x5","0x6"],` +
+		`["0x1","0x5","0x6"],["0x1","0x5","0x6"],["0x1","0x5","0x6"]],` +
+		`"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"],` +
+		`"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5,0.5]}`
+	b := &EthereumRPC{
+		RPC:         &feeHistoryRPCStub{raw: raw},
+		Timeout:     time.Second,
+		ChainConfig: &Configuration{Eip1559Fees: true},
+	}
+	fees, err := b.EthereumTypeGetEip1559Fees()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cases := []struct {
+		name    string
+		fee     *bchain.Eip1559Fee
+		wantTip int64
+	}{
+		{"low", fees.Low, 4},         // 8-block window: sees row 0's p20 spike
+		{"medium", fees.Medium, 5},   // 4-block window: median of the newest four p70 = 5
+		{"high", fees.High, 5},       // 4-block window: row 0's p70 spike of 9 is out of reach
+		{"instant", fees.Instant, 6}, // 4-block window: newest four p99 = 6
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.fee == nil {
+				t.Fatal("nil tier")
+			}
+			if c.fee.MaxPriorityFeePerGas.Int64() != c.wantTip {
+				t.Errorf("MaxPriorityFeePerGas = %v, want %d", c.fee.MaxPriorityFeePerGas, c.wantTip)
+			}
+		})
 	}
 }
 
