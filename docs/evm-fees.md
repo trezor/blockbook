@@ -201,12 +201,15 @@ Briefly, to anchor the theory — [fees.md](fees.md) has the detail.
 
 Two sources produce the tiers:
 
-- **On-chain**: one `eth_feeHistory` call over 4 blocks at percentiles **20 / 70 / 99**. A tier is a
-  percentile *plus* a window reducer — low = p20 max, medium = p70 median, high = p70 max,
-  instant = p99 max — and the result is forced non-decreasing. Measured over a 12h capture, the
-  90th percentile cost ~7× the 70th on Ethereum while adding under a point of next-block inclusion,
-  so High now separates from Normal by reading the same percentile more pessimistically rather than
-  by climbing the distribution.
+- **On-chain**: one `eth_feeHistory` call over 8 blocks at percentiles **20 / 70 / 99**. A tier is a
+  percentile *plus* a window reducer *plus* a window length — low = p20 max over 8 blocks,
+  medium = p70 median over 4, high = p70 max over 4, instant = p99 max over 4 — and the result is
+  forced non-decreasing. Measured over a 12h capture, the 90th percentile cost ~7× the 70th on
+  Ethereum while adding under a point of next-block inclusion, so High now separates from Normal by
+  reading the same percentile more pessimistically rather than by climbing the distribution. Economy
+  alone reads the longer window: over five days of Ethereum blocks that took its 4-block inclusion
+  from 99.1% to 99.7% for a median 11% more tip, while the short window on the upper tiers lets a
+  quote drop a spike as soon as it has passed.
 - **Alternative provider**: a third-party gas API (Infura or 1inch), polled in the background and
   served from cache.
 

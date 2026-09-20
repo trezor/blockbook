@@ -100,11 +100,13 @@ for c, rows in raw.items():
 # reward percentiles, which is everything the new estimator reads, so it can be replayed
 # exactly over the same blocks at the same quote heights and scored by the same rule.
 #
-# Mirrors eip1559TierSpec in bchain/coins/eth/ethrpc.go.
-NEW_SPEC = [("reward_p20_gwei", max),          # low     - p20, window maximum
-            ("reward_p70_gwei", statistics.median),  # medium - p70, window median
-            ("reward_p70_gwei", max)]          # high    - p70, window maximum
-WINDOW, DEPTH, HEADROOM = 4, 8, 2
+# Mirrors eip1559TierSpec in bchain/coins/eth/ethrpc.go: reward column, reducer, and how many
+# of the newest blocks the tier reads.
+NEW_SPEC = [("reward_p20_gwei", max, 8),               # low     - p20, window maximum, 8 blocks
+            ("reward_p70_gwei", statistics.median, 4),  # medium - p70, window median, 4 blocks
+            ("reward_p70_gwei", max, 4)]               # high    - p70, window maximum, 4 blocks
+WINDOW = max(w for _, _, w in NEW_SPEC)
+DEPTH, HEADROOM = 8, 2
 
 bidx = collections.defaultdict(dict)
 for b in brows:
@@ -122,7 +124,7 @@ def replay_onchain(chain, heights):
         if not win or any(h + i not in bl for i in range(1, DEPTH + 1)):
             continue
         base = float(bl[h]["base_gwei"])
-        tips = [f([float(x[col]) for x in win]) for col, f in NEW_SPEC]
+        tips = [f([float(x[col]) for x in win[len(win) - w:]]) for col, f, w in NEW_SPEC]
         for i in range(1, len(tips)):           # the monotonic clamp
             tips[i] = max(tips[i], tips[i - 1])
         for ti, tier in enumerate(TIERS):
