@@ -110,7 +110,9 @@ func (s *MultiTokenValues) upsert(m bchain.MultiTokenValue, index int32, aggrega
 	}
 }
 
-// AddrContract is Contract address with number of transactions done by given address
+// AddrContract is Contract address with number of transactions done by given address.
+// Value, Ids and MultiTokenValues are empty when the row was read with reduced
+// AddrContractsReadOptions; such a partial row must never be packed back.
 type AddrContract struct {
 	Standard         bchain.TokenStandard
 	Contract         bchain.AddressDescriptor
@@ -264,7 +266,26 @@ func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *
 	}, nil
 }
 
+// AddrContractsReadOptions limits how much of a cfAddressContracts row is materialised.
+// Skipped parts are left zero; Standard, Contract, Txs and the row totals are always decoded.
+type AddrContractsReadOptions struct {
+	Values   bool                     // decode ERC20 Value
+	Holdings bool                     // decode ERC721 Ids and ERC1155 MultiTokenValues
+	Contract bchain.AddressDescriptor // with Holdings, decode holdings only for this contract
+}
+
+var fullAddrContractsRead = AddrContractsReadOptions{Values: true, Holdings: true}
+
+// skipBigint returns the packed length of a bigint without allocating it
+func skipBigint(buf []byte) int {
+	return int(buf[0]) + 1
+}
+
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
+	return unpackAddrContractsOpt(buf, addrDesc, fullAddrContractsRead)
+}
+
+func unpackAddrContractsOpt(buf []byte, addrDesc bchain.AddressDescriptor, opts AddrContractsReadOptions) (acs *AddrContracts, err error) {
 	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
@@ -274,11 +295,14 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 	cl, l := unpackVaruint(buf)
 	buf = buf[l:]
 	c := make([]AddrContract, 0, cl)
+	// one backing array for all contract descriptors instead of an allocation per contract
+	descs := make([]byte, 0, cl*eth.EthereumTypeAddressDescriptorLen)
 	for len(buf) > 0 {
 		if len(buf) < eth.EthereumTypeAddressDescriptorLen {
 			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
 		}
-		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
+		descs = append(descs, buf[:eth.EthereumTypeAddressDescriptorLen]...)
+		contract := bchain.AddressDescriptor(descs[len(descs)-eth.EthereumTypeAddressDescriptorLen : len(descs) : len(descs)])
 		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
 		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
 		standard := bchain.TokenStandard(txs & 3)
@@ -289,22 +313,34 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			Txs:      txs,
 		}
 		if standard == bchain.FungibleToken {
-			b, ll := unpackBigint(buf)
-			buf = buf[ll:]
-			ac.Value = b
+			if opts.Values {
+				b, ll := unpackBigint(buf)
+				buf = buf[ll:]
+				ac.Value = b
+			} else {
+				buf = buf[skipBigint(buf):]
+			}
 		} else {
-			len, ll := unpackVaruint(buf)
+			n, ll := unpackVaruint(buf)
 			buf = buf[ll:]
-			if standard == bchain.NonFungibleToken {
-				ac.Ids = make(Ids, len)
-				for i := uint(0); i < len; i++ {
+			if !opts.Holdings || (len(opts.Contract) > 0 && !bytes.Equal(opts.Contract, contract)) {
+				// skip ids (and values for ERC1155) without materialising them
+				if standard == bchain.MultiToken {
+					n *= 2
+				}
+				for i := uint(0); i < n; i++ {
+					buf = buf[skipBigint(buf):]
+				}
+			} else if standard == bchain.NonFungibleToken {
+				ac.Ids = make(Ids, n)
+				for i := uint(0); i < n; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
 					ac.Ids[i] = b
 				}
 			} else {
-				ac.MultiTokenValues = make(MultiTokenValues, len)
-				for i := uint(0); i < len; i++ {
+				ac.MultiTokenValues = make(MultiTokenValues, n)
+				for i := uint(0); i < n; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
 					ac.MultiTokenValues[i].Id = b
@@ -337,8 +373,13 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 	return nil
 }
 
-// GetAddrDescContracts returns AddrContracts for given addrDesc
+// GetAddrDescContracts returns fully decoded AddrContracts for given addrDesc
 func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
+	return d.GetAddrDescContractsOpt(addrDesc, fullAddrContractsRead)
+}
+
+// GetAddrDescContractsOpt returns AddrContracts for given addrDesc, decoding only what opts ask for
+func (d *RocksDB) GetAddrDescContractsOpt(addrDesc bchain.AddressDescriptor, opts AddrContractsReadOptions) (*AddrContracts, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
 	if err != nil {
 		return nil, err
@@ -348,7 +389,7 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	return unpackAddrContracts(buf, addrDesc)
+	return unpackAddrContractsOpt(buf, addrDesc, opts)
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []unpackedAddrContract) (int, bool) {
