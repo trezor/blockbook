@@ -427,6 +427,8 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
+	// EthereumTypeIsIgnoredContract reports a contract whose already indexed holdings must not be served as a token
+	EthereumTypeIsIgnoredContract(contract AddressDescriptor) bool
 	GetEthereumTxData(tx *Tx) *EthereumTxData
 	GetChainExtraPayloadType() ChainExtraPayloadType
 	GetChainExtraData(tx *Tx) (json.RawMessage, error)
