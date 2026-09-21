@@ -102,8 +102,3 @@ func (b *LiquidRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 func (b *LiquidRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return b.GetTransaction(txid)
 }
-
-// GetMempoolEntry returns mempool data for given transaction
-func (b *LiquidRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
-	return nil, errors.New("GetMempoolEntry: not implemented")
-}
