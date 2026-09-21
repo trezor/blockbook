@@ -802,22 +802,23 @@ func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, st
 	return contractInfo, true, nil
 }
 
+// getEthereumTokensTransfers maps parsed transfers to the API shape. Addresses and value come from
+// the log or calldata, so a transfer whose contract metadata cannot be read is kept with the coin's
+// decimals rather than dropped or left as a zero value (trezor/blockbook#1715).
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
-	tokens := make([]TokenTransfer, len(transfers))
+	tokens := make([]TokenTransfer, 0, len(transfers))
 	if len(transfers) > 0 {
 		sort.Sort(transfers)
 		contractCache := make(contractInfoCache)
 		for i := range transfers {
 			t := transfers[i]
 			standard := bchain.EthereumTokenStandardMap[t.Standard]
-			var contractInfo *bchain.ContractInfo
-			if info, ok := contractCache[t.Contract]; ok {
-				contractInfo = info
-			} else {
+			contractInfo, ok := contractCache[t.Contract]
+			if !ok {
 				info, _, err := w.GetContractInfo(t.Contract, standard)
 				if err != nil {
 					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
-					continue
+					info = &bchain.ContractInfo{Standard: standard, Decimals: w.chainParser.AmountDecimals()}
 				}
 				contractInfo = info
 				contractCache[t.Contract] = info
@@ -835,7 +836,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			}
 			aggregateAddress(addresses, t.From)
 			aggregateAddress(addresses, t.To)
-			tokens[i] = TokenTransfer{
+			tokens = append(tokens, TokenTransfer{
 				Type:             standard,
 				Standard:         standard,
 				Contract:         t.Contract,
@@ -846,7 +847,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 				Decimals:         contractInfo.Decimals,
 				Name:             contractInfo.Name,
 				Symbol:           contractInfo.Symbol,
-			}
+			})
 		}
 	}
 	return tokens
