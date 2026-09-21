@@ -145,6 +145,35 @@ func (w *SyncWorker) sequentialFallBehindGap() uint32 {
 	return gap
 }
 
+// parallelFetchByHeight reports whether the parallel producers may skip GetBlockHash.
+// EVM GetBlock("", h) is one eth_getBlockByNumber carrying the body; bitcoin-type
+// GetBlock("") re-does getblockhash internally, so only EVM saves an RPC.
+func (w *SyncWorker) parallelFetchByHeight() bool {
+	return w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType
+}
+
+// roundParentHash seeds the writer's parent-linkage check with the hash the round extends.
+// An empty result leaves the first block unchecked, like the sequential loop does.
+func (w *SyncWorker) roundParentHash(lower uint32) string {
+	height, hash, err := w.db.GetBestBlock()
+	if err != nil || height != lower-1 {
+		return ""
+	}
+	return hash
+}
+
+// unlinkedParent reports a fork when the block does not extend the previously connected
+// hash. Blocks fetched by height carry no expected hash, so this is the parallel path's
+// only reorg detector; the caller yields errResync and resyncIndex unwinds the orphan.
+func (w *SyncWorker) unlinkedParent(prevHash string, b *bchain.Block) bool {
+	if prevHash == "" || b.Prev == "" || prevHash == b.Prev {
+		return false
+	}
+	glog.Infof("sync: fork detected at height %d %s, local prevHash %s, remote prevHash %s", b.Height, b.Hash, prevHash, b.Prev)
+	w.metrics.IndexReorgEvents.With(common.Labels{"type": "fork"}).Inc()
+	return true
+}
+
 // NewSyncWorker creates new SyncWorker and returns its handle
 func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState) (*SyncWorker, error) {
 	return NewSyncWorkerWithConfig(db, chain, syncWorkers, syncChunk, minStartHeight, dryRun, chanOsSignal, metrics, is, nil)
@@ -678,6 +707,7 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
 		lastBlock := lower - 1
+		prevHash := w.roundParentHash(lower)
 	WriteBlockLoop:
 		for {
 			select {
@@ -689,6 +719,15 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 				if b.Height != lastBlock+1 {
 					glog.Fatal("writeBlockWorker skipped block, expected block ", lastBlock+1, ", new block ", b.Height)
 				}
+				if w.unlinkedParent(prevHash, b) {
+					select {
+					case abortCh <- errResync:
+					default:
+					}
+					terminate()
+					break WriteBlockLoop
+				}
+				prevHash = b.Hash
 				err := w.db.ConnectBlock(b)
 				if err != nil {
 					glog.Fatal("writeBlockWorker ", b.Height, " ", b.Hash, " error ", err)
@@ -716,6 +755,7 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	}
 	go writeBlockWorker()
 	var hash string
+	byHeight := w.parallelFetchByHeight()
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
@@ -735,12 +775,16 @@ ConnectLoop:
 			terminate()
 			break ConnectLoop
 		default:
-			hash, err = w.chain.GetBlockHash(h)
-			if err != nil {
-				glog.Error("GetBlockHash error ", err)
-				w.metrics.IndexResyncErrors.With(common.Labels{"error": errorGetBlockHash}).Inc()
-				time.Sleep(time.Millisecond * 500)
-				continue
+			// EVM workers fetch by height, so the header lookup here would be a wasted RPC.
+			hash = ""
+			if !byHeight {
+				hash, err = w.chain.GetBlockHash(h)
+				if err != nil {
+					glog.Error("GetBlockHash error ", err)
+					w.metrics.IndexResyncErrors.With(common.Labels{"error": errorGetBlockHash}).Inc()
+					time.Sleep(time.Millisecond * 500)
+					continue
+				}
 			}
 			if err = w.sendHashHeight(hch, abortCh, hashHeight{hash, h}); err != nil {
 				if stdErrors.Is(err, errResync) {
@@ -770,9 +814,13 @@ ConnectLoop:
 			err = abortErr
 		}
 	}
+	for i := 0; i < int(syncWorkers); i++ {
+		close(bch[i])
+	}
+	<-writeBlockDone
 	// Hardening: a worker can report a terminal tail error after ConnectLoop has
-	// already ended (for example once hchClosed=true). Drain once so we return
-	// that error instead of silently succeeding.
+	// already ended, and the writer reports a fork while draining the last blocks.
+	// Drain once so we return that error instead of silently succeeding.
 	select {
 	case abortErr := <-abortCh:
 		if err == nil {
@@ -780,10 +828,6 @@ ConnectLoop:
 		}
 	default:
 	}
-	for i := 0; i < int(syncWorkers); i++ {
-		close(bch[i])
-	}
-	<-writeBlockDone
 	return err
 }
 
@@ -931,6 +975,7 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 			glog.Error("sync: InitBulkConnect error ", err)
 		}
 		lastBlock := lower - 1
+		prevHash := w.roundParentHash(lower)
 		keep := uint32(w.chain.GetChainParser().KeepBlockAddresses())
 	WriteBlockLoop:
 		for {
@@ -943,6 +988,15 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 				if b.Height != lastBlock+1 {
 					glog.Fatal("writeBlockWorker skipped block, expected block ", lastBlock+1, ", new block ", b.Height)
 				}
+				if w.unlinkedParent(prevHash, b) {
+					select {
+					case abortCh <- errResync:
+					default:
+					}
+					terminate()
+					break WriteBlockLoop
+				}
+				prevHash = b.Hash
 				err := bc.ConnectBlock(b, b.Height+keep > higher)
 				if err != nil {
 					glog.Fatal("writeBlockWorker ", b.Height, " ", b.Hash, " error ", err)
@@ -964,6 +1018,7 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	}
 	go writeBlockWorker()
 	var hash string
+	byHeight := w.parallelFetchByHeight()
 	start := time.Now()
 	msTime := time.Now().Add(1 * time.Minute)
 ConnectLoop:
@@ -986,12 +1041,16 @@ ConnectLoop:
 			terminate()
 			break ConnectLoop
 		default:
-			hash, err = w.chain.GetBlockHash(h)
-			if err != nil {
-				glog.Error("GetBlockHash error ", err)
-				w.metrics.IndexResyncErrors.With(common.Labels{"error": errorGetBlockHash}).Inc()
-				time.Sleep(time.Millisecond * 500)
-				continue
+			// EVM workers fetch by height, so the header lookup here would be a wasted RPC.
+			hash = ""
+			if !byHeight {
+				hash, err = w.chain.GetBlockHash(h)
+				if err != nil {
+					glog.Error("GetBlockHash error ", err)
+					w.metrics.IndexResyncErrors.With(common.Labels{"error": errorGetBlockHash}).Inc()
+					time.Sleep(time.Millisecond * 500)
+					continue
+				}
 			}
 			if err = w.sendHashHeight(hch, abortCh, hashHeight{hash, h}); err != nil {
 				if stdErrors.Is(err, errResync) {
@@ -1006,7 +1065,7 @@ ConnectLoop:
 			}
 			if h > 0 && h%1000 == 0 {
 				w.metrics.BlockbookBestHeight.Set(float64(h))
-				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
+				glog.Info("connecting block ", h, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
 				start = time.Now()
 			}
 			if msTime.Before(time.Now()) {
@@ -1033,8 +1092,13 @@ ConnectLoop:
 			err = abortErr
 		}
 	}
-	// Hardening: capture a late worker error reported after the connect loop
-	// exits so the caller can retry instead of treating sync as successful.
+	for i := 0; i < w.syncWorkers; i++ {
+		close(bch[i])
+	}
+	<-writeBlockDone
+	// Hardening: capture a late worker error reported after the connect loop exits,
+	// or a fork the writer found while draining, so the caller retries instead of
+	// treating sync as successful.
 	select {
 	case abortErr := <-abortCh:
 		if err == nil {
@@ -1042,10 +1106,6 @@ ConnectLoop:
 		}
 	default:
 	}
-	for i := 0; i < w.syncWorkers; i++ {
-		close(bch[i])
-	}
-	<-writeBlockDone
 	return err
 }
 
