@@ -10,6 +10,7 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/trezor/blockbook/bchain"
+	"golang.org/x/crypto/sha3"
 )
 
 // the cached checksum must agree with go-ethereum's reference implementation
@@ -34,35 +35,61 @@ func TestEIP55Address_MatchesReference(t *testing.T) {
 	}
 }
 
-func TestAddressFormatCache_AgesOut(t *testing.T) {
-	c := NewAddressFormatCache(addressFormatShards * 2)
+// the Sum fallback must produce the same checksum as the squeeze path
+func TestEIP55Checksum_SumFallback(t *testing.T) {
+	k := &eip55Scratch{keccak: sha3.NewLegacyKeccak256()}
+	for i := 0; i < 500; i++ {
+		var a ethcommon.Address
+		rand.Read(a[:])
+		if got := k.checksum(a[:]); got != a.Hex() {
+			t.Fatalf("checksum(%x) = %s, want %s", a, got, a.Hex())
+		}
+	}
+}
+
+func TestAddressFormatCache_Replacement(t *testing.T) {
+	c := NewAddressFormatCache(2)
 	calls := 0
 	format := func(d bchain.AddressDescriptor) string {
 		calls++
 		return fmt.Sprintf("%x", []byte(d))
 	}
-	// all keys land in one shard: same last byte
-	key := func(i int) bchain.AddressDescriptor { return bchain.AddressDescriptor{byte(i), byte(i >> 8), 7} }
-	for i := 0; i < 2; i++ {
-		c.Format(key(i), format)
+	// the slot is the lowest bit of the first of the last eight bytes (little endian):
+	// a and b collide, other does not
+	a := bchain.AddressDescriptor{1, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	b := bchain.AddressDescriptor{2, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	other := bchain.AddressDescriptor{3, 0, 1, 0, 0, 0, 0, 0, 0, 0}
+	if got := c.Format(a, format); got != "01000000000000000000" || calls != 1 {
+		t.Fatalf("first format: %s, calls %d", got, calls)
 	}
-	if c.Format(key(0), format); calls != 2 {
+	if c.Format(a, format); calls != 1 {
 		t.Fatalf("hit recomputed, calls = %d", calls)
 	}
-	// filling the current generation pushes the first keys to the previous one
-	c.Format(key(2), format)
-	c.Format(key(3), format)
-	if c.Format(key(0), format); calls != 4 {
-		t.Fatalf("previous generation not consulted, calls = %d", calls)
+	c.Format(other, format)
+	if c.Format(a, format); calls != 2 {
+		t.Fatalf("other slot evicted a, calls = %d", calls)
 	}
-	// a second rollover drops them: the next lookup recomputes and re-inserts
-	c.Format(key(4), format)
-	c.Format(key(5), format)
-	if c.Format(key(0), format); calls != 7 {
-		t.Fatalf("aged-out key served, calls = %d", calls)
+	c.Format(b, format)
+	if got := c.Format(a, format); got != "01000000000000000000" || calls != 4 {
+		t.Fatalf("colliding key must evict: %s, calls = %d", got, calls)
 	}
-	if got := c.Format(key(0), format); got != "000007" || calls != 7 {
-		t.Fatalf("re-inserted key: %s, calls = %d", got, calls)
+	if c.Format(other, format); calls != 4 {
+		t.Fatalf("other slot disturbed, calls = %d", calls)
+	}
+	// short and over-long descriptors bypass the table
+	for _, d := range []bchain.AddressDescriptor{{1}, make([]byte, addressFormatKeyMax+1)} {
+		before := calls
+		c.Format(d, format)
+		c.Format(d, format)
+		if calls != before+2 {
+			t.Fatalf("descriptor of %d bytes was cached", len(d))
+		}
+	}
+	if c.slots.Load() == nil {
+		t.Fatal("slots not allocated after use")
+	}
+	if NewAddressFormatCache(1<<17).slots.Load() != nil {
+		t.Fatal("slots allocated before first use")
 	}
 }
 

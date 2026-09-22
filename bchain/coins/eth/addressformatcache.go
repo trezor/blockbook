@@ -1,66 +1,73 @@
 package eth
 
 import (
-	"sync"
+	"bytes"
+	"encoding/binary"
+	"sync/atomic"
 
 	"github.com/trezor/blockbook/bchain"
 )
 
-const addressFormatShards = 64
+// addressFormatKeyMax fits an EVM address and a 0x41-prefixed Tron address.
+const addressFormatKeyMax = 21
 
 // AddressFormatCache remembers the display form of address descriptors. Formatting an
 // address costs a hash (Keccak for EIP-55, double SHA-256 for Tron) and the API formats
 // the same few thousand addresses over and over: the address whose page is served, the
-// popular token contracts. Each shard keeps a current and a previous generation and drops
-// the previous one when the current fills up, which bounds the size without bookkeeping.
+// popular token contracts.
+//
+// It is a direct-mapped table of immutable entries behind atomic pointers: lookups take
+// no lock and allocate nothing, a miss overwrites the slot the address maps to. Slots are
+// allocated on first use, so a Blockbook of another coin family pays nothing. Because the
+// key is the descriptor alone, one cache must serve exactly one format function.
 type AddressFormatCache struct {
-	shards       [addressFormatShards]addressFormatShard
-	shardEntries int
+	mask  uint64
+	slots atomic.Pointer[[]atomic.Pointer[addressFormatEntry]]
 }
 
-type addressFormatShard struct {
-	mu       sync.RWMutex
-	cur, old map[string]string
+type addressFormatEntry struct {
+	key    [addressFormatKeyMax]byte
+	keyLen uint8
+	value  string
 }
 
-// NewAddressFormatCache returns a cache holding at least entries formatted addresses.
-func NewAddressFormatCache(entries int) *AddressFormatCache {
-	c := &AddressFormatCache{shardEntries: max(entries/addressFormatShards, 1)}
-	c.reset()
-	return c
+// NewAddressFormatCache returns a cache with at least slots entries, rounded up to a power of two.
+func NewAddressFormatCache(slots int) *AddressFormatCache {
+	n := 1
+	for n < slots {
+		n <<= 1
+	}
+	return &AddressFormatCache{mask: uint64(n - 1)}
 }
 
 func (c *AddressFormatCache) reset() {
-	for i := range c.shards {
-		s := &c.shards[i]
-		s.mu.Lock()
-		s.cur = make(map[string]string, c.shardEntries)
-		s.old = nil
-		s.mu.Unlock()
+	c.slots.Store(nil)
+}
+
+func (c *AddressFormatCache) table() *[]atomic.Pointer[addressFormatEntry] {
+	if t := c.slots.Load(); t != nil {
+		return t
 	}
+	t := make([]atomic.Pointer[addressFormatEntry], c.mask+1)
+	if c.slots.CompareAndSwap(nil, &t) {
+		return &t
+	}
+	return c.slots.Load()
 }
 
 // Format returns the display form of addrDesc, computing it with format on a miss.
 func (c *AddressFormatCache) Format(addrDesc bchain.AddressDescriptor, format func(bchain.AddressDescriptor) string) string {
-	if len(addrDesc) == 0 {
+	n := len(addrDesc)
+	if n < 8 || n > addressFormatKeyMax {
 		return format(addrDesc)
 	}
-	s := &c.shards[addrDesc[len(addrDesc)-1]%addressFormatShards]
-	s.mu.RLock()
-	v, ok := s.cur[string(addrDesc)]
-	if !ok {
-		v, ok = s.old[string(addrDesc)]
+	// addresses are hash-derived, their low bytes are as good a slot index as any hash
+	slot := &(*c.table())[binary.LittleEndian.Uint64(addrDesc[n-8:])&c.mask]
+	if e := slot.Load(); e != nil && bytes.Equal(e.key[:e.keyLen], addrDesc) {
+		return e.value
 	}
-	s.mu.RUnlock()
-	if ok {
-		return v
-	}
-	v = format(addrDesc)
-	s.mu.Lock()
-	if len(s.cur) >= c.shardEntries {
-		s.old, s.cur = s.cur, make(map[string]string, c.shardEntries)
-	}
-	s.cur[string(addrDesc)] = v
-	s.mu.Unlock()
-	return v
+	e := &addressFormatEntry{keyLen: uint8(n), value: format(addrDesc)}
+	copy(e.key[:], addrDesc)
+	slot.Store(e)
+	return e.value
 }
