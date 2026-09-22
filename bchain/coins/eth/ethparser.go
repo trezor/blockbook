@@ -2,9 +2,11 @@ package eth
 
 import (
 	"encoding/hex"
+	"hash"
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/juju/errors"
@@ -227,29 +229,57 @@ func (p *EthereumParser) GetAddrDescFromAddress(address string) (bchain.AddressD
 	return hex.DecodeString(address)
 }
 
+// eip55Cache covers the hot set of a busy API node; see AddressFormatCache
+var eip55Cache = NewAddressFormatCache(65536)
+
 // EIP55Address returns an EIP55-compliant hex string representation of the address
 func EIP55Address(addrDesc bchain.AddressDescriptor) string {
-	raw := hexutil.Encode(addrDesc)
-	if len(raw) != 42 {
-		return raw
+	if len(addrDesc) != EthereumTypeAddressDescriptorLen {
+		return hexutil.Encode(addrDesc)
 	}
-	sha := sha3.NewLegacyKeccak256()
-	result := []byte(raw)
-	sha.Write(result[2:])
-	hash := sha.Sum(nil)
+	return eip55Cache.Format(addrDesc, eip55Checksum)
+}
 
-	for i := 2; i < len(result); i++ {
-		hashByte := hash[(i-2)>>1]
+// keccakState is the x/crypto Keccak with its squeeze method, which fills a caller buffer
+// where Sum would allocate one
+type keccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
+
+type eip55Scratch struct {
+	keccak keccakState
+	sum    [32]byte
+	hex    [2 + 2*EthereumTypeAddressDescriptorLen]byte
+}
+
+var eip55Pool = sync.Pool{New: func() any {
+	return &eip55Scratch{keccak: sha3.NewLegacyKeccak256().(keccakState)}
+}}
+
+// eip55Checksum computes the checksummed form of a 20-byte address; the only
+// allocation is the returned string
+func eip55Checksum(addrDesc bchain.AddressDescriptor) string {
+	k := eip55Pool.Get().(*eip55Scratch)
+	k.hex[0], k.hex[1] = '0', 'x'
+	hex.Encode(k.hex[2:], addrDesc)
+	k.keccak.Reset()
+	k.keccak.Write(k.hex[2:])
+	k.keccak.Read(k.sum[:])
+	for i := 2; i < len(k.hex); i++ {
+		hashByte := k.sum[(i-2)>>1]
 		if i%2 == 0 {
 			hashByte = hashByte >> 4
 		} else {
 			hashByte &= 0xf
 		}
-		if result[i] > '9' && hashByte > 7 {
-			result[i] -= 32
+		if k.hex[i] > '9' && hashByte > 7 {
+			k.hex[i] -= 32
 		}
 	}
-	return string(result)
+	s := string(k.hex[:])
+	eip55Pool.Put(k)
+	return s
 }
 
 // EIP55AddressFromAddress returns an EIP55-compliant hex string representation of the address
