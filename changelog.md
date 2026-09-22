@@ -19,6 +19,7 @@
 
 ### Reliability and Correctness
 
+- **Drop internal transfers from failed call frames (EVM & Tron)** ([#1621](https://github.com/trezor/blockbook/issues/1621)): a failed frame and its whole subtree (including a reverted root) no longer produce phantom internal transfers, CREATE or SELFDESTRUCT records in the address index and balance history.
 - **UTXO reorg detection fix in raw-parse path** ([#1398](https://github.com/trezor/blockbook/pull/1398)): populates `BlockHeader.Prev` for raw-parsed blocks to prevent missed fork detection that can stall sync on wrong tips.
 - **Base newHeads burst handling fix** ([#1407](https://github.com/trezor/blockbook/pull/1407)): coalesces head notifications as hints and enforces strictly increasing block-number processing with a catch-up loop.
 - **Reliable SIGTERM shutdown + clean RocksDB close** ([#1408](https://github.com/trezor/blockbook/pull/1408)): reworks signal fan-out so main shutdown always runs, unblocks workers, and stops periodic state writes during shutdown.
