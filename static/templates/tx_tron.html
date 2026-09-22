@@ -107,6 +107,17 @@
             <td><span class="copyable">{{$chainExtra.UnstakeAmount}}</span> sun</td>
         </tr>
         {{end}}
+        {{if $chainExtra.WithdrawnUnfreezeValue}}
+        <tr>
+            <td>Withdrawn Unfreeze</td>
+            <td>{{formattedAmountSpan $chainExtra.WithdrawnUnfreezeValue 6 "TRX" $data "copyable"}}</td>
+        </tr>
+        {{else if $chainExtra.WithdrawnUnfreeze}}
+        <tr>
+            <td>Withdrawn Unfreeze</td>
+            <td><span class="copyable">{{$chainExtra.WithdrawnUnfreeze}}</span> sun</td>
+        </tr>
+        {{end}}
         {{if $chainExtra.DelegateAmountValue}}
         <tr>
             <td>Delegate Amount</td>

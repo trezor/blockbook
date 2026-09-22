@@ -53,14 +53,23 @@ func tronBalanceHistoryOverrideFromExtraDataParsed(extra *bchain.TronChainExtraD
 	case "freeze":
 		override.direction = tronBalanceHistoryDirectionOutgoing
 		amountText = extra.StakeAmount
-	case "withdraw":
-		override.direction = tronBalanceHistoryDirectionIncoming
-		amountText = extra.UnstakeAmount
+	case "withdraw", "cancelUnfreeze":
+		// The principal these operations return is credited generically from
+		// WithdrawnUnfreeze, so crediting it here too would double count it.
+		override.direction = tronBalanceHistoryDirectionNone
+		override.amount.SetInt64(0)
+		return override, true
 	case "voteRewardAmount":
 		override.direction = tronBalanceHistoryDirectionIncoming
 		amountText = extra.ClaimedVoteReward
 	case "unfreeze":
-		// Unfreeze starts unlock period but funds are not yet spendable.
+		if extra.ContractType == "UnfreezeBalanceContract" {
+			// Stake 1.0 has no unlock period, the principal is spendable right away.
+			override.direction = tronBalanceHistoryDirectionIncoming
+			amountText = extra.UnstakeAmount
+			break
+		}
+		// Stake 2.0 unfreeze starts the unlock period but funds are not yet spendable.
 		// Do not account principal movement in balance history at this stage.
 		override.direction = tronBalanceHistoryDirectionNone
 		override.amount.SetInt64(0)
@@ -78,6 +87,19 @@ func tronBalanceHistoryOverrideFromExtraDataParsed(extra *bchain.TronChainExtraD
 	}
 
 	return override, true
+}
+
+// tronBalanceHistoryWithdrawnUnfreezeFromExtraDataParsed returns the matured unstake
+// that java-tron swept back into the owner's spendable balance in this transaction.
+func tronBalanceHistoryWithdrawnUnfreezeFromExtraDataParsed(extra *bchain.TronChainExtraData) big.Int {
+	var amount big.Int
+	if extra == nil {
+		return amount
+	}
+	if a, ok := parseBase10BigInt(extra.WithdrawnUnfreeze); ok {
+		amount.Set(a)
+	}
+	return amount
 }
 
 func tronBalanceHistoryFeeFromExtraDataParsed(extra *bchain.TronChainExtraData) big.Int {
@@ -116,6 +138,7 @@ func (w *Worker) processTronBalanceHistory(
 		}
 	}
 	feeSat := tronBalanceHistoryFeeFromExtraDataParsed(extra)
+	withdrawnUnfreezeSat := tronBalanceHistoryWithdrawnUnfreezeFromExtraDataParsed(extra)
 
 	override, hasOverride := tronBalanceHistoryOverrideFromExtraDataParsed(extra, &value)
 
@@ -169,6 +192,9 @@ func (w *Worker) processTronBalanceHistory(
 					}
 				}
 			}
+			// Matured unstake returns to the owner on any Stake 2.0 operation, so it is
+			// credited independently of that operation's own principal movement.
+			(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &withdrawnUnfreezeSat)
 		}
 		// Fees always reduce spendable balance for sender-side matches.
 		(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feeSat)

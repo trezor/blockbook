@@ -2,6 +2,8 @@ package bchain
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -87,7 +89,41 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 	if m.OnNewTx != nil {
 		m.OnNewTx(mtx)
 	}
-	return txEntry{addrIndexes: addrIndexes, time: txTime}, true
+	entry := txEntry{addrIndexes: addrIndexes, time: txTime}
+	if csd, ok := tx.CoinSpecificData.(EthereumSpecificData); ok && csd.Tx != nil && len(mtx.Vin) > 0 {
+		nonce, err := strconv.ParseUint(strings.TrimPrefix(csd.Tx.AccountNonce, "0x"), 16, 64)
+		if err != nil {
+			glog.Warning("cannot parse nonce ", csd.Tx.AccountNonce, " of tx ", txid, ": ", err)
+		} else {
+			entry.from = string(mtx.Vin[0].AddrDesc)
+			entry.nonce = nonce
+		}
+	}
+	return entry, true
+}
+
+// RemoveSenderTransactionsUpToNonce retires every entry sent by from with a nonce at or below the
+// mined one - no such transaction can ever mine, whatever the backend says about its pool presence.
+// Returns the removed txids.
+func (m *MempoolEthereumType) RemoveSenderTransactionsUpToNonce(from AddressDescriptor, nonce uint64) []string {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	// collect first - removeEntryFromMempool compacts the outpoint slice being scanned
+	var candidates []string
+	for _, o := range m.addrDescToTx[string(from)] {
+		if entry, ok := m.txEntries[o.Txid]; ok && entry.from != "" && entry.from == string(from) && entry.nonce <= nonce {
+			candidates = append(candidates, o.Txid)
+		}
+	}
+	var removed []string
+	for _, txid := range candidates {
+		// a self-transfer lists the txid twice under the same address
+		if entry, ok := m.txEntries[txid]; ok {
+			m.removeEntryFromMempool(txid, entry)
+			removed = append(removed, txid)
+		}
+	}
+	return removed
 }
 
 // Resync ethereum type removes timed out transactions and returns number of transactions in mempool.
