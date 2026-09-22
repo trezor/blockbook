@@ -81,7 +81,7 @@ func BenchmarkContractGetTransfersFromLogSynthetic(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		contractGetTransfersFromLog(logs, "bench")
+		contractGetTransfersFromLog(logs, "bench", "")
 	}
 }
 
@@ -93,7 +93,7 @@ func BenchmarkContractGetTransfersFromLogBlock(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, r := range receipts {
-			contractGetTransfersFromLog(r.Logs, "bench")
+			contractGetTransfersFromLog(r.Logs, "bench", "")
 		}
 	}
 }
