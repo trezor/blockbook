@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/trezor/blockbook/configs"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -84,5 +85,49 @@ func TestMetricsYAMLInvariants(t *testing.T) {
 			t.Errorf("duplicate prometheus name %q (keys %q and %q)", def.Name, prev, key)
 		}
 		names[def.Name] = key
+	}
+}
+
+// TestGoRuntimeMetricsExported pins the runtime/metrics families the Grafana system
+// panels query (GC CPU share, live/goal heap) and that swapping the Go collector keeps
+// the memstats gauges older panels use while leaving the noisy size histograms out.
+func TestGoRuntimeMetricsExported(t *testing.T) {
+	useTestPrometheusRegistry(t)
+	// The fresh test registry has no stock Go collector; the production registry does.
+	prometheus.MustRegister(collectors.NewGoCollector())
+
+	if _, err := GetMetrics("metrics_unittest_go_runtime"); err != nil {
+		t.Fatalf("GetMetrics: %v", err)
+	}
+	// A second registration in the same process (multi-coin test binaries) must be a no-op.
+	if err := registerGoRuntimeMetrics(); err != nil {
+		t.Fatalf("second registerGoRuntimeMetrics: %v", err)
+	}
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	names := make(map[string]bool, len(families))
+	for _, f := range families {
+		names[f.GetName()] = true
+	}
+	for _, want := range []string{
+		"go_cpu_classes_gc_total_cpu_seconds_total",
+		"go_cpu_classes_total_cpu_seconds_total",
+		"go_cpu_classes_idle_cpu_seconds_total",
+		"go_gc_heap_live_bytes",
+		"go_gc_heap_goal_bytes",
+		"go_memstats_alloc_bytes",
+		"go_gc_duration_seconds",
+	} {
+		if !names[want] {
+			t.Errorf("metric family %s not exported", want)
+		}
+	}
+	for _, unwanted := range []string{"go_gc_heap_allocs_by_size_bytes", "go_gc_heap_frees_by_size_bytes"} {
+		if names[unwanted] {
+			t.Errorf("metric family %s should be excluded", unwanted)
+		}
 	}
 }

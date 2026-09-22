@@ -1,11 +1,14 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/trezor/blockbook/configs"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -188,7 +191,36 @@ func GetMetrics(coin string) (*Metrics, error) {
 		}
 	}
 
+	if err := registerGoRuntimeMetrics(); err != nil {
+		return nil, fmt.Errorf("metrics: registering Go runtime metrics: %w", err)
+	}
+
 	return metrics, nil
+}
+
+// registerGoRuntimeMetrics swaps the default Go collector (memstats gauges only) for one
+// that also exports GC CPU time and the live/goal heap from runtime/metrics, so the GC
+// share of an instance's CPU can be read from Grafana instead of a pprof session.
+// The alloc/free size histograms are left out: ~30 series per instance for no question
+// the memstats gauges do not already answer.
+func registerGoRuntimeMetrics() error {
+	extended := collectors.NewGoCollector(
+		collectors.WithGoCollectorRuntimeMetrics(
+			collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile(`^/cpu/classes/`)},
+			collectors.MetricsGC,
+		),
+		collectors.WithoutGoCollectorRuntimeMetrics(regexp.MustCompile(`^/gc/heap/(allocs|frees)-by-size:bytes$`)),
+	)
+	// Both collectors describe the same go_memstats_* descriptors, so the stock one has to go first.
+	prometheus.Unregister(collectors.NewGoCollector())
+	if err := prometheus.Register(extended); err != nil {
+		var already prometheus.AlreadyRegisteredError
+		if errors.As(err, &already) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // fieldTypeToMetricType maps a Metrics struct field's Go type to the metric `type`
