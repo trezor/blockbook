@@ -163,8 +163,10 @@ func (w *SyncWorker) roundParentHash(lower uint32) string {
 }
 
 // unlinkedParent reports a fork when the block does not extend the previously connected
-// hash. Blocks fetched by height carry no expected hash, so this is the parallel path's
+// hash. Blocks fetched by height carry no expected hash, so this is the by-height path's
 // only reorg detector; the caller yields errResync and resyncIndex unwinds the orphan.
+// Hash-pinned rounds skip it: the producer's getblockhash chain is already the node's
+// canonical view, and the integration fixtures splice non-linking blocks under real hashes.
 func (w *SyncWorker) unlinkedParent(prevHash string, b *bchain.Block) bool {
 	if prevHash == "" || b.Prev == "" || prevHash == b.Prev {
 		return false
@@ -704,6 +706,7 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
 	abortCh := make(chan error, 1)
+	byHeight := w.parallelFetchByHeight()
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
 		lastBlock := lower - 1
@@ -719,7 +722,7 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 				if b.Height != lastBlock+1 {
 					glog.Fatal("writeBlockWorker skipped block, expected block ", lastBlock+1, ", new block ", b.Height)
 				}
-				if w.unlinkedParent(prevHash, b) {
+				if byHeight && w.unlinkedParent(prevHash, b) {
 					select {
 					case abortCh <- errResync:
 					default:
@@ -755,7 +758,6 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 	}
 	go writeBlockWorker()
 	var hash string
-	byHeight := w.parallelFetchByHeight()
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
@@ -968,6 +970,7 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	// Keep it buffered so the first worker can report without blocking while the
 	// coordinator is closing channels/terminating.
 	abortCh := make(chan error, 1)
+	byHeight := w.parallelFetchByHeight()
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
 		bc, err := w.db.InitBulkConnect()
@@ -988,7 +991,7 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 				if b.Height != lastBlock+1 {
 					glog.Fatal("writeBlockWorker skipped block, expected block ", lastBlock+1, ", new block ", b.Height)
 				}
-				if w.unlinkedParent(prevHash, b) {
+				if byHeight && w.unlinkedParent(prevHash, b) {
 					select {
 					case abortCh <- errResync:
 					default:
@@ -1018,7 +1021,6 @@ func (w *SyncWorker) BulkConnectBlocks(lower, higher uint32) error {
 	}
 	go writeBlockWorker()
 	var hash string
-	byHeight := w.parallelFetchByHeight()
 	start := time.Now()
 	msTime := time.Now().Add(1 * time.Minute)
 ConnectLoop:
