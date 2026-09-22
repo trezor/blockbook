@@ -739,6 +739,31 @@ func TestBulkConnectBlocksBitcoinTypeKeepsHashLookup(t *testing.T) {
 	assertBestBlock(t, d, 4, chain.hashes[4])
 }
 
+// A hash-pinned bitcoin-type round follows the node's getblockhash chain, so the writer must
+// not second-guess it through Prev: the integration fixtures splice blocks whose parents do
+// not link under real hashes, and a fork there is handleFork's job, not the writer's.
+func TestParallelConnectBlocksBitcoinTypeIgnoresUnlinkedParent(t *testing.T) {
+	d := setupRocksDB(t, bitcoinTestnetParser())
+	defer closeAndDestroyRocksDB(t, d)
+
+	chain := newResyncTestChain(nil)
+	chain.chainType = bchain.ChainBitcoinType
+	for h := uint32(1); h <= 4; h++ {
+		b := &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: strings.Repeat(strconv.Itoa(int(h)), 64), Prev: strings.Repeat("f", 64), Height: h, Time: int64(h)}}
+		chain.hashes[h], chain.blocks[h] = b.Hash, b
+	}
+	w := newResyncTestWorker(t, d, chain)
+	forksBefore := reorgEvents(t, w, "fork")
+
+	if err := w.ParallelConnectBlocks(nil, 1, 4, 2); err != nil {
+		t.Fatalf("ParallelConnectBlocks: %v", err)
+	}
+	assertBestBlock(t, d, 4, chain.hashes[4])
+	if got := reorgEvents(t, w, "fork") - forksBefore; got != 0 {
+		t.Fatalf("fork reorg events = %v, want 0", got)
+	}
+}
+
 // The EVM bulk path mirrors the parallel one: heights only, no header lookups.
 func TestBulkConnectBlocksEthereumTypeFetchesByHeight(t *testing.T) {
 	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
