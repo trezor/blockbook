@@ -3,6 +3,7 @@ package eth
 import (
 	"encoding/hex"
 	"hash"
+	"io"
 	"math/big"
 	"strconv"
 	"strings"
@@ -230,7 +231,7 @@ func (p *EthereumParser) GetAddrDescFromAddress(address string) (bchain.AddressD
 }
 
 // eip55Cache covers the hot set of a busy API node; see AddressFormatCache
-var eip55Cache = NewAddressFormatCache(65536)
+var eip55Cache = NewAddressFormatCache(1 << 17)
 
 // EIP55Address returns an EIP55-compliant hex string representation of the address
 func EIP55Address(addrDesc bchain.AddressDescriptor) string {
@@ -240,32 +241,40 @@ func EIP55Address(addrDesc bchain.AddressDescriptor) string {
 	return eip55Cache.Format(addrDesc, eip55Checksum)
 }
 
-// keccakState is the x/crypto Keccak with its squeeze method, which fills a caller buffer
-// where Sum would allocate one
-type keccakState interface {
-	hash.Hash
-	Read([]byte) (int, error)
-}
-
 type eip55Scratch struct {
-	keccak keccakState
-	sum    [32]byte
-	hex    [2 + 2*EthereumTypeAddressDescriptorLen]byte
+	keccak hash.Hash
+	// squeeze is the Keccak state's Read, which fills a caller buffer where Sum would
+	// allocate one; nil when the x/crypto implementation stops exposing it
+	squeeze io.Reader
+	sum     [32]byte
+	hex     [2 + 2*EthereumTypeAddressDescriptorLen]byte
 }
 
 var eip55Pool = sync.Pool{New: func() any {
-	return &eip55Scratch{keccak: sha3.NewLegacyKeccak256().(keccakState)}
+	k := &eip55Scratch{keccak: sha3.NewLegacyKeccak256()}
+	k.squeeze, _ = k.keccak.(io.Reader)
+	return k
 }}
 
 // eip55Checksum computes the checksummed form of a 20-byte address; the only
 // allocation is the returned string
 func eip55Checksum(addrDesc bchain.AddressDescriptor) string {
 	k := eip55Pool.Get().(*eip55Scratch)
+	s := k.checksum(addrDesc)
+	eip55Pool.Put(k)
+	return s
+}
+
+func (k *eip55Scratch) checksum(addrDesc bchain.AddressDescriptor) string {
 	k.hex[0], k.hex[1] = '0', 'x'
 	hex.Encode(k.hex[2:], addrDesc)
 	k.keccak.Reset()
 	k.keccak.Write(k.hex[2:])
-	k.keccak.Read(k.sum[:])
+	if k.squeeze != nil {
+		k.squeeze.Read(k.sum[:])
+	} else {
+		copy(k.sum[:], k.keccak.Sum(nil))
+	}
 	for i := 2; i < len(k.hex); i++ {
 		hashByte := k.sum[(i-2)>>1]
 		if i%2 == 0 {
@@ -277,9 +286,7 @@ func eip55Checksum(addrDesc bchain.AddressDescriptor) string {
 			k.hex[i] -= 32
 		}
 	}
-	s := string(k.hex[:])
-	eip55Pool.Put(k)
-	return s
+	return string(k.hex[:])
 }
 
 // EIP55AddressFromAddress returns an EIP55-compliant hex string representation of the address
