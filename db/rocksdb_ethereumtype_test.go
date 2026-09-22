@@ -1702,6 +1702,49 @@ func Benchmark_packUnpackUnpackedkAddrContracts_Mixed(b *testing.B) {
 	}
 }
 
+// fixture sizes from issue #1790: the 0xdEaD-class record with ~200k contracts
+var packed200kFungibleContracts = packAddrContracts(&AddrContracts{
+	TotalTxs:       3333330,
+	NonContractTxs: 2222220,
+	InternalTxs:    1111110,
+	Contracts:      generateAddrContracts(200_000, 0, 0, 0, 0),
+})
+
+var packed200kMixedContracts = packAddrContracts(&AddrContracts{
+	TotalTxs:       3333330,
+	NonContractTxs: 2222220,
+	InternalTxs:    1111110,
+	Contracts:      generateAddrContracts(150_000, 50_000, 5, 0, 0),
+})
+
+func Benchmark_unpackAddrContracts_200kFungible(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		unpackAddrContracts(packed200kFungibleContracts, nil)
+	}
+}
+
+func Benchmark_unpackAddrContractsHeader_200kFungible(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		unpackAddrContractsHeader(packed200kFungibleContracts, nil)
+	}
+}
+
+func Benchmark_unpackAddrContracts_200kMixed(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		unpackAddrContracts(packed200kMixedContracts, nil)
+	}
+}
+
+func Benchmark_unpackAddrContractsHeader_200kMixed(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		unpackAddrContractsHeader(packed200kMixedContracts, nil)
+	}
+}
+
 func Test_packUnpackAddrContracts(t *testing.T) {
 	parser := ethereumTestnetParser()
 	type args struct {
@@ -1794,7 +1837,78 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 			if !reflect.DeepEqual(got, &tt.data) {
 				t.Errorf("unpackAddrContracts() = %v, want %v", got, tt.data)
 			}
+			// the header-only decoder must agree on the counters and leave the array undecoded
+			header, err := unpackAddrContractsHeader(packed, nil)
+			if err != nil {
+				t.Errorf("unpackAddrContractsHeader() error = %v", err)
+				return
+			}
+			wantHeader := &AddrContracts{TotalTxs: tt.data.TotalTxs, NonContractTxs: tt.data.NonContractTxs, InternalTxs: tt.data.InternalTxs}
+			if !reflect.DeepEqual(header, wantHeader) {
+				t.Errorf("unpackAddrContractsHeader() = %v, want %v", header, wantHeader)
+			}
 		})
+	}
+}
+
+func Test_unpackAddrContractsHeader_Truncated(t *testing.T) {
+	packed := packAddrContracts(&AddrContracts{TotalTxs: 300, NonContractTxs: 200, InternalTxs: 100})
+	// the header is the three counters; the trailing contract count is not part of it
+	headerLen := 0
+	for i := 0; i < 3; i++ {
+		_, l := unpackVaruint(packed[headerLen:])
+		headerLen += l
+	}
+	for cut := 0; cut < headerLen; cut++ {
+		if _, err := unpackAddrContractsHeader(packed[:cut], nil); err == nil {
+			t.Errorf("unpackAddrContractsHeader(packed[:%d]) expected error", cut)
+		}
+	}
+}
+
+func Test_GetAddrDescContractsHeader(t *testing.T) {
+	parser := ethereumTestnetParser()
+	d := setupRocksDB(t, parser)
+	defer closeAndDestroyRocksDB(t, d)
+	addrDesc := bchain.AddressDescriptor(addressToAddrDesc(dbtestdata.EthAddr4b, parser))
+
+	got, err := d.GetAddrDescContractsHeader(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("absent record: got %v, want nil", got)
+	}
+
+	stored := &AddrContracts{
+		TotalTxs:       3333330,
+		NonContractTxs: 2222220,
+		InternalTxs:    1111110,
+		Contracts:      generateAddrContracts(10, 1, 3, 1, 3),
+	}
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.storeAddressContracts(wb, map[string]*AddrContracts{string(addrDesc): stored}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	full, err := d.GetAddrDescContracts(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = d.GetAddrDescContractsHeader(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &AddrContracts{TotalTxs: full.TotalTxs, NonContractTxs: full.NonContractTxs, InternalTxs: full.InternalTxs}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("GetAddrDescContractsHeader() = %v, want %v", got, want)
+	}
+	if len(full.Contracts) != len(stored.Contracts) {
+		t.Errorf("GetAddrDescContracts() decoded %d contracts, want %d", len(full.Contracts), len(stored.Contracts))
 	}
 }
 

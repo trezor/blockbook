@@ -324,6 +324,25 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 	}, nil
 }
 
+// unpackAddrContractsHeader decodes only the three tx counters and leaves Contracts nil;
+// callers that never read the contract array must not pay to decode it.
+func unpackAddrContractsHeader(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
+	var counters [3]uint
+	for i := range counters {
+		v, l, ok := unpackVaruintSafe(buf)
+		if !ok {
+			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
+		}
+		counters[i] = v
+		buf = buf[l:]
+	}
+	return &AddrContracts{
+		TotalTxs:       counters[0],
+		NonContractTxs: counters[1],
+		InternalTxs:    counters[2],
+	}, nil
+}
+
 func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]*AddrContracts) error {
 	for addrDesc, acs := range acm {
 		// address with 0 contracts is removed from db - happens on disconnect
@@ -349,6 +368,21 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 		return nil, nil
 	}
 	return unpackAddrContracts(buf, addrDesc)
+}
+
+// GetAddrDescContractsHeader returns only the tx counters of the cfAddressContracts record,
+// nil for an absent record exactly like GetAddrDescContracts.
+func (d *RocksDB) GetAddrDescContractsHeader(addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	buf := val.Data()
+	if len(buf) == 0 {
+		return nil, nil
+	}
+	return unpackAddrContractsHeader(buf, addrDesc)
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []unpackedAddrContract) (int, bool) {
