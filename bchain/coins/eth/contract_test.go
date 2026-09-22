@@ -313,7 +313,7 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 		}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := contractGetTransfersFromLog(tt.args, "0xtxid")
+			got := contractGetTransfersFromLog(tt.args, "0xtxid", "")
 			if len(got) != len(tt.want) {
 				t.Errorf("contractGetTransfersFromLog len not same, %+v, want %+v", got, tt.want)
 			}
@@ -383,7 +383,7 @@ func Test_contractGetTransfersFromLogSkipsMalformedERC1155TransferBatch(t *testi
 			Data: "0x0000000000000000000000000000000000000000000000000000000000000123",
 		},
 	}
-	transfers := contractGetTransfersFromLog(logs, "0xtxid")
+	transfers := contractGetTransfersFromLog(logs, "0xtxid", "")
 	if len(transfers) != 1 {
 		t.Fatalf("contractGetTransfersFromLog transfers = %+v, want the valid transfer kept", transfers)
 	}
@@ -472,7 +472,7 @@ func Test_contractGetTransfersFromTx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := contractGetTransfersFromTx(tt.args)
+			got, err := contractGetTransfersFromTx(tt.args, "")
 			if err != nil {
 				t.Errorf("contractGetTransfersFromTx error = %v", err)
 				return
@@ -486,6 +486,186 @@ func Test_contractGetTransfersFromTx(t *testing.T) {
 					t.Errorf("contractGetTransfersFromTx %d = %+v, want %+v", i, got[i], tt.want[i])
 				}
 
+			}
+		})
+	}
+}
+
+const testWETHContract = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+
+// wethDepositLog is the only log of the wrap tx from blockbook#1702
+// (0xdb59b35f7ba6c9545e14d2b2493120572f50b0da308e1c131971b543e1c65aa1): 0.001 ETH wrapped, no Transfer.
+func wethDepositLog(address string) *bchain.RpcLog {
+	return &bchain.RpcLog{
+		Address: address,
+		Topics: []string{
+			wrappedNativeDepositEventSignature,
+			"0x0000000000000000000000009ea3721b5bf3b64b4418c38b603154d2d597fae3",
+		},
+		Data: "0x00000000000000000000000000000000000000000000000000038d7ea4c68000",
+	}
+}
+
+func Test_contractGetTransfersFromLogWrappedNative(t *testing.T) {
+	wad := big.NewInt(1000000000000000)
+	tests := []struct {
+		name          string
+		wrappedNative string
+		logs          []*bchain.RpcLog
+		want          bchain.TokenTransfers
+	}{
+		{
+			name:          "Deposit on the configured contract is a mint",
+			wrappedNative: testWETHContract,
+			logs:          []*bchain.RpcLog{wethDepositLog("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2")},
+			want: bchain.TokenTransfers{{
+				Standard: bchain.FungibleToken,
+				Contract: testWETHContract,
+				From:     EthereumZeroAddress,
+				To:       "0x9ea3721b5bf3b64b4418c38b603154d2d597fae3",
+				Value:    *wad,
+			}},
+		},
+		{
+			name:          "Withdrawal on the configured contract is a burn",
+			wrappedNative: testWETHContract,
+			logs: []*bchain.RpcLog{{
+				Address: testWETHContract,
+				Topics: []string{
+					wrappedNativeWithdrawalEventSignature,
+					"0x0000000000000000000000009ea3721b5bf3b64b4418c38b603154d2d597fae3",
+				},
+				Data: "0x00000000000000000000000000000000000000000000000000038d7ea4c68000",
+			}},
+			want: bchain.TokenTransfers{{
+				Standard: bchain.FungibleToken,
+				Contract: testWETHContract,
+				From:     "0x9ea3721b5bf3b64b4418c38b603154d2d597fae3",
+				To:       EthereumZeroAddress,
+				Value:    *wad,
+			}},
+		},
+		{
+			name:          "Deposit from another contract is ignored",
+			wrappedNative: testWETHContract,
+			logs:          []*bchain.RpcLog{wethDepositLog("0x76a45e8976499ab9ae223cc584019341d5a84e96")},
+			want:          bchain.TokenTransfers{},
+		},
+		{
+			name:          "Deposit is ignored when no wrapped native is configured",
+			wrappedNative: "",
+			logs:          []*bchain.RpcLog{wethDepositLog(testWETHContract)},
+			want:          bchain.TokenTransfers{},
+		},
+		{
+			name:          "Deposit with unexpected topic count is skipped",
+			wrappedNative: testWETHContract,
+			logs: []*bchain.RpcLog{{
+				Address: testWETHContract,
+				Topics:  []string{wrappedNativeDepositEventSignature},
+				Data:    "0x00000000000000000000000000000000000000000000000000038d7ea4c68000",
+			}},
+			want: bchain.TokenTransfers{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := contractGetTransfersFromLog(tt.logs, "0xtxid", tt.wrappedNative)
+			if len(got) != len(tt.want) {
+				t.Fatalf("contractGetTransfersFromLog len not same, %+v, want %+v", got, tt.want)
+			}
+			for i := range got {
+				// the addresses could have different case
+				if strings.ToLower(fmt.Sprint(got[i])) != strings.ToLower(fmt.Sprint(tt.want[i])) {
+					t.Errorf("contractGetTransfersFromLog %d = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func Test_contractGetTransfersFromTxWrappedNative(t *testing.T) {
+	const holder = "0x9ea3721b5bf3b64b4418c38b603154d2d597fae3"
+	wad := big.NewInt(1000000000000000)
+	tests := []struct {
+		name          string
+		wrappedNative string
+		tx            *bchain.RpcTransaction
+		want          bchain.TokenTransfers
+	}{
+		{
+			name:          "pending deposit() is a mint of the tx value",
+			wrappedNative: testWETHContract,
+			tx:            &bchain.RpcTransaction{From: holder, To: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", Value: "0x38d7ea4c68000", Payload: wrappedNativeDepositMethodSignature},
+			want: bchain.TokenTransfers{{
+				Standard: bchain.FungibleToken,
+				Contract: testWETHContract,
+				From:     EthereumZeroAddress,
+				To:       holder,
+				Value:    *wad,
+			}},
+		},
+		{
+			name:          "pending withdraw(uint256) is a burn of the calldata amount",
+			wrappedNative: testWETHContract,
+			tx: &bchain.RpcTransaction{From: holder, To: testWETHContract, Value: "0x0",
+				Payload: wrappedNativeWithdrawMethodSignature + "00000000000000000000000000000000000000000000000000038d7ea4c68000"},
+			want: bchain.TokenTransfers{{
+				Standard: bchain.FungibleToken,
+				Contract: testWETHContract,
+				From:     holder,
+				To:       EthereumZeroAddress,
+				Value:    *wad,
+			}},
+		},
+		{
+			name:          "deposit() to another contract yields nothing",
+			wrappedNative: testWETHContract,
+			tx:            &bchain.RpcTransaction{From: holder, To: "0x76a45e8976499ab9ae223cc584019341d5a84e96", Value: "0x38d7ea4c68000", Payload: wrappedNativeDepositMethodSignature},
+			want:          bchain.TokenTransfers{},
+		},
+		{
+			name:          "deposit() yields nothing when no wrapped native is configured",
+			wrappedNative: "",
+			tx:            &bchain.RpcTransaction{From: holder, To: testWETHContract, Value: "0x38d7ea4c68000", Payload: wrappedNativeDepositMethodSignature},
+			want:          bchain.TokenTransfers{},
+		},
+		{
+			name:          "pending ERC-20 transfer of the wrapped token is still decoded",
+			wrappedNative: testWETHContract,
+			tx: &bchain.RpcTransaction{From: holder, To: testWETHContract, Value: "0x0",
+				Payload: erc20TransferMethodSignature +
+					"00000000000000000000000076a45e8976499ab9ae223cc584019341d5a84e96" +
+					"00000000000000000000000000000000000000000000000000038d7ea4c68000"},
+			want: bchain.TokenTransfers{{
+				Standard: bchain.FungibleToken,
+				Contract: testWETHContract,
+				From:     holder,
+				To:       "0x76a45e8976499ab9ae223cc584019341d5a84e96",
+				Value:    *wad,
+			}},
+		},
+		{
+			name:          "other calls to the wrapped native contract yield nothing",
+			wrappedNative: testWETHContract,
+			tx:            &bchain.RpcTransaction{From: holder, To: testWETHContract, Value: "0x0", Payload: "0x095ea7b3" + strings.Repeat("00", 64)},
+			want:          bchain.TokenTransfers{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := contractGetTransfersFromTx(tt.tx, tt.wrappedNative)
+			if err != nil {
+				t.Fatalf("contractGetTransfersFromTx error = %v", err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("contractGetTransfersFromTx len not same, %+v, want %+v", got, tt.want)
+			}
+			for i := range got {
+				// the addresses could have different case
+				if strings.ToLower(fmt.Sprint(got[i])) != strings.ToLower(fmt.Sprint(tt.want[i])) {
+					t.Errorf("contractGetTransfersFromTx %d = %+v, want %+v", i, got[i], tt.want[i])
+				}
 			}
 		})
 	}
