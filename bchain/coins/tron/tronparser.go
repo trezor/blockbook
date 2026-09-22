@@ -90,11 +90,18 @@ func (p *TronParser) GetAddressesFromAddrDesc(desc bchain.AddressDescriptor) ([]
 	return []string{ToTronAddressFromDesc(desc)}, true, nil
 }
 
+// tronAddressCache saves the double SHA-256 and base58 of repeated addresses; see eth.AddressFormatCache
+var tronAddressCache = eth.NewAddressFormatCache(65536)
+
+// ToTronAddressFromDesc returns the base58check Tron address of a 20 or 21-byte descriptor
 func ToTronAddressFromDesc(addrDesc bchain.AddressDescriptor) string {
 	if len(addrDesc) == 0 {
 		return ""
 	}
+	return tronAddressCache.Format(addrDesc, tronAddressFromDesc)
+}
 
+func tronAddressFromDesc(addrDesc bchain.AddressDescriptor) string {
 	var withPrefix []byte
 
 	// check if already prefixed with 0x41
