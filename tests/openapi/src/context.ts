@@ -5,7 +5,7 @@ import { OpenApiFetchClient } from "./client.js";
 import { OpenApiContract, preview } from "./openapi.js";
 import { allowOutOfSync, resolveHTTPBase, resolveWSURL } from "./config.js";
 import { SkipTest } from "./errors.js";
-import { addressPage, addressPageSize, blockPageSize, sampleAddrTxProbeMax, sampleBlockPageSize, sampleBlockProbeMax, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
+import { addressPage, addressPageSize, blockPageSize, sampleAddressCandidatesPerTx, sampleAddressMaxTxs, sampleAddressProbeMax, sampleAddrTxProbeMax, sampleBlockPageSize, sampleBlockProbeMax, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
 import {
   assertAddressMatches,
   buildAddressDetailsPath,
@@ -15,6 +15,7 @@ import {
   extractTxIDs,
   firstAddressFromTx,
   firstAddressFromTxPreferVin,
+  sampleAddressCandidatesFromTx,
   isAddressCandidate,
   isEVMAddress as isEVMAddressValue,
   isFiatDataUnavailable,
@@ -342,6 +343,17 @@ export class TestContext {
     return undefined;
   }
 
+  // sampleIndexedBlockOrFail is for tests that need a block carrying transactions; the failure
+  // names the real cause (an empty-block run), not the block index.
+  async sampleIndexedBlockOrFail() {
+    const sample = await this.getSampleIndexedBlock();
+    if (!sample) {
+      const status = await this.getStatus();
+      throw new Error(`no block with transactions in the last ${sampleBlockProbeMax} blocks below height ${status.bestHeight ?? 0}`);
+    }
+    return sample;
+  }
+
   async getSampleTxID() {
     if (this.sampleTxResolved) {
       return this.sampleTxID || undefined;
@@ -391,10 +403,64 @@ export class TestContext {
       return undefined;
     }
 
-    this.sampleAddress = this.isEVMTxID(txid)
-      ? firstAddressFromTxPreferVin(tx)
-      : firstAddressFromTx(tx);
+    const preferVin = this.isEVMTxID(txid);
+    const fallback = sampleAddressCandidatesFromTx(tx, preferVin)[0] ?? "";
+    this.sampleAddress = (await this.findBoundedAddress(tx, preferVin)) ?? fallback;
     return this.sampleAddress || undefined;
+  }
+
+  // findBoundedAddress walks the sample tx, then the other txs of its block and the blocks below,
+  // for a participant whose total tx count stays under sampleAddressMaxTxs. Address-history tests
+  // otherwise land on a bot (a random BSC sender had 4.9e8 txs) whose even time-bounded history
+  // is unservable. Returns undefined when the probe budget runs out.
+  private async findBoundedAddress(sampleTx: TxResponse, preferVin: boolean) {
+    let probed = 0;
+    const probeTx = async (tx: TxResponse) => {
+      probed++;
+      for (const address of sampleAddressCandidatesFromTx(tx, preferVin).slice(0, sampleAddressCandidatesPerTx)) {
+        if (await this.isBoundedAddress(address)) {
+          return address;
+        }
+      }
+      return undefined;
+    };
+
+    const found = await probeTx(sampleTx);
+    if (found) {
+      return found;
+    }
+    const top = positiveNumber(sampleTx.blockHeight) ? sampleTx.blockHeight : 0;
+    const lower = Math.max(1, top - txSearchWindow + 1);
+    for (let height = top; height >= lower && probed < sampleAddressProbeMax; height--) {
+      const hash = height === sampleTx.blockHeight && sampleTx.blockHash ? sampleTx.blockHash : await this.getBlockHashForHeight(height, false);
+      if (!hash) {
+        continue;
+      }
+      const block = await this.getBlockByHashForSampling(hash, false);
+      for (const txid of block?.txIDs ?? []) {
+        if (!txid || txid === sampleTx.txid) {
+          continue;
+        }
+        if (probed >= sampleAddressProbeMax) {
+          break;
+        }
+        const tx = await this.getTransactionByID(txid, false);
+        const address = tx ? await probeTx(tx) : undefined;
+        if (address) {
+          return address;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private async isBoundedAddress(address: string) {
+    const result = await this.client.getMaybe(
+      "/api/v2/address/{address}",
+      buildAddressDetailsPath(address, "basic", addressPage, addressPageSize),
+    );
+    const txs = result.status === 200 ? result.data?.txs : undefined;
+    return typeof txs === "number" && txs <= sampleAddressMaxTxs;
   }
 
   async sampleAddressOrSkip() {

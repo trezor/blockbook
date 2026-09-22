@@ -342,11 +342,7 @@ function skipWsUnsupportedOrRethrow(error: unknown, needles: string[], reason: s
 }
 
 async function testWsGetBlock(ctx: TestContext) {
-  const sample = await ctx.getSampleIndexedBlock();
-  if (!sample) {
-    const status = await ctx.getStatus();
-    throw new Error(`missing indexed block hash in recent height window near ${status.bestHeight ?? 0}`);
-  }
+  const sample = await ctx.sampleIndexedBlockOrFail();
 
   let block: BlockResponse;
   try {
@@ -444,7 +440,8 @@ async function testWsGetBlockFilter(ctx: TestContext) {
   if (!scriptType) {
     throw new SkipTest(`${ctx.coin} has no block_filter_scripts configured`);
   }
-  const sample = await ctx.getSampleIndexedBlock();
+  // A block filter exists for empty blocks too, so any indexed block will do.
+  const sample = await ctx.getSampleIndexedHeight();
   if (!sample) {
     const status = await ctx.getStatus();
     throw new Error(`missing indexed block near ${status.bestHeight ?? 0}`);

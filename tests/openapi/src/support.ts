@@ -62,6 +62,33 @@ export function firstAddressFromTxPreferVin(tx: TxResponse) {
 // come first: on account-based chains a token transfer's vin is the (often high-traffic) sender and
 // its vout is the token contract (huge history), while the token recipient - and the output of a
 // plain transfer - is usually low-traffic and reliably lists the tx on its first page.
+// sampleAddressCandidatesFromTx lists a tx's participants in sampling preference order: senders
+// first on account-based chains (recipients are often contracts, which several tests reject),
+// outputs first on UTXO chains, token-transfer parties last.
+export function sampleAddressCandidatesFromTx(tx: TxResponse, preferVin: boolean): string[] {
+  const ordered: string[] = [];
+  const add = (value?: string) => {
+    const trimmed = (value ?? "").trim();
+    if (trimmed && isAddressCandidate(trimmed)) {
+      ordered.push(trimmed);
+    }
+  };
+  const vin = () => tx.vin?.forEach((input) => input.addresses?.forEach(add));
+  const vout = () => tx.vout?.forEach((output) => output.addresses?.forEach(add));
+  if (preferVin) {
+    vin();
+    vout();
+  } else {
+    vout();
+    vin();
+  }
+  for (const transfer of tx.tokenTransfers ?? []) {
+    add(transfer.from);
+    add(transfer.to);
+  }
+  return [...new Set(ordered)];
+}
+
 export function candidateAddressesFromTx(tx: TxResponse): string[] {
   const ordered: string[] = [];
   const add = (value?: string) => {
