@@ -57,6 +57,9 @@ type EthereumParser struct {
 	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
 	// EnableEnsReverseAliases opts this chain into ENS reverse aliasing, off by default.
 	EnableEnsReverseAliases bool
+	// WrappedNativeContract (lowercase hex) is the only contract whose Deposit/Withdrawal events
+	// become token transfers; any contract can emit those signatures, so it is not auto-detected.
+	WrappedNativeContract string
 }
 
 // NewEthereumParser returns new EthereumParser instance
@@ -577,9 +580,9 @@ func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bch
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Receipt != nil {
-			r = contractGetTransfersFromLog(csd.Receipt.Logs, tx.Txid)
+			r = contractGetTransfersFromLog(csd.Receipt.Logs, tx.Txid, p.WrappedNativeContract)
 		} else {
-			r, err = contractGetTransfersFromTx(csd.Tx)
+			r, err = contractGetTransfersFromTx(csd.Tx, p.WrappedNativeContract)
 			if err != nil {
 				return nil, err
 			}
