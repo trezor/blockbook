@@ -133,7 +133,7 @@ Good examples of coin configuration are
 
             | Field | Default | Semantic |
             | --- | --- | --- |
-            | `maxCacheEntries` | **1024** | Maximum number of xpubs kept in the in-memory derivation cache before the oldest entries are evicted. Raising it reduces re-derivation on busy instances but increases resident memory, since each entry holds the xpub's derived addresses and their tx lists — size the host accordingly. |
+            | `maxCacheEntries` | **5000** | Maximum number of xpubs kept in the in-memory derivation cache before the oldest entries are evicted. Raising it reduces re-derivation on busy instances but increases resident memory, since each entry holds the xpub's derived addresses and their tx lists — size the host accordingly. |
             | `maxCacheExpirationSeconds` | **3600** | Time after last access before a cached xpub entry is dropped. |
             | `defaultAddressesGap` | **20** | Gap limit used when a request does not specify one. Clamped down to `maxAddressesGap` if set higher. |
             | `maxAddressesGap` | **10000** | Upper bound on the caller-supplied gap limit, protecting against unreasonably large scans. |
