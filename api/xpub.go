@@ -33,7 +33,7 @@ type XpubConfig struct {
 func DefaultXpubConfig() XpubConfig {
 	return finalizeXpubConfig(XpubConfig{
 		MaxCacheExpirationSeconds: 3600,
-		MaxCacheEntries:           1024,
+		MaxCacheEntries:           5000,
 		DefaultAddressesGap:       20,
 		MaxAddressesGap:           10000,
 	})

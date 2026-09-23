@@ -474,7 +474,7 @@ type XpubConfig struct {
 	// derivations (seconds). Zero / missing uses the default (3600).
 	MaxCacheExpirationSeconds int `json:"maxCacheExpirationSeconds,omitempty"`
 	// MaxCacheEntries is the hard cap on the number of cached xpubs.
-	// Zero / missing uses the default (1024).
+	// Zero / missing uses the default (5000).
 	MaxCacheEntries int `json:"maxCacheEntries,omitempty"`
 	// DefaultAddressesGap is the default BIP44 gap limit when the
 	// caller does not supply one (zero / missing → 20).
