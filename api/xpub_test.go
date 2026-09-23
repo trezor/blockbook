@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/db"
 )
 
 func TestDefaultXpubConfigDerivedFields(t *testing.T) {
@@ -130,5 +131,55 @@ func TestIsUnfilteredXpubTxidFilter(t *testing.T) {
 	}
 	if isUnfilteredXpubTxidFilter(&AddressFilter{Vout: AddressFilterVoutOff, FromHeight: 1}) {
 		t.Fatal("height filter should not be treated as unfiltered")
+	}
+}
+
+func TestXpubCacheBytesAccounting(t *testing.T) {
+	cachedXpubsMux.Lock()
+	defer cachedXpubsMux.Unlock()
+	originalCache, originalBytes := cachedXpubs, cachedXpubsBytes
+	defer func() {
+		cachedXpubs, cachedXpubsBytes = originalCache, originalBytes
+	}()
+	cachedXpubs = make(map[string]xpubData)
+	cachedXpubsBytes = 0
+
+	// an entry with two used addresses (one utxo, two txids each) and one gap address
+	used := xpubAddress{
+		addrDesc: make(bchain.AddressDescriptor, 22),
+		balance:  &db.AddrBalance{Txs: 2, Utxos: []db.Utxo{{BtxID: make([]byte, 32)}}},
+		txids:    xpubTxids{{txid: "a"}, {txid: "b"}},
+	}
+	data := xpubData{addresses: [][]xpubAddress{{used, used}, {{addrDesc: make(bchain.AddressDescriptor, 22)}}}}
+	data.mergedTxids = mergeXpubTxids(&data)
+
+	empty := xpubDataEstimatedBytes(&xpubData{}, 10)
+	got := xpubDataEstimatedBytes(&data, 10)
+	want := empty + 3*xpubCacheAddressBytes + 2*xpubCacheBalanceBytes + 2*xpubCacheUtxoBytes + 4*xpubCacheTxidBytes + len(data.mergedTxids)*xpubCacheMergedTxidBytes
+	if got != want {
+		t.Fatalf("xpubDataEstimatedBytes() = %d, want %d", got, want)
+	}
+
+	insert := func(key string, accessed int64) {
+		d := data
+		d.accessed = accessed
+		d.bytes = xpubDataEstimatedBytes(&d, len(key))
+		deleteCachedXpubLocked(key)
+		cachedXpubs[key] = d
+		cachedXpubsBytes += int64(d.bytes)
+	}
+	for i := 0; i < 4; i++ {
+		insert(fmt.Sprintf("xpub-%d", i), int64(i))
+	}
+	// re-inserting an existing key must not double count it
+	insert("xpub-3", 10)
+	if cachedXpubsBytes != 4*int64(cachedXpubs["xpub-0"].bytes) {
+		t.Fatalf("cachedXpubsBytes = %d after 4 inserts and one replace, want %d", cachedXpubsBytes, 4*cachedXpubs["xpub-0"].bytes)
+	}
+	if trimXpubCacheItemsLocked(2) != 2 || cachedXpubsBytes != 2*int64(cachedXpubs["xpub-2"].bytes) {
+		t.Fatalf("trim did not credit evicted entries: bytes=%d entries=%d", cachedXpubsBytes, len(cachedXpubs))
+	}
+	if evictXpubCacheItemsLocked(1000, 1, 100) != 2 || cachedXpubsBytes != 0 || len(cachedXpubs) != 0 {
+		t.Fatalf("expiry eviction left bytes=%d entries=%d, want both 0", cachedXpubsBytes, len(cachedXpubs))
 	}
 }
