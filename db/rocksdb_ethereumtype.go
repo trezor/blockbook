@@ -96,7 +96,8 @@ func (s *MultiTokenValues) upsert(m bchain.MultiTokenValue, index int32, aggrega
 		}
 		return
 	}
-	if index >= 0 {
+	// a zero-value receive holds nothing; inserting it would leave a permanent {id, 0} phantom
+	if index >= 0 && m.Value.Sign() != 0 {
 		elem := bchain.MultiTokenValue{
 			Id:    m.Id,
 			Value: *new(big.Int).Set(&m.Value),
@@ -456,8 +457,12 @@ func addToContract(c *unpackedAddrContract, contractIndex int, index int32, cont
 			c.Ids.insert(transfer.Value)
 		}
 	} else { // bchain.ERC1155
-		for _, t := range transfer.MultiTokenValues {
-			c.MultiTokenValues.upsert(t, index, aggregate)
+		if len(transfer.MultiTokenValues) > 1 {
+			c.MultiTokenValues.upsertBatch(transfer.MultiTokenValues, index, aggregate)
+		} else {
+			for _, t := range transfer.MultiTokenValues {
+				c.MultiTokenValues.upsert(t, index, aggregate)
+			}
 		}
 	}
 	if addTxCount {
@@ -1831,7 +1836,8 @@ func (s *unpackedMultiTokenValues) upsert(m bchain.MultiTokenValue, index int32,
 		}
 		return
 	}
-	if index >= 0 {
+	// a zero-value receive holds nothing; inserting it would leave a permanent {id, 0} phantom
+	if index >= 0 && m.Value.Sign() != 0 {
 		elem := unpackedMultiTokenValue{
 			Id:    unpackedBigInt{Value: &m.Id},
 			Value: unpackedBigInt{Value: new(big.Int).Set(&m.Value)},
@@ -1843,6 +1849,52 @@ func (s *unpackedMultiTokenValues) upsert(m bchain.MultiTokenValue, index int32,
 			(*s)[i] = elem
 		}
 	}
+}
+
+// upsertBatch is upsert applied to each element of batch in order, done as one merge pass:
+// inserting ids one by one shifts the tail every time, which is quadratic on large holdings.
+func (s *unpackedMultiTokenValues) upsertBatch(batch []bchain.MultiTokenValue, index int32, aggregate AggregateFn) {
+	order := make([]int, len(batch))
+	for i := range order {
+		order[i] = i
+	}
+	// stable keeps repeated ids in log order, the clamped subtraction depends on it
+	sort.SliceStable(order, func(a, b int) bool {
+		return batch[order[a]].Id.CmpAbs(&batch[order[b]].Id) < 0
+	})
+	old := *s
+	merged := make(unpackedMultiTokenValues, 0, len(old)+len(batch))
+	j := 0
+	for k := 0; k < len(order); {
+		id := &batch[order[k]].Id
+		for j < len(old) && old[j].Id.get().CmpAbs(id) < 0 {
+			merged = append(merged, old[j])
+			j++
+		}
+		var cur *unpackedMultiTokenValue
+		if j < len(old) && old[j].Id.get().CmpAbs(id) == 0 {
+			cur = &old[j]
+			j++
+		}
+		for ; k < len(order) && batch[order[k]].Id.CmpAbs(id) == 0; k++ {
+			m := &batch[order[k]]
+			if cur != nil {
+				aggregate(cur.Value.get(), &m.Value)
+				if index < 0 && len(cur.Value.get().Bits()) == 0 {
+					cur = nil
+				}
+			} else if index >= 0 && m.Value.Sign() != 0 {
+				cur = &unpackedMultiTokenValue{
+					Id:    unpackedBigInt{Value: new(big.Int).Set(&m.Id)},
+					Value: unpackedBigInt{Value: new(big.Int).Set(&m.Value)},
+				}
+			}
+		}
+		if cur != nil {
+			merged = append(merged, *cur)
+		}
+	}
+	*s = append(merged, old[j:]...)
 }
 
 // getUnpackedAddrDescContracts returns partially unpacked AddrContracts for given addrDesc

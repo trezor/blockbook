@@ -1175,18 +1175,26 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				}
 				t.Ids = ids
 			}
-			if len(c.MultiTokenValues) > 0 {
-				idValues := make([]MultiTokenValue, len(c.MultiTokenValues))
-				for j := range idValues {
-					idValues[j].Id = (*Amount)(&c.MultiTokenValues[j].Id)
-					idValues[j].Value = (*Amount)(&c.MultiTokenValues[j].Value)
-				}
-				t.MultiTokenValues = idValues
-			}
+			t.MultiTokenValues = multiTokenHoldings(c.MultiTokenValues)
 		}
 	}
 
 	return &t, nil
+}
+
+// multiTokenHoldings skips {id, 0} entries, older indexes stored them for zero-value receives
+func multiTokenHoldings(values db.MultiTokenValues) []MultiTokenValue {
+	var holdings []MultiTokenValue
+	for j := range values {
+		if values[j].Value.Sign() == 0 {
+			continue
+		}
+		holdings = append(holdings, MultiTokenValue{
+			Id:    (*Amount)(&values[j].Id),
+			Value: (*Amount)(&values[j].Value),
+		})
+	}
+	return holdings
 }
 
 func hasEthereumTokenHoldingsField(t *Token) bool {
