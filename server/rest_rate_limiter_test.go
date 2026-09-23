@@ -13,6 +13,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/trezor/blockbook/common"
 )
 
 func newTestRestUIRateLimiter() *restUIRateLimiter {
@@ -558,9 +562,9 @@ func TestRestUIRateLimiterStats(t *testing.T) {
 	limiter.clients["b"] = &restUIClientLimit{active: 1, blockedUntil: now.Add(time.Minute)}
 	limiter.clients["c"] = &restUIClientLimit{}
 
-	activeIPs, maxActive, blockedIPs := limiter.stats(now)
-	if activeIPs != 2 || maxActive != 2 || blockedIPs != 1 {
-		t.Fatalf("stats = %d, %d, %d; want 2, 2, 1", activeIPs, maxActive, blockedIPs)
+	activeIPs, maxActive, blockedIPs, tracked := limiter.stats(now)
+	if activeIPs != 2 || maxActive != 2 || blockedIPs != 1 || tracked != 3 {
+		t.Fatalf("stats = %d, %d, %d, %d; want 2, 2, 1, 3", activeIPs, maxActive, blockedIPs, tracked)
 	}
 }
 
@@ -691,5 +695,50 @@ func TestRestUIRateLimiterTrackingCap(t *testing.T) {
 	}
 	if decision := limiter.accept("0", "0", true, now); decision.accepted {
 		t.Fatalf("tracked second accept = %+v, want rejected", decision)
+	}
+}
+
+func TestRestUIRateLimiterDecisionMetrics(t *testing.T) {
+	limiter := newTestRestUIRateLimiter()
+	limiter.rateLimit = 1
+	limiter.burst = 1
+	limiter.whitelistPrefixes = []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")}
+	limiter.metrics = &common.Metrics{
+		RestUIRequests:            prometheus.NewCounterVec(prometheus.CounterOpts{Name: "requests"}, []string{"decision"}),
+		RestUIRateLimitRejections: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "rejections"}, []string{"reason"}),
+	}
+	handler := limiter.wrapPublic(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), "/")
+	serve := func(remote, realIP, path string) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com"+path, nil)
+		req.RemoteAddr = remote
+		if realIP != "" {
+			req.Header.Set("X-Real-Ip", realIP)
+		}
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	serve("192.0.2.1:1", "", "/tx/abc")          // limited
+	serve("192.0.2.1:1", "", "/tx/abc")          // rejected (burst 1)
+	serve("127.0.0.1:1", "", "/tx/abc")          // proxy hop without attribution
+	serve("127.0.0.1:1", "198.51.100.7", "/tx/") // whitelisted client behind the proxy
+	serve("192.0.2.1:1", "", "/static/app.js")   // not a rate-limited route
+
+	want := map[string]float64{
+		restUIDecisionLimited:     1,
+		restUIDecisionRejected:    1,
+		restUIDecisionBypassLocal: 1,
+		restUIDecisionWhitelisted: 1,
+		restUIDecisionUntracked:   0,
+	}
+	for decision, n := range want {
+		var m dto.Metric
+		if err := limiter.metrics.RestUIRequests.WithLabelValues(decision).Write(&m); err != nil {
+			t.Fatal(err)
+		}
+		if got := m.GetCounter().GetValue(); got != n {
+			t.Errorf("decision %q = %v, want %v", decision, got, n)
+		}
 	}
 }
