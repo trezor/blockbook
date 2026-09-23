@@ -57,7 +57,7 @@ function assertUTXOListConfirmed(utxos: UtxoResponse[], context: string) {
   });
 }
 
-function assertUTXOSetsEqualByOutpoint(got: UtxoResponse[], want: UtxoResponse[], context: string) {
+export function assertUTXOSetsEqualByOutpoint(got: UtxoResponse[], want: UtxoResponse[], context: string) {
   const gotSet = utxoSetByOutpoint(got, `${context}.got`);
   const wantSet = utxoSetByOutpoint(want, `${context}.want`);
   if (gotSet.size !== wantSet.size) {
@@ -70,7 +70,7 @@ function assertUTXOSetsEqualByOutpoint(got: UtxoResponse[], want: UtxoResponse[]
   }
 }
 
-function assertConfirmedUTXOsIncludedByOutpoint(mixed: UtxoResponse[], confirmed: UtxoResponse[], context: string) {
+export function assertConfirmedUTXOsIncludedByOutpoint(mixed: UtxoResponse[], confirmed: UtxoResponse[], context: string) {
   const confirmedSet = utxoSetByOutpoint(confirmed, `${context}.confirmed`);
   for (const utxo of mixed) {
     if (isUnconfirmedUtxo(utxo)) {
@@ -106,11 +106,11 @@ function utxoSetByOutpoint(utxos: UtxoResponse[], context: string) {
   return set;
 }
 
-function utxoOutpointKey(utxo: UtxoResponse) {
+export function utxoOutpointKey(utxo: UtxoResponse) {
   return `${stringValue(utxo.txid).trim().toLowerCase()}:${String(utxo.vout ?? 0)}`;
 }
 
-function isUnconfirmedUtxo(utxo: UtxoResponse) {
+export function isUnconfirmedUtxo(utxo: UtxoResponse) {
   return (utxo.confirmations ?? 0) <= 0 || (utxo.height ?? 0) <= 0;
 }
 

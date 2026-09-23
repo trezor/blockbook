@@ -1,3 +1,4 @@
+import { userAgentHeaders } from "./config.js";
 import { OpenApiContract, preview } from "./openapi.js";
 
 import type { paths } from "../.generated/blockbook.js";
@@ -57,15 +58,16 @@ export class OpenApiFetchClient {
   async getMaybe<P extends GetOperationPath>(operationPath: P, actualPath: string): Promise<HttpResult<GetResponse<P>>> {
     const url = this.resolveUrl(actualPath);
     let lastError: unknown;
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const response = await fetch(url, {
           method: "GET",
           signal: AbortSignal.timeout(25_000),
+          headers: userAgentHeaders(),
         });
         const body = await response.text();
-        if (attempt < 2 && isRetryableHTTPStatus(response.status)) {
-          await delay(attempt * 300);
+        if (attempt < maxAttempts && isRetryableHTTPStatus(response.status)) {
+          await delay(retryDelayMs(attempt));
           continue;
         }
         const data = parseJSON(body);
@@ -79,8 +81,8 @@ export class OpenApiFetchClient {
         };
       } catch (error) {
         lastError = error;
-        if (attempt < 2 && isRetryableError(error)) {
-          await delay(attempt * 300);
+        if (attempt < maxAttempts && isRetryableError(error)) {
+          await delay(retryDelayMs(attempt));
           continue;
         }
         throw error;
@@ -99,6 +101,14 @@ export class OpenApiFetchClient {
     const suffix = path.startsWith("/") ? path : `/${path}`;
     return `${this.baseUrl.replace(/\/+$/, "")}${suffix}`;
   }
+}
+
+// Edge/LB 5xx bursts in front of an instance last seconds, not one round-trip; back off across a
+// few attempts so a single blip does not fail a whole coin run at the status preflight.
+const maxAttempts = 4;
+
+function retryDelayMs(attempt: number) {
+  return 500 * 2 ** (attempt - 1);
 }
 
 function parseJSON(body: string): unknown {

@@ -56,9 +56,19 @@ export type Erc4626Fixture = {
   contract: string;
 };
 
+// An xpub or output descriptor with on-chain history. The floors are taken from the live chain when
+// the fixture is written; history only grows, so a lower value means the index is missing data.
+export type XpubFixture = {
+  name: string;
+  descriptor: string;
+  minTxs: number;
+  minUsedAddresses: number;
+};
+
 export type ApiTestData = {
   erc4626Fixtures?: Erc4626Fixture[];
   nonVaultContracts?: string[];
+  xpubFixtures?: XpubFixture[];
 };
 
 export type Capability = "utxo" | "evm";
