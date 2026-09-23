@@ -30,6 +30,8 @@ func NewPolygonRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	s := &PolygonRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),
 	}
+	// wrap the parser NewEthereumRPC already configured, so no config field has to be re-applied
+	s.Parser = &PolygonParser{EthereumParser: s.Parser.(*eth.EthereumParser)}
 
 	return s, nil
 }

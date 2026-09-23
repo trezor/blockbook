@@ -1328,7 +1328,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
 				// Only fungible tokens are eligible; respect a contract filter if present.
-				if c.Standard != bchain.FungibleToken {
+				if c.Standard != bchain.FungibleToken || w.chainParser.EthereumTypeIsIgnoredContract(c.Contract) {
 					continue
 				}
 				if len(filterDesc) > 0 && !bytes.Equal(filterDesc, c.Contract) {
@@ -1362,6 +1362,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			var j int
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
+				// skip, not remove: filter.Vout below relies on the index into ca.Contracts
+				if w.chainParser.EthereumTypeIsIgnoredContract(c.Contract) {
+					continue
+				}
 				if len(filterDesc) > 0 {
 					if !bytes.Equal(filterDesc, c.Contract) {
 						continue
