@@ -121,7 +121,7 @@ metrics:
   rest_ui_active_ips:
     name: blockbook_rest_ui_active_ips
     type: gauge
-    help: Distinct client keys with at least one in-flight public HTTP request (explorer UI or REST API)
+    help: Distinct client keys with at least one in-flight public HTTP request (explorer UI or REST API), sampled once a minute
   rest_ui_max_active_requests_per_ip:
     name: blockbook_rest_ui_max_active_requests_per_ip
     type: gauge
@@ -130,6 +130,15 @@ metrics:
     name: blockbook_rest_ui_blocked_ips
     type: gauge
     help: Distinct client keys currently blocked from public HTTP requests (explorer UI or REST API)
+  rest_ui_requests:
+    name: blockbook_rest_ui_requests
+    type: counter_vec
+    help: Rate-limited public HTTP requests (explorer UI and REST API) by limiter decision (limited, rejected, bypass_local, whitelisted, untracked)
+    labels: [decision]
+  rest_ui_tracked_clients:
+    name: blockbook_rest_ui_tracked_clients
+    type: gauge
+    help: Client keys the public HTTP limiter holds state for, i.e. seen within its state TTL (default 10 min)
   index_resync_duration:
     name: blockbook_index_resync_duration
     type: histogram
