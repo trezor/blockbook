@@ -1,0 +1,16 @@
+{
+  "xpubFixtures": [
+    {
+      "name": "test-seed-bip44",
+      "descriptor": "tpubDDKn3FtHc74CaRrRbi1WFdJNaaenZkDWqq9NsEhcafnDZ4VuKeuLG2aKHm5SuwuLgAhRkkfHqcCxpnVNSrs5kJYZXwa6Ud431VnevzzzK3U",
+      "minTxs": 178,
+      "minUsedAddresses": 56
+    },
+    {
+      "name": "test-seed-bip86-descriptor",
+      "descriptor": "tr(tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN)",
+      "minTxs": 67,
+      "minUsedAddresses": 35
+    }
+  ]
+}

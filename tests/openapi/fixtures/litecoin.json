@@ -1,0 +1,22 @@
+{
+  "xpubFixtures": [
+    {
+      "name": "test-seed-bip44",
+      "descriptor": "Ltub2Y8PyEMWQVgiX4L4gVzU8PakBTQ2WBxFdS6tJARQeasUUfXmBut2jGShnQyD3jgyBf7mmvs5jPNgmgXad5J6M8a8FiZK78dbT21fYtTAC9a",
+      "minTxs": 13,
+      "minUsedAddresses": 7
+    },
+    {
+      "name": "test-seed-bip49",
+      "descriptor": "Mtub2syZtptY6mWCxNgC59ji2ELzxifydR33xbfT5w1AcQKfEd1BrsnzraY9asxRJcQbUYuFPHGfa8opGaXQQiGEPXKDcDEjUPFXTzS1gQMYtnX",
+      "minTxs": 22,
+      "minUsedAddresses": 14
+    },
+    {
+      "name": "test-seed-bip84",
+      "descriptor": "zpub6qhzAgn63nQAJZiY829GUUb1eXFDqpLbeShTdAbTEKyZa8n2VbkLwbRhq9xqPyj5Yet5TBdbCZDgiw53NQ2qwib4mygybFq66i7ZcXUcwgU",
+      "minTxs": 4,
+      "minUsedAddresses": 1
+    }
+  ]
+}
