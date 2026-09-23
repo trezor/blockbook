@@ -56,6 +56,12 @@ const maxWebsocketEstimateFeeBlocks = 32
 // in-flight transactions; the cap keeps a malformed or hostile request from forcing unbounded work,
 // and it bounds how far the pending-nonce walk can advance in one request.
 const maxPrivatePendingNonces = 64
+
+// maxPrivatePendingTxids bounds the declared in-flight txids a getAccountInfo request may look up (see
+// WsPrivatePending). Far below maxPrivatePendingNonces because the costs differ: a declared nonce is
+// arithmetic, an unknown txid is a sequential backend round trip in front of the answer the caller is
+// waiting for. A wallet has a handful in flight, so 8 covers the real case.
+const maxPrivatePendingTxids = 8
 const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
 const maxWebsocketSubscribeFiatRatesTokens = 1000
@@ -1083,6 +1089,77 @@ func privatePendingNonces(p *WsPrivatePending) []uint64 {
 	return out[:maxPrivatePendingNonces]
 }
 
+// privatePendingTxids extracts the declared in-flight transaction hashes from a getAccountInfo
+// request: nil-safe, lowercase-normalized (mempool entries are keyed by the lowercase hash),
+// malformed hashes dropped, deduplicated and capped at maxPrivatePendingTxids. Unlike the nonces,
+// the order carries no meaning, so the cap is a plain truncation.
+func privatePendingTxids(p *WsPrivatePending) []string {
+	if p == nil || len(p.Txids) == 0 {
+		return nil
+	}
+	// sized by the cap, not by the request: the input is caller-controlled and the result is bounded
+	capacity := min(len(p.Txids), maxPrivatePendingTxids)
+	seen := make(map[string]struct{}, capacity)
+	out := make([]string, 0, capacity)
+	for _, txid := range p.Txids {
+		// the free length check first, so junk never reaches the allocating ToLower
+		if len(txid) != 66 {
+			continue
+		}
+		txid = strings.ToLower(txid)
+		if !isHexTxidShape(txid) {
+			continue
+		}
+		if _, duplicate := seen[txid]; duplicate {
+			continue
+		}
+		seen[txid] = struct{}{}
+		out = append(out, txid)
+		if len(out) == maxPrivatePendingTxids {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// isHexTxidShape reports whether s is a 0x-prefixed 32 byte hash - the spelling every EVM chain that
+// reaches this path uses, and the only shape that can match a mempool entry. Anything else would be a
+// guaranteed-miss backend lookup.
+func isHexTxidShape(s string) bool {
+	if len(s) != 66 || !strings.HasPrefix(s, "0x") {
+		return false
+	}
+	_, err := hex.DecodeString(s[2:])
+	return err == nil
+}
+
+// addPrivatePendingTxids indexes the in-flight transactions the request declared, before the account
+// info is built, so this same response already lists them. Best effort: the hint never fails the
+// request.
+func (s *WebsocketServer) addPrivatePendingTxids(req *WsAccountInfoReq) {
+	if s.chainParser.GetChainType() != bchain.ChainEthereumType {
+		return
+	}
+	txids := privatePendingTxids(req.PrivatePending)
+	if len(txids) == 0 {
+		return
+	}
+	addrDesc, err := s.chainParser.GetAddrDescFromAddress(req.Descriptor)
+	if err != nil {
+		// not an address (xpub, ENS name, garbage) - GetAddress reports the real error
+		return
+	}
+	added, err := s.chain.EthereumTypeAddPendingTransactions(addrDesc, txids)
+	if err != nil {
+		glog.V(1).Info("privatePending txids for ", req.Descriptor, ": ", err)
+	} else if added > 0 && glog.V(1) {
+		glog.Info("privatePending txids for ", req.Descriptor, ": indexed ", added)
+	}
+}
+
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
 	if err := s.api.ValidateProtocolsForChain(req.Protocols); err != nil {
 		return nil, err
@@ -1121,6 +1198,7 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		WithConfirmedNonce:   req.ConfirmedNonce,
 		PrivatePendingNonces: privatePendingNonces(req.PrivatePending),
 	}
+	s.addPrivatePendingTxids(req)
 	req.Page, req.PageSize = sanitizeAccountPagingParams(req.Page, req.PageSize, txsOnPage, txsInAPI)
 	req.Gap = validateIntValue(req.Gap, 0, 0, maxGapValue)
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, req.Gap, strings.ToLower(req.SecondaryCurrency))

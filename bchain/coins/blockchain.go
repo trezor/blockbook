@@ -361,6 +361,11 @@ func (c *blockChainWithMetrics) EthereumTypeGetNonces(addrDesc bchain.AddressDes
 	return c.b.EthereumTypeGetNonces(addrDesc, withConfirmed, privatePendingNonces...)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeAddPendingTransactions(addrDesc bchain.AddressDescriptor, txids []string) (v int, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeAddPendingTransactions", s, err) }(time.Now())
+	return c.b.EthereumTypeAddPendingTransactions(addrDesc, txids)
+}
+
 func (c *blockChainWithMetrics) EthereumTypeEstimateGas(params map[string]interface{}) (v uint64, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeEstimateGas", s, err) }(time.Now())
 	return c.b.EthereumTypeEstimateGas(params)

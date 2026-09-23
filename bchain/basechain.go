@@ -65,6 +65,11 @@ func (b *BaseChain) EthereumTypeGetNonces(addrDesc AddressDescriptor, withConfir
 	return 0, 0, false, errors.New("not supported")
 }
 
+// EthereumTypeAddPendingTransactions is not supported
+func (b *BaseChain) EthereumTypeAddPendingTransactions(addrDesc AddressDescriptor, txids []string) (int, error) {
+	return 0, errors.New("not supported")
+}
+
 // EthereumTypeEstimateGas is not supported
 func (b *BaseChain) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
 	return 0, errors.New("not supported")
