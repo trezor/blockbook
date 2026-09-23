@@ -100,9 +100,18 @@ WebSocket connectivity also verifies both surfaces:
 
 ### Blockbook API end-to-end tests
 
-Public Blockbook API checks are implemented in package `blockbook/tests/api` and configured per coin by the `api` list
-in *blockbook/tests/tests.json*.
+Public Blockbook API checks are implemented in TypeScript in *blockbook/tests/openapi* and configured per coin by the
+`api` list in *blockbook/tests/tests.json*.
 Use `make test-e2e` to run this suite only.
+
+XPUB coverage for Bitcoin-type coins is fixture driven: `xpubFixtures` in *tests/openapi/fixtures/<coin>.json* lists
+xpubs or output descriptors (derived from the public Trezor test seed `all all all ...`) together with the confirmed
+transaction and used-address counts observed when the fixture was written. History only grows, so those counts act as
+floors and a lower value means the instance is missing indexed data. The tests (`GetXpub*`, `WsGetAccountInfoXpub`,
+`WsGetAccountUtxoXpub`) check that lifetime totals reconcile with the balance, that the `tokens` filters are consistent
+views of one derivation, that paging is exact, that confirmed UTXOs sum to the balance, that balance history covers every
+transaction, that a malformed xpub is a `400`, and that HTTP and WebSocket answers agree. Coins without a fixture file
+skip these tests.
 
 Phase 1 covers smoke checks for:
 
@@ -115,6 +124,9 @@ Endpoint resolution uses the test name from `coin.test_name` in `configs/coins/<
 1. `BB_DEV_API_URL_HTTP_<test name>` and `BB_DEV_API_URL_WS_<test name>`
 2. localhost fallback from coin config port `ports.blockbook_public`
 3. when WS env var is missing, WS URL is derived from HTTP URL with `/websocket` path
+
+`OPENAPI_USER_AGENT` overrides the User-Agent sent on HTTP and WebSocket requests, for local runs against public
+instances whose edge filters non-browser agents.
 
 ### Synchronization integration tests
 

@@ -28,6 +28,17 @@ export function fiatMaxAgeSeconds() {
   return DEFAULT_FIAT_MAX_AGE_SECONDS;
 }
 
+// userAgent returns the User-Agent to send, or "" for the runtime default. Public instances sit
+// behind an edge that blocks non-browser agents, so local runs against them set OPENAPI_USER_AGENT.
+export function userAgent() {
+  return process.env.OPENAPI_USER_AGENT?.trim() ?? "";
+}
+
+export function userAgentHeaders(): Record<string, string> | undefined {
+  const ua = userAgent();
+  return ua ? { "User-Agent": ua } : undefined;
+}
+
 // allowOutOfSync lets dev runs proceed against a node still catching up to its backend. Off by
 // default so CI fails loudly on a stale tip (which makes every recent-block sample unreliable).
 // Set OPENAPI_ALLOW_OUT_OF_SYNC=1 to downgrade the inSync assertion in TestContext.getStatus.
@@ -193,7 +204,7 @@ function normalizeWSURL(raw: string) {
 }
 
 async function fetchText(url: string, timeoutMs: number) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: userAgentHeaders() });
   return {
     status: response.status,
     body: await response.text(),

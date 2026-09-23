@@ -1,0 +1,10 @@
+{
+  "xpubFixtures": [
+    {
+      "name": "test-seed-bip44",
+      "descriptor": "xpub6DFYZ2FZwJHL4WULnRKTyMAaE9sM5Vi3QoWW9kYWGzR4HxDJ42Gbbdj7bpBAtATpaNeSVqSD3gdFFmZZYK9BVo96rhxPY7SWZWsfmdHpZ7e",
+      "minTxs": 9,
+      "minUsedAddresses": 6
+    }
+  ]
+}

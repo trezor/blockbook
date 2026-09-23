@@ -584,6 +584,16 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	return &data, bestheight, inCache, nil
 }
 
+// xpubParseError classifies a rejected xpub for GetXpubAddress: a malformed key is caller input
+// and must surface as a public 400, not as a logged 500. Only GetXpubAddress uses it; the utxo and
+// balance-history callers rely on a non-public error to fall back to the plain-address path.
+func (w *Worker) xpubParseError(err error) error {
+	if w.chainType != bchain.ChainBitcoinType {
+		return ErrUnsupportedXpub
+	}
+	return NewAPIError(fmt.Sprintf("Invalid xpub, %v", err), true)
+}
+
 // GetXpubAddress computes address value and gets transactions for given address
 func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, gap int, secondaryCoin string) (*Address, error) {
 	start := time.Now()
@@ -609,7 +619,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	)
 	xd, err := w.chainParser.ParseXpub(xpub)
 	if err != nil {
-		return nil, err
+		return nil, w.xpubParseError(err)
 	}
 	data, bestheight, inCache, err := w.getXpubData(xd, page, txsOnPage, option, filter, gap)
 	if err != nil {

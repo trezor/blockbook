@@ -2,6 +2,7 @@ import { commonTests } from "./tests/common.js";
 import { evmOnlyTests } from "./tests/evm.js";
 import { utxoOnlyTests } from "./tests/utxo.js";
 import { wsEVMTests, wsOnlyTests, wsUTXOTests } from "./tests/websocket.js";
+import { wsXpubTests, xpubTests } from "./tests/xpub.js";
 
 import type { TestContext } from "./context.js";
 import type { Capability } from "./types.js";
@@ -26,6 +27,8 @@ function buildTestRegistry() {
   });
   addTests(registry, "ws-only", undefined, wsOnlyTests);
   addTests(registry, "ws-utxo", "utxo", wsUTXOTests);
+  addTests(registry, "xpub", "utxo", xpubTests);
+  addTests(registry, "ws-xpub", "utxo", wsXpubTests);
   return registry;
 }
 
