@@ -47,6 +47,16 @@ const (
 	restUIRejectIPBlocked          = "ip_blocked"
 )
 
+// Admission outcomes of a rate-limited route; their sum is every request the
+// limiter saw, so the share of traffic it actually governs is visible.
+const (
+	restUIDecisionLimited     = "limited"
+	restUIDecisionRejected    = "rejected"
+	restUIDecisionBypassLocal = "bypass_local"
+	restUIDecisionWhitelisted = "whitelisted"
+	restUIDecisionUntracked   = "untracked"
+)
+
 type restUILimiterConfig struct {
 	rateLimit         int
 	rateWindow        time.Duration
@@ -135,6 +145,7 @@ func newRestUIRateLimiter(network string, metrics *common.Metrics) (*restUIRateL
 		metrics.RestUIActiveIPs.Set(0)
 		metrics.RestUIMaxActiveRequestsPerIP.Set(0)
 		metrics.RestUIBlockedIPs.Set(0)
+		metrics.RestUITrackedClients.Set(0)
 	}
 	if cfg.rateLimit > 0 {
 		glog.Infof("REST/UI rate limit: %d requests / %s; burst: %d", cfg.rateLimit, cfg.rateWindow, cfg.burst)
@@ -268,11 +279,13 @@ func (l *restUIRateLimiter) wrapPublic(next http.Handler, basePath string) http.
 				glog.Info("REST/UI request from local/trusted peer ", ip,
 					" without a client attribution header; such requests are not rate limited")
 			})
+			l.observeDecision(restUIDecisionBypassLocal)
 			next.ServeHTTP(w, r)
 			return
 		}
 		if len(l.whitelistPrefixes) > 0 {
 			if addr, ok := parseAddr(ip); ok && isWhitelistedIP(addr, l.whitelistPrefixes) {
+				l.observeDecision(restUIDecisionWhitelisted)
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -289,6 +302,7 @@ func (l *restUIRateLimiter) wrapPublic(next http.Handler, basePath string) http.
 		}
 		decision := l.accept(ipKey, bKey, blockable, time.Now())
 		if !decision.accepted {
+			l.observeDecision(restUIDecisionRejected)
 			l.observeRejection(decision.reason)
 			if decision.shouldLog {
 				glog.Warning("REST/UI request rejected, ", ipKey, ", ", decision.reason)
@@ -296,7 +310,10 @@ func (l *restUIRateLimiter) wrapPublic(next http.Handler, basePath string) http.
 			writeRestUIRateLimitResponse(w, decision.retryAfter)
 			return
 		}
-		if !decision.untracked {
+		if decision.untracked {
+			l.observeDecision(restUIDecisionUntracked)
+		} else {
+			l.observeDecision(restUIDecisionLimited)
 			// Wrap the release so time.Now() is evaluated when the handler
 			// finishes, not when the defer is registered.
 			defer func() { l.release(ipKey, time.Now()) }()
@@ -500,9 +517,10 @@ func (l *restUIRateLimiter) sweep(now time.Time) {
 	l.sweepLocked(now)
 }
 
-func (l *restUIRateLimiter) stats(now time.Time) (activeIPs int, maxActiveRequestsPerIP int, blockedIPs int) {
+func (l *restUIRateLimiter) stats(now time.Time) (activeIPs int, maxActiveRequestsPerIP int, blockedIPs int, trackedClients int) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
+	trackedClients = len(l.clients)
 	for _, client := range l.clients {
 		if client.active > 0 {
 			activeIPs++
@@ -514,7 +532,7 @@ func (l *restUIRateLimiter) stats(now time.Time) (activeIPs int, maxActiveReques
 			blockedIPs++
 		}
 	}
-	return activeIPs, maxActiveRequestsPerIP, blockedIPs
+	return activeIPs, maxActiveRequestsPerIP, blockedIPs, trackedClients
 }
 
 func (l *restUIRateLimiter) runMaintenance(interval time.Duration) {
@@ -523,11 +541,18 @@ func (l *restUIRateLimiter) runMaintenance(interval time.Duration) {
 	for now := range ticker.C {
 		l.sweep(now)
 		if l.metrics != nil {
-			activeIPs, maxActive, blockedIPs := l.stats(now)
+			activeIPs, maxActive, blockedIPs, tracked := l.stats(now)
 			l.metrics.RestUIActiveIPs.Set(float64(activeIPs))
 			l.metrics.RestUIMaxActiveRequestsPerIP.Set(float64(maxActive))
 			l.metrics.RestUIBlockedIPs.Set(float64(blockedIPs))
+			l.metrics.RestUITrackedClients.Set(float64(tracked))
 		}
+	}
+}
+
+func (l *restUIRateLimiter) observeDecision(decision string) {
+	if l.metrics != nil {
+		l.metrics.RestUIRequests.With(common.Labels{"decision": decision}).Inc()
 	}
 }
 

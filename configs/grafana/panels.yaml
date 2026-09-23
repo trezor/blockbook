@@ -559,14 +559,14 @@ panels:
         legend: '{{coin}} - {{action}}/min'
   rest_ui.rejections:
     title: Public HTTP rate-limit rejections per minute
-    description: 'Public HTTP requests (explorer UI pages and REST API, sharing one per-client budget) the per-IP limiter rejected before any handler work (HTTP 429), by reason: request_rate is over the per-client request budget (default 180/min, burst 40), concurrent_requests is more than the per-client in-flight cap (default 12), ip_blocked is a client on the temporary blocklist (only when block duration is enabled; off by default). Sustained non-zero values mean abuse is being actively throttled.'
+    description: 'Public HTTP requests (explorer UI pages and REST API, sharing one per-client budget) the per-IP limiter rejected before any handler work (HTTP 429), by reason: request_rate is over the per-client request budget (default 20/min, burst 20), concurrent_requests is more than the per-client in-flight cap (default 12), ip_blocked is a client on the temporary blocklist (only when block duration is enabled; off by default). Sustained non-zero values mean abuse is being actively throttled.'
     queries:
       by_reason:
         promql: sum(rate({{name:rest_ui_rate_limit_rejections}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, reason) * 60
         legend: '{{coin}} - {{reason}}/min'
   rest_ui.active_ips:
     title: Public HTTP active vs blocked client IPs
-    description: 'Distinct client keys (IPv4 address or IPv6 /64 prefix) with at least one in-flight public HTTP request (explorer UI or REST API), plotted against the number currently on the temporary blocklist. Active IPs is the breadth of concurrent callers; a single source pushing heavy traffic shows up not here but as a high busiest-client value. Blocked IPs stays at 0 unless block duration is configured, then it counts clients shut out after repeated rate/concurrency breaches.'
+    description: 'Distinct client keys (IPv4 address or IPv6 /64 prefix) with at least one in-flight public HTTP request (explorer UI or REST API) at the moment of a once-a-minute sample, plotted against the number currently on the temporary blocklist. Active IPs is the breadth of concurrent callers, not of all callers: requests finish in milliseconds, so this stays low even with many clients (see tracked clients for that); a single source pushing heavy traffic shows up not here but as a high busiest-client value. Blocked IPs stays at 0 unless block duration is configured, then it counts clients shut out after repeated rate/concurrency breaches.'
     queries:
       active:
         promql: sum({{name:rest_ui_active_ips}}{job="blockbook", coin="$coin"}) by (coin)
@@ -581,6 +581,20 @@ panels:
       max:
         promql: max({{name:rest_ui_max_active_requests_per_ip}}{job="blockbook", coin="$coin"}) by (coin)
         legend: '{{coin}} - max in-flight per IP'
+  rest_ui.requests_by_decision:
+    title: Public HTTP limiter decisions per minute
+    description: 'Every rate-limited public HTTP request (explorer UI pages and REST API; static assets, docs and /websocket excluded) by what the per-IP limiter did with it: limited = counted against a client budget and served; rejected = HTTP 429 (split by reason in the rejections panel); bypass_local = arrived from a loopback/private/trusted peer with no CF-Connecting-IP or X-Real-Ip, so it had no client key and was served unlimited; whitelisted = client in a configured whitelist CIDR; untracked = served unlimited because the limiter already tracks its maximum number of client keys. Behind Cloudflare, bypass_local should be near zero: a large share means a proxy hop is dropping the client-IP header or an internal caller hits Blockbook directly, and that traffic is not rate limited at all.'
+    queries:
+      by_decision:
+        promql: sum(rate({{name:rest_ui_requests}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (coin, decision) * 60
+        legend: '{{coin}} - {{decision}}/min'
+  rest_ui.tracked_clients:
+    title: Public HTTP distinct clients (state TTL window)
+    description: 'Client keys (IPv4 address or IPv6 /64 prefix, plus per-/128 block entries when blocking is enabled) the public HTTP limiter holds state for, i.e. seen within its state TTL (default 10 min). Read against the limiter decisions panel: a high limited rate from only a handful of clients means those few are each near their budget, while a high rate spread over thousands of clients is a distributed caller that per-IP limits cannot stop. Bypassed and whitelisted requests are not counted here.'
+    queries:
+      tracked:
+        promql: sum({{name:rest_ui_tracked_clients}}{job="blockbook", coin="$coin"}) by (coin)
+        legend: '{{coin}} - tracked clients'
   rest_api.balance_history_txs:
     title: REST API balance-history transactions per request (quantiles)
     description: 'Distribution of how many transactions a single REST /api/v2/balancehistory call aggregates — the per-request DB work the cap bounds (one read per transaction). REST is the open, unauthenticated surface (non-Suite: explorer, integrations, bots), so this is where a cheap-to-send, expensive-to-serve request shows up; use it to judge whether the REST cap (default 250000) is sized right. Split by path (address vs xpub; xpub sums across derived addresses). Values are clamped at cap+1 when a request is rejected, so a flat line at the cap means requests are hitting it — read alongside the cap-rejections panel.'
