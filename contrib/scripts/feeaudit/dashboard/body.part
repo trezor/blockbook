@@ -1,0 +1,100 @@
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Blockbook &middot; EVM fee estimation</div>
+  <h1>What we quote, against what the chain charged</h1>
+  <p class="lede">Every line below is priced per unit of gas. The dashed line is what transactions in
+  that block actually paid; the coloured lines are what each fee source was offering at that moment.
+  Distance above the dashed line is money spent for nothing. Shaded stretches are congestion — the
+  base fee climbing away from its baseline, which is the only time a fee estimate is really tested.</p>
+  <div class="meta" id="meta"></div>
+</header>
+
+<div class="controls">
+  <div class="ctlrow">
+    <div class="ctlgrp"><span class="lab">network</span>
+      <div class="chips" id="chainSel" role="group" aria-label="Network"></div></div>
+    <div class="ctlgrp"><span class="lab">tier</span>
+      <div class="seg chips" id="tierSel" role="group" aria-label="Fee tier"></div></div>
+    <div class="ctlgrp"><span class="lab">scale</span>
+      <div class="seg chips" id="scaleSel" role="group" aria-label="Axis scale"></div></div>
+  </div>
+</div>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="panel">
+  <div class="phead">
+    <div><h3 id="t1">Gas price</h3>
+      <div class="cap" id="c1cap"></div></div>
+  </div>
+  <div class="chartbox"><svg id="chartPrice"></svg></div>
+  <div class="legend" id="leg1"></div>
+</div>
+
+<div class="panel">
+  <div class="phead">
+    <div><h3 id="t2">Priority fee</h3>
+      <div class="cap" id="c2cap"></div></div>
+  </div>
+  <div class="chartbox"><svg id="chartTip"></svg></div>
+  <div class="legend" id="leg2"></div>
+</div>
+
+<div class="panel">
+  <div class="phead">
+    <div><h3 id="t3b">Base fee</h3>
+      <div class="cap" id="c3bcap"></div></div>
+  </div>
+  <div class="chartbox"><svg id="chartBase"></svg></div>
+  <div class="legend" id="leg3"></div>
+  <p class="cap" id="baseNote" style="margin-top:12px;line-height:1.65;max-width:80ch"></p>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="phead"><div><h3>All three tiers, this network</h3>
+      <div class="cap">what a sender pays, as a multiple of the going rate &middot; 1.0&times; is correct</div></div></div>
+    <div class="chartbox"><svg id="chartTiers"></svg></div>
+  </div>
+  <div class="panel">
+    <div class="phead"><div><h3>Every network at this tier</h3>
+      <div class="cap">what each source costs &middot; worst first &middot; red ring = under 95% mined in 8 blocks</div></div></div>
+    <div class="chartbox"><svg id="chartScatter"></svg></div>
+  </div>
+</div>
+
+<div class="panel" id="congPanel">
+  <div class="phead"><div><h3>When the base fee climbed</h3>
+    <div class="cap" id="congCap"></div></div></div>
+  <div class="chartbox"><svg id="chartCong"></svg></div>
+  <p class="cap" style="margin-top:6px">hollow dot = calm stretch &middot; filled dot = congested stretch</p>
+</div>
+
+<div class="panel" id="speedPanel">
+  <div class="phead"><div><h3>Does the ETA hold?</h3>
+    <div class="cap">Suite shows every tier an estimated time. Each cell is the share of quotes
+    that actually confirmed inside it, against the target shown for that source &mdash; every
+    network, not just the selected one.</div></div></div>
+  <div class="tablebox" style="margin-top:10px">
+    <table id="speedTbl"><thead><tr>
+      <th>Network</th><th>Tier</th><th>Infura</th><th>1inch</th><th>on-chain now</th><th>on-chain #1768</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
+  <p class="cap" id="speedNote" style="margin-top:12px;line-height:1.65;max-width:82ch"></p>
+</div>
+
+<div class="panel" style="padding-bottom:16px">
+  <div class="phead"><div><h3 id="t3">Numbers behind the charts</h3>
+    <div class="cap" id="c3cap"></div></div></div>
+  <div class="tablebox" style="margin-top:10px">
+    <table id="tbl"><thead><tr>
+      <th>Source</th><th>Priority fee</th><th>Base fee seen</th><th>Gas price</th><th>Max fee</th>
+      <th>Needed</th><th>Paid</th><th>Next block</th><th>Within 8</th><th>Worst wait</th><th>n</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<footer id="foot"></footer>
+</div>
+<div id="tip" role="status" aria-live="polite"></div>
