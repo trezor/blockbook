@@ -564,6 +564,42 @@ type TemplateData struct {
 	TxSecondaryCoinRate      float64
 	TxTicker                 *common.CurrencyRatesTicker
 	TxIOCollapseThreshold    int
+	contractRates            map[contractRateKey]contractRate
+}
+
+const secondsInDay = 24 * 3600
+
+type contractRateKey struct {
+	contract string
+	day      int64
+}
+
+type contractRate struct {
+	rate  float64
+	found bool
+}
+
+type contractBaseRateFunc func(ticker *common.CurrencyRatesTicker, token string, timestamp int64) (float64, bool)
+
+// contractBaseRate memoizes the per-page DB fallback of GetContractBaseRate; historical token rates
+// are stored once per UTC day, so every timestamp of a day resolves to the same stored rate.
+func (td *TemplateData) contractBaseRate(contract string, lookup contractBaseRateFunc) (float64, bool) {
+	if td.TxTicker == nil {
+		return 0, false
+	}
+	if rate, found := td.TxTicker.GetTokenRate(contract); found {
+		return float64(rate), true
+	}
+	key := contractRateKey{contract: contract, day: (td.Tx.Blocktime + secondsInDay - 1) / secondsInDay}
+	if r, ok := td.contractRates[key]; ok {
+		return r.rate, r.found
+	}
+	rate, found := lookup(td.TxTicker, contract, td.Tx.Blocktime)
+	if td.contractRates == nil {
+		td.contractRates = make(map[contractRateKey]contractRate)
+	}
+	td.contractRates[key] = contractRate{rate: rate, found: found}
+	return rate, found
 }
 
 func defaultTxTemplate(chainType bchain.ChainType) string {
@@ -793,7 +829,7 @@ func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, c
 					currentSecondary = formatSecondaryAmount(base*td.CurrentSecondaryCoinRate, td)
 					// get the historical rate only if current rate exist
 					// it is very costly to search in DB in vain for a rate for token for which there are no exchange rates
-					baseRate, found := s.api.GetContractBaseRate(td.TxTicker, t.Contract, td.Tx.Blocktime)
+					baseRate, found := td.contractBaseRate(t.Contract, s.api.GetContractBaseRate)
 					if found {
 						base := p * baseRate
 						txBase = strconv.FormatFloat(base, 'f', 6, 64)
