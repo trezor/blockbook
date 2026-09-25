@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"strings"
 	"time"
 
 	vlq "github.com/bsm/go-vlq"
@@ -88,6 +89,54 @@ func unpackCurrencyRatesTicker(buf []byte) (*common.CurrencyRatesTicker, error) 
 	return &ticker, nil
 }
 
+// unpackCurrencyRatesTickerToken is unpackCurrencyRatesTicker keeping only the rate of token;
+// a ticker holds thousands of token rates, so materializing all of them per lookup dominates CPU and GC.
+// The key is matched like CurrencyRatesTicker.findTokenRate: exact first, then lowercase.
+func unpackCurrencyRatesTickerToken(buf []byte, token string) (*common.CurrencyRatesTicker, error) {
+	var (
+		ticker common.CurrencyRatesTicker
+		s      string
+		l      int
+		len    uint
+		v      float32
+	)
+	len, l = unpackVaruint(buf)
+	buf = buf[l:]
+	if len > 0 {
+		ticker.Rates = make(map[string]float32, len)
+		for i := 0; i < int(len); i++ {
+			s, l = unpackString(buf)
+			buf = buf[l:]
+			v, l = unpackFloat32(buf)
+			buf = buf[l:]
+			ticker.Rates[s] = v
+		}
+	}
+	lowerToken := strings.ToLower(token)
+	lowerFound := false
+	var lowerRate float32
+	len, l = unpackVaruint(buf)
+	buf = buf[l:]
+	for i := 0; i < int(len); i++ {
+		sl, l := unpackVaruint(buf)
+		key := buf[l : l+int(sl)]
+		buf = buf[l+int(sl):]
+		v, l = unpackFloat32(buf)
+		buf = buf[l:]
+		if string(key) == token {
+			ticker.TokenRates = map[string]float32{token: v}
+			return &ticker, nil
+		}
+		if !lowerFound && string(key) == lowerToken {
+			lowerFound, lowerRate = true, v
+		}
+	}
+	if lowerFound {
+		ticker.TokenRates = map[string]float32{lowerToken: lowerRate}
+	}
+	return &ticker, nil
+}
+
 // FiatRatesStoreTicker stores ticker data at the specified time
 func (d *RocksDB) FiatRatesStoreTicker(wb *grocksdb.WriteBatch, ticker *common.CurrencyRatesTicker) error {
 	if len(ticker.Rates) == 0 {
@@ -102,7 +151,12 @@ func getTickerFromIterator(it *grocksdb.Iterator, vsCurrency string, token strin
 	if err != nil {
 		return nil, err
 	}
-	ticker, err := unpackCurrencyRatesTicker(it.Value().Data())
+	var ticker *common.CurrencyRatesTicker
+	if token != "" {
+		ticker, err = unpackCurrencyRatesTickerToken(it.Value().Data(), token)
+	} else {
+		ticker, err = unpackCurrencyRatesTicker(it.Value().Data())
+	}
 	if err != nil {
 		return nil, err
 	}
