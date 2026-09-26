@@ -1,8 +1,14 @@
 package litecoincash
 
 import (
+	"bytes"
+
 	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil"
+	"github.com/martinboehm/btcutil/base58"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/txscript"
+	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
@@ -48,6 +54,41 @@ func NewLitecoinCashParser(params *chaincfg.Params, c *btc.Configuration) *Litec
 	}
 	p.AmountDecimalPoint = 7
 	return p
+}
+
+// GetAddrDescFromAddress accepts both the current LCC P2SH prefix and
+// the legacy SCRIPT_ADDRESS prefix still accepted by Litecoin Cash Core.
+func (p *LitecoinCashParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
+	ad, err := p.BitcoinLikeParser.GetAddrDescFromAddress(address)
+	if err == nil {
+		return ad, nil
+	}
+
+	payload, version, decodeErr := base58.CheckDecode(address, 1, p.Params.Base58CksumHasher)
+	if decodeErr != nil || len(payload) != 20 {
+		return nil, err
+	}
+
+	var legacyScriptHashID byte
+	switch p.Params.Net {
+	case MainnetMagic:
+		legacyScriptHashID = 5
+	case TestnetMagic, RegtestMagic:
+		legacyScriptHashID = 196
+	default:
+		return nil, err
+	}
+
+	if !bytes.Equal(version, []byte{legacyScriptHashID}) {
+		return nil, err
+	}
+
+	scriptAddress, scriptErr := btcutil.NewAddressScriptHashFromHash(payload, p.Params)
+	if scriptErr != nil {
+		return nil, scriptErr
+	}
+
+	return txscript.PayToAddrScript(scriptAddress)
 }
 
 func GetChainParams(chain string) *chaincfg.Params {
