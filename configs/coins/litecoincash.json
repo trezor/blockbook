@@ -1,0 +1,38 @@
+{
+    "coin": {
+        "name": "Litecoin Cash",
+        "shortcut": "LCC",
+        "label": "Litecoin Cash",
+        "alias": "litecoincash"
+    },
+    "ports": {
+        "backend_rpc": 8001,
+        "backend_message_queue": 38301,
+        "blockbook_internal": 9001,
+        "blockbook_public": 9101
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_url_ws_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_user": "rpc",
+        "rpc_pass": "rpc",
+        "rpc_timeout": 25,
+        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+    },
+    "blockbook": {
+        "package_name": "blockbook-litecoincash",
+        "system_user": "blockbook-litecoincash",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 1000,
+            "xpub_magic": 76067358,
+            "additional_params": {}
+        }
+    }
+}
