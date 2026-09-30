@@ -2,15 +2,12 @@ package bcmr
 
 import (
 	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"io/ioutil"
 	"net/http"
-	"os"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
-	"time"
 
-	"github.com/golang/glog"
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/bch"
@@ -19,64 +16,14 @@ import (
 	"github.com/trezor/blockbook/db"
 )
 
-func Test_parseSignatureFromText(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{
-			name: "asdf",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-		})
-	}
-
-}
-
-func getRegistry(url string) (*Registry, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		glog.Errorf("Error creating a new request for %v: %v", url, err)
-		return nil, err
-	}
-	req.Close = true
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("Invalid response status: " + string(resp.Status))
-	}
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	var data Registry
-	err = json.Unmarshal(bodyBytes, &data)
-	if err != nil {
-		glog.Errorf("Error unmarshalling response from %s: %v", url, err)
-		return nil, err
-	}
-
-	return &data, nil
-}
-
-func Test_download(t *testing.T) {
-	registry, _ := getRegistry("https://bcmr.paytaca.com/api/registries/cade35f821c314c4f16de1f99484deb47e0320a688e2557a7f0a7d865371d695:1/")
-
-	for _, identity := range *registry.Identities {
-		for _, revision := range identity {
-			for token_id, token := range revision.Token.Nfts.Parse.Types {
-				println(token_id, " == ", token.Name)
-			}
-		}
-	}
+func testBcmrProvider(t *testing.T) string {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		outpoint := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/registries/"), "/")
+		http.ServeFile(w, r, filepath.Join("testdata", strings.ReplaceAll(outpoint, ":", "_")+".json"))
+	}))
+	t.Cleanup(server.Close)
+	return server.URL
 }
 
 func hexToBytes(h string) []byte {
@@ -85,11 +32,7 @@ func hexToBytes(h string) []byte {
 }
 
 func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *db.RocksDB {
-	tmp, err := os.MkdirTemp("", "testdb")
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.NewRocksDB(tmp, 100000, -1, p, nil, false)
+	d, err := db.NewRocksDB(t.TempDir(), 100000, -1, p, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,16 +44,10 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *db.RocksDB {
 	return d
 }
 
-func getRocksDb(parser bchain.BlockChainParser, extendedIndex bool, t *testing.T) *db.RocksDB {
-	db := setupRocksDB(t, parser)
-	return db
-}
-
 func closeAndDestroyRocksDB(t *testing.T, d *db.RocksDB) {
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}
-	// os.RemoveAll(d.path)
 }
 
 func bcashTestnetParser() *bch.BCashParser {
@@ -125,7 +62,7 @@ func bcashTestnetParser() *bch.BCashParser {
 
 func Test_BcmrDownloader(t *testing.T) {
 	parser := bcashTestnetParser()
-	d := getRocksDb(parser, false, t)
+	d := setupRocksDB(t, parser)
 	defer closeAndDestroyRocksDB(t, d)
 
 	tests := []struct {
@@ -185,7 +122,7 @@ func Test_BcmrDownloader(t *testing.T) {
 		})
 	}
 
-	cfg := &common.Config{CoinName: "coin-unittest"}
+	cfg := &common.Config{CoinName: "coin-unittest", BcmrProvider: testBcmrProvider(t)}
 	metrics := &common.Metrics{}
 	downloader, err := NewBcmrDownloader(d, cfg, metrics)
 	if err != nil {
@@ -223,7 +160,7 @@ func Test_BcmrDownloader(t *testing.T) {
 
 func Test_BcmrDownloader_Overwrite(t *testing.T) {
 	parser := bcashTestnetParser()
-	d := getRocksDb(parser, false, t)
+	d := setupRocksDB(t, parser)
 	defer closeAndDestroyRocksDB(t, d)
 
 	wb := grocksdb.NewWriteBatch()
@@ -272,7 +209,7 @@ func Test_BcmrDownloader_Overwrite(t *testing.T) {
 		t.Errorf("WriteBatch() error = %v", err)
 	}
 
-	cfg := &common.Config{CoinName: "coin-unittest"}
+	cfg := &common.Config{CoinName: "coin-unittest", BcmrProvider: testBcmrProvider(t)}
 	metrics := &common.Metrics{}
 	downloader, err := NewBcmrDownloader(d, cfg, metrics)
 	if err != nil {
@@ -314,7 +251,7 @@ func Test_BcmrDownloader_Overwrite(t *testing.T) {
 
 func Test_BcmrDownloader_NoOverwrite(t *testing.T) {
 	parser := bcashTestnetParser()
-	d := getRocksDb(parser, false, t)
+	d := setupRocksDB(t, parser)
 	defer closeAndDestroyRocksDB(t, d)
 
 	wb := grocksdb.NewWriteBatch()
@@ -363,7 +300,7 @@ func Test_BcmrDownloader_NoOverwrite(t *testing.T) {
 		t.Errorf("WriteBatch() error = %v", err)
 	}
 
-	cfg := &common.Config{CoinName: "coin-unittest"}
+	cfg := &common.Config{CoinName: "coin-unittest", BcmrProvider: testBcmrProvider(t)}
 	metrics := &common.Metrics{}
 	downloader, err := NewBcmrDownloader(d, cfg, metrics)
 	if err != nil {
