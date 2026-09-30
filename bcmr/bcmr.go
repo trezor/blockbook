@@ -83,10 +83,8 @@ func (bd *BcmrDownloader) RunDownloader() error {
 		next := unix + bd.periodSeconds
 		next -= next % bd.periodSeconds
 
-		if next-unix < bd.periodSeconds {
-			next += int64(rand.Intn(3))
-			time.Sleep(time.Duration(next-unix) * time.Second)
-		}
+		next += int64(rand.Intn(3))
+		time.Sleep(time.Duration(next-unix) * time.Second)
 
 		metaQueue, err := bd.db.GetAllBcashTokenMetaQueue()
 		glog.Infof("BCMR metadata download queue has %d items", len(metaQueue))
