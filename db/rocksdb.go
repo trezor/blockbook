@@ -2689,7 +2689,9 @@ func (d *RocksDB) SetInconsistentState(inconsistent bool) error {
 
 // SetInternalState sets the InternalState to be used by db to collect internal state
 func (d *RocksDB) SetInternalState(is *common.InternalState) {
-	d.is = is
+	if d.is != is {
+		d.is = is
+	}
 }
 
 // GetInternalState gets the InternalState
