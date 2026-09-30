@@ -437,8 +437,3 @@ func (p *BaseParser) FormatAddressAlias(address string, name string) string {
 func (b *BaseParser) ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData {
 	return nil
 }
-
-// BcashTypeParseTokenData is unsupported
-func (b *BaseParser) BcashTypeParseTokenData(addrDesc AddressDescriptor) (*BcashToken, int, error) {
-	return nil, 0, nil
-}
