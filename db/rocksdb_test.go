@@ -2074,59 +2074,96 @@ func setupRocksDBWithExtendedIndex(t *testing.T, p bchain.BlockChainParser, exte
 // and uses a record with a coinbase input and both spent and unspent outputs, so
 // every length-skip case in packedTxInputLen/packedTxOutputLen is covered.
 func TestGetTxAddressesOutput(t *testing.T) {
-	for _, extendedIndex := range []bool{false, true} {
-		name := "basic"
-		if extendedIndex {
-			name = "extendedIndex"
+	for _, coin := range []string{"BTC", "BCH"} {
+		for _, extendedIndex := range []bool{false, true} {
+			name := coin + "/basic"
+			if extendedIndex {
+				name = coin + "/extendedIndex"
+			}
+			t.Run(name, func(t *testing.T) {
+				parser := bchain.BlockChainParser(&testBitcoinParser{
+					BitcoinParser: bitcoinTestnetParser(),
+				})
+				if coin == "BCH" {
+					parser = bcashTestnetParser()
+				}
+				d := setupRocksDBWithExtendedIndex(t, parser, extendedIndex).setCoinShortcut(coin)
+				defer closeAndDestroyRocksDB(t, d)
+
+				ta := &TxAddresses{
+					Height: 12345,
+					Inputs: []TxInput{
+						{ValueSat: *big.NewInt(0)}, // coinbase: empty AddrDesc, no Txid
+						{AddrDesc: addressToAddrDesc(dbtestdata.Addr1, d.chainParser), ValueSat: *big.NewInt(1000), Txid: strings.Repeat("b2", 32), Vout: 0},
+						{AddrDesc: addressToAddrDesc(dbtestdata.Addr2, d.chainParser), ValueSat: *big.NewInt(2000), Txid: strings.Repeat("c3", 32), Vout: 3},
+					},
+					Outputs: []TxOutput{
+						{AddrDesc: addressToAddrDesc(dbtestdata.Addr3, d.chainParser), ValueSat: *big.NewInt(3000)},
+						{AddrDesc: addressToAddrDesc(dbtestdata.Addr4, d.chainParser), ValueSat: *big.NewInt(4000), Spent: true, SpentTxid: strings.Repeat("d4", 32), SpentIndex: 5, SpentHeight: 12346},
+						{AddrDesc: addressToAddrDesc(dbtestdata.Addr5, d.chainParser), ValueSat: *big.NewInt(5000)},
+					},
+				}
+				if coin == "BCH" {
+					token := &bchain.BcashToken{Category: make([]byte, 32), Amount: common.Amount(*big.NewInt(42))}
+					ta.Inputs[1].BcashToken = token
+					ta.Outputs[1].BcashToken = token
+				}
+				txid := strings.Repeat("a1", 32)
+
+				btxID, err := d.chainParser.PackTxid(txid)
+				require.NoError(t, err)
+				wb := grocksdb.NewWriteBatch()
+				defer wb.Destroy()
+				require.NoError(t, d.storeTxAddresses(wb, map[string]*TxAddresses{string(btxID): ta}))
+				require.NoError(t, d.db.Write(d.wo, wb))
+
+				full, err := d.GetTxAddresses(txid)
+				require.NoError(t, err)
+				require.NotNil(t, full)
+
+				// Each output read singly must equal the full-record unpack.
+				for vout := range full.Outputs {
+					got, err := d.GetTxAddressesOutput(txid, uint32(vout))
+					require.NoErrorf(t, err, "vout %d", vout)
+					require.NotNilf(t, got, "vout %d", vout)
+					require.Equalf(t, full.Outputs[vout], *got, "vout %d", vout)
+				}
+
+				// Out-of-range vout and missing txid both return nil.
+				got, err := d.GetTxAddressesOutput(txid, uint32(len(full.Outputs)))
+				require.NoError(t, err)
+				require.Nil(t, got, "out-of-range vout")
+
+				got, err = d.GetTxAddressesOutput(strings.Repeat("ee", 32), 0)
+				require.NoError(t, err)
+				require.Nil(t, got, "missing txid")
+			})
 		}
-		t.Run(name, func(t *testing.T) {
-			d := setupRocksDBWithExtendedIndex(t, &testBitcoinParser{
-				BitcoinParser: bitcoinTestnetParser(),
-			}, extendedIndex)
-			defer closeAndDestroyRocksDB(t, d)
+	}
+}
 
-			ta := &TxAddresses{
-				Height: 12345,
-				Inputs: []TxInput{
-					{ValueSat: *big.NewInt(0)}, // coinbase: empty AddrDesc, no Txid
-					{AddrDesc: addressToAddrDesc(dbtestdata.Addr1, d.chainParser), ValueSat: *big.NewInt(1000), Txid: strings.Repeat("b2", 32), Vout: 0},
-					{AddrDesc: addressToAddrDesc(dbtestdata.Addr2, d.chainParser), ValueSat: *big.NewInt(2000), Txid: strings.Repeat("c3", 32), Vout: 3},
-				},
-				Outputs: []TxOutput{
-					{AddrDesc: addressToAddrDesc(dbtestdata.Addr3, d.chainParser), ValueSat: *big.NewInt(3000)},
-					{AddrDesc: addressToAddrDesc(dbtestdata.Addr4, d.chainParser), ValueSat: *big.NewInt(4000), Spent: true, SpentTxid: strings.Repeat("d4", 32), SpentIndex: 5, SpentHeight: 12346},
-					{AddrDesc: addressToAddrDesc(dbtestdata.Addr5, d.chainParser), ValueSat: *big.NewInt(5000)},
-				},
+func TestBcashColumnVersions(t *testing.T) {
+	d := setupRocksDB(t, bcashTestnetParser())
+	defer closeAndDestroyRocksDB(t, d)
+	for _, coin := range []string{"BTC", "BCH"} {
+		t.Run(coin, func(t *testing.T) {
+			state := &common.InternalState{CoinShortcut: coin}
+			columns, err := d.checkColumns(state)
+			require.NoError(t, err)
+			for _, column := range columns {
+				want := uint32(7)
+				if coin == "BCH" && (column.Name == "addressBalance" || column.Name == "txAddresses") {
+					want = 8
+				}
+				require.Equal(t, want, column.Version, column.Name)
 			}
-			txid := strings.Repeat("a1", 32)
-
-			btxID, err := d.chainParser.PackTxid(txid)
-			require.NoError(t, err)
-			wb := grocksdb.NewWriteBatch()
-			defer wb.Destroy()
-			require.NoError(t, d.storeTxAddresses(wb, map[string]*TxAddresses{string(btxID): ta}))
-			require.NoError(t, d.db.Write(d.wo, wb))
-
-			full, err := d.GetTxAddresses(txid)
-			require.NoError(t, err)
-			require.NotNil(t, full)
-
-			// Each output read singly must equal the full-record unpack.
-			for vout := range full.Outputs {
-				got, err := d.GetTxAddressesOutput(txid, uint32(vout))
-				require.NoErrorf(t, err, "vout %d", vout)
-				require.NotNilf(t, got, "vout %d", vout)
-				require.Equalf(t, full.Outputs[vout], *got, "vout %d", vout)
+			state.DbColumns = []common.InternalStateColumn{{Name: "addressBalance", Version: 7}, {Name: "txAddresses", Version: 7}}
+			_, err = d.checkColumns(state)
+			if coin == "BCH" {
+				require.ErrorContains(t, err, "DB is not compatible")
+			} else {
+				require.NoError(t, err)
 			}
-
-			// Out-of-range vout and missing txid both return nil.
-			got, err := d.GetTxAddressesOutput(txid, uint32(len(full.Outputs)))
-			require.NoError(t, err)
-			require.Nil(t, got, "out-of-range vout")
-
-			got, err = d.GetTxAddressesOutput(strings.Repeat("ee", 32), 0)
-			require.NoError(t, err)
-			require.Nil(t, got, "missing txid")
 		})
 	}
 }
