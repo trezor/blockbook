@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/martinboehm/bchutil"
 	"github.com/martinboehm/btcd/wire"
@@ -238,6 +239,28 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 		}
 	}
 	return []string{addr}, len(addr) > 0, nil
+}
+
+func (p *BCashParser) TryParseOPReturn(script []byte) string {
+	if parsed := p.BitcoinLikeParser.TryParseOPReturn(script); parsed != "" {
+		return parsed
+	}
+	if len(script) == 0 || script[0] != txscript.OP_RETURN {
+		return ""
+	}
+	chunks, err := txscript.PushedData(script[1:])
+	if err != nil || len(chunks) == 0 {
+		return ""
+	}
+	parts := make([]string, len(chunks))
+	for i, chunk := range chunks {
+		if utf8.Valid(chunk) {
+			parts[i] = string(chunk)
+		} else {
+			parts[i] = hex.EncodeToString(chunk)
+		}
+	}
+	return "OP_RETURN (" + strings.Join(parts, " ") + ")"
 }
 
 func (p *BCashParser) ParseTokenData(script []byte) (*bchain.BcashToken, int, error) {

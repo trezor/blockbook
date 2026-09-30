@@ -64,3 +64,10 @@ func TestBcashChipnet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"bchtest:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdpn3jdgd"}, addresses)
 }
+
+func TestBcashOPReturnPushData(t *testing.T) {
+	parser, err := NewBCashParser(GetChainParams("chip"), &btc.Configuration{AddressFormat: "cashaddr"})
+	require.NoError(t, err)
+	require.Equal(t, "OP_RETURN (BCMR data)", parser.TryParseOPReturn([]byte{0x6a, 4, 'B', 'C', 'M', 'R', 0x4e, 4, 0, 0, 0, 'd', 'a', 't', 'a'}))
+	require.Empty(t, parser.TryParseOPReturn([]byte{0x6a, 4, 'B', 'C', 'M', 'R', 0x4d, 1}))
+}
