@@ -47,11 +47,12 @@ func TestBatchIdsByParamLen_BatchesStayWithinLimit(t *testing.T) {
 	for i := 0; i < cap(ids); i++ {
 		ids = append(ids, fmt.Sprintf("token-%d-%s", i, strings.Repeat("y", i%40)))
 	}
-	batches := batchIdsByParamLen(ids, coingeckoMaxIdsParamLen)
+	const maxLen = 1900
+	batches := batchIdsByParamLen(ids, maxLen)
 	var joined []string
 	for _, b := range batches {
-		if l := len(url.QueryEscape(strings.Join(b, ","))); l > coingeckoMaxIdsParamLen {
-			t.Fatalf("batch ids param is %d chars, limit %d", l, coingeckoMaxIdsParamLen)
+		if l := len(url.QueryEscape(strings.Join(b, ","))); l > maxLen {
+			t.Fatalf("batch ids param is %d chars, limit %d", l, maxLen)
 		}
 		joined = append(joined, b...)
 	}
@@ -60,10 +61,10 @@ func TestBatchIdsByParamLen_BatchesStayWithinLimit(t *testing.T) {
 	}
 }
 
-// newCurrentTickersTestCoingecko serves a token platform of n ids where the batch containing
-// blockedID is rejected the way the CloudFront WAF rejects a request, and every URL longer than
-// the observed WAF limit is rejected too.
-func newCurrentTickersTestCoingecko(t *testing.T, n int, blockedID string, coinsListStatus int) (*Coingecko, map[string]float32) {
+// newCurrentTickersTestCoingecko serves a token platform of n ids like the api.coingecko.com
+// CloudFront edge: a query string over coingeckoMaxQueryLen is rejected with 403, and so is the
+// batch containing blockedID. maxQueryLen records the longest token-price query seen.
+func newCurrentTickersTestCoingecko(t *testing.T, n int, blockedID string, coinsListStatus int, maxQueryLen *int) (*Coingecko, map[string]float32) {
 	t.Helper()
 	var coins []string
 	wantTokenRates := make(map[string]float32)
@@ -75,7 +76,7 @@ func newCurrentTickersTestCoingecko(t *testing.T, n int, blockedID string, coins
 	}
 	coinsList := "[" + strings.Join(coins, ",") + "]"
 	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if len(r.URL.String()) > 3000 {
+		if len(r.URL.RawQuery) > coingeckoMaxQueryLen {
 			return stubHTTPResponse(http.StatusForbidden, cloudfrontBlockedBody), nil
 		}
 		switch r.URL.Path {
@@ -90,6 +91,9 @@ func newCurrentTickersTestCoingecko(t *testing.T, n int, blockedID string, coins
 			ids := strings.Split(r.URL.Query().Get("ids"), ",")
 			if ids[0] == "ethereum" {
 				return stubHTTPResponse(http.StatusOK, `{"ethereum":{"usd":2000,"eur":1800}}`), nil
+			}
+			if maxQueryLen != nil && len(r.URL.RawQuery) > *maxQueryLen {
+				*maxQueryLen = len(r.URL.RawQuery)
 			}
 			parts := make([]string, 0, len(ids))
 			for _, id := range ids {
@@ -114,12 +118,16 @@ func newCurrentTickersTestCoingecko(t *testing.T, n int, blockedID string, coins
 	}, wantTokenRates
 }
 
-func TestCurrentTickers_AllTokenBatchesFitUnderWAFLimit(t *testing.T) {
+func TestCurrentTickers_TokenBatchesFitUnderQueryLimit(t *testing.T) {
 	// 1000 ids of 10 chars need several batches; a single oversized one would be rejected
-	cg, wantTokenRates := newCurrentTickersTestCoingecko(t, 1000, "", http.StatusOK)
+	maxQueryLen := 0
+	cg, wantTokenRates := newCurrentTickersTestCoingecko(t, 1000, "", http.StatusOK, &maxQueryLen)
 	ticker, err := cg.CurrentTickers()
 	if err != nil {
 		t.Fatalf("CurrentTickers() error = %v", err)
+	}
+	if limit := coingeckoMaxQueryLen - coingeckoQueryLenMargin; maxQueryLen > limit || maxQueryLen < limit-20 {
+		t.Fatalf("longest token-price query is %d chars, want just under %d", maxQueryLen, limit)
 	}
 	if !reflect.DeepEqual(ticker.TokenRates, wantTokenRates) {
 		t.Fatalf("got %d token rates, want %d", len(ticker.TokenRates), len(wantTokenRates))
@@ -127,7 +135,7 @@ func TestCurrentTickers_AllTokenBatchesFitUnderWAFLimit(t *testing.T) {
 }
 
 func TestCurrentTickers_FailedTokenBatchKeepsNativeAndOtherTokenRates(t *testing.T) {
-	cg, allTokenRates := newCurrentTickersTestCoingecko(t, 1000, "token-0000", http.StatusOK)
+	cg, allTokenRates := newCurrentTickersTestCoingecko(t, 1000, "token-0000", http.StatusOK, nil)
 	ticker, err := cg.CurrentTickers()
 	if !errors.Is(err, errCoingeckoIncompleteTokenRates) {
 		t.Fatalf("CurrentTickers() error = %v, want errCoingeckoIncompleteTokenRates", err)
@@ -155,7 +163,7 @@ func TestCurrentTickers_FailedTokenBatchKeepsNativeAndOtherTokenRates(t *testing
 }
 
 func TestCurrentTickers_FailedCoinsListKeepsNativeRates(t *testing.T) {
-	cg, _ := newCurrentTickersTestCoingecko(t, 10, "", http.StatusForbidden)
+	cg, _ := newCurrentTickersTestCoingecko(t, 10, "", http.StatusForbidden, nil)
 	ticker, err := cg.CurrentTickers()
 	if !errors.Is(err, errCoingeckoIncompleteTokenRates) {
 		t.Fatalf("CurrentTickers() error = %v, want errCoingeckoIncompleteTokenRates", err)
@@ -252,5 +260,15 @@ func TestUpdateCurrentTickers(t *testing.T) {
 				t.Fatalf("stored TokenRates = %v, want %v", (*stored)[0].TokenRates, tt.want.TokenRates)
 			}
 		})
+	}
+}
+
+func TestTokenPriceIdsBudget(t *testing.T) {
+	for _, vs := range []string{"usd", "bnb", "eth", "matic-network"} {
+		ids := strings.Repeat("a", tokenPriceIdsBudget(vs))
+		query := url.Values{"ids": {ids}, "vs_currencies": {vs}}.Encode()
+		if want := coingeckoMaxQueryLen - coingeckoQueryLenMargin; len(query) != want {
+			t.Fatalf("vs=%s: query with a full ids budget is %d chars, want %d", vs, len(query), want)
+		}
 	}
 }

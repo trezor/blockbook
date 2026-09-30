@@ -82,9 +82,13 @@ var errCoingeckoHistoricalTokenUpdateInProgress = errors.New("coingecko historic
 // some token batches failed, so the caller can fill the gaps instead of dropping the ticker.
 var errCoingeckoIncompleteTokenRates = errors.New("coingecko current token rates incomplete")
 
-// coingeckoMaxIdsParamLen caps the ids query parameter of a simple/price request. Since
-// 2026-09-29 the api.coingecko.com CloudFront WAF answers 403 to URLs longer than ~3.1k chars.
-const coingeckoMaxIdsParamLen = 2000
+// coingeckoMaxQueryLen is the longest query string api.coingecko.com accepts: since 2026-09-29 its
+// CloudFront edge answers 403 "Request blocked" to longer ones. coingeckoQueryLenMargin keeps
+// token batches clear of it in case the limit tightens.
+const (
+	coingeckoMaxQueryLen    = 2048
+	coingeckoQueryLenMargin = 100
+)
 
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
@@ -684,7 +688,7 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 // batch is skipped so one rejected request cannot discard the rates of all other tokens.
 func (cg *Coingecko) currentTokenRates(platformIds []string, platformIdsToTokens map[string]string) (map[string]float32, error) {
 	rates := make(map[string]float32, len(platformIds))
-	batches := batchIdsByParamLen(platformIds, coingeckoMaxIdsParamLen)
+	batches := batchIdsByParamLen(platformIds, tokenPriceIdsBudget(cg.platformVsCurrency))
 	failed := 0
 	for i, batch := range batches {
 		prices, err := cg.simplePrice(context.Background(), batch, []string{cg.platformVsCurrency})
@@ -707,6 +711,13 @@ func (cg *Coingecko) currentTokenRates(platformIds []string, platformIdsToTokens
 		return rates, fmt.Errorf("%w: %d of %d batches failed", errCoingeckoIncompleteTokenRates, failed, len(batches))
 	}
 	return rates, nil
+}
+
+// tokenPriceIdsBudget is the ids parameter length that keeps a simple/price query for
+// vsCurrency within coingeckoMaxQueryLen, minus coingeckoQueryLenMargin.
+func tokenPriceIdsBudget(vsCurrency string) int {
+	overhead := len("ids=&vs_currencies=") + len(url.QueryEscape(vsCurrency))
+	return coingeckoMaxQueryLen - coingeckoQueryLenMargin - overhead
 }
 
 // batchIdsByParamLen splits ids into batches whose comma-joined, URL-encoded length fits maxLen.
