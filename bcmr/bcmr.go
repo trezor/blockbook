@@ -150,7 +150,7 @@ func (bd *BcmrDownloader) processMetaQueue(metaQueue []*db.BcashTokenMetaQueue) 
 				}
 				if stored != nil {
 					// check if fetched meta is older than stored one
-					if stored.Height > meta.Height || (stored.Height == meta.Height && stored.Txi < meta.Txi) {
+					if stored.Height > meta.Height || (stored.Height == meta.Height && stored.Txi > meta.Txi) {
 						// delete from queue
 						deleted = append(deleted, meta)
 						continue

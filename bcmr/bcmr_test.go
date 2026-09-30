@@ -2,6 +2,7 @@ package bcmr
 
 import (
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -246,6 +247,46 @@ func Test_BcmrDownloader_Overwrite(t *testing.T) {
 	}
 	if nftMeta.Name == "Will be overwritten" {
 		t.Errorf("Expected NFT token metadata to be overwritten, got %s", nftMeta.Name)
+	}
+}
+
+func Test_BcmrDownloader_TransactionOrder(t *testing.T) {
+	for _, txi := range []uint32{68, 70} {
+		t.Run(fmt.Sprint(txi), func(t *testing.T) {
+			d := setupRocksDB(t, bcashTestnetParser())
+			defer closeAndDestroyRocksDB(t, d)
+			category := hexToBytes("5a4f6b25243c1a2dabb2434e3d9e574f65c31764ce0e7eb4127a46fa74657691")
+			wb := grocksdb.NewWriteBatch()
+			defer wb.Destroy()
+			err := d.StoreBcashTokenMetas(wb, map[string]*db.BcashTokenMeta{
+				string(category): {Height: 879461, Txi: txi, Name: "original"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := d.WriteBatch(wb); err != nil {
+				t.Fatal(err)
+			}
+			downloader, err := NewBcmrDownloader(d, &common.Config{BcmrProvider: testBcmrProvider(t)}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			downloader.processMetaQueue([]*db.BcashTokenMetaQueue{{
+				TxId: hexToBytes("c61fadba6c9cf446a7d3a8154dfd98473a0bf80ab324f2b0fa8695704340d577"),
+				Vout: 2, Height: 879461, Txi: 69,
+			}})
+			meta, err := d.GetBcashTokenMeta(category)
+			if err != nil || meta == nil {
+				t.Fatalf("GetBcashTokenMeta: %v, %v", meta, err)
+			}
+			want := "original"
+			if txi == 68 {
+				want = "Bliss"
+			}
+			if meta.Name != want {
+				t.Fatalf("metadata from transaction %d: got %q, want %q", txi, meta.Name, want)
+			}
+		})
 	}
 }
 
