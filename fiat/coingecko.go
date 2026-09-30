@@ -78,6 +78,14 @@ const (
 
 var errCoingeckoHistoricalTokenUpdateInProgress = errors.New("coingecko historical token update already in progress")
 
+// errCoingeckoIncompleteTokenRates marks a current ticker whose native rates are complete but
+// some token batches failed, so the caller can fill the gaps instead of dropping the ticker.
+var errCoingeckoIncompleteTokenRates = errors.New("coingecko current token rates incomplete")
+
+// coingeckoMaxIdsParamLen caps the ids query parameter of a simple/price request. Since
+// 2026-09-29 the api.coingecko.com CloudFront WAF answers 403 to URLs longer than ~3.1k chars.
+const coingeckoMaxIdsParamLen = 2000
+
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
 	tipURL                   string
@@ -654,36 +662,74 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 		if platformIdsToTokens == nil {
 			err = cg.platformIdsAt(context.Background(), cg.tipURL, priorityHigh)
 			if err != nil {
-				return nil, err
+				newTickers.Timestamp = time.Now().UTC()
+				return &newTickers, fmt.Errorf("%w: coins/list failed: %v", errCoingeckoIncompleteTokenRates, err)
 			}
 			cg.cacheMu.Lock()
 			platformIds, platformIdsToTokens = cg.platformIds, cg.platformIdsToTokens
 			cg.cacheMu.Unlock()
 		}
-		newTickers.TokenRates = make(map[string]float32)
-		from := 0
-		const maxRequestLen = 6000
-		requestLen := 0
-		for to := 0; to < len(platformIds); to++ {
-			requestLen += len(platformIds[to]) + 3 // 3 characters for the comma separator %2C
-			if requestLen > maxRequestLen || to+1 >= len(platformIds) {
-				tokenPrices, err := cg.simplePrice(context.Background(), platformIds[from:to+1], []string{cg.platformVsCurrency})
-				if err != nil || tokenPrices == nil {
-					return nil, err
-				}
-				for id, v := range *tokenPrices {
-					t, found := platformIdsToTokens[id]
-					if found {
-						newTickers.TokenRates[t] = v[cg.platformVsCurrency]
-					}
-				}
-				from = to + 1
-				requestLen = 0
-			}
+		var tokenErr error
+		newTickers.TokenRates, tokenErr = cg.currentTokenRates(platformIds, platformIdsToTokens)
+		if tokenErr != nil {
+			newTickers.Timestamp = time.Now().UTC()
+			return &newTickers, tokenErr
 		}
 	}
 	newTickers.Timestamp = time.Now().UTC()
 	return &newTickers, nil
+}
+
+// currentTokenRates prices platformIds in platformVsCurrency, keyed by contract address. A failed
+// batch is skipped so one rejected request cannot discard the rates of all other tokens.
+func (cg *Coingecko) currentTokenRates(platformIds []string, platformIdsToTokens map[string]string) (map[string]float32, error) {
+	rates := make(map[string]float32, len(platformIds))
+	batches := batchIdsByParamLen(platformIds, coingeckoMaxIdsParamLen)
+	failed := 0
+	for i, batch := range batches {
+		prices, err := cg.simplePrice(context.Background(), batch, []string{cg.platformVsCurrency})
+		if err != nil {
+			failed++
+			if isCoingeckoCloudflareBanError(err) {
+				// further requests would only extend the ban
+				failed += len(batches) - i - 1
+				break
+			}
+			continue
+		}
+		for id, v := range *prices {
+			if t, found := platformIdsToTokens[id]; found {
+				rates[t] = v[cg.platformVsCurrency]
+			}
+		}
+	}
+	if failed > 0 {
+		return rates, fmt.Errorf("%w: %d of %d batches failed", errCoingeckoIncompleteTokenRates, failed, len(batches))
+	}
+	return rates, nil
+}
+
+// batchIdsByParamLen splits ids into batches whose comma-joined, URL-encoded length fits maxLen.
+// An id longer than maxLen on its own still gets a batch of its own.
+func batchIdsByParamLen(ids []string, maxLen int) [][]string {
+	var batches [][]string
+	from, paramLen := 0, 0
+	for i, id := range ids {
+		idLen := len(url.QueryEscape(id))
+		if i > from {
+			idLen += len("%2C")
+		}
+		if i > from && paramLen+idLen > maxLen {
+			batches = append(batches, ids[from:i])
+			from, paramLen = i, 0
+			idLen -= len("%2C")
+		}
+		paramLen += idLen
+	}
+	if from < len(ids) {
+		batches = append(batches, ids[from:])
+	}
+	return batches
 }
 
 func (cg *Coingecko) getHighGranularityTickers(days string) (*[]common.CurrencyRatesTicker, error) {

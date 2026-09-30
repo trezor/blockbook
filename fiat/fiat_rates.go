@@ -596,17 +596,42 @@ func (fr *FiatRates) runCurrentLoop() {
 func (fr *FiatRates) updateCurrentTickers() {
 	start := time.Now()
 	currentTicker, err := fr.downloader.CurrentTickers()
-	if err != nil || currentTicker == nil {
+	status := "success"
+	if currentTicker != nil && errors.Is(err, errCoingeckoIncompleteTokenRates) {
+		status = "partial"
+		kept := fr.keepPreviousTokenRates(currentTicker)
+		glog.Warningf("FiatRatesDownloader: CurrentTickers %v, kept previous rates of %d tokens", err, kept)
+	} else if err != nil || currentTicker == nil {
 		fr.observeUpdateDuration("current_tickers", "error", start)
 		logFiatRatesDownloaderError("FiatRatesDownloader: CurrentTickers error ", err)
 		return
 	}
 	fr.setCurrentTicker(currentTicker)
-	fr.observeUpdateDuration("current_tickers", "success", start)
+	fr.observeUpdateDuration("current_tickers", status, start)
 	glog.Info("FiatRatesDownloader: CurrentTickers updated")
 	if fr.callbackOnNewTicker != nil {
 		fr.callbackOnNewTicker(currentTicker)
 	}
+}
+
+// keepPreviousTokenRates copies into t the token rates of the current ticker that t lacks, so a
+// failed token batch serves the last known rates instead of dropping those tokens.
+func (fr *FiatRates) keepPreviousTokenRates(t *common.CurrencyRatesTicker) int {
+	prev := fr.GetCurrentTicker("", "")
+	if prev == nil || len(prev.TokenRates) == 0 {
+		return 0
+	}
+	if t.TokenRates == nil {
+		t.TokenRates = make(map[string]float32, len(prev.TokenRates))
+	}
+	kept := 0
+	for token, rate := range prev.TokenRates {
+		if _, found := t.TokenRates[token]; !found {
+			t.TokenRates[token] = rate
+			kept++
+		}
+	}
+	return kept
 }
 
 func (fr *FiatRates) updateHourlyTickersIfDue() {
