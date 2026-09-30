@@ -1032,6 +1032,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				if err != nil {
 					return err
 				}
+				tao.BcashToken = bcashToken
 				addrDesc, err = d.chainParser.GetAddrDescFromVout(output)
 			} else {
 				addrDesc, err = d.chainParser.GetAddrDescFromVout(output)
@@ -1051,7 +1052,6 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				gf.AddAddrDesc(addrDesc, tx)
 			}
 			tao.AddrDesc = addrDesc
-			tao.BcashToken = bcashToken
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
 				strAddrDesc := string(addrDesc)
 				balance, e := balances[strAddrDesc]

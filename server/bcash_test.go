@@ -54,6 +54,20 @@ func bcashWebsocketRequest(t *testing.T, conn *websocket.Conn, method string, pa
 func assertBcashTransaction(t *testing.T, fixture dbtestdata.BcashTxFixture, tx *api.Tx) {
 	t.Helper()
 	require.Equal(t, fixture.Txid, tx.Txid)
+	for i, want := range fixture.Inputs {
+		require.Equal(t, []string{want.Address}, tx.Vin[i].Addresses)
+		require.Equal(t, want.Value, tx.Vin[i].ValueSat.String())
+		wantToken, err := json.Marshal(want.Token)
+		require.NoError(t, err)
+		gotToken, err := json.Marshal(tx.Vin[i].BcashToken)
+		require.NoError(t, err)
+		require.JSONEq(t, string(wantToken), string(gotToken))
+		require.NotNil(t, tx.BcashSpecific)
+		require.Len(t, tx.BcashSpecific.TokenVins, len(fixture.Inputs))
+		gotToken, err = json.Marshal(tx.BcashSpecific.TokenVins[i])
+		require.NoError(t, err)
+		require.JSONEq(t, string(wantToken), string(gotToken))
+	}
 	require.Len(t, tx.Vout, len(fixture.Outputs))
 	for i, want := range fixture.Outputs {
 		require.Equal(t, []string{want.Address}, tx.Vout[i].Addresses)
@@ -141,6 +155,23 @@ func TestBcashIndexingAPIs(t *testing.T) {
 				require.NoError(t, err)
 				defer conn.Close()
 				for _, fixture := range selected {
+					stored, err := d.GetTxAddresses(fixture.Txid)
+					require.NoError(t, err)
+					require.NotNil(t, stored)
+					for i, want := range fixture.Outputs {
+						require.Equal(t, want.Descriptor, hex.EncodeToString(stored.Outputs[i].AddrDesc))
+						wantToken, err := json.Marshal(want.Token)
+						require.NoError(t, err)
+						gotToken, err := json.Marshal(stored.Outputs[i].BcashToken)
+						require.NoError(t, err)
+						require.JSONEq(t, string(wantToken), string(gotToken), "%s output %d", fixture.Name, i)
+						output, err := d.GetTxAddressesOutput(fixture.Txid, uint32(i))
+						require.NoError(t, err)
+						require.Equal(t, &stored.Outputs[i], output)
+					}
+					for i, want := range fixture.Inputs {
+						require.Equal(t, want.Token, stored.Inputs[i].BcashToken)
+					}
 					var rest, ws api.Tx
 					mustGetJSON(t, ts.URL+"/api/v2/tx/"+fixture.Txid, http.StatusOK, &rest)
 					assertBcashTransaction(t, fixture, &rest)

@@ -19,6 +19,7 @@ type BcashTxFixture struct {
 	Chain   string               `json:"chain"`
 	Txid    string               `json:"txid"`
 	Hex     string               `json:"hex"`
+	Inputs  []BcashOutputFixture `json:"inputs,omitempty"`
 	Outputs []BcashOutputFixture `json:"outputs"`
 }
 
