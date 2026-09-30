@@ -1,10 +1,14 @@
 name: Export Repository Variables
-description: Export all repository/environment variables from a JSON map into GITHUB_ENV.
+description: Export repository variables and the provider RPC URL secret into GITHUB_ENV.
 
 inputs:
   vars_json:
     description: JSON object map of repository/environment variables.
     required: true
+  rpc_urls:
+    description: KEY=VALUE lines of BB_DEV_RPC_URL_* / BB_PROD_RPC_URL_* (pass secrets.BB_RPC_URLS).
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -13,6 +17,7 @@ runs:
       shell: bash
       env:
         VARS_JSON: ${{ inputs.vars_json }}
+        RPC_URLS: ${{ inputs.rpc_urls }}
       run: |
         python3 - <<'PY'
         import json
@@ -30,20 +35,33 @@ runs:
                 for line in prefixes_file
                 if line.strip() and not line.strip().startswith("#")
             )
+        # Provider URLs embed auth tokens and Actions variables are printed unmasked in public logs.
+        secret_prefixes = ("BB_DEV_RPC_URL_", "BB_PROD_RPC_URL_")
 
         def write_env_var(env_file, key, value):
             delimiter = f"__{uuid.uuid4().hex}__"
             env_file.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
 
+        def normalize(key):
+            for prefix in alias_prefixes:
+                if key.startswith(prefix):
+                    alias = key[len(prefix):]
+                    # Blockbook env lookups use lowercase coin aliases from configs/coins.
+                    return prefix + alias.lower().replace("-", "_")
+            return key
+
+        leaked = sorted(key for key in vars_map if key.startswith(secret_prefixes))
+        if leaked:
+            raise SystemExit(f"::error::move {', '.join(leaked)} from Actions variables to the BB_RPC_URLS secret")
+
         with open(env_path, "a", encoding="utf-8") as env_file:
             for key, value in vars_map.items():
-                text = "" if value is None else str(value)
-                normalized = key
-                for prefix in alias_prefixes:
-                    if key.startswith(prefix):
-                        alias = key[len(prefix):]
-                        # Blockbook env lookups use lowercase coin aliases from configs/coins.
-                        normalized = prefix + alias.lower().replace("-", "_")
-                        break
-                write_env_var(env_file, normalized, text)
+                write_env_var(env_file, normalize(key), "" if value is None else str(value))
+            for line in os.environ.get("RPC_URLS", "").splitlines():
+                key, sep, value = line.strip().partition("=")
+                if not sep or not value or not key.startswith(secret_prefixes):
+                    continue
+                # The runner masks whole secret lines; the bare URL also shows up in later env headers and test errors.
+                print(f"::add-mask::{value}", flush=True)
+                write_env_var(env_file, normalize(key), value)
         PY

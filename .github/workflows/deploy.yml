@@ -134,6 +134,7 @@ jobs:
         uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
+          rpc_urls: ${{ secrets.BB_RPC_URLS }}
 
       - name: Build packages
         env:
@@ -166,6 +167,7 @@ jobs:
         uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
+          rpc_urls: ${{ secrets.BB_RPC_URLS }}
 
       - name: Materialize blockbook runtime env
         env:
@@ -211,6 +213,7 @@ jobs:
         uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
+          rpc_urls: ${{ secrets.BB_RPC_URLS }}
 
       - name: Wait for Blockbook sync
         env:
@@ -238,6 +241,7 @@ jobs:
         uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
+          rpc_urls: ${{ secrets.BB_RPC_URLS }}
 
       - name: Run Blockbook connectivity tests
         env:
