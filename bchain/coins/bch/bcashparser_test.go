@@ -245,7 +245,7 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 		{
 			name:       "empty",
 			parser:     mainParserCashAddr,
-			addresses:  []string{},
+			addresses:  []string{"script-"},
 			searchable: false,
 			hex:        "",
 			wantErr:    false,

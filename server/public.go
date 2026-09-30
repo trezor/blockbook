@@ -971,7 +971,7 @@ func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
 			rv.WriteString(" nft")
 			rv.WriteString(`</div>`)
 
-			commitmentName := html.EscapeString(commitmentHex)
+			commitmentName := commitmentHex
 			if token.Nft.Name != "" {
 				commitmentName = html.EscapeString(token.Nft.Name)
 			} else if commitmentHex == "" {
@@ -984,12 +984,12 @@ func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
 			}
 
 			rv.WriteString(`<div class="flex flex-1 w-half float-align-right justify-end copyable" cc="`)
-			rv.WriteString(html.EscapeString(commitmentHex))
+			rv.WriteString(commitmentHex)
 			rv.WriteString(`" title="NFT Commitment">`)
 			if tokenIconImg != "" {
 				rv.WriteString(tokenIconImg)
 			}
-			rv.WriteString(fmt.Sprintf(`<a href="/nft/%s/%s">%s</a>`, html.EscapeString(categoryHex), html.EscapeString(commitmentHex), commitmentName))
+			rv.WriteString(fmt.Sprintf(`<a href="/nft/%s/%s">%s</a>`, categoryHex, commitmentHex, commitmentName))
 			rv.WriteString(`</div>`)
 
 			rv.WriteString(`</div>`)

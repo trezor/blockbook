@@ -103,7 +103,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 		}
 	}
 	switch chain {
-	case "test":
+	case "test", "chip":
 		return &TestNetParams
 	case "regtest":
 		return &RegtestParams
@@ -157,9 +157,6 @@ func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid script address: %w", err)
 		}
-		if len(script) == 0 {
-			return nil, fmt.Errorf("invalid script address: empty script")
-		}
 		return script, nil
 	}
 	if isCashAddr(address) {
@@ -205,9 +202,6 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 	if err != nil {
 		return nil, false, err
 	}
-	if len(script) == 0 {
-		return []string{}, false, nil
-	}
 
 	// convert possible P2PK script to P2PK, which bchutil can process
 	script, err = txscript.ConvertP2PKtoP2PKH(p.Params.Base58CksumHasher, script)
@@ -223,7 +217,7 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 			if or != "" {
 				return []string{or}, false, nil
 			}
-			return []string{scriptAddressPrefix + hex.EncodeToString(script)}, true, nil
+			return []string{scriptAddressPrefix + hex.EncodeToString(script)}, len(script) > 0, nil
 		}
 		return nil, false, err
 	}
@@ -316,7 +310,7 @@ func UnpackTokenData(buf []byte) (*bchain.BcashToken, int, error) {
 			if commitmentLength == 0 {
 				return nil, 0, fmt.Errorf("Invalid token prefix: if encoded, commitment length must be greater than 0.")
 			}
-			if br.Len() < int(commitmentLength) {
+			if commitmentLength > uint64(br.Len()) {
 				return nil, 0, fmt.Errorf("Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: insufficient bytes. Required bytes: %d, remaining bytes: %d", commitmentLength, br.Len())
 			}
 		}

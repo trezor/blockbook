@@ -25,7 +25,9 @@
 
 **Database structure:**
 
-The database structure described here is of Blockbook version **0.5.0** (internal data format version 8).
+The database structure described here is of Blockbook version **0.5.0** (internal data format version 7).
+
+BCH uses version 8 for `addressBalance` and `txAddresses` to store CashToken data. Existing BCH databases require a resync; other coins retain version 7.
 
 The database structure for **Bitcoin type** and **Ethereum type** coins is different. Column families used for both types:
 
@@ -48,7 +50,7 @@ Column families used only by **Ethereum type** coins:
   Most important internal state values are:
 
   - coin - which coin is indexed in DB
-  - data format version - currently 8
+  - data format version - currently 7 (8 for BCH `addressBalance` and `txAddresses`)
   - dbState - closed, open, inconsistent
 
   Blockbook is checking on startup these values and does not allow to run against wrong coin, data format version and in inconsistent state. The database must be recreated if the internal state does not match.

@@ -1249,6 +1249,10 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 	if feesSat.Sign() == -1 {
 		feesSat.SetUint64(0)
 	}
+	bcashSpecific, err := w.bcashPostProcessApiTx(txid, &vins, &vouts)
+	if err != nil {
+		glog.Errorf("bcashPostProcessApiTx error %v, tx %v", err, txid)
+	}
 	r := &Tx{
 		Blockhash:     bi.Hash,
 		Blockheight:   int(ta.Height),
@@ -1260,6 +1264,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		ValueOutSat:   (*Amount)(&valOutSat),
 		Vin:           vins,
 		Vout:          vouts,
+		BcashSpecific: bcashSpecific,
 	}
 	if w.chainParser.SupportsVSize() {
 		r.VSize = int(ta.VSize)

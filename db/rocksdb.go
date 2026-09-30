@@ -24,7 +24,7 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
-const dbVersion = 8
+const dbVersion = 7
 
 const packedHeightBytes = 4
 const maxAddrDescLen = 1024
@@ -1801,6 +1801,10 @@ func (d *RocksDB) packedTxInputLen(buf []byte) int {
 		}
 		pos += al                // addrDesc
 		pos += int(buf[pos]) + 1 // value (1-byte length prefix + bytes)
+		if d.is.IsBCH() {
+			length, n := unpackVarint(buf[pos:])
+			pos += n + length
+		}
 		if !coinbase {
 			pos += d.chainParser.PackedTxidLen() // prev txid
 			_, n := unpackVaruint(buf[pos:])     // prev vout
@@ -1811,6 +1815,10 @@ func (d *RocksDB) packedTxInputLen(buf []byte) int {
 	al, pos := unpackVaruint(buf)
 	pos += int(al)           // addrDesc
 	pos += int(buf[pos]) + 1 // value
+	if d.is.IsBCH() {
+		length, n := unpackVarint(buf[pos:])
+		pos += n + length
+	}
 	return pos
 }
 
@@ -1824,6 +1832,10 @@ func (d *RocksDB) packedTxOutputLen(buf []byte) int {
 	}
 	pos += al                // addrDesc
 	pos += int(buf[pos]) + 1 // value
+	if d.is.IsBCH() {
+		length, n := unpackVarint(buf[pos:])
+		pos += n + length
+	}
 	if d.extendedIndex && spent {
 		pos += d.chainParser.PackedTxidLen() // spent txid
 		_, n := unpackVaruint(buf[pos:])     // spent index
@@ -2550,22 +2562,25 @@ func (d *RocksDB) checkColumns(is *common.InternalState) ([]common.InternalState
 	for i := 0; i < len(nc); i++ {
 		nc[i].Name = cfNames[i]
 		nc[i].Version = dbVersion
+		if is.IsBCH() && (nc[i].Name == "addressBalance" || nc[i].Name == "txAddresses") {
+			nc[i].Version = 8
+		}
 		for j := 0; j < len(sc); j++ {
 			if sc[j].Name == nc[i].Name {
 				// check the version of the column, if it does not match, the db is not compatible
-				if sc[j].Version != dbVersion {
+				if sc[j].Version != nc[i].Version {
 					if sc[j].Version == 5 && dbVersion == 6 {
 						err := d.migrateVersion5To6(&sc[j], &nc[i])
 						if err != nil {
 							return nil, err
 						}
-					} else if sc[j].Version == 6 && dbVersion == 7 {
+					} else if sc[j].Version == 6 && nc[i].Version == 7 {
 						err := d.migrateVersion6To7(&sc[j], &nc[i])
 						if err != nil {
 							return nil, err
 						}
 					} else {
-						return nil, errors.Errorf("DB version %v of column '%v' does not match the required version %v. DB is not compatible.", sc[j].Version, sc[j].Name, dbVersion)
+						return nil, errors.Errorf("DB version %v of column '%v' does not match the required version %v. DB is not compatible.", sc[j].Version, sc[j].Name, nc[i].Version)
 					}
 				}
 				nc[i].Rows = sc[j].Rows
@@ -2623,6 +2638,7 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 			return nil, errors.Errorf("BlockFilterUseZeroedKey does not match. DB BlockFilterUseZeroedKey %v, config BlockFilterUseZeroedKey  %v", is.BlockFilterUseZeroedKey, config.BlockFilterUseZeroedKey)
 		}
 	}
+	is.CoinShortcut = config.CoinShortcut
 	nc, err := d.checkColumns(is)
 	if err != nil {
 		return nil, err
@@ -2647,7 +2663,6 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	is.LastMempoolSync = t
 	is.SyncMode = false
 
-	is.CoinShortcut = config.CoinShortcut
 	if config.CoinLabel == "" {
 		is.CoinLabel = config.CoinName
 	} else {
