@@ -124,6 +124,7 @@ func TestBcashIndexingAPIs(t *testing.T) {
 				is, err = d.LoadInternalState(config)
 				require.NoError(t, err)
 				d.SetInternalState(is)
+				is.FinishedSync(uint32(len(selected)))
 				mempool, err := chain.CreateMempool(chain)
 				require.NoError(t, err)
 				cache, err := db.NewTxCache(d, chain, metrics, is, true)
