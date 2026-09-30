@@ -112,6 +112,7 @@ func TestBcashIndexingAPIs(t *testing.T) {
 				require.NoError(t, err)
 				d.SetInternalState(is)
 				selected := make(map[string]dbtestdata.BcashTxFixture)
+				spent := make(map[bchain.Outpoint]bool)
 				for _, fixture := range fixtures {
 					if fixture.Chain != network {
 						continue
@@ -120,6 +121,9 @@ func TestBcashIndexingAPIs(t *testing.T) {
 					require.NoError(t, err)
 					tx, err := parser.ParseTx(raw)
 					require.NoError(t, err)
+					for _, input := range tx.Vin {
+						spent[bchain.Outpoint{Txid: input.Txid, Vout: int32(input.Vout)}] = true
+					}
 					tx.Confirmations = 1
 					tx.BlockHeight = uint32(len(selected) + 1)
 					tx.Blocktime = 1700000000 + int64(tx.BlockHeight)
@@ -197,9 +201,20 @@ func TestBcashIndexingAPIs(t *testing.T) {
 						mustGetJSON(t, ts.URL+"/api/v2/utxo/"+address, http.StatusOK, &restUtxos)
 						bcashWebsocketRequest(t, conn, "getAccountUtxo", map[string]string{"descriptor": address}, &wsUtxos)
 						require.Equal(t, restUtxos, wsUtxos)
-						require.NotEmpty(t, restUtxos)
+						expected := make(map[bchain.Outpoint]dbtestdata.BcashOutputFixture)
+						for txid, fixture := range selected {
+							for i, output := range fixture.Outputs {
+								outpoint := bchain.Outpoint{Txid: txid, Vout: int32(i)}
+								if output.Address == address && !spent[outpoint] {
+									expected[outpoint] = output
+								}
+							}
+						}
 						for _, utxo := range restUtxos {
-							want := selected[utxo.Txid].Outputs[utxo.Vout]
+							outpoint := bchain.Outpoint{Txid: utxo.Txid, Vout: utxo.Vout}
+							want, ok := expected[outpoint]
+							require.True(t, ok, "unexpected or duplicate UTXO %v", outpoint)
+							delete(expected, outpoint)
 							require.Equal(t, want.Value, utxo.AmountSat.String())
 							gotToken, err := json.Marshal(utxo.BcashToken)
 							require.NoError(t, err)
@@ -207,6 +222,7 @@ func TestBcashIndexingAPIs(t *testing.T) {
 							require.NoError(t, err)
 							require.JSONEq(t, string(wantToken), string(gotToken))
 						}
+						require.Empty(t, expected, "missing UTXOs for %s", address)
 					}
 				}
 			})

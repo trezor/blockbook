@@ -410,5 +410,59 @@
         }
       }
     ]
+  },
+  {
+    "name": "mainnet-emulator-bch-funding",
+    "chain": "main",
+    "source": "https://rest1.biggestfan.net/v2/rawtransactions/getRawTransaction/5e6ec34c9d7a3d50593f4102e8086812bd2d1ef01ea5d174f36e6a545cac6824?verbose=true",
+    "txid": "5e6ec34c9d7a3d50593f4102e8086812bd2d1ef01ea5d174f36e6a545cac6824",
+    "hex": "02000000020abf6084735c6717696ef949298bfab970de9892464c1051c776aa3d1586e31507000000644148a473fd51a7dc1a83880b0b79ca8759112320afcb4de1eca93d581255e5d672d718064ce09e7e7ff151a5f4cc985e780930199d3893aaba94243390ad1e0d4d412103dc946d987394feaa60efff3ba699de19134bbec57552f1722242988d1423db1500000000fb83b8dbfd1731519f54a7ca755b15c56d4149b4263227106aa6d08a93441607090000006441adee2d8d6136250c1519320177b57b8fb8701a9f7340124057e941e4c030dc09dc72b88d45dc11675e49de8f195b6a70dfe1eb7a35ef8380fdacda9324c11247412103dc946d987394feaa60efff3ba699de19134bbec57552f1722242988d1423db150000000002f7620c00000000001976a914380718151e6ea08642ad7acc8593952ef8d1bdca88ac7ba10400000000001976a914d88fe8253456f2ba01b8160f7be7f22b2430a2fc88ac00000000",
+    "outputs": [
+      {
+        "descriptor": "76a914380718151e6ea08642ad7acc8593952ef8d1bdca88ac",
+        "address": "bitcoincash:qquqwxq4reh2ppjz44avepvnj5h035daeg40mulx4p",
+        "value": "811767",
+        "tokenData": null
+      },
+      {
+        "descriptor": "76a914d88fe8253456f2ba01b8160f7be7f22b2430a2fc88ac",
+        "address": "bitcoincash:qrvgl6p9x3t09wsphqtq77l87g4jgv9zls204rzn6z",
+        "value": "303483",
+        "tokenData": null
+      }
+    ]
+  },
+  {
+    "name": "mainnet-emulator-token-funding",
+    "chain": "main",
+    "source": "https://rest1.biggestfan.net/v2/rawtransactions/getRawTransaction/853ba07cba16522a2160764ecd5c07053f9f396fb8b59cac16536dadd0aba842?verbose=true",
+    "txid": "853ba07cba16522a2160764ecd5c07053f9f396fb8b59cac16536dadd0aba842",
+    "hex": "0200000002051e8e8832c7c133957aa917cf84e5b3a20c4ef79eaaefa1419d20e5d7b9d5bc010000006441938777f535868e1ec11ede1e37c0a0c60ce894b4060154eb524387cb76d74afe4f816a8f588445d3e612cc614fb732b4e070830bff5bd4a3da13b62c49071b7c4121039d06875e2d527600a16fa81c4b20e7a7625864043d6934268adaa50a88f4770c000000002468ac5c546a6ef374d1a51ef01e2dbd126808e802413f59503d7a9d4cc36e5e010000006441335a7c0e27ce61ce2ebf3592c2efd4dec805497f2234d15ae5a928750d7281116b75bbebe1f856da7e65b51547224854ac573d1facfa9f4e20e46e6911700e554121030d228a8b7b11cce4868e4c0f8b30a5c83af18a6e6b39a24b8f641e6ceea876130000000003e80300000000000040ef0d2017bb0af19b97feea08c3b19fbef72893118f1ad6c8dbf19999e4120d98de10fe0094357776a914380718151e6ea08642ad7acc8593952ef8d1bdca88ace80300000000000044ef0d2017bb0af19b97feea08c3b19fbef72893118f1ad6c8dbf19999e4120d98de10ff80a4ca721b00000076a914c40a24bf5b3cfe561cf36afea1b59fe61383e80688ac809b0400000000001976a914c40a24bf5b3cfe561cf36afea1b59fe61383e80688ac00000000",
+    "outputs": [
+      {
+        "descriptor": "76a914380718151e6ea08642ad7acc8593952ef8d1bdca88ac",
+        "address": "bitcoincash:qquqwxq4reh2ppjz44avepvnj5h035daeg40mulx4p",
+        "value": "1000",
+        "tokenData": {
+          "category": "de980d12e49999f1dbc8d61a8f119328f7be9fb1c308eafe979bf10abb17200d",
+          "amount": "2000000000"
+        }
+      },
+      {
+        "descriptor": "76a914c40a24bf5b3cfe561cf36afea1b59fe61383e80688ac",
+        "address": "bitcoincash:qrzq5f9ltv70u4su7d40agd4nlnp8qlgqcl07pguta",
+        "value": "1000",
+        "tokenData": {
+          "category": "de980d12e49999f1dbc8d61a8f119328f7be9fb1c308eafe979bf10abb17200d",
+          "amount": "117890000000"
+        }
+      },
+      {
+        "descriptor": "76a914c40a24bf5b3cfe561cf36afea1b59fe61383e80688ac",
+        "address": "bitcoincash:qrzq5f9ltv70u4su7d40agd4nlnp8qlgqcl07pguta",
+        "value": "301952",
+        "tokenData": null
+      }
+    ]
   }
 ]
