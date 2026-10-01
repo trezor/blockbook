@@ -61,82 +61,142 @@ func TestBatchIdsByParamLen_BatchesStayWithinLimit(t *testing.T) {
 	}
 }
 
-// newCurrentTickersTestCoingecko serves a token platform of n ids like the api.coingecko.com
-// CloudFront edge: a query string over coingeckoMaxQueryLen is rejected with 403, and so is the
-// batch containing blockedID. maxQueryLen records the longest token-price query seen.
-func newCurrentTickersTestCoingecko(t *testing.T, n int, blockedID string, coinsListStatus int, maxQueryLen *int) (*Coingecko, map[string]float32) {
-	t.Helper()
-	var coins []string
-	wantTokenRates := make(map[string]float32)
-	for i := 0; i < n; i++ {
-		id := fmt.Sprintf("token-%04d", i)
-		contract := fmt.Sprintf("0x%040x", i)
-		coins = append(coins, fmt.Sprintf(`{"id":%q,"symbol":"t","name":"t","platforms":{"ethereum":%q}}`, id, contract))
-		wantTokenRates[contract] = float32(i + 1)
+// stubCoingecko serves a token platform of n ids like the api.coingecko.com CloudFront edge: a
+// query string over coingeckoMaxQueryLen is rejected with 403. The batch containing blockedID is
+// rejected with blockedBody (CloudFront 403 by default) the first blockedTimes times (-1: always).
+type stubCoingecko struct {
+	n               int
+	blockedID       string
+	blockedTimes    int
+	blockedBody     string
+	coinsListStatus int
+
+	tokenRequests int
+	maxQueryLen   int
+	firstTokenAt  time.Time
+}
+
+func (s *stubCoingecko) roundTrip(r *http.Request) (*http.Response, error) {
+	if len(r.URL.RawQuery) > coingeckoMaxQueryLen {
+		return stubHTTPResponse(http.StatusForbidden, cloudfrontBlockedBody), nil
 	}
-	coinsList := "[" + strings.Join(coins, ",") + "]"
-	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if len(r.URL.RawQuery) > coingeckoMaxQueryLen {
-			return stubHTTPResponse(http.StatusForbidden, cloudfrontBlockedBody), nil
+	switch r.URL.Path {
+	case "/simple/supported_vs_currencies":
+		return stubHTTPResponse(http.StatusOK, `["usd","eur"]`), nil
+	case "/coins/list":
+		if s.coinsListStatus != 0 && s.coinsListStatus != http.StatusOK {
+			return stubHTTPResponse(s.coinsListStatus, cloudfrontBlockedBody), nil
 		}
-		switch r.URL.Path {
-		case "/simple/supported_vs_currencies":
-			return stubHTTPResponse(http.StatusOK, `["usd","eur"]`), nil
-		case "/coins/list":
-			if coinsListStatus != http.StatusOK {
-				return stubHTTPResponse(coinsListStatus, cloudfrontBlockedBody), nil
-			}
-			return stubHTTPResponse(http.StatusOK, coinsList), nil
-		case "/simple/price":
-			ids := strings.Split(r.URL.Query().Get("ids"), ",")
-			if ids[0] == "ethereum" {
-				return stubHTTPResponse(http.StatusOK, `{"ethereum":{"usd":2000,"eur":1800}}`), nil
-			}
-			if maxQueryLen != nil && len(r.URL.RawQuery) > *maxQueryLen {
-				*maxQueryLen = len(r.URL.RawQuery)
-			}
-			parts := make([]string, 0, len(ids))
-			for _, id := range ids {
-				if id == blockedID {
-					return stubHTTPResponse(http.StatusForbidden, cloudfrontBlockedBody), nil
+		coins := make([]string, 0, s.n)
+		for i := 0; i < s.n; i++ {
+			coins = append(coins, fmt.Sprintf(`{"id":"token-%04d","symbol":"t","name":"t","platforms":{"ethereum":"0x%040x"}}`, i, i))
+		}
+		return stubHTTPResponse(http.StatusOK, "["+strings.Join(coins, ",")+"]"), nil
+	case "/simple/price":
+		ids := strings.Split(r.URL.Query().Get("ids"), ",")
+		if ids[0] == "ethereum" {
+			return stubHTTPResponse(http.StatusOK, `{"ethereum":{"usd":2000,"eur":1800}}`), nil
+		}
+		if s.tokenRequests == 0 {
+			s.firstTokenAt = time.Now().UTC()
+		}
+		s.tokenRequests++
+		if len(r.URL.RawQuery) > s.maxQueryLen {
+			s.maxQueryLen = len(r.URL.RawQuery)
+		}
+		parts := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if id == s.blockedID && s.blockedTimes != 0 {
+				s.blockedTimes--
+				body := s.blockedBody
+				if body == "" {
+					body = cloudfrontBlockedBody
 				}
-				var i int
-				fmt.Sscanf(id, "token-%04d", &i)
-				parts = append(parts, fmt.Sprintf(`%q:{"eth":%d}`, id, i+1))
+				return stubHTTPResponse(http.StatusForbidden, body), nil
 			}
-			return stubHTTPResponse(http.StatusOK, "{"+strings.Join(parts, ",")+"}"), nil
+			var i int
+			fmt.Sscanf(id, "token-%04d", &i)
+			parts = append(parts, fmt.Sprintf(`%q:{"eth":%d}`, id, i+1))
 		}
-		return stubHTTPResponse(http.StatusNotFound, "unexpected path "+r.URL.Path), nil
-	})
+		return stubHTTPResponse(http.StatusOK, "{"+strings.Join(parts, ",")+"}"), nil
+	}
+	return stubHTTPResponse(http.StatusNotFound, "unexpected path "+r.URL.Path), nil
+}
+
+func (s *stubCoingecko) coingecko() *Coingecko {
 	return &Coingecko{
 		coin:               "ethereum",
 		platformIdentifier: "ethereum",
 		platformVsCurrency: "eth",
 		tipURL:             "http://coingecko.test",
-		httpClient:         &http.Client{Transport: transport},
+		httpClient:         &http.Client{Transport: roundTripFunc(s.roundTrip)},
 		plan:               coingeckoPlanFree,
-	}, wantTokenRates
+	}
+}
+
+func stubTokenRates(n int) map[string]float32 {
+	rates := make(map[string]float32, n)
+	for i := 0; i < n; i++ {
+		rates[fmt.Sprintf("0x%040x", i)] = float32(i + 1)
+	}
+	return rates
+}
+
+func tokenBatchCount(n int) int {
+	ids := make([]string, n)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("token-%04d", i)
+	}
+	return len(batchIdsByParamLen(ids, tokenPriceIdsBudget("eth")))
 }
 
 func TestCurrentTickers_TokenBatchesFitUnderQueryLimit(t *testing.T) {
 	// 1000 ids of 10 chars need several batches; a single oversized one would be rejected
-	maxQueryLen := 0
-	cg, wantTokenRates := newCurrentTickersTestCoingecko(t, 1000, "", http.StatusOK, &maxQueryLen)
-	ticker, err := cg.CurrentTickers()
+	stub := &stubCoingecko{n: 1000}
+	ticker, err := stub.coingecko().CurrentTickers()
 	if err != nil {
 		t.Fatalf("CurrentTickers() error = %v", err)
 	}
-	if limit := coingeckoMaxQueryLen - coingeckoQueryLenMargin; maxQueryLen > limit || maxQueryLen < limit-20 {
-		t.Fatalf("longest token-price query is %d chars, want just under %d", maxQueryLen, limit)
+	if limit := coingeckoMaxQueryLen - coingeckoQueryLenMargin; stub.maxQueryLen > limit || stub.maxQueryLen < limit-20 {
+		t.Fatalf("longest token-price query is %d chars, want just under %d", stub.maxQueryLen, limit)
 	}
-	if !reflect.DeepEqual(ticker.TokenRates, wantTokenRates) {
-		t.Fatalf("got %d token rates, want %d", len(ticker.TokenRates), len(wantTokenRates))
+	if !reflect.DeepEqual(ticker.TokenRates, stubTokenRates(1000)) {
+		t.Fatalf("got %d token rates, want %d", len(ticker.TokenRates), 1000)
+	}
+	if want := tokenBatchCount(1000); stub.tokenRequests != want || want < 2 {
+		t.Fatalf("token requests = %d, want %d (>= 2)", stub.tokenRequests, want)
+	}
+}
+
+func TestCurrentTickers_TimestampIsNativeFetchTime(t *testing.T) {
+	stub := &stubCoingecko{n: 1000}
+	before := time.Now().UTC()
+	ticker, err := stub.coingecko().CurrentTickers()
+	if err != nil {
+		t.Fatalf("CurrentTickers() error = %v", err)
+	}
+	if ticker.Timestamp.Before(before) || ticker.Timestamp.After(stub.firstTokenAt) {
+		t.Fatalf("Timestamp = %v, want between start %v and the first token request %v", ticker.Timestamp, before, stub.firstTokenAt)
+	}
+}
+
+func TestCurrentTickers_TransientBatchFailureIsRetried(t *testing.T) {
+	stub := &stubCoingecko{n: 1000, blockedID: "token-0000", blockedTimes: 1}
+	ticker, err := stub.coingecko().CurrentTickers()
+	if err != nil {
+		t.Fatalf("CurrentTickers() error = %v", err)
+	}
+	if !reflect.DeepEqual(ticker.TokenRates, stubTokenRates(1000)) {
+		t.Fatalf("got %d token rates, want all %d after the retry", len(ticker.TokenRates), 1000)
+	}
+	if want := tokenBatchCount(1000) + 1; stub.tokenRequests != want {
+		t.Fatalf("token requests = %d, want %d (one retry)", stub.tokenRequests, want)
 	}
 }
 
 func TestCurrentTickers_FailedTokenBatchKeepsNativeAndOtherTokenRates(t *testing.T) {
-	cg, allTokenRates := newCurrentTickersTestCoingecko(t, 1000, "token-0000", http.StatusOK, nil)
-	ticker, err := cg.CurrentTickers()
+	stub := &stubCoingecko{n: 1000, blockedID: "token-0000", blockedTimes: -1}
+	ticker, err := stub.coingecko().CurrentTickers()
 	if !errors.Is(err, errCoingeckoIncompleteTokenRates) {
 		t.Fatalf("CurrentTickers() error = %v, want errCoingeckoIncompleteTokenRates", err)
 	}
@@ -152,24 +212,51 @@ func TestCurrentTickers_FailedTokenBatchKeepsNativeAndOtherTokenRates(t *testing
 	if _, found := ticker.TokenRates[fmt.Sprintf("0x%040x", 0)]; found {
 		t.Fatal("token from the failed batch must be missing")
 	}
-	if len(ticker.TokenRates) == 0 || len(ticker.TokenRates) >= len(allTokenRates) {
-		t.Fatalf("got %d token rates, want only those of the successful batches (< %d)", len(ticker.TokenRates), len(allTokenRates))
+	all := stubTokenRates(1000)
+	if len(ticker.TokenRates) == 0 || len(ticker.TokenRates) >= len(all) {
+		t.Fatalf("got %d token rates, want only those of the successful batches (< %d)", len(ticker.TokenRates), len(all))
 	}
 	for contract, rate := range ticker.TokenRates {
-		if allTokenRates[contract] != rate {
-			t.Fatalf("TokenRates[%s] = %v, want %v", contract, rate, allTokenRates[contract])
+		if all[contract] != rate {
+			t.Fatalf("TokenRates[%s] = %v, want %v", contract, rate, all[contract])
 		}
+	}
+	if want := tokenBatchCount(1000) + 1; stub.tokenRequests != want {
+		t.Fatalf("token requests = %d, want %d (failed batch retried exactly once)", stub.tokenRequests, want)
+	}
+}
+
+func TestCurrentTickers_CloudflareBanStopsWithoutRetry(t *testing.T) {
+	// the ban hits the second batch: the first one is kept, the rest is neither requested nor retried
+	ids := make([]string, 1000)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("token-%04d", i)
+	}
+	batches := batchIdsByParamLen(ids, tokenPriceIdsBudget("eth"))
+	stub := &stubCoingecko{n: 1000, blockedID: batches[1][0], blockedTimes: -1, blockedBody: cloudflareBanBody}
+	ticker, err := stub.coingecko().CurrentTickers()
+	if !errors.Is(err, errCoingeckoIncompleteTokenRates) {
+		t.Fatalf("CurrentTickers() error = %v, want errCoingeckoIncompleteTokenRates", err)
+	}
+	if want := fmt.Sprintf("%d of %d batches failed", len(batches)-1, len(batches)); !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want it to report %q", err, want)
+	}
+	if stub.tokenRequests != 2 {
+		t.Fatalf("token requests = %d, want 2 (stop at the ban, no retry)", stub.tokenRequests)
+	}
+	if len(ticker.TokenRates) != len(batches[0]) || ticker.Rates["usd"] != 2000 {
+		t.Fatalf("got %d token rates and usd %v, want %d tokens of the first batch and native rates", len(ticker.TokenRates), ticker.Rates["usd"], len(batches[0]))
 	}
 }
 
 func TestCurrentTickers_FailedCoinsListKeepsNativeRates(t *testing.T) {
-	cg, _ := newCurrentTickersTestCoingecko(t, 10, "", http.StatusForbidden, nil)
-	ticker, err := cg.CurrentTickers()
+	stub := &stubCoingecko{n: 10, coinsListStatus: http.StatusForbidden}
+	ticker, err := stub.coingecko().CurrentTickers()
 	if !errors.Is(err, errCoingeckoIncompleteTokenRates) {
 		t.Fatalf("CurrentTickers() error = %v, want errCoingeckoIncompleteTokenRates", err)
 	}
-	if ticker == nil || ticker.Rates["usd"] != 2000 {
-		t.Fatalf("expected native rates to survive a failed coins/list, got %+v", ticker)
+	if ticker == nil || ticker.Rates["usd"] != 2000 || ticker.Timestamp.IsZero() || len(ticker.TokenRates) != 0 {
+		t.Fatalf("expected native rates and timestamp without token rates, got %+v", ticker)
 	}
 }
 
@@ -209,11 +296,12 @@ func TestUpdateCurrentTickers(t *testing.T) {
 			notified: true,
 		},
 		{
-			name:     "incomplete tokens keep previous rates of missing tokens",
+			// a token from a failed batch must not carry its previous rate under the new timestamp
+			name:     "incomplete tokens publish only the fetched token rates",
 			prev:     prev(),
 			ticker:   &common.CurrencyRatesTicker{Timestamp: newTs, Rates: map[string]float32{"usd": 2}, TokenRates: map[string]float32{"0xa": 11}},
 			err:      fmt.Errorf("%w: 1 of 2 batches failed", errCoingeckoIncompleteTokenRates),
-			want:     &common.CurrencyRatesTicker{Timestamp: newTs, Rates: map[string]float32{"usd": 2}, TokenRates: map[string]float32{"0xa": 11, "0xb": 20}},
+			want:     &common.CurrencyRatesTicker{Timestamp: newTs, Rates: map[string]float32{"usd": 2}, TokenRates: map[string]float32{"0xa": 11}},
 			notified: true,
 		},
 		{

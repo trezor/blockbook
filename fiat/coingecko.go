@@ -79,7 +79,7 @@ const (
 var errCoingeckoHistoricalTokenUpdateInProgress = errors.New("coingecko historical token update already in progress")
 
 // errCoingeckoIncompleteTokenRates marks a current ticker whose native rates are complete but
-// some token batches failed, so the caller can fill the gaps instead of dropping the ticker.
+// some token rates are missing, so the caller can still publish it.
 var errCoingeckoIncompleteTokenRates = errors.New("coingecko current token rates incomplete")
 
 // coingeckoMaxQueryLen is the longest query string api.coingecko.com accepts: since 2026-09-29 its
@@ -654,6 +654,8 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	if err != nil || prices == nil {
 		return nil, err
 	}
+	// token batches are priced after this, so the native fetch time bounds the age of every rate
+	newTickers.Timestamp = time.Now().UTC()
 	newTickers.Rates = make(map[string]float32, len((*prices)[cg.coin]))
 	for t, v := range (*prices)[cg.coin] {
 		newTickers.Rates[t] = v
@@ -666,7 +668,6 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 		if platformIdsToTokens == nil {
 			err = cg.platformIdsAt(context.Background(), cg.tipURL, priorityHigh)
 			if err != nil {
-				newTickers.Timestamp = time.Now().UTC()
 				return &newTickers, fmt.Errorf("%w: coins/list failed: %v", errCoingeckoIncompleteTokenRates, err)
 			}
 			cg.cacheMu.Lock()
@@ -676,29 +677,39 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 		var tokenErr error
 		newTickers.TokenRates, tokenErr = cg.currentTokenRates(platformIds, platformIdsToTokens)
 		if tokenErr != nil {
-			newTickers.Timestamp = time.Now().UTC()
 			return &newTickers, tokenErr
 		}
 	}
-	newTickers.Timestamp = time.Now().UTC()
 	return &newTickers, nil
 }
 
 // currentTokenRates prices platformIds in platformVsCurrency, keyed by contract address. A failed
-// batch is skipped so one rejected request cannot discard the rates of all other tokens.
+// batch is retried once after the others, so one rejected request cannot discard the rates of
+// all other tokens and a transient error does not drop its tokens for a whole period.
 func (cg *Coingecko) currentTokenRates(platformIds []string, platformIdsToTokens map[string]string) (map[string]float32, error) {
 	rates := make(map[string]float32, len(platformIds))
 	batches := batchIdsByParamLen(platformIds, tokenPriceIdsBudget(cg.platformVsCurrency))
-	failed := 0
+	failed, banned := cg.fetchTokenPriceBatches(batches, platformIdsToTokens, rates)
+	if len(failed) > 0 && !banned {
+		failed, _ = cg.fetchTokenPriceBatches(failed, platformIdsToTokens, rates)
+	}
+	if len(failed) > 0 {
+		return rates, fmt.Errorf("%w: %d of %d batches failed", errCoingeckoIncompleteTokenRates, len(failed), len(batches))
+	}
+	return rates, nil
+}
+
+// fetchTokenPriceBatches stores the prices of batches into rates and returns the batches that
+// failed. On a Cloudflare ban it stops and returns the rest as failed, as further requests would
+// only extend the ban.
+func (cg *Coingecko) fetchTokenPriceBatches(batches [][]string, platformIdsToTokens map[string]string, rates map[string]float32) (failed [][]string, banned bool) {
 	for i, batch := range batches {
 		prices, err := cg.simplePrice(context.Background(), batch, []string{cg.platformVsCurrency})
 		if err != nil {
-			failed++
 			if isCoingeckoCloudflareBanError(err) {
-				// further requests would only extend the ban
-				failed += len(batches) - i - 1
-				break
+				return append(failed, batches[i:]...), true
 			}
+			failed = append(failed, batch)
 			continue
 		}
 		for id, v := range *prices {
@@ -707,10 +718,7 @@ func (cg *Coingecko) currentTokenRates(platformIds []string, platformIdsToTokens
 			}
 		}
 	}
-	if failed > 0 {
-		return rates, fmt.Errorf("%w: %d of %d batches failed", errCoingeckoIncompleteTokenRates, failed, len(batches))
-	}
-	return rates, nil
+	return failed, false
 }
 
 // tokenPriceIdsBudget is the ids parameter length that keeps a simple/price query for
