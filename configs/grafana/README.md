@@ -41,6 +41,24 @@ Use stable, descriptive keys: `x-panel-key` should look like `<section>.<subject
 (`requests`, `errors`, `p95`, `total`, `threshold`). Rename titles freely, but keep these keys
 stable once other files refer to them.
 
+## Legend convention
+
+The dashboard has a single-select `$coin` dropdown and every panel filters on it, so a legend
+never repeats `{{coin}}` -- it says which **replica** a series comes from instead (issue #1717):
+
+| series is | legend shape | example |
+|---|---|---|
+| per replica (raw series, or aggregated `by (instance, ...)`) | `{{instance}} - <labels> <unit>` | `{{instance}} - {{method}} p95`, `{{instance}} - {{mode}}/s` |
+| summed across replicas on purpose | `all replicas - <labels> <unit>` | `all replicas - {{path}}/min` |
+| constant reference line (`vector(...)`) | plain text | `stale cutoff (900s = 15 reload periods)` |
+| table (`__auto`) or an all-coins panel with no `coin="$coin"` filter | Grafana default / `{{coin}} - {{instance}}` | `general.synchronized` |
+
+Aggregate `by (instance, ...)` when the panel exists to point at a misbehaving replica (errors,
+retries, latency, send-path routing, per-replica caches); keep the fleet sum where the panel measures
+load or an external dependency and per-replica lines would only multiply. `--check` rejects a legend
+that repeats `{{coin}}`, lacks a replica scope, or claims a scope the query does not have
+(`{{instance}}` on a query that sums it away, `all replicas` on a per-instance query).
+
 ## Render
 
 ```bash
@@ -50,7 +68,8 @@ python3 contrib/scripts/render_grafana.py --check  # validate alignment only, no
 
 `--check` fails on an unknown metric key, an invalid `width`/`height`, a `gridPos` or `datasource`
 that leaked into `template.json`, a template ↔ `panels.yaml` `x-panel-key` or `x-query-key` mismatch,
-a leftover placeholder, or any per-panel title/description/expr/legend that leaked into `template.json`.
+a leftover placeholder, a legend off the convention above, or any per-panel
+title/description/expr/legend that leaked into `template.json`.
 It also re-checks the **rendered** dashboard for the invariants Grafana enforces only at import time
 (unique panel ids, every panel inside the 24-column grid, no overlaps, a datasource on every panel and
 target, every `${input}` declared) so a structural defect fails the render here, not silently in Grafana.
