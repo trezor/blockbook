@@ -273,11 +273,6 @@ func (z *ZCashRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return z.GetTransaction(txid)
 }
 
-// GetMempoolEntry returns mempool data for given transaction
-func (z *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
-	return nil, errors.New("GetMempoolEntry: not implemented")
-}
-
 // GetBlockRaw is not supported
 func (z *ZCashRPC) GetBlockRaw(hash string) (string, error) {
 	return "", errors.New("GetBlockRaw: not supported")

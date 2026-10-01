@@ -181,24 +181,6 @@ type BlockInfo struct {
 	Txids      []string          `json:"tx,omitempty" ts_doc:"List of transaction IDs included in this block."`
 }
 
-// MempoolEntry is used to get data about mempool entry
-type MempoolEntry struct {
-	Size            uint32            `json:"size" ts_doc:"Size of the transaction in bytes, as stored in mempool."`
-	FeeSat          big.Int           `ts_doc:"Transaction fee in satoshi/base units."`
-	Fee             common.JSONNumber `json:"fee" ts_doc:"String-based fee for JSON usage."`
-	ModifiedFeeSat  big.Int           `ts_doc:"Modified fee in satoshi/base units after priority adjustments."`
-	ModifiedFee     common.JSONNumber `json:"modifiedfee" ts_doc:"String-based modified fee for JSON usage."`
-	Time            uint64            `json:"time" ts_doc:"Unix timestamp when the tx entered the mempool."`
-	Height          uint32            `json:"height" ts_doc:"Block height when the tx entered the mempool."`
-	DescendantCount uint32            `json:"descendantcount" ts_doc:"Number of descendant transactions in mempool."`
-	DescendantSize  uint32            `json:"descendantsize" ts_doc:"Total size of all descendant transactions in bytes."`
-	DescendantFees  uint32            `json:"descendantfees" ts_doc:"Combined fees of all descendant transactions."`
-	AncestorCount   uint32            `json:"ancestorcount" ts_doc:"Number of ancestor transactions in mempool."`
-	AncestorSize    uint32            `json:"ancestorsize" ts_doc:"Total size of all ancestor transactions in bytes."`
-	AncestorFees    uint32            `json:"ancestorfees" ts_doc:"Combined fees of all ancestor transactions."`
-	Depends         []string          `json:"depends" ts_doc:"List of txids this transaction depends on."`
-}
-
 // ChainInfo is used to get information about blockchain
 type ChainInfo struct {
 	Chain            string      `json:"chain" ts_doc:"Name of the chain (e.g. 'main')."`
@@ -351,7 +333,6 @@ type BlockChain interface {
 	EstimateFee(blocks int) (big.Int, error)
 	LongTermFeeRate() (*LongTermFeeRate, error)
 	SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error)
-	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error)
 	// parser
 	GetChainParser() BlockChainParser

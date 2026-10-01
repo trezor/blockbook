@@ -569,18 +569,6 @@ type ResSendRawTransaction struct {
 	Result string           `json:"result"`
 }
 
-// getmempoolentry
-
-type CmdGetMempoolEntry struct {
-	Method string   `json:"method"`
-	Params []string `json:"params"`
-}
-
-type ResGetMempoolEntry struct {
-	Error  *bchain.RPCError     `json:"error"`
-	Result *bchain.MempoolEntry `json:"result"`
-}
-
 // GetBestBlockHash returns hash of the tip of the best-block-chain.
 func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 
@@ -1157,33 +1145,6 @@ func (b *BitcoinRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (
 	}
 	if res.Error != nil {
 		return "", res.Error
-	}
-	return res.Result, nil
-}
-
-// GetMempoolEntry returns mempool data for given transaction
-func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
-	glog.V(1).Info("rpc: getmempoolentry")
-
-	res := ResGetMempoolEntry{}
-	req := CmdGetMempoolEntry{
-		Method: "getmempoolentry",
-		Params: []string{txid},
-	}
-	err := b.Call(&req, &res)
-	if err != nil {
-		return nil, err
-	}
-	if res.Error != nil {
-		return nil, res.Error
-	}
-	res.Result.FeeSat, err = b.Parser.AmountToBigInt(res.Result.Fee)
-	if err != nil {
-		return nil, err
-	}
-	res.Result.ModifiedFeeSat, err = b.Parser.AmountToBigInt(res.Result.ModifiedFee)
-	if err != nil {
-		return nil, err
 	}
 	return res.Result, nil
 }

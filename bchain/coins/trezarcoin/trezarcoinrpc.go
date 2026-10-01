@@ -103,11 +103,6 @@ func (f *TrezarcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error
 	return f.GetTransaction(txid)
 }
 
-// GetMempoolEntry returns mempool data for given transaction
-func (f *TrezarcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
-	return nil, errors.New("GetMempoolEntry: not implemented")
-}
-
 func isErrBlockNotFound(err *bchain.RPCError) bool {
 	return err.Message == "Block not found" ||
 		err.Message == "Block height out of range"

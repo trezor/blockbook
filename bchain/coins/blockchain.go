@@ -342,11 +342,6 @@ func (c *blockChainWithMetrics) observeSendTx(err error) {
 	c.m.SendTxRequests.With(common.Labels{"status": bchain.SendTxStatus(err), "reason": bchain.ClassifySendTxError(err)}).Inc()
 }
 
-func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("GetMempoolEntry", s, err) }(time.Now())
-	return c.b.GetMempoolEntry(txid)
-}
-
 func (c *blockChainWithMetrics) GetChainParser() bchain.BlockChainParser {
 	return c.b.GetChainParser()
 }
