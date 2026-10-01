@@ -9,7 +9,7 @@
     "bcash": {
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter", "GetXpubBasic", "GetXpubTokens", "GetXpubTxsPagination", "GetXpubUtxo", "GetXpubBalanceHistory", "GetXpubInvalid"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
@@ -30,8 +30,8 @@
     "bitcoin": {
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter",
-                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfo", "WsGetAccountInfoBasic", "WsGetAccountUtxo", "WsPing", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific", "WsLongTermFeeRate", "WsGetBlockFilter", "WsGetBlockFiltersBatch", "WsGetMempoolFilters", "GetBlockFilters", "GetBlockFiltersInvalidScriptType"],
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter", "GetXpubBasic", "GetXpubTokens", "GetXpubTxsPagination", "GetXpubUtxo", "GetXpubBalanceHistory", "GetXpubInvalid",
+                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfo", "WsGetAccountInfoBasic", "WsGetAccountUtxo", "WsPing", "WsGetBlock", "WsGetBalanceHistory", "WsGetTransactionSpecific", "WsLongTermFeeRate", "WsGetBlockFilter", "WsGetBlockFiltersBatch", "WsGetMempoolFilters", "GetBlockFilters", "GetBlockFiltersInvalidScriptType", "WsGetAccountInfoXpub", "WsGetAccountUtxoXpub"],
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
@@ -47,7 +47,7 @@
     "bitcoin_testnet": {
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter", "GetXpubBasic", "GetXpubTokens", "GetXpubTxsPagination", "GetXpubUtxo", "GetXpubBalanceHistory", "GetXpubInvalid"],
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
@@ -124,7 +124,7 @@
     "dogecoin": {
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter", "GetXpubBasic", "GetXpubTokens", "GetXpubTxsPagination", "GetXpubUtxo", "GetXpubBalanceHistory", "GetXpubInvalid"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "MempoolSync", "EstimateSmartFee", "EstimateFee"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
     },
@@ -170,7 +170,7 @@
     "litecoin": {
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter", "GetXpubBasic", "GetXpubTokens", "GetXpubTxsPagination", "GetXpubUtxo", "GetXpubBalanceHistory", "GetXpubInvalid"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
@@ -196,7 +196,7 @@
     "zcash": {
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetAddressTxsScientificNotation", "GetUtxo", "GetUtxoConfirmedFilter"],
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetBalanceHistory", "GetAddressTxids", "GetAddressTxs", "GetAddressTxsScientificNotation", "GetUtxo", "GetUtxoConfirmedFilter", "GetXpubBasic", "GetXpubTokens", "GetXpubTxsPagination", "GetXpubUtxo", "GetXpubBalanceHistory", "GetXpubInvalid"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]

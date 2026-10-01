@@ -912,6 +912,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiXpub v2 invalid xpub",
+			r:           newGetRequest(ts.URL + "/api/v2/xpub/not-an-xpub"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Invalid xpub, bad extended key checksum"}`,
+			},
+		},
+		{
 			name:        "apiUtxo v1",
 			r:           newGetRequest(ts.URL + "/api/v1/utxo/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"),
 			status:      http.StatusOK,
