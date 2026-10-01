@@ -926,3 +926,31 @@ func TestErc4626MathAndEncodingBoundaries(t *testing.T) {
 		t.Fatalf("unexpected 10^0 result: %v, %v", unit, err)
 	}
 }
+
+func TestBuildErc4626Token_MulticallErrorRedactsBackendURL(t *testing.T) {
+	// A dial failure on the multicall renders the backend url; the joined error string is served
+	// to the client and must keep only the host.
+	const vault = "0x00000000000000000000000000000000000000a1"
+	mc := &fakeMulticaller{
+		handlers: []func(calls []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error){
+			func(_ []bchain.EthereumMulticallCall) ([]bchain.EthereumMulticallResult, error) {
+				return nil, errors.New(`Post "https://rpc.example.io/v2/SECRET_PROVIDER_KEY": dial tcp: connection refused`)
+			},
+		},
+	}
+	persister := func(string, string) error { return nil }
+	getContractInfo := func(string, bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+		return &bchain.ContractInfo{Contract: "0x00000000000000000000000000000000000000b2", Name: "USDC", Symbol: "USDC", Decimals: 6}, true, nil
+	}
+	ci := &bchain.ContractInfo{Contract: vault, Decimals: 18, Erc4626AssetContract: "0x00000000000000000000000000000000000000b2"}
+	got, _ := buildErc4626TokenWithDeps(ci, mc, persister, getContractInfo, nil)
+	if got == nil {
+		t.Fatal("expected partial result on multicall error")
+	}
+	if strings.Contains(got.Error, "SECRET_PROVIDER_KEY") {
+		t.Fatalf("backend url must be redacted, got %q", got.Error)
+	}
+	if !strings.Contains(got.Error, `multicall: Post "https://rpc.example.io": dial tcp`) {
+		t.Fatalf("expected redacted multicall error, got %q", got.Error)
+	}
+}

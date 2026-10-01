@@ -186,7 +186,8 @@ func TestTronParser_EthereumTypeGetTokenTransfersFromTx(t *testing.T) {
 			},
 		},
 		{
-			name: "TRC721 transfer",
+			// pending transferFrom: the selector is shared with TRC-20, so no standard can be derived
+			name: "pending TRC721 transferFrom yields nothing",
 			tx: &bchain.Tx{
 				Txid: "0x49ced31cd0fd6d8e1126775f53ade165fe7ca43e9cc968d64a9ce1aff597423c",
 				CoinSpecificData: bchain.EthereumSpecificData{
@@ -194,6 +195,20 @@ func TestTronParser_EthereumTypeGetTokenTransfersFromTx(t *testing.T) {
 						From:    "0x34627862d50389c8d7a1ab5ef074b84ab4ddb9e9",
 						To:      "0x0b17822171ee88e98d4a61029f97c9f8edc15fcd",
 						Payload: "0x23b872dd00000000000000000000000034627862d50389c8d7a1ab5ef074b84ab4ddb9e90000000000000000000000000cecca0e53477d2b6c562ab68c3452fc99f7817e000000000000000000000000000000000000000000000000000000000000067f",
+					},
+				},
+			},
+			expected: bchain.TokenTransfers{},
+		},
+		{
+			name: "pending TRC721 safeTransferFrom",
+			tx: &bchain.Tx{
+				Txid: "0x49ced31cd0fd6d8e1126775f53ade165fe7ca43e9cc968d64a9ce1aff597423c",
+				CoinSpecificData: bchain.EthereumSpecificData{
+					Tx: &bchain.RpcTransaction{
+						From:    "0x34627862d50389c8d7a1ab5ef074b84ab4ddb9e9",
+						To:      "0x0b17822171ee88e98d4a61029f97c9f8edc15fcd",
+						Payload: "0x42842e0e00000000000000000000000034627862d50389c8d7a1ab5ef074b84ab4ddb9e90000000000000000000000000cecca0e53477d2b6c562ab68c3452fc99f7817e000000000000000000000000000000000000000000000000000000000000067f",
 					},
 				},
 			},

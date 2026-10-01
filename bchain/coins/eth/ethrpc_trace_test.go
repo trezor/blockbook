@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -13,6 +14,7 @@ import (
 type mockTraceRPC struct {
 	method string
 	args   []interface{}
+	trace  []rpcTraceResult // returned from debug_traceBlockByHash
 }
 
 func (m *mockTraceRPC) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -23,7 +25,7 @@ func (m *mockTraceRPC) CallContext(ctx context.Context, result interface{}, meth
 	m.method = method
 	m.args = append([]interface{}{}, args...)
 	if out, ok := result.(*[]rpcTraceResult); ok {
-		*out = []rpcTraceResult{}
+		*out = append([]rpcTraceResult{}, m.trace...)
 	}
 	return nil
 }
@@ -151,6 +153,246 @@ func TestProcessCallTraceIgnoresFakeCallcodeTransfers(t *testing.T) {
 		if d.Transfers[i].From != want[i].From || d.Transfers[i].To != want[i].To ||
 			d.Transfers[i].Value.Cmp(&want[i].Value) != 0 || d.Transfers[i].Type != want[i].Type {
 			t.Errorf("transfer[%d] = %+v, want %+v", i, d.Transfers[i], want[i])
+		}
+	}
+}
+
+// Failed frames are reverted in their entirety, so neither the frame itself nor anything
+// beneath it may be indexed as a transfer or contract lifecycle event (issue #1621).
+func TestProcessCallTraceSkipsFailedFramesAndTheirSubtrees(t *testing.T) {
+	const (
+		sender   = "0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43"
+		router   = "0x66a0e978c0b91034a27d0da7207d5f80f11e86dc"
+		target   = "0xa3b36b1ee03f71926957194abad51a7c652e77d6"
+		nested   = "0x03533db5ac95abe2164ffd9199e96524a2207a1a"
+		created  = "0x60f760bb7068e5ae61af835b10076d40d0a3d958"
+		oneEth   = "0xde0b6b3a7640000"
+		twoEth   = "0x1bc16d674ec80000"
+		threeEth = "0x29a2241af62c0000"
+	)
+	tests := []struct {
+		name          string
+		trace         *rpcCallTrace
+		wantTransfers []bchain.EthereumInternalTransfer
+		wantContracts int
+		wantError     string
+	}{
+		{
+			name: "successful root with insufficient-balance child",
+			trace: &rpcCallTrace{
+				Type: "CALL", From: sender, To: router, Value: oneEth,
+				Calls: []rpcCallTrace{
+					{Type: "CALL", From: router, To: target, Value: threeEth, Error: "insufficient balance for transfer"},
+				},
+			},
+			wantTransfers: []bchain.EthereumInternalTransfer{
+				{Value: *hexutil.MustDecodeBig(oneEth), From: sender, To: router},
+			},
+			wantError: "insufficient balance for transfer",
+		},
+		{
+			name: "reverted parent hides successful descendants, sibling survives",
+			trace: &rpcCallTrace{
+				Type: "CALL", From: sender, To: router, Value: oneEth,
+				Calls: []rpcCallTrace{
+					{
+						Type: "CALL", From: router, To: target, Value: twoEth, Error: "execution reverted",
+						Calls: []rpcCallTrace{
+							{Type: "CALL", From: target, To: nested, Value: oneEth},
+						},
+					},
+					{Type: "CALL", From: router, To: nested, Value: oneEth},
+				},
+			},
+			wantTransfers: []bchain.EthereumInternalTransfer{
+				{Value: *hexutil.MustDecodeBig(oneEth), From: sender, To: router},
+				{Value: *hexutil.MustDecodeBig(oneEth), From: router, To: nested},
+			},
+			wantError: "execution reverted",
+		},
+		{
+			name: "failed CREATE and SELFDESTRUCT leave no lifecycle records",
+			trace: &rpcCallTrace{
+				Type: "CALL", From: sender, To: router,
+				Calls: []rpcCallTrace{
+					{Type: "CREATE", From: router, To: created, Value: oneEth, Error: "out of gas"},
+					{Type: "SELFDESTRUCT", From: router, To: target, Value: twoEth, Error: "execution reverted"},
+					{Type: "CREATE2", From: router, To: nested},
+				},
+			},
+			wantTransfers: []bchain.EthereumInternalTransfer{
+				{Type: bchain.CREATE, From: router, To: nested},
+			},
+			wantContracts: 1,
+			wantError:     "execution reverted",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &EthereumRPC{ChainConfig: &Configuration{}}
+			d := &bchain.EthereumInternalData{}
+			contracts := b.processCallTrace(tt.trace, d, nil, 1)
+			assertInternalTransfers(t, d.Transfers, tt.wantTransfers)
+			if len(contracts) != tt.wantContracts {
+				t.Errorf("contracts = %+v, want %d records", contracts, tt.wantContracts)
+			}
+			if d.Error != tt.wantError {
+				t.Errorf("error = %q, want %q", d.Error, tt.wantError)
+			}
+		})
+	}
+}
+
+// A reverted root transaction undoes every child frame, so a failed tx must not carry
+// internal transfers into the index even when its children succeeded locally (issue #1621).
+func TestGetInternalDataForBlockDropsChildrenOfRevertedRoot(t *testing.T) {
+	const (
+		sender = "0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43"
+		router = "0x66a0e978c0b91034a27d0da7207d5f80f11e86dc"
+		target = "0xa3b36b1ee03f71926957194abad51a7c652e77d6"
+		oneEth = "0xde0b6b3a7640000"
+	)
+	rpcClient := &mockTraceRPC{trace: []rpcTraceResult{
+		{Result: rpcCallTrace{
+			Type: "CALL", From: sender, To: router, Error: "execution reverted",
+			Calls: []rpcCallTrace{{Type: "CALL", From: router, To: target, Value: oneEth}},
+		}},
+		{Result: rpcCallTrace{
+			Type: "CALL", From: sender, To: router,
+			Calls: []rpcCallTrace{{Type: "CALL", From: router, To: target, Value: oneEth}},
+		}},
+	}}
+	b := &EthereumRPC{RPC: rpcClient, ChainConfig: &Configuration{ProcessInternalTransactions: true}}
+	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() {
+		bchain.ProcessInternalTransactions = false
+	})
+
+	data, _, err := b.getInternalDataForBlock(context.Background(), "0xabc", 1, make([]bchain.RpcTransaction, 2))
+	if err != nil {
+		t.Fatalf("getInternalDataForBlock() error = %v", err)
+	}
+	assertInternalTransfers(t, data[0].Transfers, nil)
+	if data[0].Error == "" {
+		t.Errorf("reverted root should keep its error, got empty")
+	}
+	assertInternalTransfers(t, data[1].Transfers, []bchain.EthereumInternalTransfer{
+		{Value: *hexutil.MustDecodeBig(oneEth), From: router, To: target},
+	})
+}
+
+func assertInternalTransfers(t *testing.T, got, want []bchain.EthereumInternalTransfer) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("transfers = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i].From != want[i].From || got[i].To != want[i].To ||
+			got[i].Value.Cmp(&want[i].Value) != 0 || got[i].Type != want[i].Type {
+			t.Errorf("transfer[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// Erigon reports a per-tx tracer failure (e.g. timeout) as an envelope carrying "error" instead of
+// "result" and keeps tracing the rest of the block (issue #1760).
+func TestGetInternalDataForBlockFailsOnPerTxTraceError(t *testing.T) {
+	txs := []bchain.RpcTransaction{
+		{Hash: "0x01", From: "0xaaaa", To: "0xbbbb"},
+		{Hash: "0x02", From: "0xcccc", To: "0xdddd"},
+	}
+	rpcClient := &mockTraceRPC{trace: []rpcTraceResult{
+		{Result: rpcCallTrace{Type: "CALL", From: "0xaaaa", To: "0xbbbb", Value: "0x1"}},
+		{Error: "execution timeout"},
+	}}
+	b := &EthereumRPC{RPC: rpcClient, ChainConfig: &Configuration{ProcessInternalTransactions: true}}
+	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() { bchain.ProcessInternalTransactions = false })
+
+	_, _, err := b.getInternalDataForBlock(context.Background(), "0xabc", 1, txs)
+	if err == nil {
+		t.Fatal("expected error for failed per-tx trace, got nil")
+	}
+	for _, want := range []string{"0x02", "execution timeout"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not mention %q", err, want)
+		}
+	}
+}
+
+// The Polygon state-sync tx is already exempt from the trace-length check; a failed trace of it must
+// not queue every block that contains one for healing.
+func TestGetInternalDataForBlockIgnoresBridgingTxTraceError(t *testing.T) {
+	const zero = "0x0000000000000000000000000000000000000000"
+	txs := []bchain.RpcTransaction{
+		{Hash: "0x01", From: "0xaaaa", To: "0xbbbb"},
+		{Hash: "0x02", From: zero, To: zero},
+	}
+	rpcClient := &mockTraceRPC{trace: []rpcTraceResult{
+		{Result: rpcCallTrace{Type: "CALL", From: "0xaaaa", To: "0xbbbb", Value: "0x1"}},
+		{Error: "state sync trace failed"},
+	}}
+	b := &EthereumRPC{RPC: rpcClient, ChainConfig: &Configuration{ProcessInternalTransactions: true}}
+	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() { bchain.ProcessInternalTransactions = false })
+
+	data, _, err := b.getInternalDataForBlock(context.Background(), "0xabc", 1, txs)
+	if err != nil {
+		t.Fatalf("getInternalDataForBlock() error = %v", err)
+	}
+	if len(data) != 2 || data[1].Error != "" || len(data[1].Transfers) != 0 {
+		t.Fatalf("bridging tx should decode to empty internal data, got %+v", data)
+	}
+}
+
+func TestRpcTraceErrorUnmarshalAcceptsStringAndObject(t *testing.T) {
+	tests := []struct {
+		name, raw, want string
+	}{
+		{"geth string", `{"error":"execution timeout"}`, "execution timeout"},
+		{"erigon object", `{"error":{"code":-32000,"message":"execution timeout"}}`, "execution timeout"},
+		{"erigon object without message", `{"error":{"code":-32000}}`, "error code -32000"},
+		{"null", `{"error":null}`, ""},
+		{"absent", `{"result":{"type":"CALL"}}`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var r rpcTraceResult
+			if err := json.Unmarshal([]byte(tt.raw), &r); err != nil {
+				t.Fatalf("Unmarshal(%s) error = %v", tt.raw, err)
+			}
+			if string(r.Error) != tt.want {
+				t.Fatalf("Error = %q, want %q", r.Error, tt.want)
+			}
+		})
+	}
+}
+
+// Erigon's actual wire shape for a per-tx tracer failure, as written by rpc.HandleError.
+func TestGetInternalDataForBlockFailsOnErigonTraceErrorObject(t *testing.T) {
+	const raw = `[
+		{"txHash":"0x01","result":{"type":"CALL","from":"0xaaaa","to":"0xbbbb","value":"0x1"}},
+		{"txHash":"0x02","result":null,"error":{"code":-32000,"message":"execution timeout"}}
+	]`
+	rpcClient := &mockTraceRPC{}
+	if err := json.Unmarshal([]byte(raw), &rpcClient.trace); err != nil {
+		t.Fatalf("Unmarshal error = %v", err)
+	}
+	txs := []bchain.RpcTransaction{
+		{Hash: "0x01", From: "0xaaaa", To: "0xbbbb"},
+		{Hash: "0x02", From: "0xcccc", To: "0xdddd"},
+	}
+	b := &EthereumRPC{RPC: rpcClient, ChainConfig: &Configuration{ProcessInternalTransactions: true}}
+	bchain.ProcessInternalTransactions = true
+	t.Cleanup(func() { bchain.ProcessInternalTransactions = false })
+
+	_, _, err := b.getInternalDataForBlock(context.Background(), "0xabc", 1, txs)
+	if err == nil {
+		t.Fatal("expected error for failed per-tx trace, got nil")
+	}
+	for _, want := range []string{"0x02", "execution timeout"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not mention %q", err, want)
 		}
 	}
 }

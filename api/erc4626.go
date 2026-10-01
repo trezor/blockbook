@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 const (
@@ -342,7 +343,8 @@ func buildErc4626TokenCold(
 	}
 
 	if len(errs) > 0 {
-		result.Error = strings.Join(errs, "; ")
+		// the joined errors reach the client; an rpc dial error carries the full backend url
+		result.Error = common.RedactURLs(strings.Join(errs, "; "))
 	}
 	return result, transientErr
 }
@@ -456,7 +458,8 @@ func buildErc4626TokenWarm(
 	}
 
 	if len(errs) > 0 {
-		result.Error = strings.Join(errs, "; ")
+		// the joined errors reach the client; an rpc dial error carries the full backend url
+		result.Error = common.RedactURLs(strings.Join(errs, "; "))
 	}
 	return result, transientErr
 }
