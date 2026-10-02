@@ -45,6 +45,8 @@ type Metrics struct {
 	RestUIActiveIPs                    prometheus.Gauge         `metric:"rest_ui_active_ips"`
 	RestUIMaxActiveRequestsPerIP       prometheus.Gauge         `metric:"rest_ui_max_active_requests_per_ip"`
 	RestUIBlockedIPs                   prometheus.Gauge         `metric:"rest_ui_blocked_ips"`
+	RestUIRequests                     *prometheus.CounterVec   `metric:"rest_ui_requests"`
+	RestUITrackedClients               prometheus.Gauge         `metric:"rest_ui_tracked_clients"`
 	IndexResyncDuration                prometheus.Histogram     `metric:"index_resync_duration"`
 	MempoolResyncDuration              prometheus.Histogram     `metric:"mempool_resync_duration"`
 	MempoolResyncThroughput            *prometheus.HistogramVec `metric:"mempool_resync_throughput_txs_per_second"`
