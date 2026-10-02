@@ -1719,7 +1719,10 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
-		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
+		// Every tx on a page is materialized from the tx cache/backend, so a caller that only
+		// needs a few txs of a busy block (e.g. a sampler) must be able to shrink the page.
+		pageSize := validateIntParam(r.URL.Query().Get("pageSize"), txsInAPI, 1, txsInAPI)
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, pageSize)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.BlockToV1(block), nil
 		}
