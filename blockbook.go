@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -62,6 +63,9 @@ var (
 	forceRepair = flag.Bool("forcerepair", false, "with -repair, force a database left in inconsistent state (interrupted initial/bulk import) into open state; the index may be incomplete and a full resync is strongly advised")
 	fixUtxo     = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
+
+	mutexProfileFraction = flag.Int("mutexprofilefraction", 0, "with -prof, sample 1/n mutex contention events for /debug/pprof/mutex (default 0 = off)")
+	blockProfileRate     = flag.Int("blockprofilerate", 0, "with -prof, sample one blocking event per n ns blocked for /debug/pprof/block (default 0 = off)")
 
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing in bulk mode")
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks in bulk mode")
@@ -170,6 +174,9 @@ func mainWithExitCode() int {
 	glog.Infof("Blockbook: %+v, debug mode %v", common.GetVersionInfo(), *debugMode)
 
 	if *prof != "" {
+		// Off by default: both profilers add overhead to every contended lock or blocking channel op.
+		runtime.SetMutexProfileFraction(*mutexProfileFraction)
+		runtime.SetBlockProfileRate(*blockProfileRate)
 		go func() {
 			log.Println(http.ListenAndServe(*prof, nil))
 		}()
