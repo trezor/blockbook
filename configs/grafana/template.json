@@ -5640,6 +5640,7 @@
         "overrides": []
       },
       "id": 366,
+      "interval": "5m",
       "options": {
         "legend": {
           "calcs": [

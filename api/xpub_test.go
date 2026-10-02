@@ -64,13 +64,7 @@ func TestTrimXpubCacheItemsLocked(t *testing.T) {
 	const testMaxEntries = 128
 	cachedXpubsMux.Lock()
 	defer cachedXpubsMux.Unlock()
-
-	originalCache := cachedXpubs
-	defer func() {
-		cachedXpubs = originalCache
-	}()
-
-	cachedXpubs = make(map[string]xpubData, testMaxEntries+2)
+	defer resetXpubCacheLocked()()
 	for i := 0; i < testMaxEntries+2; i++ {
 		cachedXpubs[fmt.Sprintf("xpub-%03d", i)] = xpubData{accessed: int64(i)}
 	}
@@ -137,12 +131,7 @@ func TestIsUnfilteredXpubTxidFilter(t *testing.T) {
 func TestXpubCacheBytesAccounting(t *testing.T) {
 	cachedXpubsMux.Lock()
 	defer cachedXpubsMux.Unlock()
-	originalCache, originalBytes := cachedXpubs, cachedXpubsBytes
-	defer func() {
-		cachedXpubs, cachedXpubsBytes = originalCache, originalBytes
-	}()
-	cachedXpubs = make(map[string]xpubData)
-	cachedXpubsBytes = 0
+	defer resetXpubCacheLocked()()
 
 	// an entry with two used addresses (one utxo, two txids each) and one gap address
 	used := xpubAddress{
@@ -163,10 +152,7 @@ func TestXpubCacheBytesAccounting(t *testing.T) {
 	insert := func(key string, accessed int64) {
 		d := data
 		d.accessed = accessed
-		d.bytes = xpubDataEstimatedBytes(&d, len(key))
-		deleteCachedXpubLocked(key)
-		cachedXpubs[key] = d
-		cachedXpubsBytes += int64(d.bytes)
+		putCachedXpubLocked(key, &d)
 	}
 	for i := 0; i < 4; i++ {
 		insert(fmt.Sprintf("xpub-%d", i), int64(i))
