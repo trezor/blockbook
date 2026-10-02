@@ -291,7 +291,7 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 	var prevTicker *common.CurrencyRatesTicker
 	var prevTs int64
 	for i, t := range timestamps {
-		dailyTs := ceilUnix(t, secondsInDay)
+		dailyTs := DailyTickerTimestamp(t)
 		// use higher granularity only for non daily timestamps
 		if t != dailyTs {
 			if t >= fiveMinutesTickersFrom && t <= fiveMinutesTickersTo {
@@ -368,6 +368,12 @@ func roundUnix(t int64, granularity int64) int64 {
 func ceilUnix(t int64, granularity int64) int64 {
 	unix := t + (granularity - 1)
 	return unix - unix%granularity
+}
+
+// DailyTickerTimestamp returns the unix time of the stored daily ticker that serves t:
+// daily tickers are written at UTC midnight and lookups take the first ticker at or after t.
+func DailyTickerTimestamp(t int64) int64 {
+	return ceilUnix(t, secondsInDay)
 }
 
 // loadDailyTickers loads daily tickers to cache

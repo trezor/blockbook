@@ -564,6 +564,36 @@ type TemplateData struct {
 	TxSecondaryCoinRate      float64
 	TxTicker                 *common.CurrencyRatesTicker
 	TxIOCollapseThreshold    int
+	contractRates            map[contractRateKey]contractRate
+}
+
+type contractRateKey struct {
+	contract string
+	day      int64
+}
+
+type contractRate struct {
+	rate  float64
+	found bool
+}
+
+// contractBaseRate memoizes GetContractBaseRate per page, keyed by the daily ticker the lookup resolves to,
+// so the DB fallback runs once per contract and day instead of once per token transfer row.
+// A nil TxTicker is not memoized: amountSpan may still set it for later rows of the same day.
+func (td *TemplateData) contractBaseRate(contract string, lookup func(ticker *common.CurrencyRatesTicker, token string, timestamp int64) (float64, bool)) (float64, bool) {
+	if td.TxTicker == nil {
+		return 0, false
+	}
+	key := contractRateKey{contract: contract, day: fiat.DailyTickerTimestamp(td.Tx.Blocktime)}
+	if r, ok := td.contractRates[key]; ok {
+		return r.rate, r.found
+	}
+	rate, found := lookup(td.TxTicker, contract, td.Tx.Blocktime)
+	if td.contractRates == nil {
+		td.contractRates = make(map[contractRateKey]contractRate)
+	}
+	td.contractRates[key] = contractRate{rate: rate, found: found}
+	return rate, found
 }
 
 func defaultTxTemplate(chainType bchain.ChainType) string {
@@ -793,7 +823,7 @@ func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, c
 					currentSecondary = formatSecondaryAmount(base*td.CurrentSecondaryCoinRate, td)
 					// get the historical rate only if current rate exist
 					// it is very costly to search in DB in vain for a rate for token for which there are no exchange rates
-					baseRate, found := s.api.GetContractBaseRate(td.TxTicker, t.Contract, td.Tx.Blocktime)
+					baseRate, found := td.contractBaseRate(t.Contract, s.api.GetContractBaseRate)
 					if found {
 						base := p * baseRate
 						txBase = strconv.FormatFloat(base, 'f', 6, 64)
