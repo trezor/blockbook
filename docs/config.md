@@ -125,6 +125,8 @@ Good examples of coin configuration are
             * `hot_address_lru_cache_size` – Max hot addresses kept in the LRU (default **20000**, clamped to **100,000**).
           * Ethereum trace configuration (Blockbook, Ethereum-type indexing):
             * `trace_timeout` – Optional per-request timeout passed to `debug_traceBlockByHash` as tracer config, formatted as a Go duration string such as `"20s"`.
+          * Wrapped-native token configuration (Blockbook, Ethereum-type indexing):
+            * `wrappedNativeContract` – Address of the chain's canonical WETH9-style wrapped-native contract (WETH, WBNB, WPOL, …). Its `Deposit`/`Withdrawal` events are indexed as ERC-20 token transfers from/to the zero address, so wraps and unwraps appear in `tokenTransfers` and the wrapped token is auto-discovered on the address. Only this one contract is translated because any contract can emit the same event signatures. Do not set it on a chain whose wrapped token already emits a mint `Transfer` (Arbitrum, Robinhood Chain, Hoodi testnet), as that would double count every wrap. Applies to newly synced blocks; already indexed blocks need a reindex.
           * Address-contracts cache configuration (Blockbook, Ethereum-type indexing):
             * `address_contracts_cache_min_size` – Minimum packed size (bytes) before an addressContracts entry is cached (default **300000**).
             * `address_contracts_cache_max_bytes` – Cache size cap in bytes used while syncing near chain tip; when exceeded, cached entries are flushed early (default **2000000000**).

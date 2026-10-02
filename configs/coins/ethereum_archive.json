@@ -59,6 +59,7 @@
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 600,
             "additional_params": {
+                "wrappedNativeContract": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
                 "averageBlockTimeMs": 12000,
                 "missingBlockRetry": {
                     "retryDelayMs": 1000,
