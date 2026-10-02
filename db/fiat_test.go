@@ -318,7 +318,7 @@ func Test_packUnpackCurrencyRatesTicker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			packed := packCurrencyRatesTicker(&tt.data)
-			got, err := unpackCurrencyRatesTicker(packed)
+			got, err := unpackCurrencyRatesTicker(packed, "")
 			if err != nil {
 				t.Errorf("unpackCurrencyRatesTicker() error = %v", err)
 				return
@@ -341,7 +341,7 @@ func Test_unpackCurrencyRatesTickerToken(t *testing.T) {
 		},
 	}
 	packed := packCurrencyRatesTicker(&data)
-	full, _ := unpackCurrencyRatesTicker(packed)
+	full, _ := unpackCurrencyRatesTicker(packed, "")
 	tokens := []string{
 		"0xdac17f958d2ee523a2206206994597c13d831ec7", // exact, lowercase
 		"0xdAC17F958D2ee523a2206206994597C13D831ec7", // lowercase fallback
@@ -352,7 +352,7 @@ func Test_unpackCurrencyRatesTickerToken(t *testing.T) {
 		"0x0000000000000000000000000000000000000000", // absent
 	}
 	for _, token := range tokens {
-		got, err := unpackCurrencyRatesTickerToken(packed, token)
+		got, err := unpackCurrencyRatesTicker(packed, token)
 		if err != nil {
 			t.Fatalf("%s: %v", token, err)
 		}
@@ -399,24 +399,17 @@ func Benchmark_unpackCurrencyRatesTicker(b *testing.B) {
 		tokens := benchTokens(r, n)
 		packed := packCurrencyRatesTicker(benchTicker(r, time.Time{}, tokens))
 		token := tokens[n/2]
-		b.Run(fmt.Sprintf("tokens=%d/variant=full", n), func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				tk, _ := unpackCurrencyRatesTicker(packed)
-				if !common.IsSuitableTicker(tk, "", token) {
-					b.Fatal("token not found")
+		for _, variant := range []struct{ name, filter string }{{"full", ""}, {"token", token}} {
+			b.Run(fmt.Sprintf("tokens=%d/variant=%s", n, variant.name), func(b *testing.B) {
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					tk, _ := unpackCurrencyRatesTicker(packed, variant.filter)
+					if !common.IsSuitableTicker(tk, "", token) {
+						b.Fatal("token not found")
+					}
 				}
-			}
-		})
-		b.Run(fmt.Sprintf("tokens=%d/variant=token", n), func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				tk, _ := unpackCurrencyRatesTickerToken(packed, token)
-				if !common.IsSuitableTicker(tk, "", token) {
-					b.Fatal("token not found")
-				}
-			}
-		})
+			})
+		}
 	}
 }
 

@@ -567,8 +567,6 @@ type TemplateData struct {
 	contractRates            map[contractRateKey]contractRate
 }
 
-const secondsInDay = 24 * 3600
-
 type contractRateKey struct {
 	contract string
 	day      int64
@@ -579,18 +577,14 @@ type contractRate struct {
 	found bool
 }
 
-type contractBaseRateFunc func(ticker *common.CurrencyRatesTicker, token string, timestamp int64) (float64, bool)
-
-// contractBaseRate memoizes the per-page DB fallback of GetContractBaseRate; historical token rates
-// are stored once per UTC day, so every timestamp of a day resolves to the same stored rate.
-func (td *TemplateData) contractBaseRate(contract string, lookup contractBaseRateFunc) (float64, bool) {
+// contractBaseRate memoizes GetContractBaseRate per page, keyed by the daily ticker the lookup resolves to,
+// so the DB fallback runs once per contract and day instead of once per token transfer row.
+// A nil TxTicker is not memoized: amountSpan may still set it for later rows of the same day.
+func (td *TemplateData) contractBaseRate(contract string, lookup func(ticker *common.CurrencyRatesTicker, token string, timestamp int64) (float64, bool)) (float64, bool) {
 	if td.TxTicker == nil {
 		return 0, false
 	}
-	if rate, found := td.TxTicker.GetTokenRate(contract); found {
-		return float64(rate), true
-	}
-	key := contractRateKey{contract: contract, day: (td.Tx.Blocktime + secondsInDay - 1) / secondsInDay}
+	key := contractRateKey{contract: contract, day: fiat.DailyTickerTimestamp(td.Tx.Blocktime)}
 	if r, ok := td.contractRates[key]; ok {
 		return r.rate, r.found
 	}

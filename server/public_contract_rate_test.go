@@ -15,10 +15,6 @@ func TestTemplateDataContractBaseRate(t *testing.T) {
 		dai      = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
 		midnight = int64(1758585600) // 2025-09-23 00:00:00 UTC
 	)
-	// other tests configure fiat rates globally
-	recalculate := common.TickerRecalculateTokenRate
-	common.TickerRecalculateTokenRate = false
-	defer func() { common.TickerRecalculateTokenRate = recalculate }()
 	var calls []int64
 	lookup := func(_ *common.CurrencyRatesTicker, token string, ts int64) (float64, bool) {
 		calls = append(calls, ts)
@@ -27,7 +23,7 @@ func TestTemplateDataContractBaseRate(t *testing.T) {
 		}
 		return float64(ts), true
 	}
-	td := &TemplateData{TxTicker: &common.CurrencyRatesTicker{Rates: map[string]float32{"usd": 1}}}
+	td := &TemplateData{TxTicker: &common.CurrencyRatesTicker{}}
 	rate := func(contract string, blocktime int64) (float64, bool) {
 		td.Tx = &api.Tx{Blocktime: blocktime}
 		return td.contractBaseRate(contract, lookup)
@@ -53,12 +49,8 @@ func TestTemplateDataContractBaseRate(t *testing.T) {
 		t.Errorf("lookups = %v, want 3 (usdt twice on different days, dai once)", calls)
 	}
 
-	// rates already in the tx ticker and a missing tx ticker never reach the lookup
+	// a missing tx ticker never reaches the lookup and is not memoized as a miss
 	calls = nil
-	td.TxTicker = &common.CurrencyRatesTicker{TokenRates: map[string]float32{usdt: 0.5}}
-	if r, found := rate(usdt, midnight+7200); !found || r != 0.5 {
-		t.Errorf("tx ticker rate = %v,%v, want 0.5,true", r, found)
-	}
 	td.TxTicker = nil
 	if _, found := rate(usdt, midnight+7200); found {
 		t.Error("nil tx ticker found a rate")
