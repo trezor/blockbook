@@ -709,24 +709,25 @@ panels:
         legend: Explorer {{method}} - {{coin}}
   general.coingecko_requests:
     title: CoinGecko requests
-    description: Status separates successful calls, throttling and hard errors from the same endpoint.
+    description: Current-price, token-list and currency-list calls; status separates successful calls, throttling and hard errors. Historical market_chart downloads are in their own panel.
     queries:
-      per_server:
-        promql: '{{name:coingecko_requests}}{job="blockbook", coin="$coin"}'
-        legend: '{{coin}} - {{instance}} - {{status}} - {{endpoint}}'
-      total:
-        promql: sum({{name:coingecko_requests}}{job="blockbook", coin="$coin"})
-        legend: '{{coin}} total across servers'
+      requests:
+        promql: sum(increase({{name:coingecko_requests}}{job="blockbook", coin="$coin", endpoint!="market_chart"}[$__interval])) by (instance, endpoint, status)
+        legend: '{{instance}} - {{status}} - {{endpoint}}'
+  general.coingecko_market_chart_requests:
+    title: CoinGecko historical requests
+    description: Historical market_chart downloads, which run in bursts of hundreds of calls; status separates successful calls, throttling and hard errors.
+    queries:
+      requests:
+        promql: sum(increase({{name:coingecko_requests}}{job="blockbook", coin="$coin", endpoint="market_chart"}[$__interval])) by (instance, status)
+        legend: '{{instance}} - {{status}}'
   general.coingecko_range_requests:
     title: CoinGecko historical range choices
     description: Reveals whether downloads are full, capped, tip-only or skipped, which explains missing or stale fiat history.
     queries:
-      per_server:
-        promql: '{{name:coingecko_range_requests}}{job="blockbook", coin="$coin"}'
-        legend: '{{coin}} - {{instance}} - {{range}}'
-      total:
-        promql: sum({{name:coingecko_range_requests}}{job="blockbook", coin="$coin"})
-        legend: '{{coin}} total across servers'
+      ranges:
+        promql: sum(increase({{name:coingecko_range_requests}}{job="blockbook", coin="$coin"}[$__interval])) by (instance, range)
+        legend: '{{instance}} - {{range}}'
   general.balance_history_fiat_duration_p95:
     title: 95% quantile of balance history fiat stage duration
     description: Separates batch lookup from per-point fallback, so slow fallback behavior is visible in address and xpub paths.
