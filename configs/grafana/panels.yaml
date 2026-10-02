@@ -683,6 +683,23 @@ panels:
       size:
         promql: '{{name:xpub_cache_size}}{job="blockbook", coin="$coin"}'
         legend: '{{coin}} - {{instance}}'
+  general.xpub_cache_bytes:
+    title: Xpub cache bytes
+    description: Estimated heap held by cached xpubs (addresses, balances, utxos, txid lists); size the cap against this, not the entry count, since one whale account weighs as much as hundreds of small ones.
+    queries:
+      bytes:
+        promql: '{{name:xpub_cache_bytes}}{job="blockbook", coin="$coin"}'
+        legend: '{{coin}} - {{instance}}'
+  general.xpub_cache_activity:
+    title: Xpub cache activity
+    description: Hits return the cached snapshot; absent misses re-derive the whole account, stale misses rescan every address after a new block. A size gauge pinned at the cap with many absent misses means the cache is too small.
+    queries:
+      hits:
+        promql: rate({{name:xpub_cache_hits_total}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{coin}} - {{instance}} hits/min'
+      misses:
+        promql: rate({{name:xpub_cache_misses_total}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{coin}} - {{instance}} misses {{reason}}/min'
   general.explorer_views:
     title: Explorer views in 1 minute
     description: Action labels distinguish UI routes, public API endpoints and redirects sharing the same HTTP server.

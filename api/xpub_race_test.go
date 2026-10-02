@@ -74,8 +74,16 @@ func setupXpubRaceWorker(t *testing.T) *Worker {
 
 func resetXpubCache() {
 	cachedXpubsMux.Lock()
-	cachedXpubs = make(map[string]xpubData)
+	resetXpubCacheLocked()
 	cachedXpubsMux.Unlock()
+}
+
+// resetXpubCacheLocked empties the package-global cache together with its byte
+// total and returns a func restoring the previous contents; caller holds cachedXpubsMux.
+func resetXpubCacheLocked() (restore func()) {
+	prevCache, prevBytes := cachedXpubs, cachedXpubsBytes
+	cachedXpubs, cachedXpubsBytes = make(map[string]xpubData), 0
+	return func() { cachedXpubs, cachedXpubsBytes = prevCache, prevBytes }
 }
 
 // TestGetXpubAddressConcurrent verifies that concurrent requests for the same

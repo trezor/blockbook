@@ -409,6 +409,19 @@ metrics:
     name: blockbook_xpub_cache_size
     type: gauge
     help: UTXO-only population of in-memory extended public-key lookup entries
+  xpub_cache_bytes:
+    name: blockbook_xpub_cache_bytes
+    type: gauge
+    help: Estimated memory used by the xpub cache (derived addresses, balances, utxos and txid lists)
+  xpub_cache_hits_total:
+    name: blockbook_xpub_cache_hits_total
+    type: counter
+    help: xpub lookups served from the cache without rescanning any address
+  xpub_cache_misses_total:
+    name: blockbook_xpub_cache_misses_total
+    type: counter_vec
+    help: xpub lookups that had to derive (absent) or rescan every address of a cached entry (stale)
+    labels: [reason]
   coingecko_requests:
     name: blockbook_coingecko_requests
     type: counter_vec
