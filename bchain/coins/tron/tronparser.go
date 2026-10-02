@@ -74,7 +74,8 @@ func (p *TronParser) GetAddrDescFromAddress(address string) (bchain.AddressDescr
 		}
 		return payload[1:], nil
 	} else if len(address) != TronTypeAddressDescriptorLen*2 {
-		glog.Infof("Invalid Tron address length: got %d chars: %q", len(address), address)
+		// input is client-controlled and may be megabytes, so log only its length
+		glog.Infof("Invalid Tron address length: got %d chars", len(address))
 		return nil, bchain.ErrAddressMissing
 	}
 
