@@ -118,7 +118,15 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 	var value big.Int
 	if tl == 3 {
 		standard = bchain.FungibleToken
-		if !setBigFromHexWord(&value, l.Data, 0) {
+		data := l.Data
+		if has0xPrefix(data) {
+			data = data[2:]
+		}
+		// like ABI decoders, ignore trailing data; parsing all of it makes the amount unbounded
+		if len(data) > evmWordHex {
+			data = data[:evmWordHex]
+		}
+		if !setBigFromHexWord(&value, data, 16) {
 			return nil, errors.New("ERC20 log Data is not a number")
 		}
 	} else if tl == 4 {
