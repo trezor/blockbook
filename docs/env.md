@@ -165,7 +165,9 @@ On EVM chains the internal server also exposes `/admin/contract-info/` (same Bas
 
 -   `BB_RPC_URLS` (repository secret) - `KEY=VALUE` lines carrying every `BB_DEV_RPC_URL_*` / `BB_PROD_RPC_URL_*`
     value for CI. Provider URLs embed auth tokens and Actions variables are printed unmasked in public job logs, so
-    the exporter masks each URL and fails a job that still finds these names among repository variables.
+    the exporter masks each URL and fails a job that still finds these names among repository variables. Dependabot
+    runs don't receive it, so `testing.yml` skips connectivity/integration tests for them; a maintainer runs the
+    Testing workflow manually on the Dependabot branch.
 
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.
