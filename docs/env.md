@@ -163,6 +163,10 @@ On EVM chains the internal server also exposes `/admin/contract-info/` (same Bas
     `configs/coins/<coin>.json` is only on a feature branch. Each listed coin is skipped where its config is absent (so
     sibling branches don't fail on the orphan variables) and builds/tests/deploys normally where the config is present.
 
+-   `BB_RPC_URLS` (repository secret) - `KEY=VALUE` lines carrying every `BB_DEV_RPC_URL_*` / `BB_PROD_RPC_URL_*`
+    value for CI. Provider URLs embed auth tokens and Actions variables are printed unmasked in public job logs, so
+    the exporter masks each URL and fails a job that still finds these names among repository variables.
+
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.
 

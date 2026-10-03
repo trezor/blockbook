@@ -6,6 +6,9 @@
 # prefix-suffix normalisation used by .github/actions/export-env-vars so that
 # locally running tests see the exact same environment as CI.
 #
+# BB_DEV_RPC_URL_* / BB_PROD_RPC_URL_* live in the write-only BB_RPC_URLS secret,
+# not in variables, so export those yourself (e.g. from the team password store).
+#
 # Trezor-internal: this requires read access to the private trezor/blockbook
 # repository's Actions variables. Authenticate with `gh auth login` or export
 # GH_TOKEN with `repo` (or `actions:read`) scope, and make sure your GitHub

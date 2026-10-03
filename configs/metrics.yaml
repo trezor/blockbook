@@ -424,7 +424,7 @@ metrics:
     type: histogram_vec
     help: Time spent in fiat-rate downloader stages such as current, hourly, historical and token ticker updates
     labels: [stage, status]
-    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300]
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600]
   fiat_rates_fetched_units_total:
     name: blockbook_fiat_rates_fetched_units_total
     type: counter_vec

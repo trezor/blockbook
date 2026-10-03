@@ -3,7 +3,7 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 
 import { OpenApiFetchClient } from "./client.js";
 import { OpenApiContract, preview } from "./openapi.js";
-import { allowOutOfSync, resolveHTTPBase, resolveWSURL } from "./config.js";
+import { allowOutOfSync, resolveHTTPBase, resolveWSURL, userAgentHeaders } from "./config.js";
 import { SkipTest } from "./errors.js";
 import { addressPage, addressPageSize, blockPageSize, sampleAddrTxProbeMax, sampleBlockPageSize, sampleBlockProbeMax, sciNotationTxLimit, sciNotationWindow, scientificNotationPattern, txSearchWindow, wsDialTimeoutMs, wsMessageTimeoutMs } from "./constants.js";
 import {
@@ -69,6 +69,7 @@ class wsConnection {
         handshakeTimeout: wsDialTimeoutMs,
         rejectUnauthorized: process.env.OPENAPI_INSECURE_TLS === "0",
         agent: wsProxyAgent(),
+        headers: userAgentHeaders(),
       });
       this.ws.on("open", () => {
         if (settled) { return; }

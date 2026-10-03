@@ -5740,8 +5740,8 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
             "gradientMode": "none",
             "lineWidth": 1,
             "pointSize": 5,
@@ -5768,10 +5768,9 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
+          "sum",
+          "max"
+        ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -5787,15 +5786,10 @@
           "editorMode": "code",
           "range": true,
           "refId": "A",
-          "x-query-key": "per_server"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "B",
-          "x-query-key": "total"
+          "x-query-key": "requests"
         }
       ],
+      "interval": "5m",
       "type": "timeseries",
       "x-panel-key": "general.coingecko_requests"
     },
@@ -5806,8 +5800,68 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 363,
+      "options": {
+        "legend": {
+          "calcs": [
+          "sum",
+          "max"
+        ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "A",
+          "x-query-key": "requests"
+        }
+      ],
+      "interval": "5m",
+      "type": "timeseries",
+      "x-panel-key": "general.coingecko_market_chart_requests"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
             "gradientMode": "none",
             "lineWidth": 1,
             "pointSize": 5,
@@ -5834,10 +5888,9 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
+          "sum",
+          "max"
+        ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -5853,15 +5906,10 @@
           "editorMode": "code",
           "range": true,
           "refId": "A",
-          "x-query-key": "per_server"
-        },
-        {
-          "editorMode": "code",
-          "range": true,
-          "refId": "B",
-          "x-query-key": "total"
+          "x-query-key": "ranges"
         }
       ],
+      "interval": "5m",
       "type": "timeseries",
       "x-panel-key": "general.coingecko_range_requests"
     },

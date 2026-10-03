@@ -596,13 +596,18 @@ func (fr *FiatRates) runCurrentLoop() {
 func (fr *FiatRates) updateCurrentTickers() {
 	start := time.Now()
 	currentTicker, err := fr.downloader.CurrentTickers()
-	if err != nil || currentTicker == nil {
+	status := "success"
+	if currentTicker != nil && errors.Is(err, errCoingeckoIncompleteTokenRates) {
+		// publish the native rates; missing tokens are reported as unknown rather than served stale
+		status = "partial"
+		glog.Warningf("FiatRatesDownloader: CurrentTickers %v, publishing %d token rates", err, len(currentTicker.TokenRates))
+	} else if err != nil || currentTicker == nil {
 		fr.observeUpdateDuration("current_tickers", "error", start)
 		logFiatRatesDownloaderError("FiatRatesDownloader: CurrentTickers error ", err)
 		return
 	}
 	fr.setCurrentTicker(currentTicker)
-	fr.observeUpdateDuration("current_tickers", "success", start)
+	fr.observeUpdateDuration("current_tickers", status, start)
 	glog.Info("FiatRatesDownloader: CurrentTickers updated")
 	if fr.callbackOnNewTicker != nil {
 		fr.callbackOnNewTicker(currentTicker)
