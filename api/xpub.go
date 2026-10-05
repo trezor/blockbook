@@ -33,7 +33,7 @@ type XpubConfig struct {
 func DefaultXpubConfig() XpubConfig {
 	return finalizeXpubConfig(XpubConfig{
 		MaxCacheExpirationSeconds: 3600,
-		MaxCacheEntries:           1024,
+		MaxCacheEntries:           5000,
 		DefaultAddressesGap:       20,
 		MaxAddressesGap:           10000,
 	})
@@ -119,6 +119,62 @@ type xpubData struct {
 	balanceSat      big.Int
 	mergedTxids     xpubTxids
 	addresses       [][]xpubAddress
+	// bytes is the estimate charged to cachedXpubsBytes for this entry, kept so
+	// eviction can credit exactly what insertion debited
+	bytes int
+}
+
+var cachedXpubsBytes int64
+
+// Per-item heap costs of an xpubData entry, calibrated against runtime.MemStats
+// on synthetic accounts (within ~7% from an empty account up to 25k txids).
+const (
+	xpubCacheEntryOverheadBytes = 256
+	xpubCacheAddressBytes       = 96
+	xpubCacheBalanceBytes       = 144
+	xpubCacheUtxoBytes          = 112
+	xpubCacheTxidBytes          = 96
+	xpubCacheMergedTxidBytes    = 24
+)
+
+// xpubDataEstimatedBytes approximates the heap held by one cache entry; txids
+// dominate because every one is a separate 64-byte string.
+func xpubDataEstimatedBytes(data *xpubData, keyLen int) int {
+	size := xpubCacheEntryOverheadBytes + keyLen + len(data.mergedTxids)*xpubCacheMergedTxidBytes
+	for _, da := range data.addresses {
+		size += len(da) * xpubCacheAddressBytes
+		for i := range da {
+			ad := &da[i]
+			size += len(ad.txids) * xpubCacheTxidBytes
+			if ad.balance != nil {
+				size += xpubCacheBalanceBytes + len(ad.balance.Utxos)*xpubCacheUtxoBytes
+			}
+		}
+	}
+	return size
+}
+
+// deleteCachedXpubLocked removes an entry and credits its bytes; the only way
+// entries may leave the map so the byte total cannot drift.
+func deleteCachedXpubLocked(key string) {
+	if data, ok := cachedXpubs[key]; ok {
+		cachedXpubsBytes -= int64(data.bytes)
+		delete(cachedXpubs, key)
+	}
+}
+
+// putCachedXpubLocked is the only way entries enter the map; it charges the
+// estimate that deleteCachedXpubLocked later credits.
+func putCachedXpubLocked(key string, data *xpubData) {
+	deleteCachedXpubLocked(key)
+	data.bytes = xpubDataEstimatedBytes(data, len(key))
+	cachedXpubs[key] = *data
+	cachedXpubsBytes += int64(data.bytes)
+}
+
+func (w *Worker) setXpubCacheMetricsLocked() {
+	w.metrics.XPubCacheSize.Set(float64(len(cachedXpubs)))
+	w.metrics.XPubCacheBytes.Set(float64(cachedXpubsBytes))
 }
 
 func (w *Worker) initXpubCache() {
@@ -140,10 +196,11 @@ func (w *Worker) evictXpubCacheItems() {
 	cachedXpubsMux.Lock()
 	count := evictXpubCacheItemsLocked(now, int64(w.xpubConfig.MaxCacheExpirationSeconds), w.xpubConfig.MaxCacheEntries)
 	cacheSize := len(cachedXpubs)
+	cacheBytes := cachedXpubsBytes
+	w.setXpubCacheMetricsLocked()
 	cachedXpubsMux.Unlock()
 
-	w.metrics.XPubCacheSize.Set(float64(cacheSize))
-	glog.Info("Evicted ", count, " items from xpub cache, cache size ", cacheSize)
+	glog.Info("Evicted ", count, " items from xpub cache, cache size ", cacheSize, ", ~", cacheBytes>>20, " MB")
 }
 
 func evictXpubCacheItemsLocked(now int64, expirationSeconds int64, maxEntries int) int {
@@ -151,34 +208,28 @@ func evictXpubCacheItemsLocked(now int64, expirationSeconds int64, maxEntries in
 	count := 0
 	for k, v := range cachedXpubs {
 		if v.accessed < threshold {
-			delete(cachedXpubs, k)
+			deleteCachedXpubLocked(k)
 			count++
 		}
 	}
 	return count + trimXpubCacheItemsLocked(maxEntries)
 }
 
+// trimXpubCacheItemsLocked evicts the least recently accessed entries down to
+// maxEntries. Inserts overshoot by one at most, so a linear scan per eviction
+// holds the mutex far shorter than sorting the whole map.
 func trimXpubCacheItemsLocked(maxEntries int) int {
-	if len(cachedXpubs) <= maxEntries {
-		return 0
-	}
-	type cacheEntry struct {
-		key      string
-		accessed int64
-	}
-	entries := make([]cacheEntry, 0, len(cachedXpubs))
-	for k, v := range cachedXpubs {
-		entries = append(entries, cacheEntry{key: k, accessed: v.accessed})
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].accessed == entries[j].accessed {
-			return entries[i].key < entries[j].key
+	count := 0
+	for len(cachedXpubs) > maxEntries {
+		oldest, found := "", false
+		var oldestAccessed int64
+		for k, v := range cachedXpubs {
+			if !found || v.accessed < oldestAccessed || (v.accessed == oldestAccessed && k < oldest) {
+				oldest, oldestAccessed, found = k, v.accessed, true
+			}
 		}
-		return entries[i].accessed < entries[j].accessed
-	})
-	count := len(cachedXpubs) - maxEntries
-	for i := 0; i < count; i++ {
-		delete(cachedXpubs, entries[i].key)
+		deleteCachedXpubLocked(oldest)
+		count++
 	}
 	return count
 }
@@ -485,6 +536,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 		return nil, 0, false, err
 	}
 	if data, bestheight, ok := w.getXpubDataCached(xd, option, filter, gap); ok {
+		w.metrics.XPubCacheHits.Inc()
 		return data, bestheight, true, nil
 	}
 	// Serialize updates for this descriptor; the expensive per-tx response
@@ -497,6 +549,11 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	data, inCache := cachedXpubs[xd.XpubDescriptor]
 	cachedXpubsMux.Unlock()
 	owned := !inCache // whether data.addresses is a private copy safe to mutate
+	// absent = derived from scratch, stale = cached but every address rescanned after a new block
+	missReason := ""
+	if !inCache || data.gap != gap {
+		missReason = "absent"
+	}
 	// to load all data for xpub may take some time, do it in a loop to process a possible new block
 	for {
 		bestheight, besthash, err = w.db.GetBestBlock()
@@ -536,6 +593,9 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			owned = true
 		}
 		if needsRescan {
+			if missReason == "" {
+				missReason = "stale"
+			}
 			data.dataHeight = bestheight
 			data.dataHash = besthash
 			data.balanceSat = *new(big.Int)
@@ -576,11 +636,15 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	if cachedXpubs == nil {
 		cachedXpubs = make(map[string]xpubData)
 	}
-	cachedXpubs[xd.XpubDescriptor] = data
+	putCachedXpubLocked(xd.XpubDescriptor, &data)
 	trimXpubCacheItemsLocked(w.xpubConfig.MaxCacheEntries)
-	cacheSize := len(cachedXpubs)
+	w.setXpubCacheMetricsLocked()
 	cachedXpubsMux.Unlock()
-	w.metrics.XPubCacheSize.Set(float64(cacheSize))
+	if missReason != "" {
+		w.metrics.XPubCacheMisses.With(common.Labels{"reason": missReason}).Inc()
+	} else {
+		w.metrics.XPubCacheHits.Inc()
+	}
 	return &data, bestheight, inCache, nil
 }
 
