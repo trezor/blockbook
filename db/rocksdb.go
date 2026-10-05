@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"container/list"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -308,6 +309,8 @@ type RocksDB struct {
 	protocolGen           atomic.Uint64
 	addrContractsCacheMux sync.Mutex
 	addrContractsCache    map[string]*unpackedAddrContracts
+	// addrContractsCacheLRU orders cached records, most recently used first; eviction takes the back.
+	addrContractsCacheLRU *list.List
 	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.
 	addrContractsCacheMinSize int
 	// tipAddrContractsCacheMaxBytes is the configured non-bulk cap.
@@ -420,6 +423,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		connectBlockMux:                sync.Mutex{},
 		addrContractsCacheMux:          sync.Mutex{},
 		addrContractsCache:             make(map[string]*unpackedAddrContracts),
+		addrContractsCacheLRU:          list.New(),
 		addrContractsCacheMinSize:      addrContractsCacheMinSize,
 		tipAddrContractsCacheMaxBytes:  0,
 		bulkAddrContractsCacheMaxBytes: 0,
@@ -471,7 +475,7 @@ func (d *RocksDB) Close() error {
 	if d.db != nil {
 		// store cached address contracts
 		if d.chainParser.GetChainType() == bchain.ChainEthereumType {
-			d.storeAddrContractsCache()
+			d.storeAddrContractsCache("close")
 		}
 		// store the internal state of the app
 		if d.is != nil && d.is.DbState == common.DbStateOpen {
@@ -752,7 +756,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		return err
 	}
 	if chainType == bchain.ChainEthereumType {
-		d.storeAddrContractsCacheIfDue()
+		d.maintainAddrContractsCache()
 	}
 	// Fractional seconds: the integer average truncates to 0 on sub-second chains, which
 	// silently excludes them from any rule gated on this gauge being > 0. SetBlockTime

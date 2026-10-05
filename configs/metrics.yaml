@@ -345,7 +345,24 @@ metrics:
   addr_contracts_cache_flush_total:
     name: blockbook_addr_contracts_cache_flush_total
     type: counter_vec
-    help: addressContracts cache flushes by trigger reason
+    help: addressContracts cache write-backs of modified entries by trigger reason
+    labels: [reason]
+  addr_contracts_cache_cacheable_misses_total:
+    name: blockbook_addr_contracts_cache_cacheable_misses_total
+    type: counter
+    help: addressContracts cache misses on records large enough to be cached, i.e. first loads and re-reads after eviction
+  addr_contracts_cache_evictions_total:
+    name: blockbook_addr_contracts_cache_evictions_total
+    type: counter
+    help: addressContracts cache entries evicted because the cache exceeded its cap
+  addr_contracts_cache_loaded_bytes_total:
+    name: blockbook_addr_contracts_cache_loaded_bytes_total
+    type: counter
+    help: Packed bytes read from RocksDB into the addressContracts cache
+  addr_contracts_cache_written_bytes_total:
+    name: blockbook_addr_contracts_cache_written_bytes_total
+    type: counter_vec
+    help: Packed bytes of modified addressContracts cache entries written back to RocksDB by trigger reason
     labels: [reason]
   dbcolumn_rows:
     name: blockbook_dbcolumn_rows

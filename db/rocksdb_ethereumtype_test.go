@@ -521,51 +521,216 @@ func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t 
 	}
 }
 
-func Test_addrContractsCache_FlushOnCap(t *testing.T) {
+// putTestAddrContracts stores a packed record with n fungible contracts and returns its packed size.
+func putTestAddrContracts(t *testing.T, d *RocksDB, addrDesc bchain.AddressDescriptor, n int) int64 {
+	t.Helper()
+	acs := &unpackedAddrContracts{TotalTxs: 1}
+	for i := 0; i < n; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(5000 + i),
+			Standard: bchain.FungibleToken,
+			Txs:      1,
+			Value:    unpackedBigInt{Value: big.NewInt(int64(i))},
+		})
+	}
+	buf := packUnpackedAddrContracts(acs)
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+	return int64(len(buf))
+}
+
+func getStoredTotalTxs(t *testing.T, d *RocksDB, addrDesc bchain.AddressDescriptor) uint {
+	t.Helper()
+	ac, err := d.GetAddrDescContracts(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ac == nil {
+		t.Fatalf("no stored record for %v", addrDesc)
+	}
+	return ac.TotalTxs
+}
+
+func Test_addrContractsCache_EvictsLeastRecentlyUsedOverCap(t *testing.T) {
 	d := setupRocksDB(t, &testEthereumParser{
 		EthereumParser: ethereumTestnetParser(),
 	})
 	defer closeAndDestroyRocksDB(t, d)
-
 	d.addrContractsCacheMinSize = 1
-	d.addrContractsCacheMaxBytes = 10
 
-	addrDesc := makeTestAddrDesc(42)
-	acs := &unpackedAddrContracts{
-		TotalTxs: 1,
-		Contracts: []unpackedAddrContract{
-			{
-				Contract: makeTestAddrDesc(7),
-				Standard: bchain.FungibleToken,
-				Txs:      1,
-				Value:    unpackedBigInt{Value: big.NewInt(0)},
-			},
-		},
-	}
-	buf := packUnpackedAddrContracts(acs)
-	if int64(len(buf)) <= d.addrContractsCacheMaxBytes {
-		t.Fatalf("expected packed size to exceed cap, got %d", len(buf))
-	}
-	wb := grocksdb.NewWriteBatch()
-	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
-	if err := d.WriteBatch(wb); err != nil {
-		wb.Destroy()
-		t.Fatal(err)
-	}
-	wb.Destroy()
+	addrA, addrB, addrC := makeTestAddrDesc(41), makeTestAddrDesc(42), makeTestAddrDesc(43)
+	size := putTestAddrContracts(t, d, addrA, 3)
+	putTestAddrContracts(t, d, addrB, 3)
+	putTestAddrContracts(t, d, addrC, 3)
+	// room for two records, so loading three overshoots the cap within the "block"
+	d.addrContractsCacheMaxBytes = 2*size + 1
 
-	got, err := d.getUnpackedAddrDescContracts(addrDesc)
+	a, err := d.getUnpackedAddrDescContracts(addrA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got == nil {
-		t.Fatal("expected cached address contracts to be returned")
+	b, err := d.getUnpackedAddrDescContracts(addrB)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(d.addrContractsCache) != 0 {
-		t.Fatalf("expected cache to be flushed, got %d entries", len(d.addrContractsCache))
+	if _, err := d.getUnpackedAddrDescContracts(addrC); err != nil {
+		t.Fatal(err)
 	}
-	if d.addrContractsCacheBytes != 0 {
-		t.Fatalf("expected cache bytes to be reset, got %d", d.addrContractsCacheBytes)
+	if got := d.addrContractsCacheBytes; got != 3*size {
+		t.Fatalf("cache bytes before eviction = %d, want %d", got, 3*size)
+	}
+	// a hit on A makes B the least recently used record; B's in-memory change must survive the eviction
+	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+		t.Fatal(err)
+	}
+	b.TotalTxs = 77
+	a.TotalTxs = 55
+
+	d.evictAddrContractsCacheOverCap()
+
+	if _, found := d.addrContractsCache[string(addrB)]; found {
+		t.Fatal("expected the least recently used record B to be evicted")
+	}
+	for _, addr := range []bchain.AddressDescriptor{addrA, addrC} {
+		if _, found := d.addrContractsCache[string(addr)]; !found {
+			t.Fatalf("expected %v to stay cached", addr)
+		}
+	}
+	if got := d.addrContractsCacheBytes; got != 2*size {
+		t.Fatalf("cache bytes after eviction = %d, want %d", got, 2*size)
+	}
+	if got := d.addrContractsCacheLRU.Len(); got != 2 {
+		t.Fatalf("LRU length after eviction = %d, want 2", got)
+	}
+	if got := getStoredTotalTxs(t, d, addrB); got != 77 {
+		t.Fatalf("evicted record B stored TotalTxs = %d, want 77", got)
+	}
+	if b.cacheDirty {
+		t.Fatal("evicted record B should be marked clean after its write")
+	}
+	// A was not evicted and therefore not written yet
+	if got := getStoredTotalTxs(t, d, addrA); got != 1 {
+		t.Fatalf("cached record A stored TotalTxs = %d, want the original 1", got)
+	}
+}
+
+func Test_addrContractsCache_KeepsMostRecentlyUsedOverCap(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+	d.addrContractsCacheMaxBytes = 10
+
+	addrDesc := makeTestAddrDesc(44)
+	size := putTestAddrContracts(t, d, addrDesc, 2)
+	if size <= d.addrContractsCacheMaxBytes {
+		t.Fatalf("expected packed size to exceed cap, got %d", size)
+	}
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+
+	d.evictAddrContractsCacheOverCap()
+
+	if _, found := d.addrContractsCache[string(addrDesc)]; !found {
+		t.Fatal("a single oversized record must stay cached rather than be reloaded every block")
+	}
+	if got := d.addrContractsCacheBytes; got != size {
+		t.Fatalf("cache bytes = %d, want %d", got, size)
+	}
+}
+
+func Test_addrContractsCache_StoreWritesOnlyDirtyEntries(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrA, addrB := makeTestAddrDesc(45), makeTestAddrDesc(46)
+	putTestAddrContracts(t, d, addrA, 2)
+	putTestAddrContracts(t, d, addrB, 2)
+	a, err := d.getUnpackedAddrDescContracts(addrA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := d.getUnpackedAddrDescContracts(addrB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.cacheDirty || !b.cacheDirty {
+		t.Fatal("freshly loaded records are handed to a mutating caller and must start dirty")
+	}
+	a.TotalTxs, b.TotalTxs = 11, 12
+
+	d.storeAddrContractsCache("timer")
+
+	if a.cacheDirty || b.cacheDirty {
+		t.Fatal("stored records must be clean")
+	}
+	if got := getStoredTotalTxs(t, d, addrA); got != 11 {
+		t.Fatalf("stored A TotalTxs = %d, want 11", got)
+	}
+	if got := getStoredTotalTxs(t, d, addrB); got != 12 {
+		t.Fatalf("stored B TotalTxs = %d, want 12", got)
+	}
+	if got := len(d.addrContractsCache); got != 2 {
+		t.Fatalf("store must keep records cached, got %d entries", got)
+	}
+
+	// only a cache hit marks a record dirty again; B is changed without one and must not be rewritten
+	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+		t.Fatal(err)
+	}
+	a.TotalTxs, b.TotalTxs = 21, 22
+
+	d.storeAddrContractsCache("timer")
+
+	if got := getStoredTotalTxs(t, d, addrA); got != 21 {
+		t.Fatalf("stored A TotalTxs = %d, want 21", got)
+	}
+	if got := getStoredTotalTxs(t, d, addrB); got != 12 {
+		t.Fatalf("clean record B was rewritten, stored TotalTxs = %d, want 12", got)
+	}
+}
+
+func Test_addrContractsCache_EvictionDeletesEmptiedRecord(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrA, addrB := makeTestAddrDesc(47), makeTestAddrDesc(48)
+	size := putTestAddrContracts(t, d, addrA, 2)
+	putTestAddrContracts(t, d, addrB, 2)
+	d.addrContractsCacheMaxBytes = size
+	a, err := d.getUnpackedAddrDescContracts(addrA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.getUnpackedAddrDescContracts(addrB); err != nil {
+		t.Fatal(err)
+	}
+	// a disconnect emptied A; its eviction must remove the row like storeUnpackedAddressContracts does
+	a.TotalTxs, a.NonContractTxs, a.InternalTxs, a.Contracts = 0, 0, 0, nil
+
+	d.evictAddrContractsCacheOverCap()
+
+	if _, found := d.addrContractsCache[string(addrA)]; found {
+		t.Fatal("expected A to be evicted")
+	}
+	ac, err := d.GetAddrDescContracts(addrA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ac != nil {
+		t.Fatalf("emptied record A should be deleted, got %+v", ac)
 	}
 }
 
@@ -1455,7 +1620,7 @@ func Test_BulkConnect_EthereumType_UsesConfiguredAddrContractsCacheMaxBytes(t *t
 	}
 }
 
-func Test_BulkConnect_EthereumType_CloseFlushesAddrContractsCacheOverTipCap(t *testing.T) {
+func Test_BulkConnect_EthereumType_CloseEvictsAddrContractsCacheOverTipCap(t *testing.T) {
 	parser := ethereumTestnetParser()
 	parser.AddrContractsCacheMaxBytes = 10
 	parser.AddrContractsCacheBulkMaxBytes = 20
@@ -1469,9 +1634,10 @@ func Test_BulkConnect_EthereumType_CloseFlushesAddrContractsCacheOverTipCap(t *t
 		t.Fatal(err)
 	}
 
+	// two records fit the bulk cap but not the tip cap; the older one goes when bulk mode ends
 	d.addrContractsCacheMux.Lock()
-	d.addrContractsCache[string(makeTestAddrDesc(99))] = &unpackedAddrContracts{TotalTxs: 1}
-	d.addrContractsCacheBytes = d.tipAddrContractsCacheMaxBytes + 1
+	d.insertAddrContractsCacheEntryLocked(string(makeTestAddrDesc(98)), &unpackedAddrContracts{TotalTxs: 1}, 8)
+	d.insertAddrContractsCacheEntryLocked(string(makeTestAddrDesc(99)), &unpackedAddrContracts{TotalTxs: 1}, 8)
 	d.addrContractsCacheMux.Unlock()
 
 	if err := bc.Close(); err != nil {
@@ -1480,11 +1646,14 @@ func Test_BulkConnect_EthereumType_CloseFlushesAddrContractsCacheOverTipCap(t *t
 	if got := d.addrContractsCacheMaxBytes; got != d.tipAddrContractsCacheMaxBytes {
 		t.Fatalf("Close() addrContractsCacheMaxBytes = %d, want %d", got, d.tipAddrContractsCacheMaxBytes)
 	}
-	if got := len(d.addrContractsCache); got != 0 {
-		t.Fatalf("Close() addrContractsCache entries = %d, want 0", got)
+	if _, found := d.addrContractsCache[string(makeTestAddrDesc(98))]; found {
+		t.Fatal("Close() should evict the least recently used record over the tip cap")
 	}
-	if got := d.addrContractsCacheBytes; got != 0 {
-		t.Fatalf("Close() addrContractsCacheBytes = %d, want 0", got)
+	if _, found := d.addrContractsCache[string(makeTestAddrDesc(99))]; !found {
+		t.Fatal("Close() should keep the most recently used record")
+	}
+	if got := d.addrContractsCacheBytes; got != 8 {
+		t.Fatalf("Close() addrContractsCacheBytes = %d, want 8", got)
 	}
 }
 
