@@ -3,6 +3,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -14,6 +15,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/bch"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
@@ -889,6 +891,86 @@ func TestRefreshSyncMetricsKeepsLastGoodOnBackendError(t *testing.T) {
 	}
 	if got := gaugeValue(t, m.BackendBestHeight); got != 700 {
 		t.Errorf("backend_best_height = %v, want the retained 700", got)
+	}
+}
+
+func TestTxFromTxAddress_PreservesBcashTokenAndScriptAddress(t *testing.T) {
+	parser, err := bch.NewBCashParser(bch.GetChainParams("test"), &btc.Configuration{AddressFormat: "cashaddr"})
+	if err != nil {
+		t.Fatalf("NewBCashParser() error = %v", err)
+	}
+	rocks, err := db.NewRocksDB(t.TempDir(), 1, 1, parser, &common.Metrics{}, false)
+	if err != nil {
+		t.Fatalf("NewRocksDB() error = %v", err)
+	}
+	defer rocks.Close()
+
+	addrDesc := bchain.AddressDescriptor{0xaa, 0xbb, 0xcc}
+	token := &bchain.BcashToken{
+		Category: bytes.Repeat([]byte{0x11}, 32),
+		Amount:   common.Amount(*big.NewInt(42)),
+		Nft: &bchain.BcashTokenNft{
+			Capability: bchain.NFTCapabilityLabelMutable,
+			Commitment: []byte{0xde, 0xad, 0xbe, 0xef},
+		},
+	}
+	ta := &db.TxAddresses{
+		Height: 313026,
+		Outputs: []db.TxOutput{
+			{
+				AddrDesc:   addrDesc,
+				ValueSat:   *big.NewInt(12345),
+				BcashToken: token,
+			},
+		},
+	}
+	w := &Worker{
+		chainParser: parser,
+		db:          rocks,
+		is:          &common.InternalState{CoinShortcut: "BCH"},
+	}
+
+	tx := w.txFromTxAddress("txid", ta, &db.BlockInfo{Hash: "blockhash", Time: 1700000000}, 313026, nil)
+	if tx == nil {
+		t.Fatal("txFromTxAddress() returned nil")
+	}
+	if len(tx.Vout) != 1 {
+		t.Fatalf("unexpected vout count: got %d, want 1", len(tx.Vout))
+	}
+	if got := tx.Vout[0].Addresses; len(got) != 1 || got[0] != "script-aabbcc" {
+		t.Fatalf("unexpected output addresses: got %+v, want [script-aabbcc]", got)
+	}
+	if tx.Vout[0].BcashToken == nil {
+		t.Fatal("expected output token data")
+	}
+	if got, want := tx.Vout[0].BcashToken.Category, "1111111111111111111111111111111111111111111111111111111111111111"; got != want {
+		t.Fatalf("unexpected token category: got %s, want %s", got, want)
+	}
+	if got, want := tx.Vout[0].BcashToken.Amount.String(), "42"; got != want {
+		t.Fatalf("unexpected token amount: got %s, want %s", got, want)
+	}
+	if tx.Vout[0].BcashToken.Nft == nil {
+		t.Fatal("expected nft token data")
+	}
+	if got, want := tx.Vout[0].BcashToken.Nft.Capability, "mutable"; got != want {
+		t.Fatalf("unexpected nft capability: got %s, want %s", got, want)
+	}
+	if got, want := tx.Vout[0].BcashToken.Nft.Commitment, "deadbeef"; got != want {
+		t.Fatalf("unexpected nft commitment: got %s, want %s", got, want)
+	}
+
+	bcashSpecific, err := w.bcashPostProcessApiTx(tx.Txid, &tx.Vin, &tx.Vout)
+	if err != nil {
+		t.Fatalf("bcashPostProcessApiTx() error = %v", err)
+	}
+	if bcashSpecific == nil || len(bcashSpecific.TokenVouts) != 1 || bcashSpecific.TokenVouts[0] == nil {
+		t.Fatalf("unexpected bcashSpecific tokenVouts: %+v", bcashSpecific)
+	}
+	if got, want := bcashSpecific.TokenVouts[0].Amount.String(), "42"; got != want {
+		t.Fatalf("unexpected post-processed token amount: got %s, want %s", got, want)
+	}
+	if got, want := bcashSpecific.TokenVouts[0].Nft.Commitment, []byte{0xde, 0xad, 0xbe, 0xef}; !bytes.Equal(got, want) {
+		t.Fatalf("unexpected post-processed commitment: got %x, want %x", got, want)
 	}
 }
 

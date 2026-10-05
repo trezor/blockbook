@@ -22,11 +22,13 @@ func main() {
 	t.ManageType([]*api.Amount{}, typescriptify.TypeOptions{TSType: "string[]"})
 	t.ManageType(big.Int{}, typescriptify.TypeOptions{TSType: "number"})
 	t.ManageType(time.Time{}, typescriptify.TypeOptions{TSType: "string", TSDoc: "Time in ISO 8601 YYYY-MM-DDTHH:mm:ss.sssZd"})
+	t.ManageType(bchain.BcashToken{}, typescriptify.TypeOptions{TSType: "BcashToken"})
 
 	// API - REST and Websocket
 	t.Add(api.APIError{})
 	t.Add(bchain.TronChainExtraData{})
 	t.Add(bchain.TronAccountExtraData{})
+	t.Add(api.BcashToken{})
 	t.Add(api.Tx{})
 	t.Add(api.FeeStats{})
 	t.Add(api.Address{})

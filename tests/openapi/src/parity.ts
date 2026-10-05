@@ -53,6 +53,9 @@ const _MultiTokenValue: Compat<Bb.MultiTokenValue, Schemas["MultiTokenValue"], "
 const _TokenTransfer: Compat<Bb.TokenTransfer, Schemas["TokenTransfer"], "TokenTransfer"> = true;
 const _Vin: Compat<Bb.Vin, Schemas["Vin"], "Vin"> = true;
 const _Vout: Compat<Bb.Vout, Schemas["Vout"], "Vout"> = true;
+const _BcashToken: Compat<Bb.BcashToken, Schemas["BcashToken"], "BcashToken"> = true;
+const _BcashTokenNft: Compat<Bb.BcashTokenNft, Schemas["BcashTokenNft"], "BcashTokenNft"> = true;
+const _BcashSpecific: Compat<Bb.BcashSpecific, Schemas["BcashSpecific"], "BcashSpecific"> = true;
 
 const _EthereumInternalTransfer: Compat<Bb.EthereumInternalTransfer, Schemas["EthereumInternalTransfer"], "EthereumInternalTransfer"> = true;
 const _EthereumParsedInputParam: Compat<Bb.EthereumParsedInputParam, Schemas["EthereumParsedInputParam"], "EthereumParsedInputParam"> = true;

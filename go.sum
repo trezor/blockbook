@@ -183,8 +183,8 @@ github.com/leanovate/gopter v0.2.11 h1:vRjThO1EKPb/1NsDXuDrzldR28RLkBflWYcU9CvzW
 github.com/leanovate/gopter v0.2.11/go.mod h1:aK3tzZP/C+p1m3SPRE4SYZFGP7jjkuSI4f7Xvpt0S9c=
 github.com/linxGnu/grocksdb v1.9.8 h1:vOIKv9/+HKiqJAElJIEYv3ZLcihRxyP7Suu/Mu8Dxjs=
 github.com/linxGnu/grocksdb v1.9.8/go.mod h1:C3CNe9UYc9hlEM2pC82AqiGS3LRW537u9LFV4wIZuHk=
-github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe h1:khZWpHuxJNh2EGzBbaS6EQ2d6KxgK31WeG0TnlTMUD4=
-github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe/go.mod h1:0hw4tpGU+9slqN/DrevhjTMb0iR9esxzpCdx8I6/UzU=
+github.com/mainnet-pat/bchutil v0.0.0-20250925114252-67a05fe8f9ba h1:utSGIQ1frek69crVUaxW6J0Osai/3s2eV1KUBtPTNxI=
+github.com/mainnet-pat/bchutil v0.0.0-20250925114252-67a05fe8f9ba/go.mod h1:qG9arHg3AfRXKVN+BM1Wy/PEHLChZ5vAGOsO55ckMUQ=
 github.com/martinboehm/btcd v0.0.0-20190104121910-8e7c0427fee5/go.mod h1:rKQj/jGwFruYjpM6vN+syReFoR0DsLQaajhyH/5mwUE=
 github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809 h1:a3l5GCQYYyB4zDmtsB8gu+aB15earQxMG1W/S/zKcXs=
 github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809/go.mod h1:YGXD0z/xtFXFF5jFp1GaVnrKRlEADn4pD47Zu4xaLg0=

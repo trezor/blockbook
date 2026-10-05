@@ -1830,7 +1830,7 @@ components:
     TokenStandard:
       type: string
       description: Token standard name. Empty string means no token standard is known.
-      enum: ["", XPUBAddress, ERC20, ERC721, ERC1155, BEP20, BEP721, BEP1155, TRC20, TRC721, TRC1155]
+      enum: ["", XPUBAddress, CashToken, ERC20, ERC721, ERC1155, BEP20, BEP721, BEP1155, TRC20, TRC721, TRC1155]
 
     BlockHashResponse:
       type: object
@@ -1904,6 +1904,71 @@ components:
           items:
             $ref: "#/components/schemas/MultiTokenValue"
 
+    BcashTokenNftMeta:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        icon:
+          type: string
+
+    BcashTokenNft:
+      allOf:
+        - $ref: "#/components/schemas/BcashTokenNftMeta"
+        - type: object
+          required: [capability, commitment]
+          properties:
+            capability:
+              type: string
+              enum: [none, mutable, minting]
+            commitment:
+              type: string
+              pattern: "^([0-9a-fA-F]{2})*$"
+              maxLength: 256
+              description: Hex-encoded NFT commitment, up to 128 bytes.
+
+    BcashToken:
+      type: object
+      required: [category, amount]
+      properties:
+        category:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        amount:
+          $ref: "#/components/schemas/AmountString"
+        name:
+          type: string
+        symbol:
+          type: string
+        decimals:
+          type: integer
+        description:
+          type: string
+        icon:
+          type: string
+        website:
+          type: string
+        nft:
+          $ref: "#/components/schemas/BcashTokenNft"
+
+    BcashSpecific:
+      type: object
+      properties:
+        tokenVins:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/BcashToken"
+              - type: "null"
+        tokenVouts:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/BcashToken"
+              - type: "null"
+
     Vin:
       type: object
       required: [n, isAddress]
@@ -1934,6 +1999,8 @@ components:
           type: string
         coinbase:
           type: string
+        tokenData:
+          $ref: "#/components/schemas/BcashToken"
 
     Vout:
       type: object
@@ -1968,6 +2035,8 @@ components:
           type: boolean
         type:
           type: string
+        tokenData:
+          $ref: "#/components/schemas/BcashToken"
 
     EthereumInternalTransfer:
       type: object
@@ -2140,6 +2209,8 @@ components:
             $ref: "#/components/schemas/TokenTransfer"
         ethereumSpecific:
           $ref: "#/components/schemas/EthereumSpecific"
+        bcashSpecific:
+          $ref: "#/components/schemas/BcashSpecific"
         addressAliases:
           $ref: "#/components/schemas/AddressAliases"
 
@@ -2279,6 +2350,23 @@ components:
           description: Indexed protocol identifiers such as erc4626.
           items:
             type: string
+        category:
+          type: string
+        commitments:
+          type: array
+          items:
+            type: string
+            maxLength: 256
+        description:
+          type: string
+        icon:
+          type: string
+        website:
+          type: string
+        nfts:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/BcashTokenNftMeta"
 
     StakingPool:
       type: object
@@ -2403,6 +2491,8 @@ components:
           type: integer
         coinbase:
           type: boolean
+        tokenData:
+          $ref: "#/components/schemas/BcashToken"
 
     BalanceHistory:
       type: object
