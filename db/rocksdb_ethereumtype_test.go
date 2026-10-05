@@ -590,6 +590,7 @@ func Test_addrContractsCache_EvictsLeastRecentlyUsedOverCap(t *testing.T) {
 	b.TotalTxs = 77
 	a.TotalTxs = 55
 
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
 	d.evictAddrContractsCacheOverCap()
 
 	if _, found := d.addrContractsCache[string(addrB)]; found {
@@ -618,6 +619,49 @@ func Test_addrContractsCache_EvictsLeastRecentlyUsedOverCap(t *testing.T) {
 	}
 }
 
+func Test_addrContractsCache_KeepsRecordsUsedInRecentBlocks(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrA, addrB := makeTestAddrDesc(49), makeTestAddrDesc(50)
+	size := putTestAddrContracts(t, d, addrA, 3)
+	putTestAddrContracts(t, d, addrB, 3)
+	d.addrContractsCacheMaxBytes = size + 1
+
+	// block 0 loads both; neither may go, even though the cache is over the cap
+	for _, addr := range []bchain.AddressDescriptor{addrA, addrB} {
+		if _, err := d.getUnpackedAddrDescContracts(addr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.maintainAddrContractsCache()
+	if got := len(d.addrContractsCache); got != 2 {
+		t.Fatalf("records used in the current block were evicted, %d left", got)
+	}
+	// block 1 touches only A; B is still protected by the previous block
+	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+		t.Fatal(err)
+	}
+	d.maintainAddrContractsCache()
+	if got := len(d.addrContractsCache); got != 2 {
+		t.Fatalf("record used one block ago was evicted, %d left", got)
+	}
+	// block 2 touches only A again; B is now cold and goes
+	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+		t.Fatal(err)
+	}
+	d.maintainAddrContractsCache()
+	if _, found := d.addrContractsCache[string(addrB)]; found {
+		t.Fatal("expected the cold record B to be evicted")
+	}
+	if _, found := d.addrContractsCache[string(addrA)]; !found {
+		t.Fatal("expected the hot record A to stay")
+	}
+}
+
 func Test_addrContractsCache_KeepsMostRecentlyUsedOverCap(t *testing.T) {
 	d := setupRocksDB(t, &testEthereumParser{
 		EthereumParser: ethereumTestnetParser(),
@@ -635,6 +679,7 @@ func Test_addrContractsCache_KeepsMostRecentlyUsedOverCap(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
 	d.evictAddrContractsCacheOverCap()
 
 	if _, found := d.addrContractsCache[string(addrDesc)]; !found {
@@ -720,6 +765,7 @@ func Test_addrContractsCache_EvictionDeletesEmptiedRecord(t *testing.T) {
 	// a disconnect emptied A; its eviction must remove the row like storeUnpackedAddressContracts does
 	a.TotalTxs, a.NonContractTxs, a.InternalTxs, a.Contracts = 0, 0, 0, nil
 
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
 	d.evictAddrContractsCacheOverCap()
 
 	if _, found := d.addrContractsCache[string(addrA)]; found {
@@ -1638,6 +1684,7 @@ func Test_BulkConnect_EthereumType_CloseEvictsAddrContractsCacheOverTipCap(t *te
 	d.addrContractsCacheMux.Lock()
 	d.insertAddrContractsCacheEntryLocked(string(makeTestAddrDesc(98)), &unpackedAddrContracts{TotalTxs: 1}, 8)
 	d.insertAddrContractsCacheEntryLocked(string(makeTestAddrDesc(99)), &unpackedAddrContracts{TotalTxs: 1}, 8)
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
 	d.addrContractsCacheMux.Unlock()
 
 	if err := bc.Close(); err != nil {

@@ -283,6 +283,9 @@ const addrContractsCacheMinSize = 300_000 // limit for caching address contracts
 // addrContractsCacheStorePeriod is how often the cache is packed to disk during block connect.
 const addrContractsCacheStorePeriod = 5 * time.Minute
 
+// addrContractsCacheHotBlocks is how many recent blocks protect a cached record from eviction.
+const addrContractsCacheHotBlocks = 2
+
 // RocksDB handle
 type RocksDB struct {
 	path            string
@@ -311,6 +314,10 @@ type RocksDB struct {
 	addrContractsCache    map[string]*unpackedAddrContracts
 	// addrContractsCacheLRU orders cached records, most recently used first; eviction takes the back.
 	addrContractsCacheLRU *list.List
+	// addrContractsCacheClock counts maintenance cycles (blocks); records used within the last
+	// addrContractsCacheHotBlocks cycles are never evicted, so a hot set larger than the cap
+	// overshoots it instead of cycling through RocksDB on every block.
+	addrContractsCacheClock uint64
 	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.
 	addrContractsCacheMinSize int
 	// tipAddrContractsCacheMaxBytes is the configured non-bulk cap.

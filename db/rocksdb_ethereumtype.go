@@ -1705,6 +1705,8 @@ type unpackedAddrContracts struct {
 	cacheElem  *list.Element
 	cacheSize  int64
 	cacheDirty bool
+	// cacheLastUse is the maintenance cycle of the last hit or insert.
+	cacheLastUse uint64
 }
 
 type contractIndexKey [eth.EthereumTypeAddressDescriptorLen]byte
@@ -1908,6 +1910,7 @@ func (d *RocksDB) insertAddrContractsCacheEntryLocked(key string, acs *unpackedA
 	acs.cacheKey = key
 	acs.cacheSize = packedSize
 	acs.cacheDirty = true
+	acs.cacheLastUse = d.addrContractsCacheClock
 	acs.cacheElem = d.addrContractsCacheLRU.PushFront(acs)
 	d.addrContractsCache[key] = acs
 	d.addrContractsCacheBytes += packedSize
@@ -1915,6 +1918,7 @@ func (d *RocksDB) insertAddrContractsCacheEntryLocked(key string, acs *unpackedA
 
 func (d *RocksDB) touchAddrContractsCacheEntryLocked(acs *unpackedAddrContracts) {
 	acs.cacheDirty = true
+	acs.cacheLastUse = d.addrContractsCacheClock
 	if acs.cacheElem != nil {
 		d.addrContractsCacheLRU.MoveToFront(acs.cacheElem)
 	}
@@ -2109,8 +2113,9 @@ func (d *RocksDB) writeDirtyAddrContracts(entries []*unpackedAddrContracts) (int
 }
 
 // evictAddrContractsCacheOverCap drops the least recently used records until the cache fits its cap,
-// persisting modified ones first. The most recently used record is never evicted, so one oversized
-// hot address overshoots the cap instead of being re-read and rewritten on every block.
+// persisting modified ones first. Records used within the last addrContractsCacheHotBlocks cycles and
+// the most recently used record are never evicted: a hot set larger than the cap, or one oversized hot
+// address, overshoots the cap instead of being re-read and rewritten on every block.
 func (d *RocksDB) evictAddrContractsCacheOverCap() {
 	maxBytes := d.addrContractsCacheMaxBytes
 	if maxBytes <= 0 {
@@ -2123,6 +2128,10 @@ func (d *RocksDB) evictAddrContractsCacheOverCap() {
 	bytes := d.addrContractsCacheBytes
 	for e := d.addrContractsCacheLRU.Back(); e != nil && bytes > maxBytes && d.addrContractsCacheLRU.Len()-len(victims) > 1; e = e.Prev() {
 		acs := e.Value.(*unpackedAddrContracts)
+		// the list is ordered by recency, so the first protected record ends the scan
+		if acs.cacheLastUse+addrContractsCacheHotBlocks > d.addrContractsCacheClock {
+			break
+		}
 		victims = append(victims, acs)
 		bytes -= acs.cacheSize
 	}
@@ -2180,5 +2189,8 @@ func (d *RocksDB) storeAddrContractsCacheIfDue() {
 // here cannot race a mutation. Mid-block the cache may exceed its cap by what one block loads.
 func (d *RocksDB) maintainAddrContractsCache() {
 	d.evictAddrContractsCacheOverCap()
+	d.addrContractsCacheMux.Lock()
+	d.addrContractsCacheClock++
+	d.addrContractsCacheMux.Unlock()
 	d.storeAddrContractsCacheIfDue()
 }

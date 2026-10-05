@@ -130,8 +130,9 @@ Column families used only by **Ethereum type** coins:
   size exceeds `address_contracts_cache_min_size`. Cached records are mutated in place by block connect and disconnect
   and are written back only when modified: every five minutes, on eviction and on shutdown. After each block, if the
   cache exceeds the active cap (`address_contracts_cache_max_bytes` at chain tip, `address_contracts_cache_bulk_max_bytes`
-  during bulk connect), the least recently used records are evicted until it fits; the most recently used record is never
-  evicted, so one oversized hot address overshoots the cap instead of being reloaded on every block. Within a block the
+  during bulk connect), the least recently used records are evicted until it fits. Records used in the last two blocks and the most
+  recently used record are never evicted, so a hot set larger than the cap overshoots it instead of cycling
+  through RocksDB on every block. Within a block the
   cache may temporarily exceed the cap by whatever that block loads. The decoded record costs roughly four to six times
   its packed size in Go heap, so the cap bounds memory only approximately. The `addr_contracts_cache_*` metrics expose
   hits, misses, cacheable misses (re-reads of records the cache could have held), evictions and bytes loaded and written.
