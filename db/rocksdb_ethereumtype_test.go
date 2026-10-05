@@ -649,11 +649,13 @@ func Test_addrContractsCache_KeepsRecordsUsedInRecentBlocks(t *testing.T) {
 	if got := len(d.addrContractsCache); got != 2 {
 		t.Fatalf("record used one block ago was evicted, %d left", got)
 	}
-	// block 2 touches only A again; B is now cold and goes
-	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
-		t.Fatal(err)
+	// later blocks touch only A; B goes once it falls out of the protection window
+	for i := 2; i <= addrContractsCacheHotBlocks; i++ {
+		if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+			t.Fatal(err)
+		}
+		d.maintainAddrContractsCache()
 	}
-	d.maintainAddrContractsCache()
 	if _, found := d.addrContractsCache[string(addrB)]; found {
 		t.Fatal("expected the cold record B to be evicted")
 	}
