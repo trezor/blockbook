@@ -172,7 +172,7 @@
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>
-                                {{range $i, $iv := $t.Ids}}{{if $i}}, {{end}}<a href="/nft/{{$t.Contract}}/{{formatAmountWithDecimals $iv 0}}">{{formatAmountWithDecimals $iv 0}}</a>{{end}}
+                                {{range $i, $iv := $t.Ids}}{{if $i}}, {{end}}<a href="/nft/{{$t.Contract}}/{{formatAmountWithDecimals $iv 0}}">{{formatAmountWithDecimals $iv 0}}</a>{{end}}{{if $t.IdsTotal}} &hellip; ({{formatInt $t.IdsTotal}} total){{end}}
                             </td>
                             <td class="text-end">{{$t.Transfers}}</td>
                         </tr>
@@ -209,7 +209,7 @@
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>
-                                {{range $i, $iv := $t.MultiTokenValues}}{{if $i}}, {{end}}{{formattedAmountSpan $iv.Value 0 $t.Symbol $data ""}} of ID <a href="/nft/{{$t.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>{{end}}
+                                {{range $i, $iv := $t.MultiTokenValues}}{{if $i}}, {{end}}{{formattedAmountSpan $iv.Value 0 $t.Symbol $data ""}} of ID <a href="/nft/{{$t.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>{{end}}{{if $t.MultiTokenValuesTotal}} &hellip; ({{formatInt $t.MultiTokenValuesTotal}} total){{end}}
                             </td>
                             <td class="text-end">{{formatInt $t.Transfers}}</td>
                         </tr>

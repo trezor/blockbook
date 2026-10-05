@@ -1820,6 +1820,14 @@ func stripAddrContracts(full *AddrContracts, opts AddrContractsReadOptions) *Add
 		if opts.Holdings && (len(opts.Contract) == 0 || bytes.Equal(opts.Contract, c.Contract)) {
 			s.Ids = c.Ids
 			s.MultiTokenValues = c.MultiTokenValues
+			if n := len(c.Ids) + len(c.MultiTokenValues); opts.MaxHoldings > 0 && n > opts.MaxHoldings {
+				s.HoldingsTotal = uint(n)
+				if c.Ids != nil {
+					s.Ids = c.Ids[:opts.MaxHoldings]
+				} else {
+					s.MultiTokenValues = c.MultiTokenValues[:opts.MaxHoldings]
+				}
+			}
 		}
 		rv.Contracts[i] = s
 	}
@@ -1843,6 +1851,11 @@ func Test_unpackAddrContractsOpt(t *testing.T) {
 		{"holdingsOf47", AddrContractsReadOptions{Holdings: true, Contract: contract47}},
 		{"holdingsOf4a", AddrContractsReadOptions{Holdings: true, Contract: contract4a}},
 		{"holdingsOfAbsentContract", AddrContractsReadOptions{Holdings: true, Contract: notAContract}},
+		// every NFT row holds 3 ids, so 2 truncates all of them and 3 or 10 none
+		{"capped2", AddrContractsReadOptions{Holdings: true, values: true, MaxHoldings: 2}},
+		{"capped3", AddrContractsReadOptions{Holdings: true, MaxHoldings: 3}},
+		{"capped10", AddrContractsReadOptions{Holdings: true, MaxHoldings: 10}},
+		{"capped1Of47", AddrContractsReadOptions{Holdings: true, Contract: contract47, MaxHoldings: 1}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := unpackAddrContractsOpt(packed, nil, tt.opts)
