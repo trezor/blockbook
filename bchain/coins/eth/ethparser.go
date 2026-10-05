@@ -28,8 +28,10 @@ const defaultHotAddressMinHits = 3
 const maxHotAddressLRUCacheSize = 100_000
 const maxHotAddressMinHits = 10
 const defaultAddressContractsCacheMinSize = 300_000
-const defaultAddressContractsCacheMaxBytes int64 = 2_000_000_000
-const defaultAddressContractsCacheBulkMaxBytes int64 = 4_000_000_000
+// Packed sizes; a decoded record costs 4-6x its packed size in Go heap, and the live hot set of
+// heavy addresses on the busiest chains fits in well under 256 MB packed.
+const defaultAddressContractsCacheMaxBytes int64 = 256 << 20
+const defaultAddressContractsCacheBulkMaxBytes int64 = 1 << 30
 
 type AddressContractsCacheConfig struct {
 	MinSize      int
