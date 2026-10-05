@@ -876,6 +876,12 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 	return uri, ci, nil
 }
 
+// maxFilteredAddressScanNonMatching caps entries a filtered walk may skip; matches are already bounded by maxResults.
+var maxFilteredAddressScanNonMatching = 200000
+
+// errFilteredScanLimit is public so callers narrow from/to instead of reading a short page as the end of history.
+var errFilteredScanLimit = NewAPIError("Filtered history is too large to scan, narrow the range with from/to", true)
+
 func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter *AddressFilter, maxResults int) ([]string, error) {
 	var err error
 	txids := make([]string, 0, 4)
@@ -889,6 +895,7 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 			return nil
 		}
 	} else {
+		nonMatching := 0
 		callback = func(txid string, height uint32, indexes []int32) error {
 			for _, index := range indexes {
 				vout := index
@@ -902,8 +909,12 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 					if len(txids) >= maxResults {
 						return &db.StopIteration{}
 					}
-					break
+					return nil
 				}
+			}
+			nonMatching++
+			if nonMatching > maxFilteredAddressScanNonMatching {
+				return errFilteredScanLimit
 			}
 			return nil
 		}
@@ -1718,6 +1729,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	// get tx history if requested by option or check mempool if there are some transactions for a new address
 	if option >= AccountDetailsTxidHistory && filter.Vout != AddressFilterVoutQueryNotNecessary {
 		txc, err := w.getAddressTxids(addrDesc, false, filter, (page+1)*txsOnPage)
+		if err == errFilteredScanLimit {
+			// unwrapped: the servers recognise public errors only by a plain *APIError assertion
+			return nil, err
+		}
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
 		}
