@@ -118,13 +118,17 @@ func (c *TronClient) Close() {
 	c.Client.Close()
 }
 
+// HeaderByNumber goes through rpcClient so fixStateRoot applies
 func (c *TronClient) HeaderByNumber(ctx context.Context, number *big.Int) (bchain.EVMHeader, error) {
-	h, err := c.rpcClient.HeaderByNumber(ctx, number)
+	var head *eth.EthereumHeader
+	err := c.rpcClient.CallContext(ctx, &head, "eth_getBlockByNumber", eth.ToBlockNumArg(number), false)
+	if err == nil && head == nil {
+		err = ethereum.NotFound
+	}
 	if err != nil {
 		return nil, err
 	}
-
-	return h, nil
+	return head, nil
 }
 
 // NetworkID returns the network ID for this client.
@@ -144,16 +148,6 @@ func (c *TronClient) NetworkID(ctx context.Context) (*big.Int, error) {
 	default:
 		return nil, fmt.Errorf("invalid net_version result %q", ver)
 	}
-}
-
-// HeaderByNumber returns the canonical header at number, or the latest one if number is nil
-func (c *TronRPCClient) HeaderByNumber(ctx context.Context, number *big.Int) (*eth.EthereumHeader, error) {
-	var head *eth.EthereumHeader
-	err := c.CallContext(ctx, &head, "eth_getBlockByNumber", eth.ToBlockNumArg(number), false)
-	if err == nil && head == nil {
-		err = ethereum.NotFound
-	}
-	return head, err
 }
 
 func (c *TronRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
