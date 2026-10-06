@@ -356,33 +356,24 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 	return nil
 }
 
-// GetAddrDescContracts returns AddrContracts for given addrDesc
-func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
-	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
+// GetAddrDescContracts returns AddrContracts for given addrDesc, nil for an absent record.
+// With headerOnly only the tx counters are decoded and Contracts stays nil.
+func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, headerOnly bool) (*AddrContracts, error) {
+	// a pinned read avoids copying the whole record out of the block cache; the decoders copy
+	// what they keep, so nothing references the pinned bytes after Destroy
+	val, err := d.db.GetPinnedCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
 	if err != nil {
 		return nil, err
 	}
-	defer val.Free()
+	defer val.Destroy()
 	buf := val.Data()
 	if len(buf) == 0 {
 		return nil, nil
+	}
+	if headerOnly {
+		return unpackAddrContractsHeader(buf, addrDesc)
 	}
 	return unpackAddrContracts(buf, addrDesc)
-}
-
-// GetAddrDescContractsHeader returns only the tx counters of the cfAddressContracts record,
-// nil for an absent record exactly like GetAddrDescContracts.
-func (d *RocksDB) GetAddrDescContractsHeader(addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
-	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
-	if err != nil {
-		return nil, err
-	}
-	defer val.Free()
-	buf := val.Data()
-	if len(buf) == 0 {
-		return nil, nil
-	}
-	return unpackAddrContractsHeader(buf, addrDesc)
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []unpackedAddrContract) (int, bool) {

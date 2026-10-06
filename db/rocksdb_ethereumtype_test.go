@@ -1702,49 +1702,6 @@ func Benchmark_packUnpackUnpackedkAddrContracts_Mixed(b *testing.B) {
 	}
 }
 
-// fixture sizes from issue #1790: the 0xdEaD-class record with ~200k contracts
-var packed200kFungibleContracts = packAddrContracts(&AddrContracts{
-	TotalTxs:       3333330,
-	NonContractTxs: 2222220,
-	InternalTxs:    1111110,
-	Contracts:      generateAddrContracts(200_000, 0, 0, 0, 0),
-})
-
-var packed200kMixedContracts = packAddrContracts(&AddrContracts{
-	TotalTxs:       3333330,
-	NonContractTxs: 2222220,
-	InternalTxs:    1111110,
-	Contracts:      generateAddrContracts(150_000, 50_000, 5, 0, 0),
-})
-
-func Benchmark_unpackAddrContracts_200kFungible(b *testing.B) {
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		unpackAddrContracts(packed200kFungibleContracts, nil)
-	}
-}
-
-func Benchmark_unpackAddrContractsHeader_200kFungible(b *testing.B) {
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		unpackAddrContractsHeader(packed200kFungibleContracts, nil)
-	}
-}
-
-func Benchmark_unpackAddrContracts_200kMixed(b *testing.B) {
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		unpackAddrContracts(packed200kMixedContracts, nil)
-	}
-}
-
-func Benchmark_unpackAddrContractsHeader_200kMixed(b *testing.B) {
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		unpackAddrContractsHeader(packed200kMixedContracts, nil)
-	}
-}
-
 func Test_packUnpackAddrContracts(t *testing.T) {
 	parser := ethereumTestnetParser()
 	type args struct {
@@ -1866,18 +1823,20 @@ func Test_unpackAddrContractsHeader_Truncated(t *testing.T) {
 	}
 }
 
-func Test_GetAddrDescContractsHeader(t *testing.T) {
+func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 	parser := ethereumTestnetParser()
 	d := setupRocksDB(t, parser)
 	defer closeAndDestroyRocksDB(t, d)
 	addrDesc := bchain.AddressDescriptor(addressToAddrDesc(dbtestdata.EthAddr4b, parser))
 
-	got, err := d.GetAddrDescContractsHeader(addrDesc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != nil {
-		t.Fatalf("absent record: got %v, want nil", got)
+	for _, headerOnly := range []bool{false, true} {
+		got, err := d.GetAddrDescContracts(addrDesc, headerOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != nil {
+			t.Fatalf("absent record, headerOnly=%v: got %v, want nil", headerOnly, got)
+		}
 	}
 
 	stored := &AddrContracts{
@@ -1895,17 +1854,17 @@ func Test_GetAddrDescContractsHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	full, err := d.GetAddrDescContracts(addrDesc)
+	full, err := d.GetAddrDescContracts(addrDesc, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err = d.GetAddrDescContractsHeader(addrDesc)
+	got, err := d.GetAddrDescContracts(addrDesc, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := &AddrContracts{TotalTxs: full.TotalTxs, NonContractTxs: full.NonContractTxs, InternalTxs: full.InternalTxs}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetAddrDescContractsHeader() = %v, want %v", got, want)
+		t.Errorf("GetAddrDescContracts(headerOnly) = %v, want %v", got, want)
 	}
 	if len(full.Contracts) != len(stored.Contracts) {
 		t.Errorf("GetAddrDescContracts() decoded %d contracts, want %d", len(full.Contracts), len(stored.Contracts))

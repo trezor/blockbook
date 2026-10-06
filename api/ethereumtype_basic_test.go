@@ -46,21 +46,24 @@ func TestGetEthereumTypeAddressBalances_BasicFreshAddress(t *testing.T) {
 	require.Equal(t, "0", d.nonce)
 }
 
-// Per-contract paging and a contract filter can reach the contract array even at basic, so both
-// must fall back to the full decode.
-func TestGetEthereumTypeAddressBalances_BasicFallsBackForContractFilters(t *testing.T) {
+// Per-contract paging and a contract filter stay on the header path at basic: totalResults is
+// consumed only above basic, so the undecoded contract array is never observable.
+func TestGetEthereumTypeAddressBalances_BasicIgnoresContractFilters(t *testing.T) {
 	w, database, parser := setupContractProbeWorker(t, newContractProbeChain(t))
 	ad := addrDesc(t, parser, dbtestdata.EthAddr4b)
-	full, err := database.GetAddrDescContracts(ad)
+	full, err := database.GetAddrDescContracts(ad, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, full.Contracts)
 
-	_, d, err := w.getEthereumTypeAddressBalances(ad, AccountDetailsBasic, &AddressFilter{Vout: db.ContractIndexOffset}, "")
+	ba, d, err := w.getEthereumTypeAddressBalances(ad, AccountDetailsBasic, &AddressFilter{Vout: db.ContractIndexOffset}, "")
 	require.NoError(t, err)
-	require.Equal(t, int(full.Contracts[0].Txs), d.totalResults)
+	require.Equal(t, uint32(full.TotalTxs), ba.Txs)
+	require.Equal(t, -1, d.totalResults)
+	require.Empty(t, d.tokens)
 
-	_, d, err = w.getEthereumTypeAddressBalances(ad, AccountDetailsBasic, &AddressFilter{Vout: AddressFilterVoutOff, Contract: dbtestdata.EthAddrContract4a}, "")
+	ba, d, err = w.getEthereumTypeAddressBalances(ad, AccountDetailsBasic, &AddressFilter{Vout: AddressFilterVoutOff, Contract: dbtestdata.EthAddrContract4a}, "")
 	require.NoError(t, err)
+	require.Equal(t, uint32(full.TotalTxs), ba.Txs)
 	require.Equal(t, int(full.TotalTxs), d.totalResults)
 	require.Empty(t, d.tokens)
 }
