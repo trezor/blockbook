@@ -483,6 +483,8 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		d.cbs.balancesMiss++
 	} else {
 		d.cbs.balancesHit++
+		// bulk connect keeps this map across blocks, so a hit here is a mutation the cache did not see
+		d.touchAddrContractsCacheEntry(ac)
 	}
 	if contract == nil {
 		if addTxCount {
@@ -1914,6 +1916,17 @@ func (d *RocksDB) insertAddrContractsCacheEntryLocked(key string, acs *unpackedA
 	acs.cacheElem = d.addrContractsCacheLRU.PushFront(acs)
 	d.addrContractsCache[key] = acs
 	d.addrContractsCacheBytes += packedSize
+}
+
+// touchAddrContractsCacheEntry marks a cache-resident record dirty and most recently used. cacheElem is
+// set and cleared only on the block-connect goroutine, so the check for a non-cached record needs no lock.
+func (d *RocksDB) touchAddrContractsCacheEntry(acs *unpackedAddrContracts) {
+	if acs.cacheElem == nil {
+		return
+	}
+	d.addrContractsCacheMux.Lock()
+	d.touchAddrContractsCacheEntryLocked(acs)
+	d.addrContractsCacheMux.Unlock()
 }
 
 func (d *RocksDB) touchAddrContractsCacheEntryLocked(acs *unpackedAddrContracts) {

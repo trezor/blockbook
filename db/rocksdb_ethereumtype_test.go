@@ -746,6 +746,54 @@ func Test_addrContractsCache_StoreWritesOnlyDirtyEntries(t *testing.T) {
 	}
 }
 
+// Bulk connect keeps one addressContracts map across blocks, so after the first block a cached record
+// is reached through that map and mutated without a cache hit. Changes made after a timer flush must
+// still reach RocksDB.
+func Test_addrContractsCache_BulkMapHitKeepsRecordDirty(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addr := makeTestAddrDesc(47)
+	putTestAddrContracts(t, d, addr, 2)
+	held := make(map[string]*unpackedAddrContracts)
+
+	// block 1: the record is loaded into the cache and into the bulk map
+	if err := d.addToAddressesAndContractsEthereumType(addr, []byte{1}, 0, nil, nil, true, false, make(addressesMap), held); err != nil {
+		t.Fatal(err)
+	}
+	d.storeAddrContractsCache("timer")
+	acs := held[string(addr)]
+	if acs == nil || acs.cacheElem == nil || acs.cacheDirty {
+		t.Fatal("record must be cached and clean after the timer flush")
+	}
+	d.addrContractsCacheMux.Lock()
+	d.addrContractsCacheClock++
+	d.addrContractsCacheMux.Unlock()
+
+	// block 2: the bulk map hit mutates the cached record
+	if err := d.addToAddressesAndContractsEthereumType(addr, []byte{2}, 0, nil, nil, true, false, make(addressesMap), held); err != nil {
+		t.Fatal(err)
+	}
+	if !acs.cacheDirty {
+		t.Fatal("record mutated through the bulk map must be dirty")
+	}
+	if acs.cacheLastUse != d.addrContractsCacheClock {
+		t.Fatalf("record mutated through the bulk map must count as used in cycle %d, got %d", d.addrContractsCacheClock, acs.cacheLastUse)
+	}
+
+	d.storeAddrContractsCache("close")
+	ac, err := d.GetAddrDescContracts(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ac == nil || ac.NonContractTxs != 2 {
+		t.Fatalf("stored NonContractTxs = %+v, want 2", ac)
+	}
+}
+
 func Test_addrContractsCache_EvictionDeletesEmptiedRecord(t *testing.T) {
 	d := setupRocksDB(t, &testEthereumParser{
 		EthereumParser: ethereumTestnetParser(),
