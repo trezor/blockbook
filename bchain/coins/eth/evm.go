@@ -2,10 +2,13 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -19,12 +22,30 @@ type EthereumClient struct {
 
 // HeaderByNumber returns a block header that implements the EVMHeader interface
 func (c *EthereumClient) HeaderByNumber(ctx context.Context, number *big.Int) (bchain.EVMHeader, error) {
-	h, err := c.Client.HeaderByNumber(ctx, number)
+	// ethclient's header drops the node's hash, so decode the same call into EthereumHeader
+	var h *EthereumHeader
+	err := c.Client.Client().CallContext(ctx, &h, "eth_getBlockByNumber", ToBlockNumArg(number), false)
+	if err == nil && h == nil {
+		err = ethereum.NotFound
+	}
 	if err != nil {
 		return nil, err
 	}
+	return h, nil
+}
 
-	return &EthereumHeader{Header: h}, nil
+// ToBlockNumArg formats a block number as an eth_getBlockByNumber argument, nil meaning latest
+func ToBlockNumArg(number *big.Int) string {
+	if number == nil {
+		return "latest"
+	}
+	if number.Sign() >= 0 {
+		return hexutil.EncodeBig(number)
+	}
+	if number.IsInt64() {
+		return rpc.BlockNumber(number.Int64()).String()
+	}
+	return fmt.Sprintf("<invalid %d>", number)
 }
 
 // EstimateGas returns the current estimated gas cost for executing a transaction
@@ -95,11 +116,32 @@ func (c *EthereumRPCClient) EthSubscribe(ctx context.Context, channel interface{
 // EthereumHeader wraps a block header to implement the EVMHeader interface
 type EthereumHeader struct {
 	*types.Header
+	// hash reported by the node; types.Header.Hash() misses header fields unknown to go-ethereum
+	BlockHash common.Hash
 }
 
-// Hash returns the block hash as a hex string
+// Hash returns the node-reported block hash, falling back to the locally computed one
 func (h *EthereumHeader) Hash() string {
+	if h.BlockHash != (common.Hash{}) {
+		return h.BlockHash.Hex()
+	}
 	return h.Header.Hash().Hex()
+}
+
+// UnmarshalJSON decodes the header and keeps the node-reported hash
+func (h *EthereumHeader) UnmarshalJSON(data []byte) error {
+	var head types.Header
+	if err := json.Unmarshal(data, &head); err != nil {
+		return err
+	}
+	var hash struct {
+		Hash common.Hash `json:"hash"`
+	}
+	if err := json.Unmarshal(data, &hash); err != nil {
+		return err
+	}
+	h.Header, h.BlockHash = &head, hash.Hash
+	return nil
 }
 
 // ParentHash returns the parent block hash as a hex string
@@ -129,12 +171,12 @@ type EthereumClientSubscription struct {
 
 // EthereumNewBlock wraps a block header channel to implement the EVMNewBlockSubscriber interface
 type EthereumNewBlock struct {
-	channel chan *types.Header
+	channel chan *EthereumHeader
 }
 
 // NewEthereumNewBlock returns an initialized EthereumNewBlock struct
 func NewEthereumNewBlock() *EthereumNewBlock {
-	return &EthereumNewBlock{channel: make(chan *types.Header)}
+	return &EthereumNewBlock{channel: make(chan *EthereumHeader)}
 }
 
 // Channel returns the underlying channel as an empty interface
@@ -145,7 +187,10 @@ func (s *EthereumNewBlock) Channel() interface{} {
 // Read from the underlying channel and return a block header that implements the EVMHeader interface
 func (s *EthereumNewBlock) Read() (bchain.EVMHeader, bool) {
 	h, ok := <-s.channel
-	return &EthereumHeader{Header: h}, ok
+	if !ok {
+		return nil, false
+	}
+	return h, true
 }
 
 // Close the underlying channel
