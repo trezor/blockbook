@@ -120,15 +120,12 @@ type EthereumHeader struct {
 	BlockHash common.Hash
 }
 
-// Hash returns the node-reported block hash, falling back to the locally computed one
+// Hash returns the node-reported block hash
 func (h *EthereumHeader) Hash() string {
-	if h.BlockHash != (common.Hash{}) {
-		return h.BlockHash.Hex()
-	}
-	return h.Header.Hash().Hex()
+	return h.BlockHash.Hex()
 }
 
-// UnmarshalJSON decodes the header and keeps the node-reported hash
+// UnmarshalJSON decodes the header and requires the node-reported hash
 func (h *EthereumHeader) UnmarshalJSON(data []byte) error {
 	var head types.Header
 	if err := json.Unmarshal(data, &head); err != nil {
@@ -139,6 +136,9 @@ func (h *EthereumHeader) UnmarshalJSON(data []byte) error {
 	}
 	if err := json.Unmarshal(data, &hash); err != nil {
 		return err
+	}
+	if hash.Hash == (common.Hash{}) {
+		return fmt.Errorf("header %v without hash", head.Number)
 	}
 	h.Header, h.BlockHash = &head, hash.Hash
 	return nil

@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -70,8 +69,8 @@ func TestEthereumNewBlockKeepsNodeHash(t *testing.T) {
 	}
 }
 
-// header without a hash field -> locally computed hash
-func TestEthereumHeaderHashFallback(t *testing.T) {
+// header without a hash field -> decode error
+func TestEthereumHeaderWithoutHash(t *testing.T) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(sepoliaGlamsterdamHeader), &fields); err != nil {
 		t.Fatal(err)
@@ -79,14 +78,7 @@ func TestEthereumHeaderHashFallback(t *testing.T) {
 	delete(fields, "hash")
 	data, _ := json.Marshal(fields)
 	var h EthereumHeader
-	if err := json.Unmarshal(data, &h); err != nil {
-		t.Fatal(err)
-	}
-	var head types.Header
-	if err := json.Unmarshal(data, &head); err != nil {
-		t.Fatal(err)
-	}
-	if got, want := h.Hash(), head.Hash().Hex(); got != want {
-		t.Errorf("Hash() = %s, want %s", got, want)
+	if err := json.Unmarshal(data, &h); err == nil {
+		t.Errorf("Unmarshal succeeded, Hash() = %s", h.Hash())
 	}
 }
