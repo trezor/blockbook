@@ -120,6 +120,9 @@ type Configuration struct {
 	Eip1559Fees                     bool   `json:"eip1559Fees,omitempty"`
 	AlternativeEstimateFee          string `json:"alternative_estimate_fee,omitempty"`
 	AlternativeEstimateFeeParams    string `json:"alternative_estimate_fee_params,omitempty"`
+	// WrappedNativeContract is the chain's canonical WETH9-style contract whose Deposit/Withdrawal
+	// events are indexed as token mint/burn transfers; empty leaves them unindexed.
+	WrappedNativeContract string `json:"wrappedNativeContract,omitempty"`
 	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
 	// required for EVM coins (translates duration settings to block counts).
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
@@ -237,6 +240,7 @@ func (c *Configuration) ApplyToParser(p *EthereumParser) {
 	p.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
 	p.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
 	p.AddrContractsCacheBulkMaxBytes = c.AddressContractsCacheBulkMaxBytes
+	p.WrappedNativeContract = c.WrappedNativeContract
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -356,6 +360,12 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	}
 	if _, err := c.AverageBlockTimeDuration(); err != nil {
 		return nil, err
+	}
+	if c.WrappedNativeContract != "" {
+		if !ethcommon.IsHexAddress(c.WrappedNativeContract) {
+			return nil, errors.Errorf("invalid wrappedNativeContract %q", c.WrappedNativeContract)
+		}
+		c.WrappedNativeContract = strings.ToLower(c.WrappedNativeContract)
 	}
 
 	s := &EthereumRPC{

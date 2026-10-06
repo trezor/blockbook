@@ -58,6 +58,7 @@
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 300,
             "additional_params": {
+                "wrappedNativeContract": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
                 "averageBlockTimeMs": 450,
                 "mempoolTxTimeoutHours": 12,
                 "mempoolTxTimeout": "12h",
