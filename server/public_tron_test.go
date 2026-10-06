@@ -184,6 +184,26 @@ var websocketTestsTron = []websocketTest{
 		},
 		want: `{"id":"2","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","confirmedNonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500,"totalEnergyLimit":45500,"totalEnergyWeight":2255,"totalBandwidthLimit":2755,"totalBandwidthWeight":3255,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD","voteCount":"20"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000","latestWithdrawTime":1777018452}}}}}`,
 	},
+	{
+		// Tron reports ChainEthereumType, so a privatePending declaration reaches the handler, but
+		// nothing may come of it: its mempool mirrors the node's pending list, so TronRPC overrides
+		// the indexing as a no-op. The bare hash is also dropped by privatePendingTxids, which
+		// requires the 0x-prefixed EVM shape - two independent reasons the answer is unchanged.
+		name: "websocket getAccountInfo privatePending txids are inert on Tron",
+		req: websocketReq{
+			Method: "getAccountInfo",
+			Params: map[string]interface{}{
+				"descriptor":     dbtestdata.TronAddrTZ,
+				"details":        "txids",
+				"confirmedNonce": true,
+				"privatePending": map[string]interface{}{"txids": []string{
+					"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
+					"0x00000000000000000000000000000000000000000000000000000000000000aa",
+				}},
+			},
+		},
+		want: `{"id":"3","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt","balance":"123450255","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"],"nonce":"255","confirmedNonce":"255","tokens":[{"type":"TRC20","standard":"TRC20","name":"TronTestContract236","contract":"TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf","transfers":1,"symbol":"TRC236","decimals":6,"balance":"1000255236"}],"chainExtraData":{"payloadType":"tron","payload":{"availableStakedBandwidth":255,"totalStakedBandwidth":1255,"availableFreeBandwidth":755,"totalFreeBandwidth":1755,"availableEnergy":25500,"totalEnergy":35500,"totalEnergyLimit":45500,"totalEnergyWeight":2255,"totalBandwidthLimit":2755,"totalBandwidthWeight":3255,"stakingInfo":{"stakedBalance":"7000000","stakedBalanceEnergy":"5000000","stakedBalanceBandwidth":"2000000","unstakingBatches":[{"amount":"1112757","expireTime":1777018452}],"totalVotingPower":"10","availableVotingPower":"7","votes":[{"address":"TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD","voteCount":"20"}],"unclaimedReward":"42767","delegatedBalanceEnergy":"3210000","delegatedBalanceBandwidth":"654000","latestWithdrawTime":1777018452}}}}}`,
+	},
 }
 
 func Test_PublicServer_Tron(t *testing.T) {

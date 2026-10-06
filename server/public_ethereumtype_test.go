@@ -272,6 +272,26 @@ var websocketTestsEthereumType = []websocketTest{
 		},
 		want: `{"id":"8","data":{"address":"0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D","balance":"123450075","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"nonce":"77"}}`,
 	},
+	{
+		// The other half of the hint: a txid this instance's mempool never saw is fetched and
+		// indexed before the answer is built, so this very response lists it as unconfirmed
+		// (#1773). "0xdead" is malformed and the third hash is unknown to the backend - both must
+		// be dropped without disturbing the answer.
+		name: "websocket getAccountInfo privatePending txids index the declared pending tx",
+		req: websocketReq{
+			Method: "getAccountInfo",
+			Params: map[string]interface{}{
+				"descriptor": dbtestdata.EthAddr7bEIP55,
+				"details":    "txids",
+				"privatePending": map[string]interface{}{"txids": []string{
+					dbtestdata.EthPendingTxid,
+					"0xdead",
+					"0x00000000000000000000000000000000000000000000000000000000000000bb",
+				}},
+			},
+		},
+		want: `{"id":"9","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b","balance":"123450123","unconfirmedBalance":"-2000378000000000000","unconfirmedTxs":1,"unconfirmedSending":"2000378000000000000","txs":2,"txids":["0x1111111111111111111111111111111111111111111111111111111111111111","0xca7628be5c80cda77163729ec63d218ee868a399d827a4682a478c6f48a6e22a","0xc92919ad24ffd58f760b18df7949f06e1190cf54a50a0e3745a385608ed3cbf2"],"nonce":"123","tokens":[{"type":"ERC20","standard":"ERC20","name":"Contract 13","contract":"0x0d0F936Ee4c93e25944694D6C121de94D9760F11","transfers":1,"symbol":"S13","decimals":18,"balance":"1000123013"},{"type":"ERC721","standard":"ERC721","name":"Contract 205","contract":"0xcdA9FC258358EcaA88845f19Af595e908bb7EfE9","transfers":1,"symbol":"S205","decimals":18,"ids":["1"]},{"type":"ERC20","standard":"ERC20","name":"Contract 74","contract":"0x4af4114F73d1c1C903aC9E0361b379D1291808A2","transfers":1,"symbol":"S74","decimals":12,"balance":"1000123074"}],"addressAliases":{"0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b":{"Type":"ENS","Alias":"address7b.eth"}}}}`,
+	},
 }
 
 func initEthereumTypeDB(d *db.RocksDB) error {

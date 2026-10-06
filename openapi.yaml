@@ -2794,9 +2794,11 @@ components:
 
     WsPrivatePending:
       description: >-
-        Ethereum-like only: the private (alternative send-tx / relay) transactions the wallet knows
-        are in flight for the queried address. Only nonces drive behavior; txids are reserved for
-        future use. See docs/evm-send.md.
+        Ethereum-like only: the transactions the wallet knows are in flight for the queried address.
+        Nonces raise the reported pending nonce and route the lookup to the alternative send-tx
+        provider; txids the mempool does not know are fetched once and indexed as pending when they
+        come back without a block and sent from this address, so the same response lists them. See
+        docs/evm-send.md.
       type: object
       properties:
         nonces:

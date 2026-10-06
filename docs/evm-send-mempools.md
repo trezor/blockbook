@@ -50,6 +50,7 @@ flowchart TD
     handle["probeSentTransaction (background)<br/>fetch-back eth_getTransactionByHash<br/>reports whether the relay surfaces the send;<br/>never writes the cache"]
 
     ws["eth_subscribe newPendingTransactions<br/>skipped when disableMempoolSync"]
+    hint["getAccountInfo privatePending.txids<br/>wallet-declared hashes, fetched once<br/>and indexed when pending from the address"]
     snap["startup and Resync snapshot<br/>eth_getBlockByNumber pending<br/>only when queryBackendOnMempoolResync"]
 
     alt[("MEV / private cache<br/>full tx bodies<br/>timeout alternativeMempoolTxTimeout,<br/>the pending window by default")]
@@ -79,6 +80,7 @@ flowchart TD
     primary -. "only when disableMempoolSync" .-> pub
     ws --> pub
     snap --> pub
+    hint -- "AddPendingTransactionToMempool" --> pub
 
     alt --> altrec --> altrm
     readalt --> altrm
@@ -94,7 +96,7 @@ flowchart TD
     classDef pubstore fill:#e8f7ed,stroke:#2e8b57,color:#0b2c19;
     classDef sink fill:#fff7e6,stroke:#b8860b,color:#3a2a00;
     classDef error fill:#ffecec,stroke:#c03535,color:#3b0a0a;
-    class send,route,relay,acc,only,primary,reg,ackevict,cache,handle,ws,snap,altrec,pubrec,readalt,blk,readmined step;
+    class send,route,relay,acc,only,primary,reg,ackevict,cache,handle,ws,snap,hint,altrec,pubrec,readalt,blk,readmined step;
     class alt mev;
     class pub pubstore;
     class altrm,bothrm sink;
