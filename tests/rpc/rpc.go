@@ -33,6 +33,7 @@ var testMap = map[string]func(t *testing.T, th *TestHandler){
 	"GetBestBlockHash":         testGetBestBlockHash,
 	"GetBestBlockHeight":       testGetBestBlockHeight,
 	"GetBlockHeader":           testGetBlockHeader,
+	"GetTipBlockHeader":        testGetTipBlockHeader,
 	"EthCallBatch":             testEthCallBatch,
 	"EthCallErc4626":           testEthCallErc4626,
 	"EnsNameExpires":           testEnsNameExpires,
@@ -612,6 +613,36 @@ func testGetBestBlockHeight(t *testing.T, h *TestHandler) {
 		}
 	}
 	t.Error("GetBestBlockHeight() didn't get the best height")
+}
+
+// testGetTipBlockHeader checks the backend serves the hash GetBlockHash reports for a recent block;
+// fixtures are historical, so only the tip catches header changes from new forks
+func testGetTipBlockHeader(t *testing.T, h *TestHandler) {
+	height, err := h.Chain.GetBestBlockHeight()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			time.Sleep(time.Second)
+		}
+		hash, err := h.Chain.GetBlockHash(height)
+		if err != nil {
+			lastErr = fmt.Errorf("GetBlockHash(%d): %w", height, err)
+			continue
+		}
+		got, err := h.Chain.GetBlockHeader(hash)
+		if err != nil {
+			lastErr = fmt.Errorf("GetBlockHeader(%s) for height %d: %w", hash, height, err)
+			continue
+		}
+		if got.Height != height || !strings.EqualFold(got.Hash, hash) {
+			t.Fatalf("GetBlockHeader(%s) got height %d hash %s, want height %d", hash, got.Height, got.Hash, height)
+		}
+		return
+	}
+	t.Fatal(lastErr)
 }
 
 func testGetBlockHeader(t *testing.T, h *TestHandler) {

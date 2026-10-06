@@ -169,4 +169,6 @@ fixture file. So data in fixture file must be related together.
    block.
 * `GetBestBlockHeight` – Calls *BlockChain.GetBestBlockHeight* and verifies that returned height matches the really
    last block.
+* `GetTipBlockHeader` – Calls *BlockChain.GetBlockHash* for the best height and checks *BlockChain.GetBlockHeader*
+   returns that block. Needs no fixture data; catches block header changes from new forks that historical fixtures miss.
 * `MempoolSync` – Synchronize *BlockChain*'s mempool and verify if sync was successful.
