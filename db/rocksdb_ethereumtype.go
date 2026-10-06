@@ -1702,6 +1702,9 @@ type unpackedAddrContracts struct {
 	// contractIndex lazily maps contract address -> index for large contract lists.
 	contractIndex      map[contractIndexKey]int
 	contractIndexDirty bool
+	// indexLookupSeen defers building contractIndex until a second indexed lookup of this decoded record:
+	// a reloaded record often gets one lookup before it is evicted again, not worth a map of its size.
+	indexLookupSeen bool
 	// Cache bookkeeping, meaningful only while the record sits in RocksDB.addrContractsCache.
 	cacheKey   string
 	cacheElem  *list.Element
@@ -1736,6 +1739,7 @@ func (acs *unpackedAddrContracts) rebuildContractIndex() {
 func (acs *unpackedAddrContracts) dropContractIndex() {
 	acs.contractIndex = nil
 	acs.contractIndexDirty = false
+	acs.indexLookupSeen = false
 }
 
 func (d *RocksDB) dropAddrContractsContractIndex(addrKey addressHotnessKey) {
@@ -1756,6 +1760,10 @@ func (acs *unpackedAddrContracts) findContractIndex(addrDesc, contract bchain.Ad
 		}
 	}
 	if useIndex {
+		if acs.contractIndex == nil && !acs.indexLookupSeen {
+			acs.indexLookupSeen = true
+			return findContractInAddressContracts(contract, acs.Contracts)
+		}
 		if acs.contractIndex == nil || acs.contractIndexDirty {
 			acs.rebuildContractIndex()
 		}
@@ -1966,7 +1974,8 @@ func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err e
 	index += l
 	cl, l := unpackVaruint(buf[index:])
 	index += l
-	c := make([]unpackedAddrContract, 0, cl)
+	// spare capacity so that the first appends by the block connecting this record do not copy the whole slice
+	c := make([]unpackedAddrContract, 0, cl+cl/16+1)
 	for index < len(buf) {
 		contract := buf[index : index+eth.EthereumTypeAddressDescriptorLen]
 		index += eth.EthereumTypeAddressDescriptorLen

@@ -412,8 +412,9 @@ func Test_unpackedAddrContracts_findContractIndex_DirtyRebuild(t *testing.T) {
 	hot.BeginBlock()
 
 	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
+	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
 	if acs.contractIndex == nil {
-		t.Fatal("expected contract index map to be built")
+		t.Fatal("expected contract index map to be built on the second indexed lookup")
 	}
 
 	// Remove a contract and mark the index dirty to force rebuild.
@@ -446,7 +447,8 @@ func Test_unpackedAddrContracts_findContractIndex_InvalidLenFallback(t *testing.
 	invalid := bchain.AddressDescriptor([]byte{1, 2, 3})
 	acs.Contracts = append(acs.Contracts, unpackedAddrContract{Contract: invalid})
 
-	// Build index, which will skip the invalid entry.
+	// Build index on the second indexed lookup, which will skip the invalid entry.
+	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
 	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
 	if acs.contractIndex == nil {
 		t.Fatal("expected contract index map to be built")
@@ -481,10 +483,124 @@ func Test_unpackedAddrContracts_findContractIndex_HotnessTriggers(t *testing.T) 
 			t.Fatalf("unexpected index build before min hits, hit %d", i+1)
 		}
 	}
+	// the lookup that promotes the address is the first indexed one; the map follows on the next
+	_, _ = acs.findContractIndex(addrDesc, target, hot)
+	if acs.contractIndex != nil {
+		t.Fatal("unexpected index build on the first indexed lookup")
+	}
 	_, _ = acs.findContractIndex(addrDesc, target, hot)
 	if acs.contractIndex == nil {
-		t.Fatal("expected index to be built after reaching min hits")
+		t.Fatal("expected index to be built on the second indexed lookup after reaching min hits")
 	}
+}
+
+// A record reloaded for a hot address usually serves one lookup before it is evicted again, so the
+// contract index map must not be built until the record sees a second indexed lookup.
+func Test_unpackedAddrContracts_findContractIndex_DefersMapUntilSecondLookup(t *testing.T) {
+	minContracts := 192
+	hot := newAddressHotness(minContracts, 4, 1)
+	hot.BeginBlock()
+	addrDesc := makeTestAddrDesc(778)
+	newRecord := func() *unpackedAddrContracts {
+		acs := &unpackedAddrContracts{}
+		for i := 0; i < minContracts+8; i++ {
+			acs.Contracts = append(acs.Contracts, unpackedAddrContract{Contract: makeTestAddrDesc(i)})
+		}
+		return acs
+	}
+
+	acs := newRecord()
+	target := acs.Contracts[minContracts+3].Contract
+	idx, found := acs.findContractIndex(addrDesc, target, hot)
+	if !found || idx != minContracts+3 {
+		t.Fatalf("first lookup = (%v, %v), want (%v, true)", idx, found, minContracts+3)
+	}
+	if acs.contractIndex != nil {
+		t.Fatal("first indexed lookup of a decoded record must not build the map")
+	}
+	idx, found = acs.findContractIndex(addrDesc, acs.Contracts[5].Contract, hot)
+	if !found || idx != 5 || acs.contractIndex == nil {
+		t.Fatalf("second lookup = (%v, %v, index built %v), want (5, true, true)", idx, found, acs.contractIndex != nil)
+	}
+
+	// a fresh decode of the same address starts over, as does a record whose index was dropped
+	reloaded := newRecord()
+	if _, _ = reloaded.findContractIndex(addrDesc, target, hot); reloaded.contractIndex != nil {
+		t.Fatal("reloaded record must defer the map again")
+	}
+	acs.dropContractIndex()
+	if _, _ = acs.findContractIndex(addrDesc, target, hot); acs.contractIndex != nil {
+		t.Fatal("record with a dropped index must defer the map again")
+	}
+}
+
+func Test_partiallyUnpackAddrContracts_LeavesAppendCapacity(t *testing.T) {
+	acs := &unpackedAddrContracts{TotalTxs: 1}
+	for i := 0; i < 64; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(3000 + i),
+			Standard: bchain.FungibleToken,
+			Txs:      1,
+			Value:    unpackedBigInt{Value: big.NewInt(int64(i))},
+		})
+	}
+	unpacked, err := partiallyUnpackAddrContracts(packUnpackedAddrContracts(acs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unpacked.Contracts) != 64 || cap(unpacked.Contracts) <= 64 {
+		t.Fatalf("len %d cap %d, want 64 contracts with spare capacity", len(unpacked.Contracts), cap(unpacked.Contracts))
+	}
+	first := &unpacked.Contracts[0]
+	unpacked.Contracts = append(unpacked.Contracts, unpackedAddrContract{Contract: makeTestAddrDesc(4000)})
+	if &unpacked.Contracts[0] != first {
+		t.Fatal("the first append after decoding must not reallocate the contracts slice")
+	}
+}
+
+// Benchmark_addrContracts_ReloadTouchAppend is what one spam transfer costs a cache-evicted record of a
+// hot address: decode, one contract lookup, one appended contract. Allocations are the figure to watch.
+func Benchmark_addrContracts_ReloadTouchAppend(b *testing.B) {
+	const contracts = 35_000
+	acs := &unpackedAddrContracts{TotalTxs: contracts}
+	for i := 0; i < contracts; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(i),
+			Standard: bchain.MultiToken,
+			Txs:      1,
+			MultiTokenValues: unpackedMultiTokenValues{{
+				Id: unpackedBigInt{Value: big.NewInt(int64(i))}, Value: unpackedBigInt{Value: big.NewInt(1)},
+			}},
+		})
+	}
+	packed := packUnpackedAddrContracts(acs)
+	addrDesc := makeTestAddrDesc(40_000)
+	hot := newAddressHotness(192, 4, 1)
+	hot.BeginBlock()
+	hot.ShouldUseIndex(mustHotnessKey(b, addrDesc), contracts) // the address is already hot, as spam victims are
+	target := acs.Contracts[contracts-7].Contract
+	b.ReportAllocs()
+	b.SetBytes(int64(len(packed)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r, err := partiallyUnpackAddrContracts(packed)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, found := r.findContractIndex(addrDesc, target, hot); !found {
+			b.Fatal("contract not found")
+		}
+		r.Contracts = append(r.Contracts, unpackedAddrContract{Contract: makeTestAddrDesc(40_001)})
+	}
+}
+
+func mustHotnessKey(tb testing.TB, addrDesc bchain.AddressDescriptor) addressHotnessKey {
+	tb.Helper()
+	key, ok := addressHotnessKeyFromDesc(addrDesc)
+	if !ok {
+		tb.Fatal("invalid hotness key")
+	}
+	return key
 }
 
 func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t *testing.T) {
@@ -504,14 +620,19 @@ func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t 
 	d.addrContractsCache[string(addr1)] = acs1
 	d.addrContractsCache[string(addr2)] = acs2
 
-	if _, found := acs1.findContractIndex(addr1, acs1.Contracts[0].Contract, d.hotAddrTracker); !found {
-		t.Fatal("expected first contract to be found")
+	// the map is built on the second indexed lookup of a record
+	for i := 0; i < 2; i++ {
+		if _, found := acs1.findContractIndex(addr1, acs1.Contracts[0].Contract, d.hotAddrTracker); !found {
+			t.Fatal("expected first contract to be found")
+		}
 	}
 	if acs1.contractIndex == nil {
 		t.Fatal("expected first contract index to be built")
 	}
-	if _, found := acs2.findContractIndex(addr2, acs2.Contracts[0].Contract, d.hotAddrTracker); !found {
-		t.Fatal("expected second contract to be found")
+	for i := 0; i < 2; i++ {
+		if _, found := acs2.findContractIndex(addr2, acs2.Contracts[0].Contract, d.hotAddrTracker); !found {
+			t.Fatal("expected second contract to be found")
+		}
 	}
 	if acs1.contractIndex != nil {
 		t.Fatal("expected first contract index to be dropped after LRU eviction")
