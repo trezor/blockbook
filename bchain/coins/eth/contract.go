@@ -95,16 +95,17 @@ func addressFromPaddedHex(s string) (string, error) {
 	}
 	const addrHexLen = EthereumTypeAddressDescriptorLen * 2
 	if len(s) >= addrHexLen {
-		var a ethcommon.Address
+		var a [EthereumTypeAddressDescriptorLen]byte
 		if hexDecodeInto(a[:], s[len(s)-addrHexLen:]) {
-			return a.String(), nil
+			return EIP55Address(a[:]), nil
 		}
 	}
 	var t big.Int
 	if _, ok := t.SetString(s, 16); !ok {
 		return "", errors.New("Data is not a number")
 	}
-	return ethcommon.BigToAddress(&t).String(), nil
+	a := ethcommon.BigToAddress(&t)
+	return EIP55Address(a[:]), nil
 }
 
 func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err error) {
