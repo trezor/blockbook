@@ -94,7 +94,8 @@ and `prod`. It selects the active RPC URL override family, and in a `dev` build 
 [config guide](/docs/config.md)) so a dev instance can spend fewer requests on a paid fee or fiat-rates
 provider.
 Generated dev Blockbook services include `-prof=:<blockbook_internal + 20000>` automatically, while generated prod
-services do not include `-prof`.
+services do not include `-prof`. The mutex and block profiles stay empty unless `-mutexprofilefraction=<n>` (sample
+1/n contention events) and `-blockprofilerate=<ns>` (one sample per n ns blocked) are passed together with `-prof`.
 
 **Because the default is `dev`, a package intended for production must be built with `BB_BUILD_ENV=prod`.** The
 `Build / Deploy` workflow already does this: `mode=build` passes its `env` input through, and `mode=deploy` (dev-only)
