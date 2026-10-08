@@ -287,6 +287,15 @@ const addrContractsCacheStorePeriod = 5 * time.Minute
 // heaviest records are re-touched every three to five blocks, so a two-block window still cycled them.
 const addrContractsCacheHotBlocks = 8
 
+// addrContractsCacheWriteChunkBytes bounds one cache write-back batch. One spam block dirties ~3 GB of
+// records; written as a single batch that bypasses RocksDB's 128 MB write buffer, lands in one memtable
+// and leaves glibc holding the multi-gigabyte buffers it fragmented.
+const addrContractsCacheWriteChunkBytes = 64 << 20
+
+// addrContractsCacheEvictBudgetBytes bounds the packed bytes evicted per block, so a spike's victims
+// drain over a dozen blocks instead of stalling one for 12-23 s. Past twice the cap the budget is lifted.
+const addrContractsCacheEvictBudgetBytes = 256 << 20
+
 // RocksDB handle
 type RocksDB struct {
 	path            string
@@ -329,7 +338,13 @@ type RocksDB struct {
 	addrContractsCacheMaxBytes int64
 	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
 	addrContractsCacheBytes int64
-	hotAddrTracker          *addressHotness
+	// addrContractsCacheWriteChunkBytes and addrContractsCacheEvictBudgetBytes hold the package
+	// constants so tests can shrink them.
+	addrContractsCacheWriteChunkBytes  int64
+	addrContractsCacheEvictBudgetBytes int64
+	// addrContractsCacheHeight is the chain height of the last maintenance cycle, for log lines.
+	addrContractsCacheHeight uint32
+	hotAddrTracker           *addressHotness
 	// lastAddrContractsCacheStore is only read/written from the block-connect goroutine.
 	lastAddrContractsCacheStore time.Time
 	setBlockTimesWG             sync.WaitGroup
@@ -416,28 +431,30 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
 	r := &RocksDB{
-		path:                           path,
-		db:                             db,
-		wo:                             wo,
-		ro:                             ro,
-		cfh:                            cfh,
-		chainParser:                    parser,
-		is:                             nil,
-		metrics:                        metrics,
-		cache:                          c,
-		maxOpenFiles:                   maxOpenFiles,
-		cbs:                            connectBlockStats{},
-		extendedIndex:                  extendedIndex,
-		connectBlockMux:                sync.Mutex{},
-		addrContractsCacheMux:          sync.Mutex{},
-		addrContractsCache:             make(map[string]*unpackedAddrContracts),
-		addrContractsCacheLRU:          list.New(),
-		addrContractsCacheMinSize:      addrContractsCacheMinSize,
-		tipAddrContractsCacheMaxBytes:  0,
-		bulkAddrContractsCacheMaxBytes: 0,
-		addrContractsCacheMaxBytes:     0,
-		addrContractsCacheBytes:        0,
-		hotAddrTracker:                 nil,
+		path:                               path,
+		db:                                 db,
+		wo:                                 wo,
+		ro:                                 ro,
+		cfh:                                cfh,
+		chainParser:                        parser,
+		is:                                 nil,
+		metrics:                            metrics,
+		cache:                              c,
+		maxOpenFiles:                       maxOpenFiles,
+		cbs:                                connectBlockStats{},
+		extendedIndex:                      extendedIndex,
+		connectBlockMux:                    sync.Mutex{},
+		addrContractsCacheMux:              sync.Mutex{},
+		addrContractsCache:                 make(map[string]*unpackedAddrContracts),
+		addrContractsCacheLRU:              list.New(),
+		addrContractsCacheMinSize:          addrContractsCacheMinSize,
+		tipAddrContractsCacheMaxBytes:      0,
+		bulkAddrContractsCacheMaxBytes:     0,
+		addrContractsCacheMaxBytes:         0,
+		addrContractsCacheBytes:            0,
+		addrContractsCacheWriteChunkBytes:  addrContractsCacheWriteChunkBytes,
+		addrContractsCacheEvictBudgetBytes: addrContractsCacheEvictBudgetBytes,
+		hotAddrTracker:                     nil,
 	}
 	if chainType == bchain.ChainEthereumType {
 		r.hotAddrTracker = newAddressHotnessFromParser(parser)
@@ -764,7 +781,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		return err
 	}
 	if chainType == bchain.ChainEthereumType {
-		d.maintainAddrContractsCache()
+		d.maintainAddrContractsCache(block.Height)
 	}
 	// Fractional seconds: the integer average truncates to 0 on sub-second chains, which
 	// silently excludes them from any rule gated on this gauge being > 0. SetBlockTime

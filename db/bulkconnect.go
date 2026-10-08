@@ -491,7 +491,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 			return err
 		}
 	}
-	b.d.maintainAddrContractsCache()
+	b.d.maintainAddrContractsCache(block.Height)
 	return nil
 }
 

@@ -333,7 +333,7 @@ metrics:
   addr_contracts_cache_bytes:
     name: blockbook_addr_contracts_cache_bytes
     type: gauge
-    help: Estimated memory used by the Ethereum-type addressContracts cache
+    help: Packed (on-disk) size of the records held by the Ethereum-type addressContracts cache; decoded records occupy many times this in Go heap
   addr_contracts_cache_hits_total:
     name: blockbook_addr_contracts_cache_hits_total
     type: counter
