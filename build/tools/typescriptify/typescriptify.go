@@ -3,6 +3,8 @@
 //	make typescriptify                  # inside the build image, no local RocksDB needed
 //	go run ./build/tools/typescriptify  # from the repository root
 //
+// TestCommittedFileIsCurrent fails the unit tests while the committed file is stale.
+//
 // On top of the library's ts_type/ts_doc tags, two conventions keep the output reproducible:
 //   - Structs implementing bchain.ChainExtraPayloadWrapper are emitted as discriminated unions
 //     built from bchain.ChainExtraPayloads, so `payloadType === 'tron'` narrows the payload in
@@ -28,7 +30,7 @@ import (
 
 const outputFile = "blockbook-api.ts"
 
-// The first line is kept verbatim so tooling that recognises the file by it keeps working.
+// The first line is what the library's ConvertToFile used to write, kept for diff stability.
 const header = "/* Do not change, this code is generated from Golang structs */\n" +
 	"/* Regenerate with `make typescriptify` (see build/tools/typescriptify) */\n\n"
 
@@ -100,8 +102,6 @@ func main() {
 func newConverter() *typescriptify.TypeScriptify {
 	t := typescriptify.New()
 	t.CreateInterface = true
-	// The committed file has always been 4-space indented; anything else rewrites every line.
-	t.Indent = "    "
 	t.BackupDir = ""
 
 	t.ManageType(api.Amount{}, typescriptify.TypeOptions{TSType: "string"})
@@ -112,16 +112,20 @@ func newConverter() *typescriptify.TypeScriptify {
 	return t
 }
 
-// generate returns the complete file contents for the given root types and payload registry.
+// generate returns the complete file contents.
 func generate(roots []interface{}, payloads []bchain.ChainExtraPayload) (string, error) {
 	t := newConverter()
 	nullable, wrappers, err := scanFields(roots)
 	if err != nil {
 		return "", err
 	}
-	aliases, err := renderUnions(t, wrappers, payloads)
+	aliases, err := renderUnions(wrappers, payloads)
 	if err != nil {
 		return "", err
+	}
+	// The alias takes the wrapper's Go name, so every field of the wrapper type is typed with it.
+	for _, w := range wrappers {
+		t.ManageType(w, typescriptify.TypeOptions{TSType: w.Name()})
 	}
 	for _, p := range payloads {
 		t.Add(p.Tx)
@@ -138,6 +142,8 @@ func generate(roots []interface{}, payloads []bchain.ChainExtraPayload) (string,
 	if err != nil {
 		return "", err
 	}
+	// ManageType only matches a wrapper behind a pointer field; one listed as a root or reached
+	// through a slice or map is still converted to an interface that would shadow the alias.
 	for _, w := range wrappers {
 		if strings.Contains(body, "export interface "+w.Name()+" {") {
 			return "", fmt.Errorf("union %s was also emitted as an interface; the alias would be shadowed", w.Name())
@@ -148,11 +154,9 @@ func generate(roots []interface{}, payloads []bchain.ChainExtraPayload) (string,
 	return header + aliases + body + "\n", nil
 }
 
-// renderUnions emits one closed union per wrapper struct, a member per registered payload, and
-// tells the library to type every field of the wrapper type with the alias name. Wrappers are
-// registered by value because the library dereferences pointer fields before matching.
-func renderUnions(t *typescriptify.TypeScriptify, wrappers []reflect.Type, payloads []bchain.ChainExtraPayload) (string, error) {
-	if len(wrappers) > 0 && len(payloads) == 0 {
+// renderUnions emits one closed union per wrapper with a member per registered payload.
+func renderUnions(wrappers []reflect.Type, payloads []bchain.ChainExtraPayload) (string, error) {
+	if len(payloads) == 0 {
 		return "", fmt.Errorf("no chainExtraData payloads registered")
 	}
 	var b strings.Builder
@@ -167,7 +171,6 @@ func renderUnions(t *typescriptify.TypeScriptify, wrappers []reflect.Type, paylo
 			}
 			members = append(members, fmt.Sprintf("{ payloadType: '%s'; payload?: %s }", p.Type, reflect.TypeOf(payload).Name()))
 		}
-		t.ManageType(reflect.Zero(w).Interface(), typescriptify.TypeOptions{TSType: name})
 		fmt.Fprintf(&b, "export type %s = %s;\n", name, strings.Join(members, " | "))
 	}
 	return b.String(), nil
