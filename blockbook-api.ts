@@ -1,15 +1,9 @@
 /* Do not change, this code is generated from Golang structs */
 /* Regenerate with `make typescriptify` (see build/tools/typescriptify) */
 
-export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
-export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any };
+export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData };
+export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData };
 
-export interface APIError {
-    /** Human-readable error message describing the issue. */
-    Text: string;
-    /** Whether the error message can safely be shown to the end user. */
-    Public: boolean;
-}
 export interface TronVoteExtra {
     address?: string;
     count?: string;
@@ -22,6 +16,7 @@ export interface TronChainExtraData {
     stakeAmount?: string;
     unstakeAmount?: string;
     claimedVoteReward?: string;
+    withdrawnUnfreeze?: string;
     delegateAmount?: string;
     delegateTo?: string;
     assetIssueID?: string;
@@ -68,6 +63,12 @@ export interface TronAccountExtraData {
     totalBandwidthLimit: number;
     totalBandwidthWeight: number;
     stakingInfo?: TronStakingInfo;
+}
+export interface APIError {
+    /** Human-readable error message describing the issue. */
+    Text: string;
+    /** Whether the error message can safely be shown to the end user. */
+    Public: boolean;
 }
 export interface AddressAlias {
     /** Type of alias, e.g., user-defined name or contract name. */
