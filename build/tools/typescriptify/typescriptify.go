@@ -4,9 +4,9 @@
 //	go run ./build/tools/typescriptify  # from the repository root
 //
 // On top of the library's ts_type/ts_doc tags, two conventions keep the output reproducible:
-//   - The chainExtraData wrappers are emitted as discriminated unions built from
-//     bchain.ChainExtraPayloads, so `payloadType === 'tron'` narrows the payload in TypeScript
-//     (the library can neither emit named aliases nor unions itself).
+//   - Structs implementing bchain.ChainExtraPayloadWrapper are emitted as discriminated unions
+//     built from bchain.ChainExtraPayloads, so `payloadType === 'tron'` narrows the payload in
+//     TypeScript (the library can neither emit named aliases nor unions itself).
 //   - ts_nullable:"true" on a pointer field without omitempty emits `name: T | null` instead of
 //     the library's `name?: T`, matching what encoding/json actually puts on the wire.
 package main
@@ -32,18 +32,7 @@ const outputFile = "blockbook-api.ts"
 const header = "/* Do not change, this code is generated from Golang structs */\n" +
 	"/* Regenerate with `make typescriptify` (see build/tools/typescriptify) */\n\n"
 
-// chainExtraUnion is one `export type` alias named after the Go wrapper struct (the library
-// dereferences pointer fields before matching managed types) whose members pick draws from the
-// payload registry.
-type chainExtraUnion struct {
-	wrapper interface{}
-	pick    func(bchain.ChainExtraPayload) interface{}
-}
-
-var chainExtraUnions = []chainExtraUnion{
-	{api.TxChainExtraData{}, func(p bchain.ChainExtraPayload) interface{} { return p.Tx }},
-	{api.AccountChainExtraData{}, func(p bchain.ChainExtraPayload) interface{} { return p.Account }},
-}
+var wrapperIface = reflect.TypeOf((*bchain.ChainExtraPayloadWrapper)(nil)).Elem()
 
 // apiTypes are the roots of the generated file; nested structs are discovered by the library.
 // The payload structs behind the unions are added from bchain.ChainExtraPayloads.
@@ -96,7 +85,7 @@ var apiTypes = []interface{}{
 }
 
 func main() {
-	out, err := generate(apiTypes, chainExtraUnions, bchain.ChainExtraPayloads)
+	out, err := generate(apiTypes, bchain.ChainExtraPayloads)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "typescriptify:", err)
 		os.Exit(1)
@@ -123,10 +112,14 @@ func newConverter() *typescriptify.TypeScriptify {
 	return t
 }
 
-// generate returns the complete file contents for the given root types, unions and payloads.
-func generate(roots []interface{}, unions []chainExtraUnion, payloads []bchain.ChainExtraPayload) (string, error) {
+// generate returns the complete file contents for the given root types and payload registry.
+func generate(roots []interface{}, payloads []bchain.ChainExtraPayload) (string, error) {
 	t := newConverter()
-	aliases, err := renderUnions(t, unions, payloads)
+	nullable, wrappers, err := scanFields(roots)
+	if err != nil {
+		return "", err
+	}
+	aliases, err := renderUnions(t, wrappers, payloads)
 	if err != nil {
 		return "", err
 	}
@@ -141,21 +134,13 @@ func generate(roots []interface{}, unions []chainExtraUnion, payloads []bchain.C
 	if err != nil {
 		return "", err
 	}
-	nullable, err := collectNullable(roots)
-	if err != nil {
-		return "", err
-	}
 	body, err = applyNullable(body, nullable, t.Indent)
 	if err != nil {
 		return "", err
 	}
-	for _, u := range unions {
-		name := unionName(u)
-		if strings.Contains(body, "export interface "+name+" {") {
-			return "", fmt.Errorf("union %s was also emitted as an interface; the alias would be shadowed", name)
-		}
-		if !regexp.MustCompile(`\b` + name + `\b`).MatchString(body) {
-			return "", fmt.Errorf("union %s is not used by any field", name)
+	for _, w := range wrappers {
+		if strings.Contains(body, "export interface "+w.Name()+" {") {
+			return "", fmt.Errorf("union %s was also emitted as an interface; the alias would be shadowed", w.Name())
 		}
 	}
 	// A root type already emitted as a nested type leaves a stray blank line behind.
@@ -163,29 +148,26 @@ func generate(roots []interface{}, unions []chainExtraUnion, payloads []bchain.C
 	return header + aliases + body + "\n", nil
 }
 
-// unionName is the Go wrapper's type name, which is also what the API fields are typed with.
-func unionName(u chainExtraUnion) string {
-	return reflect.TypeOf(u.wrapper).Name()
-}
-
-// renderUnions emits one closed union per wrapper, a member per registered payload, and tells the
-// library to type every field of the wrapper type with the alias name.
-func renderUnions(t *typescriptify.TypeScriptify, unions []chainExtraUnion, payloads []bchain.ChainExtraPayload) (string, error) {
-	if len(payloads) == 0 {
+// renderUnions emits one closed union per wrapper struct, a member per registered payload, and
+// tells the library to type every field of the wrapper type with the alias name. Wrappers are
+// registered by value because the library dereferences pointer fields before matching.
+func renderUnions(t *typescriptify.TypeScriptify, wrappers []reflect.Type, payloads []bchain.ChainExtraPayload) (string, error) {
+	if len(wrappers) > 0 && len(payloads) == 0 {
 		return "", fmt.Errorf("no chainExtraData payloads registered")
 	}
 	var b strings.Builder
-	for _, u := range unions {
-		name := unionName(u)
+	for _, w := range wrappers {
+		name := w.Name()
+		pick := reflect.Zero(w).Interface().(bchain.ChainExtraPayloadWrapper)
 		members := make([]string, 0, len(payloads))
 		for _, p := range payloads {
-			payload := u.pick(p)
+			payload := pick.ChainExtraPayload(p)
 			if p.Type == bchain.ChainExtraPayloadTypeUnknown || payload == nil || reflect.TypeOf(payload).Kind() != reflect.Struct {
 				return "", fmt.Errorf("%s: payload type %q must map to a struct", name, p.Type)
 			}
 			members = append(members, fmt.Sprintf("{ payloadType: '%s'; payload?: %s }", p.Type, reflect.TypeOf(payload).Name()))
 		}
-		t.ManageType(u.wrapper, typescriptify.TypeOptions{TSType: name})
+		t.ManageType(reflect.Zero(w).Interface(), typescriptify.TypeOptions{TSType: name})
 		fmt.Fprintf(&b, "export type %s = %s;\n", name, strings.Join(members, " | "))
 	}
 	return b.String(), nil
@@ -197,10 +179,12 @@ type nullableField struct {
 	json  string
 }
 
-// collectNullable walks the struct graph the same way the library does and gathers ts_nullable fields.
-func collectNullable(roots []interface{}) ([]nullableField, error) {
+// scanFields walks the struct graph the same way the library does and gathers the ts_nullable
+// fields and, in first-seen order, the wrapper structs that must be emitted as unions.
+func scanFields(roots []interface{}) ([]nullableField, []reflect.Type, error) {
 	seen := map[reflect.Type]bool{}
-	var out []nullableField
+	var nullable []nullableField
+	var wrappers []reflect.Type
 	var walk func(typ reflect.Type) error
 	walk = func(typ reflect.Type) error {
 		for typ.Kind() == reflect.Ptr || typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array || typ.Kind() == reflect.Map {
@@ -210,6 +194,11 @@ func collectNullable(roots []interface{}) ([]nullableField, error) {
 			return nil
 		}
 		seen[typ] = true
+		if typ.Implements(wrapperIface) {
+			// The wrapper is replaced by its union, so its own fields are never emitted.
+			wrappers = append(wrappers, typ)
+			return nil
+		}
 		for i := 0; i < typ.NumField(); i++ {
 			f := typ.Field(i)
 			jsonTag := f.Tag.Get("json")
@@ -217,7 +206,7 @@ func collectNullable(roots []interface{}) ([]nullableField, error) {
 				if f.Type.Kind() != reflect.Ptr || strings.Contains(jsonTag, ",omitempty") {
 					return fmt.Errorf("%s.%s: ts_nullable requires a pointer field without omitempty", typ.Name(), f.Name)
 				}
-				out = append(out, nullableField{iface: typ.Name(), json: strings.Split(jsonTag, ",")[0]})
+				nullable = append(nullable, nullableField{iface: typ.Name(), json: strings.Split(jsonTag, ",")[0]})
 			}
 			// The library does not descend into fields overridden by ts_type, so neither do we.
 			if f.Tag.Get("ts_type") == "" {
@@ -230,10 +219,10 @@ func collectNullable(roots []interface{}) ([]nullableField, error) {
 	}
 	for _, root := range roots {
 		if err := walk(reflect.TypeOf(root)); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return out, nil
+	return nullable, wrappers, nil
 }
 
 // applyNullable rewrites `name?: T;` to `name: T | null;` inside the owning interface block.

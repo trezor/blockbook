@@ -31,3 +31,10 @@ func ChainExtraPayloadByType(t ChainExtraPayloadType) (ChainExtraPayload, bool) 
 	}
 	return ChainExtraPayload{}, false
 }
+
+// ChainExtraPayloadWrapper is implemented by the API structs whose Payload carries one of the
+// registered structs; the method picks that wrapper's struct out of a registry entry so the
+// generated client types can be derived without naming the wrappers anywhere else.
+type ChainExtraPayloadWrapper interface {
+	ChainExtraPayload(ChainExtraPayload) interface{}
+}

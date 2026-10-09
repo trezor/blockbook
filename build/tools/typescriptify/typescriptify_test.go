@@ -25,14 +25,12 @@ type probeWrapper struct {
 	PayloadType string `json:"payloadType"`
 }
 
+func (probeWrapper) ChainExtraPayload(p bchain.ChainExtraPayload) interface{} { return p.Tx }
+
 type probeOuter struct {
 	Always *probeInner   `json:"always" ts_nullable:"true"`
 	Maybe  *probeInner   `json:"maybe,omitempty"`
 	Extra  *probeWrapper `json:"extra,omitempty"`
-}
-
-var probeUnions = []chainExtraUnion{
-	{probeWrapper{}, func(p bchain.ChainExtraPayload) interface{} { return p.Tx }},
 }
 
 var probePayloads = []bchain.ChainExtraPayload{
@@ -49,7 +47,7 @@ type probeNonPointer struct {
 }
 
 func TestGenerateNullableAndUnion(t *testing.T) {
-	out, err := generate([]interface{}{probeOuter{}}, probeUnions, probePayloads)
+	out, err := generate([]interface{}{probeOuter{}}, probePayloads)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,10 +71,13 @@ func TestGenerateNullableAndUnion(t *testing.T) {
 	}
 }
 
-func TestGenerateRejectsUnusedUnion(t *testing.T) {
-	_, err := generate([]interface{}{probeInner{}}, probeUnions, probePayloads)
-	if err == nil || !strings.Contains(err.Error(), "probeWrapper") {
-		t.Fatalf("expected unused union error, got %v", err)
+func TestGenerateEmitsUnionOnlyWhenReachable(t *testing.T) {
+	out, err := generate([]interface{}{probeInner{}}, probePayloads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "probeWrapper") {
+		t.Errorf("unreachable wrapper leaked into the output:\n%s", out)
 	}
 }
 
@@ -87,7 +88,7 @@ func TestGenerateRejectsBadPayloadRegistry(t *testing.T) {
 		"nil payload":  {{Type: "a", Tx: nil, Account: probePayloadA{}}},
 		"non-struct":   {{Type: "a", Tx: "x", Account: probePayloadA{}}},
 	} {
-		if _, err := generate([]interface{}{probeOuter{}}, probeUnions, payloads); err == nil {
+		if _, err := generate([]interface{}{probeOuter{}}, payloads); err == nil {
 			t.Errorf("%s: expected an error", name)
 		}
 	}
@@ -95,7 +96,7 @@ func TestGenerateRejectsBadPayloadRegistry(t *testing.T) {
 
 func TestGenerateRejectsMisusedNullable(t *testing.T) {
 	for _, root := range []interface{}{probeOmitEmpty{}, probeNonPointer{}} {
-		_, err := generate([]interface{}{root}, nil, probePayloads)
+		_, err := generate([]interface{}{root}, probePayloads)
 		if err == nil || !strings.Contains(err.Error(), "ts_nullable") {
 			t.Errorf("%T: expected ts_nullable misuse error, got %v", root, err)
 		}
