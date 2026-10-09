@@ -2270,6 +2270,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MultiTokenValue"
+        idsTotal:
+          type: integer
+          description: Number of held token IDs; present only when ids is truncated (at most 1000 are returned).
+        multiTokenValuesTotal:
+          type: integer
+          description: Number of held ERC1155 id/value pairs; present only when multiTokenValues is truncated (at most 1000 are returned).
         totalReceived:
           $ref: "#/components/schemas/AmountString"
         totalSent:

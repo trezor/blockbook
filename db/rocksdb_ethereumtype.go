@@ -118,6 +118,8 @@ type AddrContract struct {
 	Value            big.Int          // single value of ERC20
 	Ids              Ids              // multiple ERC721 tokens
 	MultiTokenValues MultiTokenValues // multiple ERC1155 tokens
+	// HoldingsTotal is the stored count of Ids/MultiTokenValues, set only when MaxHoldings truncated them.
+	HoldingsTotal uint
 }
 
 // AddrContracts contains number of transactions and contracts for an address
@@ -272,6 +274,8 @@ type AddrContractsReadOptions struct {
 	Contract   bchain.AddressDescriptor // with Holdings, decode holdings only for this contract
 	// the indexed ERC20 Value is only needed by readers that pack the row back; the API takes balances from the backend
 	values bool
+	// MaxHoldings, when positive, caps decoded holdings per contract; anyone can mint unlimited NFTs to any address
+	MaxHoldings int
 }
 
 // FullAddrContractsRead decodes the whole row
@@ -335,22 +339,34 @@ func unpackAddrContractsOpt(buf []byte, addrDesc bchain.AddressDescriptor, opts 
 				for i := uint(0); i < n; i++ {
 					buf = buf[packedBigintLen(buf):]
 				}
-			} else if standard == bchain.NonFungibleToken {
-				ac.Ids = make(Ids, n)
-				for i := uint(0); i < n; i++ {
-					b, ll := unpackBigint(buf)
-					buf = buf[ll:]
-					ac.Ids[i] = b
-				}
 			} else {
-				ac.MultiTokenValues = make(MultiTokenValues, n)
-				for i := uint(0); i < n; i++ {
-					b, ll := unpackBigint(buf)
-					buf = buf[ll:]
-					ac.MultiTokenValues[i].Id = b
-					b, ll = unpackBigint(buf)
-					buf = buf[ll:]
-					ac.MultiTokenValues[i].Value = b
+				keep := n
+				if opts.MaxHoldings > 0 && n > uint(opts.MaxHoldings) {
+					keep = uint(opts.MaxHoldings)
+					ac.HoldingsTotal = n
+				}
+				rest := n - keep
+				if standard == bchain.NonFungibleToken {
+					ac.Ids = make(Ids, keep)
+					for i := uint(0); i < keep; i++ {
+						b, ll := unpackBigint(buf)
+						buf = buf[ll:]
+						ac.Ids[i] = b
+					}
+				} else {
+					ac.MultiTokenValues = make(MultiTokenValues, keep)
+					for i := uint(0); i < keep; i++ {
+						b, ll := unpackBigint(buf)
+						buf = buf[ll:]
+						ac.MultiTokenValues[i].Id = b
+						b, ll = unpackBigint(buf)
+						buf = buf[ll:]
+						ac.MultiTokenValues[i].Value = b
+					}
+					rest *= 2
+				}
+				for i := uint(0); i < rest; i++ {
+					buf = buf[packedBigintLen(buf):]
 				}
 			}
 		}

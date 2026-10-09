@@ -1122,6 +1122,9 @@ func clampRange(from, to, length int) (int, int) {
 	return from, min(max(to, from), length)
 }
 
+// maxTokenIdsInResponse caps NFT holdings per contract; anyone can mint unlimited ids to any address.
+const maxTokenIdsInResponse = 1000
+
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool, probes contractInfoProbes) (*Token, error) {
 	standard := bchain.EthereumTokenStandardMap[c.Standard]
 	ci, validContract, err := w.getProbedContractDescriptorInfo(c.Contract, standard, probes)
@@ -1185,6 +1188,7 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 					ids[j] = (Amount)(c.Ids[j])
 				}
 				t.Ids = ids
+				t.IdsTotal = int(c.HoldingsTotal)
 			}
 			if len(c.MultiTokenValues) > 0 {
 				idValues := make([]MultiTokenValue, len(c.MultiTokenValues))
@@ -1193,6 +1197,7 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 					idValues[j].Value = (*Amount)(&c.MultiTokenValues[j].Value)
 				}
 				t.MultiTokenValues = idValues
+				t.MultiTokenValuesTotal = int(c.HoldingsTotal)
 			}
 		}
 	}
@@ -1313,9 +1318,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	// basic reads only the header counters; NFT ids are emitted only from tokenBalances up, so
 	// decode them only there and only for the filtered contract (ERC20 balances come from the backend)
 	ca, err := w.db.GetAddrDescContracts(addrDesc, db.AddrContractsReadOptions{
-		HeaderOnly: details == AccountDetailsBasic,
-		Holdings:   details >= AccountDetailsTokenBalances,
-		Contract:   filterDesc,
+		HeaderOnly:  details == AccountDetailsBasic,
+		Holdings:    details >= AccountDetailsTokenBalances,
+		Contract:    filterDesc,
+		MaxHoldings: maxTokenIdsInResponse,
 	})
 	if err != nil {
 		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)

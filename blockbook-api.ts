@@ -352,6 +352,10 @@ export interface Token {
     totalSent?: string;
     /** Protocol identifiers the contract participates in (e.g., "erc4626"); for fresh per-vault data, use getContractInfo. */
     protocols?: string[];
+    /** Number of held token IDs; present only when ids is truncated. */
+    idsTotal?: number;
+    /** Number of held ERC1155 id/value pairs; present only when multiTokenValues is truncated. */
+    multiTokenValuesTotal?: number;
 }
 export interface Address {
     /** Current page index. */
