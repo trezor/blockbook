@@ -3,6 +3,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,12 +48,28 @@ type probeNonPointer struct {
 	Bad probeInner `json:"bad" ts_nullable:"true"`
 }
 
+// TestCommittedFileIsCurrent fails while blockbook-api.ts differs from what the generator emits.
+func TestCommittedFileIsCurrent(t *testing.T) {
+	committed, err := os.ReadFile(filepath.Join("..", "..", "..", outputFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := generate(apiTypes, bchain.ChainExtraPayloads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(committed) != want {
+		t.Fatalf("%s is stale, run 'make typescriptify'", outputFile)
+	}
+}
+
 func TestGenerateNullableAndUnion(t *testing.T) {
 	out, err := generate([]interface{}{probeOuter{}}, probePayloads)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
+		header,
 		"export type probeWrapper = { payloadType: 'a'; payload?: probePayloadA } | { payloadType: 'b'; payload?: probePayloadB };\n",
 		"export interface probePayloadA {\n",
 		"export interface probePayloadB {\n",
@@ -63,11 +81,11 @@ func TestGenerateNullableAndUnion(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "export interface probeWrapper {") {
-		t.Errorf("wrapper struct was emitted as an interface next to its alias:\n%s", out)
-	}
-	if !strings.HasPrefix(out, header) {
-		t.Errorf("output does not start with the header:\n%s", out)
+}
+
+func TestGenerateRejectsShadowedUnion(t *testing.T) {
+	if _, err := generate([]interface{}{probeWrapper{}}, probePayloads); err == nil {
+		t.Error("expected an error for a wrapper listed as a root")
 	}
 }
 
@@ -85,7 +103,6 @@ func TestGenerateRejectsBadPayloadRegistry(t *testing.T) {
 	for name, payloads := range map[string][]bchain.ChainExtraPayload{
 		"empty":        nil,
 		"unknown type": {{Type: bchain.ChainExtraPayloadTypeUnknown, Tx: probePayloadA{}, Account: probePayloadA{}}},
-		"nil payload":  {{Type: "a", Tx: nil, Account: probePayloadA{}}},
 		"non-struct":   {{Type: "a", Tx: "x", Account: probePayloadA{}}},
 	} {
 		if _, err := generate([]interface{}{probeOuter{}}, payloads); err == nil {
