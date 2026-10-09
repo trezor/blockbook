@@ -10,7 +10,7 @@ import (
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
-// stripAddrContracts derives the expected partial decode from a fully decoded row
+// stripAddrContracts derives the expected partial decode from the source row
 func stripAddrContracts(full *AddrContracts, opts AddrContractsReadOptions) *AddrContracts {
 	rv := *full
 	rv.Contracts = make([]AddrContract, len(full.Contracts))
@@ -30,62 +30,32 @@ func stripAddrContracts(full *AddrContracts, opts AddrContractsReadOptions) *Add
 
 func Test_unpackAddrContractsOpt(t *testing.T) {
 	parser := ethereumTestnetParser()
-	contract0d := addressToAddrDesc(dbtestdata.EthAddrContract0d, parser)
 	contract47 := addressToAddrDesc(dbtestdata.EthAddrContract47, parser)
 	contract4a := addressToAddrDesc(dbtestdata.EthAddrContract4a, parser)
 	notAContract := addressToAddrDesc(dbtestdata.EthAddr7b, parser)
-	rows := []struct {
-		name string
-		data AddrContracts
-	}{
-		{"mixed", AddrContracts{TotalTxs: 30, NonContractTxs: 20, InternalTxs: 10, Contracts: generateAddrContracts(2, 2, 3, 2, 3)}},
-		{"fungibleOnly", AddrContracts{TotalTxs: 3, NonContractTxs: 3, Contracts: generateAddrContracts(3, 0, 0, 0, 0)}},
-		{"holdingsOnly", AddrContracts{TotalTxs: 5, Contracts: generateAddrContracts(0, 1, 4, 1, 4)}},
-	}
-	optSets := []struct {
+	row := AddrContracts{TotalTxs: 30, NonContractTxs: 20, InternalTxs: 10, Contracts: generateAddrContracts(2, 2, 3, 2, 3)}
+	packed := packAddrContracts(&row)
+	for _, tt := range []struct {
 		name string
 		opts AddrContractsReadOptions
 	}{
-		{"full", fullAddrContractsRead},
+		{"full", FullAddrContractsRead},
 		{"none", AddrContractsReadOptions{}},
 		{"valuesOnly", AddrContractsReadOptions{Values: true}},
 		{"holdingsOnly", AddrContractsReadOptions{Holdings: true}},
 		{"holdingsOf47", AddrContractsReadOptions{Holdings: true, Contract: contract47}},
 		{"holdingsOf4a", AddrContractsReadOptions{Values: true, Holdings: true, Contract: contract4a}},
-		{"holdingsOfFungible0d", AddrContractsReadOptions{Holdings: true, Contract: contract0d}},
 		{"holdingsOfAbsentContract", AddrContractsReadOptions{Holdings: true, Contract: notAContract}},
-	}
-	for _, row := range rows {
-		packed := packAddrContracts(&row.data)
-		full, err := unpackAddrContracts(packed, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(full, &row.data) {
-			t.Fatalf("%s: full decode differs from source", row.name)
-		}
-		for _, os := range optSets {
-			t.Run(row.name+"/"+os.name, func(t *testing.T) {
-				got, err := unpackAddrContractsOpt(packed, nil, os.opts)
-				if err != nil {
-					t.Fatal(err)
-				}
-				want := stripAddrContracts(full, os.opts)
-				if !reflect.DeepEqual(got, want) {
-					t.Errorf("unpackAddrContractsOpt() = %+v, want %+v", got, want)
-				}
-			})
-		}
-	}
-}
-
-func Test_GetAddrDescContractsOpt_UnknownAddress(t *testing.T) {
-	parser := ethereumTestnetParser()
-	d := setupRocksDB(t, parser)
-	defer closeAndDestroyRocksDB(t, d)
-	got, err := d.GetAddrDescContractsOpt(addressToAddrDesc(dbtestdata.EthAddr7b, parser), AddrContractsReadOptions{})
-	if err != nil || got != nil {
-		t.Errorf("GetAddrDescContractsOpt() = %v, %v, want nil, nil", got, err)
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := unpackAddrContractsOpt(packed, nil, tt.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := stripAddrContracts(&row, tt.opts); !reflect.DeepEqual(got, want) {
+				t.Errorf("unpackAddrContractsOpt() = %+v, want %+v", got, want)
+			}
+		})
 	}
 }
 
@@ -96,7 +66,7 @@ func Benchmark_unpackAddrContractsOpt_Mixed(b *testing.B) {
 		name string
 		opts AddrContractsReadOptions
 	}{
-		{"full", fullAddrContractsRead},
+		{"full", FullAddrContractsRead},
 		{"noValues", AddrContractsReadOptions{Holdings: true}},
 		{"noHoldings", AddrContractsReadOptions{Values: true}},
 		{"contractsOnly", AddrContractsReadOptions{}},

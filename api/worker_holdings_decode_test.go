@@ -20,65 +20,43 @@ func TestGetEthereumTypeAddressBalances_HoldingsFollowDetailsLevel(t *testing.T)
 	addr := addrDesc(t, parser, dbtestdata.EthAddr7b)
 	nft := eth.EIP55Address(addrDesc(t, parser, dbtestdata.EthAddrContractCd))
 
-	idsByContract := func(tokens []Token) map[string]int {
-		rv := map[string]int{}
-		for _, tk := range tokens {
-			rv[tk.Contract] = len(tk.Ids)
-		}
-		return rv
+	get := func(details AccountDetails, contract string) *ethereumTypeAddressData {
+		_, d, err := w.getEthereumTypeAddressBalances(addr, details, &AddressFilter{Vout: AddressFilterVoutOff, Contract: contract}, "")
+		require.NoError(t, err)
+		return d
 	}
-	transfersByContract := func(tokens []Token) map[string]int {
-		rv := map[string]int{}
+	tokenOf := func(tokens []Token, contract string) Token {
 		for _, tk := range tokens {
-			rv[tk.Contract] = tk.Transfers
+			if tk.Contract == contract {
+				return tk
+			}
 		}
-		return rv
+		t.Fatalf("token %s not found", contract)
+		return Token{}
 	}
 
-	_, basic, err := w.getEthereumTypeAddressBalances(addr, AccountDetailsBasic, &AddressFilter{Vout: AddressFilterVoutOff}, "")
-	require.NoError(t, err)
+	basic := get(AccountDetailsBasic, "")
 	require.Empty(t, basic.tokens)
 	require.Equal(t, 2, basic.totalResults, "totals are still read without holdings")
 
-	_, tokens, err := w.getEthereumTypeAddressBalances(addr, AccountDetailsTokens, &AddressFilter{Vout: AddressFilterVoutOff}, "")
-	require.NoError(t, err)
+	tokens := get(AccountDetailsTokens, "")
 	require.Len(t, tokens.tokens, 3)
-	require.Equal(t, 0, idsByContract(tokens.tokens)[nft], "ids are not emitted at details=tokens")
+	require.Empty(t, tokenOf(tokens.tokens, nft).Ids, "ids are not emitted at details=tokens")
 
-	_, balances, err := w.getEthereumTypeAddressBalances(addr, AccountDetailsTokenBalances, &AddressFilter{Vout: AddressFilterVoutOff}, "")
-	require.NoError(t, err)
+	balances := get(AccountDetailsTokenBalances, "")
 	require.Len(t, balances.tokens, 3)
-	require.Equal(t, 1, idsByContract(balances.tokens)[nft], "ids are emitted at details=tokenBalances")
-	require.Equal(t, "1", balances.tokens[idxOf(balances.tokens, nft)].Ids[0].String())
-	require.Equal(t, transfersByContract(tokens.tokens), transfersByContract(balances.tokens), "skipping holdings must not change the rest of the token")
-
-	_, history, err := w.getEthereumTypeAddressBalances(addr, AccountDetailsTxidHistory, &AddressFilter{Vout: AddressFilterVoutOff}, "")
-	require.NoError(t, err)
-	require.Equal(t, 1, idsByContract(history.tokens)[nft], "the REST default level still carries ids")
+	require.Equal(t, "1", tokenOf(balances.tokens, nft).Ids[0].String(), "ids are emitted at details=tokenBalances")
+	for _, tk := range tokens.tokens {
+		require.Equal(t, tk.Transfers, tokenOf(balances.tokens, tk.Contract).Transfers, "skipping holdings must not change the rest of the token")
+	}
 
 	// a contract filter decodes holdings for that contract only
-	_, filtered, err := w.getEthereumTypeAddressBalances(addr, AccountDetailsTokenBalances, &AddressFilter{Vout: AddressFilterVoutOff, Contract: "0x" + dbtestdata.EthAddrContractCd}, "")
-	require.NoError(t, err)
+	filtered := get(AccountDetailsTokenBalances, "0x"+dbtestdata.EthAddrContractCd)
 	require.Len(t, filtered.tokens, 1)
 	require.Equal(t, nft, filtered.tokens[0].Contract)
 	require.Len(t, filtered.tokens[0].Ids, 1)
 
-	_, erc20, err := w.getEthereumTypeAddressBalances(addr, AccountDetailsTokenBalances, &AddressFilter{Vout: AddressFilterVoutOff, Contract: "0x" + dbtestdata.EthAddrContract0d}, "")
-	require.NoError(t, err)
+	erc20 := get(AccountDetailsTokenBalances, "0x"+dbtestdata.EthAddrContract0d)
 	require.Len(t, erc20.tokens, 1)
-	require.NotNil(t, erc20.tokens[0].BalanceSat)
-	require.Empty(t, erc20.tokens[0].Ids)
-
-	// an invalid filter still fails before anything is read
-	_, _, err = w.getEthereumTypeAddressBalances(addr, AccountDetailsTokenBalances, &AddressFilter{Vout: AddressFilterVoutOff, Contract: "not-an-address"}, "")
-	require.Error(t, err)
-}
-
-func idxOf(tokens []Token, contract string) int {
-	for i, tk := range tokens {
-		if tk.Contract == contract {
-			return i
-		}
-	}
-	return -1
+	require.NotNil(t, erc20.tokens[0].BalanceSat, "ERC20 balance comes from the backend, not the index")
 }

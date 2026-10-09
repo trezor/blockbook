@@ -1795,20 +1795,20 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 				t.Errorf("unpackAddrContracts() = %v, want %v", got, tt.data)
 			}
 			// the header-only decoder must agree on the counters and leave the array undecoded
-			header, err := unpackAddrContractsHeader(packed, nil)
+			header, err := unpackAddrContractsOpt(packed, nil, AddrContractsReadOptions{HeaderOnly: true})
 			if err != nil {
-				t.Errorf("unpackAddrContractsHeader() error = %v", err)
+				t.Errorf("unpackAddrContractsOpt(HeaderOnly) error = %v", err)
 				return
 			}
 			wantHeader := &AddrContracts{TotalTxs: tt.data.TotalTxs, NonContractTxs: tt.data.NonContractTxs, InternalTxs: tt.data.InternalTxs}
 			if !reflect.DeepEqual(header, wantHeader) {
-				t.Errorf("unpackAddrContractsHeader() = %v, want %v", header, wantHeader)
+				t.Errorf("unpackAddrContractsOpt(HeaderOnly) = %v, want %v", header, wantHeader)
 			}
 		})
 	}
 }
 
-func Test_unpackAddrContractsHeader_Truncated(t *testing.T) {
+func Test_unpackAddrContractsOpt_TruncatedHeader(t *testing.T) {
 	packed := packAddrContracts(&AddrContracts{TotalTxs: 300, NonContractTxs: 200, InternalTxs: 100})
 	// the header is the three counters; the trailing contract count is not part of it
 	headerLen := 0
@@ -1817,8 +1817,10 @@ func Test_unpackAddrContractsHeader_Truncated(t *testing.T) {
 		headerLen += l
 	}
 	for cut := 0; cut < headerLen; cut++ {
-		if _, err := unpackAddrContractsHeader(packed[:cut], nil); err == nil {
-			t.Errorf("unpackAddrContractsHeader(packed[:%d]) expected error", cut)
+		for _, opts := range []AddrContractsReadOptions{{HeaderOnly: true}, FullAddrContractsRead} {
+			if _, err := unpackAddrContractsOpt(packed[:cut], nil, opts); err == nil {
+				t.Errorf("unpackAddrContractsOpt(packed[:%d], %+v) expected error", cut, opts)
+			}
 		}
 	}
 }
@@ -1829,13 +1831,13 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 	defer closeAndDestroyRocksDB(t, d)
 	addrDesc := bchain.AddressDescriptor(addressToAddrDesc(dbtestdata.EthAddr4b, parser))
 
-	for _, headerOnly := range []bool{false, true} {
-		got, err := d.GetAddrDescContracts(addrDesc, headerOnly)
+	for _, opts := range []AddrContractsReadOptions{FullAddrContractsRead, {HeaderOnly: true}, {}} {
+		got, err := d.GetAddrDescContracts(addrDesc, opts)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got != nil {
-			t.Fatalf("absent record, headerOnly=%v: got %v, want nil", headerOnly, got)
+			t.Fatalf("absent record, %+v: got %v, want nil", opts, got)
 		}
 	}
 
@@ -1854,17 +1856,17 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	full, err := d.GetAddrDescContracts(addrDesc, false)
+	full, err := d.GetAddrDescContracts(addrDesc, FullAddrContractsRead)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := d.GetAddrDescContracts(addrDesc, true)
+	got, err := d.GetAddrDescContracts(addrDesc, AddrContractsReadOptions{HeaderOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := &AddrContracts{TotalTxs: full.TotalTxs, NonContractTxs: full.NonContractTxs, InternalTxs: full.InternalTxs}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetAddrDescContracts(headerOnly) = %v, want %v", got, want)
+		t.Errorf("GetAddrDescContracts(HeaderOnly) = %v, want %v", got, want)
 	}
 	if len(full.Contracts) != len(stored.Contracts) {
 		t.Errorf("GetAddrDescContracts() decoded %d contracts, want %d", len(full.Contracts), len(stored.Contracts))

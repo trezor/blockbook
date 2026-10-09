@@ -1310,10 +1310,9 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
 		}
 	}
-	// Load contract list and totals from the index. details=basic consumes only the header
-	// counters; NFT holdings are emitted only at tokenBalances and above, so skip decoding
-	// them below that (and for filtered-out contracts).
-	ca, err := w.db.GetAddrDescContractsOpt(addrDesc, db.AddrContractsReadOptions{
+	// basic reads only the header counters; NFT ids are emitted only from tokenBalances up, so
+	// decode them only there and only for the filtered contract (ERC20 balances come from the backend)
+	ca, err := w.db.GetAddrDescContracts(addrDesc, db.AddrContractsReadOptions{
 		HeaderOnly: details == AccountDetailsBasic,
 		Holdings:   details >= AccountDetailsTokenBalances,
 		Contract:   filterDesc,
@@ -1340,16 +1339,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		}
 		ticker := w.getSecondaryTicker(secondaryCoin)
 		var erc20Balances map[string]*big.Int
-		if details >= AccountDetailsTokenBalances && len(ca.Contracts) > 1 {
+		// a contract filter leaves at most one ERC20 to fetch, which never batches
+		if details >= AccountDetailsTokenBalances && len(ca.Contracts) > 1 && len(filterDesc) == 0 {
 			// Batch ERC20 balanceOf calls to cut per-contract RPC; fallback is single-call per contract.
 			erc20Contracts := make([]bchain.AddressDescriptor, 0, len(ca.Contracts))
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
-				// Only fungible tokens are eligible; respect a contract filter if present.
 				if c.Standard != bchain.FungibleToken {
-					continue
-				}
-				if len(filterDesc) > 0 && !bytes.Equal(filterDesc, c.Contract) {
 					continue
 				}
 				erc20Contracts = append(erc20Contracts, c.Contract)
@@ -1376,7 +1372,11 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			if len(filterDesc) == 0 {
 				probes = w.prefetchContractInfos(ca.Contracts)
 			}
-			d.tokens = make([]Token, len(ca.Contracts))
+			nTokens := len(ca.Contracts)
+			if len(filterDesc) > 0 {
+				nTokens = 1
+			}
+			d.tokens = make([]Token, nTokens)
 			var j int
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
