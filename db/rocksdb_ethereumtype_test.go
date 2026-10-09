@@ -1795,20 +1795,68 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 				t.Errorf("unpackAddrContracts() = %v, want %v", got, tt.data)
 			}
 			// the header-only decoder must agree on the counters and leave the array undecoded
-			header, err := unpackAddrContractsHeader(packed, nil)
+			header, err := unpackAddrContractsOpt(packed, nil, AddrContractsReadOptions{HeaderOnly: true})
 			if err != nil {
-				t.Errorf("unpackAddrContractsHeader() error = %v", err)
+				t.Errorf("unpackAddrContractsOpt(HeaderOnly) error = %v", err)
 				return
 			}
 			wantHeader := &AddrContracts{TotalTxs: tt.data.TotalTxs, NonContractTxs: tt.data.NonContractTxs, InternalTxs: tt.data.InternalTxs}
 			if !reflect.DeepEqual(header, wantHeader) {
-				t.Errorf("unpackAddrContractsHeader() = %v, want %v", header, wantHeader)
+				t.Errorf("unpackAddrContractsOpt(HeaderOnly) = %v, want %v", header, wantHeader)
 			}
 		})
 	}
 }
 
-func Test_unpackAddrContractsHeader_Truncated(t *testing.T) {
+// stripAddrContracts derives the expected partial decode from the source row
+func stripAddrContracts(full *AddrContracts, opts AddrContractsReadOptions) *AddrContracts {
+	rv := *full
+	rv.Contracts = make([]AddrContract, len(full.Contracts))
+	for i, c := range full.Contracts {
+		s := AddrContract{Standard: c.Standard, Contract: c.Contract, Txs: c.Txs}
+		if opts.values {
+			s.Value = c.Value
+		}
+		if opts.Holdings && (len(opts.Contract) == 0 || bytes.Equal(opts.Contract, c.Contract)) {
+			s.Ids = c.Ids
+			s.MultiTokenValues = c.MultiTokenValues
+		}
+		rv.Contracts[i] = s
+	}
+	return &rv
+}
+
+func Test_unpackAddrContractsOpt(t *testing.T) {
+	parser := ethereumTestnetParser()
+	contract47 := addressToAddrDesc(dbtestdata.EthAddrContract47, parser)
+	contract4a := addressToAddrDesc(dbtestdata.EthAddrContract4a, parser)
+	notAContract := addressToAddrDesc(dbtestdata.EthAddr7b, parser)
+	row := AddrContracts{TotalTxs: 30, NonContractTxs: 20, InternalTxs: 10, Contracts: generateAddrContracts(2, 2, 3, 2, 3)}
+	packed := packAddrContracts(&row)
+	for _, tt := range []struct {
+		name string
+		opts AddrContractsReadOptions
+	}{
+		{"full", FullAddrContractsRead},
+		{"none", AddrContractsReadOptions{}},
+		{"holdingsOnly", AddrContractsReadOptions{Holdings: true}},
+		{"holdingsOf47", AddrContractsReadOptions{Holdings: true, Contract: contract47}},
+		{"holdingsOf4a", AddrContractsReadOptions{Holdings: true, Contract: contract4a}},
+		{"holdingsOfAbsentContract", AddrContractsReadOptions{Holdings: true, Contract: notAContract}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := unpackAddrContractsOpt(packed, nil, tt.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := stripAddrContracts(&row, tt.opts); !reflect.DeepEqual(got, want) {
+				t.Errorf("unpackAddrContractsOpt() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+func Test_unpackAddrContractsOpt_TruncatedHeader(t *testing.T) {
 	packed := packAddrContracts(&AddrContracts{TotalTxs: 300, NonContractTxs: 200, InternalTxs: 100})
 	// the header is the three counters; the trailing contract count is not part of it
 	headerLen := 0
@@ -1817,8 +1865,10 @@ func Test_unpackAddrContractsHeader_Truncated(t *testing.T) {
 		headerLen += l
 	}
 	for cut := 0; cut < headerLen; cut++ {
-		if _, err := unpackAddrContractsHeader(packed[:cut], nil); err == nil {
-			t.Errorf("unpackAddrContractsHeader(packed[:%d]) expected error", cut)
+		for _, opts := range []AddrContractsReadOptions{{HeaderOnly: true}, FullAddrContractsRead} {
+			if _, err := unpackAddrContractsOpt(packed[:cut], nil, opts); err == nil {
+				t.Errorf("unpackAddrContractsOpt(packed[:%d], %+v) expected error", cut, opts)
+			}
 		}
 	}
 }
@@ -1829,13 +1879,13 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 	defer closeAndDestroyRocksDB(t, d)
 	addrDesc := bchain.AddressDescriptor(addressToAddrDesc(dbtestdata.EthAddr4b, parser))
 
-	for _, headerOnly := range []bool{false, true} {
-		got, err := d.GetAddrDescContracts(addrDesc, headerOnly)
+	for _, opts := range []AddrContractsReadOptions{FullAddrContractsRead, {HeaderOnly: true}, {}} {
+		got, err := d.GetAddrDescContracts(addrDesc, opts)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got != nil {
-			t.Fatalf("absent record, headerOnly=%v: got %v, want nil", headerOnly, got)
+			t.Fatalf("absent record, %+v: got %v, want nil", opts, got)
 		}
 	}
 
@@ -1854,17 +1904,17 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	full, err := d.GetAddrDescContracts(addrDesc, false)
+	full, err := d.GetAddrDescContracts(addrDesc, FullAddrContractsRead)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := d.GetAddrDescContracts(addrDesc, true)
+	got, err := d.GetAddrDescContracts(addrDesc, AddrContractsReadOptions{HeaderOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := &AddrContracts{TotalTxs: full.TotalTxs, NonContractTxs: full.NonContractTxs, InternalTxs: full.InternalTxs}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetAddrDescContracts(headerOnly) = %v, want %v", got, want)
+		t.Errorf("GetAddrDescContracts(HeaderOnly) = %v, want %v", got, want)
 	}
 	if len(full.Contracts) != len(stored.Contracts) {
 		t.Errorf("GetAddrDescContracts() decoded %d contracts, want %d", len(full.Contracts), len(stored.Contracts))

@@ -1301,8 +1301,22 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	var confirmedNonceOK bool
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
-	// details=basic consumes only the header counters; nothing it returns reads the contract array
-	ca, err := w.db.GetAddrDescContracts(addrDesc, details == AccountDetailsBasic)
+	var filterDesc bchain.AddressDescriptor
+	var err error
+	if filter.Contract != "" {
+		// Optional contract filter narrows token balances and tx paging to a single contract.
+		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
+		if err != nil {
+			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+		}
+	}
+	// basic reads only the header counters; NFT ids are emitted only from tokenBalances up, so
+	// decode them only there and only for the filtered contract (ERC20 balances come from the backend)
+	ca, err := w.db.GetAddrDescContracts(addrDesc, db.AddrContractsReadOptions{
+		HeaderOnly: details == AccountDetailsBasic,
+		Holdings:   details >= AccountDetailsTokenBalances,
+		Contract:   filterDesc,
+	})
 	if err != nil {
 		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
@@ -1310,14 +1324,6 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	b, err := w.chain.EthereumTypeGetBalance(addrDesc)
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
-	}
-	var filterDesc bchain.AddressDescriptor
-	if filter.Contract != "" {
-		// Optional contract filter narrows token balances and tx paging to a single contract.
-		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
-		if err != nil {
-			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
-		}
 	}
 	if ca != nil {
 		// Address has indexed contract/tx data; include totals and nonce.
@@ -1333,16 +1339,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		}
 		ticker := w.getSecondaryTicker(secondaryCoin)
 		var erc20Balances map[string]*big.Int
-		if details >= AccountDetailsTokenBalances && len(ca.Contracts) > 1 {
+		// a contract filter leaves at most one ERC20 to fetch, which never batches
+		if details >= AccountDetailsTokenBalances && len(ca.Contracts) > 1 && len(filterDesc) == 0 {
 			// Batch ERC20 balanceOf calls to cut per-contract RPC; fallback is single-call per contract.
 			erc20Contracts := make([]bchain.AddressDescriptor, 0, len(ca.Contracts))
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
-				// Only fungible tokens are eligible; respect a contract filter if present.
 				if c.Standard != bchain.FungibleToken {
-					continue
-				}
-				if len(filterDesc) > 0 && !bytes.Equal(filterDesc, c.Contract) {
 					continue
 				}
 				erc20Contracts = append(erc20Contracts, c.Contract)
@@ -1369,7 +1372,11 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			if len(filterDesc) == 0 {
 				probes = w.prefetchContractInfos(ca.Contracts)
 			}
-			d.tokens = make([]Token, len(ca.Contracts))
+			nTokens := len(ca.Contracts)
+			if len(filterDesc) > 0 {
+				nTokens = 1
+			}
+			d.tokens = make([]Token, nTokens)
 			var j int
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]

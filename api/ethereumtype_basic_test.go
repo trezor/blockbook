@@ -51,7 +51,7 @@ func TestGetEthereumTypeAddressBalances_BasicFreshAddress(t *testing.T) {
 func TestGetEthereumTypeAddressBalances_BasicIgnoresContractFilters(t *testing.T) {
 	w, database, parser := setupContractProbeWorker(t, newContractProbeChain(t))
 	ad := addrDesc(t, parser, dbtestdata.EthAddr4b)
-	full, err := database.GetAddrDescContracts(ad, false)
+	full, err := database.GetAddrDescContracts(ad, db.FullAddrContractsRead)
 	require.NoError(t, err)
 	require.NotEmpty(t, full.Contracts)
 

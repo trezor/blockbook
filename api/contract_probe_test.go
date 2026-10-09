@@ -202,7 +202,7 @@ func TestGetContractDescriptorInfo_ResolvedTokenIsStored(t *testing.T) {
 func TestPrefetchContractInfos_BatchesUnknownContracts(t *testing.T) {
 	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
-	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), false)
+	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), db.FullAddrContractsRead)
 	require.NoError(t, err)
 
 	probes := w.prefetchContractInfos(ca.Contracts)
@@ -220,7 +220,7 @@ func TestPrefetchContractInfos_BatchesUnknownContracts(t *testing.T) {
 func TestPrefetchContractInfos_SkipsCachedNegatives(t *testing.T) {
 	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
-	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), false)
+	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), db.FullAddrContractsRead)
 	require.NoError(t, err)
 	bestHeight, reorgGen := w.contractProbeCacheState()
 	w.contractProbeCache.add(string(addrDesc(t, parser, dbtestdata.EthAddrContract0d)), bestHeight, 100, reorgGen)
@@ -236,7 +236,7 @@ func TestPrefetchContractInfos_SkipsCachedNegatives(t *testing.T) {
 func TestGetProbedContractDescriptorInfo_CachesBatchedNegative(t *testing.T) {
 	chain := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, chain)
-	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), false)
+	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), db.FullAddrContractsRead)
 	require.NoError(t, err)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 
@@ -258,7 +258,7 @@ func TestGetProbedContractDescriptorInfo_BatchedErrorIsNotCached(t *testing.T) {
 	chain := newContractProbeChain(t)
 	chain.err = errors.New("context deadline exceeded")
 	w, database, parser := setupContractProbeWorker(t, chain)
-	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), false)
+	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), db.FullAddrContractsRead)
 	require.NoError(t, err)
 	cd := addrDesc(t, parser, dbtestdata.EthAddrContract0d)
 
@@ -303,7 +303,7 @@ func TestGetEthereumTypeAddressBalances_ResolvesMetadataInOneBatch(t *testing.T)
 func TestPrefetchContractInfos_NoBatchResolver(t *testing.T) {
 	inner := newContractProbeChain(t)
 	w, database, parser := setupContractProbeWorker(t, &contractProbeChainNoBatch{BlockChain: inner.BlockChain, inner: inner})
-	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), false)
+	ca, err := database.GetAddrDescContracts(addrDesc(t, parser, dbtestdata.EthAddr7b), db.FullAddrContractsRead)
 	require.NoError(t, err)
 
 	require.Nil(t, w.prefetchContractInfos(ca.Contracts))
