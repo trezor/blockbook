@@ -1301,8 +1301,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	var confirmedNonceOK bool
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
-	// Load cached contract list and totals from the index; this drives token lookups.
-	ca, err := w.db.GetAddrDescContracts(addrDesc)
+	// details=basic consumes only the header counters; nothing it returns reads the contract array
+	ca, err := w.db.GetAddrDescContracts(addrDesc, details == AccountDetailsBasic)
 	if err != nil {
 		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
