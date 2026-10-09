@@ -7,6 +7,16 @@ BLOCKBOOK_BASE := $(GOPATH)/src/github.com/trezor
 BLOCKBOOK_SRC := $(BLOCKBOOK_BASE)/blockbook
 ARGS ?=
 
+# JEMALLOC is set by the image build arg. The static archive goes in by path because cgo's linker-flag
+# allowlist rejects -l:libjemalloc_pic.a; gcc resolves the multiarch directory.
+ifneq ($(JEMALLOC),0)
+JEMALLOC_LIB := $(shell gcc -print-file-name=libjemalloc_pic.a)
+ifeq ($(JEMALLOC_LIB),libjemalloc_pic.a)
+$(error libjemalloc_pic.a not found; install libjemalloc-dev or build the image with JEMALLOC=0)
+endif
+export CGO_LDFLAGS := $(CGO_LDFLAGS) $(JEMALLOC_LIB)
+endif
+
 all: build tools
 
 build: prepare-sources
