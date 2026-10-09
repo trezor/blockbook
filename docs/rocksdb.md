@@ -126,11 +126,18 @@ Column families used only by **Ethereum type** coins:
 
   - Large addressContracts cache
 
-  To reduce repeated RocksDB reads/writes for very large entries, Blockbook caches addressContracts blobs whose packed
-  size exceeds `address_contracts_cache_min_size`. The cache is flushed periodically, and also flushed early when its
-  total size crosses the active cache cap. Chain-tip sync uses `address_contracts_cache_max_bytes`; bulk connect uses
-  `address_contracts_cache_bulk_max_bytes`. Early flush avoids unbounded memory growth at the cost of more frequent
-  writes.
+  To reduce repeated RocksDB reads/writes for very large entries, Blockbook caches addressContracts records whose packed
+  size exceeds `address_contracts_cache_min_size`. Cached records are mutated in place by block connect and disconnect
+  and are written back only when modified: every five minutes, on eviction and on shutdown. After each block, if the
+  cache exceeds the active cap (`address_contracts_cache_max_bytes` at chain tip, `address_contracts_cache_bulk_max_bytes`
+  during bulk connect), the least recently used records are evicted until it fits. Records used in the last eight blocks and the most
+  recently used record are never evicted, so a hot set larger than the cap overshoots it instead of cycling
+  through RocksDB on every block. Within a block the
+  cache may temporarily exceed the cap by whatever that block loads. A decoded record costs about seven times its packed
+  size in Go heap while it serves only linear lookups and 30-40 times once its contract index is built (measured on a
+  35,000-contract record: 1.1 MB packed, 7.7 MB decoded, 15 MB with the index), so the cap bounds memory only
+  approximately. The `addr_contracts_cache_*` metrics expose
+  hits, misses, cacheable misses (re-reads of records the cache could have held), evictions and bytes loaded and written.
 
 - **internalData** (used only by Ethereum type coins)
 

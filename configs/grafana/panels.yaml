@@ -334,7 +334,7 @@ panels:
         legend: '{{instance}}'
   sync.addr_contracts_cache_activity:
     title: AddrContracts cache activity
-    description: Hits avoid RocksDB reads, misses fall through to storage, and flushes show cap- or timer-driven cache resets.
+    description: Hits avoid RocksDB reads and misses fall through to storage; cacheable misses are re-reads of records the cache could have held, so cacheable misses rising together with evictions means the hot set exceeds the cap and the cache is thrashing. Flushes are the periodic write-backs of modified entries.
     queries:
       hits:
         promql: rate({{name:addr_contracts_cache_hits_total}}{job="blockbook", coin="$coin"}[5m]) * 60
@@ -342,9 +342,25 @@ panels:
       misses:
         promql: rate({{name:addr_contracts_cache_misses_total}}{job="blockbook", coin="$coin"}[5m]) * 60
         legend: '{{instance}} misses/min'
+      cacheable_misses:
+        promql: rate({{name:addr_contracts_cache_cacheable_misses_total}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} cacheable misses/min'
+      evictions:
+        promql: rate({{name:addr_contracts_cache_evictions_total}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} evictions/min'
       flushes:
         promql: rate({{name:addr_contracts_cache_flush_total}}{job="blockbook", coin="$coin"}[1h]) * 60
         legend: '{{instance}} flushes {{reason}}/min'
+  sync.addr_contracts_cache_io:
+    title: AddrContracts cache bytes in/out
+    description: Packed bytes loaded from RocksDB into the cache versus written back by evictions (cap), the periodic flush (timer) and shutdown (close). Written bytes are the RocksDB write churn the cache causes; loaded tracking cap writes means entries are cycling through the cache.
+    queries:
+      loaded:
+        promql: rate({{name:addr_contracts_cache_loaded_bytes_total}}{job="blockbook", coin="$coin"}[5m])
+        legend: '{{instance}} loaded'
+      written:
+        promql: rate({{name:addr_contracts_cache_written_bytes_total}}{job="blockbook", coin="$coin"}[5m])
+        legend: '{{instance}} written {{reason}}'
   sync.tip_feed_age:
     title: Backend tip feed age
     description: Measures notification silence for EVM newHeads or Tron ZeroMQ; healthy is low and flat, while sawtooth near the threshold means watchdog polling is carrying sync.

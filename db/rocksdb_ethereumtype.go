@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"container/list"
 	"encoding/hex"
 	"math/big"
 	"os"
@@ -482,6 +483,8 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		d.cbs.balancesMiss++
 	} else {
 		d.cbs.balancesHit++
+		// bulk connect keeps this map across blocks, so a hit here is a mutation the cache did not see
+		d.touchAddrContractsCacheEntry(ac)
 	}
 	if contract == nil {
 		if addTxCount {
@@ -1599,6 +1602,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
 		d.reorgGen.Add(1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
+		d.maintainAddrContractsCache(lower - 1)
 	}
 	return err
 }
@@ -1698,6 +1702,16 @@ type unpackedAddrContracts struct {
 	// contractIndex lazily maps contract address -> index for large contract lists.
 	contractIndex      map[contractIndexKey]int
 	contractIndexDirty bool
+	// indexLookupSeen defers building contractIndex until a second indexed lookup of this decoded record:
+	// a reloaded record often gets one lookup before it is evicted again, not worth a map of its size.
+	indexLookupSeen bool
+	// Cache bookkeeping, meaningful only while the record sits in RocksDB.addrContractsCache.
+	cacheKey   string
+	cacheElem  *list.Element
+	cacheSize  int64
+	cacheDirty bool
+	// cacheLastUse is the maintenance cycle of the last hit or insert.
+	cacheLastUse uint64
 }
 
 type contractIndexKey [eth.EthereumTypeAddressDescriptorLen]byte
@@ -1725,6 +1739,7 @@ func (acs *unpackedAddrContracts) rebuildContractIndex() {
 func (acs *unpackedAddrContracts) dropContractIndex() {
 	acs.contractIndex = nil
 	acs.contractIndexDirty = false
+	acs.indexLookupSeen = false
 }
 
 func (d *RocksDB) dropAddrContractsContractIndex(addrKey addressHotnessKey) {
@@ -1745,6 +1760,10 @@ func (acs *unpackedAddrContracts) findContractIndex(addrDesc, contract bchain.Ad
 		}
 	}
 	if useIndex {
+		if acs.contractIndex == nil && !acs.indexLookupSeen {
+			acs.indexLookupSeen = true
+			return findContractInAddressContracts(contract, acs.Contracts)
+		}
 		if acs.contractIndex == nil || acs.contractIndexDirty {
 			acs.rebuildContractIndex()
 		}
@@ -1845,10 +1864,15 @@ func (s *unpackedMultiTokenValues) upsert(m bchain.MultiTokenValue, index int32,
 	}
 }
 
-// getUnpackedAddrDescContracts returns partially unpacked AddrContracts for given addrDesc
+// getUnpackedAddrDescContracts returns partially unpacked AddrContracts for given addrDesc.
+// Both callers (block connect and disconnect) mutate the record they get, so a cache hit or
+// insert marks it dirty up front; the timer and eviction paths then persist only dirty records.
 func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor) (*unpackedAddrContracts, error) {
 	d.addrContractsCacheMux.Lock()
 	rv, found := d.addrContractsCache[string(addrDesc)]
+	if found && rv != nil {
+		d.touchAddrContractsCacheEntryLocked(rv)
+	}
 	d.addrContractsCacheMux.Unlock()
 	if found && rv != nil {
 		if d.metrics != nil {
@@ -1874,32 +1898,67 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 		minSize = addrContractsCacheMinSize
 	}
 	if err == nil && rv != nil && len(buf) > minSize {
-		var cacheEntries int
-		var cacheBytes int64
-		shouldFlush := false
+		if d.metrics != nil {
+			d.metrics.AddrContractsCacheCacheableMisses.Inc()
+			d.metrics.AddrContractsCacheLoadedBytes.Add(float64(len(buf)))
+		}
 		d.addrContractsCacheMux.Lock()
 		key := string(addrDesc)
 		if _, exists := d.addrContractsCache[key]; !exists {
-			d.addrContractsCache[key] = rv
-			// Track bytes based on the packed size at insertion time; later growth isn't accounted for.
-			d.addrContractsCacheBytes += int64(len(buf))
-			if d.addrContractsCacheMaxBytes > 0 && d.addrContractsCacheBytes > d.addrContractsCacheMaxBytes {
-				shouldFlush = true
-			}
+			d.insertAddrContractsCacheEntryLocked(key, rv, int64(len(buf)))
 		}
-		cacheEntries = len(d.addrContractsCache)
-		cacheBytes = d.addrContractsCacheBytes
+		cacheEntries, cacheBytes := len(d.addrContractsCache), d.addrContractsCacheBytes
 		d.addrContractsCacheMux.Unlock()
-		if d.metrics != nil {
-			d.metrics.AddrContractsCacheEntries.Set(float64(cacheEntries))
-			d.metrics.AddrContractsCacheBytes.Set(float64(cacheBytes))
-		}
-		if shouldFlush {
-			// Flush early when we exceed the cap to avoid unbounded memory growth.
-			d.flushAddrContractsCache()
-		}
+		d.setAddrContractsCacheGauges(cacheEntries, cacheBytes)
 	}
 	return rv, err
+}
+
+// insertAddrContractsCacheEntryLocked caches acs as the most recently used record. The packed size is
+// accounted once at insertion; later growth of the decoded record is not tracked.
+func (d *RocksDB) insertAddrContractsCacheEntryLocked(key string, acs *unpackedAddrContracts, packedSize int64) {
+	acs.cacheKey = key
+	acs.cacheSize = packedSize
+	acs.cacheDirty = true
+	acs.cacheLastUse = d.addrContractsCacheClock
+	acs.cacheElem = d.addrContractsCacheLRU.PushFront(acs)
+	d.addrContractsCache[key] = acs
+	d.addrContractsCacheBytes += packedSize
+}
+
+// touchAddrContractsCacheEntry marks a cache-resident record dirty and most recently used. cacheElem is
+// set and cleared only on the block-connect goroutine, so the check for a non-cached record needs no lock.
+func (d *RocksDB) touchAddrContractsCacheEntry(acs *unpackedAddrContracts) {
+	if acs.cacheElem == nil {
+		return
+	}
+	d.addrContractsCacheMux.Lock()
+	d.touchAddrContractsCacheEntryLocked(acs)
+	d.addrContractsCacheMux.Unlock()
+}
+
+func (d *RocksDB) touchAddrContractsCacheEntryLocked(acs *unpackedAddrContracts) {
+	acs.cacheDirty = true
+	acs.cacheLastUse = d.addrContractsCacheClock
+	if acs.cacheElem != nil {
+		d.addrContractsCacheLRU.MoveToFront(acs.cacheElem)
+	}
+}
+
+func (d *RocksDB) removeAddrContractsCacheEntryLocked(acs *unpackedAddrContracts) {
+	delete(d.addrContractsCache, acs.cacheKey)
+	if acs.cacheElem != nil {
+		d.addrContractsCacheLRU.Remove(acs.cacheElem)
+		acs.cacheElem = nil
+	}
+	d.addrContractsCacheBytes -= acs.cacheSize
+}
+
+func (d *RocksDB) setAddrContractsCacheGauges(entries int, bytes int64) {
+	if d.metrics != nil {
+		d.metrics.AddrContractsCacheEntries.Set(float64(entries))
+		d.metrics.AddrContractsCacheBytes.Set(float64(bytes))
+	}
 }
 
 // to speed up import of blocks, the unpacking of big ints is deferred to time when they are needed
@@ -1915,7 +1974,8 @@ func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err e
 	index += l
 	cl, l := unpackVaruint(buf[index:])
 	index += l
-	c := make([]unpackedAddrContract, 0, cl)
+	// spare capacity so that the first appends by the block connecting this record do not copy the whole slice
+	c := make([]unpackedAddrContract, 0, cl+cl/16+1)
 	for index < len(buf) {
 		contract := buf[index : index+eth.EthereumTypeAddressDescriptorLen]
 		index += eth.EthereumTypeAddressDescriptorLen
@@ -2040,85 +2100,162 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 	return nil
 }
 
-func (d *RocksDB) writeContractsCache() {
+// writeDirtyAddrContracts persists the modified records among entries in batches of at most
+// addrContractsCacheWriteChunkBytes, marking each batch clean as it commits. Records are independent,
+// so a failed batch only leaves its own and the following records dirty for the next pass. It returns
+// the number of records, packed bytes and batches written.
+func (d *RocksDB) writeDirtyAddrContracts(entries []*unpackedAddrContracts) (int, int64, int, error) {
+	var count, batches int
+	var bytes int64
+	var chunk []*unpackedAddrContracts
+	var chunkBytes int64
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
-	d.addrContractsCacheMux.Lock()
-	for addrDesc, acs := range d.addrContractsCache {
-		buf := packUnpackedAddrContracts(acs)
-		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+	flush := func() error {
+		if len(chunk) == 0 {
+			return nil
+		}
+		if err := d.WriteBatch(wb); err != nil {
+			return err
+		}
+		for _, acs := range chunk {
+			acs.cacheDirty = false
+		}
+		count += len(chunk)
+		bytes += chunkBytes
+		batches++
+		chunk, chunkBytes = chunk[:0], 0
+		wb.Clear()
+		return nil
 	}
-	d.addrContractsCacheMux.Unlock()
-	if err := d.WriteBatch(wb); err != nil {
-		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
-	}
-}
-
-func (d *RocksDB) writeContractsCacheSnapshot(cache map[string]*unpackedAddrContracts) {
-	wb := grocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	for addrDesc, acs := range cache {
-		buf := packUnpackedAddrContracts(acs)
-		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
-	}
-	if err := d.WriteBatch(wb); err != nil {
-		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
-	}
-}
-
-func (d *RocksDB) flushAddrContractsCache() {
-	start := time.Now()
-	d.addrContractsCacheMux.Lock()
-	cache := d.addrContractsCache
-	count := len(cache)
-	d.addrContractsCache = make(map[string]*unpackedAddrContracts)
-	d.addrContractsCacheBytes = 0
-	d.addrContractsCacheMux.Unlock()
-	if d.metrics != nil {
-		d.metrics.AddrContractsCacheEntries.Set(0)
-		d.metrics.AddrContractsCacheBytes.Set(0)
-		if count > 0 {
-			d.metrics.AddrContractsCacheFlushes.With(common.Labels{"reason": "cap"}).Inc()
+	for _, acs := range entries {
+		if !acs.cacheDirty {
+			continue
+		}
+		key := bchain.AddressDescriptor(acs.cacheKey)
+		// a record left without contracts and transactions by a disconnect is removed, as in storeUnpackedAddressContracts
+		if acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0 {
+			wb.DeleteCF(d.cfh[cfAddressContracts], key)
+		} else {
+			buf := packUnpackedAddrContracts(acs)
+			wb.PutCF(d.cfh[cfAddressContracts], key, buf)
+			chunkBytes += int64(len(buf))
+		}
+		chunk = append(chunk, acs)
+		if chunkBytes >= d.addrContractsCacheWriteChunkBytes {
+			if err := flush(); err != nil {
+				return count, bytes, batches, err
+			}
 		}
 	}
-	if count > 0 {
-		d.writeContractsCacheSnapshot(cache)
+	if err := flush(); err != nil {
+		return count, bytes, batches, err
 	}
-	glog.Info("storeAddrContractsCache: store ", count, " entries in ", time.Since(start))
+	return count, bytes, batches, nil
 }
 
-func (d *RocksDB) flushAddrContractsCacheIfOverCap() {
+// evictAddrContractsCacheOverCap drops the least recently used records until the cache fits its cap,
+// persisting modified ones first. Records used within the last addrContractsCacheHotBlocks cycles and
+// the most recently used record are never evicted: a hot set larger than the cap, or one oversized hot
+// address, overshoots the cap instead of being re-read and rewritten on every block. At most
+// addrContractsCacheEvictBudgetBytes go per call, unless the cache has grown past twice its cap.
+// It returns the packed bytes written.
+func (d *RocksDB) evictAddrContractsCacheOverCap() int64 {
 	maxBytes := d.addrContractsCacheMaxBytes
 	if maxBytes <= 0 {
+		return 0
+	}
+	start := time.Now()
+	d.addrContractsCacheMux.Lock()
+	defer d.addrContractsCacheMux.Unlock()
+	var victims []*unpackedAddrContracts
+	bytes := d.addrContractsCacheBytes
+	budget := d.addrContractsCacheEvictBudgetBytes
+	if bytes > 2*maxBytes {
+		budget = 0
+	}
+	var evicting int64
+	for e := d.addrContractsCacheLRU.Back(); e != nil && bytes > maxBytes && d.addrContractsCacheLRU.Len()-len(victims) > 1; e = e.Prev() {
+		acs := e.Value.(*unpackedAddrContracts)
+		// the list is ordered by recency, so the first protected record ends the scan
+		if acs.cacheLastUse+addrContractsCacheHotBlocks > d.addrContractsCacheClock {
+			break
+		}
+		if budget > 0 && len(victims) > 0 && evicting+acs.cacheSize > budget {
+			break
+		}
+		victims = append(victims, acs)
+		bytes -= acs.cacheSize
+		evicting += acs.cacheSize
+	}
+	if len(victims) == 0 {
+		return 0
+	}
+	count, written, batches, err := d.writeDirtyAddrContracts(victims)
+	if err != nil {
+		// keep the victims cached; the written ones are clean and the rest stay dirty for the next pass
+		glog.Error("addrContractsCache: eviction write of ", len(victims), " entries failed after ", count, " at height ", d.addrContractsCacheHeight, ": ", err)
+		return written
+	}
+	for _, acs := range victims {
+		d.removeAddrContractsCacheEntryLocked(acs)
+	}
+	d.setAddrContractsCacheGauges(len(d.addrContractsCache), d.addrContractsCacheBytes)
+	if d.metrics != nil {
+		d.metrics.AddrContractsCacheEvictions.Add(float64(len(victims)))
+		d.metrics.AddrContractsCacheWrittenBytes.With(common.Labels{"reason": "cap"}).Add(float64(written))
+	}
+	glog.Info("addrContractsCache: evicted ", len(victims), " entries (", count, " modified, ", written, " bytes in ", batches, " batches, ", d.addrContractsCacheBytes, " bytes left) at height ", d.addrContractsCacheHeight, " in ", time.Since(start))
+	return written
+}
+
+// storeAddrContractsCache persists the records modified since they were last written, keeping them cached.
+func (d *RocksDB) storeAddrContractsCache(reason string) {
+	start := time.Now()
+	d.addrContractsCacheMux.Lock()
+	entries := make([]*unpackedAddrContracts, 0, len(d.addrContractsCache))
+	for _, acs := range d.addrContractsCache {
+		entries = append(entries, acs)
+	}
+	count, written, batches, err := d.writeDirtyAddrContracts(entries)
+	height := d.addrContractsCacheHeight
+	d.addrContractsCacheMux.Unlock()
+	if err != nil {
+		glog.Error("storeAddrContractsCache: failed to store addrContractsCache after ", count, " entries at height ", height, ": ", err)
 		return
 	}
-	d.addrContractsCacheMux.Lock()
-	overCap := d.addrContractsCacheBytes > maxBytes
-	d.addrContractsCacheMux.Unlock()
-	if overCap {
-		d.flushAddrContractsCache()
-	}
-}
-
-func (d *RocksDB) storeAddrContractsCache() {
-	start := time.Now()
-	count := len(d.addrContractsCache)
-	if count > 0 {
-		d.writeContractsCache()
-	}
 	if d.metrics != nil && count > 0 {
-		d.metrics.AddrContractsCacheFlushes.With(common.Labels{"reason": "timer"}).Inc()
+		d.metrics.AddrContractsCacheFlushes.With(common.Labels{"reason": reason}).Inc()
+		d.metrics.AddrContractsCacheWrittenBytes.With(common.Labels{"reason": reason}).Add(float64(written))
 	}
-	glog.Info("storeAddrContractsCache: store ", len(d.addrContractsCache), " entries in ", time.Since(start))
+	glog.Info("storeAddrContractsCache: stored ", count, " modified of ", len(entries), " entries (", written, " bytes in ", batches, " batches) at height ", height, " in ", time.Since(start))
 }
 
-// storeAddrContractsCacheIfDue periodically flushes the cache from the block-connect
-// goroutine. Cached records are mutated without addrContractsCacheMux while a block is
-// connected, so packing them from any other goroutine would race with that mutation.
 func (d *RocksDB) storeAddrContractsCacheIfDue() {
 	if time.Since(d.lastAddrContractsCacheStore) < addrContractsCacheStorePeriod {
 		return
 	}
 	d.lastAddrContractsCacheStore = time.Now()
-	d.storeAddrContractsCache()
+	d.storeAddrContractsCache("timer")
+}
+
+// maintainAddrContractsCache runs from the block-connect goroutine between blocks, the only point where
+// no block holds cached records and no bulk store goroutine is packing them, so evicting and persisting
+// here cannot race a mutation. Mid-block the cache may exceed its cap by what one block loads. height is
+// the chain height after the connect or disconnect that just finished.
+func (d *RocksDB) maintainAddrContractsCache(height uint32) {
+	d.addrContractsCacheMux.Lock()
+	d.addrContractsCacheHeight = height
+	d.addrContractsCacheMux.Unlock()
+	if written := d.evictAddrContractsCacheOverCap(); written > 0 {
+		// the packed values and memtable blocks just freed by RocksDB stay resident in glibc arenas otherwise
+		start := time.Now()
+		if trimCHeap() {
+			glog.Info("addrContractsCache: malloc_trim after eviction in ", time.Since(start))
+		}
+	}
+	d.addrContractsCacheMux.Lock()
+	d.addrContractsCacheClock++
+	d.addrContractsCacheMux.Unlock()
+	d.storeAddrContractsCacheIfDue()
 }
