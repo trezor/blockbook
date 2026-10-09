@@ -4,6 +4,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/common"
@@ -26,6 +27,8 @@ func TestTemplateDataContractBaseRate(t *testing.T) {
 	td := &TemplateData{TxTicker: &common.CurrencyRatesTicker{}}
 	rate := func(contract string, blocktime int64) (float64, bool) {
 		td.Tx = &api.Tx{Blocktime: blocktime}
+		// amountSpan labels the day the same way: the midnight ticker is valid for the whole day before
+		td.TxDate = time.Unix(blocktime, 0).UTC().Add(-time.Second).Format("2006-01-02")
 		return td.contractBaseRate(contract, lookup)
 	}
 

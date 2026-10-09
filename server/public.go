@@ -569,7 +569,7 @@ type TemplateData struct {
 
 type contractRateKey struct {
 	contract string
-	day      int64
+	day      string
 }
 
 type contractRate struct {
@@ -577,14 +577,15 @@ type contractRate struct {
 	found bool
 }
 
-// contractBaseRate memoizes GetContractBaseRate per page, keyed by the daily ticker the lookup resolves to,
+// contractBaseRate memoizes GetContractBaseRate per page, keyed by TxDate (the day of the stored daily ticker),
 // so the DB fallback runs once per contract and day instead of once per token transfer row.
-// A nil TxTicker is not memoized: amountSpan may still set it for later rows of the same day.
+// A nil TxTicker is not memoized: amountSpan may still set it, with TxDate, for later rows of the same day.
+// The lookup is a parameter so the memo can be tested without a Worker.
 func (td *TemplateData) contractBaseRate(contract string, lookup func(ticker *common.CurrencyRatesTicker, token string, timestamp int64) (float64, bool)) (float64, bool) {
 	if td.TxTicker == nil {
 		return 0, false
 	}
-	key := contractRateKey{contract: contract, day: fiat.DailyTickerTimestamp(td.Tx.Blocktime)}
+	key := contractRateKey{contract: contract, day: td.TxDate}
 	if r, ok := td.contractRates[key]; ok {
 		return r.rate, r.found
 	}

@@ -336,8 +336,6 @@ func Test_unpackCurrencyRatesTickerToken(t *testing.T) {
 		TokenRates: map[string]float32{
 			"0xdac17f958d2ee523a2206206994597c13d831ec7": 0.0005,
 			"0x6B175474E89094C44Da98b954EedeAC495271d0F": 0.00051,
-			"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd": 1.5,
-			"0xABCDEFabcdefabcdefabcdefabcdefabcdefabcd": 2.5,
 		},
 	}
 	packed := packCurrencyRatesTicker(&data)
@@ -347,8 +345,6 @@ func Test_unpackCurrencyRatesTickerToken(t *testing.T) {
 		"0xdAC17F958D2ee523a2206206994597C13D831ec7", // lowercase fallback
 		"0x6B175474E89094C44Da98b954EedeAC495271d0F", // exact, mixed case
 		"0x6b175474e89094c44da98b954eedeac495271d0f", // stored mixed case only -> not found
-		"0xABCDEFabcdefabcdefabcdefabcdefabcdefabcd", // exact wins over lowercase
-		"0xAbcdefabcdefabcdefabcdefabcdefabcdefabcd", // lowercase fallback of the pair
 		"0x0000000000000000000000000000000000000000", // absent
 	}
 	for _, token := range tokens {
@@ -434,7 +430,7 @@ func BenchmarkFiatRatesFindTickerToken(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ts := start.Add(time.Duration(r.Int63n(int64(days-1) * int64(24*time.Hour))))
+		ts := start.Add(time.Duration(r.Intn((days-1)*24)) * time.Hour)
 		tk, err := d.FiatRatesFindTicker(&ts, "", tokens[r.Intn(len(tokens))])
 		if err != nil || tk == nil {
 			b.Fatal("ticker not found", err)

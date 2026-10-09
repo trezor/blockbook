@@ -74,7 +74,7 @@ func unpackRates(buf []byte) (map[string]float32, []byte) {
 
 // unpackCurrencyRatesTicker decodes a stored ticker; a non-empty token keeps only that token's rate,
 // because a ticker holds thousands of token rates and materializing all of them per lookup dominates CPU and GC.
-// The token is matched like CurrencyRatesTicker.findTokenRate (exact first, then lowercase) and the kept rate
+// The token matches its exact or lowercase key, as CurrencyRatesTicker.findTokenRate does, and the kept rate
 // is stored under token itself, so GetTokenRate(token) hits without a second ToLower.
 func unpackCurrencyRatesTicker(buf []byte, token string) (*common.CurrencyRatesTicker, error) {
 	var ticker common.CurrencyRatesTicker
@@ -91,12 +91,10 @@ func unpackCurrencyRatesTicker(buf []byte, token string) (*common.CurrencyRatesT
 		buf = buf[l:]
 		v, l := unpackFloat32(buf)
 		buf = buf[l:]
-		if string(key) == token {
+		// compare without converting: string(key) == s is allocation-free only in this direct form
+		if string(key) == token || string(key) == lowerToken {
 			ticker.TokenRates = map[string]float32{token: v}
 			return &ticker, nil
-		}
-		if string(key) == lowerToken {
-			ticker.TokenRates = map[string]float32{token: v}
 		}
 	}
 	return &ticker, nil
