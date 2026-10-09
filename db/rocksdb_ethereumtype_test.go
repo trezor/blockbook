@@ -1814,7 +1814,7 @@ func stripAddrContracts(full *AddrContracts, opts AddrContractsReadOptions) *Add
 	rv.Contracts = make([]AddrContract, len(full.Contracts))
 	for i, c := range full.Contracts {
 		s := AddrContract{Standard: c.Standard, Contract: c.Contract, Txs: c.Txs}
-		if opts.Values {
+		if opts.values {
 			s.Value = c.Value
 		}
 		if opts.Holdings && (len(opts.Contract) == 0 || bytes.Equal(opts.Contract, c.Contract)) {
@@ -1839,10 +1839,9 @@ func Test_unpackAddrContractsOpt(t *testing.T) {
 	}{
 		{"full", FullAddrContractsRead},
 		{"none", AddrContractsReadOptions{}},
-		{"valuesOnly", AddrContractsReadOptions{Values: true}},
 		{"holdingsOnly", AddrContractsReadOptions{Holdings: true}},
 		{"holdingsOf47", AddrContractsReadOptions{Holdings: true, Contract: contract47}},
-		{"holdingsOf4a", AddrContractsReadOptions{Values: true, Holdings: true, Contract: contract4a}},
+		{"holdingsOf4a", AddrContractsReadOptions{Holdings: true, Contract: contract4a}},
 		{"holdingsOfAbsentContract", AddrContractsReadOptions{Holdings: true, Contract: notAContract}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

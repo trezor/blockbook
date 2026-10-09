@@ -268,13 +268,14 @@ func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *
 // counters are always decoded, skipped parts stay zero; a partially read row must not be packed back.
 type AddrContractsReadOptions struct {
 	HeaderOnly bool                     // decode only the tx counters, Contracts stays nil
-	Values     bool                     // decode ERC20 Value
 	Holdings   bool                     // decode ERC721 Ids and ERC1155 MultiTokenValues
 	Contract   bchain.AddressDescriptor // with Holdings, decode holdings only for this contract
+	// the indexed ERC20 Value is only needed by readers that pack the row back; the API takes balances from the backend
+	values bool
 }
 
 // FullAddrContractsRead decodes the whole row
-var FullAddrContractsRead = AddrContractsReadOptions{Values: true, Holdings: true}
+var FullAddrContractsRead = AddrContractsReadOptions{Holdings: true, values: true}
 
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
 	return unpackAddrContractsOpt(buf, addrDesc, FullAddrContractsRead)
@@ -316,7 +317,7 @@ func unpackAddrContractsOpt(buf []byte, addrDesc bchain.AddressDescriptor, opts 
 			Txs:      txs,
 		}
 		if standard == bchain.FungibleToken {
-			if opts.Values {
+			if opts.values {
 				b, ll := unpackBigint(buf)
 				buf = buf[ll:]
 				ac.Value = b
