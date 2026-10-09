@@ -4,8 +4,9 @@
 //	go run ./build/tools/typescriptify  # from the repository root
 //
 // On top of the library's ts_type/ts_doc tags, two conventions keep the output reproducible:
-//   - ts_type:"<Name>" where <Name> is listed in tsAliases emits a shared `export type` instead
-//     of inlining the union at every use site (the library cannot emit named aliases itself).
+//   - The chainExtraData wrappers are emitted as discriminated unions built from
+//     bchain.ChainExtraPayloads, so `payloadType === 'tron'` narrows the payload in TypeScript
+//     (the library can neither emit named aliases nor unions itself).
 //   - ts_nullable:"true" on a pointer field without omitempty emits `name: T | null` instead of
 //     the library's `name?: T`, matching what encoding/json actually puts on the wire.
 package main
@@ -31,23 +32,24 @@ const outputFile = "blockbook-api.ts"
 const header = "/* Do not change, this code is generated from Golang structs */\n" +
 	"/* Regenerate with `make typescriptify` (see build/tools/typescriptify) */\n\n"
 
-// tsAlias is a named TypeScript type referenced from Go fields via ts_type:"<name>".
-type tsAlias struct {
-	name       string
-	definition string
+// chainExtraUnion is one `export type` alias named after the Go wrapper struct (the library
+// dereferences pointer fields before matching managed types) whose members pick draws from the
+// payload registry.
+type chainExtraUnion struct {
+	wrapper interface{}
+	pick    func(bchain.ChainExtraPayload) interface{}
 }
 
-var tsAliases = []tsAlias{
-	{"TxChainExtraData", "{ payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any }"},
-	{"AccountChainExtraData", "{ payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any }"},
+var chainExtraUnions = []chainExtraUnion{
+	{api.TxChainExtraData{}, func(p bchain.ChainExtraPayload) interface{} { return p.Tx }},
+	{api.AccountChainExtraData{}, func(p bchain.ChainExtraPayload) interface{} { return p.Account }},
 }
 
 // apiTypes are the roots of the generated file; nested structs are discovered by the library.
+// The payload structs behind the unions are added from bchain.ChainExtraPayloads.
 var apiTypes = []interface{}{
 	// API - REST and Websocket
 	api.APIError{},
-	bchain.TronChainExtraData{},
-	bchain.TronAccountExtraData{},
 	api.Tx{},
 	api.FeeStats{},
 	api.Address{},
@@ -94,7 +96,7 @@ var apiTypes = []interface{}{
 }
 
 func main() {
-	out, err := generate(apiTypes, tsAliases)
+	out, err := generate(apiTypes, chainExtraUnions, bchain.ChainExtraPayloads)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "typescriptify:", err)
 		os.Exit(1)
@@ -121,9 +123,17 @@ func newConverter() *typescriptify.TypeScriptify {
 	return t
 }
 
-// generate returns the complete file contents for the given root types and aliases.
-func generate(roots []interface{}, aliases []tsAlias) (string, error) {
+// generate returns the complete file contents for the given root types, unions and payloads.
+func generate(roots []interface{}, unions []chainExtraUnion, payloads []bchain.ChainExtraPayload) (string, error) {
 	t := newConverter()
+	aliases, err := renderUnions(t, unions, payloads)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range payloads {
+		t.Add(p.Tx)
+		t.Add(p.Account)
+	}
 	for _, root := range roots {
 		t.Add(root)
 	}
@@ -139,24 +149,44 @@ func generate(roots []interface{}, aliases []tsAlias) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	prefix, err := renderAliases(aliases, body)
-	if err != nil {
-		return "", err
+	for _, u := range unions {
+		name := unionName(u)
+		if strings.Contains(body, "export interface "+name+" {") {
+			return "", fmt.Errorf("union %s was also emitted as an interface; the alias would be shadowed", name)
+		}
+		if !regexp.MustCompile(`\b` + name + `\b`).MatchString(body) {
+			return "", fmt.Errorf("union %s is not used by any field", name)
+		}
 	}
 	// A root type already emitted as a nested type leaves a stray blank line behind.
 	body = regexp.MustCompile("\n{2,}").ReplaceAllString(body, "\n")
-	return header + prefix + body + "\n", nil
+	return header + aliases + body + "\n", nil
 }
 
-// renderAliases emits the alias declarations and rejects any alias no field refers to,
-// so a stale table cannot linger in the generated file unnoticed.
-func renderAliases(aliases []tsAlias, body string) (string, error) {
+// unionName is the Go wrapper's type name, which is also what the API fields are typed with.
+func unionName(u chainExtraUnion) string {
+	return reflect.TypeOf(u.wrapper).Name()
+}
+
+// renderUnions emits one closed union per wrapper, a member per registered payload, and tells the
+// library to type every field of the wrapper type with the alias name.
+func renderUnions(t *typescriptify.TypeScriptify, unions []chainExtraUnion, payloads []bchain.ChainExtraPayload) (string, error) {
+	if len(payloads) == 0 {
+		return "", fmt.Errorf("no chainExtraData payloads registered")
+	}
 	var b strings.Builder
-	for _, a := range aliases {
-		if !regexp.MustCompile(`\b` + regexp.QuoteMeta(a.name) + `\b`).MatchString(body) {
-			return "", fmt.Errorf("alias %s is not referenced by any ts_type tag", a.name)
+	for _, u := range unions {
+		name := unionName(u)
+		members := make([]string, 0, len(payloads))
+		for _, p := range payloads {
+			payload := u.pick(p)
+			if p.Type == bchain.ChainExtraPayloadTypeUnknown || payload == nil || reflect.TypeOf(payload).Kind() != reflect.Struct {
+				return "", fmt.Errorf("%s: payload type %q must map to a struct", name, p.Type)
+			}
+			members = append(members, fmt.Sprintf("{ payloadType: '%s'; payload?: %s }", p.Type, reflect.TypeOf(payload).Name()))
 		}
-		fmt.Fprintf(&b, "export type %s = %s;\n", a.name, a.definition)
+		t.ManageType(u.wrapper, typescriptify.TypeOptions{TSType: name})
+		fmt.Fprintf(&b, "export type %s = %s;\n", name, strings.Join(members, " | "))
 	}
 	return b.String(), nil
 }

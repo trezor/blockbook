@@ -427,3 +427,13 @@ func TestTronParser_UnpackBlockHash_NoPrefix(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "000000000348d2a70c64b102b21699f7f561fffbc67d50ed5f540db5ad631913", unpacked)
 }
+
+// TestTronParser_ChainExtraPayloadRegistered pins the parser's payloadType to the registry the
+// generated client types are built from, so a new payload cannot ship untyped.
+func TestTronParser_ChainExtraPayloadRegistered(t *testing.T) {
+	p := NewTronParser(6, false)
+	reg, ok := bchain.ChainExtraPayloadByType(p.GetChainExtraPayloadType())
+	require.True(t, ok, "payloadType %q is not in bchain.ChainExtraPayloads", p.GetChainExtraPayloadType())
+	require.IsType(t, bchain.TronChainExtraData{}, reg.Tx)
+	require.IsType(t, bchain.TronAccountExtraData{}, reg.Account)
+}
