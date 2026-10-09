@@ -133,8 +133,10 @@ Column families used only by **Ethereum type** coins:
   during bulk connect), the least recently used records are evicted until it fits. Records used in the last eight blocks and the most
   recently used record are never evicted, so a hot set larger than the cap overshoots it instead of cycling
   through RocksDB on every block. Within a block the
-  cache may temporarily exceed the cap by whatever that block loads. The decoded record costs roughly four to six times
-  its packed size in Go heap, so the cap bounds memory only approximately. The `addr_contracts_cache_*` metrics expose
+  cache may temporarily exceed the cap by whatever that block loads. A decoded record costs about seven times its packed
+  size in Go heap while it serves only linear lookups and 30-40 times once its contract index is built (measured on a
+  35,000-contract record: 1.1 MB packed, 7.7 MB decoded, 15 MB with the index), so the cap bounds memory only
+  approximately. The `addr_contracts_cache_*` metrics expose
   hits, misses, cacheable misses (re-reads of records the cache could have held), evictions and bytes loaded and written.
 
 - **internalData** (used only by Ethereum type coins)
