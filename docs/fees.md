@@ -46,9 +46,13 @@ flowchart TD
 How each source is built:
 
 - **On-chain** (coins with no provider, or a stale one — e.g. `ethereum` non-archive, ETH testnets):
-  one `eth_feeHistory` call (4 blocks, newest = `pending`) yields the next-block `baseFeePerGas`
-  (array index `blocks-1`) and per-tier reward percentiles (20/70/90/99) used as tips. Blockbook
-  builds `maxFeePerGas = eip1559BaseFeeMultiplier(2) × baseFee + tip`. (Previously this field held the
+  one `eth_feeHistory` call (8 blocks, newest = `pending`) yields the next-block `baseFeePerGas`
+  (array index `blocks-1`) and reward percentiles **20 / 70 / 99** used as tips. Each tier picks a
+  percentile, how the window is reduced, and how many of the newest blocks it reads
+  (`eip1559TierSpec`): low = p20 window-max over 8, medium = p70 window-median over 4,
+  high = p70 window-max over 4, instant = p99 window-max over 4. The ladder is then
+  forced non-decreasing, because mixed reducers can invert on a spiky window. Blockbook builds
+  `maxFeePerGas = eip1559BaseFeeMultiplier(2) × baseFee + tip`. (Previously this field held the
   tip alone — below the base fee, so not mineable; that was fixed.)
 - **Alternative provider** (archive coins, served from an in-memory cache, no node RPC): blockbook
   returns the provider's `maxFeePerGas` **unchanged**. For Infura, this is `suggestedMaxFeePerGas`,
