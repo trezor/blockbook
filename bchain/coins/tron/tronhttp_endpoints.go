@@ -113,6 +113,10 @@ func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
 
 // GetAddressChainExtraData returns normalized Tron-specific account/address data.
 func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (json.RawMessage, error) {
+	// only a 20-byte account has chain data; a client-supplied ad: descriptor of any length would hit quadratic base58
+	if len(addrDesc) != TronTypeAddressDescriptorLen {
+		return nil, nil
+	}
 	ctx, cancel := context.WithTimeout(b.requestContext(), b.Timeout)
 	defer cancel()
 

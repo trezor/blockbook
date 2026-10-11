@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"strings"
 	"time"
 
 	vlq "github.com/bsm/go-vlq"
@@ -53,36 +54,47 @@ func packCurrencyRatesTicker(ticker *common.CurrencyRatesTicker) []byte {
 	return buf
 }
 
-func unpackCurrencyRatesTicker(buf []byte) (*common.CurrencyRatesTicker, error) {
-	var (
-		ticker common.CurrencyRatesTicker
-		s      string
-		l      int
-		len    uint
-		v      float32
-	)
-	len, l = unpackVaruint(buf)
+// unpackRates decodes one packed rates section (count, then key/float32 pairs) and returns the rest of buf
+func unpackRates(buf []byte) (map[string]float32, []byte) {
+	n, l := unpackVaruint(buf)
 	buf = buf[l:]
-	if len > 0 {
-		ticker.Rates = make(map[string]float32, len)
-		for i := 0; i < int(len); i++ {
-			s, l = unpackString(buf)
-			buf = buf[l:]
-			v, l = unpackFloat32(buf)
-			buf = buf[l:]
-			ticker.Rates[s] = v
-		}
+	if n == 0 {
+		return nil, buf
 	}
-	len, l = unpackVaruint(buf)
+	rates := make(map[string]float32, n)
+	for i := 0; i < int(n); i++ {
+		s, l := unpackString(buf)
+		buf = buf[l:]
+		v, l := unpackFloat32(buf)
+		buf = buf[l:]
+		rates[s] = v
+	}
+	return rates, buf
+}
+
+// unpackCurrencyRatesTicker decodes a stored ticker; a non-empty token keeps only that token's rate,
+// because a ticker holds thousands of token rates and materializing all of them per lookup dominates CPU and GC.
+// The token matches its exact or lowercase key, as CurrencyRatesTicker.findTokenRate does, and the kept rate
+// is stored under token itself, so GetTokenRate(token) hits without a second ToLower.
+func unpackCurrencyRatesTicker(buf []byte, token string) (*common.CurrencyRatesTicker, error) {
+	var ticker common.CurrencyRatesTicker
+	ticker.Rates, buf = unpackRates(buf)
+	if token == "" {
+		ticker.TokenRates, _ = unpackRates(buf)
+		return &ticker, nil
+	}
+	lowerToken := strings.ToLower(token)
+	n, l := unpackVaruint(buf)
 	buf = buf[l:]
-	if len > 0 {
-		ticker.TokenRates = make(map[string]float32, len)
-		for i := 0; i < int(len); i++ {
-			s, l = unpackString(buf)
-			buf = buf[l:]
-			v, l = unpackFloat32(buf)
-			buf = buf[l:]
-			ticker.TokenRates[s] = v
+	for i := 0; i < int(n); i++ {
+		key, l := unpackStringBytes(buf)
+		buf = buf[l:]
+		v, l := unpackFloat32(buf)
+		buf = buf[l:]
+		// compare without converting: string(key) == s is allocation-free only in this direct form
+		if string(key) == token || string(key) == lowerToken {
+			ticker.TokenRates = map[string]float32{token: v}
+			return &ticker, nil
 		}
 	}
 	return &ticker, nil
@@ -102,7 +114,7 @@ func getTickerFromIterator(it *grocksdb.Iterator, vsCurrency string, token strin
 	if err != nil {
 		return nil, err
 	}
-	ticker, err := unpackCurrencyRatesTicker(it.Value().Data())
+	ticker, err := unpackCurrencyRatesTicker(it.Value().Data(), token)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +137,7 @@ func (d *RocksDB) FiatRatesGetTicker(tickerTime *time.Time) (*common.CurrencyRat
 	if len(data) == 0 {
 		return nil, nil
 	}
-	ticker, err := unpackCurrencyRatesTicker(data)
+	ticker, err := unpackCurrencyRatesTicker(data, "")
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +145,8 @@ func (d *RocksDB) FiatRatesGetTicker(tickerTime *time.Time) (*common.CurrencyRat
 	return ticker, nil
 }
 
-// FiatRatesFindTicker gets FiatRates data closest to the specified timestamp, of the base currency, vsCurrency or the token if specified
+// FiatRatesFindTicker gets FiatRates data closest to the specified timestamp, of the base currency, vsCurrency or the token if specified.
+// Tickers found for a token carry only that token's rate.
 func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time, vsCurrency string, token string) (*common.CurrencyRatesTicker, error) {
 	tickerTimeFormatted := tickerTime.UTC().Format(FiatRatesTimeFormat)
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
@@ -153,7 +166,7 @@ func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time, vsCurrency string, 
 }
 
 // FiatRatesFindTickers gets FiatRates data closest to each specified timestamp.
-// The method is optimized for timestamps sorted in ascending order.
+// The method is optimized for timestamps sorted in ascending order. Tickers found for a token carry only that token's rate.
 func (d *RocksDB) FiatRatesFindTickers(timestamps []int64, vsCurrency string, token string) ([]*common.CurrencyRatesTicker, error) {
 	tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
 	if len(timestamps) == 0 {
@@ -255,7 +268,8 @@ func (d *RocksDB) FiatRatesGetTickerTimestamps(from time.Time) ([]int64, error) 
 	return timestamps, nil
 }
 
-// FiatRatesFindLastTicker gets the last FiatRates record, of the base currency, vsCurrency or the token if specified
+// FiatRatesFindLastTicker gets the last FiatRates record, of the base currency, vsCurrency or the token if specified.
+// Tickers found for a token carry only that token's rate.
 func (d *RocksDB) FiatRatesFindLastTicker(vsCurrency string, token string) (*common.CurrencyRatesTicker, error) {
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
 	defer it.Close()

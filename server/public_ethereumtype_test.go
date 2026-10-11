@@ -79,6 +79,16 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			// details=basic takes the header-only index read; the counters must match the full path
+			name:        "apiAddress EthAddr4b details=basic",
+			r:           newGetRequest(ts.URL + "/api/v2/address/" + dbtestdata.EthAddr4b + "?details=basic"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"address":"0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D","balance":"123450075","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"nonce":"75"}`,
+			},
+		},
+		{
 			// fresh address with no indexed data: gated-on returns confirmedNonce:"0" (synthesized
 			// locally, no backend call), mirroring the always-present pending nonce:"0".
 			name:        "apiAddress fresh address confirmedNonce=true",

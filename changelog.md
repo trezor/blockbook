@@ -139,6 +139,7 @@
 - **Bcash 28.0.1 → 29.0.0** ([#1505](https://github.com/trezor/blockbook/pull/1505)).
 - **Zcash testnet: migrate to Zebra 5.0.0 for NU6.2** ([#1548](https://github.com/trezor/blockbook/pull/1548)).
 - **Tron testnet backend 4.8.2** ([#1611](https://github.com/trezor/blockbook/pull/1611)).
+- **Bitcoin Core 29.2 → 31.1 (mainnet, testnet3, testnet4, signet, regtest)** ([#1809](https://github.com/trezor/blockbook/pull/1809)): moves off the 29.x line before it goes EOL with 32.0 and drops the stale `mempoolfullrbf` (removed in Core 29.0), `deprecatedrpc=warnings` and `deprecatedrpc=estimatefee` options from the bitcoind configs.
 
 ### Removed
 

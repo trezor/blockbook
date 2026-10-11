@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -813,6 +814,26 @@ func TestTronRPC_GetAddressChainExtraData_SkipsVotesWithoutPositiveCount(t *test
 			VoteCount: "7",
 		},
 	}, extra.StakingInfo.Votes)
+}
+
+func TestTronRPC_GetAddressChainExtraData_RejectsNonAccountDescriptor(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{Resp: map[string]any{}}
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	addrDesc, err := bchain.AddressDescriptorFromString("ad:" + strings.Repeat("ab", 4096))
+	require.NoError(t, err)
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+	require.Nil(t, payload)
+	paths, _ := mockHTTP.SnapshotRequests()
+	require.Empty(t, paths)
 }
 
 func TestTronRPC_GetAddressChainExtraData_NonExistentAccount_OmitsStakingInfo(t *testing.T) {
