@@ -357,9 +357,16 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 	return nil
 }
 
+// addrContractsCacheReadWait bounds how long a reader waits for a block connect in progress before it
+// serves the on-disk record instead; a spam block can hold the connect lock for tens of seconds.
+var addrContractsCacheReadWait = 2 * time.Second
+
 // GetAddrDescContracts returns AddrContracts for given addrDesc, nil for an absent record.
 // With headerOnly only the tx counters are decoded and Contracts stays nil.
 func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, headerOnly bool) (*AddrContracts, error) {
+	if acs, ok := d.cachedAddrContractsView(addrDesc, headerOnly); ok {
+		return acs, nil
+	}
 	// a pinned read avoids copying the whole record out of the block cache; the decoders copy
 	// what they keep, so nothing references the pinned bytes after Destroy
 	val, err := d.db.GetPinnedCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
@@ -375,6 +382,91 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, header
 		return unpackAddrContractsHeader(buf, addrDesc)
 	}
 	return unpackAddrContracts(buf, addrDesc)
+}
+
+// cachedAddrContractsView serves a record that lives in the connect cache. Such records reach RocksDB only at the
+// periodic store, so the on-disk copy of a heavy address lags the chain tip by minutes; block connect mutates
+// them under connectBlockMux, so the copy is taken under its read side. Bulk connect mutates them without the
+// lock, so nothing is served from the cache while it runs.
+func (d *RocksDB) cachedAddrContractsView(addrDesc bchain.AddressDescriptor, headerOnly bool) (*AddrContracts, bool) {
+	if d.bulkConnectActive.Load() {
+		return nil, false
+	}
+	// cheap pre-check so the overwhelming majority of addresses never wait for the connect lock
+	d.addrContractsCacheMux.Lock()
+	acs := d.addrContractsCache[string(addrDesc)]
+	d.addrContractsCacheMux.Unlock()
+	if acs == nil {
+		return nil, false
+	}
+	if !d.rLockConnectBlock(addrContractsCacheReadWait) {
+		return nil, false
+	}
+	defer d.connectBlockMux.RUnlock()
+	// the record may have been flushed and reloaded meanwhile
+	d.addrContractsCacheMux.Lock()
+	acs = d.addrContractsCache[string(addrDesc)]
+	d.addrContractsCacheMux.Unlock()
+	if acs == nil {
+		return nil, false
+	}
+	return addrContractsFromUnpacked(acs, headerOnly), true
+}
+
+// rLockConnectBlock takes the read side of connectBlockMux unless a writer holds it for longer than wait.
+func (d *RocksDB) rLockConnectBlock(wait time.Duration) bool {
+	deadline := time.Now().Add(wait)
+	for !d.connectBlockMux.TryRLock() {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return true
+}
+
+// addrContractsFromUnpacked copies a cached record into its API form. It must not call get(), which
+// would materialize big.Ints inside the shared record under a read lock.
+func addrContractsFromUnpacked(acs *unpackedAddrContracts, headerOnly bool) *AddrContracts {
+	rv := &AddrContracts{TotalTxs: acs.TotalTxs, NonContractTxs: acs.NonContractTxs, InternalTxs: acs.InternalTxs}
+	if headerOnly {
+		return rv
+	}
+	rv.Contracts = make([]AddrContract, len(acs.Contracts))
+	for i := range acs.Contracts {
+		uc := &acs.Contracts[i]
+		ac := &rv.Contracts[i]
+		ac.Standard = uc.Standard
+		ac.Contract = append(bchain.AddressDescriptor(nil), uc.Contract...)
+		ac.Txs = uc.Txs
+		switch uc.Standard {
+		case bchain.FungibleToken:
+			ac.Value = uc.Value.decoded()
+		case bchain.NonFungibleToken:
+			ac.Ids = make(Ids, len(uc.Ids))
+			for j := range uc.Ids {
+				ac.Ids[j] = uc.Ids[j].decoded()
+			}
+		default:
+			ac.MultiTokenValues = make(MultiTokenValues, len(uc.MultiTokenValues))
+			for j := range uc.MultiTokenValues {
+				ac.MultiTokenValues[j].Id = uc.MultiTokenValues[j].Id.decoded()
+				ac.MultiTokenValues[j].Value = uc.MultiTokenValues[j].Value.decoded()
+			}
+		}
+	}
+	return rv
+}
+
+// decoded returns a copy of the value without caching the decoded form in the shared record.
+func (b *unpackedBigInt) decoded() big.Int {
+	var v big.Int
+	if b.Value != nil {
+		v.Set(b.Value)
+	} else if len(b.Slice) > 0 {
+		v, _ = unpackBigint(b.Slice)
+	}
+	return v
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []unpackedAddrContract) (int, bool) {
