@@ -2635,3 +2635,88 @@ func Test_addrContractsCache_ResidentBudget(t *testing.T) {
 		t.Fatalf("expected the cache flushed after growing past the cap, got %d entries", len(d.addrContractsCache))
 	}
 }
+
+func Test_GetAddrDescContracts_ServesCachedRecords(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	// every record loaded by the second block is cached and its block-2 changes stay in memory
+	d.addrContractsCacheMinSize = 1
+
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.addrContractsCache) == 0 {
+		t.Fatal("expected records of the second block in the cache")
+	}
+
+	diskRecord := func(addrDesc bchain.AddressDescriptor) []byte {
+		val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer val.Free()
+		return append([]byte(nil), val.Data()...)
+	}
+	apiRecord := func(addrDesc bchain.AddressDescriptor) []byte {
+		acs, err := d.GetAddrDescContracts(addrDesc, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		header, err := d.GetAddrDescContracts(addrDesc, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := &AddrContracts{TotalTxs: acs.TotalTxs, NonContractTxs: acs.NonContractTxs, InternalTxs: acs.InternalTxs}
+		if !reflect.DeepEqual(header, want) {
+			t.Fatalf("headerOnly view %+v, want %+v", header, want)
+		}
+		return packAddrContracts(acs)
+	}
+
+	stale := 0
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if !bytes.Equal(apiRecord(addrDesc), diskRecord(addrDesc)) {
+			stale++
+		}
+	}
+	if stale == 0 {
+		t.Fatal("expected the on-disk records to lag the cached ones before the periodic store")
+	}
+
+	// while bulk connect runs the cache is unsafe to read and the API falls back to disk
+	d.bulkConnectActive.Store(true)
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if !bytes.Equal(apiRecord(addrDesc), diskRecord(addrDesc)) {
+			t.Fatalf("address %v: API served the cache during bulk connect", addrDesc)
+		}
+	}
+	d.bulkConnectActive.Store(false)
+
+	// a connect holding the lock past the wait also falls back to disk
+	addrContractsCacheReadWait = 20 * time.Millisecond
+	defer func() { addrContractsCacheReadWait = 2 * time.Second }()
+	d.connectBlockMux.Lock()
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if !bytes.Equal(apiRecord(addrDesc), diskRecord(addrDesc)) {
+			t.Fatalf("address %v: API served the cache while a connect held the lock", addrDesc)
+		}
+	}
+	d.connectBlockMux.Unlock()
+
+	// after the periodic store the cached view and the on-disk record agree
+	d.storeAddrContractsCache()
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if got, want := apiRecord(addrDesc), diskRecord(addrDesc); !bytes.Equal(got, want) {
+			t.Fatalf("address %v: cached view %x, stored record %x", addrDesc, got, want)
+		}
+	}
+}

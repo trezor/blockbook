@@ -91,6 +91,7 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	}
 	if b.chainType == bchain.ChainEthereumType {
 		d.addrContractsCacheMaxBytes = d.bulkAddrContractsCacheMaxBytes
+		d.bulkConnectActive.Store(true)
 	}
 	glog.Info("rocksdb: bulk connect init, db set to inconsistent state")
 	return b, nil
@@ -514,6 +515,7 @@ func (b *BulkConnect) Close() error {
 	if b.d != nil && b.chainType == bchain.ChainEthereumType {
 		defer func(db *RocksDB) {
 			db.addrContractsCacheMaxBytes = db.tipAddrContractsCacheMaxBytes
+			db.bulkConnectActive.Store(false)
 			if bulkClosed {
 				db.flushAddrContractsCacheIfOverCap()
 			}
