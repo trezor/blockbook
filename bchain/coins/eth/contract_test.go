@@ -313,7 +313,7 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 		}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := contractGetTransfersFromLog(tt.args, "0xtxid")
+			got := contractGetTransfersFromLog(tt.args, "0xtxid", nil)
 			if len(got) != len(tt.want) {
 				t.Errorf("contractGetTransfersFromLog len not same, %+v, want %+v", got, tt.want)
 			}
@@ -383,7 +383,7 @@ func Test_contractGetTransfersFromLogSkipsMalformedERC1155TransferBatch(t *testi
 			Data: "0x0000000000000000000000000000000000000000000000000000000000000123",
 		},
 	}
-	transfers := contractGetTransfersFromLog(logs, "0xtxid")
+	transfers := contractGetTransfersFromLog(logs, "0xtxid", nil)
 	if len(transfers) != 1 {
 		t.Fatalf("contractGetTransfersFromLog transfers = %+v, want the valid transfer kept", transfers)
 	}

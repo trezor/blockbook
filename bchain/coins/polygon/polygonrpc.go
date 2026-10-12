@@ -15,6 +15,11 @@ const (
 	MainNet eth.Network = 137
 )
 
+// nativeTokenContract is the MRC20 system contract through which native POL moves. It emits an
+// ERC-20 Transfer for every such move, which Blockbook already indexes as an internal transfer,
+// so treating it as a token would count the same POL twice.
+const nativeTokenContract = "0x0000000000000000000000000000000000001010"
+
 // PolygonRPC is an interface to JSON-RPC polygon service.
 type PolygonRPC struct {
 	*eth.EthereumRPC
@@ -29,6 +34,9 @@ func NewPolygonRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 
 	s := &PolygonRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),
+	}
+	if err = s.Parser.(*eth.EthereumParser).IgnoreContract(nativeTokenContract); err != nil {
+		return nil, err
 	}
 
 	return s, nil
