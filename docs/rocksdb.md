@@ -131,7 +131,8 @@ Column families used only by **Ethereum type** coins:
   estimated resident size of its decoded records (re-measured at every periodic flush, since records grow in place)
   crosses the active cache cap. Chain-tip sync uses `address_contracts_cache_max_bytes`; bulk connect uses
   `address_contracts_cache_bulk_max_bytes`. Early flush avoids unbounded memory growth at the cost of more frequent
-  writes. API reads of a cached address are served from the cache (under the read side of the block-connect lock),
+  writes. The flush writes the records in batches of about 64 MB, so a store never builds one multi-gigabyte write
+  batch. API reads of a cached address are served from the cache (under the read side of the block-connect lock),
   so they see the chain tip even though the on-disk record is only rewritten at the periodic flush.
 
 - **internalData** (used only by Ethereum type coins)
