@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"container/list"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -282,6 +283,19 @@ const addrContractsCacheMinSize = 300_000 // limit for caching address contracts
 // addrContractsCacheStorePeriod is how often the cache is packed to disk during block connect.
 const addrContractsCacheStorePeriod = 5 * time.Minute
 
+// addrContractsCacheHotBlocks is how many recent blocks protect a cached record from eviction. Base's
+// heaviest records are re-touched every three to five blocks, so a two-block window still cycled them.
+const addrContractsCacheHotBlocks = 8
+
+// addrContractsCacheWriteChunkBytes bounds one cache write-back batch. One spam block dirties ~3 GB of
+// records; written as a single batch that bypasses RocksDB's 128 MB write buffer, lands in one memtable
+// and leaves glibc holding the multi-gigabyte buffers it fragmented.
+const addrContractsCacheWriteChunkBytes = 64 << 20
+
+// addrContractsCacheEvictBudgetBytes bounds the packed bytes evicted per block, so a spike's victims
+// drain over a dozen blocks instead of stalling one for 12-23 s. Past twice the cap the budget is lifted.
+const addrContractsCacheEvictBudgetBytes = 256 << 20
+
 // RocksDB handle
 type RocksDB struct {
 	path            string
@@ -308,6 +322,12 @@ type RocksDB struct {
 	protocolGen           atomic.Uint64
 	addrContractsCacheMux sync.Mutex
 	addrContractsCache    map[string]*unpackedAddrContracts
+	// addrContractsCacheLRU orders cached records, most recently used first; eviction takes the back.
+	addrContractsCacheLRU *list.List
+	// addrContractsCacheClock counts maintenance cycles (blocks); records used within the last
+	// addrContractsCacheHotBlocks cycles are never evicted, so a hot set larger than the cap
+	// overshoots it instead of cycling through RocksDB on every block.
+	addrContractsCacheClock uint64
 	// addrContractsCacheMinSize is the packed size threshold (bytes) before we cache an entry.
 	addrContractsCacheMinSize int
 	// tipAddrContractsCacheMaxBytes is the configured non-bulk cap.
@@ -318,7 +338,13 @@ type RocksDB struct {
 	addrContractsCacheMaxBytes int64
 	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
 	addrContractsCacheBytes int64
-	hotAddrTracker          *addressHotness
+	// addrContractsCacheWriteChunkBytes and addrContractsCacheEvictBudgetBytes hold the package
+	// constants so tests can shrink them.
+	addrContractsCacheWriteChunkBytes  int64
+	addrContractsCacheEvictBudgetBytes int64
+	// addrContractsCacheHeight is the chain height of the last maintenance cycle, for log lines.
+	addrContractsCacheHeight uint32
+	hotAddrTracker           *addressHotness
 	// lastAddrContractsCacheStore is only read/written from the block-connect goroutine.
 	lastAddrContractsCacheStore time.Time
 	setBlockTimesWG             sync.WaitGroup
@@ -405,27 +431,30 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
 	r := &RocksDB{
-		path:                           path,
-		db:                             db,
-		wo:                             wo,
-		ro:                             ro,
-		cfh:                            cfh,
-		chainParser:                    parser,
-		is:                             nil,
-		metrics:                        metrics,
-		cache:                          c,
-		maxOpenFiles:                   maxOpenFiles,
-		cbs:                            connectBlockStats{},
-		extendedIndex:                  extendedIndex,
-		connectBlockMux:                sync.Mutex{},
-		addrContractsCacheMux:          sync.Mutex{},
-		addrContractsCache:             make(map[string]*unpackedAddrContracts),
-		addrContractsCacheMinSize:      addrContractsCacheMinSize,
-		tipAddrContractsCacheMaxBytes:  0,
-		bulkAddrContractsCacheMaxBytes: 0,
-		addrContractsCacheMaxBytes:     0,
-		addrContractsCacheBytes:        0,
-		hotAddrTracker:                 nil,
+		path:                               path,
+		db:                                 db,
+		wo:                                 wo,
+		ro:                                 ro,
+		cfh:                                cfh,
+		chainParser:                        parser,
+		is:                                 nil,
+		metrics:                            metrics,
+		cache:                              c,
+		maxOpenFiles:                       maxOpenFiles,
+		cbs:                                connectBlockStats{},
+		extendedIndex:                      extendedIndex,
+		connectBlockMux:                    sync.Mutex{},
+		addrContractsCacheMux:              sync.Mutex{},
+		addrContractsCache:                 make(map[string]*unpackedAddrContracts),
+		addrContractsCacheLRU:              list.New(),
+		addrContractsCacheMinSize:          addrContractsCacheMinSize,
+		tipAddrContractsCacheMaxBytes:      0,
+		bulkAddrContractsCacheMaxBytes:     0,
+		addrContractsCacheMaxBytes:         0,
+		addrContractsCacheBytes:            0,
+		addrContractsCacheWriteChunkBytes:  addrContractsCacheWriteChunkBytes,
+		addrContractsCacheEvictBudgetBytes: addrContractsCacheEvictBudgetBytes,
+		hotAddrTracker:                     nil,
 	}
 	if chainType == bchain.ChainEthereumType {
 		r.hotAddrTracker = newAddressHotnessFromParser(parser)
@@ -471,7 +500,7 @@ func (d *RocksDB) Close() error {
 	if d.db != nil {
 		// store cached address contracts
 		if d.chainParser.GetChainType() == bchain.ChainEthereumType {
-			d.storeAddrContractsCache()
+			d.storeAddrContractsCache("close")
 		}
 		// store the internal state of the app
 		if d.is != nil && d.is.DbState == common.DbStateOpen {
@@ -752,7 +781,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		return err
 	}
 	if chainType == bchain.ChainEthereumType {
-		d.storeAddrContractsCacheIfDue()
+		d.maintainAddrContractsCache(block.Height)
 	}
 	// Fractional seconds: the integer average truncates to 0 on sub-second chains, which
 	// silently excludes them from any rule gated on this gauge being > 0. SetBlockTime

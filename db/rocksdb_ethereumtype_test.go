@@ -412,8 +412,9 @@ func Test_unpackedAddrContracts_findContractIndex_DirtyRebuild(t *testing.T) {
 	hot.BeginBlock()
 
 	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
+	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
 	if acs.contractIndex == nil {
-		t.Fatal("expected contract index map to be built")
+		t.Fatal("expected contract index map to be built on the second indexed lookup")
 	}
 
 	// Remove a contract and mark the index dirty to force rebuild.
@@ -446,7 +447,8 @@ func Test_unpackedAddrContracts_findContractIndex_InvalidLenFallback(t *testing.
 	invalid := bchain.AddressDescriptor([]byte{1, 2, 3})
 	acs.Contracts = append(acs.Contracts, unpackedAddrContract{Contract: invalid})
 
-	// Build index, which will skip the invalid entry.
+	// Build index on the second indexed lookup, which will skip the invalid entry.
+	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
 	_, _ = acs.findContractIndex(addrDesc, acs.Contracts[0].Contract, hot)
 	if acs.contractIndex == nil {
 		t.Fatal("expected contract index map to be built")
@@ -481,10 +483,124 @@ func Test_unpackedAddrContracts_findContractIndex_HotnessTriggers(t *testing.T) 
 			t.Fatalf("unexpected index build before min hits, hit %d", i+1)
 		}
 	}
+	// the lookup that promotes the address is the first indexed one; the map follows on the next
+	_, _ = acs.findContractIndex(addrDesc, target, hot)
+	if acs.contractIndex != nil {
+		t.Fatal("unexpected index build on the first indexed lookup")
+	}
 	_, _ = acs.findContractIndex(addrDesc, target, hot)
 	if acs.contractIndex == nil {
-		t.Fatal("expected index to be built after reaching min hits")
+		t.Fatal("expected index to be built on the second indexed lookup after reaching min hits")
 	}
+}
+
+// A record reloaded for a hot address usually serves one lookup before it is evicted again, so the
+// contract index map must not be built until the record sees a second indexed lookup.
+func Test_unpackedAddrContracts_findContractIndex_DefersMapUntilSecondLookup(t *testing.T) {
+	minContracts := 192
+	hot := newAddressHotness(minContracts, 4, 1)
+	hot.BeginBlock()
+	addrDesc := makeTestAddrDesc(778)
+	newRecord := func() *unpackedAddrContracts {
+		acs := &unpackedAddrContracts{}
+		for i := 0; i < minContracts+8; i++ {
+			acs.Contracts = append(acs.Contracts, unpackedAddrContract{Contract: makeTestAddrDesc(i)})
+		}
+		return acs
+	}
+
+	acs := newRecord()
+	target := acs.Contracts[minContracts+3].Contract
+	idx, found := acs.findContractIndex(addrDesc, target, hot)
+	if !found || idx != minContracts+3 {
+		t.Fatalf("first lookup = (%v, %v), want (%v, true)", idx, found, minContracts+3)
+	}
+	if acs.contractIndex != nil {
+		t.Fatal("first indexed lookup of a decoded record must not build the map")
+	}
+	idx, found = acs.findContractIndex(addrDesc, acs.Contracts[5].Contract, hot)
+	if !found || idx != 5 || acs.contractIndex == nil {
+		t.Fatalf("second lookup = (%v, %v, index built %v), want (5, true, true)", idx, found, acs.contractIndex != nil)
+	}
+
+	// a fresh decode of the same address starts over, as does a record whose index was dropped
+	reloaded := newRecord()
+	if _, _ = reloaded.findContractIndex(addrDesc, target, hot); reloaded.contractIndex != nil {
+		t.Fatal("reloaded record must defer the map again")
+	}
+	acs.dropContractIndex()
+	if _, _ = acs.findContractIndex(addrDesc, target, hot); acs.contractIndex != nil {
+		t.Fatal("record with a dropped index must defer the map again")
+	}
+}
+
+func Test_partiallyUnpackAddrContracts_LeavesAppendCapacity(t *testing.T) {
+	acs := &unpackedAddrContracts{TotalTxs: 1}
+	for i := 0; i < 64; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(3000 + i),
+			Standard: bchain.FungibleToken,
+			Txs:      1,
+			Value:    unpackedBigInt{Value: big.NewInt(int64(i))},
+		})
+	}
+	unpacked, err := partiallyUnpackAddrContracts(packUnpackedAddrContracts(acs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unpacked.Contracts) != 64 || cap(unpacked.Contracts) <= 64 {
+		t.Fatalf("len %d cap %d, want 64 contracts with spare capacity", len(unpacked.Contracts), cap(unpacked.Contracts))
+	}
+	first := &unpacked.Contracts[0]
+	unpacked.Contracts = append(unpacked.Contracts, unpackedAddrContract{Contract: makeTestAddrDesc(4000)})
+	if &unpacked.Contracts[0] != first {
+		t.Fatal("the first append after decoding must not reallocate the contracts slice")
+	}
+}
+
+// Benchmark_addrContracts_ReloadTouchAppend is what one spam transfer costs a cache-evicted record of a
+// hot address: decode, one contract lookup, one appended contract. Allocations are the figure to watch.
+func Benchmark_addrContracts_ReloadTouchAppend(b *testing.B) {
+	const contracts = 35_000
+	acs := &unpackedAddrContracts{TotalTxs: contracts}
+	for i := 0; i < contracts; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(i),
+			Standard: bchain.MultiToken,
+			Txs:      1,
+			MultiTokenValues: unpackedMultiTokenValues{{
+				Id: unpackedBigInt{Value: big.NewInt(int64(i))}, Value: unpackedBigInt{Value: big.NewInt(1)},
+			}},
+		})
+	}
+	packed := packUnpackedAddrContracts(acs)
+	addrDesc := makeTestAddrDesc(40_000)
+	hot := newAddressHotness(192, 4, 1)
+	hot.BeginBlock()
+	hot.ShouldUseIndex(mustHotnessKey(b, addrDesc), contracts) // the address is already hot, as spam victims are
+	target := acs.Contracts[contracts-7].Contract
+	b.ReportAllocs()
+	b.SetBytes(int64(len(packed)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r, err := partiallyUnpackAddrContracts(packed)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, found := r.findContractIndex(addrDesc, target, hot); !found {
+			b.Fatal("contract not found")
+		}
+		r.Contracts = append(r.Contracts, unpackedAddrContract{Contract: makeTestAddrDesc(40_001)})
+	}
+}
+
+func mustHotnessKey(tb testing.TB, addrDesc bchain.AddressDescriptor) addressHotnessKey {
+	tb.Helper()
+	key, ok := addressHotnessKeyFromDesc(addrDesc)
+	if !ok {
+		tb.Fatal("invalid hotness key")
+	}
+	return key
 }
 
 func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t *testing.T) {
@@ -504,14 +620,19 @@ func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t 
 	d.addrContractsCache[string(addr1)] = acs1
 	d.addrContractsCache[string(addr2)] = acs2
 
-	if _, found := acs1.findContractIndex(addr1, acs1.Contracts[0].Contract, d.hotAddrTracker); !found {
-		t.Fatal("expected first contract to be found")
+	// the map is built on the second indexed lookup of a record
+	for i := 0; i < 2; i++ {
+		if _, found := acs1.findContractIndex(addr1, acs1.Contracts[0].Contract, d.hotAddrTracker); !found {
+			t.Fatal("expected first contract to be found")
+		}
 	}
 	if acs1.contractIndex == nil {
 		t.Fatal("expected first contract index to be built")
 	}
-	if _, found := acs2.findContractIndex(addr2, acs2.Contracts[0].Contract, d.hotAddrTracker); !found {
-		t.Fatal("expected second contract to be found")
+	for i := 0; i < 2; i++ {
+		if _, found := acs2.findContractIndex(addr2, acs2.Contracts[0].Contract, d.hotAddrTracker); !found {
+			t.Fatal("expected second contract to be found")
+		}
 	}
 	if acs1.contractIndex != nil {
 		t.Fatal("expected first contract index to be dropped after LRU eviction")
@@ -521,51 +642,467 @@ func Test_unpackedAddrContracts_findContractIndex_DropsIndexOnHotnessEviction(t 
 	}
 }
 
-func Test_addrContractsCache_FlushOnCap(t *testing.T) {
+// putTestAddrContracts stores a packed record with n fungible contracts and returns its packed size.
+func putTestAddrContracts(t *testing.T, d *RocksDB, addrDesc bchain.AddressDescriptor, n int) int64 {
+	t.Helper()
+	acs := &unpackedAddrContracts{TotalTxs: 1}
+	for i := 0; i < n; i++ {
+		acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+			Contract: makeTestAddrDesc(5000 + i),
+			Standard: bchain.FungibleToken,
+			Txs:      1,
+			Value:    unpackedBigInt{Value: big.NewInt(int64(i))},
+		})
+	}
+	buf := packUnpackedAddrContracts(acs)
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+	return int64(len(buf))
+}
+
+func getStoredTotalTxs(t *testing.T, d *RocksDB, addrDesc bchain.AddressDescriptor) uint {
+	t.Helper()
+	ac, err := d.GetAddrDescContracts(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ac == nil {
+		t.Fatalf("no stored record for %v", addrDesc)
+	}
+	return ac.TotalTxs
+}
+
+func Test_addrContractsCache_EvictsLeastRecentlyUsedOverCap(t *testing.T) {
 	d := setupRocksDB(t, &testEthereumParser{
 		EthereumParser: ethereumTestnetParser(),
 	})
 	defer closeAndDestroyRocksDB(t, d)
-
 	d.addrContractsCacheMinSize = 1
-	d.addrContractsCacheMaxBytes = 10
 
-	addrDesc := makeTestAddrDesc(42)
-	acs := &unpackedAddrContracts{
-		TotalTxs: 1,
-		Contracts: []unpackedAddrContract{
-			{
-				Contract: makeTestAddrDesc(7),
-				Standard: bchain.FungibleToken,
-				Txs:      1,
-				Value:    unpackedBigInt{Value: big.NewInt(0)},
-			},
-		},
-	}
-	buf := packUnpackedAddrContracts(acs)
-	if int64(len(buf)) <= d.addrContractsCacheMaxBytes {
-		t.Fatalf("expected packed size to exceed cap, got %d", len(buf))
-	}
-	wb := grocksdb.NewWriteBatch()
-	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
-	if err := d.WriteBatch(wb); err != nil {
-		wb.Destroy()
-		t.Fatal(err)
-	}
-	wb.Destroy()
+	addrA, addrB, addrC := makeTestAddrDesc(41), makeTestAddrDesc(42), makeTestAddrDesc(43)
+	size := putTestAddrContracts(t, d, addrA, 3)
+	putTestAddrContracts(t, d, addrB, 3)
+	putTestAddrContracts(t, d, addrC, 3)
+	// room for two records, so loading three overshoots the cap within the "block"
+	d.addrContractsCacheMaxBytes = 2*size + 1
 
-	got, err := d.getUnpackedAddrDescContracts(addrDesc)
+	a, err := d.getUnpackedAddrDescContracts(addrA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got == nil {
-		t.Fatal("expected cached address contracts to be returned")
+	b, err := d.getUnpackedAddrDescContracts(addrB)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(d.addrContractsCache) != 0 {
-		t.Fatalf("expected cache to be flushed, got %d entries", len(d.addrContractsCache))
+	if _, err := d.getUnpackedAddrDescContracts(addrC); err != nil {
+		t.Fatal(err)
 	}
-	if d.addrContractsCacheBytes != 0 {
-		t.Fatalf("expected cache bytes to be reset, got %d", d.addrContractsCacheBytes)
+	if got := d.addrContractsCacheBytes; got != 3*size {
+		t.Fatalf("cache bytes before eviction = %d, want %d", got, 3*size)
+	}
+	// a hit on A makes B the least recently used record; B's in-memory change must survive the eviction
+	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+		t.Fatal(err)
+	}
+	b.TotalTxs = 77
+	a.TotalTxs = 55
+
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
+	d.evictAddrContractsCacheOverCap()
+
+	if _, found := d.addrContractsCache[string(addrB)]; found {
+		t.Fatal("expected the least recently used record B to be evicted")
+	}
+	for _, addr := range []bchain.AddressDescriptor{addrA, addrC} {
+		if _, found := d.addrContractsCache[string(addr)]; !found {
+			t.Fatalf("expected %v to stay cached", addr)
+		}
+	}
+	if got := d.addrContractsCacheBytes; got != 2*size {
+		t.Fatalf("cache bytes after eviction = %d, want %d", got, 2*size)
+	}
+	if got := d.addrContractsCacheLRU.Len(); got != 2 {
+		t.Fatalf("LRU length after eviction = %d, want 2", got)
+	}
+	if got := getStoredTotalTxs(t, d, addrB); got != 77 {
+		t.Fatalf("evicted record B stored TotalTxs = %d, want 77", got)
+	}
+	if b.cacheDirty {
+		t.Fatal("evicted record B should be marked clean after its write")
+	}
+	// A was not evicted and therefore not written yet
+	if got := getStoredTotalTxs(t, d, addrA); got != 1 {
+		t.Fatalf("cached record A stored TotalTxs = %d, want the original 1", got)
+	}
+}
+
+func Test_addrContractsCache_KeepsRecordsUsedInRecentBlocks(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrA, addrB := makeTestAddrDesc(49), makeTestAddrDesc(50)
+	size := putTestAddrContracts(t, d, addrA, 3)
+	putTestAddrContracts(t, d, addrB, 3)
+	d.addrContractsCacheMaxBytes = size + 1
+
+	// block 0 loads both; neither may go, even though the cache is over the cap
+	for _, addr := range []bchain.AddressDescriptor{addrA, addrB} {
+		if _, err := d.getUnpackedAddrDescContracts(addr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.maintainAddrContractsCache(1)
+	if got := len(d.addrContractsCache); got != 2 {
+		t.Fatalf("records used in the current block were evicted, %d left", got)
+	}
+	// block 1 touches only A; B is still protected by the previous block
+	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+		t.Fatal(err)
+	}
+	d.maintainAddrContractsCache(1)
+	if got := len(d.addrContractsCache); got != 2 {
+		t.Fatalf("record used one block ago was evicted, %d left", got)
+	}
+	// later blocks touch only A; B goes once it falls out of the protection window
+	for i := 2; i <= addrContractsCacheHotBlocks; i++ {
+		if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+			t.Fatal(err)
+		}
+		d.maintainAddrContractsCache(1)
+	}
+	if _, found := d.addrContractsCache[string(addrB)]; found {
+		t.Fatal("expected the cold record B to be evicted")
+	}
+	if _, found := d.addrContractsCache[string(addrA)]; !found {
+		t.Fatal("expected the hot record A to stay")
+	}
+}
+
+func Test_addrContractsCache_KeepsMostRecentlyUsedOverCap(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+	d.addrContractsCacheMaxBytes = 10
+
+	addrDesc := makeTestAddrDesc(44)
+	size := putTestAddrContracts(t, d, addrDesc, 2)
+	if size <= d.addrContractsCacheMaxBytes {
+		t.Fatalf("expected packed size to exceed cap, got %d", size)
+	}
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
+	d.evictAddrContractsCacheOverCap()
+
+	if _, found := d.addrContractsCache[string(addrDesc)]; !found {
+		t.Fatal("a single oversized record must stay cached rather than be reloaded every block")
+	}
+	if got := d.addrContractsCacheBytes; got != size {
+		t.Fatalf("cache bytes = %d, want %d", got, size)
+	}
+}
+
+// loadTestAddrContractsIntoCache stores n small records and loads them into the cache in order, so the
+// first address is the least recently used. It returns the addresses and the packed size of one record.
+func loadTestAddrContractsIntoCache(t *testing.T, d *RocksDB, firstSeed, n int) ([]bchain.AddressDescriptor, int64) {
+	t.Helper()
+	addrs := make([]bchain.AddressDescriptor, n)
+	var size int64
+	for i := range addrs {
+		addrs[i] = makeTestAddrDesc(firstSeed + i)
+		size = putTestAddrContracts(t, d, addrs[i], 3)
+	}
+	for _, addr := range addrs {
+		if _, err := d.getUnpackedAddrDescContracts(addr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return addrs, size
+}
+
+func Test_addrContractsCache_EvictionBudgetSpreadsOverBlocks(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrs, size := loadTestAddrContractsIntoCache(t, d, 61, 7)
+	// four records fit; seven are cached, three over the cap but below twice the cap
+	d.addrContractsCacheMaxBytes = 4*size + 1
+	// a budget of one record per block
+	d.addrContractsCacheEvictBudgetBytes = size
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
+
+	for i, wantLeft := range []int{6, 5, 4, 4} {
+		d.evictAddrContractsCacheOverCap()
+		if got := len(d.addrContractsCache); got != wantLeft {
+			t.Fatalf("after eviction %d: %d cached, want %d", i+1, got, wantLeft)
+		}
+	}
+	// the least recently used records went first
+	for i, addr := range addrs {
+		_, found := d.addrContractsCache[string(addr)]
+		if found != (i >= 3) {
+			t.Fatalf("record %d cached = %v, want %v", i, found, i >= 3)
+		}
+	}
+}
+
+func Test_addrContractsCache_EvictionBudgetLiftedOverTwiceCap(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	_, size := loadTestAddrContractsIntoCache(t, d, 71, 6)
+	// two records fit; six cached is more than twice the cap, so the budget must not apply
+	d.addrContractsCacheMaxBytes = 2*size + 1
+	d.addrContractsCacheEvictBudgetBytes = size
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
+
+	d.evictAddrContractsCacheOverCap()
+	if got := len(d.addrContractsCache); got != 2 {
+		t.Fatalf("%d cached after one eviction, want 2: a cache past twice its cap must drain at once", got)
+	}
+}
+
+func Test_writeDirtyAddrContracts_ChunksBatches(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrs, size := loadTestAddrContractsIntoCache(t, d, 81, 5)
+	// a chunk closes once it holds one record, so five dirty records take five batches
+	d.addrContractsCacheWriteChunkBytes = size
+	entries := make([]*unpackedAddrContracts, 0, len(addrs))
+	for i, addr := range addrs {
+		acs := d.addrContractsCache[string(addr)]
+		acs.TotalTxs = uint(100 + i)
+		acs.cacheDirty = true
+		entries = append(entries, acs)
+	}
+	// the last record is clean and must not be written
+	entries[4].cacheDirty = false
+
+	count, bytes, batches, err := d.writeDirtyAddrContracts(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 || bytes != 4*size || batches != 4 {
+		t.Fatalf("count=%d bytes=%d batches=%d, want 4, %d, 4", count, bytes, batches, 4*size)
+	}
+	for i, addr := range addrs[:4] {
+		if entries[i].cacheDirty {
+			t.Fatalf("record %d still dirty after its batch", i)
+		}
+		if got := getStoredTotalTxs(t, d, addr); got != uint(100+i) {
+			t.Fatalf("record %d stored TotalTxs = %d, want %d", i, got, 100+i)
+		}
+	}
+	if got := getStoredTotalTxs(t, d, addrs[4]); got != 1 {
+		t.Fatalf("clean record stored TotalTxs = %d, want the original 1", got)
+	}
+
+	// records smaller than a chunk share one batch
+	d.addrContractsCacheWriteChunkBytes = 10 * size
+	for _, acs := range entries {
+		acs.cacheDirty = true
+	}
+	if _, _, batches, err = d.writeDirtyAddrContracts(entries); err != nil || batches != 1 {
+		t.Fatalf("batches=%d err=%v, want one batch", batches, err)
+	}
+}
+
+// Benchmark_addrContracts_WriteBack measures the eviction write-back of eight ~1 MB records, the per
+// spam transaction cost on Optimism scaled down, in chunks of 2 MB.
+func Benchmark_addrContracts_WriteBack(b *testing.B) {
+	d := setupRocksDB(b, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(b, d)
+	d.addrContractsCacheMinSize = 1
+	d.addrContractsCacheWriteChunkBytes = 2 << 20
+
+	const records = 8
+	entries := make([]*unpackedAddrContracts, 0, records)
+	var total int64
+	for i := 0; i < records; i++ {
+		acs := &unpackedAddrContracts{TotalTxs: 1}
+		for j := 0; j < 35_000; j++ {
+			acs.Contracts = append(acs.Contracts, unpackedAddrContract{
+				Contract: makeTestAddrDesc(5000 + j),
+				Standard: bchain.FungibleToken,
+				Txs:      1,
+				Value:    unpackedBigInt{Value: big.NewInt(int64(j))},
+			})
+		}
+		acs.cacheKey = string(makeTestAddrDesc(91 + i))
+		total += int64(len(packUnpackedAddrContracts(acs)))
+		entries = append(entries, acs)
+	}
+	b.SetBytes(total)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, acs := range entries {
+			acs.TotalTxs++
+			acs.cacheDirty = true
+		}
+		if _, _, _, err := d.writeDirtyAddrContracts(entries); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func Test_addrContractsCache_StoreWritesOnlyDirtyEntries(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrA, addrB := makeTestAddrDesc(45), makeTestAddrDesc(46)
+	putTestAddrContracts(t, d, addrA, 2)
+	putTestAddrContracts(t, d, addrB, 2)
+	a, err := d.getUnpackedAddrDescContracts(addrA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := d.getUnpackedAddrDescContracts(addrB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.cacheDirty || !b.cacheDirty {
+		t.Fatal("freshly loaded records are handed to a mutating caller and must start dirty")
+	}
+	a.TotalTxs, b.TotalTxs = 11, 12
+
+	d.storeAddrContractsCache("timer")
+
+	if a.cacheDirty || b.cacheDirty {
+		t.Fatal("stored records must be clean")
+	}
+	if got := getStoredTotalTxs(t, d, addrA); got != 11 {
+		t.Fatalf("stored A TotalTxs = %d, want 11", got)
+	}
+	if got := getStoredTotalTxs(t, d, addrB); got != 12 {
+		t.Fatalf("stored B TotalTxs = %d, want 12", got)
+	}
+	if got := len(d.addrContractsCache); got != 2 {
+		t.Fatalf("store must keep records cached, got %d entries", got)
+	}
+
+	// only a cache hit marks a record dirty again; B is changed without one and must not be rewritten
+	if _, err := d.getUnpackedAddrDescContracts(addrA); err != nil {
+		t.Fatal(err)
+	}
+	a.TotalTxs, b.TotalTxs = 21, 22
+
+	d.storeAddrContractsCache("timer")
+
+	if got := getStoredTotalTxs(t, d, addrA); got != 21 {
+		t.Fatalf("stored A TotalTxs = %d, want 21", got)
+	}
+	if got := getStoredTotalTxs(t, d, addrB); got != 12 {
+		t.Fatalf("clean record B was rewritten, stored TotalTxs = %d, want 12", got)
+	}
+}
+
+// Bulk connect keeps one addressContracts map across blocks, so after the first block a cached record
+// is reached through that map and mutated without a cache hit. Changes made after a timer flush must
+// still reach RocksDB.
+func Test_addrContractsCache_BulkMapHitKeepsRecordDirty(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addr := makeTestAddrDesc(47)
+	putTestAddrContracts(t, d, addr, 2)
+	held := make(map[string]*unpackedAddrContracts)
+
+	// block 1: the record is loaded into the cache and into the bulk map
+	if err := d.addToAddressesAndContractsEthereumType(addr, []byte{1}, 0, nil, nil, true, false, make(addressesMap), held); err != nil {
+		t.Fatal(err)
+	}
+	d.storeAddrContractsCache("timer")
+	acs := held[string(addr)]
+	if acs == nil || acs.cacheElem == nil || acs.cacheDirty {
+		t.Fatal("record must be cached and clean after the timer flush")
+	}
+	d.addrContractsCacheMux.Lock()
+	d.addrContractsCacheClock++
+	d.addrContractsCacheMux.Unlock()
+
+	// block 2: the bulk map hit mutates the cached record
+	if err := d.addToAddressesAndContractsEthereumType(addr, []byte{2}, 0, nil, nil, true, false, make(addressesMap), held); err != nil {
+		t.Fatal(err)
+	}
+	if !acs.cacheDirty {
+		t.Fatal("record mutated through the bulk map must be dirty")
+	}
+	if acs.cacheLastUse != d.addrContractsCacheClock {
+		t.Fatalf("record mutated through the bulk map must count as used in cycle %d, got %d", d.addrContractsCacheClock, acs.cacheLastUse)
+	}
+
+	d.storeAddrContractsCache("close")
+	ac, err := d.GetAddrDescContracts(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ac == nil || ac.NonContractTxs != 2 {
+		t.Fatalf("stored NonContractTxs = %+v, want 2", ac)
+	}
+}
+
+func Test_addrContractsCache_EvictionDeletesEmptiedRecord(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.addrContractsCacheMinSize = 1
+
+	addrA, addrB := makeTestAddrDesc(47), makeTestAddrDesc(48)
+	size := putTestAddrContracts(t, d, addrA, 2)
+	putTestAddrContracts(t, d, addrB, 2)
+	d.addrContractsCacheMaxBytes = size
+	a, err := d.getUnpackedAddrDescContracts(addrA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.getUnpackedAddrDescContracts(addrB); err != nil {
+		t.Fatal(err)
+	}
+	// a disconnect emptied A; its eviction must remove the row like storeUnpackedAddressContracts does
+	a.TotalTxs, a.NonContractTxs, a.InternalTxs, a.Contracts = 0, 0, 0, nil
+
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
+	d.evictAddrContractsCacheOverCap()
+
+	if _, found := d.addrContractsCache[string(addrA)]; found {
+		t.Fatal("expected A to be evicted")
+	}
+	ac, err := d.GetAddrDescContracts(addrA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ac != nil {
+		t.Fatalf("emptied record A should be deleted, got %+v", ac)
 	}
 }
 
@@ -1455,7 +1992,7 @@ func Test_BulkConnect_EthereumType_UsesConfiguredAddrContractsCacheMaxBytes(t *t
 	}
 }
 
-func Test_BulkConnect_EthereumType_CloseFlushesAddrContractsCacheOverTipCap(t *testing.T) {
+func Test_BulkConnect_EthereumType_CloseEvictsAddrContractsCacheOverTipCap(t *testing.T) {
 	parser := ethereumTestnetParser()
 	parser.AddrContractsCacheMaxBytes = 10
 	parser.AddrContractsCacheBulkMaxBytes = 20
@@ -1469,9 +2006,11 @@ func Test_BulkConnect_EthereumType_CloseFlushesAddrContractsCacheOverTipCap(t *t
 		t.Fatal(err)
 	}
 
+	// two records fit the bulk cap but not the tip cap; the older one goes when bulk mode ends
 	d.addrContractsCacheMux.Lock()
-	d.addrContractsCache[string(makeTestAddrDesc(99))] = &unpackedAddrContracts{TotalTxs: 1}
-	d.addrContractsCacheBytes = d.tipAddrContractsCacheMaxBytes + 1
+	d.insertAddrContractsCacheEntryLocked(string(makeTestAddrDesc(98)), &unpackedAddrContracts{TotalTxs: 1}, 8)
+	d.insertAddrContractsCacheEntryLocked(string(makeTestAddrDesc(99)), &unpackedAddrContracts{TotalTxs: 1}, 8)
+	d.addrContractsCacheClock += addrContractsCacheHotBlocks
 	d.addrContractsCacheMux.Unlock()
 
 	if err := bc.Close(); err != nil {
@@ -1480,11 +2019,14 @@ func Test_BulkConnect_EthereumType_CloseFlushesAddrContractsCacheOverTipCap(t *t
 	if got := d.addrContractsCacheMaxBytes; got != d.tipAddrContractsCacheMaxBytes {
 		t.Fatalf("Close() addrContractsCacheMaxBytes = %d, want %d", got, d.tipAddrContractsCacheMaxBytes)
 	}
-	if got := len(d.addrContractsCache); got != 0 {
-		t.Fatalf("Close() addrContractsCache entries = %d, want 0", got)
+	if _, found := d.addrContractsCache[string(makeTestAddrDesc(98))]; found {
+		t.Fatal("Close() should evict the least recently used record over the tip cap")
 	}
-	if got := d.addrContractsCacheBytes; got != 0 {
-		t.Fatalf("Close() addrContractsCacheBytes = %d, want 0", got)
+	if _, found := d.addrContractsCache[string(makeTestAddrDesc(99))]; !found {
+		t.Fatal("Close() should keep the most recently used record")
+	}
+	if got := d.addrContractsCacheBytes; got != 8 {
+		t.Fatalf("Close() addrContractsCacheBytes = %d, want 8", got)
 	}
 }
 

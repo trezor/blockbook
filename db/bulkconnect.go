@@ -491,7 +491,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 			return err
 		}
 	}
-	b.d.storeAddrContractsCacheIfDue()
+	b.d.maintainAddrContractsCache(block.Height)
 	return nil
 }
 
@@ -515,7 +515,7 @@ func (b *BulkConnect) Close() error {
 		defer func(db *RocksDB) {
 			db.addrContractsCacheMaxBytes = db.tipAddrContractsCacheMaxBytes
 			if bulkClosed {
-				db.flushAddrContractsCacheIfOverCap()
+				db.evictAddrContractsCacheOverCap()
 			}
 		}(b.d)
 	}

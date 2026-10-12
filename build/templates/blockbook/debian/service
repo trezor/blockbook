@@ -7,6 +7,11 @@ Wants={{.Backend.PackageName}}.service
 {{end}}
 
 [Service]
+# glibc malloc defaults for RocksDB's C heap: two arenas instead of eight per core, and a fixed 1 MB mmap
+# threshold so record values and memtable blocks return to the kernel on free instead of fragmenting arena
+# heaps. Values from the EnvironmentFile below override these.
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_MMAP_THRESHOLD_=1048576
 # Optional operator-supplied runtime environment (API keys such as INFURA_API_KEY
 # and per-coin tunables; see docs/env.md). The leading '-' makes the file optional,
 # so public/community installs and hosts that still rely on systemd

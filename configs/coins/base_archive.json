@@ -70,6 +70,7 @@
                 "alternativeMempoolTxTimeout": "12h",
                 "processInternalTransactions": true,
                 "trace_timeout": "10s",
+                "address_contracts_cache_max_bytes": 1610612736,
                 "queryBackendOnMempoolResync": false,
                 "disableMempoolSync": true,
                 "fiat_rates": "coingecko",
