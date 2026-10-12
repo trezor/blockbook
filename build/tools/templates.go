@@ -136,6 +136,7 @@ const (
 	prodRPCURLHTTPPrefix        = "BB_PROD_RPC_URL_HTTP_"
 	prodRPCURLWSPrefix          = "BB_PROD_RPC_URL_WS_"
 	prodMQURLPrefix             = "BB_PROD_MQ_URL_"
+	backendAddnodePrefix        = "BB_ADDNODE_"
 	devBlockbookPprofPortOffset = 20000
 )
 
@@ -256,6 +257,7 @@ func rpcEnvPrefixes() []string {
 		prodMQURLPrefix,
 		"BB_RPC_BIND_HOST_",
 		"BB_RPC_ALLOW_IP_",
+		backendAddnodePrefix,
 	}
 }
 
@@ -492,12 +494,33 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 		}
 	}
 
+	if err := applyBackendAddnodesFromEnv(config); err != nil {
+		return nil, fmt.Errorf("%s: %w", coin, err)
+	}
+
 	config.Env.WantsBackendService, err = wantsBackendService(config)
 	if err != nil {
 		return nil, err
 	}
 
 	return config, nil
+}
+
+// applyBackendAddnodesFromEnv appends private backend peers from the build env, which keeps
+// them out of the public coin config.
+func applyBackendAddnodesFromEnv(config *Config) error {
+	peers, ok := lookupAliasEnv(backendAddnodePrefix, config.Coin.Alias)
+	if !ok {
+		return nil
+	}
+	key := backendAddnodePrefix + config.Coin.Alias
+	if isEmpty(config, "backend") {
+		return fmt.Errorf("%s is set but the coin has no backend package", key)
+	}
+	if err := appendBackendAddnodes(&config.Backend, peers); err != nil {
+		return fmt.Errorf("%s: %w", key, err)
+	}
+	return nil
 }
 
 func isEmpty(config *Config, target string) bool {
@@ -519,6 +542,19 @@ func lookupEnvWithArchiveFallback(prefix, alias string) (string, bool) {
 	}
 
 	for _, candidate := range aliasCandidates(alias) {
+		if value, ok := os.LookupEnv(prefix + candidate); ok && value != "" {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// lookupAliasEnv reads prefix+alias, also accepting the underscore form of a hyphenated alias.
+func lookupAliasEnv(prefix, alias string) (string, bool) {
+	if alias == "" {
+		return "", false
+	}
+	for _, candidate := range withEnvAliasVariants([]string{alias}) {
 		if value, ok := os.LookupEnv(prefix + candidate); ok && value != "" {
 			return value, true
 		}

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // validateAdditionalParamsOverlay rejects an override of a setting the production
@@ -110,4 +112,57 @@ func decodeJSONObject(raw json.RawMessage) (object map[string]json.RawMessage, w
 		return object, true, true
 	}
 	return nil, false, false
+}
+
+// addnodePeerPattern limits an env-supplied peer to one host[:port] token, so the value
+// cannot inject further lines or options into the rendered backend config.
+var addnodePeerPattern = regexp.MustCompile(`^[A-Za-z0-9.:\[\]-]+$`)
+
+// appendBackendAddnodes appends private peers after the public addnode list of the coin
+// config, keeping their order and dropping duplicates.
+func appendBackendAddnodes(backend *Backend, raw string) error {
+	peers := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	for i, peer := range peers {
+		if !addnodePeerPattern.MatchString(peer) {
+			// The peers are private, so name only the position of the bad entry.
+			return fmt.Errorf("addnode peer #%d is not a host[:port]", i+1)
+		}
+	}
+	if len(peers) == 0 {
+		return nil
+	}
+
+	if backend.AdditionalParams == nil {
+		backend.AdditionalParams = map[string]interface{}{}
+	}
+	params, ok := backend.AdditionalParams.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("backend additional_params is not an object")
+	}
+
+	var nodes []interface{}
+	seen := make(map[string]struct{})
+	switch existing := params["addnode"].(type) {
+	case nil:
+	case []interface{}:
+		for _, node := range existing {
+			name, ok := node.(string)
+			if !ok {
+				return fmt.Errorf("backend additional_params addnode must list strings")
+			}
+			nodes = append(nodes, name)
+			seen[name] = struct{}{}
+		}
+	default:
+		return fmt.Errorf("backend additional_params addnode must be a list")
+	}
+	for _, peer := range peers {
+		if _, dup := seen[peer]; dup {
+			continue
+		}
+		nodes = append(nodes, peer)
+		seen[peer] = struct{}{}
+	}
+	params["addnode"] = nodes
+	return nil
 }
