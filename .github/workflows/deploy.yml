@@ -135,6 +135,7 @@ jobs:
         with:
           vars_json: ${{ toJSON(vars) }}
           rpc_urls: ${{ secrets.BB_RPC_URLS }}
+          backend_peers: ${{ secrets.BB_BACKEND_PEERS }}
 
       - name: Build packages
         env:

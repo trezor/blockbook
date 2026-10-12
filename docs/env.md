@@ -153,6 +153,10 @@ On EVM chains the internal server also exposes `/admin/contract-info/` (same Bas
     `0.0.0.0`, RPC stays restricted unless `BB_RPC_ALLOW_IP_<coin alias>` is set.
 -   `BB_RPC_ALLOW_IP_<coin alias>` - Overrides backend RPC allow list for UTXO configs (e.g. `rpcallowip`), defaulting
     to `127.0.0.1`.
+-   `BB_ADDNODE_<coin alias>` - Comma or whitespace separated private backend peers (`host[:port]`) appended to
+    `backend.additional_params.addnode` during package/config generation, so they stay out of the public coin config.
+    Supported by the backend config templates that expand the `addnode` list (`bitcoin*.conf`, `bitcoin_like.conf`,
+    `bcash.conf`, `deeponion.conf`). The peers are baked into the built backend package.
 
 ## CI/CD workflow variables
 
@@ -166,6 +170,9 @@ On EVM chains the internal server also exposes `/admin/contract-info/` (same Bas
 -   `BB_RPC_URLS` (repository secret) - `KEY=VALUE` lines carrying every `BB_DEV_RPC_URL_*` / `BB_PROD_RPC_URL_*`
     value for CI. Provider URLs embed auth tokens and Actions variables are printed unmasked in public job logs, so
     the exporter masks each URL and fails a job that still finds these names among repository variables.
+
+-   `BB_BACKEND_PEERS` (repository secret) - `KEY=VALUE` lines carrying `BB_ADDNODE_*` values for the CI build job.
+    The exporter masks each peer and fails a job that finds these names among repository variables.
 
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.

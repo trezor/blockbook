@@ -643,3 +643,69 @@ func TestAllCoinConfigsRenderInBothBuildEnvs(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfigAppendsAddnodePeersFromEnv(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+	t.Setenv(backendAddnodePrefix+"bitcoin", "p1.example:8333,10.0.0.5")
+
+	config, err := LoadConfig(configsDir, "bitcoin")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	templ := config.ParseTemplate()
+	// The real generateRPCAuth shells out to a repo-root script.
+	templ.Funcs(template.FuncMap{"generateRPCAuth": func(string, string) (string, error) { return "rpcauth=stub", nil }})
+	conf, err := os.ReadFile(filepath.Join("..", "templates", "backend", "config", config.Backend.ServerConfigFile))
+	if err != nil {
+		t.Fatalf("ReadFile(server config) error = %v", err)
+	}
+	templ = template.Must(templ.Parse(string(conf)))
+	var out bytes.Buffer
+	if err := templ.ExecuteTemplate(&out, "main", config); err != nil {
+		t.Fatalf("render server config error = %v", err)
+	}
+
+	var addnodes []string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, "addnode=") {
+			addnodes = append(addnodes, strings.TrimPrefix(line, "addnode="))
+		}
+	}
+	if got, want := strings.Join(addnodes, " "), "ove.palatinus.cz p1.example:8333 10.0.0.5"; got != want {
+		t.Fatalf("rendered addnode lines = %q, want %q\n%s", got, want, out.String())
+	}
+}
+
+func TestLoadConfigRejectsInvalidAddnodePeers(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+	t.Setenv(backendAddnodePrefix+"bitcoin", "secret.example\nrpcallowip=0.0.0.0/0")
+
+	_, err := LoadConfig(configsDir, "bitcoin")
+	if err == nil {
+		t.Fatal("expected an invalid addnode peer to fail the build")
+	}
+	if strings.Contains(err.Error(), "secret.example") {
+		t.Fatalf("error must not echo the private value: %v", err)
+	}
+}
+
+func TestLoadConfigRejectsAddnodePeersForUnknownAlias(t *testing.T) {
+	configsDir := filepath.Clean(filepath.Join("..", "..", "configs"))
+	withTemporarilyUnsetEnv(t, stagingEnvVar)
+	t.Setenv(backendAddnodePrefix+"bitcion", "p1.example")
+
+	if _, err := LoadConfig(configsDir, "bitcoin"); err == nil || !strings.Contains(err.Error(), "bitcion") {
+		t.Fatalf("expected the misspelled alias to be rejected, got %v", err)
+	}
+}
+
+func TestApplyBackendAddnodesRejectsCoinWithoutBackend(t *testing.T) {
+	config := &Config{}
+	config.Coin.Alias = "nobackend"
+	t.Setenv(backendAddnodePrefix+"nobackend", "p1.example")
+
+	if err := applyBackendAddnodesFromEnv(config); err == nil || !strings.Contains(err.Error(), "no backend package") {
+		t.Fatalf("expected peers for a coin without a backend to be rejected, got %v", err)
+	}
+}
