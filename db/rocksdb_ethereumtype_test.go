@@ -564,6 +564,11 @@ func Test_addrContractsCache_FlushOnCap(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected cached address contracts to be returned")
 	}
+	// the load itself never flushes, the block boundary does
+	if len(d.addrContractsCache) != 1 || d.addrContractsCacheBytes <= d.addrContractsCacheMaxBytes {
+		t.Fatalf("expected the record cached over the cap, got %d entries, %d bytes", len(d.addrContractsCache), d.addrContractsCacheBytes)
+	}
+	d.flushAddrContractsCacheIfOverCap()
 	if len(d.addrContractsCache) != 0 {
 		t.Fatalf("expected cache to be flushed, got %d entries", len(d.addrContractsCache))
 	}
@@ -2627,10 +2632,9 @@ func Test_addrContractsCache_ResidentBudget(t *testing.T) {
 		t.Fatalf("cache bytes after store = %d, want re-measured %d", d.addrContractsCacheBytes, grown)
 	}
 
-	// a record that grew past the cap without any new insert is flushed by the due store
+	// a record that grew past the cap without any new insert is flushed at the next block boundary
 	d.addrContractsCacheMaxBytes = grown - 1
-	d.lastAddrContractsCacheStore = time.Time{}
-	d.storeAddrContractsCacheIfDue()
+	d.flushAddrContractsCacheIfOverCap()
 	if len(d.addrContractsCache) != 0 {
 		t.Fatalf("expected the cache flushed after growing past the cap, got %d entries", len(d.addrContractsCache))
 	}
@@ -2764,4 +2768,33 @@ func Test_addrContractsCache_ChunkedWriteBack(t *testing.T) {
 		t.Fatalf("writeAddrContractsRecords() = %d batches, %v; want 1 batch", batches, err)
 	}
 	verifyStored()
+}
+
+func Test_addrContractsCache_FlushAtBlockBoundary(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.metrics = getTestMetrics(t)
+	// every record the second block loads is cached and exceeds the cap on its own
+	d.addrContractsCacheMinSize = 1
+	d.addrContractsCacheMaxBytes = 1
+	capFlushes := d.metrics.AddrContractsCacheFlushes.With(common.Labels{"reason": "cap"})
+	flushes0 := counterValue(t, capFlushes)
+
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	// one flush at the boundary of the second block, none while its records were being loaded
+	if got := counterValue(t, capFlushes) - flushes0; got != 1 {
+		t.Fatalf("cap flushes after two blocks = %v, want 1", got)
+	}
+	if len(d.addrContractsCache) != 0 {
+		t.Fatalf("expected the cache flushed at the block boundary, got %d entries", len(d.addrContractsCache))
+	}
+	// the flushed records carry the whole second block
+	verifyAfterEthereumTypeBlock2(t, d, true)
 }
