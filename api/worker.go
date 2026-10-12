@@ -65,8 +65,8 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 	}); ok {
 		if override := provider.XpubConfigOverride(); override != nil {
 			xpubCfg = ApplyXpubConfig(override)
-			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
-				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
+			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheBytes=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
+				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheBytes, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
 		}
 	}
 	w := &Worker{

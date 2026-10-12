@@ -53,7 +53,7 @@ func setupXpubRaceWorker(t *testing.T) *Worker {
 	}
 	is.FinishedSync(block2.Height)
 
-	metrics, err := common.GetMetrics("Fakecoin-xpubrace")
+	metrics, err := common.GetMetrics("Fakecoin-" + t.Name()) // unique per test: collectors register globally
 	if err != nil {
 		t.Fatal(err)
 	}

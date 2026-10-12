@@ -420,7 +420,7 @@ metrics:
   xpub_cache_misses_total:
     name: blockbook_xpub_cache_misses_total
     type: counter_vec
-    help: xpub lookups that had to derive (absent) or rescan every address of a cached entry (stale)
+    help: xpub lookups that had to derive (absent), re-derive a different gap (gap), rescan every address after a new block (stale) or load txids from the db (history)
     labels: [reason]
   coingecko_requests:
     name: blockbook_coingecko_requests

@@ -22,6 +22,7 @@ const txOutput = 2
 type XpubConfig struct {
 	MaxCacheExpirationSeconds int
 	MaxCacheEntries           int
+	MaxCacheBytes             int
 	DefaultAddressesGap       int
 	MaxAddressesGap           int
 	MaxAddressDerivations     int // computed: (MaxAddressesGap + 1) * 2
@@ -34,6 +35,7 @@ func DefaultXpubConfig() XpubConfig {
 	return finalizeXpubConfig(XpubConfig{
 		MaxCacheExpirationSeconds: 3600,
 		MaxCacheEntries:           5000,
+		MaxCacheBytes:             1 << 30,
 		DefaultAddressesGap:       20,
 		MaxAddressesGap:           10000,
 	})
@@ -68,6 +70,7 @@ func ApplyXpubConfig(o *bchain.XpubConfig) XpubConfig {
 	}
 	apply("maxCacheExpirationSeconds", o.MaxCacheExpirationSeconds, func(v int) { cfg.MaxCacheExpirationSeconds = v })
 	apply("maxCacheEntries", o.MaxCacheEntries, func(v int) { cfg.MaxCacheEntries = v })
+	apply("maxCacheBytes", o.MaxCacheBytes, func(v int) { cfg.MaxCacheBytes = v })
 	apply("defaultAddressesGap", o.DefaultAddressesGap, func(v int) { cfg.DefaultAddressesGap = v })
 	apply("maxAddressesGap", o.MaxAddressesGap, func(v int) { cfg.MaxAddressesGap = v })
 	return finalizeXpubConfig(cfg)
@@ -194,7 +197,7 @@ func (w *Worker) initXpubCache() {
 func (w *Worker) evictXpubCacheItems() {
 	now := time.Now().Unix()
 	cachedXpubsMux.Lock()
-	count := evictXpubCacheItemsLocked(now, int64(w.xpubConfig.MaxCacheExpirationSeconds), w.xpubConfig.MaxCacheEntries)
+	count := evictXpubCacheItemsLocked(now, int64(w.xpubConfig.MaxCacheExpirationSeconds), w.xpubConfig.MaxCacheEntries, int64(w.xpubConfig.MaxCacheBytes))
 	cacheSize := len(cachedXpubs)
 	cacheBytes := cachedXpubsBytes
 	w.setXpubCacheMetricsLocked()
@@ -203,7 +206,7 @@ func (w *Worker) evictXpubCacheItems() {
 	glog.Info("Evicted ", count, " items from xpub cache, cache size ", cacheSize, ", ~", cacheBytes>>20, " MB")
 }
 
-func evictXpubCacheItemsLocked(now int64, expirationSeconds int64, maxEntries int) int {
+func evictXpubCacheItemsLocked(now int64, expirationSeconds int64, maxEntries int, maxBytes int64) int {
 	threshold := now - expirationSeconds
 	count := 0
 	for k, v := range cachedXpubs {
@@ -212,23 +215,49 @@ func evictXpubCacheItemsLocked(now int64, expirationSeconds int64, maxEntries in
 			count++
 		}
 	}
-	return count + trimXpubCacheItemsLocked(maxEntries)
+	return count + trimXpubCacheItemsLocked(maxEntries, maxBytes)
 }
 
-// trimXpubCacheItemsLocked evicts the least recently accessed entries down to
-// maxEntries. Inserts overshoot by one at most, so a linear scan per eviction
-// holds the mutex far shorter than sorting the whole map.
-func trimXpubCacheItemsLocked(maxEntries int) int {
-	count := 0
-	for len(cachedXpubs) > maxEntries {
-		oldest, found := "", false
-		var oldestAccessed int64
-		for k, v := range cachedXpubs {
-			if !found || v.accessed < oldestAccessed || (v.accessed == oldestAccessed && k < oldest) {
-				oldest, oldestAccessed, found = k, v.accessed, true
-			}
+// trimXpubCacheItemsLocked evicts the least recently accessed entries until
+// both caps hold; the byte cap bounds memory, since one entry's txid history is
+// unbounded. An entry larger than maxBytes evicts itself too.
+func trimXpubCacheItemsLocked(maxEntries int, maxBytes int64) int {
+	over := func() bool {
+		return len(cachedXpubs) > maxEntries || (len(cachedXpubs) > 0 && cachedXpubsBytes > maxBytes)
+	}
+	if !over() {
+		return 0
+	}
+	// an insert usually overshoots by one entry, where a linear scan beats sorting
+	type keyAccess struct {
+		key      string
+		accessed int64
+	}
+	var oldest keyAccess
+	found := false
+	for k, v := range cachedXpubs {
+		if !found || v.accessed < oldest.accessed || (v.accessed == oldest.accessed && k < oldest.key) {
+			oldest, found = keyAccess{k, v.accessed}, true
 		}
-		deleteCachedXpubLocked(oldest)
+	}
+	deleteCachedXpubLocked(oldest.key)
+	count := 1
+	if !over() {
+		return count
+	}
+	// a large entry can displace thousands; sort once instead of rescanning per eviction
+	lru := make([]keyAccess, 0, len(cachedXpubs))
+	for k, v := range cachedXpubs {
+		lru = append(lru, keyAccess{k, v.accessed})
+	}
+	sort.Slice(lru, func(i, j int) bool {
+		return lru[i].accessed < lru[j].accessed || (lru[i].accessed == lru[j].accessed && lru[i].key < lru[j].key)
+	})
+	for _, e := range lru {
+		if !over() {
+			break
+		}
+		deleteCachedXpubLocked(e.key)
 		count++
 	}
 	return count
@@ -549,10 +578,13 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 	data, inCache := cachedXpubs[xd.XpubDescriptor]
 	cachedXpubsMux.Unlock()
 	owned := !inCache // whether data.addresses is a private copy safe to mutate
-	// absent = derived from scratch, stale = cached but every address rescanned after a new block
+	// absent = derived from scratch, gap = cached under another gap and re-derived,
+	// stale = every address rescanned after a new block, history = txids loaded from the db
 	missReason := ""
-	if !inCache || data.gap != gap {
+	if !inCache {
 		missReason = "absent"
+	} else if data.gap != gap {
+		missReason = "gap"
 	}
 	// to load all data for xpub may take some time, do it in a loop to process a possible new block
 	for {
@@ -625,6 +657,9 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 			}
 			if txidsChanged {
 				data.mergedTxids = nil
+				if missReason == "" {
+					missReason = "history"
+				}
 			}
 			if isUnfilteredXpubTxidFilter(filter) && data.mergedTxids == nil {
 				data.mergedTxids = mergeXpubTxids(&data)
@@ -637,7 +672,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 		cachedXpubs = make(map[string]xpubData)
 	}
 	putCachedXpubLocked(xd.XpubDescriptor, &data)
-	trimXpubCacheItemsLocked(w.xpubConfig.MaxCacheEntries)
+	trimXpubCacheItemsLocked(w.xpubConfig.MaxCacheEntries, int64(w.xpubConfig.MaxCacheBytes))
 	w.setXpubCacheMetricsLocked()
 	cachedXpubsMux.Unlock()
 	if missReason != "" {
