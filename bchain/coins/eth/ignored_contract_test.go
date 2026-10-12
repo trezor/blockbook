@@ -63,6 +63,70 @@ func requireTransferContracts(t *testing.T, got bchain.TokenTransfers, want ...s
 	}
 }
 
+// Post-Glamsterdam ETH -> token swap on Sepolia (tx 0x83b1a2e8…, block 11856400): the two
+// EIP-7708 logs mirror the ETH paid into the router and wrapped into WETH, only the WETH and
+// the bought token transfers are token transfers.
+func TestEthereumParser_SkipsEIP7708TransferLogs(t *testing.T) {
+	const (
+		weth   = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9"
+		bought = "0x5f2E83cCDEa73D60aF400e03F1Cd8Fb9eaB07b20"
+	)
+	tx := txWithReceiptLogs(
+		&bchain.RpcLog{
+			Address: "0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE",
+			Topics: []string{
+				tokenTransferEventSignature,
+				"0x0000000000000000000000007757d12199d98cf46b9af7be5072495fca4c983c",
+				"0x0000000000000000000000008f6eb7870334b1fd8006fd52413f01689f4e57e9",
+			},
+			Data: "0x0000000000000000000000000000000000000000000000000000033ce0891000",
+		},
+		&bchain.RpcLog{
+			Address: "0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE",
+			Topics: []string{
+				tokenTransferEventSignature,
+				"0x0000000000000000000000008f6eb7870334b1fd8006fd52413f01689f4e57e9",
+				"0x0000000000000000000000007b79995e5f793a07bc00c21412e50ecae098e7f9",
+			},
+			Data: "0x0000000000000000000000000000000000000000000000000000033ce0891000",
+		},
+		&bchain.RpcLog{ // WETH Deposit
+			Address: weth,
+			Topics: []string{
+				"0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c",
+				"0x0000000000000000000000008f6eb7870334b1fd8006fd52413f01689f4e57e9",
+			},
+			Data: "0x0000000000000000000000000000000000000000000000000000033ce0891000",
+		},
+		&bchain.RpcLog{
+			Address: weth,
+			Topics: []string{
+				tokenTransferEventSignature,
+				"0x0000000000000000000000008f6eb7870334b1fd8006fd52413f01689f4e57e9",
+				"0x000000000000000000000000f32e24b7f739c7c17544cb972833ab551121a72b",
+			},
+			Data: "0x0000000000000000000000000000000000000000000000000000033ce0891000",
+		},
+		&bchain.RpcLog{
+			Address: bought,
+			Topics: []string{
+				tokenTransferEventSignature,
+				"0x000000000000000000000000f32e24b7f739c7c17544cb972833ab551121a72b",
+				"0x0000000000000000000000007757d12199d98cf46b9af7be5072495fca4c983c",
+			},
+			Data: "0x0000000000000000000000000000000000000000000000000000000014318826",
+		},
+	)
+	got, err := NewEthereumParser(1, false).EthereumTypeGetTokenTransfersFromTx(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireTransferContracts(t, got, weth, bought)
+	if got[1].Value.Int64() != 0x14318826 {
+		t.Errorf("bought token value = %s, want %d", got[1].Value.String(), 0x14318826)
+	}
+}
+
 func TestEthereumParser_SkipsIgnoredContractLogs(t *testing.T) {
 	const erc20 = "0x76a45e8976499ab9ae223cc584019341d5a84e96"
 	const erc1155 = "0x6Fd712E3A5B556654044608F9129040A4839E36c"
@@ -128,7 +192,10 @@ func TestEthereumParser_EthereumTypeIsIgnoredContract(t *testing.T) {
 		}
 		return d
 	}
-	if p.EthereumTypeIsIgnoredContract(desc("0x0000000000000000000000000000000000001011")) {
+	if !p.EthereumTypeIsIgnoredContract(desc(eip7708SystemAddress)) {
+		t.Error("EIP-7708 system address not ignored by default")
+	}
+	if p.EthereumTypeIsIgnoredContract(desc("0xffffffffffffffffffffffffffffffffffffffff")) {
 		t.Error("neighbouring address ignored")
 	}
 	if p.EthereumTypeIsIgnoredContract(nil) {
@@ -145,6 +212,9 @@ func TestEthereumParser_EthereumTypeIsIgnoredContract(t *testing.T) {
 	}
 	if !p.EthereumTypeIsIgnoredContract(desc(testIgnoredContract)) {
 		t.Error("contract not ignored after IgnoreContract")
+	}
+	if !p.EthereumTypeIsIgnoredContract(desc(eip7708SystemAddress)) {
+		t.Error("EIP-7708 system address no longer ignored after IgnoreContract")
 	}
 	// each parser has its own set
 	if NewEthereumParser(1, false).EthereumTypeIsIgnoredContract(desc(testIgnoredContract)) {

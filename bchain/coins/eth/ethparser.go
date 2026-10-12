@@ -61,6 +61,12 @@ type EthereumParser struct {
 	ignoredContracts        []bchain.AddressDescriptor
 }
 
+// eip7708SystemAddress emits an ERC-20 shaped Transfer log for every ETH move since Glamsterdam.
+// It has no code, so it cannot emit logs on a chain without EIP-7708 and is ignored everywhere.
+const eip7708SystemAddress = "0xfffffffffffffffffffffffffffffffffffffffe"
+
+var eip7708SystemAddressDesc = mustAddrDescFromAddress(eip7708SystemAddress)
+
 // NewEthereumParser returns new EthereumParser instance
 func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 	return &EthereumParser{
@@ -78,7 +84,16 @@ func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 		AddrContractsCacheBulkMaxBytes: defaultAddressContractsCacheBulkMaxBytes,
 		FormatAddressFunc:              EIP55AddressFromAddress,
 		FromDescToAddressFunc:          EIP55Address,
+		ignoredContracts:               []bchain.AddressDescriptor{eip7708SystemAddressDesc},
 	}
+}
+
+func mustAddrDescFromAddress(address string) bchain.AddressDescriptor {
+	desc, err := (&EthereumParser{}).GetAddrDescFromAddress(address)
+	if err != nil {
+		panic(err)
+	}
+	return desc
 }
 
 // IgnoreContract makes the contract's Transfer logs not count as token transfers, for protocol
