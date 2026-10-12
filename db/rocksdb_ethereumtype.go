@@ -1893,12 +1893,17 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	rv, err = partiallyUnpackAddrContracts(buf)
 	minSize := d.addrContractsCacheMinSize
 	if minSize <= 0 {
 		minSize = addrContractsCacheMinSize
 	}
-	if err == nil && rv != nil && len(buf) > minSize {
+	cacheable := len(buf) > minSize
+	if cacheable && d.metrics != nil {
+		// the plain miss counter includes records too small to cache, so only this one measures reuse
+		d.metrics.AddrContractsCacheCacheableMisses.Inc()
+	}
+	rv, err = partiallyUnpackAddrContracts(buf)
+	if err == nil && rv != nil && cacheable {
 		var cacheEntries int
 		var cacheBytes int64
 		shouldFlush := false

@@ -89,6 +89,7 @@ type Metrics struct {
 	AddrContractsCacheBytes            prometheus.Gauge         `metric:"addr_contracts_cache_bytes"`
 	AddrContractsCacheHits             prometheus.Counter       `metric:"addr_contracts_cache_hits_total"`
 	AddrContractsCacheMisses           prometheus.Counter       `metric:"addr_contracts_cache_misses_total"`
+	AddrContractsCacheCacheableMisses  prometheus.Counter       `metric:"addr_contracts_cache_cacheable_misses_total"`
 	AddrContractsCacheFlushes          *prometheus.CounterVec   `metric:"addr_contracts_cache_flush_total"`
 	DbColumnRows                       *prometheus.GaugeVec     `metric:"dbcolumn_rows"`
 	DbColumnSize                       *prometheus.GaugeVec     `metric:"dbcolumn_size"`

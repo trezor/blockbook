@@ -12,6 +12,8 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
@@ -2505,5 +2507,77 @@ func Benchmark_contractIndexLookup(b *testing.B) {
 				_, _ = acs.findContractIndex(addrDesc, target, hot)
 			}
 		})
+	}
+}
+
+func counterValue(t *testing.T, c prometheus.Counter) float64 {
+	t.Helper()
+	var m dto.Metric
+	if err := c.Write(&m); err != nil {
+		t.Fatal(err)
+	}
+	return m.GetCounter().GetValue()
+}
+
+func Test_addrContractsCache_CacheableMisses(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.metrics = getTestMetrics(t)
+
+	addrDesc := makeTestAddrDesc(43)
+	acs := &unpackedAddrContracts{
+		TotalTxs: 1,
+		Contracts: []unpackedAddrContract{{
+			Contract: makeTestAddrDesc(7),
+			Standard: bchain.FungibleToken,
+			Txs:      1,
+			Value:    unpackedBigInt{Value: big.NewInt(0)},
+		}},
+	}
+	buf := packUnpackedAddrContracts(acs)
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	misses0 := counterValue(t, d.metrics.AddrContractsCacheMisses)
+	cacheable0 := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses)
+	hits0 := counterValue(t, d.metrics.AddrContractsCacheHits)
+
+	// below the threshold: a miss, but not a cacheable one
+	d.addrContractsCacheMinSize = len(buf)
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheMisses) - misses0; got != 1 {
+		t.Fatalf("misses after uncacheable read = %v, want 1", got)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses) - cacheable0; got != 0 {
+		t.Fatalf("cacheable misses after uncacheable read = %v, want 0", got)
+	}
+
+	// above the threshold: the first read is a cacheable miss, the second a hit
+	d.addrContractsCacheMinSize = len(buf) - 1
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses) - cacheable0; got != 1 {
+		t.Fatalf("cacheable misses after cacheable read = %v, want 1", got)
+	}
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheHits) - hits0; got != 1 {
+		t.Fatalf("hits after cached read = %v, want 1", got)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheMisses) - misses0; got != 2 {
+		t.Fatalf("misses total = %v, want 2", got)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses) - cacheable0; got != 1 {
+		t.Fatalf("cacheable misses total = %v, want 1", got)
 	}
 }
