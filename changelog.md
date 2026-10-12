@@ -67,6 +67,7 @@
 - **Tune REST/UI rate-limit defaults for individual user traffic** ([#1590](https://github.com/trezor/blockbook/pull/1590)): adjusts per-client rate-limit defaults to 20 req/min with burst 20, matching individual browsing patterns rather than high-throughput clients.
 - **Make WebSocket per-connection pending-request limit configurable** ([#1626](https://github.com/trezor/blockbook/pull/1626)): exposes the previously hard-coded `maxWebsocketPendingRequests` (48) as a per-coin env knob so self-hosted batch consumers pipelining many requests over one connection are no longer disconnected mid-batch.
 - **Configurable per-coin xpub expansion and cache caps** ([#1630](https://github.com/trezor/blockbook/pull/1630)): replaces the hard-coded xpub cache-size, expiration, and max-derivation constants with a per-coin `XpubConfig`, and raises the default cache to 1024 entries to stop thrashing under many concurrent users.
+- **Bitcoin-family backends accept inbound P2P connections** ([#1851](https://github.com/trezor/blockbook/pull/1851)): drops `nolisten=1` from the shared `bitcoin.conf` template (bitcoin, bitcoin_testnet, monacoin, groestlcoin and their testnets), so our own backends can link to each other via `addnode`.
 
 ### Observability
 
