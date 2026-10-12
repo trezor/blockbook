@@ -104,6 +104,9 @@ type Metrics struct {
 	ExplorerPendingRequests            *prometheus.GaugeVec     `metric:"explorer_pending_requests"`
 	WebsocketPendingRequests           *prometheus.GaugeVec     `metric:"websocket_pending_requests"`
 	XPubCacheSize                      prometheus.Gauge         `metric:"xpub_cache_size"`
+	XPubCacheBytes                     prometheus.Gauge         `metric:"xpub_cache_bytes"`
+	XPubCacheHits                      prometheus.Counter       `metric:"xpub_cache_hits_total"`
+	XPubCacheMisses                    *prometheus.CounterVec   `metric:"xpub_cache_misses_total"`
 	CoingeckoRequests                  *prometheus.CounterVec   `metric:"coingecko_requests"`
 	CoingeckoRangeRequests             *prometheus.CounterVec   `metric:"coingecko_range_requests"`
 	FiatRatesUpdateDuration            *prometheus.HistogramVec `metric:"fiat_rates_update_duration_seconds"`

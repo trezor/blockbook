@@ -226,9 +226,7 @@ func buildXpubPagingWorker(t *testing.T) (*Worker, string) {
 	require.NoError(t, err)
 
 	// the xpub cache is package global, so it must not leak between tests
-	cachedXpubsMux.Lock()
-	cachedXpubs = nil
-	cachedXpubsMux.Unlock()
+	resetXpubCache()
 
 	w := &Worker{
 		db:          database,
