@@ -127,10 +127,15 @@ Column families used only by **Ethereum type** coins:
   - Large addressContracts cache
 
   To reduce repeated RocksDB reads/writes for very large entries, Blockbook caches addressContracts blobs whose packed
-  size exceeds `address_contracts_cache_min_size`. The cache is flushed periodically, and also flushed early when its
-  total size crosses the active cache cap. Chain-tip sync uses `address_contracts_cache_max_bytes`; bulk connect uses
-  `address_contracts_cache_bulk_max_bytes`. Early flush avoids unbounded memory growth at the cost of more frequent
-  writes.
+  size exceeds `address_contracts_cache_min_size`. The cache is flushed periodically, and also flushed at the next
+  block boundary when the estimated resident size of its decoded records (re-measured at every periodic flush, since
+  records grow in place) exceeds the active cache cap. The cap is never enforced in the middle of a block: that would
+  write records with half a block applied and move the evicted records into the block's own write batch. Chain-tip
+  sync uses `address_contracts_cache_max_bytes`; bulk connect uses `address_contracts_cache_bulk_max_bytes`. Early
+  flush avoids unbounded memory growth at the cost of more frequent
+  writes. The flush writes the records in batches of about 64 MB, so a store never builds one multi-gigabyte write
+  batch. API reads of a cached address are served from the cache (under the read side of the block-connect lock),
+  so they see the chain tip even though the on-disk record is only rewritten at the periodic flush.
 
 - **internalData** (used only by Ethereum type coins)
 

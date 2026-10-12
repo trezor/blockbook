@@ -334,7 +334,7 @@ panels:
         legend: '{{instance}}'
   sync.addr_contracts_cache_activity:
     title: AddrContracts cache activity
-    description: Hits avoid RocksDB reads, misses fall through to storage, and flushes show cap- or timer-driven cache resets.
+    description: Hits avoid RocksDB reads, misses fall through to storage (cacheable misses are the ones on records large enough to cache, so hits versus cacheable misses is the real reuse rate), and flushes show cap- or timer-driven cache resets.
     queries:
       hits:
         promql: rate({{name:addr_contracts_cache_hits_total}}{job="blockbook", coin="$coin"}[5m]) * 60
@@ -342,6 +342,9 @@ panels:
       misses:
         promql: rate({{name:addr_contracts_cache_misses_total}}{job="blockbook", coin="$coin"}[5m]) * 60
         legend: '{{instance}} misses/min'
+      cacheable_misses:
+        promql: rate({{name:addr_contracts_cache_cacheable_misses_total}}{job="blockbook", coin="$coin"}[5m]) * 60
+        legend: '{{instance}} cacheable misses/min'
       flushes:
         promql: rate({{name:addr_contracts_cache_flush_total}}{job="blockbook", coin="$coin"}[1h]) * 60
         legend: '{{instance}} flushes {{reason}}/min'

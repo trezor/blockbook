@@ -333,7 +333,7 @@ metrics:
   addr_contracts_cache_bytes:
     name: blockbook_addr_contracts_cache_bytes
     type: gauge
-    help: Estimated memory used by the Ethereum-type addressContracts cache
+    help: Estimated resident memory of the decoded records in the Ethereum-type addressContracts cache
   addr_contracts_cache_hits_total:
     name: blockbook_addr_contracts_cache_hits_total
     type: counter
@@ -342,6 +342,10 @@ metrics:
     name: blockbook_addr_contracts_cache_misses_total
     type: counter
     help: addressContracts cache lookups that had to read from RocksDB
+  addr_contracts_cache_cacheable_misses_total:
+    name: blockbook_addr_contracts_cache_cacheable_misses_total
+    type: counter
+    help: addressContracts cache misses on records large enough to be cached; misses_total also counts records below the cache threshold
   addr_contracts_cache_flush_total:
     name: blockbook_addr_contracts_cache_flush_total
     type: counter_vec

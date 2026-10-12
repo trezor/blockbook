@@ -91,6 +91,7 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	}
 	if b.chainType == bchain.ChainEthereumType {
 		d.addrContractsCacheMaxBytes = d.bulkAddrContractsCacheMaxBytes
+		d.bulkConnectActive.Store(true)
 	}
 	glog.Info("rocksdb: bulk connect init, db set to inconsistent state")
 	return b, nil
@@ -412,6 +413,8 @@ func (b *BulkConnect) parallelStoreAddressContracts(c chan error, all bool) {
 }
 
 func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTxs bool) error {
+	// the cap is enforced between blocks, see flushAddrContractsCacheIfOverCap
+	b.d.flushAddrContractsCacheIfOverCap()
 	addresses := make(addressesMap)
 	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, b.addressContracts)
 	if err != nil {
@@ -514,6 +517,7 @@ func (b *BulkConnect) Close() error {
 	if b.d != nil && b.chainType == bchain.ChainEthereumType {
 		defer func(db *RocksDB) {
 			db.addrContractsCacheMaxBytes = db.tipAddrContractsCacheMaxBytes
+			db.bulkConnectActive.Store(false)
 			if bulkClosed {
 				db.flushAddrContractsCacheIfOverCap()
 			}

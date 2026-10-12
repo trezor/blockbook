@@ -28,8 +28,10 @@ const defaultHotAddressMinHits = 3
 const maxHotAddressLRUCacheSize = 100_000
 const maxHotAddressMinHits = 10
 const defaultAddressContractsCacheMinSize = 300_000
-const defaultAddressContractsCacheMaxBytes int64 = 2_000_000_000
-const defaultAddressContractsCacheBulkMaxBytes int64 = 4_000_000_000
+
+// The caps bound the estimated resident size of the decoded records, not their packed size.
+const defaultAddressContractsCacheMaxBytes int64 = 16_000_000_000
+const defaultAddressContractsCacheBulkMaxBytes int64 = 32_000_000_000
 
 type AddressContractsCacheConfig struct {
 	MinSize      int

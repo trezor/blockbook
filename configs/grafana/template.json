@@ -2925,6 +2925,12 @@
           "range": true,
           "refId": "C",
           "x-query-key": "flushes"
+        },
+        {
+          "editorMode": "code",
+          "range": true,
+          "refId": "D",
+          "x-query-key": "cacheable_misses"
         }
       ],
       "type": "timeseries",
