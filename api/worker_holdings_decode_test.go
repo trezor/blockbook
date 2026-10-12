@@ -3,10 +3,12 @@
 package api
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
@@ -59,4 +61,33 @@ func TestGetEthereumTypeAddressBalances_HoldingsFollowDetailsLevel(t *testing.T)
 	erc20 := get(AccountDetailsTokenBalances, "0x"+dbtestdata.EthAddrContract0d)
 	require.Len(t, erc20.tokens, 1)
 	require.NotNil(t, erc20.tokens[0].BalanceSat, "ERC20 balance comes from the backend, not the index")
+}
+
+// A row that names the same contract twice is index corruption the API must survive: the filtered
+// token list is as long as the matches, never a fixed slot that the second match overruns.
+func TestGetEthereumTypeAddressBalances_DuplicateContractRow(t *testing.T) {
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(eth.NewEthereumParser(1, true))
+	require.NoError(t, err)
+	w, database, parser := setupContractProbeWorker(t, chain)
+	addr := addrDesc(t, parser, dbtestdata.EthAddr7b)
+	nft := addrDesc(t, parser, dbtestdata.EthAddrContractCd)
+
+	row, err := database.GetAddrDescContracts(addr, db.FullAddrContractsRead())
+	require.NoError(t, err)
+	var dup []db.AddrContract
+	for _, c := range row.Contracts {
+		dup = append(dup, c)
+		if bytes.Equal(c.Contract, nft) {
+			dup = append(dup, c)
+		}
+	}
+	require.Len(t, dup, len(row.Contracts)+1)
+	require.NoError(t, database.StoreAddrContractsForTest(addr, &db.AddrContracts{
+		TotalTxs: row.TotalTxs, NonContractTxs: row.NonContractTxs, InternalTxs: row.InternalTxs, Contracts: dup,
+	}))
+
+	_, d, err := w.getEthereumTypeAddressBalances(addr, AccountDetailsTokenBalances,
+		&AddressFilter{Vout: AddressFilterVoutOff, Contract: "0x" + dbtestdata.EthAddrContractCd}, "")
+	require.NoError(t, err)
+	require.Len(t, d.tokens, 2)
 }

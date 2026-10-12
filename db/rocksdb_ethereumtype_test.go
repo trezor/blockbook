@@ -1648,7 +1648,7 @@ var fungibleContracts = AddrContracts{
 	InternalTxs:    1111110,
 	Contracts:      generateAddrContracts(100_000, 1, 1, 1, 1),
 }
-var packedFungibleContracts = packAddrContracts(&fungibleContracts)
+var packedFungibleContracts = mustPackAddrContracts(&fungibleContracts)
 var unpackedFungibleContracts, _ = partiallyUnpackAddrContracts(packedFungibleContracts)
 
 var mixedContracts = AddrContracts{
@@ -1657,7 +1657,7 @@ var mixedContracts = AddrContracts{
 	InternalTxs:    1111110,
 	Contracts:      generateAddrContracts(100_000, 1, 1_000_000, 1, 1_000_000),
 }
-var packedMixedContracts = packAddrContracts(&mixedContracts)
+var packedMixedContracts = mustPackAddrContracts(&mixedContracts)
 var unpackedMixedContracts, _ = partiallyUnpackAddrContracts(packedMixedContracts)
 
 func Benchmark_packUnpackAddrContractsV6_Fungible(b *testing.B) {
@@ -1669,7 +1669,7 @@ func Benchmark_packUnpackAddrContractsV6_Fungible(b *testing.B) {
 
 func Benchmark_packUnpackAddrContracts_Fungible(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		packed := packAddrContracts(&fungibleContracts)
+		packed := mustPackAddrContracts(&fungibleContracts)
 		unpackAddrContracts(packed, nil)
 	}
 }
@@ -1690,7 +1690,7 @@ func Benchmark_packUnpackAddrContractsV6_Mixed(b *testing.B) {
 
 func Benchmark_packUnpackAddrContracts_Mixed(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		packed := packAddrContracts(&mixedContracts)
+		packed := mustPackAddrContracts(&mixedContracts)
 		unpackAddrContracts(packed, nil)
 	}
 }
@@ -1785,7 +1785,7 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			packed := packAddrContracts(&tt.data)
+			packed := mustPackAddrContracts(&tt.data)
 			got, err := unpackAddrContracts(packed, nil)
 			if err != nil {
 				t.Errorf("unpackAddrContracts() error = %v", err)
@@ -1800,7 +1800,7 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 				t.Errorf("unpackAddrContractsOpt(HeaderOnly) error = %v", err)
 				return
 			}
-			wantHeader := &AddrContracts{TotalTxs: tt.data.TotalTxs, NonContractTxs: tt.data.NonContractTxs, InternalTxs: tt.data.InternalTxs}
+			wantHeader := &AddrContracts{TotalTxs: tt.data.TotalTxs, NonContractTxs: tt.data.NonContractTxs, InternalTxs: tt.data.InternalTxs, partial: true}
 			if !reflect.DeepEqual(header, wantHeader) {
 				t.Errorf("unpackAddrContractsOpt(HeaderOnly) = %v, want %v", header, wantHeader)
 			}
@@ -1809,8 +1809,17 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 }
 
 // stripAddrContracts derives the expected partial decode from the source row
+func mustPackAddrContracts(acs *AddrContracts) []byte {
+	buf, err := packAddrContracts(acs)
+	if err != nil {
+		panic(err)
+	}
+	return buf
+}
+
 func stripAddrContracts(full *AddrContracts, opts AddrContractsReadOptions) *AddrContracts {
 	rv := *full
+	rv.partial = !opts.full()
 	rv.Contracts = make([]AddrContract, len(full.Contracts))
 	for i, c := range full.Contracts {
 		s := AddrContract{Standard: c.Standard, Contract: c.Contract, Txs: c.Txs}
@@ -1832,12 +1841,12 @@ func Test_unpackAddrContractsOpt(t *testing.T) {
 	contract4a := addressToAddrDesc(dbtestdata.EthAddrContract4a, parser)
 	notAContract := addressToAddrDesc(dbtestdata.EthAddr7b, parser)
 	row := AddrContracts{TotalTxs: 30, NonContractTxs: 20, InternalTxs: 10, Contracts: generateAddrContracts(2, 2, 3, 2, 3)}
-	packed := packAddrContracts(&row)
+	packed := mustPackAddrContracts(&row)
 	for _, tt := range []struct {
 		name string
 		opts AddrContractsReadOptions
 	}{
-		{"full", FullAddrContractsRead},
+		{"full", FullAddrContractsRead()},
 		{"none", AddrContractsReadOptions{}},
 		{"holdingsOnly", AddrContractsReadOptions{Holdings: true}},
 		{"holdingsOf47", AddrContractsReadOptions{Holdings: true, Contract: contract47}},
@@ -1856,19 +1865,112 @@ func Test_unpackAddrContractsOpt(t *testing.T) {
 	}
 }
 
-func Test_unpackAddrContractsOpt_TruncatedHeader(t *testing.T) {
-	packed := packAddrContracts(&AddrContracts{TotalTxs: 300, NonContractTxs: 200, InternalTxs: 100})
-	// the header is the three counters; the trailing contract count is not part of it
+var addrContractsReadOptionSets = []AddrContractsReadOptions{
+	FullAddrContractsRead(),
+	{},
+	{HeaderOnly: true},
+	{Holdings: true},
+	{Holdings: true, Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, ethereumTestnetParser())},
+}
+
+// Every option set must report a corrupt row as an error, never panic, whichever byte is missing.
+func Test_unpackAddrContractsOpt_CorruptRow(t *testing.T) {
+	row := AddrContracts{TotalTxs: 300, NonContractTxs: 200, InternalTxs: 100, Contracts: generateAddrContracts(2, 2, 3, 2, 3)}
+	packed := mustPackAddrContracts(&row)
+	// the header is the three counters; HeaderOnly reads nothing past it and accepts any tail
 	headerLen := 0
 	for i := 0; i < 3; i++ {
 		_, l := unpackVaruint(packed[headerLen:])
 		headerLen += l
 	}
-	for cut := 0; cut < headerLen; cut++ {
-		for _, opts := range []AddrContractsReadOptions{{HeaderOnly: true}, FullAddrContractsRead} {
+	for cut := 0; cut < len(packed); cut++ {
+		for _, opts := range addrContractsReadOptionSets {
+			if opts.HeaderOnly && cut >= headerLen {
+				continue
+			}
 			if _, err := unpackAddrContractsOpt(packed[:cut], nil, opts); err == nil {
 				t.Errorf("unpackAddrContractsOpt(packed[:%d], %+v) expected error", cut, opts)
 			}
+		}
+	}
+	// a contract count larger than the row can hold must not size an allocation
+	_, l := unpackVaruint(packed[headerLen:])
+	corrupt := append(append([]byte{}, packed[:headerLen]...), 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f)
+	corrupt = append(corrupt, packed[headerLen+l:]...)
+	for _, opts := range addrContractsReadOptionSets {
+		if opts.HeaderOnly {
+			continue
+		}
+		if _, err := unpackAddrContractsOpt(corrupt, nil, opts); err == nil {
+			t.Errorf("unpackAddrContractsOpt(huge contract count, %+v) expected error", opts)
+		}
+	}
+	// a holdings count larger than the remaining row must not size an allocation either
+	nft := AddrContracts{Contracts: generateAddrContracts(0, 1, 1, 0, 0)}
+	packedNft := mustPackAddrContracts(&nft)
+	for _, opts := range addrContractsReadOptionSets {
+		if opts.HeaderOnly {
+			continue
+		}
+		bad := append([]byte{}, packedNft...)
+		bad[len(bad)-3] = 0x7f // the ERC721 ids count varint, now 127 with a 2-byte tail
+		if _, err := unpackAddrContractsOpt(bad, nil, opts); err == nil {
+			t.Errorf("unpackAddrContractsOpt(huge holdings count, %+v) expected error", opts)
+		}
+	}
+}
+
+// The skip path must agree with pack and decode on the row layout for every standard value the two
+// standard bits can hold, not only for the three named ones.
+func Test_unpackAddrContractsOpt_SkipsUnknownStandardAsPairs(t *testing.T) {
+	parser := ethereumTestnetParser()
+	row := AddrContracts{TotalTxs: 3, NonContractTxs: 1, Contracts: []AddrContract{
+		{
+			Standard: bchain.TokenStandard(3),
+			Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+			Txs:      5,
+			MultiTokenValues: MultiTokenValues{
+				{Id: *big.NewInt(1), Value: *big.NewInt(1000)},
+				{Id: *big.NewInt(2), Value: *big.NewInt(2000)},
+			},
+		},
+		{
+			Standard: bchain.FungibleToken,
+			Contract: addressToAddrDesc(dbtestdata.EthAddrContract0d, parser),
+			Txs:      7,
+			Value:    *big.NewInt(123456),
+		},
+	}}
+	packed := mustPackAddrContracts(&row)
+	for _, opts := range addrContractsReadOptionSets {
+		if opts.HeaderOnly {
+			continue
+		}
+		got, err := unpackAddrContractsOpt(packed, nil, opts)
+		if err != nil {
+			t.Fatalf("%+v: %v", opts, err)
+		}
+		if want := stripAddrContracts(&row, opts); !reflect.DeepEqual(got, want) {
+			t.Errorf("unpackAddrContractsOpt(%+v) = %+v, want %+v", opts, got, want)
+		}
+	}
+}
+
+func Test_packAddrContracts_RefusesPartialRow(t *testing.T) {
+	row := AddrContracts{TotalTxs: 30, NonContractTxs: 20, InternalTxs: 10, Contracts: generateAddrContracts(2, 2, 3, 2, 3)}
+	packed := mustPackAddrContracts(&row)
+	for _, opts := range addrContractsReadOptionSets {
+		got, err := unpackAddrContractsOpt(packed, nil, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		repacked, err := packAddrContracts(got)
+		if opts.full() {
+			if err != nil || !bytes.Equal(repacked, packed) {
+				t.Errorf("full read must pack back identically, err %v", err)
+			}
+		} else if err == nil {
+			t.Errorf("packAddrContracts(partial read %+v) expected error", opts)
 		}
 	}
 }
@@ -1879,7 +1981,7 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 	defer closeAndDestroyRocksDB(t, d)
 	addrDesc := bchain.AddressDescriptor(addressToAddrDesc(dbtestdata.EthAddr4b, parser))
 
-	for _, opts := range []AddrContractsReadOptions{FullAddrContractsRead, {HeaderOnly: true}, {}} {
+	for _, opts := range []AddrContractsReadOptions{FullAddrContractsRead(), {HeaderOnly: true}, {}} {
 		got, err := d.GetAddrDescContracts(addrDesc, opts)
 		if err != nil {
 			t.Fatal(err)
@@ -1904,7 +2006,7 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	full, err := d.GetAddrDescContracts(addrDesc, FullAddrContractsRead)
+	full, err := d.GetAddrDescContracts(addrDesc, FullAddrContractsRead())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1912,7 +2014,7 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := &AddrContracts{TotalTxs: full.TotalTxs, NonContractTxs: full.NonContractTxs, InternalTxs: full.InternalTxs}
+	want := &AddrContracts{TotalTxs: full.TotalTxs, NonContractTxs: full.NonContractTxs, InternalTxs: full.InternalTxs, partial: true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("GetAddrDescContracts(HeaderOnly) = %v, want %v", got, want)
 	}
@@ -2222,7 +2324,7 @@ func Test_addToContracts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// convert addrContracts to partially unpacked form which is used for block import
-			buf := packAddrContracts(addrContracts)
+			buf := mustPackAddrContracts(addrContracts)
 			unpackedAddrContracts, _ := partiallyUnpackAddrContracts(buf)
 			// check logic
 			contractIndex, found := findContractInAddressContracts(tt.args.contract, unpackedAddrContracts.Contracts)

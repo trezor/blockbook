@@ -1372,12 +1372,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			if len(filterDesc) == 0 {
 				probes = w.prefetchContractInfos(ca.Contracts)
 			}
-			nTokens := len(ca.Contracts)
-			if len(filterDesc) > 0 {
-				nTokens = 1
-			}
-			d.tokens = make([]Token, nTokens)
-			var j int
+			// sized for the unfiltered case; a filter leaves one token, but the row is not trusted to hold it once
+			d.tokens = make([]Token, 0, len(ca.Contracts))
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
 				if len(filterDesc) > 0 {
@@ -1403,12 +1399,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				if details >= AccountDetailsTokenBalances && !hasEthereumTokenHoldingsField(t) {
 					continue
 				}
-				d.tokens[j] = *t
+				d.tokens = append(d.tokens, *t)
 				d.tokensBaseValue += t.BaseValue
 				d.tokensSecondaryValue += t.SecondaryValue
-				j++
 			}
-			d.tokens = d.tokens[:j]
 			sort.Sort(d.tokens)
 			w.enrichTokenProtocols(d.tokens, filter.Protocols)
 		}
