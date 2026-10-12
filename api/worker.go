@@ -1339,8 +1339,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		}
 		ticker := w.getSecondaryTicker(secondaryCoin)
 		var erc20Balances map[string]*big.Int
-		// a contract filter leaves at most one ERC20 to fetch, which never batches
-		if details >= AccountDetailsTokenBalances && len(ca.Contracts) > 1 && len(filterDesc) == 0 {
+		// a contract filter leaves one ERC20 to fetch, which the per-contract path handles itself
+		if details >= AccountDetailsTokenBalances && len(filterDesc) == 0 {
 			// Batch ERC20 balanceOf calls to cut per-contract RPC; fallback is single-call per contract.
 			erc20Contracts := make([]bchain.AddressDescriptor, 0, len(ca.Contracts))
 			for i := range ca.Contracts {
