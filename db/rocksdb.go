@@ -2960,6 +2960,14 @@ func packedBigintLen(buf []byte) int {
 	return int(buf[0]) + 1
 }
 
+// skipPackedBigints advances past count packed bigints without decoding them
+func skipPackedBigints(buf []byte, count uint) []byte {
+	for i := uint(0); i < count; i++ {
+		buf = buf[packedBigintLen(buf):]
+	}
+	return buf
+}
+
 func unpackBigint(buf []byte) (big.Int, int) {
 	var r big.Int
 	l := int(buf[0]) + 1

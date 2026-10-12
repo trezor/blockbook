@@ -327,14 +327,14 @@ func unpackAddrContractsOpt(buf []byte, addrDesc bchain.AddressDescriptor, opts 
 		} else {
 			n, ll := unpackVaruint(buf)
 			buf = buf[ll:]
-			if !opts.Holdings || (len(opts.Contract) > 0 && !bytes.Equal(opts.Contract, contract)) {
-				// skip ids (and values for ERC1155) without materialising them
+			wantHoldings := opts.Holdings && (len(opts.Contract) == 0 || bytes.Equal(opts.Contract, contract))
+			if !wantHoldings {
+				// a holding is one bigint for ERC721 and an id/value pair for ERC1155
+				bigints := n
 				if standard == bchain.MultiToken {
-					n *= 2
+					bigints = 2 * n
 				}
-				for i := uint(0); i < n; i++ {
-					buf = buf[packedBigintLen(buf):]
-				}
+				buf = skipPackedBigints(buf, bigints)
 			} else if standard == bchain.NonFungibleToken {
 				ac.Ids = make(Ids, n)
 				for i := uint(0); i < n; i++ {
