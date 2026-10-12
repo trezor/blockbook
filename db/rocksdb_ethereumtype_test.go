@@ -2720,3 +2720,48 @@ func Test_GetAddrDescContracts_ServesCachedRecords(t *testing.T) {
 		}
 	}
 }
+
+func Test_addrContractsCache_ChunkedWriteBack(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	defer func() { addrContractsWriteBatchBytes = defaultAddrContractsWriteBatchBytes }()
+
+	records := make(map[string]*unpackedAddrContracts)
+	for i := 0; i < 10; i++ {
+		packed := packAddrContracts(&AddrContracts{TotalTxs: uint(i + 1), Contracts: generateAddrContracts(3, 1, 5, 1, 5)})
+		acs, err := partiallyUnpackAddrContracts(packed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		records[string(makeTestAddrDesc(2000+i))] = acs
+	}
+	verifyStored := func() {
+		t.Helper()
+		for key, acs := range records {
+			val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], bchain.AddressDescriptor(key))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(val.Data(), packUnpackedAddrContracts(acs)) {
+				t.Fatalf("record %x not stored as packed", key)
+			}
+			val.Free()
+		}
+	}
+
+	// a cap below any record commits every record on its own
+	addrContractsWriteBatchBytes = 1
+	if _, batches, err := d.writeAddrContractsRecords(records); err != nil || batches != len(records) {
+		t.Fatalf("writeAddrContractsRecords() = %d batches, %v; want %d batches", batches, err, len(records))
+	}
+	verifyStored()
+
+	// a cap above the whole set commits once
+	addrContractsWriteBatchBytes = 1 << 30
+	if _, batches, err := d.writeAddrContractsRecords(records); err != nil || batches != 1 {
+		t.Fatalf("writeAddrContractsRecords() = %d batches, %v; want 1 batch", batches, err)
+	}
+	verifyStored()
+}

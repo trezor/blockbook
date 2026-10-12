@@ -2195,35 +2195,58 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 	return nil
 }
 
-func (d *RocksDB) writeContractsCache() {
-	wb := grocksdb.NewWriteBatch()
+// addrContractsWriteBatchBytes caps one write batch of cached records. The batch is a C++ string that doubles on
+// append, so one batch of the whole cache allocated gigabytes natively at every store; that transient drove the L0
+// flush size and the allocator's retained virtual memory. The buffer is reserved once and reused across batches.
+const defaultAddrContractsWriteBatchBytes = 64 << 20
+
+var addrContractsWriteBatchBytes = defaultAddrContractsWriteBatchBytes
+
+// writeAddrContractsRecords stores the records in batches of about addrContractsWriteBatchBytes, each committed on
+// its own so a failed batch leaves only its records stale. It also returns the records' resident size.
+func (d *RocksDB) writeAddrContractsRecords(records map[string]*unpackedAddrContracts) (resident int64, batches int, err error) {
+	wb := grocksdb.NewWriteBatchWithParams(addrContractsWriteBatchBytes, 0, 0, 0)
 	defer wb.Destroy()
-	var resident int64
-	d.addrContractsCacheMux.Lock()
-	for addrDesc, acs := range d.addrContractsCache {
+	batchBytes := 0
+	commit := func() {
+		if e := d.WriteBatch(wb); e != nil && err == nil {
+			err = e
+		}
+		batches++
+		wb.Clear()
+		batchBytes = 0
+	}
+	for addrDesc, acs := range records {
 		buf := packUnpackedAddrContracts(acs)
 		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 		resident += acs.residentSize()
+		batchBytes += len(buf)
+		if batchBytes >= addrContractsWriteBatchBytes {
+			commit()
+		}
 	}
+	if batchBytes > 0 {
+		commit()
+	}
+	return resident, batches, err
+}
+
+func (d *RocksDB) writeContractsCache() {
+	d.addrContractsCacheMux.Lock()
+	resident, _, err := d.writeAddrContractsRecords(d.addrContractsCache)
 	// records grow in place between loads; re-measuring here keeps the budget honest without a per-mutation cost
 	d.addrContractsCacheBytes = resident
 	d.addrContractsCacheMux.Unlock()
 	if d.metrics != nil {
 		d.metrics.AddrContractsCacheBytes.Set(float64(resident))
 	}
-	if err := d.WriteBatch(wb); err != nil {
+	if err != nil {
 		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
 	}
 }
 
 func (d *RocksDB) writeContractsCacheSnapshot(cache map[string]*unpackedAddrContracts) {
-	wb := grocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	for addrDesc, acs := range cache {
-		buf := packUnpackedAddrContracts(acs)
-		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
-	}
-	if err := d.WriteBatch(wb); err != nil {
+	if _, _, err := d.writeAddrContractsRecords(cache); err != nil {
 		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
 	}
 }
