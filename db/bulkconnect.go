@@ -413,6 +413,8 @@ func (b *BulkConnect) parallelStoreAddressContracts(c chan error, all bool) {
 }
 
 func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTxs bool) error {
+	// the cap is enforced between blocks, see flushAddrContractsCacheIfOverCap
+	b.d.flushAddrContractsCacheIfOverCap()
 	addresses := make(addressesMap)
 	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, b.addressContracts)
 	if err != nil {

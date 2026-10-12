@@ -944,6 +944,7 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
+	d.flushAddrContractsCacheIfOverCap()
 	return nil
 }
 
@@ -1714,6 +1715,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 	}
 	err := d.WriteBatch(wb)
 	if err == nil {
+		d.flushAddrContractsCacheIfOverCap()
 		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
 		d.reorgGen.Add(1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
@@ -2029,30 +2031,22 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 	}
 	rv, err = partiallyUnpackAddrContracts(buf)
 	if err == nil && rv != nil && cacheable {
-		var cacheEntries int
-		var cacheBytes int64
-		shouldFlush := false
 		d.addrContractsCacheMux.Lock()
 		key := string(addrDesc)
 		if _, exists := d.addrContractsCache[key]; !exists {
 			d.addrContractsCache[key] = rv
 			// charged at the decoded size; growth since the load is re-measured by the periodic store
 			d.addrContractsCacheBytes += rv.residentSize()
-			if d.addrContractsCacheMaxBytes > 0 && d.addrContractsCacheBytes > d.addrContractsCacheMaxBytes {
-				shouldFlush = true
-			}
 		}
-		cacheEntries = len(d.addrContractsCache)
-		cacheBytes = d.addrContractsCacheBytes
+		cacheEntries := len(d.addrContractsCache)
+		cacheBytes := d.addrContractsCacheBytes
 		d.addrContractsCacheMux.Unlock()
 		if d.metrics != nil {
 			d.metrics.AddrContractsCacheEntries.Set(float64(cacheEntries))
 			d.metrics.AddrContractsCacheBytes.Set(float64(cacheBytes))
 		}
-		if shouldFlush {
-			// Flush early when we exceed the cap to avoid unbounded memory growth.
-			d.flushAddrContractsCache()
-		}
+		// the cap is enforced between blocks (flushAddrContractsCacheIfOverCap), never here: a flush in the
+		// middle of a block would write half-applied records and push the evicted ones into the block batch
 	}
 	return rv, err
 }
@@ -2272,6 +2266,9 @@ func (d *RocksDB) flushAddrContractsCache() {
 	glog.Info("storeAddrContractsCache: store ", count, " entries in ", time.Since(start))
 }
 
+// flushAddrContractsCacheIfOverCap is the only place the cap is enforced. Callers run it between blocks, after
+// the previous block's batch committed, so that batch never carries evicted records and no record is written
+// with half a block applied.
 func (d *RocksDB) flushAddrContractsCacheIfOverCap() {
 	maxBytes := d.addrContractsCacheMaxBytes
 	if maxBytes <= 0 {
@@ -2306,6 +2303,4 @@ func (d *RocksDB) storeAddrContractsCacheIfDue() {
 	}
 	d.lastAddrContractsCacheStore = time.Now()
 	d.storeAddrContractsCache()
-	// the store re-measured the records; a cache that grew past the cap in place is flushed here
-	d.flushAddrContractsCacheIfOverCap()
 }

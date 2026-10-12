@@ -757,6 +757,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	}
 	if chainType == bchain.ChainEthereumType {
 		d.storeAddrContractsCacheIfDue()
+		d.flushAddrContractsCacheIfOverCap()
 	}
 	// Fractional seconds: the integer average truncates to 0 on sub-second chains, which
 	// silently excludes them from any rule gated on this gauge being > 0. SetBlockTime

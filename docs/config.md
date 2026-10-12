@@ -127,8 +127,8 @@ Good examples of coin configuration are
             * `trace_timeout` – Optional per-request timeout passed to `debug_traceBlockByHash` as tracer config, formatted as a Go duration string such as `"20s"`.
           * Address-contracts cache configuration (Blockbook, Ethereum-type indexing):
             * `address_contracts_cache_min_size` – Minimum packed size (bytes) before an addressContracts entry is cached (default **300000**).
-            * `address_contracts_cache_max_bytes` – Cache cap used while syncing near chain tip, in bytes of estimated resident memory of the decoded records (several times their packed size); when exceeded, cached entries are flushed early (default **8000000000**).
-            * `address_contracts_cache_bulk_max_bytes` – The same cap used during bulk connect (default **16000000000**).
+            * `address_contracts_cache_max_bytes` – Cache cap used while syncing near chain tip, in bytes of estimated resident memory of the decoded records (several times their packed size); when exceeded, the cache is flushed at the next block boundary (default **16000000000**).
+            * `address_contracts_cache_bulk_max_bytes` – The same cap used during bulk connect (default **32000000000**).
           * `xpubConfig` – xpub/descriptor expansion and cache tuning (BitcoinType only). Each field is optional; a missing or `<= 0` value keeps the built-in default, and a negative value is logged as invalid and ignored. When an override is present, Blockbook logs one `xpub: xpubConfig override applied: …` line at startup so you can confirm the effective values.
 
             | Field | Default | Semantic |
