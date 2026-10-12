@@ -2968,10 +2968,14 @@ func packedBigintLen(buf []byte) int {
 // skipPackedBigints advances past count packed bigints without decoding them, false if buf runs out
 func skipPackedBigints(buf []byte, count uint) ([]byte, bool) {
 	for i := uint(0); i < count; i++ {
-		if len(buf) == 0 || packedBigintLen(buf) > len(buf) {
+		if len(buf) == 0 {
 			return nil, false
 		}
-		buf = buf[packedBigintLen(buf):]
+		l := packedBigintLen(buf)
+		if l > len(buf) {
+			return nil, false
+		}
+		buf = buf[l:]
 	}
 	return buf, true
 }
@@ -2979,10 +2983,13 @@ func skipPackedBigints(buf []byte, count uint) ([]byte, bool) {
 // unpackBigintSafe is unpackBigint that reports a truncated buffer instead of panicking
 func unpackBigintSafe(buf []byte) (big.Int, int, bool) {
 	var r big.Int
-	if len(buf) == 0 || packedBigintLen(buf) > len(buf) {
+	if len(buf) == 0 {
 		return r, 0, false
 	}
 	l := packedBigintLen(buf)
+	if l > len(buf) {
+		return r, 0, false
+	}
 	r.SetBytes(buf[1:l])
 	return r, l, true
 }
