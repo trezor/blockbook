@@ -19,6 +19,11 @@ ENV CGO_CFLAGS="-I/opt/rocksdb/include"
 ENV CGO_LDFLAGS="-L/opt/rocksdb -ldl -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
 ARG TCMALLOC
 
+# The Blockbook binary links jemalloc statically (JEMALLOC=0 keeps glibc malloc); see docs/build.md.
+ARG JEMALLOC=1
+ENV JEMALLOC=${JEMALLOC}
+RUN if [ "${JEMALLOC}" != "0" ]; then apt-get install -y libjemalloc-dev; fi
+
 RUN mkdir /build
 
 RUN if [ -n "${TCMALLOC}" ]; then \
@@ -44,7 +49,9 @@ RUN echo -n "GOPATH: " && echo $GOPATH
 # install rocksdb
 RUN cd /opt && git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git \
     && test "$(git -C /opt/rocksdb rev-parse HEAD)" = "ae8fb3e5000e46d8d4c9dbf3a36019c0aaceebff"
-RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB DISABLE_WARNING_AS_ERROR=1 make -j 4 release
+# RocksDB must not detect jemalloc: it would link ldb and sst_dump against libjemalloc.so and the package
+# would stop installing with a bare dpkg -i. The Blockbook binary links the static archive instead.
+RUN cd /opt/rocksdb && ROCKSDB_DISABLE_JEMALLOC=1 CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB DISABLE_WARNING_AS_ERROR=1 make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
 
