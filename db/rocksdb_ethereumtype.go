@@ -8,6 +8,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -1725,6 +1726,38 @@ type unpackedAddrContracts struct {
 	contractIndexDirty bool
 }
 
+// contractIndexEntryResidentSize approximates one map entry of contractIndex: key, value and bucket overhead.
+const contractIndexEntryResidentSize = 48
+
+// residentSize estimates the heap bytes a cached record holds: the packed copy, the decoded contract and id
+// entries, big.Ints materialized since the load and the contract index. The cache budget is charged with this
+// because the packed length undercounts the real cost several times over for NFT-heavy records.
+func (acs *unpackedAddrContracts) residentSize() int64 {
+	size := int64(unsafe.Sizeof(*acs)) + int64(cap(acs.Packed))
+	size += int64(cap(acs.Contracts)) * int64(unsafe.Sizeof(unpackedAddrContract{}))
+	for i := range acs.Contracts {
+		ac := &acs.Contracts[i]
+		size += ac.Value.residentSize()
+		size += int64(cap(ac.Ids)) * int64(unsafe.Sizeof(unpackedBigInt{}))
+		for j := range ac.Ids {
+			size += ac.Ids[j].residentSize()
+		}
+		size += int64(cap(ac.MultiTokenValues)) * int64(unsafe.Sizeof(unpackedMultiTokenValue{}))
+		for j := range ac.MultiTokenValues {
+			size += ac.MultiTokenValues[j].Id.residentSize() + ac.MultiTokenValues[j].Value.residentSize()
+		}
+	}
+	return size + int64(len(acs.contractIndex))*contractIndexEntryResidentSize
+}
+
+// residentSize is the heap cost of a materialized big.Int; an unmaterialized slice is already counted in Packed.
+func (b *unpackedBigInt) residentSize() int64 {
+	if b.Value == nil {
+		return 0
+	}
+	return int64(unsafe.Sizeof(big.Int{})) + int64(cap(b.Value.Bits()))*int64(unsafe.Sizeof(big.Word(0)))
+}
+
 type contractIndexKey [eth.EthereumTypeAddressDescriptorLen]byte
 
 func contractIndexKeyFromDesc(addr bchain.AddressDescriptor) (contractIndexKey, bool) {
@@ -1911,8 +1944,8 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 		key := string(addrDesc)
 		if _, exists := d.addrContractsCache[key]; !exists {
 			d.addrContractsCache[key] = rv
-			// Track bytes based on the packed size at insertion time; later growth isn't accounted for.
-			d.addrContractsCacheBytes += int64(len(buf))
+			// charged at the decoded size; growth since the load is re-measured by the periodic store
+			d.addrContractsCacheBytes += rv.residentSize()
 			if d.addrContractsCacheMaxBytes > 0 && d.addrContractsCacheBytes > d.addrContractsCacheMaxBytes {
 				shouldFlush = true
 			}
@@ -2073,12 +2106,19 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 func (d *RocksDB) writeContractsCache() {
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
+	var resident int64
 	d.addrContractsCacheMux.Lock()
 	for addrDesc, acs := range d.addrContractsCache {
 		buf := packUnpackedAddrContracts(acs)
 		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+		resident += acs.residentSize()
 	}
+	// records grow in place between loads; re-measuring here keeps the budget honest without a per-mutation cost
+	d.addrContractsCacheBytes = resident
 	d.addrContractsCacheMux.Unlock()
+	if d.metrics != nil {
+		d.metrics.AddrContractsCacheBytes.Set(float64(resident))
+	}
 	if err := d.WriteBatch(wb); err != nil {
 		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
 	}
@@ -2151,4 +2191,6 @@ func (d *RocksDB) storeAddrContractsCacheIfDue() {
 	}
 	d.lastAddrContractsCacheStore = time.Now()
 	d.storeAddrContractsCache()
+	// the store re-measured the records; a cache that grew past the cap in place is flushed here
+	d.flushAddrContractsCacheIfOverCap()
 }

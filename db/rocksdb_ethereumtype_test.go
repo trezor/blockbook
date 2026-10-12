@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
@@ -2579,5 +2580,58 @@ func Test_addrContractsCache_CacheableMisses(t *testing.T) {
 	}
 	if got := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses) - cacheable0; got != 1 {
 		t.Fatalf("cacheable misses total = %v, want 1", got)
+	}
+}
+
+func Test_addrContractsCache_ResidentBudget(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.metrics = getTestMetrics(t)
+	d.addrContractsCacheMinSize = 1
+
+	// an NFT holding: ids pack to a few bytes each but decode to 32-byte entries
+	stored := &AddrContracts{TotalTxs: 10, Contracts: generateAddrContracts(0, 1, 500, 0, 0)}
+	buf := packAddrContracts(stored)
+	addrDesc := makeTestAddrDesc(44)
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	acs, err := d.getUnpackedAddrDescContracts(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resident := acs.residentSize()
+	if resident < 3*int64(len(buf)) {
+		t.Fatalf("residentSize() = %d, want well above the packed size %d", resident, len(buf))
+	}
+	if d.addrContractsCacheBytes != resident {
+		t.Fatalf("cache charged %d bytes at insert, want residentSize() %d", d.addrContractsCacheBytes, resident)
+	}
+
+	// growth in place is re-measured by the periodic store
+	for i := 0; i < 1000; i++ {
+		acs.Contracts[0].Ids.insert(*big.NewInt(int64(1_000_000 + i)))
+	}
+	grown := acs.residentSize()
+	if grown <= resident {
+		t.Fatalf("residentSize() after growth = %d, want more than %d", grown, resident)
+	}
+	d.storeAddrContractsCache()
+	if d.addrContractsCacheBytes != grown {
+		t.Fatalf("cache bytes after store = %d, want re-measured %d", d.addrContractsCacheBytes, grown)
+	}
+
+	// a record that grew past the cap without any new insert is flushed by the due store
+	d.addrContractsCacheMaxBytes = grown - 1
+	d.lastAddrContractsCacheStore = time.Time{}
+	d.storeAddrContractsCacheIfDue()
+	if len(d.addrContractsCache) != 0 {
+		t.Fatalf("expected the cache flushed after growing past the cap, got %d entries", len(d.addrContractsCache))
 	}
 }

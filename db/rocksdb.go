@@ -316,7 +316,7 @@ type RocksDB struct {
 	bulkAddrContractsCacheMaxBytes int64
 	// addrContractsCacheMaxBytes is a soft cap; when exceeded we flush and clear the cache.
 	addrContractsCacheMaxBytes int64
-	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
+	// addrContractsCacheBytes is the estimated resident size of the cached records (see residentSize).
 	addrContractsCacheBytes int64
 	hotAddrTracker          *addressHotness
 	// lastAddrContractsCacheStore is only read/written from the block-connect goroutine.
