@@ -78,6 +78,9 @@ Prometheus metrics and the Grafana dashboard share one source of truth, `configs
   set `width`/`height` in the panels.yaml entry to override.
 - Prefer stable panel keys like `<section>.<subject>[_stat]` (for example `rpc.request_duration_p95`)
   and query keys that name the plotted series (`requests`, `errors`, `p95`, `total`, `threshold`).
+- Legends never repeat `{{coin}}` (the dropdown fixes it); they start with `{{instance}}` for a
+  per-replica series or `all replicas - ` for a query that sums replicas away -- see
+  `configs/grafana/README.md`, "Legend convention". `--check` enforces it.
 - After any of these, run `python3 contrib/scripts/render_grafana.py` (CI gates with `--check`).
 
 ## Facts to keep in mind to avoid regressions and waste
