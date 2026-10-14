@@ -1,0 +1,44 @@
+{{define "specific"}}{{$data := .}}
+<h1>NFT Token Detail</h1>
+<div class="row">
+    <div class="col-md-6">
+        <table class="table data-table info-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Commitment</td>
+                    <td><span class="copyable">{{$data.Commitment}}</span></td>
+                </tr>
+                <tr>
+                    <td>Category</td>
+                    <td><a href="/token/{{$data.Category}}"><span class="copyable">{{$data.Category}}</span></a>
+{{if $data.CategoryName}}
+                        <br>{{$data.CategoryName}}
+{{end}}
+                    </td>
+                </tr>
+{{if $data.Name}}
+                <tr id="name">
+                    <td>Name</td>
+                    <td class="copyable">{{$data.Name}}</td>
+                </tr>
+{{end}}
+{{if $data.Description}}
+                <tr id="description">
+                    <td>Description</td>
+                    <td>{{$data.Description}}</td>
+                </tr>
+{{end}}
+                <tr>
+                    <td>Standard</td>
+                    <td>CashTokens</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-6 mt-4" id="image">
+{{if $data.ImageURL}}
+        <img class="border w-100 bg-white" src="{{$data.ImageURL}}">
+{{end}}
+    </div>
+</div>
+{{end}}

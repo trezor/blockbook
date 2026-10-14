@@ -1,0 +1,48 @@
+{
+  "$schema": "https://cashtokens.org/bcmr-v2.schema.json",
+  "version": {
+    "major": 0,
+    "minor": 3,
+    "patch": 0
+  },
+  "identities": {
+    "5a4f6b25243c1a2dabb2434e3d9e574f65c31764ce0e7eb4127a46fa74657691": {
+      "2024-10-05T16:50:41.242Z": {
+        "name": "Bliss",
+        "uris": {
+          "web": "https://www.bliss.cash/",
+          "icon": "https://bliss.cash/logo.png",
+          "reddit": "https://www.reddit.com/user/bchbliss",
+          "support": "bliss@monsterbitar.se",
+          "twitter": "https://twitter.com/bchbliss",
+          "telegram": "https://t.me/bchbliss"
+        },
+        "token": {
+          "nfts": {
+            "parse": {
+              "types": {
+                "0a": {
+                  "name": "Bliss (Jessica #010, 2024)",
+                  "uris": {
+                    "icon": "https://bliss.cash/10.png",
+                    "image": "https://bliss.cash/10-img.png"
+                  },
+                  "description": "Ticket to Bliss 2024"
+                }
+              }
+            },
+            "description": ""
+          },
+          "symbol": "BLISS",
+          "category": "5a4f6b25243c1a2dabb2434e3d9e574f65c31764ce0e7eb4127a46fa74657691"
+        },
+        "description": "Tickets for the Bliss conferences."
+      }
+    }
+  },
+  "latestRevision": "2025-01-03T12:00:00.000Z",
+  "registryIdentity": {
+    "name": "BCH Bliss",
+    "description": "Token metadata for the BCH Bliss conferences."
+  }
+}

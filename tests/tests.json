@@ -15,6 +15,10 @@
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "bcash_testnet": {
+        "connectivity": ["http", "ws"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter", "BcashTransactionVectors",
+                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfo", "WsGetAccountInfoBasic", "WsGetAccountUtxo", "WsPing", "WsGetBlock", "WsGetTransactionSpecific"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
