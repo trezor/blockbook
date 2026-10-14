@@ -86,6 +86,8 @@ command: `make NO_CACHE=true all-bitcoin`.
 
 `TCMALLOC`: RocksDB, the storage engine used by Blockbook, allows to use alternative memory allocators. Use the `TCMALLOC` variable to specify Google's TCMalloc allocator `make TCMALLOC=true all-bitcoin`. To run Blockbook built with TCMalloc, the library must be installed on the target server, for example by `sudo apt-get install google-perftools`.
 
+`JEMALLOC`: The Blockbook binary links [jemalloc](https://jemalloc.net) statically as the C heap allocator that RocksDB allocates from. glibc malloc keeps freed multi-megabyte RocksDB buffers (record values, memtable blocks, write batches) resident inside fragmented arena heaps, and on busy EVM chains that retained memory grew by gigabytes per hour; jemalloc returns such buffers to the kernel. Nothing has to be installed on the target server. Use `make JEMALLOC=0 all-bitcoin` to build against glibc malloc instead. The allocator can be tuned at runtime through the `MALLOC_CONF` environment variable (see [env.md](/docs/env.md)).
+
 `PORTABLE`: By default, the RocksDB binaries shipped with Blockbook are optimized for the platform you're compiling on (-march=native or the equivalent). If you want to build a portable binary, use `make PORTABLE=1 all-bitcoin`.
 
 `BB_BUILD_ENV`: Selects which environment the package is generated for. Defaults to `dev`. Accepted values are `dev`
@@ -243,7 +245,7 @@ make command to create a portable binary.
 
 ```
 sudo apt-get update && sudo apt-get install -y \
-    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev
+    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev libjemalloc-dev
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
 git checkout v9.10.0
@@ -254,8 +256,10 @@ Setup variables for grocksdb
 
 ```
 export CGO_CFLAGS="-I/path/to/rocksdb/include"
-export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -ldl -lbz2 -lsnappy -llz4 -lzstd"
+export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -ldl -lbz2 -lsnappy -llz4 -lzstd $(gcc -print-file-name=libjemalloc_pic.a)"
 ```
+
+The last argument links jemalloc statically as the C heap allocator (see `JEMALLOC` above); leave it out to use glibc malloc.
 
 Install ZeroMQ: https://github.com/zeromq/libzmq
 
