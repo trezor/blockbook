@@ -19,6 +19,7 @@
 
 ### Reliability and Correctness
 
+- **Index wrapped-native wraps/unwraps as token transfers (EVM)** ([#1702](https://github.com/trezor/blockbook/issues/1702)): WETH9-style contracts mint and burn without a `Transfer` event, so wraps never produced `tokenTransfers` and the wrapped token was never auto-discovered on the address. The `Deposit`/`Withdrawal` events (and pending `deposit()`/`withdraw()` calls) of the per-coin `wrappedNativeContract` are now indexed as ERC-20 mint/burn transfers from/to the zero address; configured for Ethereum, Polygon, Avalanche, Optimism, Base, BSC, Ethereum Classic, HyperEVM and Sepolia. Existing blocks need a reindex for discovery.
 - **Drop internal transfers from failed call frames (EVM & Tron)** ([#1621](https://github.com/trezor/blockbook/issues/1621)): a failed frame and its whole subtree (including a reverted root) no longer produce phantom internal transfers, CREATE or SELFDESTRUCT records in the address index and balance history.
 - **UTXO reorg detection fix in raw-parse path** ([#1398](https://github.com/trezor/blockbook/pull/1398)): populates `BlockHeader.Prev` for raw-parsed blocks to prevent missed fork detection that can stall sync on wrong tips.
 - **Base newHeads burst handling fix** ([#1407](https://github.com/trezor/blockbook/pull/1407)): coalesces head notifications as hints and enforces strictly increasing block-number processing with a catch-up loop.

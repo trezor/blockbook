@@ -19,10 +19,16 @@ const erc721SafeTransferFromMethodSignature = "0x42842e0e"         // safeTransf
 const erc721SafeTransferFromWithDataMethodSignature = "0xb88d4fde" // safeTransferFrom(address,address,uint256,bytes)
 const erc721TokenURIMethodSignature = "0xc87b56dd"                 // tokenURI(uint256)
 const erc1155URIMethodSignature = "0x0e89341c"                     // uri(uint256)
+const wrappedNativeDepositMethodSignature = "0xd0e30db0"           // deposit()
+const wrappedNativeWithdrawMethodSignature = "0x2e1a7d4d"          // withdraw(uint256)
 
 const tokenTransferEventSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 const tokenERC1155TransferSingleEventSignature = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
 const tokenERC1155TransferBatchEventSignature = "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
+
+// WETH9 and its ports mint and burn without a Transfer event
+const wrappedNativeDepositEventSignature = "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"    // Deposit(address indexed dst, uint256 wad)
+const wrappedNativeWithdrawalEventSignature = "0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65" // Withdrawal(address indexed src, uint256 wad)
 
 const contractNameSignature = "0x06fdde03"
 const contractSymbolSignature = "0x95d89b41"
@@ -140,6 +146,38 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 	}
 	return &bchain.TokenTransfer{
 		Standard: standard,
+		Contract: EIP55AddressFromAddress(l.Address),
+		From:     from,
+		To:       to,
+		Value:    value,
+	}, nil
+}
+
+// processWrappedNativeEvent turns a Deposit into a mint and a Withdrawal into a burn of the
+// wrapped token, so wraps and unwraps look like the ERC-20 transfers the contract does not emit.
+func processWrappedNativeEvent(l *bchain.RpcLog, deposit bool) (transfer *bchain.TokenTransfer, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("processWrappedNativeEvent recovered from panic %v", r)
+		}
+	}()
+	if len(l.Topics) != 2 {
+		return nil, nil
+	}
+	var value big.Int
+	if !setBigFromHexWord(&value, l.Data, 0) {
+		return nil, errors.New("wrapped native log Data is not a number")
+	}
+	holder, err := addressFromPaddedHex(l.Topics[1])
+	if err != nil {
+		return nil, err
+	}
+	from, to := EthereumZeroAddress, holder
+	if !deposit {
+		from, to = holder, EthereumZeroAddress
+	}
+	return &bchain.TokenTransfer{
+		Standard: bchain.FungibleToken,
 		Contract: EIP55AddressFromAddress(l.Address),
 		From:     from,
 		To:       to,
@@ -323,7 +361,8 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 // contractGetTransfersFromLog extracts token transfers from receipt logs.
 // An unparseable log is skipped with a warning so that one malformed event
 // does not discard the valid transfers of the transaction.
-func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string) bchain.TokenTransfers {
+// Deposit/Withdrawal events are translated only for wrappedNative (lowercase hex, "" disables).
+func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string, wrappedNative string) bchain.TokenTransfers {
 	var r bchain.TokenTransfers
 	for _, l := range logs {
 		tl := len(l.Topics)
@@ -337,6 +376,10 @@ func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string) bchain.Toke
 				tt, err = processERC1155TransferSingleEvent(l)
 			} else if signature == tokenERC1155TransferBatchEventSignature {
 				tt, err = processERC1155TransferBatchEvent(l)
+			} else if signature == wrappedNativeDepositEventSignature && isWrappedNativeContract(l.Address, wrappedNative) {
+				tt, err = processWrappedNativeEvent(l, true)
+			} else if signature == wrappedNativeWithdrawalEventSignature && isWrappedNativeContract(l.Address, wrappedNative) {
+				tt, err = processWrappedNativeEvent(l, false)
 			} else {
 				continue
 			}
@@ -352,8 +395,47 @@ func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string) bchain.Toke
 	return r
 }
 
-func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfers, error) {
+// isWrappedNativeContract reports whether address is the configured wrapped-native contract;
+// the compare runs only after a signature match, so ordinary logs never pay for it.
+func isWrappedNativeContract(address string, wrappedNative string) bool {
+	return wrappedNative != "" && strings.EqualFold(address, wrappedNative)
+}
+
+// contractGetTransfersFromTx derives token transfers of a pending tx from its calldata.
+// deposit()/withdraw() are translated only when the tx targets wrappedNative ("" disables).
+func contractGetTransfersFromTx(tx *bchain.RpcTransaction, wrappedNative string) (bchain.TokenTransfers, error) {
 	var r bchain.TokenTransfers
+	if isWrappedNativeContract(tx.To, wrappedNative) {
+		if tx.Payload == wrappedNativeDepositMethodSignature {
+			var t big.Int
+			if !setBigFromHexWord(&t, tx.Value, 0) {
+				return nil, errors.New("Value is not a number")
+			}
+			r = append(r, &bchain.TokenTransfer{
+				Standard: bchain.FungibleToken,
+				Contract: EIP55AddressFromAddress(tx.To),
+				From:     EthereumZeroAddress,
+				To:       EIP55AddressFromAddress(tx.From),
+				Value:    t,
+			})
+		} else if len(tx.Payload) == 10+64 && strings.HasPrefix(tx.Payload, wrappedNativeWithdrawMethodSignature) {
+			var t big.Int
+			if !setBigFromHexWord(&t, tx.Payload[10:], 16) {
+				return nil, errors.New("Data is not a number")
+			}
+			r = append(r, &bchain.TokenTransfer{
+				Standard: bchain.FungibleToken,
+				Contract: EIP55AddressFromAddress(tx.To),
+				From:     EIP55AddressFromAddress(tx.From),
+				To:       EthereumZeroAddress,
+				Value:    t,
+			})
+		}
+		// a plain transfer() of the wrapped token itself still takes the ERC-20 path below
+		if len(r) > 0 {
+			return r, nil
+		}
+	}
 	if len(tx.Payload) == 10+128 && strings.HasPrefix(tx.Payload, erc20TransferMethodSignature) {
 		to, err := addressFromPaddedHex(tx.Payload[10 : 10+64])
 		if err != nil {

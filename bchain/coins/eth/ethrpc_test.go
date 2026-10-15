@@ -362,6 +362,52 @@ func TestNewEthereumRPC_PropagatesEnsReverseOptIn(t *testing.T) {
 	}
 }
 
+// TestNewEthereumRPC_WrappedNativeContract pins the config->parser wiring of the wrapped-native
+// contract: a typo must fail startup rather than silently leave wraps unindexed.
+func TestNewEthereumRPC_WrappedNativeContract(t *testing.T) {
+	tests := []struct {
+		name    string
+		params  string
+		want    string
+		wantErr bool
+	}{
+		{name: "absent", params: ``},
+		{name: "checksummed is stored lowercase", params: `"wrappedNativeContract": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",`, want: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"},
+		{name: "not an address", params: `"wrappedNativeContract": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756C",`, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// NewEthereumRPC writes this process-wide; keep the test order-independent.
+			orig := bchain.ProcessInternalTransactions
+			defer func() { bchain.ProcessInternalTransactions = orig }()
+
+			config := json.RawMessage(`{
+				"coin_name": "Ethereum",
+				"rpc_url": "http://127.0.0.1:8545",
+				"rpc_timeout": 25,
+				"block_addresses_to_keep": 300,
+				` + tt.params + `
+				"averageBlockTimeMs": 12000,
+				"mempoolTxTimeoutHours": 48
+			}`)
+
+			chain, err := NewEthereumRPC(config, func(bchain.NotificationType) {})
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("NewEthereumRPC accepted an invalid wrappedNativeContract")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NewEthereumRPC: %v", err)
+			}
+			if got := chain.(*EthereumRPC).Parser.(*EthereumParser).WrappedNativeContract; got != tt.want {
+				t.Errorf("WrappedNativeContract = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // getLogsStub serves one canned eth_getLogs response.
 type getLogsStub struct{ logsJSON string }
 
