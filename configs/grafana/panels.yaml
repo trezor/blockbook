@@ -22,6 +22,23 @@ panels:
       allocated:
         promql: go_memstats_alloc_bytes{job="blockbook"}
         legend: '{{instance}}'
+  system.go_gc_cpu:
+    title: Go GC share of process CPU
+    description: Fraction of the CPU the process actually used (idle excluded) that the Go garbage collector consumed; sustained values above ~0.25 mean GOGC/GOMEMLIMIT can trade heap for CPU, below ~0.05 GC tuning gains nothing.
+    queries:
+      gc_share:
+        promql: sum by (instance) (rate(go_cpu_classes_gc_total_cpu_seconds_total{job="blockbook"}[5m])) / sum by (instance) (rate(go_cpu_classes_total_cpu_seconds_total{job="blockbook"}[5m]) - rate(go_cpu_classes_idle_cpu_seconds_total{job="blockbook"}[5m]))
+        legend: '{{instance}}'
+  system.go_heap_live:
+    title: Go live heap vs GC goal
+    description: Live heap after the last mark and the heap size the next GC cycle is aimed at; the gap is what GOGC=100 costs in RAM and what a GOMEMLIMIT would cap. RSS above the goal is RocksDB and other native memory.
+    queries:
+      live:
+        promql: go_gc_heap_live_bytes{job="blockbook"}
+        legend: 'live {{instance}}'
+      goal:
+        promql: go_gc_heap_goal_bytes{job="blockbook"}
+        legend: 'goal {{instance}}'
   system.open_fds:
     title: Open file descriptors
     description: Sustained growth can indicate leaked sockets or files.
