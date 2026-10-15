@@ -2361,7 +2361,12 @@ func (d *RocksDB) migrateAddrContractsToV7(approxRows int64) error {
 				glog.Error(err, ", ", hex.EncodeToString(buf))
 				acs = &AddrContracts{}
 			}
-			repacked := packAddrContracts(acs)
+			repacked, err := packAddrContracts(acs)
+			if err != nil {
+				wb.Destroy()
+				it.Close()
+				return err
+			}
 			wb.PutCF(d.cfh[cfAddressContracts], addrDesc, repacked)
 		}
 		err := d.WriteBatch(wb)
@@ -2958,6 +2963,35 @@ func packBigint(bi *big.Int, buf []byte) int {
 
 func packedBigintLen(buf []byte) int {
 	return int(buf[0]) + 1
+}
+
+// skipPackedBigints advances past count packed bigints without decoding them, false if buf runs out
+func skipPackedBigints(buf []byte, count uint) ([]byte, bool) {
+	for i := uint(0); i < count; i++ {
+		if len(buf) == 0 {
+			return nil, false
+		}
+		l := packedBigintLen(buf)
+		if l > len(buf) {
+			return nil, false
+		}
+		buf = buf[l:]
+	}
+	return buf, true
+}
+
+// unpackBigintSafe is unpackBigint that reports a truncated buffer instead of panicking
+func unpackBigintSafe(buf []byte) (big.Int, int, bool) {
+	var r big.Int
+	if len(buf) == 0 {
+		return r, 0, false
+	}
+	l := packedBigintLen(buf)
+	if l > len(buf) {
+		return r, 0, false
+	}
+	r.SetBytes(buf[1:l])
+	return r, l, true
 }
 
 func unpackBigint(buf []byte) (big.Int, int) {

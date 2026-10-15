@@ -126,6 +126,8 @@ type AddrContracts struct {
 	NonContractTxs uint
 	InternalTxs    uint
 	Contracts      []AddrContract
+	// set by a read that skipped parts of the row, so that it can never be packed back over the full row
+	partial bool
 }
 
 // packAddrContracts packs AddrContracts into a byte buffer
@@ -166,8 +168,11 @@ func packAddrContractsV6(acs *AddrContracts) []byte {
 	return buf
 }
 
-// packAddrContracts packs AddrContracts into a byte buffer
-func packAddrContracts(acs *AddrContracts) []byte {
+// packAddrContracts packs AddrContracts into a byte buffer; a partially decoded row is refused
+func packAddrContracts(acs *AddrContracts) ([]byte, error) {
+	if acs.partial {
+		return nil, errors.New("packAddrContracts: partially decoded row")
+	}
 	buf := make([]byte, 0, 8+len(acs.Contracts)*(eth.EthereumTypeAddressDescriptorLen+12))
 	varBuf := make([]byte, maxPackedBigintBytes)
 	l := packVaruint(acs.TotalTxs, varBuf)
@@ -203,7 +208,7 @@ func packAddrContracts(acs *AddrContracts) []byte {
 			}
 		}
 	}
-	return buf
+	return buf, nil
 }
 
 func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
@@ -264,22 +269,67 @@ func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *
 	}, nil
 }
 
+// AddrContractsReadOptions limits how much of a cfAddressContracts row is materialised. The tx
+// counters are always decoded, skipped parts stay zero and packAddrContracts refuses the partial row.
+type AddrContractsReadOptions struct {
+	HeaderOnly bool                     // decode only the tx counters, Contracts stays nil
+	Holdings   bool                     // decode ERC721 Ids and ERC1155 MultiTokenValues
+	Contract   bchain.AddressDescriptor // with Holdings, decode holdings only for this contract
+	// the indexed ERC20 Value is only needed by readers that pack the row back; the API takes balances from the backend
+	values bool
+}
+
+// FullAddrContractsRead returns the options that decode the whole row, the only read that may be packed back
+func FullAddrContractsRead() AddrContractsReadOptions {
+	return AddrContractsReadOptions{Holdings: true, values: true}
+}
+
+func (o AddrContractsReadOptions) full() bool {
+	return !o.HeaderOnly && o.Holdings && o.values && len(o.Contract) == 0
+}
+
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
-	tt, l := unpackVaruint(buf)
-	buf = buf[l:]
-	nct, l := unpackVaruint(buf)
-	buf = buf[l:]
-	ict, l := unpackVaruint(buf)
-	buf = buf[l:]
-	cl, l := unpackVaruint(buf)
+	return unpackAddrContractsOpt(buf, addrDesc, FullAddrContractsRead())
+}
+
+// unpackAddrContractsOpt decodes a row as opts ask for. Every read is bounds-checked, so a truncated
+// or corrupt row is reported as an error instead of a panic on the API path.
+func unpackAddrContractsOpt(buf []byte, addrDesc bchain.AddressDescriptor, opts AddrContractsReadOptions) (*AddrContracts, error) {
+	invalid := func() (*AddrContracts, error) {
+		return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
+	}
+	var counters [3]uint
+	for i := range counters {
+		v, l, ok := unpackVaruintSafe(buf)
+		if !ok {
+			return invalid()
+		}
+		counters[i] = v
+		buf = buf[l:]
+	}
+	acs := &AddrContracts{TotalTxs: counters[0], NonContractTxs: counters[1], InternalTxs: counters[2], partial: !opts.full()}
+	if opts.HeaderOnly {
+		return acs, nil
+	}
+	cl, l, ok := unpackVaruintSafe(buf)
+	// a contract takes at least its descriptor, a txs varint and one byte of value or holdings count
+	if !ok || cl > uint(len(buf)-l)/(eth.EthereumTypeAddressDescriptorLen+2) {
+		return invalid()
+	}
 	buf = buf[l:]
 	c := make([]AddrContract, 0, cl)
+	// one backing array for all contract descriptors instead of an allocation per contract
+	descs := make([]byte, 0, cl*eth.EthereumTypeAddressDescriptorLen)
 	for len(buf) > 0 {
 		if len(buf) < eth.EthereumTypeAddressDescriptorLen {
-			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
+			return invalid()
 		}
-		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
-		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
+		descs = append(descs, buf[:eth.EthereumTypeAddressDescriptorLen]...)
+		contract := bchain.AddressDescriptor(descs[len(descs)-eth.EthereumTypeAddressDescriptorLen : len(descs) : len(descs)])
+		txs, l, ok := unpackVaruintSafe(buf[eth.EthereumTypeAddressDescriptorLen:])
+		if !ok {
+			return invalid()
+		}
 		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
 		standard := bchain.TokenStandard(txs & 3)
 		txs >>= 2
@@ -289,58 +339,74 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			Txs:      txs,
 		}
 		if standard == bchain.FungibleToken {
-			b, ll := unpackBigint(buf)
-			buf = buf[ll:]
-			ac.Value = b
+			if opts.values {
+				b, ll, ok := unpackBigintSafe(buf)
+				if !ok {
+					return invalid()
+				}
+				buf = buf[ll:]
+				ac.Value = b
+			} else if buf, ok = skipPackedBigints(buf, 1); !ok {
+				return invalid()
+			}
 		} else {
-			len, ll := unpackVaruint(buf)
+			n, ll, ok := unpackVaruintSafe(buf)
+			if !ok {
+				return invalid()
+			}
 			buf = buf[ll:]
-			if standard == bchain.NonFungibleToken {
-				ac.Ids = make(Ids, len)
-				for i := uint(0); i < len; i++ {
-					b, ll := unpackBigint(buf)
+			// packAddrContracts writes one bigint per ERC721 id and an id/value pair for every other standard
+			pairs := standard != bchain.NonFungibleToken
+			wantHoldings := opts.Holdings && (len(opts.Contract) == 0 || bytes.Equal(opts.Contract, contract))
+			if !wantHoldings {
+				bigints := n
+				if pairs {
+					bigints = 2 * n
+				}
+				if buf, ok = skipPackedBigints(buf, bigints); !ok {
+					return invalid()
+				}
+			} else if !pairs {
+				// every packed bigint is at least one byte, which bounds the allocation on a corrupt count
+				if n > uint(len(buf)) {
+					return invalid()
+				}
+				ac.Ids = make(Ids, n)
+				for i := uint(0); i < n; i++ {
+					b, ll, ok := unpackBigintSafe(buf)
+					if !ok {
+						return invalid()
+					}
 					buf = buf[ll:]
 					ac.Ids[i] = b
 				}
 			} else {
-				ac.MultiTokenValues = make(MultiTokenValues, len)
-				for i := uint(0); i < len; i++ {
-					b, ll := unpackBigint(buf)
+				if n > uint(len(buf))/2 {
+					return invalid()
+				}
+				ac.MultiTokenValues = make(MultiTokenValues, n)
+				for i := uint(0); i < n; i++ {
+					id, ll, ok := unpackBigintSafe(buf)
+					if !ok {
+						return invalid()
+					}
 					buf = buf[ll:]
-					ac.MultiTokenValues[i].Id = b
-					b, ll = unpackBigint(buf)
+					value, ll, ok := unpackBigintSafe(buf)
+					if !ok {
+						return invalid()
+					}
 					buf = buf[ll:]
-					ac.MultiTokenValues[i].Value = b
+					ac.MultiTokenValues[i] = bchain.MultiTokenValue{Id: id, Value: value}
 				}
 			}
 		}
 		c = append(c, ac)
 	}
-	return &AddrContracts{
-		TotalTxs:       tt,
-		NonContractTxs: nct,
-		InternalTxs:    ict,
-		Contracts:      c,
-	}, nil
-}
-
-// unpackAddrContractsHeader decodes only the three tx counters and leaves Contracts nil;
-// callers that never read the contract array must not pay to decode it.
-func unpackAddrContractsHeader(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
-	var counters [3]uint
-	for i := range counters {
-		v, l, ok := unpackVaruintSafe(buf)
-		if !ok {
-			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
-		}
-		counters[i] = v
-		buf = buf[l:]
+	if uint(len(c)) != cl {
+		return invalid()
 	}
-	return &AddrContracts{
-		TotalTxs:       counters[0],
-		NonContractTxs: counters[1],
-		InternalTxs:    counters[2],
-	}, nil
+	acs.Contracts = c
+	return acs, nil
 }
 
 func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]*AddrContracts) error {
@@ -349,16 +415,18 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
-			buf := packAddrContracts(acs)
+			buf, err := packAddrContracts(acs)
+			if err != nil {
+				return err
+			}
 			wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 		}
 	}
 	return nil
 }
 
-// GetAddrDescContracts returns AddrContracts for given addrDesc, nil for an absent record.
-// With headerOnly only the tx counters are decoded and Contracts stays nil.
-func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, headerOnly bool) (*AddrContracts, error) {
+// GetAddrDescContracts returns AddrContracts for given addrDesc decoded as opts ask for, nil for an absent record
+func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, opts AddrContractsReadOptions) (*AddrContracts, error) {
 	// a pinned read avoids copying the whole record out of the block cache; the decoders copy
 	// what they keep, so nothing references the pinned bytes after Destroy
 	val, err := d.db.GetPinnedCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
@@ -370,10 +438,7 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, header
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	if headerOnly {
-		return unpackAddrContractsHeader(buf, addrDesc)
-	}
-	return unpackAddrContracts(buf, addrDesc)
+	return unpackAddrContractsOpt(buf, addrDesc, opts)
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []unpackedAddrContract) (int, bool) {
@@ -1654,6 +1719,7 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 			ca, err := unpackAddrContracts(buf, addrDesc)
 			if err != nil {
 				glog.Error("failed to unpack AddrContracts for: ", hex.EncodeToString(addrDesc))
+				continue
 			}
 			update := false
 			for i := range ca.Contracts {
@@ -1671,7 +1737,10 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 				if err := func() error {
 					wb := grocksdb.NewWriteBatch()
 					defer wb.Destroy()
-					buf := packAddrContracts(ca)
+					buf, err := packAddrContracts(ca)
+					if err != nil {
+						return err
+					}
 					wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
 					return d.WriteBatch(wb)
 				}(); err != nil {

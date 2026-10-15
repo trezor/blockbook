@@ -68,11 +68,10 @@ func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
 }
 
 func unpackVaruintSafe(buf []byte) (uint, int, bool) {
-	if len(buf) == 0 {
-		return 0, 0, false
-	}
+	// vlq.Uint never reads past buf: it returns 0 when buf ends before the terminator and a
+	// negative length on overflow, so one sign test keeps this small enough to inline
 	ui, l := unpackVaruint(buf)
-	if l <= 0 || l > len(buf) {
+	if l <= 0 {
 		return 0, 0, false
 	}
 	return ui, l, true
