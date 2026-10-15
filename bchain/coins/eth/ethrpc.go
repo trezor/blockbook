@@ -19,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
@@ -651,7 +650,7 @@ func (b *EthereumRPC) Initialize() error {
 	b.Client = ec
 	b.RPC = rc
 	b.MainNetChainID = MainNet
-	b.NewBlock = &EthereumNewBlock{channel: make(chan *types.Header)}
+	b.NewBlock = NewEthereumNewBlock()
 	b.NewTx = &EthereumNewTx{channel: make(chan ethcommon.Hash)}
 
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
