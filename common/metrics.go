@@ -76,6 +76,7 @@ type Metrics struct {
 	EthAlternativePendingFloorRaised   *prometheus.CounterVec   `metric:"eth_alternative_pending_floor_raised_total"`
 	EthAlternativePendingFloorStranded *prometheus.CounterVec   `metric:"eth_alternative_pending_floor_stranded_total"`
 	EthAlternativeNonceRequests        *prometheus.CounterVec   `metric:"eth_alternative_nonce_requests_total"`
+	EthPrivatePendingTxids             *prometheus.CounterVec   `metric:"eth_private_pending_txids_total"`
 	SendTxRequests                     *prometheus.CounterVec   `metric:"sendtx_requests_total"`
 	EthSendTxPath                      *prometheus.CounterVec   `metric:"eth_sendtx_path_total"`
 	EthAlternativeSendTx               *prometheus.CounterVec   `metric:"eth_alternative_sendtx_total"`

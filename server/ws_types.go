@@ -41,7 +41,7 @@ type WsAccountInfoReq struct {
 	SecondaryCurrency string            `json:"secondaryCurrency,omitempty" ts_doc:"Currency code to convert values into (e.g. 'USD')."`
 	Gap               int               `json:"gap,omitempty" ts_doc:"Gap limit for XPUB scanning, if relevant."`
 	ConfirmedNonce    bool              `json:"confirmedNonce,omitempty" ts_doc:"If true, additionally return the confirmed nonce for Ethereum-like addresses (extra backend call)."`
-	PrivatePending    *WsPrivatePending `json:"privatePending,omitempty" ts_doc:"Ethereum-like only: the sender's in-flight private (alternative send-tx / relay) transactions the wallet is tracking for this address. When it declares nonces, Blockbook answers the pending-nonce lookup from this authoritative wallet state instead of inferring it from recently accepted sends (see docs/evm-send.md)."`
+	PrivatePending    *WsPrivatePending `json:"privatePending,omitempty" ts_doc:"Ethereum-like only: the sender's in-flight private (alternative send-tx / relay) transactions the wallet is tracking for this address. When it declares nonces, Blockbook answers the pending-nonce lookup from this authoritative wallet state instead of inferring it from recently accepted sends; when it declares txids, Blockbook indexes the ones it does not know as pending so they appear in this response's history (see docs/evm-send.md)."`
 }
 
 // WsPrivatePending declares the private (alternative send-tx / relay) transactions a wallet knows
@@ -49,11 +49,11 @@ type WsAccountInfoReq struct {
 // pending only there is invisible to the public backend RPC; declaring it lets Blockbook route the
 // nonce lookup to the relay and count each declared nonce as an occupied slot in the pending-nonce
 // walk (see the Nonces doc), rather than guessing from which addresses recently sent through this
-// instance. Only Nonces drive behavior today; Txids are accepted for forward compatibility (future
-// pending-tx correlation).
+// instance. Nonces route the nonce lookup; Txids restore the transactions themselves to the address
+// history when this instance's mempool never saw them.
 type WsPrivatePending struct {
 	Nonces []uint64 `json:"nonces,omitempty" ts_doc:"Account nonces of the wallet's in-flight private transactions for this address. Each entry is a literal in-flight nonce (0 is a valid value, not a sentinel) and is treated as an occupied nonce slot alongside Blockbook's own cached private transactions: the reported pending nonce advances from the backend's own answer across the contiguous run of occupied slots. Send the whole in-flight set, not just its maximum, and do not pad or default the array - a declared nonce above a slot nothing fills does not lift the answer over that slot."`
-	Txids  []string `json:"txids,omitempty" ts_doc:"Transaction hashes of the in-flight private transactions (reserved for future use)."`
+	Txids  []string `json:"txids,omitempty" ts_doc:"Transaction hashes of the wallet's own in-flight transactions for this address. A hash this Blockbook's mempool does not know is looked up once on the backend (or the relay cache) and, if it comes back without a block and sent from this address, indexed as pending - so this same response already lists it and address subscribers are notified. Mined, unknown and foreign-sender hashes are ignored, as are malformed ones; the list is capped (see maxPrivatePendingTxids)."`
 }
 
 // WsContractInfoReq carries parameters for the 'getContractInfo' method.
