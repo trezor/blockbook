@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"math/big"
@@ -323,33 +324,54 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 // contractGetTransfersFromLog extracts token transfers from receipt logs.
 // An unparseable log is skipped with a warning so that one malformed event
 // does not discard the valid transfers of the transaction.
-func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string) bchain.TokenTransfers {
+func contractGetTransfersFromLog(logs []*bchain.RpcLog, txid string, ignored []bchain.AddressDescriptor) bchain.TokenTransfers {
 	var r bchain.TokenTransfers
 	for _, l := range logs {
-		tl := len(l.Topics)
-		if tl > 0 {
-			signature := l.Topics[0]
-			var tt *bchain.TokenTransfer
-			var err error
-			if signature == tokenTransferEventSignature {
-				tt, err = processTransferEvent(l)
-			} else if signature == tokenERC1155TransferSingleEventSignature {
-				tt, err = processERC1155TransferSingleEvent(l)
-			} else if signature == tokenERC1155TransferBatchEventSignature {
-				tt, err = processERC1155TransferBatchEvent(l)
-			} else {
-				continue
-			}
-			if err != nil {
-				glog.Warningf("contractGetTransfersFromLog: skipping unparseable log of contract %s, tx %s: %v", l.Address, txid, err)
-				continue
-			}
-			if tt != nil {
-				r = append(r, tt)
-			}
+		if len(l.Topics) == 0 {
+			continue
+		}
+		var process func(*bchain.RpcLog) (*bchain.TokenTransfer, error)
+		switch l.Topics[0] {
+		case tokenTransferEventSignature:
+			process = processTransferEvent
+		case tokenERC1155TransferSingleEventSignature:
+			process = processERC1155TransferSingleEvent
+		case tokenERC1155TransferBatchEventSignature:
+			process = processERC1155TransferBatchEvent
+		default:
+			continue
+		}
+		// checked only for transfer events, before the costly decode
+		if isIgnoredContract(ignored, l.Address) {
+			continue
+		}
+		tt, err := process(l)
+		if err != nil {
+			glog.Warningf("contractGetTransfersFromLog: skipping unparseable log of contract %s, tx %s: %v", l.Address, txid, err)
+			continue
+		}
+		if tt != nil {
+			r = append(r, tt)
 		}
 	}
 	return r
+}
+
+// isIgnoredContract reports whether the hex address is one of the ignored contracts, without allocating.
+func isIgnoredContract(ignored []bchain.AddressDescriptor, address string) bool {
+	if len(ignored) == 0 || !has0xPrefix(address) {
+		return false
+	}
+	var desc [EthereumTypeAddressDescriptorLen]byte
+	if !hexDecodeInto(desc[:], address[2:]) {
+		return false
+	}
+	for _, c := range ignored {
+		if bytes.Equal(c, desc[:]) {
+			return true
+		}
+	}
+	return false
 }
 
 func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfers, error) {
