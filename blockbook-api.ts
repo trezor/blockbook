@@ -189,6 +189,48 @@ export interface Vout {
     isOwn?: boolean;
     /** Output script type (e.g., 'P2PKH', 'P2SH'). */
     type?: string;
+    /** If this output receives a CashToken, this field contains the token details. */
+    tokenData?: BcashToken;
+}
+export interface BcashTokenNft {
+    /** Capability of the NFT, which can be 'none', 'mutable', or 'minting' */
+    capability: 'none' | 'mutable' | 'minting';
+    /** Commitment of the NFT, hex encoded, maximum 128 bytes */
+    commitment: string;
+    name?: string;
+    description?: string;
+    icon?: string;
+}
+export interface BcashToken {
+    /** Identifier of the token, which is a 32-byte hash of its genesis transaction */
+    category: string;
+    /** Fungible token amount in base units */
+    amount: string;
+    /** Readable name of the token. */
+    name?: string;
+    /** Symbol for the token (e.g., 'ETH', 'USDT'). */
+    symbol?: string;
+    /** Number of decimals for this token. */
+    decimals?: number;
+    /** Description of the token, if available. */
+    description?: string;
+    /** URL to an icon image for this token, if available. */
+    icon?: string;
+    /** URL to the token's official website, if available. */
+    website?: string;
+    /** Optional pointer to a BcashTokenNft object if the token also holds an NFT */
+    nft?: BcashTokenNft;
+}
+export interface BcashSpecific {
+    /** Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vin */
+    tokenVins?: (BcashToken | null)[];
+    /** Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vout */
+    tokenVouts?: (BcashToken | null)[];
+}
+export interface BcashTokenNftMeta {
+    name?: string;
+    description?: string;
+    icon?: string;
 }
 export interface Vin {
     /** ID/hash of the originating transaction (where the UTXO comes from). */
@@ -213,6 +255,8 @@ export interface Vin {
     asm?: string;
     /** Data for coinbase inputs (when mining). */
     coinbase?: string;
+    /** If this input spends a CashToken, this field contains the token details. */
+    tokenData?: BcashToken;
 }
 export interface Tx {
     /** Transaction ID (hash). */
@@ -261,6 +305,8 @@ export interface Tx {
     ethereumSpecific?: EthereumSpecific;
     /** Aliases for addresses involved in this transaction. */
     addressAliases?: {[key: string]: AddressAlias};
+    /** BitcoinCash blockchain specific data (if applicable), contains the information about CashTokens. */
+    bcashSpecific?: BcashSpecific;
 }
 export interface FeeStats {
     /** Number of transactions in the given block. */
@@ -322,8 +368,8 @@ export interface Erc4626Token {
 }
 export interface Token {
     /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    type: '' | 'XPUBAddress' | 'CashToken' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'CashToken' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
     /** Readable name of the token. */
     name: string;
     /** Derivation path if this token is derived from an XPUB-based address. */
@@ -352,6 +398,18 @@ export interface Token {
     totalSent?: string;
     /** Protocol identifiers the contract participates in (e.g., "erc4626"); for fresh per-vault data, use getContractInfo. */
     protocols?: string[];
+    /** Identifier of the token, 32 bytes */
+    category?: string;
+    /** Array of hex-encoded token commitments, each up to 128 bytes */
+    commitments?: string[];
+    /** Description of the token, if available. */
+    description?: string;
+    /** URL to an icon image for this token, if available. */
+    icon?: string;
+    /** URL to the token's official website, if available. */
+    website?: string;
+    /** For NFT tokens, a mapping of token IDs to their metadata, serialized in key order. */
+    nfts?: {[key: string]: BcashTokenNftMeta};
 }
 export interface Address {
     /** Current page index. */
@@ -471,6 +529,8 @@ export interface Utxo {
     lockTime?: number;
     /** Indicates if this UTXO originated from a coinbase transaction. */
     coinbase?: boolean;
+    /** If this UTXO holds a CashToken, this field contains the token details. */
+    tokenData?: BcashToken;
 }
 export interface BalanceHistory {
     /** Unix timestamp for this point in the balance history. */

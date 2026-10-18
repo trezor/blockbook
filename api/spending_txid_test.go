@@ -43,7 +43,7 @@ func setupSpendingWorker(t *testing.T, extendedIndex bool) *Worker {
 	block1 := dbtestdata.GetTestBitcoinTypeBlock1(parser)
 	block2 := dbtestdata.GetTestBitcoinTypeBlock2(parser)
 	// BlockTimes is indexed by height, so pad up to the first fixture block
-	is.BlockTimes = make([]uint32, block1.Height)
+	is.SetBlockTimes(make([]uint32, block1.Height))
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
