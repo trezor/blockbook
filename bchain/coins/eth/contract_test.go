@@ -328,6 +328,44 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 	}
 }
 
+func Test_processTransferEventDecodesOnlyFirstDataWord(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want *big.Int // nil -> error
+	}{
+		{name: "oversized data -> first word", data: "0x" + fmt.Sprintf("%064x", 0x123) + strings.Repeat("ff", 1<<20), want: big.NewInt(0x123)},
+		{name: "one trailing nibble -> first word", data: "0x" + fmt.Sprintf("%064x", 7) + "f", want: big.NewInt(7)},
+		{name: "short data -> numeric value", data: "0x123", want: big.NewInt(0x123)},
+		{name: "empty data -> error", data: "0x"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transfer, err := processTransferEvent(&bchain.RpcLog{
+				Address: "0x76a45e8976499ab9ae223cc584019341d5a84e96",
+				Topics: []string{
+					tokenTransferEventSignature,
+					"0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8",
+					"0x000000000000000000000000e9a5216ff992cfa01594d43501a56e12769eb9d2",
+				},
+				Data: tt.data,
+			})
+			if tt.want == nil {
+				if err == nil {
+					t.Fatalf("processTransferEvent value = %s, want error", transfer.Value.String())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("processTransferEvent error = %v", err)
+			}
+			if transfer.Value.Cmp(tt.want) != 0 {
+				t.Fatalf("processTransferEvent value has %d bits, want %s", transfer.Value.BitLen(), tt.want)
+			}
+		})
+	}
+}
+
 func erc1155BatchWord(n uint64) string {
 	return fmt.Sprintf("%064x", n)
 }
