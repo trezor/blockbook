@@ -80,6 +80,10 @@ type Metrics struct {
 	EthAlternativePendingFloorStranded *prometheus.CounterVec   `metric:"eth_alternative_pending_floor_stranded_total"`
 	EthAlternativeNonceRequests        *prometheus.CounterVec   `metric:"eth_alternative_nonce_requests_total"`
 	SendTxRequests                     *prometheus.CounterVec   `metric:"sendtx_requests_total"`
+	SentTxPending                      prometheus.Gauge         `metric:"sent_tx_pending"`
+	SentTxPendingOldest                prometheus.Gauge         `metric:"sent_tx_pending_oldest_timestamp_seconds"`
+	SentTxOutcome                      *prometheus.CounterVec   `metric:"sent_tx_outcome_total"`
+	SentTxInclusionSeconds             prometheus.Histogram     `metric:"sent_tx_inclusion_seconds"`
 	EthSendTxPath                      *prometheus.CounterVec   `metric:"eth_sendtx_path_total"`
 	EthAlternativeSendTx               *prometheus.CounterVec   `metric:"eth_alternative_sendtx_total"`
 	EthAlternativeSendTxDuration       *prometheus.HistogramVec `metric:"eth_alternative_sendtx_duration_seconds"`

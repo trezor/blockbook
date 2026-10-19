@@ -166,6 +166,33 @@ panels:
       p95:
         promql: histogram_quantile(0.95, sum(rate({{name:eth_alternative_sendtx_duration_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (provider_host, status, le))
         legend: 'all replicas - {{provider_host}} {{status}} p95'
+  rpc.sent_tx_pending:
+    title: Own broadcasts pending
+    description: '{{help:sent_tx_pending}}. The dashed series is the age in minutes of the oldest pending send (time() - {{name:sent_tx_pending_oldest_timestamp_seconds}}, hidden while nothing is pending). Alert shape - count above twice its 1h average for 5m, or oldest age above 10 minutes; both fire on an underpriced estimator while mempool_size stays flat, and on a congested network only if the 2x base-fee reserve stopped covering it.'
+    queries:
+      pending:
+        promql: '{{name:sent_tx_pending}}{job="blockbook", coin="$coin"}'
+        legend: '{{instance}} - pending'
+      oldest_age:
+        promql: ((time() - {{name:sent_tx_pending_oldest_timestamp_seconds}}{job="blockbook", coin="$coin"}) / 60) and {{name:sent_tx_pending}}{job="blockbook", coin="$coin"} > 0
+        legend: '{{instance}} - oldest age (min)'
+  rpc.sent_tx_outcome:
+    title: Own broadcast outcomes
+    description: '{{help:sent_tx_outcome_total}}.'
+    queries:
+      outcomes:
+        promql: sum(rate({{name:sent_tx_outcome_total}}{job="blockbook", coin="$coin"}[$__rate_interval])) by (instance, result) * 3600
+        legend: '{{instance}} - {{result}}/h'
+  rpc.sent_tx_inclusion:
+    title: Own broadcast inclusion time
+    description: '{{help:sent_tx_inclusion_seconds}}.'
+    queries:
+      p50:
+        promql: histogram_quantile(0.5, sum(rate({{name:sent_tx_inclusion_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (instance, le))
+        legend: '{{instance}} - p50'
+      p90:
+        promql: histogram_quantile(0.9, sum(rate({{name:sent_tx_inclusion_seconds}}_bucket{job="blockbook", coin="$coin"}[$__rate_interval])) by (instance, le))
+        legend: '{{instance}} - p90'
   row.sync:
     title: Sync
   sync.index_resync_duration_p95:

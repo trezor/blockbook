@@ -262,6 +262,24 @@ metrics:
     type: counter_vec
     help: Transactions submitted by clients through any API (websocket, REST, explorer form), labeled by status and, for failures, by the class of rejection. Caller-side classes (underpriced, nonce_too_low, insufficient_funds, already_known) mean the transaction was refused on its own merits and no action is needed on the Blockbook side, while rate_limited, unauthorized, timeout and unavailable mean the send never got a verdict from the backend or provider and are the classes worth alerting on. A rising share of "other" is the signal to extend the classifier, not an incident
     labels: [status, reason]
+  sent_tx_pending:
+    name: blockbook_sent_tx_pending
+    type: gauge
+    help: Transactions this instance broadcast (websocket sendTransaction, REST sendtx, explorer form) that no connected block has carried yet. Entries leave on inclusion or after one hour (sent_tx_outcome_total). This is the outcome side of fee estimation - a quote that is too low shows up here as a count that climbs while the network's own mempool looks normal - so alert on it rising over its recent baseline rather than on an absolute value, which scales with how many wallets use the replica
+  sent_tx_pending_oldest_timestamp_seconds:
+    name: blockbook_sent_tx_pending_oldest_timestamp_seconds
+    type: gauge
+    help: Unix time of the oldest own broadcast still pending; 0 when nothing is pending, so read it only together with sent_tx_pending > 0. time() - this is how long the slowest in-flight send has waited, the number an ETA promise is judged by
+  sent_tx_outcome_total:
+    name: blockbook_sent_tx_outcome_total
+    type: counter_vec
+    labels: [result]
+    help: How own broadcasts left the pending set - mined (seen in a connected block) or expired (an hour without one, which is also the exit of a replaced or dropped transaction). An expired share above a few percent of mined means sends are dying rather than settling; cross-check sendtx_requests_total for whether they were accepted at all
+  sent_tx_inclusion_seconds:
+    name: blockbook_sent_tx_inclusion_seconds
+    type: histogram
+    help: Seconds from an own broadcast being accepted to the block that carried it being connected (includes Blockbook's own sync latency, so it slightly overstates chain inclusion time). The p90 against the chain's block time is the live check of the fee tiers' ETA promise (Ethereum - Normal within 2 blocks, High within 1)
+    buckets: [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]
   eth_sendtx_path_total:
     name: blockbook_eth_sendtx_path_total
     type: counter_vec

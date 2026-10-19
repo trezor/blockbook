@@ -84,6 +84,7 @@ type PublicServer struct {
 	chain               bchain.BlockChain
 	chainParser         bchain.BlockChainParser
 	mempool             bchain.Mempool
+	sentTxs             *sentTxTracker
 	api                 *api.Worker
 	explorerURL         string
 	internalExplorer    bool
@@ -106,6 +107,8 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	if err != nil {
 		return nil, err
 	}
+	sentTxs := newSentTxTracker(metrics)
+	websocket.sentTxs = sentTxs
 
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
@@ -150,6 +153,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		chain:               chain,
 		chainParser:         chain.GetChainParser(),
 		mempool:             mempool,
+		sentTxs:             sentTxs,
 		explorerURL:         explorerURL,
 		internalExplorer:    explorerURL == "",
 		is:                  is,
@@ -297,6 +301,7 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 
 // OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
 func (s *PublicServer) OnNewBlock(block *bchain.Block) {
+	s.sentTxs.OnNewBlock(block)
 	s.websocket.OnNewBlock(block)
 }
 
@@ -1346,7 +1351,9 @@ func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (t
 		hex := r.FormValue("hex")
 		if len(hex) > 0 {
 			res, err := s.chain.SendRawTransaction(hex, false)
-			if err != nil {
+			if err == nil {
+				s.sentTxs.track(res)
+			} else {
 				data.SendTxHex = hex
 				// rendered straight into the page, so it bypasses the handler-level redaction
 				data.Error = &api.APIError{Text: common.RedactURLs(err.Error()), Public: true}
@@ -1820,6 +1827,7 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 		if err != nil {
 			return nil, api.NewAPIError(err.Error(), true)
 		}
+		s.sentTxs.track(res.Result)
 		return res, nil
 	}
 	return nil, api.NewAPIError("Missing tx blob", true)

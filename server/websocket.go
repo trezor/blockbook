@@ -114,6 +114,7 @@ type WebsocketServer struct {
 	chainParser                     bchain.BlockChainParser
 	mempool                         bchain.Mempool
 	metrics                         *common.Metrics
+	sentTxs                         *sentTxTracker // set by PublicServer, nil in tests
 	is                              *common.InternalState
 	api                             *api.Worker
 	block0hash                      string
@@ -1316,6 +1317,7 @@ func (s *WebsocketServer) sendTransaction(tx string, disableAlternativeRPC bool)
 	if err != nil {
 		return res, err
 	}
+	s.sentTxs.track(txid)
 	res.Result = txid
 	return
 }
