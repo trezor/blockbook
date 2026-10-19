@@ -62,9 +62,9 @@ How each source is built:
   Blockbook builds `maxFeePerGas = eip1559BaseFeeMultiplier(2) × baseFee + tip`. On a month of
   mainnet blocks (Sep–Oct 2026, 216k quotes) this lands Economy within 4 blocks 99.9% of the time,
   Normal within 2 blocks 99.4% and High in the next block 99.7%, paying 1.14× / 1.21× / 2.04× the
-  tip that cleared the block; the former 4-block means of p20/p70/p90 paid 1.03× / 2.64× / 11.3× for
-  the same reliability, and the proposed plain floor ladder (p20 median, 1 / 1.5 / 2×) missed the
-  High target 15% of the time.
+  tip that cleared the block. The former 4-block means of p20/p70/p90 landed 98.7% / 99.99% / 99.99%
+  for 1.03× / 2.64× / 11.3×, and a plain floor ladder on a 4-block p20 median (1 / 1.5 / 2×) missed
+  the High target 15% of the time.
 - **Alternative provider** (archive coins, served from an in-memory cache, no node RPC): blockbook
   returns the provider's `maxFeePerGas` **unchanged**. For Infura, this is `suggestedMaxFeePerGas`,
   padded well above the base fee (~2.5× for the high tier); for 1inch, it is the provider's own

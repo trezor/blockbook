@@ -2432,7 +2432,7 @@ const eip1559BaseFeeMultiplier = 2
 
 // eip1559FeeHistoryBlocks is the eth_feeHistory window the on-chain tiers are read from. A tip spike
 // is usually a single block; eight blocks (~100 s on mainnet) keep it in the quote long enough for the
-// transaction that follows it, where a four-block mean forgot it two blocks later.
+// transaction that follows it, where a four-block window drops it two blocks later.
 const eip1559FeeHistoryBlocks = 8
 
 // eip1559RewardPercentiles are the reward percentiles requested per block: the 20th is the floor every
@@ -2441,8 +2441,9 @@ var eip1559RewardPercentiles = []int{20, 50, 99}
 
 // eip1559TierTips reduces the eth_feeHistory reward matrix (one row per block, one column per
 // requested percentile) to the low/medium/high/instant tips. Each column is reduced by its window
-// maximum, never a mean, so the busiest recent block prices the quote; a 4-block mean forgot a spike
-// two blocks later and missed the next block 3% of the time on mainnet.
+// maximum, so the busiest recent block prices the quote. A mean buys the same reliability only by
+// overpaying (the p90 mean priced High at 11x the clearing tip on mainnet), and a 4-block median
+// forgets a spike two blocks later (a p20-median floor ladder missed the next block 15% of the time).
 //
 //	low     = max p20
 //	medium  = 1.5 * low
