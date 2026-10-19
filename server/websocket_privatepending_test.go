@@ -5,7 +5,9 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -126,4 +128,57 @@ func TestEstimateFeePrivatePendingDecodesIntoSpecific(t *testing.T) {
 	if !ok || len(nonces) != 1 || nonces[0].(float64) != 42 {
 		t.Fatalf("specific.privatePending.nonces = %#v, want [42]", pp["nonces"])
 	}
+}
+
+// TestPrivatePendingTxids covers the extraction helper: nil-safe, normalization, validation, dedupe
+// and the cap. Every declared hash costs a backend lookup when unknown, so junk must never reach it.
+func TestPrivatePendingTxids(t *testing.T) {
+	const valid = "0x00000000000000000000000000000000000000000000000000000000000000aa"
+	const other = "0x00000000000000000000000000000000000000000000000000000000000000bb"
+
+	if got := privatePendingTxids(nil); got != nil {
+		t.Errorf("nil input = %v, want nil", got)
+	}
+	if got := privatePendingTxids(&WsPrivatePending{}); got != nil {
+		t.Errorf("empty txids = %v, want nil", got)
+	}
+
+	t.Run("normalizes and deduplicates", func(t *testing.T) {
+		src := &WsPrivatePending{Txids: []string{strings.ToUpper(valid[2:]) /* no prefix */, "0x" + strings.ToUpper(valid[2:]), valid, other}}
+		got := privatePendingTxids(src)
+		if !reflect.DeepEqual(got, []string{valid, other}) {
+			t.Fatalf("got %v, want [%s %s]", got, valid, other)
+		}
+	})
+
+	t.Run("drops malformed hashes", func(t *testing.T) {
+		src := &WsPrivatePending{Txids: []string{"0xdead", valid[:65], valid + "aa", "0x" + strings.Repeat("z", 64), ""}}
+		if got := privatePendingTxids(src); got != nil {
+			t.Fatalf("got %v, want nil - none of these can match a mempool entry", got)
+		}
+	})
+
+	t.Run("caps the list", func(t *testing.T) {
+		atCap := make([]string, maxPrivatePendingTxids)
+		for i := range atCap {
+			atCap[i] = fmt.Sprintf("0x%064x", i)
+		}
+		if got := privatePendingTxids(&WsPrivatePending{Txids: atCap}); len(got) != maxPrivatePendingTxids {
+			t.Fatalf("at cap: got %d txids, want %d", len(got), maxPrivatePendingTxids)
+		}
+		overCap := append(append([]string{}, atCap...), fmt.Sprintf("0x%064x", maxPrivatePendingTxids))
+		got := privatePendingTxids(&WsPrivatePending{Txids: overCap})
+		if len(got) != maxPrivatePendingTxids || got[0] != atCap[0] {
+			t.Fatalf("over cap: got %d txids starting %s, want %d starting %s", len(got), got[0], maxPrivatePendingTxids, atCap[0])
+		}
+	})
+
+	t.Run("defensive copy", func(t *testing.T) {
+		src := &WsPrivatePending{Txids: []string{valid}}
+		got := privatePendingTxids(src)
+		got[0] = other
+		if src.Txids[0] != valid {
+			t.Fatalf("request txids mutated to %v, want the helper to return its own slice", src.Txids)
+		}
+	})
 }

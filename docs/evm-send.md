@@ -202,8 +202,46 @@ The field appears in two places, matching the two consumers of the routing machi
   and may miss a private predecessor held only by a different relay node — an accepted limit of a
   multi-URL relay without sender affinity, not compensable the way the nonce floor is.
 
-Only `nonces` drives behavior today; `txids` is accepted for forward compatibility (future
-pending-tx correlation) and is not yet consumed on any path.
+- **`getAccountInfo` → `privatePending.txids`** restores the transactions themselves. The wallet
+  declares the hashes of its own in-flight sends; each hash this instance's mempool index does not
+  already hold is looked up — the relay cache, then `eth_getTransactionByHash`, then the relay
+  itself when the node returns null — and, when it comes back without a block and sent from the
+  queried address, indexed as pending **before the account info is built** — so the same response
+  already lists it and `subscribeAddresses` clients are notified. A known hash costs nothing: the
+  index answers, no backend call is made.
+
+  The relay leg is what makes the hint work across replicas: a transaction broadcast privately
+  through another instance is in no local store — not this instance's cache, and not its node's
+  pool, which never received it — and the relay is the only place its body exists. Only a clean miss
+  falls through to it; a primary RPC that is erroring is not worth a second wait.
+
+  A relay-sourced body is kept in the pending-tx cache before it is indexed. The mempool index holds
+  hashes, so the account page fetches each body back through `GetTransaction` — which would return to
+  the node that never had it, log `GetTransaction in mempool: ... not found`, and drop the
+  transaction from the very response the declaration was meant to populate. The entry goes in at
+  generation 0 and evicts nothing: a declaration must never displace a send this instance accepted
+  itself, and reconcile then retires it like any other cached transaction. That cache is also why the
+  leg requires `*_ALTERNATIVE_FETCH_MEMPOOL_TX`; without it the relay is not asked at all, since the
+  answer would have nowhere to live.
+
+  Without this, a wallet that lands on a replica which never saw its send gets a history page
+  without the transaction and prunes it locally, permanently. That replica's index holds only what
+  it learned since its own start — the pending block read at `InitializeMempool` plus subscription
+  events — which excludes queued/nonce-gapped transactions, anything a private relay holds, and, on
+  chains with `disableMempoolSync`, everything this instance did not broadcast itself.
+
+  Ignored without effect: a mined hash (the mempool does not check, so the read path applies the
+  guard), one no backend knows, one sent by somebody else, and anything that is not a 0x-prefixed
+  32 byte hash.
+
+  The list is capped at `maxPrivatePendingTxids`, well below the nonce cap, because the two cost
+  different things. The lookups run **in front of** the answer the caller is waiting for, one after
+  another, and each gets its own fresh `rpc_timeout` deadline rather than sharing one budget — so a
+  backend that accepts connections and never answers costs the cap times the timeout, 8 x 25 s on the
+  stock EVM configs, before the account info is served, and a hash neither store knows pays the node
+  and the relay in sequence. On a healthy backend the same eight lookups
+  are a few hundred milliseconds and a wallet declares one or two hashes, not eight. The cap is what
+  keeps the pathological case finite; it is not a throughput budget.
 
 The hint is **additive and backward-compatible**: absent the field, behavior is exactly as before
 (the `recentSenders` heuristic remains the fallback, and is still consulted when no hint is
@@ -214,13 +252,41 @@ Declaring the field also outlives the routing window: `useForNonces` stops routi
 after its send, but a wallet that keeps declaring an in-flight transaction keeps being routed to the
 relay for as long as it is actually pending.
 
-Pruning the declaration is the wallet's side of the contract. Blockbook cannot tell a stale
-declaration from a live one and never expires one server-side — unlike a cached transaction, which
-the missing eviction retires once the relay stops answering for it (`alternativeMissingTxTimeout`) —
-so a wallet that keeps declaring a dropped transaction's nonce keeps its own floor raised past it
-(only its own: the declaration is per-request). A wallet that derives the declaration from the
-pending transactions Blockbook itself reports self-heals: the missing eviction removes the dropped
-transaction from those answers within minutes, and the declaration follows on the next re-fetch.
+Pruning the declaration is the wallet's side of the contract. A declared **nonce** is per-request
+and never expires server-side — unlike a cached transaction, which the missing eviction retires once
+the relay stops answering for it (`alternativeMissingTxTimeout`) — so a wallet that keeps declaring a
+dropped transaction's nonce keeps its own floor raised past it (only its own). A wallet that derives
+the declaration from the pending transactions Blockbook itself reports self-heals: the missing
+eviction removes the dropped transaction from those answers within minutes, and the declaration
+follows on the next re-fetch.
+
+A declared **txid** that gets indexed then lives under the ordinary mempool rules: retired when its
+block is indexed, when a later nonce of its sender mines (#1709), or by `mempoolTxTimeout`. An entry
+already in the index is never restamped by a further declaration, which is what keeps the loop
+finite — otherwise a wallet declaring a permanently dropped transaction would hold it pending
+forever. After the timeout the next declaration re-verifies the hash against the backend at one
+round trip; once the backend stops returning it the entry is not re-added, the page stops listing it,
+and the wallet stops declaring it. On ethereum-classic, which runs `queryBackendOnMempoolResync`, an
+entry the backend snapshot does not contain is swept at the next resync and re-indexed on the next
+declaration.
+
+**Tron indexes nothing on the hint.** `TronRPC` overrides the method as a no-op, and the reason is
+not merely that its transaction bodies come from the HTTP full node rather than
+`eth_getTransactionByHash`. Its mempool is a mirror of the node's pending list: every resync adds
+everything the list contains and `reconcileMempoolWithPendingList` removes everything it does not,
+with none of the just-added grace `removeTransactionsMissingFromBackend` gives. A transaction the
+node holds is therefore already indexed within the resync period without any declaration, and one it
+does not hold would be deleted at the next tick — so indexing on the hint would be redundant where it
+works and futile where it would matter. Tron also has no alternative send-tx provider, which is the
+private-mempool case the whole hint exists for. The declaration is accepted and ignored, at no cost.
+
+A wallet does reach this path: Tron transactions serialize `"nonce":0` (the field has no `omitempty`
+and `TronParser.GetEthereumTxData` zeroes it), so a hint builder keyed on a numeric nonce does not
+skip a Tron account on shape alone, and Tron's parser reports `ChainEthereumType`, so the handler
+gate passes. Two things then make it inert rather than wrong: a Tron txid is bare 64-hex, which
+`privatePendingTxids` drops for want of the `0x` prefix, and `TronRPC` ignores whatever survives.
+Invalid entries are dropped silently, never rejected, so a declaration in the wrong shape costs the
+request nothing.
 
 Note the deliberate trade-off against pre-#1629 behavior: `estimateFee` is no longer routed to the
 relay for *every* sender, so a wallet that sent privately, omitted the hint, and is served by a
@@ -229,10 +295,19 @@ without the private predecessor. Declaring `privatePending` closes that gap dete
 widening routing for hint-less senders is avoided because it is indistinguishable from the #1629
 hot-path drain.
 
-**Trust boundary (accepted).** `privatePending` is an *unauthenticated client hint*, and
-per-request only — never written into `recentSenders` or the pending-tx cache — so a hostile client
-can distort only its own request's answer, never shared state. Its one outward effect, routing the
-read to the relay, adds no capability an unauthenticated caller does not already have:
+**Trust boundary (accepted).** `privatePending` is an *unauthenticated client hint*. The declared
+**nonces** are per-request only — never written into `recentSenders` or the pending-tx cache — so a
+hostile client can distort only its own request's answer, never shared state. The declared **txids**
+are the one exception: an indexed transaction enters the shared mempool index, visible to everyone
+who queries that address. Four properties bound what that buys an attacker. Blockbook indexes only
+what the backend or the relay actually returns as pending, so a client can *name* a transaction,
+never fabricate one. It must be sent from the address being queried, so no transaction can be pushed
+into a stranger's history. The per-request cap bounds the backend round trips, under the connection's
+existing message rate limit. And the result is exactly what the `newPendingTransactions` subscription
+would have produced on an instance that happened to see the broadcast. The residual is that a client
+can keep a real pending transaction of its own address listed until the mempool timeout — no more
+than the public mempool already exposes. Routing the read to the relay adds no capability an
+unauthenticated caller does not already have:
 `sendTransaction` spends the same relay quota with every call, fanned out to *every* relay URL, at
 no cost for a rejected transaction. Relay-quota protection, if ever needed, belongs in the server's
 per-IP rate limiting, uniformly across methods — not in this path.
@@ -256,6 +331,15 @@ Prometheus counters for the cache lifecycle:
   relay answers null, so with the missing eviction configured off `provider_missing` stops firing
   rather than pinning at the timeout.
 - `blockbook_eth_alternative_mempool_cache_size` — current cache depth.
+- `blockbook_eth_private_pending_txids_total{result}` — declared txids by outcome: `indexed` (this
+  instance did not know it, its node or the relay cache returned it as pending from the queried
+  address), `indexed_relay` (the same, but only the relay itself knew it), `already_indexed` (no
+  backend call), `mined`, `not_found` (null answer), `foreign` (pending but sent by somebody else)
+  and `error`. `already_indexed` should dominate on a healthy instance; `indexed` marks the replica
+  gap this hint exists to close, so a rate that tracks send volume means wallets are routinely
+  landing where their transaction is unknown. `indexed_relay` is what says whether the relay leg
+  earns its round trip — at zero it never does. A sustained `not_found` means wallets declare hashes
+  neither the node nor the relay knows; `foreign` should stay near zero.
 
 Signals for *hanging* private transactions — a tx stuck Unconfirmed, or a nonce pinned above a dead
 on-chain gap:
