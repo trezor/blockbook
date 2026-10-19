@@ -2430,6 +2430,58 @@ func (b *EthereumRPC) observePendingFloorStranded(source string) {
 // blocks, since the base fee can rise at most 12.5% per block (1.125^6 ≈ 2). Tunable.
 const eip1559BaseFeeMultiplier = 2
 
+// eip1559FeeHistoryBlocks is the eth_feeHistory window the on-chain tiers are read from. A tip spike
+// is usually a single block; eight blocks (~100 s on mainnet) keep it in the quote long enough for the
+// transaction that follows it, where a four-block window drops it two blocks later.
+const eip1559FeeHistoryBlocks = 8
+
+// eip1559RewardPercentiles are the reward percentiles requested per block: the 20th is the floor every
+// tier is built on, the 50th prices High, the 99th Instant.
+var eip1559RewardPercentiles = []int{20, 50, 99}
+
+// eip1559TierTips reduces the eth_feeHistory reward matrix (one row per block, one column per
+// requested percentile) to the low/medium/high/instant tips. Each column is reduced by its window
+// maximum, so the busiest recent block prices the quote. A mean buys the same reliability only by
+// overpaying (the p90 mean priced High at 11x the clearing tip on mainnet), and a 4-block median
+// forgets a spike two blocks later (a p20-median floor ladder missed the next block 15% of the time).
+//
+//	low     = max p20
+//	medium  = 1.5 * low
+//	high    = max p50, at least medium
+//	instant = max p99, at least high
+//
+// Short or undecodable rows are skipped. An empty or all-zero matrix (idle chains, backends without
+// rewards) yields zero tips: there is no priority competition to price.
+func eip1559TierTips(reward [][]string) [4]*big.Int {
+	columnMax := func(col int) *big.Int {
+		m := new(big.Int)
+		for _, row := range reward {
+			if len(row) <= col {
+				continue
+			}
+			v, err := hexutil.DecodeBig(row[col])
+			if err != nil {
+				continue
+			}
+			if v.Cmp(m) > 0 {
+				m = v
+			}
+		}
+		return m
+	}
+	maxBig := func(a, b *big.Int) *big.Int { // a copy, so no two tiers share a value
+		if a.Cmp(b) >= 0 {
+			return new(big.Int).Set(a)
+		}
+		return new(big.Int).Set(b)
+	}
+	low := columnMax(0)
+	medium := new(big.Int).Div(new(big.Int).Mul(low, big.NewInt(3)), big.NewInt(2))
+	high := maxBig(columnMax(1), medium)
+	instant := maxBig(columnMax(2), high)
+	return [4]*big.Int{low, medium, high, instant}
+}
+
 // EthereumTypeGetEip1559Fees retrieves Eip1559Fees, if supported
 func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) {
 	if !b.ChainConfig.Eip1559Fees {
@@ -2450,7 +2502,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 		// so configured networks still return EIP-1559 fees instead of nil, which resolves to empty fees.
 	}
 
-	// otherwise use algorithm from here https://docs.alchemy.com/docs/how-to-build-a-gas-fee-estimator-using-eip-1559
+	// otherwise estimate from eth_feeHistory, see docs/fees.md "On-chain"
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
@@ -2463,24 +2515,16 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 		GasUsedRatio  []float64  `json:"gasUsedRatio"`
 	}
 	var h history
-	percentiles := []int{
-		20, // low
-		70, // medium
-		90, // high
-		99, // instant
-	}
-	blocks := 4
-
-	err := b.RPC.CallContext(ctx, &h, "eth_feeHistory", blocks, "pending", percentiles)
+	err := b.RPC.CallContext(ctx, &h, "eth_feeHistory", eip1559FeeHistoryBlocks, "pending", eip1559RewardPercentiles)
 	if err != nil {
 		return nil, err
 	}
-	if len(h.BaseFeePerGas) < blocks {
+	if len(h.BaseFeePerGas) < eip1559FeeHistoryBlocks {
 		return nil, nil
 	}
 
 	hs, _ := json.Marshal(h)
-	baseFee, _ := hexutil.DecodeUint64(h.BaseFeePerGas[blocks-1])
+	baseFee, _ := hexutil.DecodeUint64(h.BaseFeePerGas[eip1559FeeHistoryBlocks-1])
 	// SetUint64, not big.NewInt(int64(...)): base fee is wei and a value above math.MaxInt64
 	// (~9.22e18) would wrap negative on the int64 cast. Unreachable on mainnet today but possible
 	// on high-fee L2s. Matches the header path in attachBlockGas.
@@ -2495,31 +2539,8 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	// subscribeNewBlock evmData push, which carries the real previous-block header.
 	glog.Info("eth_feeHistory ", string(hs))
 
-	for i := 0; i < 4; i++ {
-		var f bchain.Eip1559Fee
-		// Per-tier tip: average of the requested reward percentile (low=20th .. instant=99th) over the window.
-		// A compliant eth_feeHistory row has one reward per requested percentile, but guard the column index
-		// so a non-conforming backend returning a short row skips that row instead of panicking; the divisor
-		// counts only the rows actually summed so skipped rows don't deflate the average.
-		priorityFee := int64(0)
-		rows := int64(0)
-		for j := 0; j < len(h.Reward); j++ {
-			if len(h.Reward[j]) <= i {
-				continue
-			}
-			p, _ := hexutil.DecodeUint64(h.Reward[j][i])
-			priorityFee += int64(p)
-			rows++
-		}
-		if rows > 0 {
-			priorityFee /= rows
-		}
-		// A zero tip is a deliberate, accepted outcome on idle chains: when eth_feeHistory reports empty or
-		// all-zero reward percentiles (quiet testnets such as Sepolia, or a backend that omits
-		// rewards) there is no priority competition to price, so maxPriorityFeePerGas is 0. maxFeePerGas
-		// still covers eip1559BaseFeeMultiplier*baseFee below, so the tx stays mineable.
-		tip := big.NewInt(priorityFee)
-		f.MaxPriorityFeePerGas = tip
+	for i, tip := range eip1559TierTips(h.Reward) {
+		f := bchain.Eip1559Fee{MaxPriorityFeePerGas: tip}
 		// maxFeePerGas must cover the next-block base fee plus the tip, with headroom for base-fee
 		// growth while the tx waits: maxFeePerGas = eip1559BaseFeeMultiplier*baseFee + tip. The previous
 		// code put only the tip here (omitting the base fee), which is below the base fee and therefore
