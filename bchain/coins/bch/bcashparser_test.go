@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
@@ -353,5 +354,50 @@ func Test_UnpackTx(t *testing.T) {
 				t.Errorf("unpackTx() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
+	}
+}
+
+// verbose getrawtransaction of mainnet tx 7cb443cd...9338 (block 968742) as returned by BCHN:
+// vout 5 carries a CashToken whose prefix is missing from scriptPubKey.hex but present in hex
+const testTxCashTokenJSON = `{"txid":"7cb443cd358ca4073cc7d00acdedca411c8e2b66f89046898af51da2ee799338","version":2,"size":1221,"locktime":0,"vin":[{"txid":"8c99d0d9c0b5b39c45252a6662bae03a7609b37ada3afb38cee3e6622c9d1952","vout":0,"sequence":4294967295},{"txid":"8c99d0d9c0b5b39c45252a6662bae03a7609b37ada3afb38cee3e6622c9d1952","vout":1,"sequence":4294967295},{"txid":"8c99d0d9c0b5b39c45252a6662bae03a7609b37ada3afb38cee3e6622c9d1952","vout":2,"sequence":4294967295},{"txid":"8c99d0d9c0b5b39c45252a6662bae03a7609b37ada3afb38cee3e6622c9d1952","vout":3,"sequence":4294967295},{"txid":"8c99d0d9c0b5b39c45252a6662bae03a7609b37ada3afb38cee3e6622c9d1952","vout":4,"sequence":4294967295},{"txid":"3ff3dfafa5dc208c18b3d91979e7c704e1f2c89908310b430f7e247e5107d75d","vout":2,"sequence":4294967295}],"vout":[{"value":240.53007729,"n":0,"scriptPubKey":{"asm":"OP_HASH256 e76e18a75e8cf6aacaacae3d0b07324796df232d8054875d7a7fd4a199beff43 OP_EQUAL","hex":"aa20e76e18a75e8cf6aacaacae3d0b07324796df232d8054875d7a7fd4a199beff4387","reqSigs":1,"type":"scripthash","addresses":["bitcoincash:p0nkux98t6x0d2k24jhr6zc8xfredher9kq9fp6a0flafgvehml5xqswpc96w"]},"tokenData":{"category":"2469acc5afa4b10cb5b5c04afb89c3a3ffd61c5da9c01e26d00951cae2a02544","amount":"5278989"}},{"value":134.81564445,"n":1,"scriptPubKey":{"asm":"OP_HASH256 1c74d78d275e27604de2ba5d416bac0b4e021c1da30a4ab9e0df5f7b469f2c0c OP_EQUAL","hex":"aa201c74d78d275e27604de2ba5d416bac0b4e021c1da30a4ab9e0df5f7b469f2c0c87","reqSigs":1,"type":"scripthash","addresses":["bitcoincash:pvw8f4udya0zwczdu2a96stt4s95uqsurk3s5j4eur04776xnukqcu7lhg7xu"]},"tokenData":{"category":"2469acc5afa4b10cb5b5c04afb89c3a3ffd61c5da9c01e26d00951cae2a02544","amount":"2958841"}},{"value":57.83630628,"n":2,"scriptPubKey":{"asm":"OP_HASH256 a55ed15bc3fc73e1ff0ce38733da7cf2757d7f2bf929f6cbb95294a8aed0f5e2 OP_EQUAL","hex":"aa20a55ed15bc3fc73e1ff0ce38733da7cf2757d7f2bf929f6cbb95294a8aed0f5e287","reqSigs":1,"type":"scripthash","addresses":["bitcoincash:pwj4a52mc0788c0lpn3cwv760ne82ltl90ujnakth9fff29w6r67yqak8f6ge"]},"tokenData":{"category":"2469acc5afa4b10cb5b5c04afb89c3a3ffd61c5da9c01e26d00951cae2a02544","amount":"1269352"}},{"value":23.64034221,"n":3,"scriptPubKey":{"asm":"OP_HASH256 472d1974998e751377bb0bfd16d44750d84b4c44fde3db389ec3eef2c762bcf2 OP_EQUAL","hex":"aa20472d1974998e751377bb0bfd16d44750d84b4c44fde3db389ec3eef2c762bcf287","reqSigs":1,"type":"scripthash","addresses":["bitcoincash:pdrj6xt5nx882ymhhv9l69k5gagdsj6vgn778kecnmp7auk8v270yhwewdl3y"]},"tokenData":{"category":"2469acc5afa4b10cb5b5c04afb89c3a3ffd61c5da9c01e26d00951cae2a02544","amount":"518842"}},{"value":16.97119661,"n":4,"scriptPubKey":{"asm":"OP_HASH256 01cf30e5780e948b7e2eb807fe418d23fca3fb0652646d3c9e3f1735b36f50bc OP_EQUAL","hex":"aa2001cf30e5780e948b7e2eb807fe418d23fca3fb0652646d3c9e3f1735b36f50bc87","reqSigs":1,"type":"scripthash","addresses":["bitcoincash:pvqu7v890q8ffzm796uq0ljp353leglmqefxgmfuncl3wddndagtck644hjl6"]},"tokenData":{"category":"2469acc5afa4b10cb5b5c04afb89c3a3ffd61c5da9c01e26d00951cae2a02544","amount":"372473"}},{"value":8e-06,"n":5,"scriptPubKey":{"asm":"OP_DUP OP_HASH160 f6ba3624436026f9cece52df1023d541241702e5 OP_EQUALVERIFY OP_CHECKSIG","hex":"76a914f6ba3624436026f9cece52df1023d541241702e588ac","reqSigs":1,"type":"pubkeyhash","addresses":["bitcoincash:qrmt5d3ygdszd7wweefd7ypr64qjg9czu52chgdm3z"]},"tokenData":{"category":"2469acc5afa4b10cb5b5c04afb89c3a3ffd61c5da9c01e26d00951cae2a02544","amount":"13765"}},{"value":0.18679189,"n":6,"scriptPubKey":{"asm":"OP_DUP OP_HASH160 f6ba3624436026f9cece52df1023d541241702e5 OP_EQUALVERIFY OP_CHECKSIG","hex":"76a914f6ba3624436026f9cece52df1023d541241702e588ac","reqSigs":1,"type":"pubkeyhash","addresses":["bitcoincash:qrmt5d3ygdszd7wweefd7ypr64qjg9czu52chgdm3z"]}}],"hex":"020000000652199d2c62e6e3ce38fb3ada7ab309763ae0ba62662a25459cb3b5c0d9d0998c000000004544746376a91412effae58abba049d5402634a709e1e6a15c048088ac67c0d1c0ce88c25288c0cdc0c788c0c6c0d095c0c6c0cc9490539502e80396c0cc7c94c0d3957ca268ffffffff52199d2c62e6e3ce38fb3ada7ab309763ae0ba62662a25459cb3b5c0d9d0998c010000004544746376a914ab0de1203d427481b247faa0b434af9fd49a3ee888ac67c0d1c0ce88c25288c0cdc0c788c0c6c0d095c0c6c0cc9490539502e80396c0cc7c94c0d3957ca268ffffffff52199d2c62e6e3ce38fb3ada7ab309763ae0ba62662a25459cb3b5c0d9d0998c020000004544746376a9142ceb9595368b37469a883092dfa02b79f31ec53888ac67c0d1c0ce88c25288c0cdc0c788c0c6c0d095c0c6c0cc9490539502e80396c0cc7c94c0d3957ca268ffffffff52199d2c62e6e3ce38fb3ada7ab309763ae0ba62662a25459cb3b5c0d9d0998c030000004544746376a914b503af5d5d0e63cfe5e128bb8dfdfd94f2fb34df88ac67c0d1c0ce88c25288c0cdc0c788c0c6c0d095c0c6c0cc9490539502e80396c0cc7c94c0d3957ca268ffffffff52199d2c62e6e3ce38fb3ada7ab309763ae0ba62662a25459cb3b5c0d9d0998c040000004544746376a914c004928ff41d49c8649f098fdde048d84afe5f8f88ac67c0d1c0ce88c25288c0cdc0c788c0c6c0d095c0c6c0cc9490539502e80396c0cc7c94c0d3957ca268ffffffff5dd707517e247e0f430b310899c8f2e104c7e77919d9b3188c20dca5afdff33f02000000644190299e0cb9cd7f7cf720761355172fceb749fd688354141f96ea483925922b6d9ce761f95a93e33c70d1836de3e14ee9b64c9ab6963c03479eb066d54cbe395d412103edb0801ae8733876c6303764d7e625fc74a4e612fbe59d633eb2db1d034c83edffffffff0771c5ab99050000004aef4425a0e2ca5109d0261ec0a95d1cd6ffa3c389fb4ac0b5b50cb1a4afc5ac692410fe0d8d5000aa20e76e18a75e8cf6aacaacae3d0b07324796df232d8054875d7a7fd4a199beff43871d599023030000004aef4425a0e2ca5109d0261ec0a95d1cd6ffa3c389fb4ac0b5b50cb1a4afc5ac692410fef9252d00aa201c74d78d275e27604de2ba5d416bac0b4e021c1da30a4ab9e0df5f7b469f2c0c872433bb58010000004aef4425a0e2ca5109d0261ec0a95d1cd6ffa3c389fb4ac0b5b50cb1a4afc5ac692410fe685e1300aa20a55ed15bc3fc73e1ff0ce38733da7cf2757d7f2bf929f6cbb95294a8aed0f5e287ad4ce88c000000004aef4425a0e2ca5109d0261ec0a95d1cd6ffa3c389fb4ac0b5b50cb1a4afc5ac692410febaea0700aa20472d1974998e751377bb0bfd16d44750d84b4c44fde3db389ec3eef2c762bcf287adfd2765000000004aef4425a0e2ca5109d0261ec0a95d1cd6ffa3c389fb4ac0b5b50cb1a4afc5ac692410fef9ae0500aa2001cf30e5780e948b7e2eb807fe418d23fca3fb0652646d3c9e3f1735b36f50bc8720030000000000003eef4425a0e2ca5109d0261ec0a95d1cd6ffa3c389fb4ac0b5b50cb1a4afc5ac692410fdc53576a914f6ba3624436026f9cece52df1023d541241702e588ac95051d01000000001976a914f6ba3624436026f9cece52df1023d541241702e588ac00000000"}`
+
+func Test_ParseTxFromJson_CashToken(t *testing.T) {
+	parser, _, _, _ := setupParsers(t)
+
+	got, err := parser.ParseTxFromJson([]byte(testTxCashTokenJSON))
+	if err != nil {
+		t.Fatalf("ParseTxFromJson() error = %v", err)
+	}
+	raw, _ := hex.DecodeString(got.Hex)
+	want, err := parser.ParseTx(raw)
+	if err != nil {
+		t.Fatalf("ParseTx() error = %v", err)
+	}
+	if len(got.Vout) != 7 || len(want.Vout) != 7 {
+		t.Fatalf("unexpected vout count json=%d hex=%d", len(got.Vout), len(want.Vout))
+	}
+	for i := range got.Vout {
+		if !reflect.DeepEqual(got.Vout[i].ScriptPubKey, want.Vout[i].ScriptPubKey) {
+			t.Errorf("vout %d ScriptPubKey = %+v, want %+v", i, got.Vout[i].ScriptPubKey, want.Vout[i].ScriptPubKey)
+		}
+	}
+	token := got.Vout[5].ScriptPubKey.Hex
+	if !strings.HasPrefix(token, "ef") || !strings.HasSuffix(token, "76a914f6ba3624436026f9cece52df1023d541241702e588ac") {
+		t.Errorf("vout 5 hex = %v, want CashToken prefix restored", token)
+	}
+	if got.Vout[6].ScriptPubKey.Hex != "76a914f6ba3624436026f9cece52df1023d541241702e588ac" {
+		t.Errorf("vout 6 hex = %v, want plain P2PKH unchanged", got.Vout[6].ScriptPubKey.Hex)
+	}
+	// the token output must resolve exactly as the index does: no address
+	addrDesc, err := parser.GetAddrDescFromVout(&got.Vout[5])
+	if err != nil {
+		t.Fatalf("GetAddrDescFromVout() error = %v", err)
+	}
+	addresses, isAddress, err := parser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil || len(addresses) != 0 || isAddress {
+		t.Errorf("token vout resolved to %v, %v, %v; want no address", addresses, isAddress, err)
+	}
+	if got.Vout[5].ValueSat.Int64() != 800 {
+		t.Errorf("vout 5 value = %v, want 800", got.Vout[5].ValueSat.String())
 	}
 }
