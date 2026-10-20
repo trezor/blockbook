@@ -60,6 +60,10 @@ const maxWebsocketSubscribeAddresses = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
 const maxWebsocketSubscribeFiatRatesTokens = 1000
 const websocketLogPreviewBytes = 256
+const websocketErrorTextBytes = 1024
+
+// websocketErrorLogsPerSecond caps client-triggered Error lines; glog exits the process on a full disk.
+const websocketErrorLogsPerSecond = 10
 
 // allRates is a special "currency" parameter that means all available currencies
 const allFiatRates = "!ALL!"
@@ -164,6 +168,7 @@ type WebsocketServer struct {
 	activeChannels map[*websocketChannel]struct{}
 	activeRequests int
 	requestWg      sync.WaitGroup
+	errorLogBudget errorLogBudget
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -327,6 +332,33 @@ func getWebsocketPayloadPreview(d []byte) string {
 		return string(d)
 	}
 	return string(d[:websocketLogPreviewBytes]) + "...(truncated)"
+}
+
+func truncateWebsocketText(s string) string {
+	if len(s) <= websocketErrorTextBytes {
+		return s
+	}
+	return s[:websocketErrorTextBytes] + "...(truncated)"
+}
+
+type errorLogBudget struct {
+	mu     sync.Mutex
+	second int64
+	count  int
+}
+
+// allow reports whether another error line fits into the current second's budget.
+func (b *errorLogBudget) allow(now time.Time) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if sec := now.Unix(); sec != b.second {
+		if suppressed := b.count - websocketErrorLogsPerSecond; suppressed > 0 {
+			glog.Warning("Suppressed ", suppressed, " websocket client error log lines")
+		}
+		b.second, b.count = sec, 0
+	}
+	b.count++
+	return b.count <= websocketErrorLogsPerSecond
 }
 
 // ServeHTTP sets up handler of websocket channel
@@ -1030,13 +1062,14 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "success"}).Inc()
 		} else {
-			if apiErr, ok := err.(*api.APIError); !ok || !apiErr.Public {
-				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data len ", len(req.Params), ", preview ", getWebsocketPayloadPreview(req.Params))
+			if apiErr, ok := err.(*api.APIError); (!ok || !apiErr.Public) && s.errorLogBudget.allow(t) {
+				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", truncateWebsocketText(errors.ErrorStack(err)), ", data len ", len(req.Params), ", preview ", getWebsocketPayloadPreview(req.Params))
 			}
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
 			e := resultError{}
 			// the ws protocol returns the message for every error, public or not, so redact here
-			e.Error.Message = common.RedactURLs(err.Error())
+			// redact before truncating so a cut URL cannot escape redaction
+			e.Error.Message = truncateWebsocketText(common.RedactURLs(err.Error()))
 			data = e
 		}
 	} else {
