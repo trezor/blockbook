@@ -18,6 +18,7 @@ import (
 	"time"
 
 	jujuErrors "github.com/juju/errors"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
@@ -170,8 +171,10 @@ type getBlockChainTestChain struct {
 	bestHeightCalls   int
 	hashes            map[uint32]string
 	blocks            map[uint32]*bchain.Block
+	blocksOnce        map[uint32]*bchain.Block // served before blocks, once: a block that a reorg later replaces
 	blockErrors       map[uint32][]error
 	getBlockCalls     map[uint32]int
+	getBlockByHeight  map[uint32]int // GetBlock calls made with an empty hash
 	getBlockHashCalls map[uint32]int
 	getBlockHashErr   error
 }
@@ -183,6 +186,10 @@ type chainTypeTestParser struct {
 
 func (p *chainTypeTestParser) GetChainType() bchain.ChainType {
 	return p.chainType
+}
+
+func (p *chainTypeTestParser) KeepBlockAddresses() int {
+	return 0
 }
 
 func (c *getBlockChainTestChain) GetChainParser() bchain.BlockChainParser {
@@ -229,10 +236,18 @@ func (c *getBlockChainTestChain) GetBlock(hash string, height uint32) (*bchain.B
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.getBlockCalls[height]++
+	if hash == "" && c.getBlockByHeight != nil {
+		c.getBlockByHeight[height]++
+	}
 	if errs := c.blockErrors[height]; len(errs) > 0 {
 		err := errs[0]
 		c.blockErrors[height] = errs[1:]
 		return nil, err
+	}
+	if block := c.blocksOnce[height]; block != nil {
+		delete(c.blocksOnce, height)
+		copy := *block
+		return &copy, nil
 	}
 	if block := c.blocks[height]; block != nil {
 		copy := *block
@@ -468,8 +483,10 @@ func newResyncTestChain(tip *bchain.EVMTip, blocks ...*bchain.Block) *getBlockCh
 		tip:               tip,
 		hashes:            map[uint32]string{},
 		blocks:            map[uint32]*bchain.Block{},
+		blocksOnce:        map[uint32]*bchain.Block{},
 		blockErrors:       map[uint32][]error{},
 		getBlockCalls:     map[uint32]int{},
+		getBlockByHeight:  map[uint32]int{},
 		getBlockHashCalls: map[uint32]int{},
 	}
 	for _, b := range blocks {
@@ -585,9 +602,9 @@ func TestResyncIndexEthereumTypeGapAboveOneKeepsForkCheck(t *testing.T) {
 	assertCalls(t, "GetBlock", chain.getBlockCalls, 4, 0)
 }
 
-// A gap of four or more takes the parallel path, which resolves every block hash itself,
-// so resyncIndex must not look the first one up beforehand.
-func TestResyncIndexEthereumTypeParallelPathResolvesStartHashOnce(t *testing.T) {
+// A gap of four or more takes the parallel path. On EVM its workers fetch by height, so no
+// block hash is looked up at all: neither by resyncIndex beforehand nor by the producer.
+func TestResyncIndexEthereumTypeParallelPathFetchesByHeight(t *testing.T) {
 	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
 	defer closeAndDestroyRocksDB(t, d)
 
@@ -609,8 +626,187 @@ func TestResyncIndexEthereumTypeParallelPathResolvesStartHashOnce(t *testing.T) 
 	}
 	assertBestBlock(t, d, 6, hashes[6])
 	for h := uint32(2); h <= 6; h++ {
-		assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, h, 1)
+		assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, h, 0)
 		assertCalls(t, "GetBlock", chain.getBlockCalls, h, 1)
+		assertCalls(t, "GetBlock by height", chain.getBlockByHeight, h, 1)
+	}
+}
+
+// reorgEvents reads the index_reorg_events counter for one type; the metrics registry is
+// shared across tests, so callers compare a before/after delta.
+func reorgEvents(t *testing.T, w *SyncWorker, typ string) float64 {
+	t.Helper()
+	var m dto.Metric
+	if err := w.metrics.IndexReorgEvents.With(common.Labels{"type": typ}).Write(&m); err != nil {
+		t.Fatalf("read reorg metric: %v", err)
+	}
+	return m.GetCounter().GetValue()
+}
+
+// A reorg between two worker fetches leaves height 4 pointing at a parent the writer never
+// connected. The writer must stop before the unlinked block, keep the linked prefix and
+// yield errResync instead of storing a broken chain.
+func TestParallelConnectBlocksDetectsUnlinkedParent(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	hashes := []string{"", evmTestHash("11"), evmTestHash("22"), evmTestHash("33"), evmTestHash("44"), evmTestHash("55"), evmTestHash("66")}
+	blocks := make([]*bchain.Block, 0, 6)
+	for h := uint32(1); h <= 6; h++ {
+		blocks = append(blocks, evmTestBlock(hashes[h], hashes[h-1], h))
+	}
+	blocks[3].Prev = evmTestHash("ab")
+	if err := d.ConnectBlock(blocks[0]); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := newResyncTestChain(nil, blocks...)
+	w := newResyncTestWorker(t, d, chain)
+	forksBefore := reorgEvents(t, w, "fork")
+
+	if err := w.ParallelConnectBlocks(nil, 2, 6, 2); !stdErrors.Is(err, errResync) {
+		t.Fatalf("ParallelConnectBlocks error = %v, want %v", err, errResync)
+	}
+	assertBestBlock(t, d, 3, hashes[3])
+	if got := reorgEvents(t, w, "fork") - forksBefore; got != 1 {
+		t.Fatalf("fork reorg events = %v, want 1", got)
+	}
+}
+
+// End-to-end reorg round trip on the parallel path: a worker fetched height 3 on the old
+// branch, its siblings fetched 4..8 on the new one. The writer's parent check aborts the
+// round, the next resyncIndex fork check finds the orphan at 3, handleFork disconnects it
+// and a second parallel round connects the canonical branch, all without any per-height
+// GetBlockHash. The chain is tall enough for the recovery round to stay parallel too.
+func TestResyncIndexEthereumTypeParallelForkRecovers(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	hashes := []string{"", evmTestHash("11"), evmTestHash("22"), evmTestHash("33"), evmTestHash("44"), evmTestHash("55"), evmTestHash("66"), evmTestHash("77"), evmTestHash("88")}
+	blocks := make([]*bchain.Block, 0, 8)
+	for h := uint32(1); h <= 8; h++ {
+		blocks = append(blocks, evmTestBlock(hashes[h], hashes[h-1], h))
+	}
+	if err := d.ConnectBlock(blocks[0]); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := newResyncTestChain(&bchain.EVMTip{Hash: hashes[8], ParentHash: hashes[7], Height: 8}, blocks...)
+	orphan := evmTestBlock(evmTestHash("ab"), hashes[2], 3)
+	chain.blocksOnce[3] = orphan
+	w := newResyncTestWorker(t, d, chain)
+	w.syncWorkers = 2
+	forksBefore := reorgEvents(t, w, "fork")
+
+	if err := w.resyncIndex(nil, false); !stdErrors.Is(err, syncNotNeeded) {
+		t.Fatalf("resyncIndex error = %v, want %v", err, syncNotNeeded)
+	}
+	assertBestBlock(t, d, 8, hashes[8])
+	if got := reorgEvents(t, w, "fork") - forksBefore; got != 1 {
+		t.Fatalf("fork reorg events = %v, want 1", got)
+	}
+	// Height 3 was fetched twice: the orphan in the first round, the canonical block in the second.
+	assertCalls(t, "GetBlock", chain.getBlockCalls, 3, 2)
+	// The only header lookups are the fork check and handleFork's walk, both at heights <= 3.
+	for h := uint32(4); h <= 8; h++ {
+		assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, h, 0)
+	}
+	if hash, err := d.GetBlockHash(3); err != nil || hash != hashes[3] {
+		t.Fatalf("block 3 = %s %v, want canonical %s", hash, err, hashes[3])
+	}
+}
+
+// Bitcoin-type GetBlock("") issues getblockhash itself, so the bulk producer keeps
+// resolving the hash: moving the RPC into the workers would save nothing.
+func TestBulkConnectBlocksBitcoinTypeKeepsHashLookup(t *testing.T) {
+	d := setupRocksDB(t, bitcoinTestnetParser())
+	defer closeAndDestroyRocksDB(t, d)
+
+	chain := newResyncTestChain(nil)
+	chain.chainType = bchain.ChainBitcoinType
+	for h := uint32(1); h <= 4; h++ {
+		b := &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: strings.Repeat(strconv.Itoa(int(h)), 64), Height: h, Time: int64(h)}}
+		chain.hashes[h], chain.blocks[h] = b.Hash, b
+	}
+	w := newResyncTestWorker(t, d, chain)
+	w.syncWorkers = 2
+
+	if err := w.BulkConnectBlocks(1, 4); err != nil {
+		t.Fatalf("BulkConnectBlocks: %v", err)
+	}
+	for h := uint32(1); h <= 4; h++ {
+		assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, h, 1)
+		assertCalls(t, "GetBlock by height", chain.getBlockByHeight, h, 0)
+	}
+	assertBestBlock(t, d, 4, chain.hashes[4])
+}
+
+// A hash-pinned bitcoin-type round follows the node's getblockhash chain, so the writer must
+// not second-guess it through Prev: the integration fixtures splice blocks whose parents do
+// not link under real hashes, and a fork there is handleFork's job, not the writer's.
+func TestParallelConnectBlocksBitcoinTypeIgnoresUnlinkedParent(t *testing.T) {
+	d := setupRocksDB(t, bitcoinTestnetParser())
+	defer closeAndDestroyRocksDB(t, d)
+
+	chain := newResyncTestChain(nil)
+	chain.chainType = bchain.ChainBitcoinType
+	for h := uint32(1); h <= 4; h++ {
+		b := &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: strings.Repeat(strconv.Itoa(int(h)), 64), Prev: strings.Repeat("f", 64), Height: h, Time: int64(h)}}
+		chain.hashes[h], chain.blocks[h] = b.Hash, b
+	}
+	w := newResyncTestWorker(t, d, chain)
+	forksBefore := reorgEvents(t, w, "fork")
+
+	if err := w.ParallelConnectBlocks(nil, 1, 4, 2); err != nil {
+		t.Fatalf("ParallelConnectBlocks: %v", err)
+	}
+	assertBestBlock(t, d, 4, chain.hashes[4])
+	if got := reorgEvents(t, w, "fork") - forksBefore; got != 0 {
+		t.Fatalf("fork reorg events = %v, want 0", got)
+	}
+}
+
+// The EVM bulk path mirrors the parallel one: heights only, no header lookups.
+func TestBulkConnectBlocksEthereumTypeFetchesByHeight(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	hashes := []string{"", evmTestHash("11"), evmTestHash("22"), evmTestHash("33"), evmTestHash("44")}
+	blocks := make([]*bchain.Block, 0, 4)
+	for h := uint32(1); h <= 4; h++ {
+		blocks = append(blocks, evmTestBlock(hashes[h], hashes[h-1], h))
+	}
+	chain := newResyncTestChain(nil, blocks...)
+	w := newResyncTestWorker(t, d, chain)
+	w.syncWorkers = 2
+
+	if err := w.BulkConnectBlocks(1, 4); err != nil {
+		t.Fatalf("BulkConnectBlocks: %v", err)
+	}
+	for h := uint32(1); h <= 4; h++ {
+		assertCalls(t, "GetBlockHash", chain.getBlockHashCalls, h, 0)
+		assertCalls(t, "GetBlock by height", chain.getBlockByHeight, h, 1)
+	}
+	assertBestBlock(t, d, 4, hashes[4])
+}
+
+func TestUnlinkedParent(t *testing.T) {
+	w := &SyncWorker{metrics: getTestMetrics(t)}
+	tests := []struct {
+		name     string
+		prevHash string
+		block    *bchain.Block
+		want     bool
+	}{
+		{"no previous hash leaves the first block unchecked", "", evmTestBlock("b", "x", 1), false},
+		{"block without parent is not checked", "a", evmTestBlock("b", "", 1), false},
+		{"linked", "a", evmTestBlock("b", "a", 1), false},
+		{"unlinked", "a", evmTestBlock("b", "x", 1), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := w.unlinkedParent(tt.prevHash, tt.block); got != tt.want {
+				t.Fatalf("unlinkedParent(%q, prev %q) = %v, want %v", tt.prevHash, tt.block.Prev, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -883,7 +1079,10 @@ func TestParallelConnectBlocksReturnsWorkerAbortWhenHashQueueFull(t *testing.T) 
 		blockErrors:   map[uint32][]error{},
 		getBlockCalls: map[uint32]int{},
 	}
+	d := setupRocksDB(t, bitcoinTestnetParser())
+	defer closeAndDestroyRocksDB(t, d)
 	w := &SyncWorker{
+		db:    d,
 		chain: chain,
 		missingBlockRetry: MissingBlockRetryConfig{
 			RecheckThreshold:    1,
@@ -1093,6 +1292,8 @@ func (c *parallelTailTestChain) GetBlockHash(height uint32) (string, error) {
 	return "h" + strconv.Itoa(int(height)), nil
 }
 
+// GetBlock is called by height on EVM; the block carries no Prev so the writer's
+// parent-linkage check stays inert here.
 func (c *parallelTailTestChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	c.mu.Lock()
 	c.calls[height]++
@@ -1100,7 +1301,7 @@ func (c *parallelTailTestChain) GetBlock(hash string, height uint32) (*bchain.Bl
 	if height == c.failHeight {
 		return nil, c.failErr
 	}
-	return &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: hash, Height: height}}, nil
+	return &bchain.Block{BlockHeader: bchain.BlockHeader{Hash: evmTestHash(strconv.Itoa(10 + int(height))), Height: height}}, nil
 }
 
 // Regression for #1767: a worker that exits on a tail block without producing it must not
@@ -1108,7 +1309,10 @@ func (c *parallelTailTestChain) GetBlock(hash string, height uint32) (*bchain.Bl
 func TestParallelConnectBlocksReturnsWhenTailWorkerExitsWithoutBlock(t *testing.T) {
 	wantErr := stdErrors.New("rpc -32000: logs unavailable")
 	chain := &parallelTailTestChain{failHeight: 1, failErr: wantErr, calls: map[uint32]int{}}
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
 	w := &SyncWorker{
+		db:    d,
 		chain: chain,
 		missingBlockRetry: MissingBlockRetryConfig{
 			TipRecheckThreshold: 2,
