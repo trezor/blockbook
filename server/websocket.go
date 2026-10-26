@@ -348,17 +348,25 @@ type errorLogBudget struct {
 }
 
 // allow reports whether another error line fits into the current second's budget.
+// The window only moves forward, so a late, older timestamp cannot reset the count.
 func (b *errorLogBudget) allow(now time.Time) bool {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	if sec := now.Unix(); sec != b.second {
-		if suppressed := b.count - websocketErrorLogsPerSecond; suppressed > 0 {
-			glog.Warning("Suppressed ", suppressed, " websocket client error log lines")
-		}
+	prevSecond, suppressed := b.second, 0
+	if sec := now.Unix(); sec > b.second {
+		suppressed = b.count - websocketErrorLogsPerSecond
 		b.second, b.count = sec, 0
 	}
 	b.count++
-	return b.count <= websocketErrorLogsPerSecond
+	count := b.count
+	b.mu.Unlock()
+	// log outside the lock so a slow disk does not stall other failing requests
+	if suppressed > 0 {
+		glog.Warning("Suppressed ", suppressed, " websocket client error log lines in second ", time.Unix(prevSecond, 0).UTC().Format(time.RFC3339))
+	}
+	if count == websocketErrorLogsPerSecond+1 {
+		glog.Warning("Websocket client error log limit of ", websocketErrorLogsPerSecond, " lines per second reached, suppressing")
+	}
+	return count <= websocketErrorLogsPerSecond
 }
 
 // ServeHTTP sets up handler of websocket channel
@@ -1062,7 +1070,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "success"}).Inc()
 		} else {
-			if apiErr, ok := err.(*api.APIError); (!ok || !apiErr.Public) && s.errorLogBudget.allow(t) {
+			if apiErr, ok := err.(*api.APIError); (!ok || !apiErr.Public) && s.errorLogBudget.allow(time.Now()) {
 				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", truncateWebsocketText(errors.ErrorStack(err)), ", data len ", len(req.Params), ", preview ", getWebsocketPayloadPreview(req.Params))
 			}
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()

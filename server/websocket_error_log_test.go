@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/trezor/blockbook/common"
@@ -54,6 +55,22 @@ func TestWebsocketErrorLogIsBounded(t *testing.T) {
 		// the loop may straddle a second boundary, which grants a second budget
 		if n := glog.Stats.Error.Lines() - lines; n > 20 {
 			t.Errorf("1000 bad requests logged %d error lines, want <= 20", n)
+		}
+	})
+
+	t.Run("out-of-order times do not reset the window", func(t *testing.T) {
+		var b errorLogBudget
+		late, now := time.Unix(100, 0), time.Unix(105, 0)
+		allowed := 0
+		for i := 0; i < 100; i++ {
+			for _, ts := range []time.Time{now, late} {
+				if b.allow(ts) {
+					allowed++
+				}
+			}
+		}
+		if allowed != websocketErrorLogsPerSecond {
+			t.Errorf("allowed %d lines, want %d", allowed, websocketErrorLogsPerSecond)
 		}
 	})
 }
