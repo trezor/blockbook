@@ -27,6 +27,26 @@ and try pack and unpack them. Specialities of particular coin are tested too. Se
 [bitcoinparser_test.go](/bchain/coins/btc/bitcoinparser_test.go) and
 [ethparser_test.go](/bchain/coins/eth/ethparser_test.go).
 
+### Benchmarks on real EVM blocks
+
+The EVM read-path benchmarks (`BenchmarkUnpackTxBlocks`, `BenchmarkReadPathBlocks` in `bchain/coins/eth`; the address page,
+`getAccountInfo` and `GetBlock` benchmarks in `api`) replay real transactions and skip unless `BLOCKBOOK_BENCH_BLOCKS`
+names a directory with `block<N>.json` and `receipts<N>.json` for N = 0, 1, ... — the raw responses of
+`eth_getBlockByNumber(<block>, true)` and `eth_getBlockReceipts(<block>)` of consecutive blocks:
+
+```
+RPC=https://ethereum-rpc.publicnode.com
+for i in 0 1 2 3; do
+  HEX=$(printf '0x%x' $((26033116 - i)))
+  curl -s -X POST $RPC -H 'content-type: application/json' -o bench/block$i.json \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getBlockByNumber\",\"params\":[\"$HEX\",true]}"
+  curl -s -X POST $RPC -H 'content-type: application/json' -o bench/receipts$i.json \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getBlockReceipts\",\"params\":[\"$HEX\"]}"
+done
+BLOCKBOOK_BENCH_BLOCKS=$PWD/bench go test -tags unittest -run xxx -bench 'Blocks|TxsPage|GetAccountInfo|GetBlock' -benchmem ./bchain/coins/eth/ ./api/
+```
+
+The fixture is not committed; a handful of busy blocks (about 1000 transactions) is enough.
 
 ## Integration tests
 
