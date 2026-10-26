@@ -1,6 +1,8 @@
 package db
 
 import (
+	"strings"
+
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
@@ -65,6 +67,8 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 	c.metrics.TxCacheEfficiency.With(common.Labels{"status": "miss"}).Inc()
 	// cache only confirmed transactions
 	if tx.Confirmations > 0 {
+		// only txs of indexed blocks are evicted on reorg, a tx from any other block must not be cached
+		var indexed bool
 		if c.chainType == bchain.ChainBitcoinType {
 			ta, err := c.db.GetTxAddresses(txid)
 			if err != nil {
@@ -85,16 +89,18 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 				}
 			default:
 				h = ta.Height
+				indexed = true
 			}
 		} else if c.chainType == bchain.ChainEthereumType {
 			h, err = eth.GetHeightFromTx(tx)
 			if err != nil {
 				return nil, 0, err
 			}
+			indexed = c.inIndexedBlock(tx, h)
 		} else {
 			return nil, 0, errors.New("Unknown chain type")
 		}
-		if c.enabled {
+		if c.enabled && indexed {
 			err = c.db.PutTx(tx, h, tx.Blocktime)
 			// do not return caching error, only log it
 			if err != nil {
@@ -105,4 +111,21 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 		return tx, -1, nil
 	}
 	return tx, int(h), nil
+}
+
+// inIndexedBlock reports whether the backend placed the Ethereum-type tx in the block indexed at height h.
+func (c *TxCache) inIndexedBlock(tx *bchain.Tx, h uint32) bool {
+	indexed, err := c.db.GetBlockHash(h)
+	if err != nil || indexed == "" {
+		return false
+	}
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok || csd.Tx == nil {
+		return false
+	}
+	// Tron txs carry no block hash, the indexed height is the only check available there
+	if csd.Tx.BlockHash == "" {
+		return true
+	}
+	return strings.EqualFold(indexed, csd.Tx.BlockHash)
 }
