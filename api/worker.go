@@ -862,8 +862,12 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 	if err != nil {
 		return "", nil, err
 	}
+	// token ids are uint256 (at most 78 decimal digits); bound the input before the superlinear decimal parse
+	if len(id) > 78 {
+		return "", nil, errors.New("Invalid token id")
+	}
 	tokenId, ok := new(big.Int).SetString(id, 10)
-	if !ok {
+	if !ok || tokenId.Sign() < 0 || tokenId.BitLen() > 256 {
 		return "", nil, errors.New("Invalid token id")
 	}
 	uri, err := w.chain.GetTokenURI(cd, tokenId)
