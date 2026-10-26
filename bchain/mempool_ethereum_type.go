@@ -239,9 +239,13 @@ func (m *MempoolEthereumType) addTransactionToMempool(txid string, private bool)
 			return false
 		}
 		m.mux.Lock()
-		m.txEntries[txid] = entry
-		for _, si := range entry.addrIndexes {
-			m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+		// a concurrent add of the same txid may have written while the fetch ran unlocked: the first
+		// entry wins, so the stored index always matches the outpoints that were appended for it
+		if _, exists = m.txEntries[txid]; !exists {
+			m.txEntries[txid] = entry
+			for _, si := range entry.addrIndexes {
+				m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+			}
 		}
 		m.mux.Unlock()
 	}
