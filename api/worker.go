@@ -862,7 +862,7 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 	if err != nil {
 		return "", nil, err
 	}
-	tokenId, ok := new(big.Int).SetString(id, 10)
+	tokenId, ok := parseTokenID(id)
 	if !ok {
 		return "", nil, errors.New("Invalid token id")
 	}
@@ -875,6 +875,18 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 		return "", nil, err
 	}
 	return uri, ci, nil
+}
+
+// parseTokenID accepts a decimal uint256; the length bound (78 digits) runs before the superlinear decimal parse.
+func parseTokenID(id string) (*big.Int, bool) {
+	if len(id) > 78 {
+		return nil, false
+	}
+	tokenID, ok := new(big.Int).SetString(id, 10)
+	if !ok || tokenID.Sign() < 0 || tokenID.BitLen() > 256 {
+		return nil, false
+	}
+	return tokenID, true
 }
 
 // maxFilteredAddressScanNonMatching caps entries a filtered walk may skip; matches are already bounded by maxResults.
