@@ -2564,8 +2564,14 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			fees.Instant = &f
 		}
 	}
-	// networkCongestion: where the projected base fee ranks among the last 200 mined ones
-	fees.NetworkCongestion = eip1559BaseFeePercentile(b.congestionWindow(h.OldestBlock), baseFee)
+	// networkCongestion and historicalBaseFeeRange rank the projected base fee against the last 200
+	// mined ones; baseFeeTrend compares it with the oldest base fee of this 8-block window
+	window := b.congestionWindow(h.OldestBlock)
+	fees.NetworkCongestion = eip1559BaseFeePercentile(window, baseFee)
+	fees.HistoricalBaseFeeRange = eip1559BaseFeeRange(window)
+	if oldest, err := hexutil.DecodeBig(h.BaseFeePerGas[0]); err == nil {
+		fees.BaseFeeTrend = eip1559BaseFeeTrend(oldest, baseFee)
+	}
 	// Reaching here with a provider configured means its cache was stale/unready (a hit would have
 	// returned above), so this on-chain estimate is a fallback.
 	source := "onchain"

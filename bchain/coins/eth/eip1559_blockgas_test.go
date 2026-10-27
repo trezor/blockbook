@@ -229,6 +229,36 @@ func TestEip1559BaseFeePercentile(t *testing.T) {
 	}
 }
 
+// TestEip1559BaseFeeRangeAndTrend: historicalBaseFeeRange is the window's min and max as copies, nil
+// for an empty window; baseFeeTrend is the sign of projected minus oldest, empty when flat or unknown.
+func TestEip1559BaseFeeRangeAndTrend(t *testing.T) {
+	if r := eip1559BaseFeeRange(nil); r != nil {
+		t.Errorf("empty window range = %v, want nil", r)
+	}
+	w := []*big.Int{big.NewInt(30), big.NewInt(10), big.NewInt(20)}
+	r := eip1559BaseFeeRange(w)
+	if len(r) != 2 || r[0].Int64() != 10 || r[1].Int64() != 30 {
+		t.Errorf("range = %v, want [10 30]", r)
+	}
+	if r[0] == w[1] || r[1] == w[0] {
+		t.Error("range must not alias the cached window")
+	}
+	for _, c := range []struct {
+		from, to *big.Int
+		want     string
+	}{
+		{big.NewInt(1), big.NewInt(2), "up"},
+		{big.NewInt(2), big.NewInt(1), "down"},
+		{big.NewInt(2), big.NewInt(2), ""},
+		{nil, big.NewInt(2), ""},
+		{big.NewInt(2), nil, ""},
+	} {
+		if got := eip1559BaseFeeTrend(c.from, c.to); got != c.want {
+			t.Errorf("trend(%v -> %v) = %q, want %q", c.from, c.to, got, c.want)
+		}
+	}
+}
+
 // TestEthereumTypeGetEip1559FeesOnChainCongestion: the on-chain estimate ranks the projected base fee
 // in a 200-block window fetched by a second, percentile-free eth_feeHistory, cached until the tier
 // window's oldestBlock moves; a failed window fetch keeps the previous window and never fails the quote.
@@ -246,6 +276,13 @@ func TestEthereumTypeGetEip1559FeesOnChainCongestion(t *testing.T) {
 	}
 	if fees.NetworkCongestion != 0.4 {
 		t.Errorf("NetworkCongestion = %v, want 0.4", fees.NetworkCongestion)
+	}
+	if r := fees.HistoricalBaseFeeRange; len(r) != 2 || r[0].Int64() != 16 || r[1].Int64() != 256 {
+		t.Errorf("HistoricalBaseFeeRange = %v, want [16 256]", r)
+	}
+	// the tier window's oldest base fee is 0x10 = 16, the projection 100
+	if fees.BaseFeeTrend != "up" {
+		t.Errorf("BaseFeeTrend = %q, want up", fees.BaseFeeTrend)
 	}
 	if len(stub.windowArgs) != 3 || stub.windowArgs[0] != eip1559CongestionBlocks || stub.windowArgs[1] != "latest" || fmt.Sprint(stub.windowArgs[2]) != "[]" {
 		t.Errorf("window eth_feeHistory args = %v, want [%d latest []]", stub.windowArgs, eip1559CongestionBlocks)
@@ -279,6 +316,9 @@ func TestEthereumTypeGetEip1559FeesOnChainCongestion(t *testing.T) {
 	fees, err = b.EthereumTypeGetEip1559Fees()
 	if err != nil || fees == nil || fees.NetworkCongestion != 0 || stub.windowCalls != 3 {
 		t.Errorf("flat window: fees = %v, err = %v, windowCalls = %d; want 0 and 3 fetches", fees, err, stub.windowCalls)
+	}
+	if r := fees.HistoricalBaseFeeRange; len(r) != 2 || r[0].Int64() != 100 || r[1].Int64() != 100 {
+		t.Errorf("flat window range = %v, want [100 100]", r)
 	}
 }
 

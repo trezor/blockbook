@@ -11,7 +11,8 @@ The split is deliberate: Blockbook supplies facts, the wallet decides policy.
 
 - base fee — the next-block projection, taken from the chain
 - priority-fee tiers (tips)
-- congestion (`networkCongestion`, on both paths) and trend signals (alternative provider only)
+- congestion and base-fee context (`networkCongestion`, `historicalBaseFeeRange`, `baseFeeTrend`, on
+  both paths); priority-fee ranges and trend (alternative provider only)
 - per-block gas — `baseFee`, `gasUsed`, `gasLimit`
 
 **Trezor Suite — owns the fee policy:**
@@ -74,7 +75,11 @@ How each source is built:
   window or a flat base fee (rollups at their floor) and 1 the most expensive. The window comes from
   a second `eth_feeHistory` without reward percentiles — a header-only read — cached until the tier
   window's `oldestBlock` moves, so it costs one extra call per new block, not per `estimateFee`. A
-  failed window fetch keeps the previous window and never fails the quote. `gasUsedRatio` is not
+  failed window fetch keeps the previous window and never fails the quote. The same window gives
+  `historicalBaseFeeRange` (its lowest and highest base fee, wei), and `baseFeeTrend` is `up` or
+  `down` by the projected base fee against the oldest of the 8 tier-window blocks (~100 s), omitted
+  when equal; a one-block comparison would flip every block as EIP-1559 hunts its target.
+  `gasUsedRatio` is not
   used: EIP-1559 steers block fullness to 0.5 on average at any price level (the 8-block mean sat at
   0.45–0.56 through the 394 gwei base-fee spike of 2024-03-05 just as on a sub-gwei day), so it
   measures where the base fee is heading next block, not where it stands.
