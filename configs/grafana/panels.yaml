@@ -824,7 +824,7 @@ panels:
         legend: '{{instance}} - {{tier}}'
   fees.eip1559_priority_fee:
     title: EIP-1559 priority tip by tier (Gwei)
-    description: The maxPriorityFeePerGas (miner tip) served per tier, in Gwei (raw wei / 1e9), shown in a separate panel from maxFeePerGas because tips are an order of magnitude smaller. On the on-chain path tiers map to eth_feeHistory reward percentiles 20/70/90/99; a near-zero flat tip is normal on quiet or L2 chains. Read exact values from the legend table.
+    description: The maxPriorityFeePerGas (miner tip) served per tier, in Gwei (raw wei / 1e9), shown in a separate panel from maxFeePerGas because tips are an order of magnitude smaller. On the on-chain path the tiers are a ladder on the 8-block max of the eth_feeHistory p20 reward (Economy = p20 max, Normal = 1.5x, High = p50 max, Instant = p99 max); a near-zero flat tip is normal on quiet or L2 chains. Read exact values from the legend table.
     queries:
       by_tier:
         promql: ({{name:eth_eip1559_fee}}{job="blockbook", coin="$coin", kind="priority_fee"} / 1e9)
