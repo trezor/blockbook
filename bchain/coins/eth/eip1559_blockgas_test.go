@@ -17,10 +17,16 @@ import (
 )
 
 // feeHistoryRPCStub serves a canned eth_feeHistory response; any other method errors so the test
-// also asserts the on-chain path no longer issues eth_maxPriorityFeePerGas.
+// also asserts the on-chain path no longer issues eth_maxPriorityFeePerGas. The 200-block congestion
+// window is served from windowRaw when set (raw otherwise) and counted separately, so tests can
+// assert the tier call's arguments and the window cache independently.
 type feeHistoryRPCStub struct {
-	raw  string
-	args []interface{} // the last eth_feeHistory arguments, so tests can assert the window and percentiles
+	raw         string
+	args        []interface{} // the last tier eth_feeHistory arguments, so tests can assert the window and percentiles
+	windowRaw   string
+	windowArgs  []interface{}
+	windowCalls int
+	windowErr   error
 }
 
 func (s *feeHistoryRPCStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -32,6 +38,17 @@ func (s *feeHistoryRPCStub) Close() {}
 func (s *feeHistoryRPCStub) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	if method != "eth_feeHistory" {
 		return errors.New("unexpected RPC method: " + method)
+	}
+	if len(args) > 0 && args[0] == eip1559CongestionBlocks {
+		s.windowArgs = args
+		s.windowCalls++
+		if s.windowErr != nil {
+			return s.windowErr
+		}
+		if s.windowRaw != "" {
+			return json.Unmarshal([]byte(s.windowRaw), result)
+		}
+		return json.Unmarshal([]byte(s.raw), result)
 	}
 	s.args = args
 	return json.Unmarshal([]byte(s.raw), result)
@@ -178,6 +195,90 @@ func TestEthereumTypeGetEip1559FeesOnChainBaseFeeIsLast(t *testing.T) {
 	}
 	if _, err := newRPC(`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","zz"]`).EthereumTypeGetEip1559Fees(); err == nil {
 		t.Error("undecodable base fee: expected an error")
+	}
+}
+
+// TestEip1559BaseFeePercentile: networkCongestion is the fraction of window base fees strictly below
+// the projected one, so a flat window (a rollup at its base-fee floor) scores 0 rather than 0.5, and
+// an empty window scores 0, which omitempty then drops from the response.
+func TestEip1559BaseFeePercentile(t *testing.T) {
+	window := func(vs ...int64) []*big.Int {
+		out := make([]*big.Int, len(vs))
+		for i, v := range vs {
+			out[i] = big.NewInt(v)
+		}
+		return out
+	}
+	for _, c := range []struct {
+		name   string
+		window []*big.Int
+		base   *big.Int
+		want   float64
+	}{
+		{"empty window", nil, big.NewInt(5), 0},
+		{"nil base fee", window(1, 2), nil, 0},
+		{"cheapest", window(2, 3, 4), big.NewInt(1), 0},
+		{"most expensive", window(1, 2, 3), big.NewInt(4), 1},
+		{"flat", window(7, 7, 7, 7), big.NewInt(7), 0},
+		{"mid", window(1, 2, 3, 4), big.NewInt(3), 0.5},
+		{"ties not counted", window(1, 3, 3, 5), big.NewInt(3), 0.25},
+	} {
+		if got := eip1559BaseFeePercentile(c.window, c.base); got != c.want {
+			t.Errorf("%s: percentile = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainCongestion: the on-chain estimate ranks the projected base fee
+// in a 200-block window fetched by a second, percentile-free eth_feeHistory, cached until the tier
+// window's oldestBlock moves; a failed window fetch keeps the previous window and never fails the quote.
+func TestEthereumTypeGetEip1559FeesOnChainCongestion(t *testing.T) {
+	stub := &feeHistoryRPCStub{
+		raw: `{"oldestBlock":"0x1","reward":[["0x1","0x2","0x3"]],` + feeHistoryBaseFees + `}`,
+		// five mined base fees (16, 64, 200, 256, 100) plus the projection; the tier window projects a
+		// base fee of 100 -> two of five strictly below = 0.4 (the tie at 100 does not count)
+		windowRaw: `{"oldestBlock":"0x1","baseFeePerGas":["0x10","0x40","0xc8","0x100","0x64","0x70"],"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5]}`,
+	}
+	b := &EthereumRPC{RPC: stub, Timeout: time.Second, ChainConfig: &Configuration{Eip1559Fees: true}}
+	fees, err := b.EthereumTypeGetEip1559Fees()
+	if err != nil || fees == nil {
+		t.Fatalf("fees, err = %v, %v", fees, err)
+	}
+	if fees.NetworkCongestion != 0.4 {
+		t.Errorf("NetworkCongestion = %v, want 0.4", fees.NetworkCongestion)
+	}
+	if len(stub.windowArgs) != 3 || stub.windowArgs[0] != eip1559CongestionBlocks || stub.windowArgs[1] != "latest" || fmt.Sprint(stub.windowArgs[2]) != "[]" {
+		t.Errorf("window eth_feeHistory args = %v, want [%d latest []]", stub.windowArgs, eip1559CongestionBlocks)
+	}
+	// the tier call's arguments are untouched by the second call
+	if len(stub.args) != 3 || stub.args[0] != eip1559FeeHistoryBlocks {
+		t.Errorf("tier eth_feeHistory args = %v", stub.args)
+	}
+
+	// same tip block: served from the cache
+	if _, err := b.EthereumTypeGetEip1559Fees(); err != nil || stub.windowCalls != 1 {
+		t.Errorf("second call at the same tip: windowCalls = %d, err = %v; want 1 fetch", stub.windowCalls, err)
+	}
+
+	// new tip block with a failing window fetch: the quote still comes back with the previous rank
+	stub.raw = `{"oldestBlock":"0x2","reward":[["0x1","0x2","0x3"]],` + feeHistoryBaseFees + `}`
+	stub.windowErr = errors.New("block count too large")
+	fees, err = b.EthereumTypeGetEip1559Fees()
+	if err != nil || fees == nil || fees.NetworkCongestion != 0.4 || stub.windowCalls != 2 {
+		t.Errorf("failed window fetch: fees = %v, err = %v, windowCalls = %d; want stale 0.4 and 2 fetches", fees, err, stub.windowCalls)
+	}
+	// and it is not retried until the tip moves again
+	if _, err := b.EthereumTypeGetEip1559Fees(); err != nil || stub.windowCalls != 2 {
+		t.Errorf("repeat after failure: windowCalls = %d, err = %v; want no refetch", stub.windowCalls, err)
+	}
+
+	// a window with every base fee at the projection (flat rollup) scores 0
+	stub.raw = `{"oldestBlock":"0x3","reward":[["0x1","0x2","0x3"]],` + feeHistoryBaseFees + `}`
+	stub.windowErr = nil
+	stub.windowRaw = `{"oldestBlock":"0x3","baseFeePerGas":["0x64","0x64","0x64","0x64"],"gasUsedRatio":[0.5,0.5,0.5]}`
+	fees, err = b.EthereumTypeGetEip1559Fees()
+	if err != nil || fees == nil || fees.NetworkCongestion != 0 || stub.windowCalls != 3 {
+		t.Errorf("flat window: fees = %v, err = %v, windowCalls = %d; want 0 and 3 fetches", fees, err, stub.windowCalls)
 	}
 }
 

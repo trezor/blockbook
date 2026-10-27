@@ -276,6 +276,7 @@ type EthereumRPC struct {
 	stakingPoolContracts      []string
 	alternativeFeeProvider    alternativeFeeProviderInterface
 	alternativeSendTxProvider *AlternativeSendTxProvider
+	baseFeeWindow             baseFeeWindow
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
 	// Multicall3AddressOverride replaces the canonical Multicall3 address for chains
@@ -2563,6 +2564,8 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			fees.Instant = &f
 		}
 	}
+	// networkCongestion: where the projected base fee ranks among the last 200 mined ones
+	fees.NetworkCongestion = eip1559BaseFeePercentile(b.congestionWindow(h.OldestBlock), baseFee)
 	// Reaching here with a provider configured means its cache was stale/unready (a hit would have
 	// returned above), so this on-chain estimate is a fallback.
 	source := "onchain"
