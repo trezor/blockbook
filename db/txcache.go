@@ -49,8 +49,8 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 		if tx != nil {
 			// number of confirmations is not stored in cache, they change all the time
 			_, bestheight, _, _ := c.is.GetSyncState()
-			// Ethereum-type txs are cached at their chain height, which can be above the
-			// indexed height; report the mined minimum instead of underflowing.
+			// the best height drops before a disconnect commits, so a cached tx can sit above
+			// it for a moment; report the mined minimum instead of underflowing
 			if bestheight < h {
 				tx.Confirmations = 1
 			} else {
@@ -68,7 +68,7 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 	// cache only confirmed transactions
 	if tx.Confirmations > 0 {
 		// only txs of indexed blocks are evicted on reorg, a tx from any other block must not be cached
-		var indexed bool
+		var cache bool
 		if c.chainType == bchain.ChainBitcoinType {
 			ta, err := c.db.GetTxAddresses(txid)
 			if err != nil {
@@ -89,22 +89,27 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 				}
 			default:
 				h = ta.Height
-				indexed = true
+				cache = c.enabled
 			}
 		} else if c.chainType == bchain.ChainEthereumType {
 			h, err = eth.GetHeightFromTx(tx)
 			if err != nil {
 				return nil, 0, err
 			}
-			indexed = c.inIndexedBlock(tx, h)
+			cache = c.enabled && c.inIndexedBlock(tx, txid, h)
 		} else {
 			return nil, 0, errors.New("Unknown chain type")
 		}
-		if c.enabled && indexed {
+		if cache {
 			err = c.db.PutTx(tx, h, tx.Blocktime)
 			// do not return caching error, only log it
 			if err != nil {
 				glog.Warning("PutTx ", tx.Txid, ",error ", err)
+			} else if !c.inIndexedBlock(tx, txid, h) {
+				// a disconnect that landed between the check above and PutTx evicted nothing
+				if err = c.db.DeleteTx(txid); err != nil {
+					glog.Warning("DeleteTx ", tx.Txid, ",error ", err)
+				}
 			}
 		}
 	} else {
@@ -113,14 +118,19 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 	return tx, int(h), nil
 }
 
-// inIndexedBlock reports whether the backend placed the Ethereum-type tx in the block indexed at height h.
-func (c *TxCache) inIndexedBlock(tx *bchain.Tx, h uint32) bool {
+// inIndexedBlock reports whether the index currently holds the tx in the block at height h.
+func (c *TxCache) inIndexedBlock(tx *bchain.Tx, txid string, h uint32) bool {
+	if c.chainType == bchain.ChainBitcoinType {
+		ta, err := c.db.GetTxAddresses(txid)
+		return err == nil && ta != nil && ta.Height == h
+	}
 	indexed, err := c.db.GetBlockHash(h)
 	if err != nil || indexed == "" {
 		return false
 	}
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-	if !ok || csd.Tx == nil {
+	// Tron reports confirmations for unsolidified txs too, their nil receipt is the only pending marker
+	if !ok || csd.Tx == nil || csd.Receipt == nil {
 		return false
 	}
 	// Tron txs carry no block hash, the indexed height is the only check available there
