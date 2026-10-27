@@ -2524,6 +2524,8 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	if err != nil {
 		return nil, err
 	}
+	// A full window is required: a chain younger than eip1559FeeHistoryBlocks gets no on-chain
+	// estimate (nil, resolved by the API as empty fees) rather than tiers priced from a few blocks.
 	if len(h.BaseFeePerGas) < eip1559FeeHistoryBlocks {
 		return nil, nil
 	}
