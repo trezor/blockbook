@@ -108,6 +108,16 @@ const ErrorTy byte = 255
 // real calls rarely exceed a few KB, so ~64 KB keeps parse work off the chain gas limit.
 const maxParseInputDataLen = 128 * 1024
 
+// markProcessed flags data word i as decoded. Encoders write each value once; a repeat means
+// offsets share data, which lets small calldata expand into huge output.
+func markProcessed(processed []bool, i int) bool {
+	if i < 0 || i >= len(processed) || processed[i] {
+		return false
+	}
+	processed[i] = true
+	return true
+}
+
 func processParam(data string, index int, dataOffset int, t *abi.Type, processed []bool) ([]string, int, bool) {
 	var retval []string
 	d := index << 6
@@ -132,7 +142,9 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		} else {
 			retval = []string{n.String()}
 		}
-		processed[index] = true
+		if !markProcessed(processed, index) {
+			return nil, 0, false
+		}
 		index++
 	case abi.AddressTy:
 		b, err := hex.DecodeString(block[24:])
@@ -140,11 +152,15 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 			return nil, 0, false
 		}
 		retval = []string{EIP55Address(b)}
-		processed[index] = true
+		if !markProcessed(processed, index) {
+			return nil, 0, false
+		}
 		index++
 	case abi.FixedBytesTy:
 		retval = []string{"0x" + block[:t.Size<<1]}
-		processed[index] = true
+		if !markProcessed(processed, index) {
+			return nil, 0, false
+		}
 		index++
 	case abi.ArrayTy:
 		for i := 0; i < t.Size; i++ {
@@ -163,7 +179,9 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		if err != nil {
 			return nil, 0, false
 		}
-		processed[index] = true
+		if !markProcessed(processed, index) {
+			return nil, 0, false
+		}
 		index++
 		offset <<= 1
 		d = int(offset) + dataOffset
@@ -177,7 +195,10 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 			return nil, 0, false
 		}
 		count := int(c)
-		processed[dynIndex] = true
+		// encoders may point several empty values at one zero length word, which adds no data
+		if !markProcessed(processed, dynIndex) && count != 0 {
+			return nil, 0, false
+		}
 		dynIndex++
 		if t.T == abi.StringTy || t.T == abi.BytesTy {
 			d += 64
@@ -211,7 +232,9 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 					if dynIndex >= len(processed) {
 						return nil, 0, false
 					}
-					processed[dynIndex] = true
+					if !markProcessed(processed, dynIndex) {
+						return nil, 0, false
+					}
 					dynIndex++
 				}
 			}
