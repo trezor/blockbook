@@ -46,8 +46,11 @@ flowchart TD
 How each source is built:
 
 - **On-chain** (coins with no provider, or a stale one — e.g. `ethereum` non-archive, ETH testnets):
-  one `eth_feeHistory` call (8 blocks, newest = `pending`, reward percentiles 20/50/99) yields the
-  next-block `baseFeePerGas` (array index `blocks-1`) and one reward row per block. Each percentile is
+  one `eth_feeHistory` call (8 blocks, newest = `latest`, reward percentiles 20/50/99) yields the
+  node's projected next-block `baseFeePerGas` (the last array element, computed with the chain's own
+  EIP-1559 parameters) and one reward row per mined block. The window ends at `latest` rather than
+  `pending` because a pending row is a half-built block sorted by tip, whose percentiles the window
+  maximum would carry, and Erigon has no pending block and would shorten the window by one. Each percentile is
   reduced by its **window maximum** — the busiest of the last 8 blocks prices the quote, so a one-block
   tip spike stays in the estimate for ~100 s instead of being averaged away — and the tiers form a
   ladder on the 20th-percentile floor:

@@ -37,10 +37,10 @@ func (s *feeHistoryRPCStub) CallContext(ctx context.Context, result interface{},
 	return json.Unmarshal([]byte(s.raw), result)
 }
 
-// feeHistoryBaseFees is an 8-element baseFeePerGas array (one per window block, as a
-// no-distinct-pending-block backend returns): [blocks-1]=0x64=100 is the projected next-block base fee.
-const feeHistoryBaseFees = `"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"],` +
-	`"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5,0.5,0.5]`
+// feeHistoryBaseFees is the 9-element baseFeePerGas array geth and Erigon return for an 8-block
+// "latest" window: one per window block plus the projected next-block base fee, 0x64=100, last.
+const feeHistoryBaseFees = `"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","0x64"],` +
+	`"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]`
 
 func onChainFees(t *testing.T, reward string) (*bchain.Eip1559Fees, *feeHistoryRPCStub) {
 	t.Helper()
@@ -98,9 +98,10 @@ func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 	}
 	checkTiers(t, fees, "4", "6", "8", "48")
 
-	// the request itself: an 8-block window ending at pending, percentiles 20/50/99
-	if len(stub.args) != 3 || stub.args[0] != eip1559FeeHistoryBlocks || stub.args[1] != "pending" {
-		t.Fatalf("eth_feeHistory args = %v, want [%d pending [20 50 99]]", stub.args, eip1559FeeHistoryBlocks)
+	// the request itself: an 8-block window of mined blocks (latest, not the inflated pending row),
+	// percentiles 20/50/99
+	if len(stub.args) != 3 || stub.args[0] != eip1559FeeHistoryBlocks || stub.args[1] != "latest" {
+		t.Fatalf("eth_feeHistory args = %v, want [%d latest [20 50 99]]", stub.args, eip1559FeeHistoryBlocks)
 	}
 	if got := fmt.Sprint(stub.args[2]); got != "[20 50 99]" {
 		t.Errorf("percentiles = %s, want [20 50 99]", got)
@@ -153,6 +154,33 @@ func TestEthereumTypeGetEip1559FeesOnChainBigReward(t *testing.T) {
 // TestEthereumTypeGetEip1559FeesOnChainShortHistory: a backend that returns fewer base fees than the
 // window asked for (a chain younger than 8 blocks, or a non-compliant node) yields no on-chain estimate
 // rather than a quote read off the wrong index.
+// TestEthereumTypeGetEip1559FeesOnChainBaseFeeIsLast: the projected base fee is read from the end of
+// the array, so a backend that returns one base fee per block with the projection last (Erigon's
+// shape for a shortened window) and one that returns blocks+1 agree, and a malformed value is an error
+// rather than a silent zero.
+func TestEthereumTypeGetEip1559FeesOnChainBaseFeeIsLast(t *testing.T) {
+	newRPC := func(baseFees string) *EthereumRPC {
+		return &EthereumRPC{
+			RPC: &feeHistoryRPCStub{raw: `{"oldestBlock":"0x1","reward":[["0x1","0x2","0x3"]],` +
+				`"baseFeePerGas":` + baseFees + `,"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]}`},
+			Timeout:     time.Second,
+			ChainConfig: &Configuration{Eip1559Fees: true},
+		}
+	}
+	for _, baseFees := range []string{
+		`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"]`,
+		`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","0x64"]`,
+	} {
+		fees, err := newRPC(baseFees).EthereumTypeGetEip1559Fees()
+		if err != nil || fees == nil || fees.BaseFeePerGas.Int64() != 100 {
+			t.Errorf("baseFeePerGas %s: fees, err = %v, %v; want base fee 100", baseFees, fees, err)
+		}
+	}
+	if _, err := newRPC(`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","zz"]`).EthereumTypeGetEip1559Fees(); err == nil {
+		t.Error("undecodable base fee: expected an error")
+	}
+}
+
 func TestEthereumTypeGetEip1559FeesOnChainShortHistory(t *testing.T) {
 	b := &EthereumRPC{
 		RPC: &feeHistoryRPCStub{raw: `{"oldestBlock":"0x1","reward":[["0x1","0x2","0x3"]],` +

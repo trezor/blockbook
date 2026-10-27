@@ -2433,6 +2433,11 @@ const eip1559BaseFeeMultiplier = 2
 // eip1559FeeHistoryBlocks is the eth_feeHistory window the on-chain tiers are read from. A tip spike
 // is usually a single block; eight blocks (~100 s on mainnet) keep it in the quote long enough for the
 // transaction that follows it, where a four-block window drops it two blocks later.
+//
+// The window ends at "latest", not "pending": a pending row is the block the node is building, sorted
+// by tip and only partly filled, so its percentiles are inflated and the window max would carry them.
+// Backends without a pending block (Erigon) silently shorten the window by one instead. "latest" is
+// eight mined blocks on every client, which is what the replay the ladder was tuned on scored.
 const eip1559FeeHistoryBlocks = 8
 
 // eip1559RewardPercentiles are the reward percentiles requested per block: the 20th is the floor every
@@ -2515,7 +2520,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 		GasUsedRatio  []float64  `json:"gasUsedRatio"`
 	}
 	var h history
-	err := b.RPC.CallContext(ctx, &h, "eth_feeHistory", eip1559FeeHistoryBlocks, "pending", eip1559RewardPercentiles)
+	err := b.RPC.CallContext(ctx, &h, "eth_feeHistory", eip1559FeeHistoryBlocks, "latest", eip1559RewardPercentiles)
 	if err != nil {
 		return nil, err
 	}
@@ -2524,19 +2529,15 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	}
 
 	hs, _ := json.Marshal(h)
-	baseFee, _ := hexutil.DecodeUint64(h.BaseFeePerGas[eip1559FeeHistoryBlocks-1])
-	// SetUint64, not big.NewInt(int64(...)): base fee is wei and a value above math.MaxInt64
-	// (~9.22e18) would wrap negative on the int64 cast. Unreachable on mainnet today but possible
-	// on high-fee L2s. Matches the header path in attachBlockGas.
-	fees.BaseFeePerGas = new(big.Int).SetUint64(baseFee)
-	// We expose only baseFeePerGas here and deliberately do NOT add a separate "next block" base-fee
-	// field. eth_feeHistory returns one extra projected element beyond the requested range, but its
-	// meaning is backend-dependent: nodes with no distinct pending block (e.g. Erigon, which ethereum
-	// mainnet uses) drop the extra element, so baseFeePerGas[blocks-1] is already the next block's
-	// projected fee; other backends (some L2s) keep it and shift the indices, making the extra element
-	// either N+1 or an N+2 estimate computed off an incomplete pending block. No single field can
-	// describe all of these. Clients that need an exact next-block base fee should use the
-	// subscribeNewBlock evmData push, which carries the real previous-block header.
+	// The last baseFeePerGas element is the node's projection for the block after the window, computed
+	// with the chain's own EIP-1559 parameters (OP-stack chains use a different denominator and
+	// elasticity, so deriving it from the header here would be wrong there). geth and Erigon both
+	// append it after the window's own base fees; indexing from the end does not depend on which.
+	baseFee, err := hexutil.DecodeBig(h.BaseFeePerGas[len(h.BaseFeePerGas)-1])
+	if err != nil {
+		return nil, errors.Annotate(err, "eth_feeHistory baseFeePerGas")
+	}
+	fees.BaseFeePerGas = baseFee
 	glog.Info("eth_feeHistory ", string(hs))
 
 	for i, tip := range eip1559TierTips(h.Reward) {
