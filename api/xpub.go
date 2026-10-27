@@ -899,9 +899,22 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		}
 	}
 
-	var unconfirmedBalanceSat *Amount
+	var unconfirmedBalanceSat, immatureBalanceSat *Amount
 	if option > AccountDetailsBasic {
 		unconfirmedBalanceSat = (*Amount)(&uBalSat)
+		var immature big.Int
+		for _, da := range data.addresses {
+			for i := range da {
+				if ad := &da[i]; ad.balance != nil {
+					adImmature, err := w.immatureCoinbaseBalance(ad.balance, bestheight)
+					if err != nil {
+						return nil, err
+					}
+					immature.Add(&immature, adImmature)
+				}
+			}
+		}
+		immatureBalanceSat = amountOrNil(&immature)
 	}
 	addr := Address{
 		Paging:                pg,
@@ -913,6 +926,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		AddrTxCount:           addrTxCount,
 		UnconfirmedBalanceSat: unconfirmedBalanceSat,
 		UnconfirmedTxs:        unconfirmedTxs,
+		ImmatureBalanceSat:    immatureBalanceSat,
 		Transactions:          txs,
 		Txids:                 txids,
 		UsedTokens:            usedTokens,

@@ -813,6 +813,33 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiAddress v2 immature coinbase",
+			r:           newGetRequest(ts.URL + "/api/v2/address/mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj","balance":"1360030331","totalReceived":"1360030331","totalSent":"0","unconfirmedBalance":"0","unconfirmedTxs":0,"immatureBalance":"1360030331","txs":1,"txids":["fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db"]}`,
+			},
+		},
+		{
+			name:        "apiAddress v2 immature coinbase details=basic",
+			r:           newGetRequest(ts.URL + "/api/v2/address/mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj?details=basic"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"address":"mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj","balance":"1360030331","totalReceived":"1360030331","totalSent":"0","unconfirmedTxs":0,"txs":1}`,
+			},
+		},
+		{
+			name:        "apiUtxo v2 immature coinbase",
+			r:           newGetRequest(ts.URL + "/api/v2/utxo/mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"txid":"fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db","vout":0,"value":"1360030331","height":225494,"confirmations":1,"coinbase":true}]`,
+			},
+		},
+		{
 			name:        "apiAddress v2 details=txs",
 			r:           newGetRequest(ts.URL + "/api/v2/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw?details=txs"),
 			status:      http.StatusOK,
@@ -1831,11 +1858,12 @@ func setupChain(t *testing.T) (bchain.BlockChainParser, bchain.BlockChain) {
 	parser := btc.NewBitcoinParser(
 		btc.GetChainParams("test"),
 		&btc.Configuration{
-			BlockAddressesToKeep:  1,
-			XPubMagic:             70617039,
-			XPubMagicSegwitP2sh:   71979618,
-			XPubMagicSegwitNative: 73342198,
-			Slip44:                1,
+			BlockAddressesToKeep:         1,
+			XPubMagic:                    70617039,
+			XPubMagicSegwitP2sh:          71979618,
+			XPubMagicSegwitNative:        73342198,
+			Slip44:                       1,
+			MinimumCoinbaseConfirmations: 100,
 		})
 
 	chain, err := dbtestdata.NewFakeBlockChain(parser)

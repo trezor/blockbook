@@ -444,9 +444,12 @@ paths:
         controlled by the details parameter.
 
         At details=basic, mempool transactions are not aggregated:
-        unconfirmedBalance, unconfirmedSending, and unconfirmedReceiving are
-        omitted, and unconfirmedTxs reports the raw mempool index size for the
-        address.
+        unconfirmedBalance, unconfirmedSending, unconfirmedReceiving, and
+        immatureBalance are omitted, and unconfirmedTxs reports the raw mempool
+        index size for the address.
+
+        For Bitcoin-type coins, immatureBalance is the part of balance held in
+        coinbase outputs that cannot be spent yet; it is omitted when zero.
 
         Load estimate: Variable; basic is low, token/tokenBalances and
         txids/txslight are medium, and txs can be high as it grows with
@@ -502,6 +505,9 @@ paths:
         tr(xpub). Descriptors can include origin paths and change selectors
         such as <0;1> or {0,1}; when change is omitted, Blockbook defaults to
         <0;1>.
+
+        Above details=basic, immatureBalance reports the part of balance held
+        in coinbase outputs that cannot be spent yet; it is omitted when zero.
 
         Note: usedTokens always reports the total number of used addresses for
         the XPUB, regardless of the tokens query filter.
@@ -2337,6 +2343,8 @@ components:
         unconfirmedSending:
           $ref: "#/components/schemas/AmountString"
         unconfirmedReceiving:
+          $ref: "#/components/schemas/AmountString"
+        immatureBalance:
           $ref: "#/components/schemas/AmountString"
         txs:
           type: integer
