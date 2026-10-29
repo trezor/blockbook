@@ -1135,6 +1135,9 @@ func clampRange(from, to, length int) (int, int) {
 	return from, min(max(to, from), length)
 }
 
+// maxTokenIdsInResponse caps NFT holdings per contract; anyone can mint unlimited ids to any address.
+const maxTokenIdsInResponse = 1000
+
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string, erc20Balance *big.Int, erc20Batched bool, probes contractInfoProbes) (*Token, error) {
 	standard := bchain.EthereumTokenStandardMap[c.Standard]
 	ci, validContract, err := w.getProbedContractDescriptorInfo(c.Contract, standard, probes)
@@ -1198,6 +1201,7 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 					ids[j] = (Amount)(c.Ids[j])
 				}
 				t.Ids = ids
+				t.IdsTotal = int(c.HoldingsTotal)
 			}
 			if len(c.MultiTokenValues) > 0 {
 				idValues := make([]MultiTokenValue, len(c.MultiTokenValues))
@@ -1206,6 +1210,7 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 					idValues[j].Value = (*Amount)(&c.MultiTokenValues[j].Value)
 				}
 				t.MultiTokenValues = idValues
+				t.MultiTokenValuesTotal = int(c.HoldingsTotal)
 			}
 		}
 	}
@@ -1314,8 +1319,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	var confirmedNonceOK bool
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
-	// details=basic consumes only the header counters; nothing it returns reads the contract array
-	ca, err := w.db.GetAddrDescContracts(addrDesc, details == AccountDetailsBasic)
+	// details=basic consumes only the header counters; nothing it returns reads the contract array.
+	// NFT ids are returned only from tokenBalances up, so lower levels skip decoding them.
+	maxHoldings := 0
+	if details >= AccountDetailsTokenBalances {
+		maxHoldings = maxTokenIdsInResponse
+	}
+	ca, err := w.db.GetAddrDescContracts(addrDesc, details == AccountDetailsBasic, maxHoldings)
 	if err != nil {
 		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
