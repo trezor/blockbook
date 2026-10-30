@@ -336,6 +336,7 @@ func Test_processTransferEventDecodesOnlyFirstDataWord(t *testing.T) {
 	}{
 		{name: "oversized data -> first word", data: "0x" + fmt.Sprintf("%064x", 0x123) + strings.Repeat("ff", 1<<20), want: big.NewInt(0x123)},
 		{name: "one trailing nibble -> first word", data: "0x" + fmt.Sprintf("%064x", 7) + "f", want: big.NewInt(7)},
+		{name: "non-hex tail -> first word", data: "0x" + fmt.Sprintf("%064x", 7) + "zz", want: big.NewInt(7)},
 		{name: "short data -> numeric value", data: "0x123", want: big.NewInt(0x123)},
 		{name: "empty data -> error", data: "0x"},
 	}
