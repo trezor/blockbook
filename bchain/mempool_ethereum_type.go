@@ -48,17 +48,10 @@ func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) (
 	return io, addrDesc
 }
 
-// hasCalldata reports whether the transaction calls a contract, i.e. carries input data.
-func hasCalldata(tx *Tx) bool {
-	csd, ok := tx.CoinSpecificData.(EthereumSpecificData)
-	return ok && csd.Tx != nil && len(strings.TrimPrefix(csd.Tx.Payload, "0x")) > 0
-}
-
 // createTxEntry builds the address index of a mempool transaction and announces it through OnNewTx.
-// A private relay send is indexed under its sender and its plain counterparties only - the recipient
-// of a value transfer and the parties of a parsed token transfer - never under a contract it calls:
-// the relay was chosen so the call is not public before inclusion, and a subscription to a router
-// address would otherwise hand out every such call as it is accepted.
+// A private relay send is indexed under its sender only: the relay was chosen so the transaction is
+// not public before inclusion, and a subscription to a router, token or recipient address would
+// otherwise hand it out as it is accepted. The sender's own devices still need to see it.
 func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private bool) (txEntry, bool) {
 	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
@@ -70,7 +63,7 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private 
 	mtx := m.txToMempoolTx(tx)
 	parser := m.chain.GetChainParser()
 	addrIndexes := make([]addrIndex, 0, len(mtx.Vout)+len(mtx.Vin))
-	if !private || !hasCalldata(tx) {
+	if !private {
 		for _, output := range mtx.Vout {
 			addrDesc, err := parser.GetAddrDescFromVout(&output)
 			if err != nil {
@@ -95,9 +88,11 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private 
 		glog.Error("GetGetTokenTransfersFromTx for tx ", txid, ", ", err)
 	} else {
 		mtx.TokenTransfers = t
-		for i := range t {
-			addrIndexes, _ = appendAddress(addrIndexes, ^int32(i+1), t[i].From, parser)
-			addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
+		if !private {
+			for i := range t {
+				addrIndexes, _ = appendAddress(addrIndexes, ^int32(i+1), t[i].From, parser)
+				addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
+			}
 		}
 	}
 	if private {
@@ -260,8 +255,8 @@ func (m *MempoolEthereumType) AddOrRefreshTransactionInMempool(txid string) bool
 }
 
 // AddOrRefreshPrivateTransactionInMempool is AddOrRefreshTransactionInMempool for a send accepted by
-// the private relay: indexed under its sender and plain counterparties only (see createTxEntry) and
-// left out of the mempool listing. An entry the public backend already surfaced stays public.
+// the private relay: indexed under its sender only (see createTxEntry) and left out of the mempool
+// listing. An entry the public backend already surfaced stays public.
 func (m *MempoolEthereumType) AddOrRefreshPrivateTransactionInMempool(txid string) bool {
 	return m.addOrRefreshTransactionInMempool(txid, true)
 }

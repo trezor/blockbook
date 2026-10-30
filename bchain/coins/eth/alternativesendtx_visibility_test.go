@@ -53,23 +53,10 @@ func (h *visibilityHarness) send(t *testing.T, rawTx string) string {
 	return txid
 }
 
-func uniqueTxids(txids []string) []string {
-	seen := make(map[string]struct{}, len(txids))
-	out := make([]string, 0, len(txids))
-	for _, txid := range txids {
-		if _, ok := seen[txid]; !ok {
-			seen[txid] = struct{}{}
-			out = append(out, txid)
-		}
-	}
-	return out
-}
-
 func (h *visibilityHarness) assertIndexed(t *testing.T, txid string, indexed []ethcommon.Address, notIndexed []ethcommon.Address) {
 	t.Helper()
 	for _, addr := range indexed {
-		// the raw index lists a txid once per role (sender and token-transfer sender), the API dedups
-		if got := uniqueTxids(mempoolTxids(t, h.rpc, addr.Hex())); !sameTxids(got, txid) {
+		if got := mempoolTxids(t, h.rpc, addr.Hex()); !sameTxids(got, txid) {
 			t.Errorf("mempool txids for %s = %v, want [%s]", addr.Hex(), got, txid)
 		}
 	}
@@ -133,8 +120,9 @@ func TestAlternativeSendContractCallIsVisibleUnderSenderOnly(t *testing.T) {
 	}
 }
 
-// A plain value transfer has no call to hide: the recipient sees it as incoming, as before.
-func TestAlternativeSendValueTransferIsVisibleToRecipient(t *testing.T) {
+// A plain value transfer is hidden from its recipient too: a watched recipient address would
+// otherwise reveal the send before inclusion.
+func TestAlternativeSendValueTransferIsHiddenFromRecipient(t *testing.T) {
 	recipient := ethcommon.HexToAddress("0x3333333333333333333333333333333333333333")
 	rawTx, sender, tx := signTestTx(t, &types.DynamicFeeTx{
 		ChainID:   big.NewInt(1),
@@ -148,12 +136,12 @@ func TestAlternativeSendValueTransferIsVisibleToRecipient(t *testing.T) {
 	h := newVisibilityHarness(t, tx)
 	txid := h.send(t, rawTx)
 
-	h.assertIndexed(t, txid, []ethcommon.Address{sender, recipient}, nil)
+	h.assertIndexed(t, txid, []ethcommon.Address{sender}, []ethcommon.Address{recipient})
 }
 
-// A token transfer is indexed under its counterparty, parsed from the calldata, but not under the
-// token contract the call goes to.
-func TestAlternativeSendTokenTransferIsVisibleToCounterparty(t *testing.T) {
+// A token transfer is indexed neither under the token contract nor under the counterparty parsed
+// from the calldata; the parsed transfer still rides on the sender's notification.
+func TestAlternativeSendTokenTransferIsHiddenFromCounterparty(t *testing.T) {
 	token := ethcommon.HexToAddress("0x4af4114F73d1c1C903aC9E0361b379D1291808A2")
 	recipient := ethcommon.HexToAddress("0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f")
 	calldata := ethcommon.FromHex("0xa9059cbb000000000000000000000000555ee11fbddc0e49a9bab358a8941ad95ffdb48f00000000000000000000000000000000000000000000021e19e0c9bab2400000")
@@ -169,5 +157,8 @@ func TestAlternativeSendTokenTransferIsVisibleToCounterparty(t *testing.T) {
 	h := newVisibilityHarness(t, tx)
 	txid := h.send(t, rawTx)
 
-	h.assertIndexed(t, txid, []ethcommon.Address{sender, recipient}, []ethcommon.Address{token})
+	h.assertIndexed(t, txid, []ethcommon.Address{sender}, []ethcommon.Address{token, recipient})
+	if tt := h.pushed[0].TokenTransfers; len(tt) != 1 || tt[0].To != recipient.Hex() {
+		t.Errorf("sender notification token transfers = %+v, want one to %s", tt, recipient.Hex())
+	}
 }
