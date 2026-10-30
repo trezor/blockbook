@@ -498,6 +498,49 @@ func TestParseInputDataOverflowDynamicLength(t *testing.T) {
 	}
 }
 
+// Offsets pointing at the same child would decode it once per offset, so nested
+// arrays could expand small calldata into n^depth values.
+func TestParseInputDataRejectsOverlappingOffsets(t *testing.T) {
+	parser := NewEthereumParser(1, false)
+	words := func(w ...int) string {
+		s := "0xaabbccdd"
+		for _, v := range w {
+			s += fmt.Sprintf("%064x", v)
+		}
+		return s
+	}
+	tests := []struct {
+		name  string
+		param string
+		data  string
+		want  []string // nil -> method id only
+	}{
+		// offset, count 2, both element offsets -> one child: length 1, data 0xab
+		{name: "bytes[] shared element", param: "bytes[]", data: words(0x20, 2, 0x40, 0x40, 1) + "ab" + strings.Repeat("0", 62)},
+		// offset, count 2, both element offsets -> one inner array [7]
+		{name: "uint256[][] shared element", param: "uint256[][]", data: words(0x20, 2, 0x40, 0x40, 1, 7)},
+		{name: "uint256[][] distinct elements", param: "uint256[][]", data: words(0x20, 2, 0x40, 0x80, 1, 7, 1, 8), want: []string{"7", "8"}},
+		// empty values sharing one zero length word, as in real atomicMatch_ calldata
+		{name: "bytes[] shared empty element", param: "bytes[]", data: words(0x20, 2, 0x40, 0x40, 0), want: []string{"", ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			signatures := []bchain.FourByteSignature{{Name: "store", Parameters: []string{tt.param}}}
+			got := parser.ParseInputData(&signatures, tt.data)
+			if tt.want == nil {
+				want := &bchain.EthereumParsedInputData{MethodId: "0xaabbccdd"}
+				if !reflect.DeepEqual(got, want) {
+					t.Errorf("ParseInputData() = %#v, want %#v", got, want)
+				}
+				return
+			}
+			if got == nil || len(got.Params) != 1 || !reflect.DeepEqual(got.Params[0].Values, tt.want) {
+				t.Errorf("ParseInputData() = %#v, want values %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func Test_getEnsRecord(t *testing.T) {
 	tests := []struct {
 		name string
