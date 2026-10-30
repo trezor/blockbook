@@ -19,6 +19,8 @@ type txEntry struct {
 	// entry without asking the backend whether it is still in the pool.
 	from  string
 	nonce uint64
+	// EthereumType only: a send accepted by the private relay, kept off the mempool listing
+	private bool
 }
 
 type txidio struct {

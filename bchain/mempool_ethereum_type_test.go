@@ -117,3 +117,101 @@ func TestMempoolEthereumType_RemoveSenderTransactionsUpToNonce(t *testing.T) {
 		t.Fatalf("removed = %v for an unknown sender, want none", got)
 	}
 }
+
+// The mempool listing is public and the relay serves a body to anyone holding the hash, so a private
+// relay send stays off it while public entries are listed as before.
+func TestMempoolEthereumTypeGetAllEntriesOmitsPrivateEntries(t *testing.T) {
+	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
+	now := uint32(time.Now().Unix())
+	m.txEntries["public"] = txEntry{time: now}
+	m.txEntries["private"] = txEntry{time: now, private: true}
+
+	entries := m.GetAllEntries()
+	if len(entries) != 1 || entries[0].Txid != "public" {
+		t.Fatalf("GetAllEntries() = %+v, want only the public entry", entries)
+	}
+}
+
+// A re-send restamps a private entry in place and keeps it private.
+func TestMempoolEthereumTypeAddOrRefreshPrivateKeepsEntryPrivate(t *testing.T) {
+	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
+	old := uint32(time.Now().Add(-time.Hour).Unix())
+	m.txEntries["tx1"] = txEntry{addrIndexes: []addrIndex{{addrDesc: "addr1"}}, time: old, private: true}
+
+	if !m.AddOrRefreshPrivateTransactionInMempool("tx1") {
+		t.Fatal("AddOrRefreshPrivateTransactionInMempool() = false, want true")
+	}
+	entry := m.txEntries["tx1"]
+	if entry.time == old || !entry.private {
+		t.Fatalf("entry = %+v, want restamped and still private", entry)
+	}
+}
+
+// gatedChain serves one transaction from GetTransactionForMempool, each call held until the test
+// releases it, so two adds of the same txid can be interleaved deterministically.
+type gatedChain struct {
+	BlockChain
+	tx    *Tx
+	calls chan chan struct{}
+}
+
+func (c *gatedChain) GetChainParser() BlockChainParser { return fakeEthParser{} }
+
+func (c *gatedChain) GetTransactionForMempool(txid string) (*Tx, error) {
+	release := make(chan struct{})
+	c.calls <- release
+	<-release
+	return c.tx, nil
+}
+
+// fakeEthParser uses the address string itself as the descriptor.
+type fakeEthParser struct{ BlockChainParser }
+
+func (fakeEthParser) GetAddrDescFromVout(v *Vout) (AddressDescriptor, error) {
+	if len(v.ScriptPubKey.Addresses) == 0 {
+		return nil, ErrAddressMissing
+	}
+	return AddressDescriptor(v.ScriptPubKey.Addresses[0]), nil
+}
+
+func (fakeEthParser) GetAddrDescFromAddress(a string) (AddressDescriptor, error) {
+	return AddressDescriptor(a), nil
+}
+
+func (fakeEthParser) EthereumTypeGetTokenTransfersFromTx(*Tx) (TokenTransfers, error) {
+	return nil, nil
+}
+
+// A public and a private add of the same txid can both pass the existence check before either writes.
+// Whichever entry is stored, its index must match the outpoints in addrDescToTx, otherwise the router
+// outpoint written by the public add outlives the private entry and serves the txid forever.
+func TestMempoolEthereumTypeConcurrentPublicAndPrivateAddLeavesNoOrphanOutpoint(t *testing.T) {
+	chain := &gatedChain{
+		tx: &Tx{
+			Txid: "tx1",
+			Vin:  []Vin{{Addresses: []string{"sender"}}},
+			Vout: []Vout{{N: 0, ScriptPubKey: ScriptPubKey{Addresses: []string{"router"}}}},
+			CoinSpecificData: EthereumSpecificData{
+				Tx: &RpcTransaction{Payload: "0xdeadbeef", AccountNonce: "0x1"},
+			},
+		},
+		calls: make(chan chan struct{}, 2),
+	}
+	m := NewMempoolEthereumType(chain, 10*time.Minute, false)
+
+	done := make(chan struct{})
+	go func() { m.AddOrRefreshPrivateTransactionInMempool("tx1"); done <- struct{}{} }()
+	privateFetch := <-chain.calls
+	go func() { m.AddTransactionToMempool("tx1"); done <- struct{}{} }()
+	publicFetch := <-chain.calls
+	// the public add writes first, the private add second
+	close(publicFetch)
+	<-done
+	close(privateFetch)
+	<-done
+
+	m.RemoveTransactionFromMempool("tx1")
+	if len(m.txEntries) != 0 || len(m.addrDescToTx) != 0 {
+		t.Fatalf("after removal txEntries = %+v, addrDescToTx = %+v, want both empty", m.txEntries, m.addrDescToTx)
+	}
+}

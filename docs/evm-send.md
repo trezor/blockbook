@@ -27,7 +27,7 @@ flowchart TD
     reject["onlyAlternative: return error<br/>else: fall back to primary"]
     reg["registerSuccessfulSend<br/>(record sender + URL, assign gen)"]
     evict["evictReplacedByNonce<br/>retire same-(from,nonce) predecessor<br/>on ACK (RBF / cancel), gen-ordered"]
-    cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → AddTransactionToMempool → notify"]
+    cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → index under the sender only<br/>→ notify the sender's subscribers"]
     handle["probeSentTransaction (background)<br/>fetch-back → report whether the relay<br/>surfaces what it accepted; writes nothing<br/>(undecodable hex → exposeAcceptedSend<br/>retries, then caches)"]
 
     subgraph rec ["reconcileMempoolTxs (1 min tick, per cached tx, probes backed off by age)"]
@@ -118,6 +118,17 @@ Key invariants:
   returns, and `RemoveTransaction` passes `sync_removed`, which nothing else would record. The gating
   is what keeps concurrent reconcile / read-path / RBF evictions of the same entry from
   double-counting.
+- **A private send is public only where its sender is.** The cached body is served by txid (the relay
+  does the same for anyone holding the hash) and indexed under the sender alone: never under the
+  recipient, a token-transfer counterparty or a contract it calls, never on the explorer mempool page
+  and never on the global `subscribeNewTransaction` stream, and the address notification goes exactly
+  where the index does. So no subscription other than one to the sender's own address learns of a
+  private send before inclusion, while every device on the sending account sees the pending
+  transaction at once. Anyone watching the sender's own address still sees its private sends in full;
+  Blockbook cannot tell such a watcher from a second device of the same account, and showing the
+  transaction to the account is what keeps a stuck or duplicated send visible. This sender index is
+  interim: once the wallet keeps its own record of every send it routes through the relay, Blockbook
+  stops indexing private sends altogether and serves them by txid only.
 - **Removals are not pushed to the wallet.** Blockbook pushes only *added* txs; a wallet learns a
   pending tx is gone on its next account re-fetch (the initiating device also removes it
   optimistically). The cache timeout — `alternativeMempoolTxTimeout`, the pending window by default

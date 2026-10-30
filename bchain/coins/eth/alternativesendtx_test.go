@@ -100,7 +100,7 @@ type fakeWrappedMempool struct {
 	ops []string
 }
 
-func (f *fakeWrappedMempool) AddOrRefreshTransactionInMempool(txid string) bool {
+func (f *fakeWrappedMempool) AddOrRefreshPrivateTransactionInMempool(txid string) bool {
 	f.ops = append(f.ops, "addOrRefresh:"+txid)
 	return true
 }
