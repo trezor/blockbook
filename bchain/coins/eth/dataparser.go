@@ -125,6 +125,13 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		return nil, 0, false
 	}
 	block := data[d : d+64]
+	// every type except a fixed array owns exactly one head word at index
+	if t.T != abi.ArrayTy {
+		if !markProcessed(processed, index) {
+			return nil, 0, false
+		}
+		index++
+	}
 	switch t.T {
 	// static types
 	case abi.IntTy, abi.UintTy, abi.BoolTy:
@@ -142,26 +149,14 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		} else {
 			retval = []string{n.String()}
 		}
-		if !markProcessed(processed, index) {
-			return nil, 0, false
-		}
-		index++
 	case abi.AddressTy:
 		b, err := hex.DecodeString(block[24:])
 		if err != nil {
 			return nil, 0, false
 		}
 		retval = []string{EIP55Address(b)}
-		if !markProcessed(processed, index) {
-			return nil, 0, false
-		}
-		index++
 	case abi.FixedBytesTy:
 		retval = []string{"0x" + block[:t.Size<<1]}
-		if !markProcessed(processed, index) {
-			return nil, 0, false
-		}
-		index++
 	case abi.ArrayTy:
 		for i := 0; i < t.Size; i++ {
 			var r []string
@@ -179,10 +174,6 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		if err != nil {
 			return nil, 0, false
 		}
-		if !markProcessed(processed, index) {
-			return nil, 0, false
-		}
-		index++
 		offset <<= 1
 		d = int(offset) + dataOffset
 		dynIndex := d >> 6
@@ -225,13 +216,6 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 				}
 				count = ((count - 1) >> 5) + 1
 				for i := 0; i < count; i++ {
-					// A dynamic field whose declared length runs past the data
-					// (malformed or non-32-byte-aligned input) would index beyond
-					// processed, which is sized len(data)/64; treat it as a
-					// non-matching signature instead of panicking.
-					if dynIndex >= len(processed) {
-						return nil, 0, false
-					}
 					if !markProcessed(processed, dynIndex) {
 						return nil, 0, false
 					}
