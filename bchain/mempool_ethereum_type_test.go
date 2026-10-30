@@ -117,3 +117,32 @@ func TestMempoolEthereumType_RemoveSenderTransactionsUpToNonce(t *testing.T) {
 		t.Fatalf("removed = %v for an unknown sender, want none", got)
 	}
 }
+
+// The mempool listing is public and the relay serves a body to anyone holding the hash, so a private
+// relay send stays off it while public entries are listed as before.
+func TestMempoolEthereumTypeGetAllEntriesOmitsPrivateEntries(t *testing.T) {
+	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
+	now := uint32(time.Now().Unix())
+	m.txEntries["public"] = txEntry{time: now}
+	m.txEntries["private"] = txEntry{time: now, private: true}
+
+	entries := m.GetAllEntries()
+	if len(entries) != 1 || entries[0].Txid != "public" {
+		t.Fatalf("GetAllEntries() = %+v, want only the public entry", entries)
+	}
+}
+
+// A re-send restamps a private entry in place and keeps it private.
+func TestMempoolEthereumTypeAddOrRefreshPrivateKeepsEntryPrivate(t *testing.T) {
+	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
+	old := uint32(time.Now().Add(-time.Hour).Unix())
+	m.txEntries["tx1"] = txEntry{addrIndexes: []addrIndex{{addrDesc: "addr1"}}, time: old, private: true}
+
+	if !m.AddOrRefreshPrivateTransactionInMempool("tx1") {
+		t.Fatal("AddOrRefreshPrivateTransactionInMempool() = false, want true")
+	}
+	entry := m.txEntries["tx1"]
+	if entry.time == old || !entry.private {
+		t.Fatalf("entry = %+v, want restamped and still private", entry)
+	}
+}

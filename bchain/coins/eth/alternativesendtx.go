@@ -185,7 +185,7 @@ func NewAlternativeSendTxProvider(network string, rpcTimeout int, mempoolTxsTime
 // wrappedMempool is the slice of MempoolEthereumType the cache path drives, narrowed so tests can
 // observe the calls the retention coupling depends on.
 type wrappedMempool interface {
-	AddOrRefreshTransactionInMempool(txid string) bool
+	AddOrRefreshPrivateTransactionInMempool(txid string) bool
 	RemoveTransactionFromMempool(txid string)
 }
 
@@ -907,7 +907,8 @@ func (p *AlternativeSendTxProvider) cacheMempoolTransaction(txid string, tx *bch
 	if p.mempool != nil {
 		// AddOrRefresh, not Add: a re-send restamps the cache entry, and the wrapped entry must age with
 		// it or the mempool sweep drops the address index while the cache still serves the tx (#1573).
-		p.mempool.AddOrRefreshTransactionInMempool(txid)
+		// Private: indexed under the sender and plain counterparties, not under a called contract.
+		p.mempool.AddOrRefreshPrivateTransactionInMempool(txid)
 		// A concurrent higher-generation send for this slot can evict txid from both stores during the
 		// add above, which then re-inserts it into the wrapped mempool only - and reconcile walks just
 		// the provider cache, so that orphan would linger as "Unconfirmed" until the wrapped mempool

@@ -1969,7 +1969,12 @@ func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts 
 		processAddress(internalTransfers[i].From)
 		processAddress(internalTransfers[i].To)
 	}
+	return s.subscribedCandidates(candidates, newBlockTxsOnly)
+}
 
+// subscribedCandidates narrows candidate address descriptors to the ones with a matching
+// subscription; with newBlockTxsOnly, to subscribers that asked for confirmed block transactions.
+func (s *WebsocketServer) subscribedCandidates(candidates map[string]struct{}, newBlockTxsOnly bool) map[string]struct{} {
 	subscribed := make(map[string]struct{})
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
@@ -1992,26 +1997,42 @@ func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts 
 	return subscribed
 }
 
-func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[string]struct{}) {
+func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[string]struct{}, global bool) {
 	atx, err := s.api.GetTransactionFromMempoolTx(tx)
 	if err != nil {
 		glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
 		return
 	}
-	s.sendOnNewTx(atx)
+	if global {
+		s.sendOnNewTx(atx)
+	}
 	for stringAddressDescriptor := range subscribed {
 		s.sendOnNewTxAddr(stringAddressDescriptor, atx, false)
 	}
 }
 
+// newTxRecipients returns the address subscriptions a mempool transaction is announced to and whether
+// it also goes on the global new-transaction stream. A private relay send reaches only subscribers of
+// the addresses the mempool indexed it under and never the global stream.
+func (s *WebsocketServer) newTxRecipients(tx *bchain.MempoolTx) (map[string]struct{}, bool) {
+	if tx.Private {
+		candidates := make(map[string]struct{}, len(tx.NotifyAddrDescs))
+		for _, addrDesc := range tx.NotifyAddrDescs {
+			candidates[string(addrDesc)] = struct{}{}
+		}
+		return s.subscribedCandidates(candidates, false), false
+	}
+	return s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers, nil, false), len(s.newTransactionSubscriptions) > 0
+}
+
 // OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
-	subscribed := s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers, nil, false)
-	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
+	subscribed, global := s.newTxRecipients(tx)
+	if global || len(subscribed) > 0 {
 		if ok, _ := s.trackWork(); ok {
 			go func() {
 				defer s.workDone()
-				s.onNewTxAsync(tx, subscribed)
+				s.onNewTxAsync(tx, subscribed, global)
 			}()
 		}
 	}

@@ -27,7 +27,7 @@ flowchart TD
     reject["onlyAlternative: return error<br/>else: fall back to primary"]
     reg["registerSuccessfulSend<br/>(record sender + URL, assign gen)"]
     evict["evictReplacedByNonce<br/>retire same-(from,nonce) predecessor<br/>on ACK (RBF / cancel), gen-ordered"]
-    cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → AddTransactionToMempool → notify"]
+    cache["cacheMempoolTransaction<br/>cache body decoded from the signed bytes<br/>(gen-ordered) → index under sender + plain<br/>counterparties only → notify those"]
     handle["probeSentTransaction (background)<br/>fetch-back → report whether the relay<br/>surfaces what it accepted; writes nothing<br/>(undecodable hex → exposeAcceptedSend<br/>retries, then caches)"]
 
     subgraph rec ["reconcileMempoolTxs (1 min tick, per cached tx, probes backed off by age)"]
@@ -118,6 +118,16 @@ Key invariants:
   returns, and `RemoveTransaction` passes `sync_removed`, which nothing else would record. The gating
   is what keeps concurrent reconcile / read-path / RBF evictions of the same entry from
   double-counting.
+- **A private send is public only where its sender is.** The cached body is served by txid (the relay
+  does the same for anyone holding the hash) and indexed under the sender and its plain counterparties:
+  the recipient of a value transfer and the parties of a token transfer parsed from the calldata. It
+  is never indexed under a contract it calls, never listed on the explorer mempool page and never put
+  on the global `subscribeNewTransaction` stream, and the address notification goes exactly where the
+  index does. So a subscription to a router, aggregator or token contract learns nothing about private
+  sends before inclusion, while every device on the sending account sees the pending transaction at
+  once. Anyone watching the sender's own address still sees its private sends in full; Blockbook
+  cannot tell such a watcher from a second device of the same account, and showing the transaction
+  to the account is what keeps a stuck or duplicated send visible.
 - **Removals are not pushed to the wallet.** Blockbook pushes only *added* txs; a wallet learns a
   pending tx is gone on its next account re-fetch (the initiating device also removes it
   optimistically). The cache timeout — `alternativeMempoolTxTimeout`, the pending window by default
