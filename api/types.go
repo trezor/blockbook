@@ -437,6 +437,7 @@ type Address struct {
 	UnconfirmedTxs        int                 `json:"unconfirmedTxs" ts_doc:"Number of unconfirmed transactions for this address."`
 	UnconfirmedSending    *Amount             `json:"unconfirmedSending,omitempty" ts_doc:"Unconfirmed outgoing balance for this address."`
 	UnconfirmedReceiving  *Amount             `json:"unconfirmedReceiving,omitempty" ts_doc:"Unconfirmed incoming balance for this address."`
+	ImmatureBalanceSat    *Amount             `json:"immatureBalance,omitempty" ts_doc:"Part of the confirmed balance in coinbase outputs that cannot be spent yet. Bitcoin-like coins only; omitted for details=basic."`
 	Txs                   int                 `json:"txs" ts_doc:"Number of transactions for this address (including confirmed)."`
 	AddrTxCount           int                 `json:"addrTxCount,omitempty" ts_doc:"Historical total count of transactions, if known."`
 	NonTokenTxs           int                 `json:"nonTokenTxs,omitempty" ts_doc:"Number of transactions not involving tokens (pure coin transfers)."`

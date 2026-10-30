@@ -1672,8 +1672,13 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		}
 		totalResults = ed.totalResults
 	} else {
+		// above basic, the utxos are needed for the immature coinbase balance
+		var balanceDetail db.AddressBalanceDetail = db.AddressBalanceDetailNoUTXO
+		if option > AccountDetailsBasic {
+			balanceDetail = db.AddressBalanceDetailUTXO
+		}
 		// ba can be nil if the address is only in mempool!
-		ba, err = w.db.GetAddrDescBalance(addrDesc, db.AddressBalanceDetailNoUTXO)
+		ba, err = w.db.GetAddrDescBalance(addrDesc, balanceDetail)
 		if err != nil {
 			return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 		}
@@ -1807,10 +1812,21 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			totalSecondaryValue = secondaryRate * totalBaseValue
 		}
 	}
-	var unconfirmedBalanceSat *Amount
+	var unconfirmedBalanceSat, immatureBalanceSat *Amount
 	if option > AccountDetailsBasic {
 		uBalSat.Sub(&uBalReceiving, &uBalSending)
 		unconfirmedBalanceSat = (*Amount)(&uBalSat)
+		if w.chainType == bchain.ChainBitcoinType {
+			bestheight, _, err := w.db.GetBestBlock()
+			if err != nil {
+				return nil, errors.Annotatef(err, "GetBestBlock")
+			}
+			immature, err := w.immatureCoinbaseBalance(ba, bestheight)
+			if err != nil {
+				return nil, err
+			}
+			immatureBalanceSat = amountOrNil(immature)
+		}
 	}
 	var contractInfoBestHeight uint32
 	if ed.contractInfo != nil {
@@ -1833,6 +1849,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		UnconfirmedTxs:        unconfirmedTxs,
 		UnconfirmedSending:    amountOrNil(&uBalSending),
 		UnconfirmedReceiving:  amountOrNil(&uBalReceiving),
+		ImmatureBalanceSat:    immatureBalanceSat,
 		Transactions:          txs,
 		Txids:                 txids,
 		Tokens:                ed.tokens,
@@ -1854,6 +1871,38 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	}
 	glog.V(1).Info("GetAddress-", option, " ", address, ", ", time.Since(start))
 	return r, nil
+}
+
+// immatureCoinbaseBalance sums the coinbase utxos of ba that cannot be spent yet at bestheight
+func (w *Worker) immatureCoinbaseBalance(ba *db.AddrBalance, bestheight uint32) (*big.Int, error) {
+	var immature big.Int
+	for i := range ba.Utxos {
+		utxo := &ba.Utxos[i]
+		if int(bestheight)-int(utxo.Height)+1 >= w.chainParser.MinimumCoinbaseConfirmations() {
+			continue
+		}
+		txid, err := w.chainParser.UnpackTxid(utxo.BtxID)
+		if err != nil {
+			return nil, err
+		}
+		coinbase, err := w.isCoinbaseTx(txid)
+		if err != nil {
+			return nil, err
+		}
+		if coinbase {
+			immature.Add(&immature, &utxo.ValueSat)
+		}
+	}
+	return &immature, nil
+}
+
+// isCoinbaseTx reports whether the indexed tx has a single input without address and value
+func (w *Worker) isCoinbaseTx(txid string) (bool, error) {
+	ta, err := w.db.GetTxAddresses(txid)
+	if err != nil || ta == nil {
+		return false, err
+	}
+	return len(ta.Inputs) == 1 && len(ta.Inputs[0].AddrDesc) == 0 && IsZeroBigInt(&ta.Inputs[0].ValueSat), nil
 }
 
 // Returns either the Amount or nil if the number is zero
@@ -2333,12 +2382,8 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 					coinbase := false
 					// for performance reasons, check coinbase transactions only in minimum confirmantion range
 					if confirmations < w.chainParser.MinimumCoinbaseConfirmations() {
-						ta, err := w.db.GetTxAddresses(txid)
-						if err != nil {
+						if coinbase, err = w.isCoinbaseTx(txid); err != nil {
 							return nil, err
-						}
-						if len(ta.Inputs) == 1 && len(ta.Inputs[0].AddrDesc) == 0 && IsZeroBigInt(&ta.Inputs[0].ValueSat) {
-							coinbase = true
 						}
 					}
 					_, e = inMempool[txid+":"+strconv.Itoa(int(utxo.Vout))]
