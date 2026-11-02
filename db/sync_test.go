@@ -764,6 +764,35 @@ func TestParallelConnectBlocksBitcoinTypeIgnoresUnlinkedParent(t *testing.T) {
 	}
 }
 
+// The bulk writer runs the same parent check as the parallel one. The aborted round must
+// flush the linked prefix on Close so the restart's fork check reads the last linked block.
+func TestBulkConnectBlocksDetectsUnlinkedParent(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	hashes := []string{"", evmTestHash("11"), evmTestHash("22"), evmTestHash("33"), evmTestHash("44"), evmTestHash("55"), evmTestHash("66")}
+	blocks := make([]*bchain.Block, 0, 6)
+	for h := uint32(1); h <= 6; h++ {
+		blocks = append(blocks, evmTestBlock(hashes[h], hashes[h-1], h))
+	}
+	blocks[3].Prev = evmTestHash("ab")
+	if err := d.ConnectBlock(blocks[0]); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := newResyncTestChain(nil, blocks...)
+	w := newResyncTestWorker(t, d, chain)
+	w.syncWorkers = 2
+	forksBefore := reorgEvents(t, w, "fork")
+
+	if err := w.BulkConnectBlocks(2, 6); !stdErrors.Is(err, errResync) {
+		t.Fatalf("BulkConnectBlocks error = %v, want %v", err, errResync)
+	}
+	assertBestBlock(t, d, 3, hashes[3])
+	if got := reorgEvents(t, w, "fork") - forksBefore; got != 1 {
+		t.Fatalf("fork reorg events = %v, want 1", got)
+	}
+}
+
 // The EVM bulk path mirrors the parallel one: heights only, no header lookups.
 func TestBulkConnectBlocksEthereumTypeFetchesByHeight(t *testing.T) {
 	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
