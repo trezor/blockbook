@@ -391,7 +391,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 					if err != nil {
 						if stdErrors.Is(err, errResync) {
 							// block hash changed during parallel sync, restart the full resync
-							return w.resyncIndex(onNewBlock, initialSync)
+							return w.resyncAfterDelay(onNewBlock, initialSync)
 						}
 						return err
 					}
@@ -414,7 +414,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 					if err != nil {
 						if stdErrors.Is(err, errResync) {
 							// block hash changed during parallel sync, restart the full resync
-							return w.resyncIndex(onNewBlock, initialSync)
+							return w.resyncAfterDelay(onNewBlock, initialSync)
 						}
 						return err
 					}
@@ -433,9 +433,21 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	}
 	err = w.connectBlocks(onNewBlock, initialSync)
 	if stdErrors.Is(err, errFork) || stdErrors.Is(err, errResync) {
-		return w.resyncIndex(onNewBlock, initialSync)
+		return w.resyncAfterDelay(onNewBlock, initialSync)
 	}
 	return err
+}
+
+// resyncAfterDelay paces a reorg-triggered restart by one RetryDelay. By-height fetches give
+// a split load-balanced pool no reason to answer differently on an immediate retry, so
+// without the pause the round would spin the worker pool until the pool converges.
+func (w *SyncWorker) resyncAfterDelay(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
+	select {
+	case <-time.After(w.missingBlockRetry.RetryDelay):
+		return w.resyncIndex(onNewBlock, initialSync)
+	case <-w.chanOsSignal:
+		return ErrOperationInterrupted
+	}
 }
 
 // startHashForHeight resolves the hash of the first block to connect. When the block is the
