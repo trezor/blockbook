@@ -4,9 +4,15 @@ package api
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
 func TestDefaultXpubConfigDerivedFields(t *testing.T) {
@@ -63,18 +69,12 @@ func TestTrimXpubCacheItemsLocked(t *testing.T) {
 	const testMaxEntries = 128
 	cachedXpubsMux.Lock()
 	defer cachedXpubsMux.Unlock()
-
-	originalCache := cachedXpubs
-	defer func() {
-		cachedXpubs = originalCache
-	}()
-
-	cachedXpubs = make(map[string]xpubData, testMaxEntries+2)
+	defer resetXpubCacheLocked()()
 	for i := 0; i < testMaxEntries+2; i++ {
 		cachedXpubs[fmt.Sprintf("xpub-%03d", i)] = xpubData{accessed: int64(i)}
 	}
 
-	if got := trimXpubCacheItemsLocked(testMaxEntries); got != 2 {
+	if got := trimXpubCacheItemsLocked(testMaxEntries, math.MaxInt64); got != 2 {
 		t.Fatalf("trimXpubCacheItemsLocked() evicted %d entries, want 2", got)
 	}
 	if got := len(cachedXpubs); got != testMaxEntries {
@@ -130,5 +130,127 @@ func TestIsUnfilteredXpubTxidFilter(t *testing.T) {
 	}
 	if isUnfilteredXpubTxidFilter(&AddressFilter{Vout: AddressFilterVoutOff, FromHeight: 1}) {
 		t.Fatal("height filter should not be treated as unfiltered")
+	}
+}
+
+func TestXpubCacheBytesAccounting(t *testing.T) {
+	cachedXpubsMux.Lock()
+	defer cachedXpubsMux.Unlock()
+	defer resetXpubCacheLocked()()
+
+	// an entry with two used addresses (one utxo, two txids each) and one gap address
+	used := xpubAddress{
+		addrDesc: make(bchain.AddressDescriptor, 22),
+		balance:  &db.AddrBalance{Txs: 2, Utxos: []db.Utxo{{BtxID: make([]byte, 32)}}},
+		txids:    xpubTxids{{txid: "a"}, {txid: "b"}},
+	}
+	data := xpubData{addresses: [][]xpubAddress{{used, used}, {{addrDesc: make(bchain.AddressDescriptor, 22)}}}}
+	data.mergedTxids = mergeXpubTxids(&data)
+
+	empty := xpubDataEstimatedBytes(&xpubData{}, 10)
+	got := xpubDataEstimatedBytes(&data, 10)
+	want := empty + 3*xpubCacheAddressBytes + 2*xpubCacheBalanceBytes + 2*xpubCacheUtxoBytes + 4*xpubCacheTxidBytes + len(data.mergedTxids)*xpubCacheMergedTxidBytes
+	if got != want {
+		t.Fatalf("xpubDataEstimatedBytes() = %d, want %d", got, want)
+	}
+
+	insert := func(key string, accessed int64) {
+		d := data
+		d.accessed = accessed
+		putCachedXpubLocked(key, &d)
+	}
+	for i := 0; i < 4; i++ {
+		insert(fmt.Sprintf("xpub-%d", i), int64(i))
+	}
+	// re-inserting an existing key must not double count it
+	insert("xpub-3", 10)
+	if cachedXpubsBytes != 4*int64(cachedXpubs["xpub-0"].bytes) {
+		t.Fatalf("cachedXpubsBytes = %d after 4 inserts and one replace, want %d", cachedXpubsBytes, 4*cachedXpubs["xpub-0"].bytes)
+	}
+	if trimXpubCacheItemsLocked(2, math.MaxInt64) != 2 || cachedXpubsBytes != 2*int64(cachedXpubs["xpub-2"].bytes) {
+		t.Fatalf("trim did not credit evicted entries: bytes=%d entries=%d", cachedXpubsBytes, len(cachedXpubs))
+	}
+	if evictXpubCacheItemsLocked(1000, 1, 100, math.MaxInt64) != 2 || cachedXpubsBytes != 0 || len(cachedXpubs) != 0 {
+		t.Fatalf("expiry eviction left bytes=%d entries=%d, want both 0", cachedXpubsBytes, len(cachedXpubs))
+	}
+}
+
+func TestXpubCacheByteBudget(t *testing.T) {
+	cachedXpubsMux.Lock()
+	defer cachedXpubsMux.Unlock()
+	defer resetXpubCacheLocked()()
+
+	small := xpubData{addresses: [][]xpubAddress{{{}}}}
+	for i := 0; i < 4; i++ {
+		d := small
+		d.accessed = int64(i)
+		putCachedXpubLocked(fmt.Sprintf("small-%d", i), &d)
+	}
+	smallBytes := int64(cachedXpubs["small-0"].bytes)
+	// a whale with a long txid history, worth ~2.5 small entries
+	whale := xpubData{accessed: 10, addresses: [][]xpubAddress{{{txids: make(xpubTxids, (int(smallBytes)*5/2)/xpubCacheTxidBytes)}}}}
+	putCachedXpubLocked("whale", &whale)
+	whaleBytes := int64(cachedXpubs["whale"].bytes)
+
+	// entry cap alone would keep everything; the byte cap evicts the oldest small entries
+	budget := whaleBytes + 2*smallBytes
+	if n := trimXpubCacheItemsLocked(100, budget); n != 2 {
+		t.Fatalf("trim evicted %d entries, want 2", n)
+	}
+	if _, ok := cachedXpubs["small-1"]; ok {
+		t.Fatal("small-1 should have been evicted as least recently accessed")
+	}
+	if _, ok := cachedXpubs["whale"]; !ok || cachedXpubsBytes != budget {
+		t.Fatalf("after trim bytes=%d (want %d), whale cached=%v", cachedXpubsBytes, budget, ok)
+	}
+	// an entry larger than the whole budget evicts everything, itself included
+	if n := trimXpubCacheItemsLocked(100, whaleBytes-1); n != 3 || len(cachedXpubs) != 0 || cachedXpubsBytes != 0 {
+		t.Fatalf("oversized entry: evicted %d, left entries=%d bytes=%d", n, len(cachedXpubs), cachedXpubsBytes)
+	}
+}
+
+func TestXpubCacheMissReasons(t *testing.T) {
+	w := setupXpubRaceWorker(t)
+	resetXpubCache()
+	defer resetXpubCache()
+
+	filter := &AddressFilter{Vout: AddressFilterVoutOff}
+	count := func(c prometheus.Counter) float64 {
+		var m dto.Metric
+		if err := c.Write(&m); err != nil {
+			t.Fatal(err)
+		}
+		return m.GetCounter().GetValue()
+	}
+	misses := func(reason string) float64 {
+		return count(w.metrics.XPubCacheMisses.With(common.Labels{"reason": reason}))
+	}
+	steps := []struct {
+		name   string
+		option AccountDetails
+		gap    int
+		want   string // miss reason, "" for a hit
+	}{
+		{"first lookup derives", AccountDetailsBasic, 20, "absent"},
+		{"same request is served cached", AccountDetailsBasic, 20, ""},
+		{"history not cached yet", AccountDetailsTxidHistory, 20, "history"},
+		{"history now cached", AccountDetailsTxidHistory, 20, ""},
+		{"different gap re-derives", AccountDetailsBasic, 30, "gap"},
+	}
+	for _, s := range steps {
+		hits, missed := count(w.metrics.XPubCacheHits), 0.0
+		if s.want != "" {
+			missed = misses(s.want)
+		}
+		if _, err := w.GetXpubAddress(dbtestdata.Xpub, 1, 25, s.option, filter, s.gap, ""); err != nil {
+			t.Fatalf("%s: %v", s.name, err)
+		}
+		if s.want == "" {
+			if count(w.metrics.XPubCacheHits) != hits+1 {
+				t.Fatalf("%s: not counted as a hit", s.name)
+			}
+		} else if misses(s.want) != missed+1 {
+			t.Fatalf("%s: not counted as a %q miss", s.name, s.want)
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -18,7 +19,8 @@ import (
 // feeHistoryRPCStub serves a canned eth_feeHistory response; any other method errors so the test
 // also asserts the on-chain path no longer issues eth_maxPriorityFeePerGas.
 type feeHistoryRPCStub struct {
-	raw string
+	raw  string
+	args []interface{} // the last eth_feeHistory arguments, so tests can assert the window and percentiles
 }
 
 func (s *feeHistoryRPCStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -31,18 +33,20 @@ func (s *feeHistoryRPCStub) CallContext(ctx context.Context, result interface{},
 	if method != "eth_feeHistory" {
 		return errors.New("unexpected RPC method: " + method)
 	}
+	s.args = args
 	return json.Unmarshal([]byte(s.raw), result)
 }
 
-func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
-	// baseFeePerGas[blocks-1]=[3]=0x64=100 is the projected next-block base fee (4-element array, as a
-	// no-distinct-pending-block backend returns). Per-tier reward percentiles over 2 blocks.
-	raw := `{"oldestBlock":"0x1",` +
-		`"reward":[["0x1","0x2","0x3","0x4"],["0x3","0x4","0x5","0x6"]],` +
-		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
-		`"gasUsedRatio":[0.5,0.5,0.5]}`
+// feeHistoryBaseFees is the 9-element baseFeePerGas array geth and Erigon return for an 8-block
+// "latest" window: one per window block plus the projected next-block base fee, 0x64=100, last.
+const feeHistoryBaseFees = `"baseFeePerGas":["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","0x64"],` +
+	`"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]`
+
+func onChainFees(t *testing.T, reward string) (*bchain.Eip1559Fees, *feeHistoryRPCStub) {
+	t.Helper()
+	stub := &feeHistoryRPCStub{raw: `{"oldestBlock":"0x1","reward":` + reward + `,` + feeHistoryBaseFees + `}`}
 	b := &EthereumRPC{
-		RPC:         &feeHistoryRPCStub{raw: raw},
+		RPC:         stub,
 		Timeout:     time.Second,
 		ChainConfig: &Configuration{Eip1559Fees: true},
 	}
@@ -53,33 +57,31 @@ func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 	if fees == nil || fees.BaseFeePerGas == nil {
 		t.Fatal("expected fees with baseFeePerGas")
 	}
-	if fees.BaseFeePerGas.Int64() != 100 {
-		t.Errorf("BaseFeePerGas = %v, want 100", fees.BaseFeePerGas)
-	}
-	// tip = average of the tier's reward percentile; maxFeePerGas = 2*baseFee + tip.
-	cases := []struct {
-		name    string
-		fee     *bchain.Eip1559Fee
-		wantTip int64
-	}{
-		{"low", fees.Low, 2},         // avg(1,3)
-		{"medium", fees.Medium, 3},   // avg(2,4)
-		{"high", fees.High, 4},       // avg(3,5)
-		{"instant", fees.Instant, 5}, // avg(4,6)
-	}
-	for _, c := range cases {
+	return fees, stub
+}
+
+// checkTiers asserts the tips of the ladder and that maxFeePerGas = 2*baseFee + tip for every tier.
+func checkTiers(t *testing.T, fees *bchain.Eip1559Fees, low, medium, high, instant string) {
+	t.Helper()
+	tiers := []struct {
+		name string
+		fee  *bchain.Eip1559Fee
+		want string
+	}{{"low", fees.Low, low}, {"medium", fees.Medium, medium}, {"high", fees.High, high}, {"instant", fees.Instant, instant}}
+	for _, c := range tiers {
 		t.Run(c.name, func(t *testing.T) {
 			if c.fee == nil {
 				t.Fatal("nil tier")
 			}
-			if c.fee.MaxPriorityFeePerGas.Int64() != c.wantTip {
-				t.Errorf("MaxPriorityFeePerGas = %v, want %d", c.fee.MaxPriorityFeePerGas, c.wantTip)
+			wantTip, _ := new(big.Int).SetString(c.want, 10)
+			if c.fee.MaxPriorityFeePerGas.Cmp(wantTip) != 0 {
+				t.Errorf("MaxPriorityFeePerGas = %v, want %v", c.fee.MaxPriorityFeePerGas, wantTip)
 			}
-			wantMax := int64(eip1559BaseFeeMultiplier)*100 + c.wantTip
-			if c.fee.MaxFeePerGas.Int64() != wantMax {
-				t.Errorf("MaxFeePerGas = %v, want %d", c.fee.MaxFeePerGas, wantMax)
+			wantMax := new(big.Int).Add(new(big.Int).Mul(fees.BaseFeePerGas, big.NewInt(eip1559BaseFeeMultiplier)), wantTip)
+			if c.fee.MaxFeePerGas.Cmp(wantMax) != 0 {
+				t.Errorf("MaxFeePerGas = %v, want %v", c.fee.MaxFeePerGas, wantMax)
 			}
-			// core invariant the previous code violated: maxFeePerGas must cover the base fee.
+			// core invariant the pre-fix code violated: maxFeePerGas must cover the base fee.
 			if c.fee.MaxFeePerGas.Cmp(fees.BaseFeePerGas) <= 0 {
 				t.Errorf("MaxFeePerGas %v must exceed baseFee %v", c.fee.MaxFeePerGas, fees.BaseFeePerGas)
 			}
@@ -87,48 +89,108 @@ func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
 	}
 }
 
-// TestEthereumTypeGetEip1559FeesOnChainShortRewardRow asserts the on-chain tier loop tolerates a
-// non-compliant eth_feeHistory whose reward rows are shorter than the requested percentile count: it
-// must not panic on h.Reward[j][i], and the per-tier average must divide only by the rows that
-// actually contributed a value (so a skipped short row does not deflate the tip).
+func TestEthereumTypeGetEip1559FeesOnChain(t *testing.T) {
+	// Three blocks of (p20, p50, p99) rewards. Each tier is the window MAX of its column, not a mean:
+	// low = max p20 = 4, medium = 1.5*low = 6, high = max p50 = 8, instant = max p99 = 0x30 = 48.
+	fees, stub := onChainFees(t, `[["0x2","0x5","0x9"],["0x4","0x3","0x30"],["0x1","0x8","0x7"]]`)
+	if fees.BaseFeePerGas.Int64() != 100 {
+		t.Errorf("BaseFeePerGas = %v, want 100", fees.BaseFeePerGas)
+	}
+	checkTiers(t, fees, "4", "6", "8", "48")
+
+	// the request itself: an 8-block window of mined blocks (latest, not the inflated pending row),
+	// percentiles 20/50/99
+	if len(stub.args) != 3 || stub.args[0] != eip1559FeeHistoryBlocks || stub.args[1] != "latest" {
+		t.Fatalf("eth_feeHistory args = %v, want [%d latest [20 50 99]]", stub.args, eip1559FeeHistoryBlocks)
+	}
+	if got := fmt.Sprint(stub.args[2]); got != "[20 50 99]" {
+		t.Errorf("percentiles = %s, want [20 50 99]", got)
+	}
+	for _, f := range []*bchain.Eip1559Fee{fees.Low, fees.Medium, fees.High} {
+		if f.MaxPriorityFeePerGas.Cmp(fees.Instant.MaxPriorityFeePerGas) > 0 {
+			t.Errorf("ladder must be non-decreasing: %v above instant %v", f.MaxPriorityFeePerGas, fees.Instant.MaxPriorityFeePerGas)
+		}
+	}
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainLadderClamp: when the busiest block's p50 (or p99) is below
+// the tier under it, the tier is lifted to it so the ladder never inverts (medium 1.5*low can exceed
+// a quiet p50).
+func TestEthereumTypeGetEip1559FeesOnChainLadderClamp(t *testing.T) {
+	fees, _ := onChainFees(t, `[["0x10","0x1","0x2"],["0x8","0x11","0x3"]]`)
+	// low = 16, medium = 24; max p50 = 17 < 24 -> high = 24; max p99 = 3 < 24 -> instant = 24
+	checkTiers(t, fees, "16", "24", "24", "24")
+	if fees.Medium.MaxPriorityFeePerGas == fees.High.MaxPriorityFeePerGas {
+		t.Error("clamped tiers must not share one big.Int")
+	}
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainShortRewardRow asserts the reducer tolerates a non-compliant
+// eth_feeHistory whose reward rows are shorter than the requested percentile count: it must not panic
+// and must take the column max over the rows that carry the column.
 func TestEthereumTypeGetEip1559FeesOnChainShortRewardRow(t *testing.T) {
-	// Row 0 has all 4 percentiles; row 1 has only 2. For tiers high(i=2) and instant(i=3) row 1 is
-	// short and must be skipped, leaving the average over row 0 alone.
-	raw := `{"oldestBlock":"0x1",` +
-		`"reward":[["0x1","0x2","0x3","0x4"],["0x3","0x4"]],` +
-		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
-		`"gasUsedRatio":[0.5,0.5,0.5]}`
+	// Row 1 has only the p20 column; p50 and p99 come from row 0 alone. An undecodable cell is skipped.
+	fees, _ := onChainFees(t, `[["0x1","0x2","0x3"],["0x4"],["zz","0x9"]]`)
+	// low = max(1,4) = 4, medium = 6, high = max(2,9)=9, instant = max(3, 9) = 9
+	checkTiers(t, fees, "4", "6", "9", "9")
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainIdle: no rewards at all (quiet testnet, backend without reward
+// support) prices every tier at a zero tip; maxFeePerGas still covers 2*baseFee so the tx is mineable.
+func TestEthereumTypeGetEip1559FeesOnChainIdle(t *testing.T) {
+	fees, _ := onChainFees(t, `[]`)
+	checkTiers(t, fees, "0", "0", "0", "0")
+	fees, _ = onChainFees(t, `[["0x0","0x0","0x0"],[]]`)
+	checkTiers(t, fees, "0", "0", "0", "0")
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainBigReward: rewards are wei and may exceed int64 (a 2^64-1
+// bribe would have wrapped negative through the old int64 sum); the reducer must carry them intact.
+func TestEthereumTypeGetEip1559FeesOnChainBigReward(t *testing.T) {
+	fees, _ := onChainFees(t, `[["0x2","0x3","0xffffffffffffffff"],["0x1","0x10000000000000000","0x4"]]`)
+	checkTiers(t, fees, "2", "3", "18446744073709551616", "18446744073709551616")
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainShortHistory: a backend that returns fewer base fees than the
+// window asked for (a chain younger than 8 blocks, or a non-compliant node) yields no on-chain estimate
+// rather than a quote read off the wrong index.
+// TestEthereumTypeGetEip1559FeesOnChainBaseFeeIsLast: the projected base fee is read from the end of
+// the array, so a backend that returns one base fee per block with the projection last (Erigon's
+// shape for a shortened window) and one that returns blocks+1 agree, and a malformed value is an error
+// rather than a silent zero.
+func TestEthereumTypeGetEip1559FeesOnChainBaseFeeIsLast(t *testing.T) {
+	newRPC := func(baseFees string) *EthereumRPC {
+		return &EthereumRPC{
+			RPC: &feeHistoryRPCStub{raw: `{"oldestBlock":"0x1","reward":[["0x1","0x2","0x3"]],` +
+				`"baseFeePerGas":` + baseFees + `,"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]}`},
+			Timeout:     time.Second,
+			ChainConfig: &Configuration{Eip1559Fees: true},
+		}
+	}
+	for _, baseFees := range []string{
+		`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x64"]`,
+		`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","0x64"]`,
+	} {
+		fees, err := newRPC(baseFees).EthereumTypeGetEip1559Fees()
+		if err != nil || fees == nil || fees.BaseFeePerGas.Int64() != 100 {
+			t.Errorf("baseFeePerGas %s: fees, err = %v, %v; want base fee 100", baseFees, fees, err)
+		}
+	}
+	if _, err := newRPC(`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","zz"]`).EthereumTypeGetEip1559Fees(); err == nil {
+		t.Error("undecodable base fee: expected an error")
+	}
+}
+
+func TestEthereumTypeGetEip1559FeesOnChainShortHistory(t *testing.T) {
 	b := &EthereumRPC{
-		RPC:         &feeHistoryRPCStub{raw: raw},
+		RPC: &feeHistoryRPCStub{raw: `{"oldestBlock":"0x1","reward":[["0x1","0x2","0x3"]],` +
+			`"baseFeePerGas":["0x10","0x20","0x30","0x64"],"gasUsedRatio":[0.5,0.5,0.5]}`},
 		Timeout:     time.Second,
 		ChainConfig: &Configuration{Eip1559Fees: true},
 	}
 	fees, err := b.EthereumTypeGetEip1559Fees()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if fees == nil {
-		t.Fatal("expected fees")
-	}
-	cases := []struct {
-		name    string
-		fee     *bchain.Eip1559Fee
-		wantTip int64
-	}{
-		{"low", fees.Low, 2},         // avg(1,3) over both rows
-		{"medium", fees.Medium, 3},   // avg(2,4) over both rows
-		{"high", fees.High, 3},       // row 1 short -> avg(3) over row 0 only
-		{"instant", fees.Instant, 4}, // row 1 short -> avg(4) over row 0 only
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if c.fee == nil {
-				t.Fatal("nil tier")
-			}
-			if c.fee.MaxPriorityFeePerGas.Int64() != c.wantTip {
-				t.Errorf("MaxPriorityFeePerGas = %v, want %d", c.fee.MaxPriorityFeePerGas, c.wantTip)
-			}
-		})
+	if err != nil || fees != nil {
+		t.Fatalf("fees, err = %v, %v; want nil, nil", fees, err)
 	}
 }
 
@@ -223,10 +285,7 @@ func TestEip1559FeeSourceMetric(t *testing.T) {
 			prometheus.GaugeOpts{Name: "test_eth_eip1559_fee_src"}, []string{"tier", "kind"}),
 		EthEip1559BaseFee: prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_eth_eip1559_base_fee_src"}),
 	}
-	raw := `{"oldestBlock":"0x1",` +
-		`"reward":[["0x1","0x2","0x3","0x4"]],` +
-		`"baseFeePerGas":["0x10","0x20","0x30","0x64"],` +
-		`"gasUsedRatio":[0.5,0.5,0.5]}`
+	raw := `{"oldestBlock":"0x1","reward":[["0x1","0x2","0x3"]],` + feeHistoryBaseFees + `}`
 	b := &EthereumRPC{
 		RPC:         &feeHistoryRPCStub{raw: raw},
 		Timeout:     time.Second,

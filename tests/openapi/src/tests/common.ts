@@ -38,11 +38,7 @@ async function testGetBlockIndex(ctx: TestContext) {
 }
 
 async function testGetBlock(ctx: TestContext) {
-  const sample = await ctx.getSampleIndexedBlock();
-  if (!sample) {
-    const status = await ctx.getStatus();
-    throw new Error(`missing indexed block hash in recent height window near ${status.bestHeight ?? 0}`);
-  }
+  const sample = await ctx.sampleIndexedBlockOrFail();
   const block = await ctx.getBlockByHash(sample.hash, true);
   if (!block) {
     throw new Error(`missing block for hash ${sample.hash}`);
@@ -57,11 +53,7 @@ async function testGetBlock(ctx: TestContext) {
 }
 
 async function testGetBlockByHeight(ctx: TestContext) {
-  const sample = await ctx.getSampleIndexedBlock();
-  if (!sample) {
-    const status = await ctx.getStatus();
-    throw new Error(`missing indexed block hash in recent height window near ${status.bestHeight ?? 0}`);
-  }
+  const sample = await ctx.sampleIndexedBlockOrFail();
 
   const path = `/api/v2/block/${sample.height}?page=1&pageSize=${blockPageSize}`;
   const block = await ctx.client.getJson("/api/v2/block/{blockId}", path);

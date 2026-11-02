@@ -173,5 +173,54 @@ class GrafanaImportValidityTest(unittest.TestCase):
         self.assertTrue(any("'panels' list" in p for p in render_grafana.validate_rendered(dash)))
 
 
+class LegendConventionTest(unittest.TestCase):
+    PER_INSTANCE = 'blockbook_mempool_size{job="blockbook", coin="$coin"}'
+    SUMMED_BY_METHOD = 'sum(rate(blockbook_rpc_latency_count{job="blockbook", coin="$coin"}[1m])) by (method) * 60'
+    SUMMED_BY_INSTANCE = 'sum by (instance, method) (rate(blockbook_rpc_latency_count{job="blockbook", coin="$coin"}[1m]))'
+
+    def problems(self, promql, legend):
+        return render_grafana.legend_problems("rpc.request_rate", "requests", promql, legend)
+
+    def test_instance_legend_on_per_instance_series_is_accepted(self):
+        self.assertEqual([], self.problems(self.PER_INSTANCE, "{{instance}} - {{method}}/min"))
+        self.assertEqual([], self.problems(self.SUMMED_BY_INSTANCE, "{{instance}} - {{method}}"))
+
+    def test_all_replicas_legend_on_aggregated_series_is_accepted(self):
+        self.assertEqual([], self.problems(self.SUMMED_BY_METHOD, "all replicas - {{method}}"))
+
+    def test_auto_and_reference_lines_are_exempt(self):
+        self.assertEqual([], self.problems(self.PER_INSTANCE, "__auto"))
+        self.assertEqual([], self.problems("vector(600)", "default stale cutoff (600s = 10m)"))
+
+    def test_coin_in_legend_is_rejected_when_the_dropdown_fixes_it(self):
+        problems = self.problems(self.PER_INSTANCE, "{{coin}} - {{instance}}")
+        self.assertEqual(1, len(problems))
+        self.assertIn("repeats {{coin}}", problems[0])
+
+    def test_coin_in_legend_is_allowed_on_all_coin_panels(self):
+        self.assertEqual([], self.problems('blockbook_synchronized{job="blockbook"}', "{{coin}} - {{instance}}"))
+
+    def test_legend_without_replica_scope_is_rejected(self):
+        problems = self.problems(self.SUMMED_BY_METHOD, "{{method}}")
+        self.assertEqual(1, len(problems))
+        self.assertIn("must carry {{instance}}", problems[0])
+
+    def test_missing_legend_is_rejected(self):
+        self.assertEqual(1, len(self.problems(self.PER_INSTANCE, None)))
+
+    def test_instance_legend_on_aggregated_series_is_rejected(self):
+        problems = self.problems(self.SUMMED_BY_METHOD, "{{instance}} - {{method}}")
+        self.assertEqual(1, len(problems))
+        self.assertIn("aggregates it away", problems[0])
+        # a bare sum() with no by-clause drops instance just the same
+        self.assertEqual(1, len(self.problems("sum(blockbook_websocket_clients{coin=\"$coin\"})", "{{instance}}")))
+
+    def test_all_replicas_legend_on_per_instance_series_is_rejected(self):
+        for promql in (self.PER_INSTANCE, self.SUMMED_BY_INSTANCE):
+            problems = self.problems(promql, "all replicas - {{method}}")
+            self.assertEqual(1, len(problems), promql)
+            self.assertIn("keeps per-instance series", problems[0])
+
+
 if __name__ == "__main__":
     unittest.main()

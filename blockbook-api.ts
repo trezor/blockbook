@@ -1,12 +1,9 @@
 /* Do not change, this code is generated from Golang structs */
+/* Regenerate with `make typescriptify` (see build/tools/typescriptify) */
 
+export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData };
+export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData };
 
-export interface APIError {
-    /** Human-readable error message describing the issue. */
-    Text: string;
-    /** Whether the error message can safely be shown to the end user. */
-    Public: boolean;
-}
 export interface TronVoteExtra {
     address?: string;
     count?: string;
@@ -18,10 +15,13 @@ export interface TronChainExtraData {
     resource?: string;
     stakeAmount?: string;
     unstakeAmount?: string;
+    claimedVoteReward?: string;
+    withdrawnUnfreeze?: string;
     delegateAmount?: string;
     delegateTo?: string;
     assetIssueID?: string;
     totalFee?: string;
+    feeLimit?: string;
     energyUsage?: string;
     energyUsageTotal?: string;
     energyFee?: string;
@@ -64,8 +64,47 @@ export interface TronAccountExtraData {
     totalBandwidthWeight: number;
     stakingInfo?: TronStakingInfo;
 }
-export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
-export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any };
+export interface APIError {
+    /** Human-readable error message describing the issue. */
+    Text: string;
+    /** Whether the error message can safely be shown to the end user. */
+    Public: boolean;
+}
+export interface BcashTokenNft {
+    /** Capability of the NFT, which can be 'none', 'mutable', or 'minting' */
+    capability: 'none' | 'mutable' | 'minting';
+    /** Commitment of the NFT, hex encoded, maximum 128 bytes */
+    commitment: string;
+    name?: string;
+    description?: string;
+    icon?: string;
+}
+export interface BcashToken {
+    /** Identifier of the token, which is a 32-byte hash of its genesis transaction */
+    category: string;
+    /** Fungible token amount in base units */
+    amount: string;
+    /** Readable name of the token. */
+    name?: string;
+    /** Symbol for the token (e.g., 'ETH', 'USDT'). */
+    symbol?: string;
+    /** Number of decimals for this token. */
+    decimals?: number;
+    /** Description of the token, if available. */
+    description?: string;
+    /** URL to an icon image for this token, if available. */
+    icon?: string;
+    /** URL to the token's official website, if available. */
+    website?: string;
+    /** Optional pointer to a BcashTokenNft object if the token also holds an NFT */
+    nft?: BcashTokenNft;
+}
+export interface BcashSpecific {
+    /** Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vin */
+    tokenVins?: (BcashToken | null)[];
+    /** Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vout */
+    tokenVouts?: (BcashToken | null)[];
+}
 export interface AddressAlias {
     /** Type of alias, e.g., user-defined name or contract name. */
     Type: string;
@@ -192,46 +231,6 @@ export interface Vout {
     /** If this output receives a CashToken, this field contains the token details. */
     tokenData?: BcashToken;
 }
-export interface BcashTokenNft {
-    /** Capability of the NFT, which can be 'none', 'mutable', or 'minting' */
-    capability: 'none' | 'mutable' | 'minting';
-    /** Commitment of the NFT, hex encoded, maximum 128 bytes */
-    commitment: string;
-    name?: string;
-    description?: string;
-    icon?: string;
-}
-export interface BcashToken {
-    /** Identifier of the token, which is a 32-byte hash of its genesis transaction */
-    category: string;
-    /** Fungible token amount in base units */
-    amount: string;
-    /** Readable name of the token. */
-    name?: string;
-    /** Symbol for the token (e.g., 'ETH', 'USDT'). */
-    symbol?: string;
-    /** Number of decimals for this token. */
-    decimals?: number;
-    /** Description of the token, if available. */
-    description?: string;
-    /** URL to an icon image for this token, if available. */
-    icon?: string;
-    /** URL to the token's official website, if available. */
-    website?: string;
-    /** Optional pointer to a BcashTokenNft object if the token also holds an NFT */
-    nft?: BcashTokenNft;
-}
-export interface BcashSpecific {
-    /** Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vin */
-    tokenVins?: (BcashToken | null)[];
-    /** Array of pointers to BcashToken objects or nil if there are no tokens at the corresponding vout */
-    tokenVouts?: (BcashToken | null)[];
-}
-export interface BcashTokenNftMeta {
-    name?: string;
-    description?: string;
-    icon?: string;
-}
 export interface Vin {
     /** ID/hash of the originating transaction (where the UTXO comes from). */
     txid?: string;
@@ -349,7 +348,7 @@ export interface Erc4626TokenMetadata {
     decimals: number;
 }
 export interface Erc4626Token {
-    /** Metadata of the underlying asset token. */
+    /** Metadata of the underlying asset token. Omitted when decimals cannot be resolved. */
     asset?: Erc4626TokenMetadata;
     /** Metadata of the vault share token. */
     share?: Erc4626TokenMetadata;
@@ -365,6 +364,46 @@ export interface Erc4626Token {
     previewRedeem1Share?: string;
     /** Error message for partial failures while fetching ERC4626 fields. */
     error?: string;
+}
+export interface ContractInfoProtocols {
+    /** ERC4626 vault details when explicitly requested and detected. */
+    erc4626?: Erc4626Token;
+}
+export interface ContractInfoRates {
+    /** Current price of one whole token in the chain base currency, when available. */
+    baseRate?: number;
+    /** Requested secondary currency code for the secondaryRate field, lower-cased. */
+    currency?: string;
+    /** Current price of one whole token in the requested secondary currency, when available. */
+    secondaryRate?: number;
+}
+export interface ContractInfoResult {
+    /** @deprecated: Use standard instead. */
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
+    /** Smart contract address. */
+    contract: string;
+    /** Readable name of the contract. */
+    name: string;
+    /** Symbol for tokens under this contract, if applicable. */
+    symbol: string;
+    /** Number of decimal places, if applicable. */
+    decimals: number;
+    /** Block height where contract was first created. */
+    createdInBlock?: number;
+    /** Block height where contract was destroyed (if any). */
+    destructedInBlock?: number;
+    /** Current rate data for the contract when available. */
+    rates?: ContractInfoRates;
+    /** Optional protocol-specific enrichments requested by the caller. */
+    protocols?: ContractInfoProtocols;
+    /** Indexed best block height used as freshness metadata for this response. */
+    blockHeight: number;
+}
+export interface BcashTokenNftMeta {
+    name?: string;
+    description?: string;
+    icon?: string;
 }
 export interface Token {
     /** @deprecated: Use standard instead. */
@@ -474,41 +513,6 @@ export interface Address {
     stakingPools?: StakingPool[];
     /** Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload. */
     chainExtraData?: AccountChainExtraData;
-}
-export interface ContractInfoProtocols {
-    /** ERC4626 vault details when explicitly requested and detected. */
-    erc4626?: Erc4626Token;
-}
-export interface ContractInfoRates {
-    /** Current price of one whole token in the chain base currency, when available. */
-    baseRate?: number;
-    /** Requested secondary currency code for the secondaryRate field, lower-cased. */
-    currency?: string;
-    /** Current price of one whole token in the requested secondary currency, when available. */
-    secondaryRate?: number;
-}
-export interface ContractInfoResult {
-    /** @deprecated: Use standard instead. */
-    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
-    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155' | 'TRC20' | 'TRC721' | 'TRC1155';
-    /** Smart contract address. */
-    contract: string;
-    /** Readable name of the contract. */
-    name: string;
-    /** Symbol for tokens under this contract, if applicable. */
-    symbol: string;
-    /** Number of decimal places, if applicable. */
-    decimals: number;
-    /** Block height where contract was first created. */
-    createdInBlock?: number;
-    /** Block height where contract was destroyed (if any). */
-    destructedInBlock?: number;
-    /** Current rate data for the contract when available. */
-    rates?: ContractInfoRates;
-    /** Optional protocol-specific enrichments requested by the caller. */
-    protocols?: ContractInfoProtocols;
-    /** Indexed best block height used as freshness metadata for this response. */
-    blockHeight: number;
 }
 export interface Utxo {
     /** Transaction ID in which this UTXO was created. */

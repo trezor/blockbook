@@ -52,6 +52,7 @@ func TestCanonicalPrefixesCoverTemplateConsumers(t *testing.T) {
 		prodMQURLPrefix,
 		"BB_RPC_BIND_HOST_", // inline literal in LoadConfig
 		"BB_RPC_ALLOW_IP_",  // inline literal in LoadConfig
+		backendAddnodePrefix,
 	}
 
 	for _, prefix := range usedByTemplates {

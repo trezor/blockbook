@@ -5,6 +5,8 @@ on:
     branches: [ master, develop ]
   pull_request:
     branches: [ '**' ]
+  # Lets a maintainer run the RPC-dependent jobs on a Dependabot branch.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -45,7 +47,8 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted]
     timeout-minutes: 30
     needs: unit-tests
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    # Dependabot runs get no Actions secrets, so BB_RPC_URLS is empty; dispatch the workflow on the branch instead.
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.actor != 'dependabot[bot]' }}
 
     steps:
       - name: Checkout code
@@ -72,7 +75,7 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted]
     timeout-minutes: 180
     needs: connectivity-tests
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.actor != 'dependabot[bot]' }}
 
     steps:
       - name: Checkout code

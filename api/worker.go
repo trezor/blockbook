@@ -67,8 +67,8 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 	}); ok {
 		if override := provider.XpubConfigOverride(); override != nil {
 			xpubCfg = ApplyXpubConfig(override)
-			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
-				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
+			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheBytes=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
+				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheBytes, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
 		}
 	}
 	w := &Worker{
@@ -893,22 +893,23 @@ func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, st
 	return contractInfo, true, nil
 }
 
+// getEthereumTokensTransfers maps parsed transfers to the API shape. Addresses and value come from
+// the log or calldata, so a transfer whose contract metadata cannot be read is kept with the coin's
+// decimals rather than dropped or left as a zero value (trezor/blockbook#1715).
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
-	tokens := make([]TokenTransfer, len(transfers))
+	tokens := make([]TokenTransfer, 0, len(transfers))
 	if len(transfers) > 0 {
 		sort.Sort(transfers)
 		contractCache := make(contractInfoCache)
 		for i := range transfers {
 			t := transfers[i]
 			standard := bchain.EthereumTokenStandardMap[t.Standard]
-			var contractInfo *bchain.ContractInfo
-			if info, ok := contractCache[t.Contract]; ok {
-				contractInfo = info
-			} else {
+			contractInfo, ok := contractCache[t.Contract]
+			if !ok {
 				info, _, err := w.GetContractInfo(t.Contract, standard)
 				if err != nil {
 					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
-					continue
+					info = &bchain.ContractInfo{Standard: standard, Decimals: w.chainParser.AmountDecimals()}
 				}
 				contractInfo = info
 				contractCache[t.Contract] = info
@@ -926,7 +927,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			}
 			aggregateAddress(addresses, t.From)
 			aggregateAddress(addresses, t.To)
-			tokens[i] = TokenTransfer{
+			tokens = append(tokens, TokenTransfer{
 				Type:             standard,
 				Standard:         standard,
 				Contract:         t.Contract,
@@ -937,7 +938,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 				Decimals:         contractInfo.Decimals,
 				Name:             contractInfo.Name,
 				Symbol:           contractInfo.Symbol,
-			}
+			})
 		}
 	}
 	return tokens
@@ -948,7 +949,7 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 	if err != nil {
 		return "", nil, err
 	}
-	tokenId, ok := new(big.Int).SetString(id, 10)
+	tokenId, ok := parseTokenID(id)
 	if !ok {
 		return "", nil, errors.New("Invalid token id")
 	}
@@ -961,6 +962,18 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 		return "", nil, err
 	}
 	return uri, ci, nil
+}
+
+// parseTokenID accepts a decimal uint256; the length bound (78 digits) runs before the superlinear decimal parse.
+func parseTokenID(id string) (*big.Int, bool) {
+	if len(id) > 78 {
+		return nil, false
+	}
+	tokenID, ok := new(big.Int).SetString(id, 10)
+	if !ok || tokenID.Sign() < 0 || tokenID.BitLen() > 256 {
+		return nil, false
+	}
+	return tokenID, true
 }
 
 // maxFilteredAddressScanNonMatching caps entries a filtered walk may skip; matches are already bounded by maxResults.
@@ -1568,7 +1581,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
 				// Only fungible tokens are eligible; respect a contract filter if present.
-				if c.Standard != bchain.FungibleToken {
+				if c.Standard != bchain.FungibleToken || w.chainParser.EthereumTypeIsIgnoredContract(c.Contract) {
 					continue
 				}
 				if len(filterDesc) > 0 && !bytes.Equal(filterDesc, c.Contract) {
@@ -1602,6 +1615,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			var j int
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
+				// skip, not remove: filter.Vout below relies on the index into ca.Contracts
+				if w.chainParser.EthereumTypeIsIgnoredContract(c.Contract) {
+					continue
+				}
 				if len(filterDesc) > 0 {
 					if !bytes.Equal(filterDesc, c.Contract) {
 						continue

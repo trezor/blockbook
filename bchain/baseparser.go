@@ -414,6 +414,11 @@ func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers
 	return nil, errors.New("Not supported")
 }
 
+// EthereumTypeIsIgnoredContract ignores no contract by default
+func (p *BaseParser) EthereumTypeIsIgnoredContract(contract AddressDescriptor) bool {
+	return false
+}
+
 // GetEthereumTxData returns default pending status for non-Ethereum-like chains.
 func (p *BaseParser) GetEthereumTxData(tx *Tx) *EthereumTxData {
 	return &EthereumTxData{Status: TxStatusPending}

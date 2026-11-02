@@ -4,6 +4,8 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 Blockbook reads these from its process environment. When installed from the Debian package, the systemd unit loads them from an optional `EnvironmentFile=-/etc/blockbook/blockbook.env` (one `KEY=value` per line). The file is optional: if it is absent the service starts normally and any variables provided by other means (e.g. systemd `DefaultEnvironment`) still apply. The file is read by the service manager at startup, so it only needs to be readable by root.
 
+The packaged binary uses jemalloc as the C heap allocator for RocksDB (see [build.md](/docs/build.md)). The packaged unit sets `MALLOC_CONF=narenas:8,background_thread:true`; a `MALLOC_CONF` in `/etc/blockbook/blockbook.env` replaces that whole value, so repeat those options when adding others, for example `MALLOC_CONF=narenas:8,background_thread:true,dirty_decay_ms:5000`. glibc's `MALLOC_*` variables have no effect on it.
+
 -   `BB_ADMIN_USER` / `BB_ADMIN_PASSWORD` - **Global (not coin-prefixed).** HTTP Basic-auth credentials required to reach the internal server's `/admin` endpoints (the administrative pages and the state-mutating POST handlers such as internal-data refetch and contract-info updates). Basic auth is used so the admin pages and forms work directly in a browser via its native login prompt (and `curl -u user:pass` for scripts). The admin surface is **fail-closed**: unless **both** variables are set, every `/admin` route returns `503` and the endpoints are unusable; `/metrics`, the status page (`/`) and static assets are unaffected. A request with missing or wrong credentials gets `401`. Leading/trailing whitespace in either value is ignored, so a stray space or newline in `blockbook.env` will not lock you out. The internal server binds all interfaces by default (`internal_binding_template` is `:<port>`), so set these on every host. Note that the packaged service serves the internal port over HTTPS using the **bundled self-signed certificate** (`cert/blockbook.{crt,key}`, symlinked to the repo's `testcert`), whose private key is public — so that TLS protects the credentials against passive sniffing but not against an active man-in-the-middle. This is acceptable on a trusted, firewalled internal segment (the intended deployment); from a shell you can reach it as e.g. `curl -k -u "$BB_ADMIN_USER:$BB_ADMIN_PASSWORD" https://host:<internal port>/admin/...`. If the internal network is not trusted, terminate real TLS at a reverse proxy and/or restrict the internal port to trusted peers. Do not expose it directly to the internet.
 
 -   `<coin shortcut>_WS_GETACCOUNTINFO_LIMIT` - Limits the number of `getAccountInfo` requests per websocket connection to reduce server abuse. Accepts number as input. Defaults to `42` (matching the Trezor Suite client concurrency limit).
@@ -153,6 +155,10 @@ On EVM chains the internal server also exposes `/admin/contract-info/` (same Bas
     `0.0.0.0`, RPC stays restricted unless `BB_RPC_ALLOW_IP_<coin alias>` is set.
 -   `BB_RPC_ALLOW_IP_<coin alias>` - Overrides backend RPC allow list for UTXO configs (e.g. `rpcallowip`), defaulting
     to `127.0.0.1`.
+-   `BB_ADDNODE_<coin alias>` - Comma or whitespace separated private backend peers (`host[:port]`) appended to
+    `backend.additional_params.addnode` during package/config generation, so they stay out of the public coin config.
+    Supported by the backend config templates that expand the `addnode` list (`bitcoin*.conf`, `bitcoin_like.conf`,
+    `bcash.conf`, `deeponion.conf`). The peers are baked into the built backend package.
 
 ## CI/CD workflow variables
 
@@ -165,7 +171,12 @@ On EVM chains the internal server also exposes `/admin/contract-info/` (same Bas
 
 -   `BB_RPC_URLS` (repository secret) - `KEY=VALUE` lines carrying every `BB_DEV_RPC_URL_*` / `BB_PROD_RPC_URL_*`
     value for CI. Provider URLs embed auth tokens and Actions variables are printed unmasked in public job logs, so
-    the exporter masks each URL and fails a job that still finds these names among repository variables.
+    the exporter masks each URL and fails a job that still finds these names among repository variables. Dependabot
+    runs don't receive it, so `testing.yml` skips connectivity/integration tests for them; a maintainer runs the
+    Testing workflow manually on the Dependabot branch.
+
+-   `BB_BACKEND_PEERS` (repository secret) - `KEY=VALUE` lines carrying `BB_ADDNODE_*` values for the CI build job.
+    The exporter masks each peer and fails a job that finds these names among repository variables.
 
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.

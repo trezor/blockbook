@@ -46,10 +46,28 @@ flowchart TD
 How each source is built:
 
 - **On-chain** (coins with no provider, or a stale one — e.g. `ethereum` non-archive, ETH testnets):
-  one `eth_feeHistory` call (4 blocks, newest = `pending`) yields the next-block `baseFeePerGas`
-  (array index `blocks-1`) and per-tier reward percentiles (20/70/90/99) used as tips. Blockbook
-  builds `maxFeePerGas = eip1559BaseFeeMultiplier(2) × baseFee + tip`. (Previously this field held the
-  tip alone — below the base fee, so not mineable; that was fixed.)
+  one `eth_feeHistory` call (8 blocks, newest = `latest`, reward percentiles 20/50/99) yields the
+  node's projected next-block `baseFeePerGas` (the last array element, computed with the chain's own
+  EIP-1559 parameters) and one reward row per mined block. The window ends at `latest` rather than
+  `pending` because a pending row is a half-built block sorted by tip, whose percentiles the window
+  maximum would carry, and Erigon has no pending block and would shorten the window by one. Each percentile is
+  reduced by its **window maximum** — the busiest of the last 8 blocks prices the quote, so a one-block
+  tip spike stays in the estimate for ~100 s instead of being averaged away — and the tiers form a
+  ladder on the 20th-percentile floor:
+
+  | tier | tip |
+  |---|---|
+  | low (Economy) | max p20 — the cheapest tip that still bought a fifth of the busiest recent block |
+  | medium (Normal) | 1.5 × low |
+  | high (High) | max p50, never below medium |
+  | instant | max p99, never below high (kept for the API; Suite does not use it) |
+
+  Blockbook builds `maxFeePerGas = eip1559BaseFeeMultiplier(2) × baseFee + tip`. On a month of
+  mainnet blocks (Sep–Oct 2026, 216k quotes) this lands Economy within 4 blocks 99.9% of the time,
+  Normal within 2 blocks 99.4% and High in the next block 99.7%, paying 1.14× / 1.21× / 2.04× the
+  tip that cleared the block. The former 4-block means of p20/p70/p90 landed 98.7% / 99.99% / 99.99%
+  for 1.03× / 2.64× / 11.3×, and a plain floor ladder on a 4-block p20 median (1 / 1.5 / 2×) missed
+  the High target 15% of the time.
 - **Alternative provider** (archive coins, served from an in-memory cache, no node RPC): blockbook
   returns the provider's `maxFeePerGas` **unchanged**. For Infura, this is `suggestedMaxFeePerGas`,
   padded well above the base fee (~2.5× for the high tier); for 1inch, it is the provider's own
@@ -152,7 +170,7 @@ maxFeePerGas = 2 × baseFee + tip
 
 - **base fee** — consensus-determined for the next block (deterministic from the parent header), so it
   is taken from the chain, never from an oracle estimate.
-- **tip** (`maxPriorityFeePerGas`) — the only estimated part; from fee-history reward percentiles, or
+- **tip** (`maxPriorityFeePerGas`) — the only estimated part; from the fee-history ladder above, or
   the provider's per-tier suggestion.
 - **`2×` buffer** — the wallet's policy knob. It absorbs roughly 6 consecutive full blocks of base-fee
   growth (the base fee can rise at most 12.5% per block) before a transaction stalls, and EIP-1559
