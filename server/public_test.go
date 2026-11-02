@@ -64,9 +64,7 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 		t.Fatal(err)
 	}
 	// setup internal state BlockTimes
-	for i := uint32(0); i < block1.Height; i++ {
-		is.BlockTimes = append(is.BlockTimes, 0)
-	}
+	is.SetBlockTimes(make([]uint32, block1.Height))
 	// import data
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)

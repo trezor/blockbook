@@ -1,0 +1,127 @@
+{{define "specific"}}{{$addr := .Address}}{{$data := .}}
+<div class="row g-0 ms-2 ms-lg-0">
+    <div class="col-md-10 order-2 order-md-1">
+        <h1>Token {{$data.Name}}{{if $data.Symbol}} ({{$data.Symbol}}){{end}}</h1>
+        <h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">{{$data.Category}}</span></h5>
+    </div>
+    <div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0">
+        <div id="qrcode"></div>
+        <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
+        <script type="text/javascript">
+            new QRCode(document.getElementById("qrcode"), { text: "{{$data.Category}}", width: 120, height: 120 });
+        </script>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-6">
+<table class="table data-table info-table col-md-6">
+    <tbody>
+        <tr>
+            <td style="white-space: nowrap;"><h5>Info</h5></td>
+            <td></td>
+        </tr>
+{{if $data.Name}}
+        <tr>
+            <td>Name</td>
+            <td>{{$data.Name}}</td>
+        </tr>
+{{end}}
+{{if $data.Symbol}}
+        <tr>
+            <td>Symbol</td>
+            <td>{{$data.Symbol}}</td>
+        </tr>
+{{end}}
+{{if $data.Decimals}}
+        <tr>
+            <td>Decimals</td>
+            <td>{{$data.Decimals}}</td>
+        </tr>
+{{end}}
+{{if $data.Description}}
+        <tr>
+            <td>Description</td>
+            <td>{{$data.Description}}</td>
+        </tr>
+{{end}}
+{{if $data.URI}}
+        <tr>
+            <td>Website</td>
+            <td><a href="{{$data.URI}}">{{$data.URI}}</a></td>
+        </tr>
+{{end}}
+{{if $data.Commitments}}
+        <tr>
+            <td>Commitments</td>
+            <td class="text-end">
+                {{range $i, $iv := $data.Commitments}}{{if $i}}, {{end}}
+                    <a href="/nft/{{$data.Category}}/{{$iv}}">
+                        {{if $data.Nfts}}
+                            <span class="copyable" cc="{{$iv}}" alias-type="Commitment">
+                                {{if (index $data.Nfts $iv).Icon}}<img onerror="this.style.display='none'" style="width: 24px; height: 24px;" src="{{(index $data.Nfts $iv).Icon}}" />{{end}}
+                                {{(index $data.Nfts $iv).Name}}
+                            </span>
+                        {{else}}
+                            {{$iv}}
+                        {{end}}
+                    </a>
+                {{end}}
+            </td>
+        </tr>
+{{end}}
+        <tr>
+            <td>Confirmed Transactions</td>
+            <td>{{formatInt $addr.Txs}}</td>
+        </tr>
+        <tr>
+            <td style="width: 40%;">Standard</td>
+            <td>CashTokens</td>
+        </tr>
+    </tbody>
+</table>
+</div>
+<div class="col-md-6 mt-4" id="image">
+{{if $data.ImageURL}}
+    <img class="border w-100 bg-white" style="border-radius: 20px; padding: 10px;" src="{{$data.ImageURL}}">
+{{end}}
+</div>
+</div>
+
+{{if or $addr.Transactions $addr.Filter}}
+<div class="row pt-3 pb-1">
+    <h3 class="col-sm-6 col-lg-3 m-0 align-self-center">Transactions</h3>
+    <div class="col-sm-6 col-lg-3 my-2 my-lg-0 align-self-center">
+        <select  class="w-100" onchange="self.location='?filter='+options[selectedIndex].value">
+            <option>All</option>
+            <option {{if eq $addr.Filter "inputs"}}selected{{end}} value="inputs">Address on input side</option>
+            <option {{if eq $addr.Filter "outputs"}}selected{{end}} value="outputs">Address on output side</option>
+            {{if $addr.Tokens}}
+            <option {{if eq $addr.Filter "0"}}selected{{end}} value="0">Non-contract</option>
+            <option {{if eq $addr.Filter "1"}}selected{{end}} value="1">Internal</option>
+            {{range $t := $addr.Tokens}}
+            {{if eq $t.Standard $.FungibleTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.FungibleTokenName}})</option>
+            {{end}}
+            {{end}}
+            {{range $t := $addr.Tokens}}
+            {{if eq $t.Standard $.NonFungibleTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.NonFungibleTokenName}})</option>
+            {{end}}
+            {{end}}
+            {{range $t := $addr.Tokens}}
+            {{if eq $t.Standard $.MultiTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.MultiTokenName}})</option>
+            {{end}}
+            {{end}}
+            {{end}}
+        </select>
+    </div>
+    <div class="col-lg-6">
+        {{template "paging" $data}}
+    </div>
+</div>
+<div>
+    {{range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end}}
+</div>
+{{template "paging" $data }}
+{{end}}{{end}}

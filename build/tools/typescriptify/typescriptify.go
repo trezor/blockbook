@@ -41,6 +41,7 @@ var wrapperIface = reflect.TypeOf((*bchain.ChainExtraPayloadWrapper)(nil)).Elem(
 var apiTypes = []interface{}{
 	// API - REST and Websocket
 	api.APIError{},
+	api.BcashToken{},
 	api.Tx{},
 	api.FeeStats{},
 	api.Address{},
@@ -109,6 +110,7 @@ func newConverter() *typescriptify.TypeScriptify {
 	t.ManageType([]*api.Amount{}, typescriptify.TypeOptions{TSType: "string[]"})
 	t.ManageType(big.Int{}, typescriptify.TypeOptions{TSType: "number"})
 	t.ManageType(time.Time{}, typescriptify.TypeOptions{TSType: "string", TSDoc: "Time in ISO 8601 YYYY-MM-DDTHH:mm:ss.sssZd"})
+	t.ManageType(bchain.BcashToken{}, typescriptify.TypeOptions{TSType: "BcashToken"})
 	return t
 }
 

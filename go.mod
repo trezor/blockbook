@@ -92,3 +92,5 @@ require (
 // replace github.com/martinboehm/btcutil => ../btcutil
 
 // replace github.com/martinboehm/btcd => ../btcd
+
+replace github.com/martinboehm/bchutil => github.com/mainnet-pat/bchutil v0.0.0-20250925114252-67a05fe8f9ba

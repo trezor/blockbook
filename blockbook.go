@@ -21,6 +21,7 @@ import (
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins"
+	"github.com/trezor/blockbook/bcmr"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
@@ -117,6 +118,7 @@ var (
 	syncWorker                    *db.SyncWorker
 	internalState                 *common.InternalState
 	fiatRates                     *fiat.FiatRates
+	bcmrDownloader                *bcmr.BcmrDownloader
 	callbacksOnNewBlock           []bchain.OnNewBlockFunc
 	callbacksOnNewTx              []bchain.OnNewTxFunc
 	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
@@ -344,6 +346,11 @@ func mainWithExitCode() int {
 
 	if fiatRates, err = fiat.NewFiatRates(index, config, metrics, onNewFiatRatesTicker); err != nil {
 		glog.Error("fiatRates ", err)
+		return exitCodeFatal
+	}
+
+	if bcmrDownloader, err = bcmr.NewBcmrDownloader(index, config, metrics); err != nil {
+		glog.Error("bcmrDownloader ", err)
 		return exitCodeFatal
 	}
 
@@ -946,6 +953,10 @@ func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, config *common.Con
 		// are repaired via the CDN without contending with the Free-tier tip loop.
 		runStartupSelfHealing()
 		go fiatRates.RunDownloader()
+	}
+
+	if bcmrDownloader != nil {
+		go bcmrDownloader.RunDownloader()
 	}
 
 	if config.FourByteSignatures != "" && chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
