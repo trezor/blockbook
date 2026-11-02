@@ -9,9 +9,9 @@
     "e2e": "tsx src/e2e.ts"
   },
   "overrides": {
-    "fast-uri": "3.1.3",
-    "js-yaml": "4.3.0",
-    "brace-expansion@2": "2.1.2",
+    "fast-uri": "3.1.9",
+    "js-yaml": "4.3.2",
+    "brace-expansion@2": "2.1.7",
     "brace-expansion@>=3": "5.0.7"
   },
   "devDependencies": {
@@ -23,7 +23,7 @@
     "openapi-typescript": "7.10.1",
     "tsx": "4.22.4",
     "typescript": "5.9.3",
-    "undici": "6.28.0",
+    "undici": "6.29.1",
     "ws": "8.21.0",
     "yaml": "2.6.1"
   }
