@@ -839,6 +839,35 @@ func TestUnlinkedParent(t *testing.T) {
 	}
 }
 
+// A reorg restart waits one RetryDelay so a split pool can converge, and shutdown cuts the
+// wait short instead of re-entering resyncIndex.
+func TestResyncAfterDelay(t *testing.T) {
+	d := setupRocksDB(t, eth.NewEthereumParser(1, false))
+	defer closeAndDestroyRocksDB(t, d)
+
+	b := evmTestBlock(evmTestHash("11"), "", 1)
+	if err := d.ConnectBlock(b); err != nil {
+		t.Fatalf("ConnectBlock: %v", err)
+	}
+	chain := newResyncTestChain(&bchain.EVMTip{Hash: b.Hash, Height: 1}, b)
+	w := newResyncTestWorker(t, d, chain)
+	w.missingBlockRetry.RetryDelay = 50 * time.Millisecond
+
+	start := time.Now()
+	if err := w.resyncAfterDelay(nil, false); !stdErrors.Is(err, syncNotNeeded) {
+		t.Fatalf("resyncAfterDelay error = %v, want %v", err, syncNotNeeded)
+	}
+	if elapsed := time.Since(start); elapsed < 50*time.Millisecond {
+		t.Fatalf("resyncAfterDelay returned after %s, want at least the retry delay", elapsed)
+	}
+
+	w.missingBlockRetry.RetryDelay = time.Hour
+	go func() { w.chanOsSignal <- os.Interrupt }()
+	if err := w.resyncAfterDelay(nil, false); !stdErrors.Is(err, ErrOperationInterrupted) {
+		t.Fatalf("resyncAfterDelay on shutdown error = %v, want %v", err, ErrOperationInterrupted)
+	}
+}
+
 // The tip is one block ahead but its parent is not our best block: the fork check runs,
 // the orphaned local block is disconnected and the canonical branch is connected.
 func TestResyncIndexEthereumTypeParentMismatchHandlesFork(t *testing.T) {

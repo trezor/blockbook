@@ -78,7 +78,7 @@ sequenceDiagram
     end
 ```
 
-`errResync` and `errFork` cause `resyncIndex` to be re-entered (handling the new chain state); any other error propagates up and `syncIndexLoop` retries once before waiting for the next trigger.
+`errResync` and `errFork` cause `resyncIndex` to be re-entered after one `RetryDelay` (`resyncAfterDelay`; by-height fetches would otherwise spin against a split pool); any other error propagates up and `syncIndexLoop` retries once before waiting for the next trigger.
 
 ## Tip feed and the stall watchdog
 
@@ -150,7 +150,7 @@ The retry policy is exposed per chain under `additional_params.missingBlockRetry
 
 | Knob                  | Current default | Where it bites                                                                  | Semantic                                                              |
 | --------------------- | --------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `RetryDelay`          | 1 s             | `getBlockWorker` (parallel) directly; `getBlockChain` clamps to ≤ 250 ms regardless | Sleep between successive `GetBlock` attempts for the same missing block |
+| `RetryDelay`          | 1 s             | `getBlockWorker` (parallel) directly; `getBlockChain` clamps to ≤ 250 ms regardless; `resyncAfterDelay` before every `errResync`/`errFork` restart | Sleep between successive `GetBlock` attempts for the same missing block, and the pause before a reorg-triggered restart so a split pool can converge |
 | `RecheckThreshold`    | 10              | `getBlockWorker` mid-queue                                                      | Retries before calling `shouldRestartSyncOnMissingBlock` (a no-op for hashless EVM fetches; `MaxStallDuration` bounds those) |
 | `TipRecheckThreshold` | 3               | both loops, at the tail                                                         | Retries before chain-state probe, when we're near the tip             |
 | `MaxStallDuration`    | 60 s            | both loops                                                                      | Wall-clock cap before yielding `errResync`                            |
