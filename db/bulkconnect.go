@@ -285,6 +285,8 @@ func (b *BulkConnect) resetStats() {
 }
 
 func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs bool) error {
+	// bulk writes are batched, so the index is rebuilt once regular connects resume
+	b.d.invalidateImmatureCoinbase()
 	b.addBitcoinStats(block)
 	addresses := make(addressesMap)
 	gf, err := bchain.NewGolombFilter(b.d.is.BlockGolombFilterP, b.d.is.BlockFilterScripts, block.BlockHeader.Hash, b.d.is.BlockFilterUseZeroedKey)

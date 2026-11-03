@@ -903,6 +903,18 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	if option > AccountDetailsBasic {
 		unconfirmedBalanceSat = (*Amount)(&uBalSat)
 	}
+	var immature big.Int
+	for _, da := range data.addresses {
+		for i := range da {
+			if ad := &da[i]; ad.balance != nil && ad.balance.BalanceSat.Sign() > 0 {
+				adImmature, err := w.db.GetImmatureCoinbaseBalance(ad.addrDesc)
+				if err != nil {
+					return nil, err
+				}
+				immature.Add(&immature, adImmature)
+			}
+		}
+	}
 	addr := Address{
 		Paging:                pg,
 		AddrStr:               xpub,
@@ -913,6 +925,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		AddrTxCount:           addrTxCount,
 		UnconfirmedBalanceSat: unconfirmedBalanceSat,
 		UnconfirmedTxs:        unconfirmedTxs,
+		ImmatureBalanceSat:    amountOrNil(&immature),
 		Transactions:          txs,
 		Txids:                 txids,
 		UsedTokens:            usedTokens,
