@@ -245,6 +245,9 @@ type Token struct {
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
 	Protocols        TokenProtocols           `json:"protocols,omitempty" ts_type:"string[]" ts_doc:"Protocol identifiers the contract participates in (e.g., \"erc4626\"); for fresh per-vault data, use getContractInfo."`
 	ContractIndex    string                   `json:"-"`
+
+	IdsTotal              int `json:"idsTotal,omitempty" ts_doc:"Number of held token IDs; present only when ids is truncated."`
+	MultiTokenValuesTotal int `json:"multiTokenValuesTotal,omitempty" ts_doc:"Number of held ERC1155 id/value pairs; present only when multiTokenValues is truncated."`
 }
 
 // Tokens is array of Token
