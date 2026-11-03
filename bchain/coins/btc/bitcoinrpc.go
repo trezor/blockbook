@@ -148,6 +148,10 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	if c.MinimumCoinbaseConfirmations == 0 {
 		c.MinimumCoinbaseConfirmations = 100
 	}
+	// the immature coinbase index is rebuilt from the kept block txs
+	if c.BlockAddressesToKeep < c.MinimumCoinbaseConfirmations {
+		c.BlockAddressesToKeep = c.MinimumCoinbaseConfirmations
+	}
 	// at least 1 mempool worker/subworker for synchronous mempool synchronization
 	if c.MempoolWorkers < 1 {
 		c.MempoolWorkers = 1
