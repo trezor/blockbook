@@ -608,6 +608,16 @@ func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresse
 	return nil
 }
 
+// isIgnoredSenderTx reports a protocol system transaction (OP-stack per-block deposits) that is
+// indexed under no address; its blockTx keeps empty from/to, which disconnect already tolerates.
+func (d *RocksDB) isIgnoredSenderTx(tx *bchain.Tx) bool {
+	if len(tx.Vin) != 1 || len(tx.Vin[0].Addresses) != 1 {
+		return false
+	}
+	from, err := d.chainParser.GetAddrDescFromAddress(tx.Vin[0].Addresses[0])
+	return err == nil && d.chainParser.EthereumTypeIsIgnoredSender(from)
+}
+
 func (d *RocksDB) setAddressTxIndexesToAddressMap(addrDesc bchain.AddressDescriptor, height uint32, addresses addressesMap) error {
 	strAddrDesc := string(addrDesc)
 	_, found := addresses[strAddrDesc]
@@ -747,6 +757,9 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		}
 		blockTx := &blockTxs[txi]
 		blockTx.btxID = btxID
+		if d.isIgnoredSenderTx(tx) {
+			continue
+		}
 		if err = d.processBaseTxData(blockTx, tx, addresses, addressContracts); err != nil {
 			return nil, err
 		}
@@ -801,7 +814,7 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-		if eid.InternalData == nil {
+		if eid.InternalData == nil || d.isIgnoredSenderTx(tx) {
 			continue
 		}
 		btxID, err := d.chainParser.PackTxid(tx.Txid)

@@ -255,6 +255,67 @@ func TestERC721SelfTransferConnectDisconnectRoundTrip(t *testing.T) {
 	}
 }
 
+// TestConnectBlock_IgnoredSenderTxIndexesNoAddress verifies that an OP-stack system deposit is
+// indexed under neither its sender nor its recipient, a user transaction in the same block is,
+// and the block still disconnects.
+func TestConnectBlock_IgnoredSenderTxIndexesNoAddress(t *testing.T) {
+	parser := ethereumTestnetParser()
+	d := setupRocksDB(t, parser)
+	defer closeAndDestroyRocksDB(t, d)
+	const systemSender = "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"
+	const l1AttributesPredeploy = "0x4200000000000000000000000000000000000015"
+	const height = 4321000
+	tx := func(txid, from, to string) bchain.Tx {
+		return bchain.Tx{
+			Txid: txid,
+			Vin:  []bchain.Vin{{Addresses: []string{from}}},
+			Vout: []bchain.Vout{{ScriptPubKey: bchain.ScriptPubKey{Addresses: []string{to}}}},
+		}
+	}
+	block := &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Height: height,
+			Hash:   "0xc7b98df95acfd11c51ba25611a39e004fe56c8fdfc1582af99354fcd09c17b11",
+			Time:   1534858022,
+		},
+		Txs: []bchain.Tx{
+			tx("80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05201", systemSender, l1AttributesPredeploy),
+			tx("80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05202", dbtestdata.EthAddr7b, dbtestdata.EthAddr83),
+		},
+	}
+	if err := d.ConnectBlock(block); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		address string
+		indexed bool
+	}{
+		{systemSender, false},
+		{l1AttributesPredeploy, false},
+		{dbtestdata.EthAddr7b, true},
+		{dbtestdata.EthAddr83, true},
+	} {
+		addrDesc := addressToAddrDesc(tc.address, parser)
+		txIndexes, err := d.getTxIndexesForAddressAndBlock(addrDesc, height)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (len(txIndexes) > 0) != tc.indexed {
+			t.Errorf("%s: %d tx indexes in block %d, want indexed=%v", tc.address, len(txIndexes), height, tc.indexed)
+		}
+		acs, err := d.getUnpackedAddrDescContracts(addrDesc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (acs != nil) != tc.indexed {
+			t.Errorf("%s: address contracts present=%v, want %v", tc.address, acs != nil, tc.indexed)
+		}
+	}
+	if err := d.DisconnectBlockRangeEthereumType(height, height); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestDisconnectBlockRange_MultiHopTransferRestoresHoldings verifies that a token moving
 // A->B->C inside one disconnected block is rolled back to A only. B already has history
 // with the collection, so its contract entry survives the disconnect and would keep a
