@@ -419,6 +419,11 @@ func (p *BaseParser) EthereumTypeIsIgnoredContract(contract AddressDescriptor) b
 	return false
 }
 
+// EthereumTypeIsIgnoredSender ignores no sender by default
+func (p *BaseParser) EthereumTypeIsIgnoredSender(sender AddressDescriptor) bool {
+	return false
+}
+
 // GetEthereumTxData returns default pending status for non-Ethereum-like chains.
 func (p *BaseParser) GetEthereumTxData(tx *Tx) *EthereumTxData {
 	return &EthereumTxData{Status: TxStatusPending}
