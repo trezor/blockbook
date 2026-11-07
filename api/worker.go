@@ -65,8 +65,8 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 	}); ok {
 		if override := provider.XpubConfigOverride(); override != nil {
 			xpubCfg = ApplyXpubConfig(override)
-			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
-				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
+			glog.Infof("xpub: xpubConfig override applied: maxCacheEntries=%d maxCacheBytes=%d maxCacheExpirationSeconds=%d defaultAddressesGap=%d maxAddressesGap=%d",
+				xpubCfg.MaxCacheEntries, xpubCfg.MaxCacheBytes, xpubCfg.MaxCacheExpirationSeconds, xpubCfg.DefaultAddressesGap, xpubCfg.MaxAddressesGap)
 		}
 	}
 	w := &Worker{
@@ -817,22 +817,23 @@ func (w *Worker) getProbedContractDescriptorInfo(cd bchain.AddressDescriptor, st
 	return contractInfo, true, nil
 }
 
+// getEthereumTokensTransfers maps parsed transfers to the API shape. Addresses and value come from
+// the log or calldata, so a transfer whose contract metadata cannot be read is kept with the coin's
+// decimals rather than dropped or left as a zero value (trezor/blockbook#1715).
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
-	tokens := make([]TokenTransfer, len(transfers))
+	tokens := make([]TokenTransfer, 0, len(transfers))
 	if len(transfers) > 0 {
 		sort.Sort(transfers)
 		contractCache := make(contractInfoCache)
 		for i := range transfers {
 			t := transfers[i]
 			standard := bchain.EthereumTokenStandardMap[t.Standard]
-			var contractInfo *bchain.ContractInfo
-			if info, ok := contractCache[t.Contract]; ok {
-				contractInfo = info
-			} else {
+			contractInfo, ok := contractCache[t.Contract]
+			if !ok {
 				info, _, err := w.GetContractInfo(t.Contract, standard)
 				if err != nil {
 					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
-					continue
+					info = &bchain.ContractInfo{Standard: standard, Decimals: w.chainParser.AmountDecimals()}
 				}
 				contractInfo = info
 				contractCache[t.Contract] = info
@@ -850,7 +851,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			}
 			aggregateAddress(addresses, t.From)
 			aggregateAddress(addresses, t.To)
-			tokens[i] = TokenTransfer{
+			tokens = append(tokens, TokenTransfer{
 				Type:             standard,
 				Standard:         standard,
 				Contract:         t.Contract,
@@ -861,7 +862,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 				Decimals:         contractInfo.Decimals,
 				Name:             contractInfo.Name,
 				Symbol:           contractInfo.Symbol,
-			}
+			})
 		}
 	}
 	return tokens
@@ -872,7 +873,7 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 	if err != nil {
 		return "", nil, err
 	}
-	tokenId, ok := new(big.Int).SetString(id, 10)
+	tokenId, ok := parseTokenID(id)
 	if !ok {
 		return "", nil, errors.New("Invalid token id")
 	}
@@ -887,6 +888,24 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 	return uri, ci, nil
 }
 
+// parseTokenID accepts a decimal uint256; the length bound (78 digits) runs before the superlinear decimal parse.
+func parseTokenID(id string) (*big.Int, bool) {
+	if len(id) > 78 {
+		return nil, false
+	}
+	tokenID, ok := new(big.Int).SetString(id, 10)
+	if !ok || tokenID.Sign() < 0 || tokenID.BitLen() > 256 {
+		return nil, false
+	}
+	return tokenID, true
+}
+
+// maxFilteredAddressScanNonMatching caps entries a filtered walk may skip; matches are already bounded by maxResults.
+var maxFilteredAddressScanNonMatching = 200000
+
+// errFilteredScanLimit is public so callers narrow from/to instead of reading a short page as the end of history.
+var errFilteredScanLimit = NewAPIError("Filtered history is too large to scan, narrow the range with from/to", true)
+
 func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter *AddressFilter, maxResults int) ([]string, error) {
 	var err error
 	txids := make([]string, 0, 4)
@@ -900,6 +919,7 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 			return nil
 		}
 	} else {
+		nonMatching := 0
 		callback = func(txid string, height uint32, indexes []int32) error {
 			for _, index := range indexes {
 				vout := index
@@ -913,8 +933,12 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 					if len(txids) >= maxResults {
 						return &db.StopIteration{}
 					}
-					break
+					return nil
 				}
+			}
+			nonMatching++
+			if nonMatching > maxFilteredAddressScanNonMatching {
+				return errFilteredScanLimit
 			}
 			return nil
 		}
@@ -1301,8 +1325,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	var confirmedNonceOK bool
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
-	// Load cached contract list and totals from the index; this drives token lookups.
-	ca, err := w.db.GetAddrDescContracts(addrDesc)
+	// details=basic consumes only the header counters; nothing it returns reads the contract array
+	ca, err := w.db.GetAddrDescContracts(addrDesc, details == AccountDetailsBasic)
 	if err != nil {
 		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
@@ -1339,7 +1363,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
 				// Only fungible tokens are eligible; respect a contract filter if present.
-				if c.Standard != bchain.FungibleToken {
+				if c.Standard != bchain.FungibleToken || w.chainParser.EthereumTypeIsIgnoredContract(c.Contract) {
 					continue
 				}
 				if len(filterDesc) > 0 && !bytes.Equal(filterDesc, c.Contract) {
@@ -1373,6 +1397,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			var j int
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
+				// skip, not remove: filter.Vout below relies on the index into ca.Contracts
+				if w.chainParser.EthereumTypeIsIgnoredContract(c.Contract) {
+					continue
+				}
 				if len(filterDesc) > 0 {
 					if !bytes.Equal(filterDesc, c.Contract) {
 						continue
@@ -1729,6 +1757,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	// get tx history if requested by option or check mempool if there are some transactions for a new address
 	if option >= AccountDetailsTxidHistory && filter.Vout != AddressFilterVoutQueryNotNecessary {
 		txc, err := w.getAddressTxids(addrDesc, false, filter, (page+1)*txsOnPage)
+		if err == errFilteredScanLimit {
+			// unwrapped: the servers recognise public errors only by a plain *APIError assertion
+			return nil, err
+		}
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
 		}

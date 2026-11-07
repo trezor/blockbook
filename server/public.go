@@ -564,6 +564,37 @@ type TemplateData struct {
 	TxSecondaryCoinRate      float64
 	TxTicker                 *common.CurrencyRatesTicker
 	TxIOCollapseThreshold    int
+	contractRates            map[contractRateKey]contractRate
+}
+
+type contractRateKey struct {
+	contract string
+	day      string
+}
+
+type contractRate struct {
+	rate  float64
+	found bool
+}
+
+// contractBaseRate memoizes GetContractBaseRate per page, keyed by TxDate (the day of the stored daily ticker),
+// so the DB fallback runs once per contract and day instead of once per token transfer row.
+// A nil TxTicker is not memoized: amountSpan may still set it, with TxDate, for later rows of the same day.
+// The lookup is a parameter so the memo can be tested without a Worker.
+func (td *TemplateData) contractBaseRate(contract string, lookup func(ticker *common.CurrencyRatesTicker, token string, timestamp int64) (float64, bool)) (float64, bool) {
+	if td.TxTicker == nil {
+		return 0, false
+	}
+	key := contractRateKey{contract: contract, day: td.TxDate}
+	if r, ok := td.contractRates[key]; ok {
+		return r.rate, r.found
+	}
+	rate, found := lookup(td.TxTicker, contract, td.Tx.Blocktime)
+	if td.contractRates == nil {
+		td.contractRates = make(map[contractRateKey]contractRate)
+	}
+	td.contractRates[key] = contractRate{rate: rate, found: found}
+	return rate, found
 }
 
 func defaultTxTemplate(chainType bchain.ChainType) string {
@@ -793,7 +824,7 @@ func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, c
 					currentSecondary = formatSecondaryAmount(base*td.CurrentSecondaryCoinRate, td)
 					// get the historical rate only if current rate exist
 					// it is very costly to search in DB in vain for a rate for token for which there are no exchange rates
-					baseRate, found := s.api.GetContractBaseRate(td.TxTicker, t.Contract, td.Tx.Blocktime)
+					baseRate, found := td.contractBaseRate(t.Contract, s.api.GetContractBaseRate)
 					if found {
 						base := p * baseRate
 						txBase = strconv.FormatFloat(base, 'f', 6, 64)
@@ -1719,7 +1750,10 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		page := validateIntParam(r.URL.Query().Get("page"), 0, 0, maxPageNumber)
-		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
+		// Every tx on a page is materialized from the tx cache/backend, so a caller that only
+		// needs a few txs of a busy block (e.g. a sampler) must be able to shrink the page.
+		pageSize := validateIntParam(r.URL.Query().Get("pageSize"), txsInAPI, 1, txsInAPI)
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, pageSize)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.BlockToV1(block), nil
 		}

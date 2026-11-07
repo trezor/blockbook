@@ -53,7 +53,7 @@ func setupXpubRaceWorker(t *testing.T) *Worker {
 	}
 	is.FinishedSync(block2.Height)
 
-	metrics, err := common.GetMetrics("Fakecoin-xpubrace")
+	metrics, err := common.GetMetrics("Fakecoin-" + t.Name()) // unique per test: collectors register globally
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,8 +74,16 @@ func setupXpubRaceWorker(t *testing.T) *Worker {
 
 func resetXpubCache() {
 	cachedXpubsMux.Lock()
-	cachedXpubs = make(map[string]xpubData)
+	resetXpubCacheLocked()
 	cachedXpubsMux.Unlock()
+}
+
+// resetXpubCacheLocked empties the package-global cache together with its byte
+// total and returns a func restoring the previous contents; caller holds cachedXpubsMux.
+func resetXpubCacheLocked() (restore func()) {
+	prevCache, prevBytes := cachedXpubs, cachedXpubsBytes
+	cachedXpubs, cachedXpubsBytes = make(map[string]xpubData), 0
+	return func() { cachedXpubs, cachedXpubsBytes = prevCache, prevBytes }
 }
 
 // TestGetXpubAddressConcurrent verifies that concurrent requests for the same

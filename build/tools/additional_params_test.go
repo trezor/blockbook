@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -144,5 +145,57 @@ func TestDecodeJSONObjectReportsForm(t *testing.T) {
 				t.Fatalf("decodeJSONObject(%s) wasString = %v, want %v", tt.raw, wasString, tt.wantWasString)
 			}
 		})
+	}
+}
+
+func TestAppendBackendAddnodes(t *testing.T) {
+	backend := &Backend{AdditionalParams: map[string]interface{}{
+		"addnode": []interface{}{"public.example"},
+		"dbcache": "1000",
+	}}
+	if err := appendBackendAddnodes(backend, "p1.example:8333, 10.0.0.5\n[2001:db8::1]:8333,public.example p1.example:8333"); err != nil {
+		t.Fatalf("appendBackendAddnodes() error = %v", err)
+	}
+	params := backend.AdditionalParams.(map[string]interface{})
+	got := fmt.Sprint(params["addnode"])
+	if want := "[public.example p1.example:8333 10.0.0.5 [2001:db8::1]:8333]"; got != want {
+		t.Fatalf("addnode = %s, want %s", got, want)
+	}
+	if params["dbcache"] != "1000" {
+		t.Fatalf("other params must survive, got %v", params)
+	}
+}
+
+func TestAppendBackendAddnodesWithoutExistingParams(t *testing.T) {
+	backend := &Backend{}
+	if err := appendBackendAddnodes(backend, "p1.example"); err != nil {
+		t.Fatalf("appendBackendAddnodes() error = %v", err)
+	}
+	if got := fmt.Sprint(backend.AdditionalParams.(map[string]interface{})["addnode"]); got != "[p1.example]" {
+		t.Fatalf("addnode = %s", got)
+	}
+
+	backend = &Backend{AdditionalParams: map[string]interface{}{"dbcache": "1000"}}
+	if err := appendBackendAddnodes(backend, "p1.example"); err != nil {
+		t.Fatalf("appendBackendAddnodes() error = %v", err)
+	}
+	if got := fmt.Sprint(backend.AdditionalParams.(map[string]interface{})["addnode"]); got != "[p1.example]" {
+		t.Fatalf("addnode = %s", got)
+	}
+}
+
+func TestAppendBackendAddnodesRejectsInjectionWithoutEchoingIt(t *testing.T) {
+	for _, raw := range []string{"secret.example\nrpcallowip=0.0.0.0/0", "secret.example=1", "secret.example;x"} {
+		backend := &Backend{}
+		err := appendBackendAddnodes(backend, raw)
+		if err == nil {
+			t.Fatalf("expected %q to be rejected", raw)
+		}
+		if strings.Contains(err.Error(), "secret.example") || strings.Contains(err.Error(), "rpcallowip") {
+			t.Fatalf("error must not echo the private value: %v", err)
+		}
+		if backend.AdditionalParams != nil {
+			t.Fatalf("rejected input must leave the params untouched, got %v", backend.AdditionalParams)
+		}
 	}
 }

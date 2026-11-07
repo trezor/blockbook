@@ -13,6 +13,10 @@ Wants={{.Backend.PackageName}}.service
 # DefaultEnvironment are unaffected when it is absent. The service manager (root)
 # reads it at start, so it need not be readable by the blockbook user, and a
 # unit-level value here overrides a DefaultEnvironment value for the same key.
+# jemalloc tuning for the Blockbook binary (see docs/env.md): eight arenas instead of four per CPU
+# stop idle arenas from holding purged memory, and the background thread purges without stalling
+# the allocating goroutine. A MALLOC_CONF in blockbook.env replaces this value.
+Environment=MALLOC_CONF=narenas:8,background_thread:true
 EnvironmentFile=-/etc/blockbook/blockbook.env
 ExecStart={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin/blockbook -blockchaincfg={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/config/blockchaincfg.json -datadir={{.Env.BlockbookDataPath}}/{{.Coin.Alias}}/blockbook/db -sync -internal={{template "Blockbook.InternalBindingTemplate" .}} -public={{template "Blockbook.PublicBindingTemplate" .}} -certfile={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/cert/blockbook -explorer={{.Blockbook.ExplorerURL}} -log_dir={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/logs{{if .Env.BlockbookPprofBinding}} -prof={{.Env.BlockbookPprofBinding}}{{end}} {{.Blockbook.AdditionalParams}}
 User={{.Blockbook.SystemUser}}

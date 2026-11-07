@@ -2892,10 +2892,15 @@ func packString(s string) []byte {
 }
 
 func unpackString(buf []byte) (string, int) {
+	b, l := unpackStringBytes(buf)
+	return string(b), l
+}
+
+// unpackStringBytes returns the packed string as a slice of buf, for comparisons that must not allocate
+func unpackStringBytes(buf []byte) ([]byte, int) {
 	sl, l := unpackVaruint(buf)
 	so := l + int(sl)
-	s := string(buf[l:so])
-	return s, so
+	return buf[l:so], so
 }
 
 const (

@@ -16,3 +16,11 @@ type TxChainExtraData chainExtraDataBase
 
 // AccountChainExtraData wraps normalized chain-specific account/address data with a payload discriminator.
 type AccountChainExtraData chainExtraDataBase
+
+// ChainExtraPayload implements bchain.ChainExtraPayloadWrapper with the transaction payload.
+func (TxChainExtraData) ChainExtraPayload(p bchain.ChainExtraPayload) interface{} { return p.Tx }
+
+// ChainExtraPayload implements bchain.ChainExtraPayloadWrapper with the account payload.
+func (AccountChainExtraData) ChainExtraPayload(p bchain.ChainExtraPayload) interface{} {
+	return p.Account
+}

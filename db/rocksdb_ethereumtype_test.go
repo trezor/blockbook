@@ -1794,7 +1794,80 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 			if !reflect.DeepEqual(got, &tt.data) {
 				t.Errorf("unpackAddrContracts() = %v, want %v", got, tt.data)
 			}
+			// the header-only decoder must agree on the counters and leave the array undecoded
+			header, err := unpackAddrContractsHeader(packed, nil)
+			if err != nil {
+				t.Errorf("unpackAddrContractsHeader() error = %v", err)
+				return
+			}
+			wantHeader := &AddrContracts{TotalTxs: tt.data.TotalTxs, NonContractTxs: tt.data.NonContractTxs, InternalTxs: tt.data.InternalTxs}
+			if !reflect.DeepEqual(header, wantHeader) {
+				t.Errorf("unpackAddrContractsHeader() = %v, want %v", header, wantHeader)
+			}
 		})
+	}
+}
+
+func Test_unpackAddrContractsHeader_Truncated(t *testing.T) {
+	packed := packAddrContracts(&AddrContracts{TotalTxs: 300, NonContractTxs: 200, InternalTxs: 100})
+	// the header is the three counters; the trailing contract count is not part of it
+	headerLen := 0
+	for i := 0; i < 3; i++ {
+		_, l := unpackVaruint(packed[headerLen:])
+		headerLen += l
+	}
+	for cut := 0; cut < headerLen; cut++ {
+		if _, err := unpackAddrContractsHeader(packed[:cut], nil); err == nil {
+			t.Errorf("unpackAddrContractsHeader(packed[:%d]) expected error", cut)
+		}
+	}
+}
+
+func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
+	parser := ethereumTestnetParser()
+	d := setupRocksDB(t, parser)
+	defer closeAndDestroyRocksDB(t, d)
+	addrDesc := bchain.AddressDescriptor(addressToAddrDesc(dbtestdata.EthAddr4b, parser))
+
+	for _, headerOnly := range []bool{false, true} {
+		got, err := d.GetAddrDescContracts(addrDesc, headerOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != nil {
+			t.Fatalf("absent record, headerOnly=%v: got %v, want nil", headerOnly, got)
+		}
+	}
+
+	stored := &AddrContracts{
+		TotalTxs:       3333330,
+		NonContractTxs: 2222220,
+		InternalTxs:    1111110,
+		Contracts:      generateAddrContracts(10, 1, 3, 1, 3),
+	}
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.storeAddressContracts(wb, map[string]*AddrContracts{string(addrDesc): stored}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	full, err := d.GetAddrDescContracts(addrDesc, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.GetAddrDescContracts(addrDesc, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &AddrContracts{TotalTxs: full.TotalTxs, NonContractTxs: full.NonContractTxs, InternalTxs: full.InternalTxs}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("GetAddrDescContracts(headerOnly) = %v, want %v", got, want)
+	}
+	if len(full.Contracts) != len(stored.Contracts) {
+		t.Errorf("GetAddrDescContracts() decoded %d contracts, want %d", len(full.Contracts), len(stored.Contracts))
 	}
 }
 

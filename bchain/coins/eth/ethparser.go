@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math/big"
 	"strconv"
@@ -57,7 +58,14 @@ type EthereumParser struct {
 	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
 	// EnableEnsReverseAliases opts this chain into ENS reverse aliasing, off by default.
 	EnableEnsReverseAliases bool
+	ignoredContracts        []bchain.AddressDescriptor
 }
+
+// eip7708SystemAddress emits an ERC-20 shaped Transfer log for every ETH move since Glamsterdam.
+// It has no code, so it cannot emit logs on a chain without EIP-7708 and is ignored everywhere.
+const eip7708SystemAddress = "0xfffffffffffffffffffffffffffffffffffffffe"
+
+var eip7708SystemAddressDesc = mustAddrDescFromAddress(eip7708SystemAddress)
 
 // NewEthereumParser returns new EthereumParser instance
 func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
@@ -76,7 +84,38 @@ func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 		AddrContractsCacheBulkMaxBytes: defaultAddressContractsCacheBulkMaxBytes,
 		FormatAddressFunc:              EIP55AddressFromAddress,
 		FromDescToAddressFunc:          EIP55Address,
+		ignoredContracts:               []bchain.AddressDescriptor{eip7708SystemAddressDesc},
 	}
+}
+
+func mustAddrDescFromAddress(address string) bchain.AddressDescriptor {
+	desc, err := (&EthereumParser{}).GetAddrDescFromAddress(address)
+	if err != nil {
+		panic(err)
+	}
+	return desc
+}
+
+// IgnoreContract makes the contract's Transfer logs not count as token transfers, for protocol
+// contracts mirroring native coin moves that are already indexed as internal transfers.
+// It must be called before the parser is in use.
+func (p *EthereumParser) IgnoreContract(address string) error {
+	desc, err := p.GetAddrDescFromAddress(address)
+	if err != nil {
+		return err
+	}
+	p.ignoredContracts = append(p.ignoredContracts, desc)
+	return nil
+}
+
+// EthereumTypeIsIgnoredContract reports a contract whose already indexed holdings must not be served as a token
+func (p *EthereumParser) EthereumTypeIsIgnoredContract(contract bchain.AddressDescriptor) bool {
+	for _, c := range p.ignoredContracts {
+		if bytes.Equal(c, contract) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *EthereumParser) HotAddressConfig() (minContracts, lruSize, minHits int) {
@@ -577,8 +616,8 @@ func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bch
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Receipt != nil {
-			r = contractGetTransfersFromLog(csd.Receipt.Logs, tx.Txid)
-		} else {
+			r = contractGetTransfersFromLog(csd.Receipt.Logs, tx.Txid, p.ignoredContracts)
+		} else if !isIgnoredContract(p.ignoredContracts, csd.Tx.To) {
 			r, err = contractGetTransfersFromTx(csd.Tx)
 			if err != nil {
 				return nil, err

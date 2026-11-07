@@ -43,7 +43,7 @@ func bitcoinTestnetParser() *btc.BitcoinParser {
 		&btc.Configuration{BlockAddressesToKeep: 1})
 }
 
-func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
+func setupRocksDB(t testing.TB, p bchain.BlockChainParser) *RocksDB {
 	// the contract cache is package-level, so entries cached by a previous
 	// test's database would leak into this one
 	cachedContracts.reset()
@@ -63,7 +63,7 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	return d
 }
 
-func closeAndDestroyRocksDB(t *testing.T, d *RocksDB) {
+func closeAndDestroyRocksDB(t testing.TB, d *RocksDB) {
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}

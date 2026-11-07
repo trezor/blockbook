@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -913,6 +914,40 @@ func TestIsReplaceableInput(t *testing.T) {
 			if got := w.isReplaceableInput(tt.sequence); got != tt.want {
 				t.Errorf("isReplaceableInput(%#x) = %v, want %v", tt.sequence, got, tt.want)
 			}
+		})
+	}
+}
+
+func TestParseTokenID(t *testing.T) {
+	maxUint256 := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+	tests := []struct {
+		name string
+		id   string
+		want *big.Int
+	}{
+		{"zero", "0", big.NewInt(0)},
+		{"negative zero", "-0", big.NewInt(0)},
+		{"plus sign", "+1", big.NewInt(1)},
+		{"leading zeros", "0001", big.NewInt(1)},
+		{"max uint256", maxUint256.String(), maxUint256},
+		{"empty", "", nil},
+		{"negative", "-1", nil},
+		{"2^256", new(big.Int).Add(maxUint256, big.NewInt(1)).String(), nil},
+		{"hex prefix", "0x1", nil},
+		{"underscore", "1_000", nil},
+		{"whitespace", " 1", nil},
+		{"padded max uint256", "+0000" + maxUint256.String(), nil},
+		{"over 78 digits", strings.Repeat("9", 79), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := parseTokenID(tt.id)
+			if tt.want == nil {
+				require.False(t, ok, "parseTokenID(%q) = %v", tt.id, got)
+				return
+			}
+			require.True(t, ok, "parseTokenID(%q)", tt.id)
+			require.Zero(t, tt.want.Cmp(got), "parseTokenID(%q) = %v", tt.id, got)
 		})
 	}
 }

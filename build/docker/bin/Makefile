@@ -7,6 +7,16 @@ BLOCKBOOK_BASE := $(GOPATH)/src/github.com/trezor
 BLOCKBOOK_SRC := $(BLOCKBOOK_BASE)/blockbook
 ARGS ?=
 
+# JEMALLOC is set by the image build arg. The static archive goes in by path because cgo's linker-flag
+# allowlist rejects -l:libjemalloc_pic.a; gcc resolves the multiarch directory.
+ifneq ($(JEMALLOC),0)
+JEMALLOC_LIB := $(shell gcc -print-file-name=libjemalloc_pic.a)
+ifeq ($(JEMALLOC_LIB),libjemalloc_pic.a)
+$(error libjemalloc_pic.a not found; install libjemalloc-dev or build the image with JEMALLOC=0)
+endif
+export CGO_LDFLAGS := $(CGO_LDFLAGS) $(JEMALLOC_LIB)
+endif
+
 all: build tools
 
 build: prepare-sources
@@ -38,6 +48,12 @@ test-connectivity: prepare-sources
 
 test-all: prepare-sources
 	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` -timeout 30m $(ARGS)
+
+# Regenerates blockbook-api.ts from the Go structs and hands it back to the mounted checkout.
+typescriptify: prepare-sources
+	cd $(BLOCKBOOK_SRC) && go run ./build/tools/typescriptify
+	cp $(BLOCKBOOK_SRC)/blockbook-api.ts /src/blockbook-api.ts
+	chown $(PACKAGER) /src/blockbook-api.ts
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)

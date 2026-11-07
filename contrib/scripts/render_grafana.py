@@ -22,9 +22,10 @@ x-keys are stripped from the rendered grafana.json, which stays pure Grafana.
     python3 contrib/scripts/render_grafana.py [--check]
 
         --check  validate + render in memory and exit non-zero on any problem
-                 (unknown metric key, panel/query key mismatch, residual placeholder, or a
-                 rendered dashboard that violates a Grafana import invariant -- see
-                 validate_rendered) WITHOUT writing the file -- for CI / pre-commit.
+                 (unknown metric key, panel/query key mismatch, residual placeholder, a legend
+                 off the replica-naming convention -- see legend_problems -- or a rendered
+                 dashboard that violates a Grafana import invariant -- see validate_rendered)
+                 WITHOUT writing the file -- for CI / pre-commit.
 """
 import json
 import os
@@ -46,6 +47,46 @@ DEFAULT_PANEL_HEIGHT = 8
 # Single datasource for the whole dashboard -- injected at render time so the template
 # carries no per-panel/per-target datasource boilerplate.
 DATASOURCE = {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}
+
+# Legend convention (issue #1717): the coin dropdown already fixes `coin`, so a legend never
+# repeats it; instead every series says which replica it is -- `{{instance}}` for a
+# per-replica series, or the literal `all replicas` prefix when the query sums replicas away.
+COIN_FILTER = 'coin="$coin"'
+ALL_REPLICAS = "all replicas"
+LEGEND_LABEL = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
+BY_CLAUSE = re.compile(r"\bby\s*\(([^)]*)\)")
+AGGREGATION = re.compile(r"\b(sum|min|max|avg|count)\s*(?:by\s*\([^)]*\)\s*)?\(")
+
+
+def legend_problems(pkey, qkey, promql, legend):
+    """Check one query's legend against the replica-naming convention.
+
+    Skips Grafana's `__auto` (tables) and constant reference lines (`vector(...)`), which name
+    no series. Otherwise the legend must carry `{{instance}}` and the query must keep the
+    instance label through every `by (...)`, or start with `all replicas - ` and actually
+    aggregate the instance label away -- so the legend never claims a scope the query lacks.
+    """
+    where = "panel %r query %r" % (pkey, qkey)
+    if legend is None:
+        return ["%s has no 'legend' in panels.yaml" % where]
+    if legend == "__auto" or promql.lstrip().startswith("vector("):
+        return []
+    problems = []
+    if COIN_FILTER in promql and "coin" in LEGEND_LABEL.findall(legend):
+        problems.append("%s legend %r repeats {{coin}}, which the $coin dropdown already fixes" % (where, legend))
+    by_groups = [{lbl.strip() for lbl in g.split(",")} for g in BY_CLAUSE.findall(promql)]
+    aggregates = bool(AGGREGATION.search(promql))
+    if "instance" in LEGEND_LABEL.findall(legend):
+        if aggregates and (not by_groups or any("instance" not in g for g in by_groups)):
+            problems.append("%s legend %r names {{instance}} but the query aggregates it away; add instance to "
+                            "every by (...) or prefix the legend with '%s - '" % (where, legend, ALL_REPLICAS))
+    elif legend.startswith(ALL_REPLICAS + " - "):
+        if not aggregates or any("instance" in g for g in by_groups):
+            problems.append("%s legend %r claims '%s' but the query keeps per-instance series"
+                            % (where, legend, ALL_REPLICAS))
+    else:
+        problems.append("%s legend %r must carry {{instance}} or start with '%s - '" % (where, legend, ALL_REPLICAS))
+    return problems
 
 
 def fail(msg):
@@ -337,6 +378,7 @@ def render():
                                 % (pkey, qkey, t.get("refId")))
                 continue
             t["expr"] = expand(promql, reg, missing)
+            problems.extend(legend_problems(pkey, qkey, promql, qc.get("legend")))
             if "legend" in qc:
                 t["legendFormat"] = expand(qc["legend"], reg, missing)
         extra = set(queries) - tmpl_qkeys
