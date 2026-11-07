@@ -515,28 +515,21 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 		parsedInputData := w.getParsedEthereumInputData(ethTxData.Data)
 
-	if w.chainParser.GetChainExtraPayloadType() == bchain.ChainExtraPayloadTypeTron {
-    	chainExtraData, err := w.chainParser.GetChainExtraData(bchainTx)
-    	if err != nil {
-        		return nil, err
-   		}
-
-    	var tronExtra bchain.TronChainExtraData
-    	if err := json.Unmarshal(chainExtraData, &tronExtra); err != nil {
-        	return nil, err
-    	}
-
-    	if tronExtra.TotalFee == "" {
-        	feesSat.SetInt64(0)
-    	} else if _, ok := feesSat.SetString(tronExtra.TotalFee, 10); !ok {
-        	return nil, errors.Errorf("invalid Tron totalFee %q", tronExtra.TotalFee)
-    	}
-	} else {
-    		feesSat = *getEthereumFeesSat(ethTxData)
-	}
+		feesSat = *getEthereumFeesSat(ethTxData)
+		if w.chainParser.GetChainExtraPayloadType() == bchain.ChainExtraPayloadTypeTron {
+			chainExtraData, err := w.chainParser.GetChainExtraData(bchainTx)
+			if err != nil {
+				return nil, err
+			}
+			fee, err := getTronFeesSat(chainExtraData)
+			if err != nil {
+				return nil, err
+			}
+			feesSat = *fee
+		}
 		if len(bchainTx.Vout) > 0 {
 			valOutSat = bchainTx.Vout[0].ValueSat
-	}
+		}
 		ethSpecific = &EthereumSpecific{
 			GasLimit:             ethTxData.GasLimit,
 			GasPrice:             (*Amount)(ethTxData.GasPrice),
@@ -3039,4 +3032,18 @@ func (w *Worker) EstimateFee(blocks int, conservative bool) (big.Int, error) {
 		return w.chain.EstimateSmartFee(blocks, conservative)
 	}
 	return w.cachedEstimateFee(blocks, conservative)
+}
+
+func getTronFeesSat(data json.RawMessage) (*big.Int, error) {
+	var extra bchain.TronChainExtraData
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return nil, err
+	}
+	fee := new(big.Int)
+	if extra.TotalFee != "" {
+		if _, ok := fee.SetString(extra.TotalFee, 10); !ok || fee.Sign() < 0 {
+			return nil, errors.Errorf("invalid Tron totalFee %q", extra.TotalFee)
+		}
+	}
+	return fee, nil
 }
