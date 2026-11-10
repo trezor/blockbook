@@ -70,12 +70,19 @@ How each source is built:
   for 1.03× / 2.64× / 11.3×, and a plain floor ladder on a 4-block p20 median (1 / 1.5 / 2×) missed
   the High target 15% of the time.
 
-  `networkCongestion` is the percentile rank of the projected base fee among the last 200 mined base
-  fees (~40 min on mainnet): the fraction strictly below it, so 0 means the cheapest block of the
-  window or a flat base fee (rollups at their floor) and 1 the most expensive. The window comes from
-  a second `eth_feeHistory` without reward percentiles — a header-only read — cached until the tier
-  window's `oldestBlock` moves, so it costs one extra call per new block, not per `estimateFee`. A
-  failed window fetch keeps the previous window and never fails the quote. The same window gives
+  `networkCongestion` ranks the base fee against three days of mined ones (`averageBlockTimeMs`
+  sets the block count: 21,600 on mainnet, capped at 259,200 for sub-second chains). For each of the
+  last 8 blocks (the 7 newest mined ones and the projected next one), it takes the fraction of the
+  preceding three days' base fees strictly below that block's base fee, and averages the 8 values. 0 means the cheapest blocks
+  of the window or a flat base fee (rollups at their floor), 1 the most expensive. A quote at or above
+  0.9 is "busy". Replayed over 2026 mainnet blocks, that held 11.6% of the time in 5.7 episodes a day
+  and never while the base fee was below its 7-day median. A 12 h window let a quiet half-day make an
+  ordinary evening read busy (13% of its busy time was below the 7-day median), and a 7-day window
+  held a busy day above 0.8 for up to 88% of it. Averaging over 8 blocks cuts threshold crossings
+  from 28 to 9 a day, because EIP-1559 swings the base fee every block. The window lives in memory:
+  the first quote starts a background fill (percentile-free `eth_feeHistory`, 1024 blocks per call,
+  22 calls on mainnet), and each later quote extends it from the tier window at no extra RPC. Until
+  it is full, or for a minute after a failed fill, the field is omitted. The same window gives
   `historicalBaseFeeRange` (its lowest and highest base fee, wei), and `baseFeeTrend` is `up` or
   `down` by the projected base fee against the oldest of the 8 tier-window blocks (~100 s), omitted
   when equal; a one-block comparison would flip every block as EIP-1559 hunts its target.

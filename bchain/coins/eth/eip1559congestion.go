@@ -2,62 +2,89 @@ package eth
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
 
-// eip1559CongestionBlocks is the trailing window of mined base fees the projected base fee is ranked
-// in for networkCongestion. 200 blocks is ~40 min on mainnet: long enough that the rank reads as
-// "expensive compared to the last while" rather than "up since the previous block". The window is
-// fetched without reward percentiles, a header-only read on geth and Erigon.
-const eip1559CongestionBlocks = 200
+// eip1559CongestionWindow is the history networkCongestion ranks against: three days keep a busy day
+// from reading as normal (as a 12 h window does) without one busy day holding the score up for most of
+// the next (as a 7-day window does), see docs/fees.md.
+const eip1559CongestionWindow = 72 * time.Hour
 
-// baseFeeWindow caches the congestion window per tip block, so the pull path adds at most one
-// 200-block eth_feeHistory per new block however often estimateFee is called.
+// eip1559CongestionMaxBlocks caps the window at ~2 MiB of base fees and ~250 eth_feeHistory calls to
+// fill; chains faster than one block per second rank against less than three days.
+const eip1559CongestionMaxBlocks = 259200
+
+// feeHistoryMaxBlocks is the most blocks geth and Erigon serve from one eth_feeHistory call.
+const feeHistoryMaxBlocks = 1024
+
+// baseFeeWindowRetry spaces fill attempts after a failure, so a backend without deep fee history is
+// not asked again on every quote.
+const baseFeeWindowRetry = time.Minute
+
+// baseFeeWindow is a ring of mined base fees indexed by height, filled once in the background and then
+// extended from each quote's 8-block tier window, so a quote costs no extra RPC once it is full.
 type baseFeeWindow struct {
-	mu   sync.Mutex
-	key  string // oldestBlock of the 8-block tier window; it moves with every new tip block
-	fees []*big.Int
+	mu          sync.Mutex
+	fees        []uint64
+	has         bool
+	first, last uint64 // stored heights, empty while last < first
+	filling     bool
+	retryAt     time.Time
+	key         [2]uint64 // tip height and projected base fee of the cached score
+	score       float64
+	lo, hi      uint64
 }
 
-// eip1559BaseFeePercentile is the networkCongestion score: the fraction of window base fees strictly
-// below the projected base fee. 0 means the next block is the cheapest in the window, or the base fee
-// is flat (rollups at their floor); 1 means it is the most expensive. An empty window scores 0, which
-// omitempty drops from the response. The ratio of full blocks is deliberately not used: EIP-1559 holds
-// it at 0.5 on average whatever the price level (see docs/fees.md).
-func eip1559BaseFeePercentile(window []*big.Int, baseFee *big.Int) float64 {
-	if len(window) == 0 || baseFee == nil {
+// put stores height h, which must be at most one past the newest stored height.
+func (w *baseFeeWindow) put(h, fee uint64) {
+	size := uint64(len(w.fees))
+	w.fees[h%size] = fee
+	if h == w.last+1 {
+		w.last = h
+		if w.last-w.first+1 > size {
+			w.first = w.last - size + 1
+		}
+	}
+}
+
+// eip1559CongestionScore is networkCongestion: for each of the last k quotes, the fraction of the n base
+// fees before it strictly below its next-block base fee, averaged over the k quotes. seq holds n+k-1
+// mined base fees, oldest first, then the projection. A flat base fee (a rollup at its floor) scores 0.
+// Averaging over the tier window's 8 blocks cuts how often the score crosses a threshold about 3x,
+// because EIP-1559 makes the base fee swing block to block.
+func eip1559CongestionScore(seq []uint64, n int) float64 {
+	k := len(seq) - n
+	if n <= 0 || k <= 0 {
 		return 0
 	}
 	below := 0
-	for _, f := range window {
-		if f.Cmp(baseFee) < 0 {
-			below++
+	for j := 0; j < k; j++ {
+		next := seq[j+n]
+		for _, f := range seq[j : j+n] {
+			if f < next {
+				below++
+			}
 		}
 	}
-	return float64(below) / float64(len(window))
+	return float64(below) / float64(n*k)
 }
 
-// eip1559BaseFeeRange is historicalBaseFeeRange: the lowest and highest base fee of the window, in
-// wei like the provider path's. Nil for an empty window, which omitempty drops.
-func eip1559BaseFeeRange(window []*big.Int) []*big.Int {
-	if len(window) == 0 {
-		return nil
+// baseFeeUint64 saturates, so a base fee above 2^64-1 wei ranks as the highest rather than wrapping.
+func baseFeeUint64(v *big.Int) uint64 {
+	if v.Sign() <= 0 {
+		return 0
 	}
-	lo, hi := window[0], window[0]
-	for _, f := range window[1:] {
-		if f.Cmp(lo) < 0 {
-			lo = f
-		}
-		if f.Cmp(hi) > 0 {
-			hi = f
-		}
+	if !v.IsUint64() {
+		return math.MaxUint64
 	}
-	return []*big.Int{new(big.Int).Set(lo), new(big.Int).Set(hi)}
+	return v.Uint64()
 }
 
 // eip1559BaseFeeTrend is baseFeeTrend: "up" when the projected base fee is above the oldest base
@@ -77,55 +104,115 @@ func eip1559BaseFeeTrend(from, to *big.Int) string {
 	return ""
 }
 
-// congestionWindow returns the mined base fees of the last eip1559CongestionBlocks blocks, from the
-// cache while key matches the last call. A failed fetch keeps the previous window (one block stale
-// is still a fair rank) and warns once per tip block.
-func (b *EthereumRPC) congestionWindow(key string) []*big.Int {
-	w := &b.baseFeeWindow
-	w.mu.Lock()
-	if w.key == key {
-		fees := w.fees
-		w.mu.Unlock()
-		return fees
-	}
-	w.mu.Unlock()
-	// Fetched outside the lock: concurrent callers at a block boundary may fetch twice, but waiting
-	// on another caller's RPC would stall every estimateFee for up to b.Timeout.
-	fees, err := b.fetchBaseFeeWindow()
-	w.mu.Lock()
-	defer w.mu.Unlock()
+// congestionBlocks is the window length in blocks for this chain's block time, 0 when unknown.
+func (b *EthereumRPC) congestionBlocks() int {
+	avg, err := b.ChainConfig.AverageBlockTimeDuration()
 	if err != nil {
-		if w.key != key {
-			glog.Warning("eth_feeHistory congestion window: ", err)
-			w.key = key
-		}
-		return w.fees
+		return 0
 	}
-	w.key, w.fees = key, fees
-	return fees
+	return int(min(eip1559CongestionWindow/avg, eip1559CongestionMaxBlocks))
 }
 
-func (b *EthereumRPC) fetchBaseFeeWindow() ([]*big.Int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	var h struct {
-		BaseFeePerGas []string `json:"baseFeePerGas"`
+// congestion returns networkCongestion and historicalBaseFeeRange for the tier window starting at
+// height oldest, whose mined base fees are mined and projection next. Both stay empty (0, nil) until
+// the window holds three days; the first call starts filling it in the background.
+func (b *EthereumRPC) congestion(oldest uint64, mined []uint64, next uint64) (float64, []*big.Int) {
+	n, k := b.congestionBlocks(), len(mined)
+	if n == 0 || k == 0 || k > eip1559FeeHistoryBlocks {
+		return 0, nil
 	}
-	if err := b.RPC.CallContext(ctx, &h, "eth_feeHistory", eip1559CongestionBlocks, "latest", []int{}); err != nil {
-		return nil, err
+	w := &b.baseFeeWindow
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if size := n + eip1559FeeHistoryBlocks - 1; len(w.fees) != size {
+		w.fees, w.has = make([]uint64, size), false
 	}
-	// the last element is the projection for the block after the window, not a mined base fee
-	if len(h.BaseFeePerGas) < 2 {
-		return nil, errors.Errorf("eth_feeHistory returned %d base fees", len(h.BaseFeePerGas))
-	}
-	mined := h.BaseFeePerGas[:len(h.BaseFeePerGas)-1]
-	fees := make([]*big.Int, 0, len(mined))
-	for _, s := range mined {
-		v, err := hexutil.DecodeBig(s)
-		if err != nil {
-			return nil, errors.Annotate(err, "eth_feeHistory baseFeePerGas")
+	// the tier window extends the ring and rewrites the heights a shallow reorg changed
+	if w.has && oldest >= w.first && oldest <= w.last+1 {
+		for i, f := range mined {
+			w.put(oldest+uint64(i), f)
 		}
-		fees = append(fees, v)
 	}
-	return fees, nil
+	tip, span := oldest+uint64(k)-1, uint64(n+k-1)
+	if tip+1 < span {
+		return 0, nil
+	}
+	from := tip - span + 1
+	if !w.has || w.last < w.first || w.first > from || w.last < tip {
+		if !w.filling && time.Now().After(w.retryAt) {
+			start := from
+			if w.has && w.last+1 > from && w.first <= from {
+				start = w.last + 1
+			}
+			w.filling = true
+			go b.fillBaseFeeWindow(start, tip)
+		}
+		return 0, nil
+	}
+	if w.key != [2]uint64{tip, next} {
+		size := uint64(len(w.fees))
+		seq := make([]uint64, 0, span+1)
+		for h := from; h <= tip; h++ {
+			seq = append(seq, w.fees[h%size])
+		}
+		w.lo, w.hi = math.MaxUint64, 0
+		for _, f := range seq[k-1:] {
+			w.lo, w.hi = min(w.lo, f), max(w.hi, f)
+		}
+		w.score = eip1559CongestionScore(append(seq, next), n)
+		w.key = [2]uint64{tip, next}
+	}
+	return w.score, []*big.Int{new(big.Int).SetUint64(w.lo), new(big.Int).SetUint64(w.hi)}
+}
+
+// fillBaseFeeWindow loads heights from..to into the window, continuing it when from follows the newest
+// stored height and starting it over otherwise.
+func (b *EthereumRPC) fillBaseFeeWindow(from, to uint64) {
+	fees, err := b.fetchBaseFees(from, to)
+	w := &b.baseFeeWindow
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.filling = false
+	if err != nil {
+		glog.Warning("eth_feeHistory congestion window: ", err)
+		w.retryAt = time.Now().Add(baseFeeWindowRetry)
+		return
+	}
+	if !w.has || from != w.last+1 {
+		w.has, w.first, w.last = true, from, from-1
+	}
+	for i, f := range fees {
+		w.put(from+uint64(i), f)
+	}
+}
+
+// fetchBaseFees reads the base fees of heights from..to, oldest first, feeHistoryMaxBlocks per call and
+// without reward percentiles, a header-only read on geth and Erigon.
+func (b *EthereumRPC) fetchBaseFees(from, to uint64) ([]uint64, error) {
+	out := make([]uint64, 0, to-from+1)
+	for start := from; start <= to; start += feeHistoryMaxBlocks {
+		end := min(start+feeHistoryMaxBlocks-1, to)
+		count := int(end - start + 1)
+		var h struct {
+			OldestBlock   string   `json:"oldestBlock"`
+			BaseFeePerGas []string `json:"baseFeePerGas"`
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+		err := b.RPC.CallContext(ctx, &h, "eth_feeHistory", count, hexutil.EncodeUint64(end), []int{})
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		if oldest, err := hexutil.DecodeUint64(h.OldestBlock); err != nil || oldest != start || len(h.BaseFeePerGas) < count {
+			return nil, errors.Errorf("eth_feeHistory %d..%d returned oldestBlock %q with %d base fees", start, end, h.OldestBlock, len(h.BaseFeePerGas))
+		}
+		for _, s := range h.BaseFeePerGas[:count] {
+			v, err := hexutil.DecodeBig(s)
+			if err != nil {
+				return nil, errors.Annotate(err, "eth_feeHistory baseFeePerGas")
+			}
+			out = append(out, baseFeeUint64(v))
+		}
+	}
+	return out, nil
 }
