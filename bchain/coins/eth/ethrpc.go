@@ -276,6 +276,7 @@ type EthereumRPC struct {
 	stakingPoolContracts      []string
 	alternativeFeeProvider    alternativeFeeProviderInterface
 	alternativeSendTxProvider *AlternativeSendTxProvider
+	baseFeeWindow             baseFeeWindow
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 	consensusMonitor          *consensusVersionMonitor
 	// Multicall3AddressOverride replaces the canonical Multicall3 address for chains
@@ -2562,6 +2563,22 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 		default:
 			fees.Instant = &f
 		}
+	}
+	// networkCongestion and historicalBaseFeeRange rank the projected base fee against a week of
+	// mined ones; baseFeeTrend compares it with the oldest base fee of this 8-block window
+	if oldest, err := hexutil.DecodeUint64(h.OldestBlock); err == nil {
+		mined := make([]uint64, 0, len(h.BaseFeePerGas)-1)
+		for _, s := range h.BaseFeePerGas[:len(h.BaseFeePerGas)-1] {
+			if v, err := hexutil.DecodeBig(s); err == nil {
+				mined = append(mined, baseFeeUint64(v))
+			}
+		}
+		if len(mined) == len(h.BaseFeePerGas)-1 {
+			fees.NetworkCongestion, fees.HistoricalBaseFeeRange = b.congestion(oldest, mined, baseFeeUint64(baseFee))
+		}
+	}
+	if oldest, err := hexutil.DecodeBig(h.BaseFeePerGas[0]); err == nil {
+		fees.BaseFeeTrend = eip1559BaseFeeTrend(oldest, baseFee)
 	}
 	// Reaching here with a provider configured means its cache was stale/unready (a hit would have
 	// returned above), so this on-chain estimate is a fallback.
