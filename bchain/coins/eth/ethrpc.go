@@ -2564,7 +2564,7 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 			fees.Instant = &f
 		}
 	}
-	// networkCongestion and historicalBaseFeeRange rank the projected base fee against three days of
+	// networkCongestion and historicalBaseFeeRange rank the projected base fee against a week of
 	// mined ones; baseFeeTrend compares it with the oldest base fee of this 8-block window
 	if oldest, err := hexutil.DecodeUint64(h.OldestBlock); err == nil {
 		mined := make([]uint64, 0, len(h.BaseFeePerGas)-1)

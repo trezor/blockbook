@@ -250,7 +250,7 @@ func TestEip1559BaseFeeTrend(t *testing.T) {
 	}
 }
 
-// congestionRPC is an EthereumRPC whose three-day window is 16 blocks, so a test chain stays small.
+// congestionRPC is an EthereumRPC whose congestion window is 16 blocks, so a test chain stays small.
 func congestionRPC(stub *feeHistoryRPCStub) *EthereumRPC {
 	return &EthereumRPC{RPC: stub, Timeout: time.Second, ChainConfig: &Configuration{
 		Eip1559Fees:        true,

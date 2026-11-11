@@ -12,14 +12,14 @@ import (
 	"github.com/juju/errors"
 )
 
-// eip1559CongestionWindow is the history networkCongestion ranks against: three days keep a busy day
-// from reading as normal (as a 12 h window does) without one busy day holding the score up for most of
-// the next (as a 7-day window does), see docs/fees.md.
-const eip1559CongestionWindow = 72 * time.Hour
+// eip1559CongestionWindow is the history networkCongestion ranks against: a week, so a short bump that
+// is large only against a quiet day or two (as with a 3-day window) does not rank as busy, while a
+// new fee level is absorbed within a week (unlike 14 or 30 days), see docs/fees.md.
+const eip1559CongestionWindow = 7 * 24 * time.Hour
 
-// eip1559CongestionMaxBlocks caps the window at ~2 MiB of base fees and ~250 eth_feeHistory calls to
-// fill; chains faster than one block per second rank against less than three days.
-const eip1559CongestionMaxBlocks = 259200
+// eip1559CongestionMaxBlocks caps the window at ~4.6 MiB of base fees and ~590 eth_feeHistory calls to
+// fill; chains faster than one block per second rank against less than a week.
+const eip1559CongestionMaxBlocks = 604800
 
 // feeHistoryMaxBlocks is the most blocks geth and Erigon serve from one eth_feeHistory call.
 const feeHistoryMaxBlocks = 1024
@@ -115,7 +115,7 @@ func (b *EthereumRPC) congestionBlocks() int {
 
 // congestion returns networkCongestion and historicalBaseFeeRange for the tier window starting at
 // height oldest, whose mined base fees are mined and projection next. Both stay empty (0, nil) until
-// the window holds three days; the first call starts filling it in the background.
+// the window is full; the first call starts filling it in the background.
 func (b *EthereumRPC) congestion(oldest uint64, mined []uint64, next uint64) (float64, []*big.Int) {
 	n, k := b.congestionBlocks(), len(mined)
 	if n == 0 || k == 0 || k > eip1559FeeHistoryBlocks {
