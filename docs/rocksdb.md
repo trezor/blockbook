@@ -260,11 +260,7 @@ Column families used only by **Ethereum type** coins:
 
 - **addressAliases** (used only by Ethereum type coins)
 
-  Maps _address_ to address ENS name.
-
-  ```
-  (address []byte) -> (ensName []byte)
-  ```
+  No longer written or read. The column is kept so that existing databases still open.
 
 **Note:**
 The `txid` field as specified in this documentation is a byte array of fixed size with length 32 bytes (_[32]byte_), however some coins may define other fixed size lengths.

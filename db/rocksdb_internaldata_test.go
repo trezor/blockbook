@@ -26,8 +26,7 @@ func blockWithFailedInternalData(block *bchain.Block) *bchain.Block {
 		block.Txs[i].CoinSpecificData = csd
 	}
 	block.CoinSpecificData = &bchain.EthereumBlockSpecificData{
-		InternalDataError:   dbtestdata.Block2SpecificData.InternalDataError,
-		AddressAliasRecords: dbtestdata.Block2SpecificData.AddressAliasRecords,
+		InternalDataError: dbtestdata.Block2SpecificData.InternalDataError,
 	}
 	return block
 }
@@ -36,8 +35,7 @@ func blockWithFailedInternalData(block *bchain.Block) *bchain.Block {
 // internal data present, no error - so it can be reconnected to the indexed block.
 func blockWithHealedInternalData(block *bchain.Block) *bchain.Block {
 	block.CoinSpecificData = &bchain.EthereumBlockSpecificData{
-		AddressAliasRecords: dbtestdata.Block2SpecificData.AddressAliasRecords,
-		Contracts:           dbtestdata.Block2SpecificData.Contracts,
+		Contracts: dbtestdata.Block2SpecificData.Contracts,
 	}
 	return block
 }
