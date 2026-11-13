@@ -222,6 +222,41 @@ func TestEthereumParser_EthereumTypeIsIgnoredContract(t *testing.T) {
 	}
 }
 
+func TestEthereumParser_EthereumTypeIsIgnoredSender(t *testing.T) {
+	p := NewEthereumParser(1, false)
+	desc := func(address string) bchain.AddressDescriptor {
+		d, err := p.GetAddrDescFromAddress(address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if !p.EthereumTypeIsIgnoredSender(desc(opStackSystemSender)) {
+		t.Error("OP-stack system sender not ignored by default")
+	}
+	if p.EthereumTypeIsIgnoredSender(desc("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0002")) {
+		t.Error("neighbouring address ignored")
+	}
+	if p.EthereumTypeIsIgnoredSender(desc(eip7708SystemAddress)) {
+		t.Error("ignored contract treated as ignored sender")
+	}
+	if err := p.IgnoreSender("0x1"); err == nil {
+		t.Error("malformed address accepted")
+	}
+	if err := p.IgnoreSender(testIgnoredContract); err != nil {
+		t.Fatal(err)
+	}
+	if !p.EthereumTypeIsIgnoredSender(desc(testIgnoredContract)) {
+		t.Error("sender not ignored after IgnoreSender")
+	}
+	if p.EthereumTypeIsIgnoredContract(desc(testIgnoredContract)) {
+		t.Error("IgnoreSender leaked into the ignored contracts")
+	}
+	if NewEthereumParser(1, false).EthereumTypeIsIgnoredSender(desc(testIgnoredContract)) {
+		t.Error("IgnoreSender leaked into another parser")
+	}
+}
+
 func Test_isIgnoredContract(t *testing.T) {
 	ignored := newIgnoringTestParser(t).ignoredContracts
 	tests := []struct {
