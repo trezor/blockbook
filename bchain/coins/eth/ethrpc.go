@@ -99,26 +99,19 @@ type Configuration struct {
 	AddressContractsCacheMaxBytes     int64  `json:"address_contracts_cache_max_bytes,omitempty"`
 	AddressContractsCacheBulkMaxBytes int64  `json:"address_contracts_cache_bulk_max_bytes,omitempty"`
 	AddressAliases                    bool   `json:"address_aliases,omitempty"`
-	// EnableEnsReverseAliases opts a chain into ENS reverse aliasing (address->name
-	// labels), which is off by default; see the warning on getEnsRecord. Contract/
-	// token-name aliases and forward ResolveENS are unaffected either way.
-	// Labels are only recorded as blocks are synced and there is no backfill, so enabling
-	// this later covers new blocks only - names registered while it was off stay unlabeled
-	// until the chain is reindexed.
-	EnableEnsReverseAliases         bool   `json:"enable_ens_reverse_aliases,omitempty"`
-	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
-	MempoolTxTimeout                string `json:"mempoolTxTimeout,omitempty"`
-	AlternativePendingTxWindow      string `json:"alternativePendingTxWindow,omitempty"`
-	AlternativeMempoolTxTimeout     string `json:"alternativeMempoolTxTimeout,omitempty"`
-	AlternativeMissingTxTimeout     string `json:"alternativeMissingTxTimeout,omitempty"`
-	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
-	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
-	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
-	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
-	DisableMempoolSync              bool   `json:"disableMempoolSync,omitempty"`
-	Eip1559Fees                     bool   `json:"eip1559Fees,omitempty"`
-	AlternativeEstimateFee          string `json:"alternative_estimate_fee,omitempty"`
-	AlternativeEstimateFeeParams    string `json:"alternative_estimate_fee_params,omitempty"`
+	MempoolTxTimeoutHours             int    `json:"mempoolTxTimeoutHours"`
+	MempoolTxTimeout                  string `json:"mempoolTxTimeout,omitempty"`
+	AlternativePendingTxWindow        string `json:"alternativePendingTxWindow,omitempty"`
+	AlternativeMempoolTxTimeout       string `json:"alternativeMempoolTxTimeout,omitempty"`
+	AlternativeMissingTxTimeout       string `json:"alternativeMissingTxTimeout,omitempty"`
+	QueryBackendOnMempoolResync       bool   `json:"queryBackendOnMempoolResync"`
+	ProcessInternalTransactions       bool   `json:"processInternalTransactions"`
+	ProcessZeroInternalTransactions   bool   `json:"processZeroInternalTransactions"`
+	ConsensusNodeVersionURL           string `json:"consensusNodeVersion"`
+	DisableMempoolSync                bool   `json:"disableMempoolSync,omitempty"`
+	Eip1559Fees                       bool   `json:"eip1559Fees,omitempty"`
+	AlternativeEstimateFee            string `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams      string `json:"alternative_estimate_fee_params,omitempty"`
 	// AverageBlockTimeMs is the chain's nominal block cadence in ms;
 	// required for EVM coins (translates duration settings to block counts).
 	AverageBlockTimeMs int `json:"averageBlockTimeMs,omitempty"`
@@ -224,12 +217,11 @@ func (c *Configuration) AverageBlockTimeDuration() (time.Duration, error) {
 // ApplyToParser copies every config-derived field onto p. Coin packages that build their own
 // EthereumParser instead of reusing the one NewEthereumRPC configured (Tron) call this as well,
 // so a new config-derived parser field is added in one place rather than in each constructor -
-// forgetting one there is silent, and previously dropped disable_ens_aliases on Tron.
-// Fields a coin owns (EnsSuffix, AmountDecimalPoint, the address format funcs) are left alone.
+// forgetting one there is silent.
+// Fields a coin owns (AmountDecimalPoint, the address format funcs) are left alone.
 func (c *Configuration) ApplyToParser(p *EthereumParser) {
 	p.BlockAddressesToKeep = c.BlockAddressesToKeep
 	p.AddressAliases = c.AddressAliases
-	p.EnableEnsReverseAliases = c.EnableEnsReverseAliases
 	p.HotAddressMinContracts = c.HotAddressMinContracts
 	p.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
 	p.HotAddressMinHits = c.HotAddressMinHits
@@ -1557,11 +1549,10 @@ func (b *EthereumRPC) GetBlockRawByHashOrHeight(hash string, height uint32, full
 	return b.getBlockRaw(hash, height, fullTxs)
 }
 
-func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
+func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var logs []rpcLogWithTxHash
-	var ensRecords []bchain.AddressAliasRecord
 	var method = "eth_getLogs"
 	var err error
 	defer func(s time.Time) { b.observeSyncRPCLatency(method, s, err) }(time.Now())
@@ -1574,23 +1565,16 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		// juju's Annotatef has no Unwrap; keep the sentinel bare so getBlockChain's
 		// end-of-chain exit and retry accounting still see ErrBlockNotFound.
 		if stdErrors.Is(err, bchain.ErrBlockNotFound) {
-			return nil, nil, err
+			return nil, err
 		}
-		return nil, nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
+		return nil, errors.Annotatef(err, "%s blockNumber %v", method, blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
-	recordEns := b.Parser.UseEnsReverseAliases()
 	for i := range logs {
 		l := &logs[i]
 		r[l.Hash] = append(r[l.Hash], &l.RpcLog)
-		if recordEns {
-			ens := getEnsRecord(l)
-			if ens != nil {
-				ensRecords = append(ensRecords, *ens)
-			}
-		}
 	}
-	return r, ensRecords, nil
+	return r, nil
 }
 
 type rpcCallTrace struct {
@@ -1792,11 +1776,10 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 	return data, contracts, nil
 }
 
-// blockAuxData is what GetBlock needs beyond the block body: logs (with ENS records) and
-// internal transfers. internalErr is stored with the block instead of failing it.
+// blockAuxData is what GetBlock needs beyond the block body: logs and internal transfers.
+// internalErr is stored with the block instead of failing it.
 type blockAuxData struct {
 	logs         map[string][]*bchain.RpcLog
-	ens          []bchain.AddressAliasRecord
 	internalData []bchain.EthereumInternalData
 	contracts    []bchain.ContractInfo
 	internalErr  error
@@ -1809,7 +1792,6 @@ func (b *EthereumRPC) getBlockAuxData(head *rpcHeader, height uint32, transactio
 	defer cancelInternal()
 	type logsResult struct {
 		logs map[string][]*bchain.RpcLog
-		ens  []bchain.AddressAliasRecord
 		err  error
 	}
 	type internalResult struct {
@@ -1821,7 +1803,7 @@ func (b *EthereumRPC) getBlockAuxData(head *rpcHeader, height uint32, transactio
 	logsCh := make(chan logsResult, 1)
 	internalCh := make(chan internalResult, 1)
 	go func() {
-		// processEventsForBlock/getEnsRecord parse attacker-controlled on-chain log data and
+		// processEventsForBlock parses attacker-controlled on-chain log data and
 		// nothing above this goroutine recovers, so a panic here would crash-loop the process
 		// on an uncommitted block. Turn it into an error the sync loop can handle.
 		defer func() {
@@ -1831,8 +1813,8 @@ func (b *EthereumRPC) getBlockAuxData(head *rpcHeader, height uint32, transactio
 				logsCh <- logsResult{err: fmt.Errorf("recovered from panic in processEventsForBlock: %v", r)}
 			}
 		}()
-		logs, ens, err := b.processEventsForBlock(head.Number)
-		logsCh <- logsResult{logs: logs, ens: ens, err: err}
+		logs, err := b.processEventsForBlock(head.Number)
+		logsCh <- logsResult{logs: logs, err: err}
 	}()
 	go func() {
 		data, contracts, err := b.getInternalDataForBlock(ctxInternal, head.Hash, height, transactions)
@@ -1845,7 +1827,6 @@ func (b *EthereumRPC) getBlockAuxData(head *rpcHeader, height uint32, transactio
 	internalRes := <-internalCh
 	return &blockAuxData{
 		logs:         logsRes.logs,
-		ens:          logsRes.ens,
 		internalData: internalRes.data,
 		contracts:    internalRes.contracts,
 		internalErr:  internalRes.err,
@@ -1882,14 +1863,11 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	}
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
-	// pass internalData error and ENS records in blockSpecificData to be stored
-	if aux.internalErr != nil || len(aux.ens) > 0 || len(aux.contracts) > 0 {
+	// pass internalData error and contracts in blockSpecificData to be stored
+	if aux.internalErr != nil || len(aux.contracts) > 0 {
 		blockSpecificData = &bchain.EthereumBlockSpecificData{}
 		if aux.internalErr != nil {
 			blockSpecificData.InternalDataError = aux.internalErr.Error()
-		}
-		if len(aux.ens) > 0 {
-			blockSpecificData.AddressAliasRecords = aux.ens
 		}
 		if len(aux.contracts) > 0 {
 			blockSpecificData.Contracts = aux.contracts

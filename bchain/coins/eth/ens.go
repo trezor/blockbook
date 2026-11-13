@@ -3,7 +3,6 @@ package eth
 import (
 	"encoding/hex"
 	"math/big"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,9 +12,6 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"golang.org/x/crypto/sha3"
 )
-
-// nameRegisteredEventSignature is the topic0 of the ENS NameRegistered event.
-const nameRegisteredEventSignature = "0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f"
 
 // ENS contract addresses and function selectors (Ethereum mainnet).
 const (
@@ -30,54 +26,6 @@ const (
 	// ENSExpirationFunctionSelector is the Base Registrar's nameExpires(uint256) selector.
 	ENSExpirationFunctionSelector = "0xd6e4fa86"
 )
-
-// SetEnsSuffix sets the suffix appended to a decoded ENS name when formatting.
-func (p *EthereumParser) SetEnsSuffix(suffix string) {
-	p.EnsSuffix = suffix
-}
-
-// UseEnsReverseAliases reports whether ENS reverse aliases are recorded and served.
-// Opt-in: a chain gets them only with both address_aliases and
-// enable_ens_reverse_aliases set. Gating the recording side means toggling this on later
-// does not recover labels for blocks already synced without it (no backfill).
-func (p *EthereumParser) UseEnsReverseAliases() bool {
-	return p.AddressAliases && p.EnableEnsReverseAliases
-}
-
-// getEnsRecord parses an ENS record from a transaction log entry.
-//
-// WARNING: not production-ready, disabled by default (see UseEnsReverseAliases).
-// Trusts any log emitter (spoofable labels), does not validate names, and ignores
-// expiry/ownership (stale/duplicate labels). Use forward ResolveENS instead.
-func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
-	if len(l.Topics) == 3 && l.Topics[0] == nameRegisteredEventSignature && len(l.Data) >= 322 {
-		address, err := addressFromPaddedHex(l.Topics[2])
-		if err != nil {
-			return nil
-		}
-		c, err := strconv.ParseInt(l.Data[194:194+64], 16, 64)
-		if err != nil {
-			return nil
-		}
-		const nameStart = 194 + 64
-		// int(c)<<1 can overflow: c is attacker-controlled (up to 2^63-1) and Go's
-		// signed left shift wraps silently, so de can land anywhere in [0, 257]
-		// below nameStart. The lower bound must be the slice
-		// start index, not 0 — a de below the start makes l.Data[nameStart:de] a
-		// low>high slice expression that panics. Checking de < nameStart guarantees
-		// nameStart <= de <= len(l.Data), so the slice below can never panic.
-		de := nameStart + (int(c) << 1)
-		if de > len(l.Data) || de < nameStart {
-			return nil
-		}
-		b, err := hex.DecodeString(l.Data[nameStart:de])
-		if err != nil {
-			return nil
-		}
-		return &bchain.AddressAliasRecord{Address: address, Name: string(b)}
-	}
-	return nil
-}
 
 // ensNameHash computes the ENS namehash of name per the ENS spec.
 func ensNameHash(name string) string {

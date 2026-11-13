@@ -193,8 +193,7 @@ func processParam(data string, index int, dataOffset int, t *abi.Type, processed
 		dynIndex++
 		if t.T == abi.StringTy || t.T == abi.BytesTy {
 			d += 64
-			// count<<1 can overflow and wrap below d (same class as the
-			// getEnsRecord bug); the lower bound must be the slice start d, not 0,
+			// count<<1 can overflow and wrap below d; the lower bound must be the slice start d, not 0,
 			// so that d <= de <= len(data) and data[d:de] below can never panic.
 			// count==0 gives de==d, which is still accepted.
 			de := d + (count << 1)

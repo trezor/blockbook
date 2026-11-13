@@ -840,25 +840,6 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 		}
 	}
 
-	var addressAliases []keyPair
-	addressAliases = []keyPair{
-		{
-			hex.EncodeToString([]byte(dbtestdata.EthAddr7bEIP55)),
-			hex.EncodeToString([]byte("address7b")),
-			nil,
-		},
-		{
-			hex.EncodeToString([]byte(dbtestdata.EthAddr20EIP55)),
-			hex.EncodeToString([]byte("address20")),
-			nil,
-		},
-	}
-	if err := checkColumn(d, cfAddressAliases, addressAliases); err != nil {
-		{
-			t.Fatal(err)
-		}
-	}
-
 	var internalDataError []keyPair
 	if wantBlockInternalDataError {
 		internalDataError = []keyPair{

@@ -31,13 +31,11 @@ type Worker struct {
 	chainParser       bchain.BlockChainParser
 	chainType         bchain.ChainType
 	useAddressAliases bool
-	// useEnsReverseAliases gates serving ENS reverse labels (EthereumType only).
-	useEnsReverseAliases bool
-	mempool              bchain.Mempool
-	is                   *common.InternalState
-	fiatRates            *fiat.FiatRates
-	metrics              *common.Metrics
-	xpubConfig           XpubConfig
+	mempool           bchain.Mempool
+	is                *common.InternalState
+	fiatRates         *fiat.FiatRates
+	metrics           *common.Metrics
+	xpubConfig        XpubConfig
 	// contractProbeCache remembers contracts the chain reported as holding no token. The
 	// index never records that verdict, so without the cache every request re-probes them.
 	contractProbeCache *negativeProbeCache
@@ -70,19 +68,18 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		}
 	}
 	w := &Worker{
-		db:                   db,
-		txCache:              txCache,
-		chain:                chain,
-		chainParser:          chain.GetChainParser(),
-		chainType:            chain.GetChainParser().GetChainType(),
-		useAddressAliases:    chain.GetChainParser().UseAddressAliases(),
-		useEnsReverseAliases: chain.GetChainParser().UseEnsReverseAliases(),
-		mempool:              mempool,
-		is:                   is,
-		fiatRates:            fiatRates,
-		metrics:              metrics,
-		xpubConfig:           xpubCfg,
-		contractProbeCache:   newNegativeProbeCache(contractProbeCacheCapacity),
+		db:                 db,
+		txCache:            txCache,
+		chain:              chain,
+		chainParser:        chain.GetChainParser(),
+		chainType:          chain.GetChainParser().GetChainType(),
+		useAddressAliases:  chain.GetChainParser().UseAddressAliases(),
+		mempool:            mempool,
+		is:                 is,
+		fiatRates:          fiatRates,
+		metrics:            metrics,
+		xpubConfig:         xpubCfg,
+		contractProbeCache: newNegativeProbeCache(contractProbeCacheCapacity),
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
@@ -229,38 +226,26 @@ func (w *Worker) getAccountChainExtraData(addrDesc bchain.AddressDescriptor) (*A
 	}, nil
 }
 
+// getAddressAliases labels the addresses that are named contracts (EthereumType only).
 func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliasesMap {
 	if len(addresses) > 0 {
 		aliases := make(AddressAliasesMap)
-		var t string
-		if w.chainType == bchain.ChainEthereumType {
-			t = "ENS"
-		} else {
-			t = "Alias"
+		if w.chainType != bchain.ChainEthereumType {
+			return aliases
 		}
 		for a := range addresses {
-			if w.chainType == bchain.ChainEthereumType {
-				addrDesc, err := w.chainParser.GetAddrDescFromAddress(a)
-				if err != nil || addrDesc == nil {
-					continue
-				}
-				ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
-				if err == nil && ci != nil {
-					if ci.Standard == bchain.UnhandledTokenStandard {
-						ci, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenStandard)
-					}
-					if err == nil && ci != nil && ci.Name != "" {
-						aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
-					}
-				}
-				// keep the contract/token name, skip the ENS label when disabled
-				if !w.useEnsReverseAliases {
-					continue
-				}
+			addrDesc, err := w.chainParser.GetAddrDescFromAddress(a)
+			if err != nil || addrDesc == nil {
+				continue
 			}
-			n := w.db.GetAddressAlias(a)
-			if len(n) > 0 {
-				aliases[a] = AddressAlias{Type: t, Alias: n}
+			ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
+			if err == nil && ci != nil {
+				if ci.Standard == bchain.UnhandledTokenStandard {
+					ci, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenStandard)
+				}
+				if err == nil && ci != nil && ci.Name != "" {
+					aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
+				}
 			}
 		}
 		return aliases

@@ -199,12 +199,6 @@ func (p *BaseParser) UseAddressAliases() bool {
 	return p.AddressAliases
 }
 
-// UseEnsReverseAliases returns false - ENS reverse labels are an EthereumType concern,
-// and off unless that parser opts the chain in.
-func (p *BaseParser) UseEnsReverseAliases() bool {
-	return false
-}
-
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 	var tx Tx
@@ -432,11 +426,6 @@ func (p *BaseParser) GetChainExtraData(tx *Tx) (json.RawMessage, error) {
 // GetChainExtraPayloadType identifies the shape of normalized chain-specific transaction data.
 func (p *BaseParser) GetChainExtraPayloadType() ChainExtraPayloadType {
 	return ChainExtraPayloadTypeUnknown
-}
-
-// FormatAddressAlias makes possible to do coin specific formatting to an address alias
-func (p *BaseParser) FormatAddressAlias(address string, name string) string {
-	return name
 }
 
 func (b *BaseParser) ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData {

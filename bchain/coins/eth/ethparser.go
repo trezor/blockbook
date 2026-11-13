@@ -41,13 +41,11 @@ type AddressContractsCacheConfig struct {
 type EthereumLikeParser interface {
 	bchain.BlockChainParser
 	EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
-	SetEnsSuffix(suffix string)
 }
 
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
-	EnsSuffix                      string
 	HotAddressMinContracts         int
 	HotAddressLRUCacheSize         int
 	HotAddressMinHits              int
@@ -56,9 +54,7 @@ type EthereumParser struct {
 	AddrContractsCacheBulkMaxBytes int64
 	FormatAddressFunc              func(addr string) string
 	FromDescToAddressFunc          func(addrDesc bchain.AddressDescriptor) string
-	// EnableEnsReverseAliases opts this chain into ENS reverse aliasing, off by default.
-	EnableEnsReverseAliases bool
-	ignoredContracts        []bchain.AddressDescriptor
+	ignoredContracts               []bchain.AddressDescriptor
 }
 
 // eip7708SystemAddress emits an ERC-20 shaped Transfer log for every ETH move since Glamsterdam.
@@ -75,7 +71,6 @@ func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 			AmountDecimalPoint:   EtherAmountDecimalPoint,
 			AddressAliases:       addressAliases,
 		},
-		EnsSuffix:                      ".eth",
 		HotAddressMinContracts:         defaultHotAddressMinContracts,
 		HotAddressLRUCacheSize:         defaultHotAddressLRUCacheSize,
 		HotAddressMinHits:              defaultHotAddressMinHits,
@@ -625,11 +620,6 @@ func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bch
 		}
 	}
 	return r, nil
-}
-
-// FormatAddressAlias adds .eth to a name alias
-func (p *EthereumParser) FormatAddressAlias(address string, name string) string {
-	return name + p.EnsSuffix
 }
 
 // GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData.
