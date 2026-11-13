@@ -11,13 +11,12 @@
   "overrides": {
     "fast-uri": "3.1.9",
     "js-yaml": "4.3.2",
-    "brace-expansion@2": "2.1.7",
-    "brace-expansion@>=3": "5.0.7"
+    "brace-expansion@2": "2.1.7"
   },
   "devDependencies": {
     "@redocly/cli": "2.51.2",
     "@types/ws": "8.18.1",
-    "ajv": "8.17.1",
+    "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "https-proxy-agent": "7.0.6",
     "openapi-typescript": "7.10.1",
@@ -25,6 +24,6 @@
     "typescript": "5.9.3",
     "undici": "6.29.1",
     "ws": "8.21.0",
-    "yaml": "2.6.1"
+    "yaml": "2.9.1"
   }
 }
