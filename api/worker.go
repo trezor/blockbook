@@ -1807,10 +1807,17 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			totalSecondaryValue = secondaryRate * totalBaseValue
 		}
 	}
-	var unconfirmedBalanceSat *Amount
+	var unconfirmedBalanceSat, immatureBalanceSat *Amount
 	if option > AccountDetailsBasic {
 		uBalSat.Sub(&uBalReceiving, &uBalSending)
 		unconfirmedBalanceSat = (*Amount)(&uBalSat)
+	}
+	if w.chainType == bchain.ChainBitcoinType && ba.BalanceSat.Sign() > 0 {
+		immature, err := w.db.GetImmatureCoinbaseBalance(addrDesc)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetImmatureCoinbaseBalance %v", addrDesc)
+		}
+		immatureBalanceSat = amountOrNil(immature)
 	}
 	var contractInfoBestHeight uint32
 	if ed.contractInfo != nil {
@@ -1833,6 +1840,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		UnconfirmedTxs:        unconfirmedTxs,
 		UnconfirmedSending:    amountOrNil(&uBalSending),
 		UnconfirmedReceiving:  amountOrNil(&uBalReceiving),
+		ImmatureBalanceSat:    immatureBalanceSat,
 		Transactions:          txs,
 		Txids:                 txids,
 		Tokens:                ed.tokens,
@@ -1854,6 +1862,15 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	}
 	glog.V(1).Info("GetAddress-", option, " ", address, ", ", time.Since(start))
 	return r, nil
+}
+
+// isCoinbaseTx reports whether the indexed tx is a coinbase
+func (w *Worker) isCoinbaseTx(txid string) (bool, error) {
+	ta, err := w.db.GetTxAddresses(txid)
+	if err != nil || ta == nil {
+		return false, err
+	}
+	return db.IsCoinbaseTxAddresses(ta), nil
 }
 
 // Returns either the Amount or nil if the number is zero
@@ -2333,12 +2350,8 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 					coinbase := false
 					// for performance reasons, check coinbase transactions only in minimum confirmantion range
 					if confirmations < w.chainParser.MinimumCoinbaseConfirmations() {
-						ta, err := w.db.GetTxAddresses(txid)
-						if err != nil {
+						if coinbase, err = w.isCoinbaseTx(txid); err != nil {
 							return nil, err
-						}
-						if len(ta.Inputs) == 1 && len(ta.Inputs[0].AddrDesc) == 0 && IsZeroBigInt(&ta.Inputs[0].ValueSat) {
-							coinbase = true
 						}
 					}
 					_, e = inMempool[txid+":"+strconv.Itoa(int(utxo.Vout))]
