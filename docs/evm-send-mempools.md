@@ -19,7 +19,7 @@ mempool the index built from it. A public transaction is only ever in the mempoo
 
 Two couplings between the stores are load-bearing:
 
-- `AddOrRefreshTransactionInMempool` — restamping an existing entry, delegating a first add to
+- `AddOrRefreshPrivateTransactionInMempool` — restamping an existing entry, delegating a first add to
   `AddTransactionToMempool` — builds its address index through `GetTransactionForMempool` →
   `GetTransaction`, which reads the cache first, so a private transaction must be cached *before* it
   is added to the wrapped mempool or it cannot be indexed at all. The body comes from the send's own
@@ -74,7 +74,7 @@ flowchart TD
     acc -- "yes" --> reg --> ackevict --> cache --> handle
     ackevict -. "predecessor" .-> altrm
     cache -- "1. cache the body" --> alt
-    cache -- "2. AddOrRefreshTransactionInMempool,<br/>index built by reading the cache<br/>(a re-send restamps), then push NewTx" --> pub
+    cache -- "2. AddOrRefreshPrivateTransactionInMempool,<br/>index built by reading the cache<br/>(a re-send restamps), then push NewTx" --> pub
     handle -. "probe only,<br/>never writes" .-> alt
     primary -. "only when disableMempoolSync" .-> pub
     ws --> pub

@@ -19,6 +19,8 @@ type txEntry struct {
 	// entry without asking the backend whether it is still in the pool.
 	from  string
 	nonce uint64
+	// EthereumType only: a send accepted by the private relay, kept off the mempool listing
+	private bool
 }
 
 type txidio struct {
@@ -101,17 +103,16 @@ func (m *BaseMempool) removeEntryFromMempool(txid string, entry txEntry) {
 	}
 }
 
-// GetAllEntries returns all mempool entries sorted by fist seen time in descending order
+// GetAllEntries returns the mempool entries sorted by first seen time in descending order, without
+// private relay sends: the listing is public and the relay serves a body to anyone holding the hash.
 func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
-	i := 0
 	m.mux.Lock()
-	entries := make(MempoolTxidEntries, len(m.txEntries))
+	entries := make(MempoolTxidEntries, 0, len(m.txEntries))
 	for txid, entry := range m.txEntries {
-		entries[i] = MempoolTxidEntry{
-			Txid: txid,
-			Time: entry.time,
+		if entry.private {
+			continue
 		}
-		i++
+		entries = append(entries, MempoolTxidEntry{Txid: txid, Time: entry.time})
 	}
 	m.mux.Unlock()
 	sort.Sort(entries)
