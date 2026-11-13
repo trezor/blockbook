@@ -37,7 +37,7 @@ const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 // defaultWsPendingRequestsLimit is the default per-connection cap on
 // concurrently executing requests; override with
 // <network>_WS_PENDING_REQUESTS_LIMIT (0 disables), see docs/env.md.
-const defaultWsPendingRequestsLimit = 48
+const defaultWsPendingRequestsLimit = 128
 
 // maxWebsocketMempoolFiltersResponses caps per-connection getMempoolFilters
 // requests over their whole lifecycle: the slot is acquired before the handler
@@ -56,7 +56,12 @@ const maxWebsocketEstimateFeeBlocks = 32
 // in-flight transactions; the cap keeps a malformed or hostile request from forcing unbounded work,
 // and it bounds how far the pending-nonce walk can advance in one request.
 const maxPrivatePendingNonces = 64
-const maxWebsocketSubscribeAddresses = 1000
+
+// Per-connection subscribeAddresses caps by chain family. A UTXO wallet subscribes
+// every derived address of every account (Trezor Suite: 40 per fresh account, all
+// wallets on one connection), an EVM account is a single address.
+const defaultWsMaxSubscribeAddressesUTXO = 5000
+const defaultWsMaxSubscribeAddressesEVM = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
 const maxWebsocketSubscribeFiatRatesTokens = 1000
 const websocketLogPreviewBytes = 256
@@ -152,6 +157,9 @@ type WebsocketServer struct {
 	// pendingRequestsLimit caps how many requests a single connection may have
 	// executing concurrently before it is closed; 0 disables the cap.
 	pendingRequestsLimit int
+	// maxSubscribeAddresses caps the address list of one subscribeAddresses
+	// request; 0 disables the cap.
+	maxSubscribeAddresses int
 	// ipBlockEnabled gates the whole IP blocklist: true only when the rate limit can
 	// produce breaches (messageRateLimit > 0) and blocking is configured
 	// (ipBlockDuration > 0). When false, all block checks/sweeps are skipped.
@@ -250,6 +258,9 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		return nil, err
 	}
 	if err := s.configurePendingRequestsLimit(is.GetNetwork()); err != nil {
+		return nil, err
+	}
+	if err := s.configureSubscribeAddressesLimit(is.GetNetwork(), s.chainParser.GetChainType()); err != nil {
 		return nil, err
 	}
 	if s.metrics != nil {
@@ -1501,11 +1512,11 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, bool, err
 	if err != nil {
 		return nil, false, api.NewAPIError("Invalid subscribeAddresses params", true)
 	}
-	limit := maxWebsocketSubscribeAddresses
+	limit := s.maxSubscribeAddresses
 	if r.NewBlockTxs {
 		limit = maxWebsocketSubscribeAddressesWithNewBlockTxs
 	}
-	if len(r.Addresses) > limit {
+	if limit > 0 && len(r.Addresses) > limit {
 		return nil, false, api.NewAPIError("addresses max "+strconv.Itoa(limit), true)
 	}
 	rv := make([]string, 0, len(r.Addresses))
