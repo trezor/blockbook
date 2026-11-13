@@ -61,24 +61,6 @@ func TestNewMempoolEthereumTypeUsesDuration(t *testing.T) {
 	}
 }
 
-// A restamped entry ages from the newest add, so the timeout sweep cannot drop it while the
-// alternative-provider cache - which also ages from the newest send - still serves it as pending.
-func TestMempoolEthereumTypeAddOrRefreshRestampsExistingEntry(t *testing.T) {
-	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
-	old := uint32(time.Now().Add(-time.Hour).Unix())
-	m.txEntries["tx1"] = txEntry{addrIndexes: []addrIndex{{addrDesc: "addr1"}}, time: old}
-
-	if !m.AddOrRefreshTransactionInMempool("tx1") {
-		t.Fatal("AddOrRefreshTransactionInMempool() = false, want true")
-	}
-	if got := m.txEntries["tx1"].time; got == old {
-		t.Fatalf("entry time = %d, want restamped past %d", got, old)
-	}
-	if got := m.txEntries["tx1"].addrIndexes; len(got) != 1 {
-		t.Fatalf("addrIndexes = %+v, want the original index kept", got)
-	}
-}
-
 // A mined nonce retires the sender's entries at or below it and nothing else: higher nonces, entries
 // where the address is only a recipient, and entries without nonce data (pre-upgrade) all stay (#1709).
 func TestMempoolEthereumType_RemoveSenderTransactionsUpToNonce(t *testing.T) {
@@ -144,6 +126,9 @@ func TestMempoolEthereumTypeAddOrRefreshPrivateKeepsEntryPrivate(t *testing.T) {
 	entry := m.txEntries["tx1"]
 	if entry.time == old || !entry.private {
 		t.Fatalf("entry = %+v, want restamped and still private", entry)
+	}
+	if len(entry.addrIndexes) != 1 {
+		t.Fatalf("addrIndexes = %+v, want the original index kept", entry.addrIndexes)
 	}
 }
 

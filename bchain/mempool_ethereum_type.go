@@ -2,7 +2,6 @@ package bchain
 
 import (
 	"errors"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -216,7 +215,7 @@ func (m *MempoolEthereumType) removeTransactionsMissingFromBackend(backendTxs ma
 
 // AddTransactionToMempool adds transactions to mempool, returns true if tx added to mempool, false if not added (for example duplicate call).
 // An existing entry keeps its original time - the resync path re-adds every backend tx and the timeout
-// sweep depends on the first-seen stamp; use AddOrRefreshTransactionInMempool to age from the newest add.
+// sweep depends on the first-seen stamp; use AddOrRefreshPrivateTransactionInMempool to age from the newest add.
 func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
 	return m.addTransactionToMempool(txid, false)
 }
@@ -247,21 +246,12 @@ func (m *MempoolEthereumType) addTransactionToMempool(txid string, private bool)
 	return !exists
 }
 
-// AddOrRefreshTransactionInMempool is AddTransactionToMempool for a caller whose own store ages from
-// the newest submission (the alternative-provider cache): an existing entry is restamped in place, so
-// the timeout sweep cannot drop it while that store still serves the transaction as pending.
-func (m *MempoolEthereumType) AddOrRefreshTransactionInMempool(txid string) bool {
-	return m.addOrRefreshTransactionInMempool(txid, false)
-}
-
-// AddOrRefreshPrivateTransactionInMempool is AddOrRefreshTransactionInMempool for a send accepted by
-// the private relay: indexed under its sender only (see createTxEntry) and left out of the mempool
-// listing. An entry the public backend already surfaced stays public.
+// AddOrRefreshPrivateTransactionInMempool adds a send accepted by the private relay: indexed under
+// its sender only (see createTxEntry) and left out of the mempool listing. The relay cache ages from
+// the newest submission, so an existing entry is restamped in place and the timeout sweep cannot drop
+// it while the cache still serves the transaction as pending. An entry the public backend already
+// surfaced stays public.
 func (m *MempoolEthereumType) AddOrRefreshPrivateTransactionInMempool(txid string) bool {
-	return m.addOrRefreshTransactionInMempool(txid, true)
-}
-
-func (m *MempoolEthereumType) addOrRefreshTransactionInMempool(txid string, private bool) bool {
 	m.mux.Lock()
 	entry, exists := m.txEntries[txid]
 	if exists {
@@ -272,7 +262,7 @@ func (m *MempoolEthereumType) addOrRefreshTransactionInMempool(txid string, priv
 	if exists {
 		return true
 	}
-	return m.addTransactionToMempool(txid, private)
+	return m.addTransactionToMempool(txid, true)
 }
 
 // RemoveTransactionFromMempool removes transaction from mempool
@@ -286,22 +276,6 @@ func (m *MempoolEthereumType) RemoveTransactionFromMempool(txid string) {
 		m.removeEntryFromMempool(txid, entry)
 	}
 	m.mux.Unlock()
-}
-
-// GetAllEntries returns the mempool entries sorted by first seen time in descending order, without
-// private relay sends: the listing is public and the relay serves a body to anyone holding the hash.
-func (m *MempoolEthereumType) GetAllEntries() MempoolTxidEntries {
-	m.mux.Lock()
-	entries := make(MempoolTxidEntries, 0, len(m.txEntries))
-	for txid, entry := range m.txEntries {
-		if entry.private {
-			continue
-		}
-		entries = append(entries, MempoolTxidEntry{Txid: txid, Time: entry.time})
-	}
-	m.mux.Unlock()
-	sort.Sort(entries)
-	return entries
 }
 
 // GetTxidFilterEntries returns all mempool entries with golomb filter from
