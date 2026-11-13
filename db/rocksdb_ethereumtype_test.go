@@ -257,13 +257,14 @@ func TestERC721SelfTransferConnectDisconnectRoundTrip(t *testing.T) {
 
 // TestConnectBlock_IgnoredSenderTxIndexesNoAddress verifies that an OP-stack system deposit is
 // indexed under neither its sender nor its recipient, a user transaction in the same block is,
-// and the block still disconnects.
+// and disconnecting the block reverts nothing for the deposit, not even on the zero address.
 func TestConnectBlock_IgnoredSenderTxIndexesNoAddress(t *testing.T) {
 	parser := ethereumTestnetParser()
 	d := setupRocksDB(t, parser)
 	defer closeAndDestroyRocksDB(t, d)
 	const systemSender = "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"
 	const l1AttributesPredeploy = "0x4200000000000000000000000000000000000015"
+	const zeroAddress = "0x0000000000000000000000000000000000000000"
 	const height = 4321000
 	tx := func(txid, from, to string) bchain.Tx {
 		return bchain.Tx{
@@ -271,6 +272,17 @@ func TestConnectBlock_IgnoredSenderTxIndexesNoAddress(t *testing.T) {
 			Vin:  []bchain.Vin{{Addresses: []string{from}}},
 			Vout: []bchain.Vout{{ScriptPubKey: bchain.ScriptPubKey{Addresses: []string{to}}}},
 		}
+	}
+	// gives the zero address the history every real chain has
+	prevBlock := &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Height: height - 1,
+			Hash:   "0xc7b98df95acfd11c51ba25611a39e004fe56c8fdfc1582af99354fcd09c17b10",
+			Time:   1534858021,
+		},
+		Txs: []bchain.Tx{
+			tx("80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05200", dbtestdata.EthAddr7b, zeroAddress),
+		},
 	}
 	block := &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
@@ -283,8 +295,10 @@ func TestConnectBlock_IgnoredSenderTxIndexesNoAddress(t *testing.T) {
 			tx("80a0533b0f66e9d29aa4dbbdc8c4b90326b073e0d6b864e02c9598032ed05202", dbtestdata.EthAddr7b, dbtestdata.EthAddr83),
 		},
 	}
-	if err := d.ConnectBlock(block); err != nil {
-		t.Fatal(err)
+	for _, b := range []*bchain.Block{prevBlock, block} {
+		if err := d.ConnectBlock(b); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, tc := range []struct {
 		address string
@@ -313,6 +327,13 @@ func TestConnectBlock_IgnoredSenderTxIndexesNoAddress(t *testing.T) {
 	}
 	if err := d.DisconnectBlockRangeEthereumType(height, height); err != nil {
 		t.Fatal(err)
+	}
+	acs, err := d.getUnpackedAddrDescContracts(addressToAddrDesc(zeroAddress, parser))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acs == nil || acs.TotalTxs != 1 || acs.NonContractTxs != 1 {
+		t.Errorf("zero address contracts %+v after disconnect, want the 1 tx of block %d", acs, height-1)
 	}
 }
 

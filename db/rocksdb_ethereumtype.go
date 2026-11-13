@@ -608,14 +608,17 @@ func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresse
 	return nil
 }
 
-// isIgnoredSenderTx reports a protocol system transaction (OP-stack per-block deposits) that is
-// indexed under no address; its blockTx keeps empty from/to, which disconnect already tolerates.
-func (d *RocksDB) isIgnoredSenderTx(tx *bchain.Tx) bool {
+// ignoredSender returns the sender of a protocol system transaction (OP-stack per-block deposits),
+// which is indexed under no address, and nil for any other transaction.
+func (d *RocksDB) ignoredSender(tx *bchain.Tx) bchain.AddressDescriptor {
 	if len(tx.Vin) != 1 || len(tx.Vin[0].Addresses) != 1 {
-		return false
+		return nil
 	}
 	from, err := d.chainParser.GetAddrDescFromAddress(tx.Vin[0].Addresses[0])
-	return err == nil && d.chainParser.EthereumTypeIsIgnoredSender(from)
+	if err != nil || !d.chainParser.EthereumTypeIsIgnoredSender(from) {
+		return nil
+	}
+	return from
 }
 
 func (d *RocksDB) setAddressTxIndexesToAddressMap(addrDesc bchain.AddressDescriptor, height uint32, addresses addressesMap) error {
@@ -757,7 +760,9 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		}
 		blockTx := &blockTxs[txi]
 		blockTx.btxID = btxID
-		if d.isIgnoredSenderTx(tx) {
+		if from := d.ignoredSender(tx); from != nil {
+			// the sender is kept so that disconnect recognizes the tx and reverts nothing for it
+			blockTx.from = from
 			continue
 		}
 		if err = d.processBaseTxData(blockTx, tx, addresses, addressContracts); err != nil {
@@ -814,7 +819,7 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-		if eid.InternalData == nil || d.isIgnoredSenderTx(tx) {
+		if eid.InternalData == nil || d.ignoredSender(tx) != nil {
 			continue
 		}
 		btxID, err := d.chainParser.PackTxid(tx.Txid)
@@ -1544,13 +1549,17 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height
 	addresses := make(map[string]map[string]struct{})
 	for i := range blockTxs {
 		blockTx := &blockTxs[i]
-		if err := d.disconnectAddress(blockTx.btxID, false, blockTx.from, nil, addresses, contracts); err != nil {
-			return err
-		}
-		// if from==to, tx is counted only once and does not have to be disconnected again
-		if !bytes.Equal(blockTx.from, blockTx.to) {
-			if err := d.disconnectAddress(blockTx.btxID, false, blockTx.to, nil, addresses, contracts); err != nil {
+		// an ignored sender's tx was indexed under no address; its empty to unpacks as the zero
+		// address, whose counters must not be reverted for it
+		if !d.chainParser.EthereumTypeIsIgnoredSender(blockTx.from) {
+			if err := d.disconnectAddress(blockTx.btxID, false, blockTx.from, nil, addresses, contracts); err != nil {
 				return err
+			}
+			// if from==to, tx is counted only once and does not have to be disconnected again
+			if !bytes.Equal(blockTx.from, blockTx.to) {
+				if err := d.disconnectAddress(blockTx.btxID, false, blockTx.to, nil, addresses, contracts); err != nil {
+					return err
+				}
 			}
 		}
 		// internal data - the contract registry rollback relies on this forward walk
