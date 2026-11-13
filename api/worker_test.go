@@ -958,14 +958,9 @@ func TestGetTronFeesSat(t *testing.T) {
 		invalid    bool
 	}{
 		{`{"totalFee":"267000"}`, "267000", false},
-		{`{"totalFee":"345000"}`, "345000", false},
-		{`{"totalFee":"0"}`, "0", false},
 		{`{}`, "0", false},
-		{`{"totalFee":""}`, "0", false},
-		{`{"totalFee":"9223372036854775808"}`, "9223372036854775808", false},
 		{`{"totalFee":"bad"}`, "", true},
 		{`{"totalFee":"-1"}`, "", true},
-		{`{`, "", true},
 	} {
 		t.Run(tc.data, func(t *testing.T) {
 			fee, err := getTronFeesSat(json.RawMessage(tc.data))

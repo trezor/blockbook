@@ -516,17 +516,6 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		parsedInputData := w.getParsedEthereumInputData(ethTxData.Data)
 
 		feesSat = *getEthereumFeesSat(ethTxData)
-		if w.chainParser.GetChainExtraPayloadType() == bchain.ChainExtraPayloadTypeTron {
-			chainExtraData, err := w.chainParser.GetChainExtraData(bchainTx)
-			if err != nil {
-				return nil, err
-			}
-			fee, err := getTronFeesSat(chainExtraData)
-			if err != nil {
-				return nil, err
-			}
-			feesSat = *fee
-		}
 		if len(bchainTx.Vout) > 0 {
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
@@ -577,6 +566,14 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	chainExtraData, err = w.getTxChainExtraData(bchainTx)
 	if err != nil {
 		glog.Warningf("GetTxChainExtraData error %v, %v", err, bchainTx)
+	}
+	// Tron clears the gas fields, so the fee is the burned TRX from chainExtraData
+	if chainExtraData != nil && chainExtraData.PayloadType == bchain.ChainExtraPayloadTypeTron {
+		if fee, err := getTronFeesSat(chainExtraData.Payload); err != nil {
+			glog.Warningf("getTronFeesSat error %v, %v", err, bchainTx.Txid)
+		} else {
+			feesSat = *fee
+		}
 	}
 	r := &Tx{
 		Blockhash:        blockhash,
