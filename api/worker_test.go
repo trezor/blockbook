@@ -951,3 +951,25 @@ func TestParseTokenID(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTronFeesSat(t *testing.T) {
+	for _, tc := range []struct {
+		data, want string
+		invalid    bool
+	}{
+		{`{"totalFee":"267000"}`, "267000", false},
+		{`{}`, "0", false},
+		{`{"totalFee":"bad"}`, "", true},
+		{`{"totalFee":"-1"}`, "", true},
+	} {
+		t.Run(tc.data, func(t *testing.T) {
+			fee, err := getTronFeesSat(json.RawMessage(tc.data))
+			if tc.invalid {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, fee.String())
+		})
+	}
+}
