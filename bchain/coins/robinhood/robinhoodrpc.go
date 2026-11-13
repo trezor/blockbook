@@ -81,7 +81,3 @@ func (b *RobinhoodRPC) Initialize() error {
 
 	return nil
 }
-
-func (b *RobinhoodRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
-	return b.EthereumRPC.ResolveENS(name)
-}

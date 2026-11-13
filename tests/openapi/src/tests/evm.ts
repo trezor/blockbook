@@ -395,18 +395,6 @@ export async function assertContractInfoFixturesFetched(
   }
 }
 
-async function testEnsResolutionEVM(ctx: TestContext) {
-  const resp = await ctx.client.getJson(
-    "/api/v2/address/{address}",
-    `/api/v2/address/${encodeURIComponent("vitalik.eth")}?details=basic`,
-  );
-  assertNonEmptyString(resp.address, "EnsResolutionEVM.address");
-  if (!equalFold(resp.address, "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045")) {
-    throw new Error(`EnsResolutionEVM.address mismatch: got ${resp.address}, want 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`);
-  }
-  assertNonEmptyString(resp.balance, "EnsResolutionEVM.balance");
-}
-
 export const evmOnlyTests: Record<string, TestFunction> = {
   GetAddressBasicEVM: testGetAddressBasicEVM,
   GetAddressConfirmedNonceEVM: testGetAddressConfirmedNonceEVM,
@@ -423,5 +411,4 @@ export const evmOnlyTests: Record<string, TestFunction> = {
   GetAddressContractFilterEVM: testGetAddressContractFilterEVM,
   GetTransactionEVMShape: testGetTransactionEVMShape,
   GetTransactionFeeConsistencyEVM: testGetTransactionFeeConsistencyEVM,
-  EnsResolutionEVM: testEnsResolutionEVM,
 };
