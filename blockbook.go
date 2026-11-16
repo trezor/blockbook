@@ -650,7 +650,9 @@ func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool)
 
 	limitStr := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_WS_GETACCOUNTINFO_LIMIT")
 	if limitStr == "" {
-		is.WsGetAccountInfoLimit = 42
+		// Distinct accounts per connection; Suite queries every account of every
+		// remembered wallet on one connection, so this must cover a multi-wallet user.
+		is.WsGetAccountInfoLimit = 250
 	} else {
 		is.WsGetAccountInfoLimit, _ = strconv.Atoi(limitStr)
 	}
