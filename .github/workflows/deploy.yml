@@ -105,6 +105,7 @@ jobs:
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
+      coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout workflow code
