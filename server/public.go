@@ -1104,11 +1104,8 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 			voutFilter = api.AddressFilterVoutInputs
 		} else if filterParam == "outputs" {
 			voutFilter = api.AddressFilterVoutOutputs
-		} else {
-			voutFilter, ec := strconv.Atoi(filterParam)
-			if ec != nil || voutFilter < 0 {
-				voutFilter = api.AddressFilterVoutOff
-			}
+		} else if v, ec := strconv.Atoi(filterParam); ec == nil && v >= 0 {
+			voutFilter = v
 		}
 	}
 	switch r.URL.Query().Get("details") {
