@@ -634,7 +634,6 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"summaryValuesSpan":        s.summaryValuesSpan,
 		"addressAlias":             addressAlias,
 		"addressAliasSpan":         addressAliasSpan,
-		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"formatInt64":              formatInt64,
 		"formatInt":                formatInt,

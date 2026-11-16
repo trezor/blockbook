@@ -22,7 +22,7 @@ BB_RPC_ENV := $(BB_RPC_ENV)$(if $(BB_STAGING), -e BB_STAGING)
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 
-.PHONY: build build-debug test test-connectivity test-integration test-e2e test-all typescriptify deb
+.PHONY: build build-debug test test-connectivity test-integration test-e2e test-all typescriptify
 
 build: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e BB_BUILD_ENV=$(BB_BUILD_ENV) -e GITCOMMIT=$(GITCOMMIT) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
