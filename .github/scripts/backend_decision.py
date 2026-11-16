@@ -32,11 +32,19 @@ def main(argv: list[str] | None = None) -> None:
     if not config_path.is_file():
         raise CoinRPCError(f"missing coin config {config_path}")
     build_env = resolve_build_env()
+    backend_mode = os.environ.get("BACKEND_MODE", "").strip() or backend_policy.BACKEND_MODE_AUTO
+    # should_build_backend treats unknown modes as auto, so reject typos here.
+    if backend_mode not in {
+        backend_policy.BACKEND_MODE_AUTO,
+        backend_policy.BACKEND_MODE_ALWAYS,
+        backend_policy.BACKEND_MODE_NEVER,
+    }:
+        raise CoinRPCError(f"invalid BACKEND_MODE '{backend_mode}'")
     decision = backend_policy.compute_backend_decision(
         coin=coin,
         config=load_config(config_path),
         build_env=build_env,
-        backend_mode=backend_policy.BACKEND_MODE_AUTO,
+        backend_mode=backend_mode,
     )
     print(format_shell(decision, build_env))
 

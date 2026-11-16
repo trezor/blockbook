@@ -3,9 +3,14 @@ name: Build / Deploy
 # Surface what the run actually does in the run list; without this every
 # dispatch shows only the generic workflow name. env context is not
 # available in run-name, so the ref fallback is inlined.
-run-name: "${{ inputs.mode }} ${{ inputs.coins }} (${{ inputs.mode == 'build' && inputs.env || 'dev' }}) @ ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}"
+run-name: "${{ github.event_name == 'workflow_run' && format('auto-deploy ALL (dev) @ {0}', github.event.workflow_run.head_sha) || format('{0} {1} ({2}) @ {3}', inputs.mode, inputs.coins, inputs.mode == 'build' && inputs.env || 'dev', inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name) }}"
 
 on:
+  # Redeploy every dev instance (Blockbook only) once Testing passes on a master push.
+  workflow_run:
+    workflows: [Testing]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
     inputs:
       mode:
@@ -25,7 +30,7 @@ on:
         required: true
         default: dev
       backend_mode:
-        description: "Backend package build mode; in never mode, backend-only coins still build backend packages"
+        description: "Backend package mode; in build mode, never still builds backend-only coins; in deploy mode, never redeploys Blockbook only"
         type: choice
         options:
           - auto
@@ -34,7 +39,7 @@ on:
         required: true
         default: auto
       coins:
-        description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
+        description: "Comma-separated coin aliases from configs/coins, or ALL (deploy ALL skips coins that are not deployable in dev)"
         required: true
       branch_or_tag:
         description: "Branch or tag to check out and deploy (leave empty for current ref)"
@@ -44,8 +49,15 @@ on:
 permissions:
   contents: read
 
+# Queue auto-deploys instead of overlapping them; a newer merge replaces the
+# pending one, and a running dpkg install is never cancelled.
+concurrency:
+  group: ${{ github.event_name == 'workflow_run' && 'dev-auto-deploy' || format('deploy-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 env:
-  RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+  # Auto-deploys pin the exact commit Testing passed, not whatever master is by now.
+  RESOLVED_BRANCH_OR_TAG: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || (inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name) }}
 
 jobs:
   prepare_build:
@@ -82,7 +94,14 @@ jobs:
   prepare_deploy:
     name: Prepare Deploy Plan
     runs-on: ubuntu-latest
-    if: ${{ inputs.mode == 'deploy' }}
+    # A fork PR whose head branch is named master also fires workflow_run, so
+    # accept only pushes to this repository.
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy') ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository) }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
@@ -93,7 +112,9 @@ jobs:
         with:
           persist-credentials: false
 
+      # Auto-deploys check out a SHA from the Testing run, which ls-remote cannot validate.
       - name: Validate branch or tag
+        if: ${{ github.event_name != 'workflow_run' }}
         env:
           REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
         run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
@@ -108,7 +129,7 @@ jobs:
         id: plan
         env:
           VARS_JSON: ${{ toJSON(vars) }}
-          COINS_INPUT: ${{ inputs.coins }}
+          COINS_INPUT: ${{ inputs.coins || 'ALL' }}
         run: python3 ./.github/scripts/deploy_plan.py
 
   build:
@@ -150,7 +171,6 @@ jobs:
   deploy:
     name: Deploy (${{ matrix.coin }})
     needs: prepare_deploy
-    if: ${{ inputs.mode == 'deploy' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -188,6 +208,8 @@ jobs:
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_BUILD_ENV: dev
+          # Auto-deploys leave backend nodes running; manual deploys default to auto.
+          BACKEND_MODE: ${{ inputs.backend_mode || 'never' }}
           DEPLOY_COIN: ${{ matrix.coin }}
         run: ./contrib/scripts/deploy-bb-and-backend.sh "$DEPLOY_COIN" --force-confnew
 
