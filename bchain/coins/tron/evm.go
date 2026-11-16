@@ -40,63 +40,8 @@ func (c *TronClient) BalanceAt(ctx context.Context, addrDesc bchain.AddressDescr
 	return (*big.Int)(&result), err
 }
 
-// NonceAt is not supported by Tron RPC
-func (c *TronClient) NonceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (uint64, error) {
-	return 0, nil
-}
-
-// TronHash wraps a transaction hash to implement the EVMHash interface
-type TronHash struct {
-	common.Hash
-}
-
 type TronClientSubscription struct {
 	*rpc.ClientSubscription
-}
-
-// TronNewBlock wraps a block header channel to implement the EVMNewBlockSubscriber interface
-type TronNewBlock struct {
-	channel chan *eth.EthereumHeader
-}
-
-// Close the underlying channel
-func (s *TronNewBlock) Close() {
-	close(s.channel)
-}
-
-// Channel returns the underlying channel as an empty interface
-func (s *TronNewBlock) Channel() interface{} {
-	return s.channel
-}
-
-// Read from the underlying channel and return a block header that implements the EVMHeader interface
-func (s *TronNewBlock) Read() (bchain.EVMHeader, bool) {
-	h, ok := <-s.channel
-	if !ok {
-		return nil, false
-	}
-	return h, true
-}
-
-// TronNewTx wraps a transaction hash channel to conform with the EVMNewTxSubscriber interface
-type TronNewTx struct {
-	channel chan common.Hash
-}
-
-// Channel returns the underlying channel as an empty interface
-func (s *TronNewTx) Channel() interface{} {
-	return s.channel
-}
-
-// Read from the underlying channel and return a transaction hash that implements the EVMHash interface
-func (s *TronNewTx) Read() (bchain.EVMHash, bool) {
-	h, ok := <-s.channel
-	return &TronHash{Hash: h}, ok
-}
-
-// Close the underlying channel
-func (s *TronNewTx) Close() {
-	close(s.channel)
 }
 
 // TronRPCClient wraps an rpc client to implement the EVMRPCClient interface
@@ -112,10 +57,6 @@ func (c *TronRPCClient) EthSubscribe(ctx context.Context, channel interface{}, a
 	}
 
 	return &TronClientSubscription{ClientSubscription: sub}, nil
-}
-
-func (c *TronClient) Close() {
-	c.Client.Close()
 }
 
 // HeaderByNumber goes through rpcClient so fixStateRoot applies

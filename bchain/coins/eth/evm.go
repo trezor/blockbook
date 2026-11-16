@@ -58,16 +58,6 @@ func (c *EthereumClient) BalanceAt(ctx context.Context, addrDesc bchain.AddressD
 	return c.Client.BalanceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
 }
 
-// NonceAt returns the nonce for the given account at a specific block, or latest known block if no block number is provided
-func (c *EthereumClient) NonceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (uint64, error) {
-	return c.Client.NonceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
-}
-
-// EthereumRPCClient wraps an rpc client to implement the EVMRPCClient interface
-type EthereumRPCClient struct {
-	*rpc.Client
-}
-
 // DualRPCClient routes calls over HTTP and subscriptions over WebSocket.
 type DualRPCClient struct {
 	CallClient *rpc.Client
@@ -101,16 +91,6 @@ func (c *DualRPCClient) Close() {
 	if c.CallClient != nil && c.CallClient != c.SubClient {
 		c.CallClient.Close()
 	}
-}
-
-// EthSubscribe subscribes to events and returns a client subscription that implements the EVMClientSubscription interface
-func (c *EthereumRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
-	sub, err := c.Client.EthSubscribe(ctx, channel, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	return &EthereumClientSubscription{ClientSubscription: sub}, nil
 }
 
 // EthereumHeader wraps a block header to implement the EVMHeader interface
