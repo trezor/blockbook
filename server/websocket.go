@@ -89,7 +89,6 @@ type websocketChannel struct {
 	blockable                    bool
 	limited                      bool
 	messageRate                  *connMessageRate
-	requestHeader                http.Header
 	alive                        bool
 	aliveLock                    sync.Mutex
 	closeReason                  string
@@ -424,7 +423,6 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		blockKey:            bKey,
 		blockable:           blockable,
 		limited:             limited,
-		requestHeader:       r.Header,
 		alive:               true,
 	}
 	if s.messageRateLimit > 0 && !whitelisted {

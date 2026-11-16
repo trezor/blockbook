@@ -77,7 +77,6 @@ type PublicServer struct {
 	certFiles           string
 	websocket           *WebsocketServer
 	serveMux            *http.ServeMux
-	restLimiter         *restUIRateLimiter
 	https               *http.Server
 	db                  *db.RocksDB
 	txCache             *db.TxCache
@@ -141,7 +140,6 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		binding:             binding,
 		certFiles:           certFiles,
 		serveMux:            serveMux,
-		restLimiter:         restLimiter,
 		https:               https,
 		api:                 api,
 		websocket:           websocket,
@@ -156,7 +154,6 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		fiatRates:           fiatRates,
 		useSatsAmountFormat: chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType && chain.GetChainParser().AmountDecimals() == 8,
 	}
-	s.htmlTemplates.newTemplateData = s.newTemplateData
 	s.htmlTemplates.newTemplateDataWithError = s.newTemplateDataWithError
 	s.htmlTemplates.parseTemplates = s.parseTemplates
 	s.htmlTemplates.postHtmlTemplateHandler = s.postHtmlTemplateHandler
@@ -438,7 +435,6 @@ func getFunctionName(i interface{}) string {
 
 func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 	t := &TemplateData{
-		CoinName:              s.is.Coin,
 		CoinShortcut:          s.is.CoinShortcut,
 		CoinLabel:             s.is.CoinLabel,
 		ChainType:             s.chainParser.GetChainType(),
@@ -521,7 +517,6 @@ const (
 
 // TemplateData is used to transfer data to the templates
 type TemplateData struct {
-	CoinName                 string
 	CoinShortcut             string
 	CoinLabel                string
 	InternalExplorer         bool

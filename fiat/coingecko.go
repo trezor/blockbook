@@ -99,8 +99,6 @@ type Coingecko struct {
 	platformIdentifier       string
 	platformVsCurrency       string
 	allowedVsCurrencies      map[string]struct{}
-	httpTimeout              time.Duration
-	timeFormat               string
 	httpClient               *http.Client
 	db                       *db.RocksDB
 	updatingTokens           bool
@@ -201,7 +199,7 @@ func resolveCoinGeckoBootstrapURL(bootstrapURL string) string {
 }
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string, bootstrapURL string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, plan string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
+func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string, bootstrapURL string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, plan string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
 	allowedVsCurrenciesMap := getAllowedVsCurrenciesMap(allowedVsCurrencies)
 
 	apiKey := resolveCoinGeckoAPIKey(network, coinShortcut)
@@ -232,8 +230,6 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string,
 		platformIdentifier:  platformIdentifier,
 		platformVsCurrency:  platformVsCurrency,
 		allowedVsCurrencies: allowedVsCurrenciesMap,
-		httpTimeout:         DefaultHTTPTimeout,
-		timeFormat:          timeFormat,
 		httpClient: &http.Client{
 			Timeout: DefaultHTTPTimeout,
 		},

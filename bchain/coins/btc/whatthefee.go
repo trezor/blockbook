@@ -35,8 +35,7 @@ type whatTheFeeParams struct {
 
 type whatTheFeeProvider struct {
 	*alternativeFeeProvider
-	params        whatTheFeeParams
-	probabilities []string
+	params whatTheFeeParams
 }
 
 // NewWhatTheFee initializes https://whatthefee.io provider
@@ -83,7 +82,6 @@ func (p *whatTheFeeProvider) whatTheFeeProcessData(data *whatTheFeeServiceResult
 	}
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	p.probabilities = data.Columns
 	p.fees = make([]alternativeFeeProviderFee, len(data.Index))
 	for i, blocks := range data.Index {
 		if len(data.Columns) != len(data.Data[i]) {
