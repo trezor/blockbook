@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"encoding/hex"
+	"maps"
 	"math/big"
 	"os"
 	"sort"
@@ -2226,9 +2227,14 @@ func (d *RocksDB) writeAddrContractsRecords(records map[string]*unpackedAddrCont
 }
 
 func (d *RocksDB) writeContractsCache() {
+	// only the block-connect goroutine, which runs this store, adds or mutates records, so a snapshot of the
+	// map is enough; holding the mutex across the commits would block every API read for the whole store
 	d.addrContractsCacheMux.Lock()
-	resident, _, err := d.writeAddrContractsRecords(d.addrContractsCache)
+	records := maps.Clone(d.addrContractsCache)
+	d.addrContractsCacheMux.Unlock()
+	resident, _, err := d.writeAddrContractsRecords(records)
 	// records grow in place between loads; re-measuring here keeps the budget honest without a per-mutation cost
+	d.addrContractsCacheMux.Lock()
 	d.addrContractsCacheBytes = resident
 	d.addrContractsCacheMux.Unlock()
 	if d.metrics != nil {
