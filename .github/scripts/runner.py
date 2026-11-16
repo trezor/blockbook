@@ -437,19 +437,16 @@ def resolve_deploy_selection(context: CoinContext, raw: str) -> list[str]:
     if not context.has_deployability:
         raise ValidationError("deploy selection requires deployability context")
 
-    if raw.strip().upper() == "ALL":
-        raise ValidationError(
-            "deploy does not support ALL; "
-            f"deployable coins: {','.join(context.deployable_coins)}"
-        )
-
-    requested_all, requested = parse_coin_tokens(raw, allow_all=False)
+    requested_all, requested = parse_coin_tokens(raw, allow_all=True)
     if requested_all:
-        raise ValidationError(
-            "deploy does not support ALL; "
-            f"deployable coins: {','.join(context.deployable_coins)}"
-        )
-    requested = [canonical_coin_name(coin, context.all_coins) for coin in requested]
+        # ALL skips non-deployable coins instead of failing, like build ALL skips prod-only ones.
+        if not context.deployable_coins:
+            raise ValidationError(
+                "no deployable coins: "
+                + " | ".join(context.deployability_errors.values())
+            )
+        return list(context.deployable_coins)
+    requested =[canonical_coin_name(coin, context.all_coins) for coin in requested]
 
     unknown = [coin for coin in requested if coin not in context.all_coins]
     if unknown:
