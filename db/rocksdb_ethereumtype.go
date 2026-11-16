@@ -57,14 +57,6 @@ func (s *Ids) insert(id big.Int) {
 	}
 }
 
-func (s *Ids) remove(id big.Int) {
-	i := s.search(id)
-	// remove id if found
-	if i < len(*s) && (*s)[i].CmpAbs(&id) == 0 {
-		*s = append((*s)[:i], (*s)[i+1:]...)
-	}
-}
-
 type MultiTokenValues []bchain.MultiTokenValue
 
 func (s *MultiTokenValues) sort() bool {
@@ -77,37 +69,6 @@ func (s *MultiTokenValues) sort() bool {
 		return isLess
 	})
 	return sorted
-}
-
-// search for multi token value using a binary seach on id
-func (s *MultiTokenValues) search(m bchain.MultiTokenValue) int {
-	return sort.Search(len(*s), func(i int) bool {
-		return (*s)[i].Id.CmpAbs(&m.Id) >= 0
-	})
-}
-
-func (s *MultiTokenValues) upsert(m bchain.MultiTokenValue, index int32, aggregate AggregateFn) {
-	i := s.search(m)
-	if i < len(*s) && (*s)[i].Id.CmpAbs(&m.Id) == 0 {
-		aggregate(&(*s)[i].Value, &m.Value)
-		// if transfer from, remove if the value is zero
-		if index < 0 && len((*s)[i].Value.Bits()) == 0 {
-			*s = append((*s)[:i], (*s)[i+1:]...)
-		}
-		return
-	}
-	if index >= 0 {
-		elem := bchain.MultiTokenValue{
-			Id:    m.Id,
-			Value: *new(big.Int).Set(&m.Value),
-		}
-		if i == len(*s) {
-			*s = append(*s, elem)
-		} else {
-			*s = append((*s)[:i+1], (*s)[i:]...)
-			(*s)[i] = elem
-		}
-	}
 }
 
 // AddrContract is Contract address with number of transactions done by given address

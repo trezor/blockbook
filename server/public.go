@@ -270,11 +270,6 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	s.isFullInterface = true
 }
 
-// IsFullInterface reports whether full public functionality is already enabled.
-func (s *PublicServer) IsFullInterface() bool {
-	return s.isFullInterface
-}
-
 // Close closes the server
 func (s *PublicServer) Close() error {
 	glog.Infof("public server: closing")

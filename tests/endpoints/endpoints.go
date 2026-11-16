@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -193,36 +192,4 @@ func deriveWSFromHTTP(httpBase string) (string, error) {
 	u.RawQuery = ""
 	u.Fragment = ""
 	return u.String(), nil
-}
-
-func shouldUpgradeToHTTPS(status int, body []byte, baseURL string) bool {
-	if status != http.StatusBadRequest {
-		return false
-	}
-	if !strings.Contains(strings.ToLower(string(body)), "http request to an https server") {
-		return false
-	}
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	return parsed.Scheme == "http"
-}
-
-func upgradeHTTPBaseToHTTPS(raw string) (string, bool) {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "http" {
-		return "", false
-	}
-	u.Scheme = "https"
-	return strings.TrimRight(u.String(), "/"), true
-}
-
-func upgradeWSBaseToWSS(raw string) (string, bool) {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "ws" {
-		return "", false
-	}
-	u.Scheme = "wss"
-	return u.String(), true
 }

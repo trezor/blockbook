@@ -16,7 +16,6 @@ import (
 
 const maxUint32 = ^uint32(0)
 const maxInt = int(^uint(0) >> 1)
-const maxInt64 = int64(^uint64(0) >> 1)
 
 // AccountDetails specifies what data returns GetAddress and GetXpub calls
 type AccountDetails int
@@ -686,9 +685,4 @@ type Eip1559Fees struct {
 	HistoricalBaseFeeRange     []*Amount   `json:"historicalBaseFeeRange,omitempty"`
 	PriorityFeeTrend           string      `json:"priorityFeeTrend,omitempty" ts_type:"'up' | 'down'"`
 	BaseFeeTrend               string      `json:"baseFeeTrend,omitempty" ts_type:"'up' | 'down'"`
-}
-
-type LongTermFeeRate struct {
-	FeePerUnit string `json:"feePerUnit" ts_doc:"Long term fee rate (in sat/kByte)."`
-	Blocks     uint64 `json:"blocks" ts_doc:"Amount of blocks used for the long term fee rate estimation."`
 }

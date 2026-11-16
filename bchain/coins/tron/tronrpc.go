@@ -34,7 +34,6 @@ const (
 	// (base58 TEazPvZwDjDtFeJupyo7QunvnrnUjPH8ED); applied in NewTronRPC.
 	tronMulticall3Address = "0x32a4f47a74a6810bd0bf861cabab99656a75de9e"
 
-	TRC10TokenType   bchain.TokenStandardName = "TRC10"
 	TRC20TokenType   bchain.TokenStandardName = "TRC20"
 	TRC721TokenType  bchain.TokenStandardName = "TRC721"
 	TRC1155TokenType bchain.TokenStandardName = "TRC1155"
