@@ -9,9 +9,12 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
@@ -561,6 +564,11 @@ func Test_addrContractsCache_FlushOnCap(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected cached address contracts to be returned")
 	}
+	// the load itself never flushes, the block boundary does
+	if len(d.addrContractsCache) != 1 || d.addrContractsCacheBytes <= d.addrContractsCacheMaxBytes {
+		t.Fatalf("expected the record cached over the cap, got %d entries, %d bytes", len(d.addrContractsCache), d.addrContractsCacheBytes)
+	}
+	d.flushAddrContractsCacheIfOverCap()
 	if len(d.addrContractsCache) != 0 {
 		t.Fatalf("expected cache to be flushed, got %d entries", len(d.addrContractsCache))
 	}
@@ -2506,4 +2514,287 @@ func Benchmark_contractIndexLookup(b *testing.B) {
 			}
 		})
 	}
+}
+
+func counterValue(t *testing.T, c prometheus.Counter) float64 {
+	t.Helper()
+	var m dto.Metric
+	if err := c.Write(&m); err != nil {
+		t.Fatal(err)
+	}
+	return m.GetCounter().GetValue()
+}
+
+func Test_addrContractsCache_CacheableMisses(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.metrics = getTestMetrics(t)
+
+	addrDesc := makeTestAddrDesc(43)
+	acs := &unpackedAddrContracts{
+		TotalTxs: 1,
+		Contracts: []unpackedAddrContract{{
+			Contract: makeTestAddrDesc(7),
+			Standard: bchain.FungibleToken,
+			Txs:      1,
+			Value:    unpackedBigInt{Value: big.NewInt(0)},
+		}},
+	}
+	buf := packUnpackedAddrContracts(acs)
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	misses0 := counterValue(t, d.metrics.AddrContractsCacheMisses)
+	cacheable0 := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses)
+	hits0 := counterValue(t, d.metrics.AddrContractsCacheHits)
+
+	// below the threshold: a miss, but not a cacheable one
+	d.addrContractsCacheMinSize = len(buf)
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheMisses) - misses0; got != 1 {
+		t.Fatalf("misses after uncacheable read = %v, want 1", got)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses) - cacheable0; got != 0 {
+		t.Fatalf("cacheable misses after uncacheable read = %v, want 0", got)
+	}
+
+	// above the threshold: the first read is a cacheable miss, the second a hit
+	d.addrContractsCacheMinSize = len(buf) - 1
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses) - cacheable0; got != 1 {
+		t.Fatalf("cacheable misses after cacheable read = %v, want 1", got)
+	}
+	if _, err := d.getUnpackedAddrDescContracts(addrDesc); err != nil {
+		t.Fatal(err)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheHits) - hits0; got != 1 {
+		t.Fatalf("hits after cached read = %v, want 1", got)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheMisses) - misses0; got != 2 {
+		t.Fatalf("misses total = %v, want 2", got)
+	}
+	if got := counterValue(t, d.metrics.AddrContractsCacheCacheableMisses) - cacheable0; got != 1 {
+		t.Fatalf("cacheable misses total = %v, want 1", got)
+	}
+}
+
+func Test_addrContractsCache_ResidentBudget(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.metrics = getTestMetrics(t)
+	d.addrContractsCacheMinSize = 1
+
+	// an NFT holding: ids pack to a few bytes each but decode to 32-byte entries
+	stored := &AddrContracts{TotalTxs: 10, Contracts: generateAddrContracts(0, 1, 500, 0, 0)}
+	buf := packAddrContracts(stored)
+	addrDesc := makeTestAddrDesc(44)
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	acs, err := d.getUnpackedAddrDescContracts(addrDesc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resident := acs.residentSize()
+	if resident < 3*int64(len(buf)) {
+		t.Fatalf("residentSize() = %d, want well above the packed size %d", resident, len(buf))
+	}
+	if d.addrContractsCacheBytes != resident {
+		t.Fatalf("cache charged %d bytes at insert, want residentSize() %d", d.addrContractsCacheBytes, resident)
+	}
+
+	// growth in place is re-measured by the periodic store
+	for i := 0; i < 1000; i++ {
+		acs.Contracts[0].Ids.insert(*big.NewInt(int64(1_000_000 + i)))
+	}
+	grown := acs.residentSize()
+	if grown <= resident {
+		t.Fatalf("residentSize() after growth = %d, want more than %d", grown, resident)
+	}
+	d.storeAddrContractsCache()
+	if d.addrContractsCacheBytes != grown {
+		t.Fatalf("cache bytes after store = %d, want re-measured %d", d.addrContractsCacheBytes, grown)
+	}
+
+	// a record that grew past the cap without any new insert is flushed at the next block boundary
+	d.addrContractsCacheMaxBytes = grown - 1
+	d.flushAddrContractsCacheIfOverCap()
+	if len(d.addrContractsCache) != 0 {
+		t.Fatalf("expected the cache flushed after growing past the cap, got %d entries", len(d.addrContractsCache))
+	}
+}
+
+func Test_GetAddrDescContracts_ServesCachedRecords(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	// every record loaded by the second block is cached and its block-2 changes stay in memory
+	d.addrContractsCacheMinSize = 1
+
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.addrContractsCache) == 0 {
+		t.Fatal("expected records of the second block in the cache")
+	}
+
+	diskRecord := func(addrDesc bchain.AddressDescriptor) []byte {
+		val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer val.Free()
+		return append([]byte(nil), val.Data()...)
+	}
+	apiRecord := func(addrDesc bchain.AddressDescriptor) []byte {
+		acs, err := d.GetAddrDescContracts(addrDesc, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		header, err := d.GetAddrDescContracts(addrDesc, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := &AddrContracts{TotalTxs: acs.TotalTxs, NonContractTxs: acs.NonContractTxs, InternalTxs: acs.InternalTxs}
+		if !reflect.DeepEqual(header, want) {
+			t.Fatalf("headerOnly view %+v, want %+v", header, want)
+		}
+		return packAddrContracts(acs)
+	}
+
+	stale := 0
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if !bytes.Equal(apiRecord(addrDesc), diskRecord(addrDesc)) {
+			stale++
+		}
+	}
+	if stale == 0 {
+		t.Fatal("expected the on-disk records to lag the cached ones before the periodic store")
+	}
+
+	// while bulk connect runs the cache is unsafe to read and the API falls back to disk
+	d.bulkConnectActive.Store(true)
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if !bytes.Equal(apiRecord(addrDesc), diskRecord(addrDesc)) {
+			t.Fatalf("address %v: API served the cache during bulk connect", addrDesc)
+		}
+	}
+	d.bulkConnectActive.Store(false)
+
+	// a connect holding the lock past the wait also falls back to disk
+	addrContractsCacheReadWait = 20 * time.Millisecond
+	defer func() { addrContractsCacheReadWait = 2 * time.Second }()
+	d.connectBlockMux.Lock()
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if !bytes.Equal(apiRecord(addrDesc), diskRecord(addrDesc)) {
+			t.Fatalf("address %v: API served the cache while a connect held the lock", addrDesc)
+		}
+	}
+	d.connectBlockMux.Unlock()
+
+	// after the periodic store the cached view and the on-disk record agree
+	d.storeAddrContractsCache()
+	for key := range d.addrContractsCache {
+		addrDesc := bchain.AddressDescriptor(key)
+		if got, want := apiRecord(addrDesc), diskRecord(addrDesc); !bytes.Equal(got, want) {
+			t.Fatalf("address %v: cached view %x, stored record %x", addrDesc, got, want)
+		}
+	}
+}
+
+func Test_addrContractsCache_ChunkedWriteBack(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	defer func() { addrContractsWriteBatchBytes = defaultAddrContractsWriteBatchBytes }()
+
+	records := make(map[string]*unpackedAddrContracts)
+	for i := 0; i < 10; i++ {
+		packed := packAddrContracts(&AddrContracts{TotalTxs: uint(i + 1), Contracts: generateAddrContracts(3, 1, 5, 1, 5)})
+		acs, err := partiallyUnpackAddrContracts(packed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		records[string(makeTestAddrDesc(2000+i))] = acs
+	}
+	verifyStored := func() {
+		t.Helper()
+		for key, acs := range records {
+			val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], bchain.AddressDescriptor(key))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(val.Data(), packUnpackedAddrContracts(acs)) {
+				t.Fatalf("record %x not stored as packed", key)
+			}
+			val.Free()
+		}
+	}
+
+	// a cap below any record commits every record on its own
+	addrContractsWriteBatchBytes = 1
+	if _, batches, err := d.writeAddrContractsRecords(records); err != nil || batches != len(records) {
+		t.Fatalf("writeAddrContractsRecords() = %d batches, %v; want %d batches", batches, err, len(records))
+	}
+	verifyStored()
+
+	// a cap above the whole set commits once
+	addrContractsWriteBatchBytes = 1 << 30
+	if _, batches, err := d.writeAddrContractsRecords(records); err != nil || batches != 1 {
+		t.Fatalf("writeAddrContractsRecords() = %d batches, %v; want 1 batch", batches, err)
+	}
+	verifyStored()
+}
+
+func Test_addrContractsCache_FlushAtBlockBoundary(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	d.metrics = getTestMetrics(t)
+	// every record the second block loads is cached and exceeds the cap on its own
+	d.addrContractsCacheMinSize = 1
+	d.addrContractsCacheMaxBytes = 1
+	capFlushes := d.metrics.AddrContractsCacheFlushes.With(common.Labels{"reason": "cap"})
+	flushes0 := counterValue(t, capFlushes)
+
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)); err != nil {
+		t.Fatal(err)
+	}
+	// one flush at the boundary of the second block, none while its records were being loaded
+	if got := counterValue(t, capFlushes) - flushes0; got != 1 {
+		t.Fatalf("cap flushes after two blocks = %v, want 1", got)
+	}
+	if len(d.addrContractsCache) != 0 {
+		t.Fatalf("expected the cache flushed at the block boundary, got %d entries", len(d.addrContractsCache))
+	}
+	// the flushed records carry the whole second block
+	verifyAfterEthereumTypeBlock2(t, d, true)
 }
