@@ -1073,16 +1073,6 @@ func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// GetCoinName returns coin name
-func (b *EthereumRPC) GetCoinName() string {
-	return b.ChainConfig.CoinName
-}
-
-// GetSubversion returns empty string, ethereum does not have subversion
-func (b *EthereumRPC) GetSubversion() string {
-	return ""
-}
-
 // GetChainInfo returns information about the connected backend
 func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	h, err := b.getBestHeader()

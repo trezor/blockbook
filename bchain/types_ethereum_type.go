@@ -88,19 +88,6 @@ type ContractInfo struct {
 	Erc4626AssetContract string `json:"-"`
 }
 
-// EthereumTypeRPCCall defines one eth_call request payload.
-type EthereumTypeRPCCall struct {
-	Data string
-	To   string
-	From string
-}
-
-// EthereumTypeRPCCallResult carries one eth_call response payload.
-type EthereumTypeRPCCallResult struct {
-	Data  string
-	Error error
-}
-
 // EthereumMulticallCall is one sub-call in a Multicall3 aggregate3 batch.
 // CallData is "0x"-prefixed hex. AllowFailure=true lets a revert produce
 // Success=false in the result slot instead of failing the batch.

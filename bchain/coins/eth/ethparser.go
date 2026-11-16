@@ -303,11 +303,6 @@ func (p *EthereumParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescrip
 	return []string{p.FromDescToAddressFunc(addrDesc)}, true, nil
 }
 
-// GetScriptFromAddrDesc returns output script for given address descriptor
-func (p *EthereumParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
-	return addrDesc, nil
-}
-
 func hexDecode(s string) ([]byte, error) {
 	b, err := hexutil.Decode(s)
 	if err != nil && err != hexutil.ErrEmptyString {
