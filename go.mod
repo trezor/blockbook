@@ -6,8 +6,8 @@ require (
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
 	github.com/deckarep/golang-set v1.8.0
 	github.com/decred/base58 v1.0.3
-	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
-	github.com/decred/dcrd/chaincfg/v3 v3.0.0
+	github.com/decred/dcrd/chaincfg/chainhash v1.0.5
+	github.com/decred/dcrd/chaincfg/v3 v3.3.0
 	github.com/decred/dcrd/dcrec v1.0.0
 	github.com/decred/dcrd/dcrjson/v3 v3.0.1
 	github.com/decred/dcrd/dcrutil/v3 v3.0.0
@@ -59,7 +59,7 @@ require (
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v3 v3.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
-	github.com/decred/dcrd/wire v1.4.0 // indirect
+	github.com/decred/dcrd/wire v1.7.1 // indirect
 	github.com/decred/slog v1.1.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.5 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -71,6 +71,7 @@ require (
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
 	github.com/juju/testing v0.0.0-20191001232224-ce9dec17d28b // indirect
 	github.com/kkdai/bstream v0.0.0-20171226095907-f71540b9dfdc // indirect
+	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -95,6 +96,7 @@ require (
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
+	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
 // replace github.com/martinboehm/btcutil => ../btcutil
