@@ -8,19 +8,29 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 )
 
 // feeHistoryRPCStub serves a canned eth_feeHistory response; any other method errors so the test
-// also asserts the on-chain path no longer issues eth_maxPriorityFeePerGas.
+// also asserts the on-chain path no longer issues eth_maxPriorityFeePerGas. Percentile-free calls
+// fill the congestion window from windowFee (one base fee per height) and are counted separately,
+// so tests can assert the tier call's arguments and the window fill independently.
 type feeHistoryRPCStub struct {
-	raw  string
-	args []interface{} // the last eth_feeHistory arguments, so tests can assert the window and percentiles
+	mu          sync.Mutex
+	raw         string
+	args        []interface{} // the last tier eth_feeHistory arguments, so tests can assert the window and percentiles
+	windowFee   func(height uint64) uint64
+	windowArgs  []interface{}
+	windowCalls int
+	windowErr   error
 }
 
 func (s *feeHistoryRPCStub) EthSubscribe(context.Context, interface{}, ...interface{}) (bchain.EVMClientSubscription, error) {
@@ -32,6 +42,22 @@ func (s *feeHistoryRPCStub) Close() {}
 func (s *feeHistoryRPCStub) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	if method != "eth_feeHistory" {
 		return errors.New("unexpected RPC method: " + method)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(args) == 3 && fmt.Sprint(args[2]) == "[]" {
+		s.windowArgs = args
+		s.windowCalls++
+		if s.windowErr != nil {
+			return s.windowErr
+		}
+		count, end := uint64(args[0].(int)), hexutil.MustDecodeUint64(args[1].(string))
+		fees := make([]string, 0, count+1)
+		for h := end - count + 1; h <= end+1; h++ {
+			fees = append(fees, hexutil.EncodeUint64(s.windowFee(h)))
+		}
+		raw, _ := json.Marshal(map[string]interface{}{"oldestBlock": hexutil.EncodeUint64(end - count + 1), "baseFeePerGas": fees})
+		return json.Unmarshal(raw, result)
 	}
 	s.args = args
 	return json.Unmarshal([]byte(s.raw), result)
@@ -178,6 +204,178 @@ func TestEthereumTypeGetEip1559FeesOnChainBaseFeeIsLast(t *testing.T) {
 	}
 	if _, err := newRPC(`["0x10","0x20","0x30","0x40","0x50","0x60","0x70","0x80","zz"]`).EthereumTypeGetEip1559Fees(); err == nil {
 		t.Error("undecodable base fee: expected an error")
+	}
+}
+
+// TestEip1559CongestionScore: networkCongestion averages, over the last k quotes, the share of the n
+// base fees before each one strictly below its next-block base fee, so a flat chain (a rollup at its
+// floor) scores 0 rather than 0.5 and a steady climb scores 1.
+func TestEip1559CongestionScore(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		seq  []uint64
+		n    int
+		want float64
+	}{
+		{"too short", []uint64{1, 2}, 2, 0},
+		{"flat", []uint64{7, 7, 7, 7, 7}, 3, 0},
+		{"climb", []uint64{1, 2, 3, 4, 5}, 3, 1},
+		{"fall", []uint64{5, 4, 3, 2, 1}, 3, 0},
+		// quotes 4 vs [1 3 5] = 2/3, 2 vs [3 5 4] = 0, 6 vs [5 4 2] = 1 -> 5/9
+		{"mixed", []uint64{1, 3, 5, 4, 2, 6}, 3, 5.0 / 9},
+		// ties do not count: 3 vs [3 3] = 0, 3 vs [3 3] = 0
+		{"ties", []uint64{3, 3, 3, 3}, 2, 0},
+	} {
+		if got := eip1559CongestionScore(c.seq, c.n); got != c.want {
+			t.Errorf("%s: score = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestEip1559BaseFeeTrend: baseFeeTrend is the sign of projected minus oldest, empty when flat or unknown.
+func TestEip1559BaseFeeTrend(t *testing.T) {
+	for _, c := range []struct {
+		from, to *big.Int
+		want     string
+	}{
+		{big.NewInt(1), big.NewInt(2), "up"},
+		{big.NewInt(2), big.NewInt(1), "down"},
+		{big.NewInt(2), big.NewInt(2), ""},
+		{nil, big.NewInt(2), ""},
+		{big.NewInt(2), nil, ""},
+	} {
+		if got := eip1559BaseFeeTrend(c.from, c.to); got != c.want {
+			t.Errorf("trend(%v -> %v) = %q, want %q", c.from, c.to, got, c.want)
+		}
+	}
+}
+
+// congestionRPC is an EthereumRPC whose congestion window is 16 blocks, so a test chain stays small.
+func congestionRPC(stub *feeHistoryRPCStub) *EthereumRPC {
+	return &EthereumRPC{RPC: stub, Timeout: time.Second, ChainConfig: &Configuration{
+		Eip1559Fees:        true,
+		AverageBlockTimeMs: int(eip1559CongestionWindow / time.Millisecond / 16),
+	}}
+}
+
+// tierWindow sets the stub's tier response to the 8 blocks from oldest, base fees from fee, plus the
+// projection for the block after them.
+func (s *feeHistoryRPCStub) tierWindow(oldest uint64, fee func(uint64) uint64) {
+	fees := make([]string, 0, 9)
+	for h := oldest; h <= oldest+8; h++ {
+		fees = append(fees, fmt.Sprintf("%q", hexutil.EncodeUint64(fee(h))))
+	}
+	s.mu.Lock()
+	s.raw = fmt.Sprintf(`{"oldestBlock":%q,"reward":[["0x1","0x2","0x3"]],"baseFeePerGas":[%s],"gasUsedRatio":[0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]}`,
+		hexutil.EncodeUint64(oldest), strings.Join(fees, ","))
+	s.mu.Unlock()
+}
+
+// waitFill blocks until no background window fill is running.
+func waitFill(t *testing.T, b *EthereumRPC) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		b.baseFeeWindow.mu.Lock()
+		filling := b.baseFeeWindow.filling
+		b.baseFeeWindow.mu.Unlock()
+		if !filling {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("window fill did not finish")
+		}
+	}
+}
+
+// quote returns the fees and waits for any window fill the quote started.
+func quote(t *testing.T, b *EthereumRPC) *bchain.Eip1559Fees {
+	t.Helper()
+	fees, err := b.EthereumTypeGetEip1559Fees()
+	if err != nil || fees == nil {
+		t.Fatalf("fees, err = %v, %v", fees, err)
+	}
+	waitFill(t, b)
+	return fees
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainCongestion: the first quote starts a background fill of the
+// window and omits the fields; once full, each quote ranks against it at no extra RPC, a gap refills
+// it, and a failed fill is not retried on every quote.
+func TestEthereumTypeGetEip1559FeesOnChainCongestion(t *testing.T) {
+	climb := func(h uint64) uint64 { return h }
+	stub := &feeHistoryRPCStub{windowFee: climb}
+	stub.tierWindow(100, climb)
+	b := congestionRPC(stub)
+
+	if fees := quote(t, b); fees.NetworkCongestion != 0 || fees.HistoricalBaseFeeRange != nil {
+		t.Errorf("before the fill: congestion %v, range %v; want both empty", fees.NetworkCongestion, fees.HistoricalBaseFeeRange)
+	}
+	// tier window 100..107, n = 16: the fill reads 16+7 blocks ending at the tip, percentile-free
+	if stub.windowCalls != 1 || fmt.Sprint(stub.windowArgs) != "[23 0x6b []]" {
+		t.Fatalf("fill: %d calls, last args %v; want 1 call [23 0x6b []]", stub.windowCalls, stub.windowArgs)
+	}
+	fees := quote(t, b)
+	if fees.NetworkCongestion != 1 {
+		t.Errorf("steady climb: congestion = %v, want 1", fees.NetworkCongestion)
+	}
+	if r := fees.HistoricalBaseFeeRange; len(r) != 2 || r[0].Int64() != 92 || r[1].Int64() != 107 {
+		t.Errorf("range = %v, want the last 16 mined blocks [92 107]", r)
+	}
+	if fees.BaseFeeTrend != "up" {
+		t.Errorf("BaseFeeTrend = %q, want up", fees.BaseFeeTrend)
+	}
+
+	// the next block extends the ring from the tier window alone; a falling projection lowers the
+	// average of the 8 quotes by one eighth
+	stub.tierWindow(101, func(h uint64) uint64 {
+		if h == 109 {
+			return 1
+		}
+		return h
+	})
+	if fees = quote(t, b); stub.windowCalls != 1 || fees.NetworkCongestion != 7.0/8 {
+		t.Errorf("next block: %d fills, congestion %v; want 1 fill and 7/8", stub.windowCalls, fees.NetworkCongestion)
+	}
+
+	// a gap past the stored tip refills the window, here after a failure that is not retried at once
+	stub.mu.Lock()
+	stub.windowErr = errors.New("history pruned")
+	stub.mu.Unlock()
+	stub.tierWindow(200, climb)
+	if fees = quote(t, b); stub.windowCalls != 2 || fees.NetworkCongestion != 0 {
+		t.Errorf("failed fill: %d fills, congestion %v; want 2 fills and empty", stub.windowCalls, fees.NetworkCongestion)
+	}
+	stub.mu.Lock()
+	stub.windowErr = nil
+	stub.mu.Unlock()
+	b.baseFeeWindow.mu.Lock()
+	b.baseFeeWindow.retryAt = time.Time{}
+	b.baseFeeWindow.mu.Unlock()
+	if fees = quote(t, b); fees.NetworkCongestion != 0 {
+		t.Errorf("gap: congestion %v, want empty until the refill lands", fees.NetworkCongestion)
+	}
+	if fees = quote(t, b); stub.windowCalls != 3 || fees.NetworkCongestion != 1 {
+		t.Errorf("refill: %d fills, congestion %v; want 3 fills and 1", stub.windowCalls, fees.NetworkCongestion)
+	}
+}
+
+// TestEthereumTypeGetEip1559FeesOnChainCongestionFlat: a chain whose base fee sits at its floor (a
+// rollup) scores 0, and a chain without a configured block time gets no window at all.
+func TestEthereumTypeGetEip1559FeesOnChainCongestionFlat(t *testing.T) {
+	flat := func(uint64) uint64 { return 100 }
+	stub := &feeHistoryRPCStub{windowFee: flat}
+	stub.tierWindow(100, flat)
+	b := congestionRPC(stub)
+	quote(t, b)
+	fees := quote(t, b)
+	if r := fees.HistoricalBaseFeeRange; fees.NetworkCongestion != 0 || len(r) != 2 || r[0].Int64() != 100 || r[1].Int64() != 100 {
+		t.Errorf("flat: congestion %v, range %v; want 0 and [100 100]", fees.NetworkCongestion, r)
+	}
+
+	b = &EthereumRPC{RPC: stub, Timeout: time.Second, ChainConfig: &Configuration{Eip1559Fees: true}}
+	calls := stub.windowCalls
+	if fees = quote(t, b); fees.HistoricalBaseFeeRange != nil || stub.windowCalls != calls {
+		t.Errorf("no block time: range %v, %d new fills; want none", fees.HistoricalBaseFeeRange, stub.windowCalls-calls)
 	}
 }
 
