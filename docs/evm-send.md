@@ -126,7 +126,8 @@ Key invariants:
   private send before inclusion, while every device on the sending account sees the pending
   transaction at once. Anyone watching the sender's own address still sees its private sends in full;
   Blockbook cannot tell such a watcher from a second device of the same account, and showing the
-  transaction to the account is what keeps a stuck or duplicated send visible. This sender index is
+  transaction to the account is what keeps a stuck or duplicated send visible. If the public backend
+  later reports the transaction, it is no longer private and is re-indexed and announced in full. This sender index is
   interim: once the wallet keeps its own record of every send it routes through the relay, Blockbook
   stops indexing private sends altogether and serves them by txid only.
 - **Removals are not pushed to the wallet.** Blockbook pushes only *added* txs; a wallet learns a

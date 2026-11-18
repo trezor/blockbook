@@ -47,17 +47,17 @@ func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) (
 	return io, addrDesc
 }
 
-// createTxEntry builds the address index of a mempool transaction and announces it through OnNewTx.
+// createTxEntry builds the address index of a mempool transaction and the MempoolTx announced for it.
 // A private relay send is indexed under its sender only: the relay was chosen so the transaction is
 // not public before inclusion, and a subscription to a router, token or recipient address would
 // otherwise hand it out as it is accepted. The sender's own devices still need to see it.
-func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private bool) (txEntry, bool) {
+func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private bool) (txEntry, *MempoolTx, bool) {
 	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
 		if err != ErrTxNotFound {
 			glog.Warning("cannot get transaction ", txid, ": ", err)
 		}
-		return txEntry{}, false
+		return txEntry{}, nil, false
 	}
 	mtx := m.txToMempoolTx(tx)
 	parser := m.chain.GetChainParser()
@@ -106,9 +106,6 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private 
 			}
 		}
 	}
-	if m.OnNewTx != nil {
-		m.OnNewTx(mtx)
-	}
 	entry := txEntry{addrIndexes: addrIndexes, time: txTime, private: private}
 	if csd, ok := tx.CoinSpecificData.(EthereumSpecificData); ok && csd.Tx != nil && len(mtx.Vin) > 0 {
 		nonce, err := strconv.ParseUint(strings.TrimPrefix(csd.Tx.AccountNonce, "0x"), 16, 64)
@@ -119,7 +116,7 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private 
 			entry.nonce = nonce
 		}
 	}
-	return entry, true
+	return entry, mtx, true
 }
 
 // RemoveSenderTransactionsUpToNonce retires every entry sent by from with a nonce at or below the
@@ -204,7 +201,8 @@ func (m *MempoolEthereumType) removeTransactionsMissingFromBackend(backendTxs ma
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	for txid, entry := range m.txEntries {
-		if _, exists := backendTxs[txid]; exists || entry.time >= backendSnapshotTime {
+		// a private relay send is never in the public pool; the relay reconcile and the timeout retire it
+		if _, exists := backendTxs[txid]; exists || entry.private || entry.time >= backendSnapshotTime {
 			continue
 		}
 		m.removeEntryFromMempool(txid, entry)
@@ -222,35 +220,47 @@ func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
 
 func (m *MempoolEthereumType) addTransactionToMempool(txid string, private bool) bool {
 	m.mux.Lock()
-	_, exists := m.txEntries[txid]
+	existing, exists := m.txEntries[txid]
 	m.mux.Unlock()
 	if glog.V(1) {
 		glog.Info("AddTransactionToMempool ", txid, ", existed ", exists, ", private ", private)
 	}
-	if !exists {
-		entry, ok := m.createTxEntry(txid, uint32(time.Now().Unix()), private)
-		if !ok {
-			return false
-		}
-		m.mux.Lock()
-		// a concurrent add of the same txid may have written while the fetch ran unlocked: the first
-		// entry wins, so the stored index always matches the outpoints that were appended for it
-		if _, exists = m.txEntries[txid]; !exists {
-			m.txEntries[txid] = entry
-			for _, si := range entry.addrIndexes {
-				m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
-			}
-		}
-		m.mux.Unlock()
+	// a private send the public backend now reports is no longer private: re-index it in full
+	if exists && !(existing.private && !private) {
+		return false
 	}
-	return !exists
+	entry, mtx, ok := m.createTxEntry(txid, uint32(time.Now().Unix()), private)
+	if !ok {
+		return false
+	}
+	stored := false
+	m.mux.Lock()
+	// a concurrent add of the same txid may have written while the fetch ran unlocked: the first
+	// entry wins unless this one makes it public, so the stored index always matches its outpoints
+	if current, exists := m.txEntries[txid]; !exists || (current.private && !private) {
+		if exists {
+			entry.time = current.time
+			m.removeEntryFromMempool(txid, current)
+		}
+		m.txEntries[txid] = entry
+		for _, si := range entry.addrIndexes {
+			m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+		}
+		stored = true
+	}
+	m.mux.Unlock()
+	// announced only by the add that stored it, so concurrent adds notify once
+	if stored && m.OnNewTx != nil {
+		m.OnNewTx(mtx)
+	}
+	return stored
 }
 
 // AddOrRefreshPrivateTransactionInMempool adds a send accepted by the private relay: indexed under
 // its sender only (see createTxEntry) and left out of the mempool listing. The relay cache ages from
 // the newest submission, so an existing entry is restamped in place and the timeout sweep cannot drop
 // it while the cache still serves the transaction as pending. An entry the public backend already
-// surfaced stays public.
+// surfaced stays public, and a private entry the public backend reports later is made public.
 func (m *MempoolEthereumType) AddOrRefreshPrivateTransactionInMempool(txid string) bool {
 	m.mux.Lock()
 	entry, exists := m.txEntries[txid]

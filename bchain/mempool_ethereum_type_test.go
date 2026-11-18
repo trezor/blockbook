@@ -2,6 +2,7 @@ package bchain
 
 import (
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -198,5 +199,92 @@ func TestMempoolEthereumTypeConcurrentPublicAndPrivateAddLeavesNoOrphanOutpoint(
 	m.RemoveTransactionFromMempool("tx1")
 	if len(m.txEntries) != 0 || len(m.addrDescToTx) != 0 {
 		t.Fatalf("after removal txEntries = %+v, addrDescToTx = %+v, want both empty", m.txEntries, m.addrDescToTx)
+	}
+}
+
+func newRouterTxChain() *gatedChain {
+	return &gatedChain{
+		tx: &Tx{
+			Txid: "tx1",
+			Vin:  []Vin{{Addresses: []string{"sender"}}},
+			Vout: []Vout{{N: 0, ScriptPubKey: ScriptPubKey{Addresses: []string{"router"}}}},
+			CoinSpecificData: EthereumSpecificData{
+				Tx: &RpcTransaction{Payload: "0xdeadbeef", AccountNonce: "0x1"},
+			},
+		},
+		calls: make(chan chan struct{}, 2),
+	}
+}
+
+// Once the public backend reports a private send it is public, so recipients must see it pending.
+func TestMempoolEthereumTypePublicAddPromotesPrivateEntry(t *testing.T) {
+	chain := newRouterTxChain()
+	go func() {
+		for release := range chain.calls {
+			close(release)
+		}
+	}()
+	m := NewMempoolEthereumType(chain, 10*time.Minute, false)
+	var announced []*MempoolTx
+	m.OnNewTx = func(tx *MempoolTx) { announced = append(announced, tx) }
+
+	m.AddOrRefreshPrivateTransactionInMempool("tx1")
+	firstSeen := uint32(time.Now().Add(-time.Hour).Unix())
+	entry := m.txEntries["tx1"]
+	entry.time = firstSeen
+	m.txEntries["tx1"] = entry
+
+	if !m.AddTransactionToMempool("tx1") {
+		t.Fatal("AddTransactionToMempool() = false, want true for a private entry made public")
+	}
+	entry = m.txEntries["tx1"]
+	if entry.private || entry.time != firstSeen {
+		t.Fatalf("entry = %+v, want public with the first-seen time kept", entry)
+	}
+	if len(m.addrDescToTx["router"]) != 1 || len(m.addrDescToTx["sender"]) != 1 {
+		t.Fatalf("addrDescToTx = %+v, want tx1 once under sender and router", m.addrDescToTx)
+	}
+	if len(announced) != 2 || !announced[0].Private || announced[1].Private {
+		t.Fatalf("announced %d txs, want the private and then the public announcement", len(announced))
+	}
+	if m.AddTransactionToMempool("tx1") {
+		t.Fatal("AddTransactionToMempool() = true for an entry already public")
+	}
+}
+
+// Two adds of one txid can both fetch it before either stores; only the one that stores announces it.
+func TestMempoolEthereumTypeConcurrentAddsAnnounceOnce(t *testing.T) {
+	chain := newRouterTxChain()
+	m := NewMempoolEthereumType(chain, 10*time.Minute, false)
+	var announced atomic.Int32
+	m.OnNewTx = func(*MempoolTx) { announced.Add(1) }
+
+	done := make(chan struct{})
+	go func() { m.AddTransactionToMempool("tx1"); done <- struct{}{} }()
+	first := <-chain.calls
+	go func() { m.AddTransactionToMempool("tx1"); done <- struct{}{} }()
+	second := <-chain.calls
+	close(first)
+	<-done
+	close(second)
+	<-done
+
+	if n := announced.Load(); n != 1 {
+		t.Fatalf("OnNewTx called %d times, want 1", n)
+	}
+}
+
+// A private send is never in the public pool, so a backend resync must not drop it.
+func TestMempoolEthereumTypeBackendResyncKeepsPrivateEntries(t *testing.T) {
+	m := NewMempoolEthereumType(nil, 10*time.Minute, false)
+	snapshotTime := uint32(time.Now().Unix())
+	m.txEntries["private"] = txEntry{addrIndexes: []addrIndex{{addrDesc: "sender"}}, time: snapshotTime - 1, private: true}
+	m.addrDescToTx["sender"] = []Outpoint{{Txid: "private"}}
+
+	if removed := m.removeTransactionsMissingFromBackend(map[string]struct{}{}, snapshotTime); removed != 0 {
+		t.Fatalf("removeTransactionsMissingFromBackend() = %d, want 0", removed)
+	}
+	if _, found := m.txEntries["private"]; !found {
+		t.Fatal("private entry removed by the backend resync")
 	}
 }
