@@ -1693,3 +1693,24 @@ func TestNewTxRecipientsRestrictsPrivateSend(t *testing.T) {
 		t.Fatal("private tx: announced on the global new-transaction stream")
 	}
 }
+
+// newTxRecipients runs on the mempool goroutine while websocket clients subscribe concurrently.
+func TestNewTxRecipientsConcurrentWithSubscribe(t *testing.T) {
+	s := &WebsocketServer{
+		addressSubscriptions:        map[string]map[*websocketChannel]*addressDetails{},
+		newTransactionSubscriptions: map[*websocketChannel]string{},
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 1000; i++ {
+			s.newTransactionSubscriptionsLock.Lock()
+			s.newTransactionSubscriptions[&websocketChannel{}] = "id"
+			s.newTransactionSubscriptionsLock.Unlock()
+		}
+	}()
+	for i := 0; i < 1000; i++ {
+		s.newTxRecipients(&bchain.MempoolTx{})
+	}
+	<-done
+}

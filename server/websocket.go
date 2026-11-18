@@ -2022,7 +2022,13 @@ func (s *WebsocketServer) newTxRecipients(tx *bchain.MempoolTx) (map[string]stru
 		}
 		return s.subscribedCandidates(candidates, false), false
 	}
-	return s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers, nil, false), len(s.newTransactionSubscriptions) > 0
+	return s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers, nil, false), s.hasNewTransactionSubscriptions()
+}
+
+func (s *WebsocketServer) hasNewTransactionSubscriptions() bool {
+	s.newTransactionSubscriptionsLock.Lock()
+	defer s.newTransactionSubscriptionsLock.Unlock()
+	return len(s.newTransactionSubscriptions) > 0
 }
 
 // OnNewTx is a callback that broadcasts info about a tx affecting subscribed address

@@ -288,3 +288,21 @@ func TestMempoolEthereumTypeBackendResyncKeepsPrivateEntries(t *testing.T) {
 		t.Fatal("private entry removed by the backend resync")
 	}
 }
+
+// A private self-send keeps the sender's output leg, so output-filtered queries on the sender find it.
+func TestMempoolEthereumTypePrivateSelfSendKeepsSenderOutput(t *testing.T) {
+	chain := newRouterTxChain()
+	chain.tx.Vout[0].ScriptPubKey.Addresses = []string{"sender"}
+	go func() {
+		for release := range chain.calls {
+			close(release)
+		}
+	}()
+	m := NewMempoolEthereumType(chain, 10*time.Minute, false)
+
+	m.AddOrRefreshPrivateTransactionInMempool("tx1")
+	want := []Outpoint{{Txid: "tx1", Vout: 0}, {Txid: "tx1", Vout: ^int32(0)}}
+	if got := m.addrDescToTx["sender"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("sender outpoints = %+v, want %+v", got, want)
+	}
+}

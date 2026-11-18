@@ -2,6 +2,7 @@ package eth
 
 import (
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -56,7 +57,8 @@ func (h *visibilityHarness) send(t *testing.T, rawTx string) string {
 func (h *visibilityHarness) assertIndexed(t *testing.T, txid string, indexed []ethcommon.Address, notIndexed []ethcommon.Address) {
 	t.Helper()
 	for _, addr := range indexed {
-		if got := mempoolTxids(t, h.rpc, addr.Hex()); !sameTxids(got, txid) {
+		// the sender holds one outpoint per leg it is on (input, token transfer), all of this txid
+		if got := mempoolTxids(t, h.rpc, addr.Hex()); len(got) == 0 || !sameTxids(slices.Compact(got), txid) {
 			t.Errorf("mempool txids for %s = %v, want [%s]", addr.Hex(), got, txid)
 		}
 	}

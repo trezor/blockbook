@@ -48,9 +48,9 @@ func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) (
 }
 
 // createTxEntry builds the address index of a mempool transaction and the MempoolTx announced for it.
-// A private relay send is indexed under its sender only: the relay was chosen so the transaction is
-// not public before inclusion, and a subscription to a router, token or recipient address would
-// otherwise hand it out as it is accepted. The sender's own devices still need to see it.
+// A private relay send is indexed under its sender only, with every leg that touches the sender: the
+// relay was chosen so the transaction is not public before inclusion, and a subscription to a router,
+// token or recipient address would otherwise hand it out as it is accepted.
 func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private bool) (txEntry, *MempoolTx, bool) {
 	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
@@ -62,18 +62,16 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private 
 	mtx := m.txToMempoolTx(tx)
 	parser := m.chain.GetChainParser()
 	addrIndexes := make([]addrIndex, 0, len(mtx.Vout)+len(mtx.Vin))
-	if !private {
-		for _, output := range mtx.Vout {
-			addrDesc, err := parser.GetAddrDescFromVout(&output)
-			if err != nil {
-				if err != ErrAddressMissing {
-					glog.Error("error in output addrDesc in ", txid, " ", output.N, ": ", err)
-				}
-				continue
+	for _, output := range mtx.Vout {
+		addrDesc, err := parser.GetAddrDescFromVout(&output)
+		if err != nil {
+			if err != ErrAddressMissing {
+				glog.Error("error in output addrDesc in ", txid, " ", output.N, ": ", err)
 			}
-			if len(addrDesc) > 0 {
-				addrIndexes = append(addrIndexes, addrIndex{string(addrDesc), int32(output.N)})
-			}
+			continue
+		}
+		if len(addrDesc) > 0 {
+			addrIndexes = append(addrIndexes, addrIndex{string(addrDesc), int32(output.N)})
 		}
 	}
 	for j := range mtx.Vin {
@@ -87,14 +85,26 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32, private 
 		glog.Error("GetGetTokenTransfersFromTx for tx ", txid, ", ", err)
 	} else {
 		mtx.TokenTransfers = t
-		if !private {
-			for i := range t {
-				addrIndexes, _ = appendAddress(addrIndexes, ^int32(i+1), t[i].From, parser)
-				addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
-			}
+		for i := range t {
+			addrIndexes, _ = appendAddress(addrIndexes, ^int32(i+1), t[i].From, parser)
+			addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
 		}
 	}
 	if private {
+		// keep the sender's legs only, so a self-send or a swap back to the sender keeps its outputs
+		senders := make(map[string]struct{}, len(mtx.Vin))
+		for j := range mtx.Vin {
+			if len(mtx.Vin[j].AddrDesc) > 0 {
+				senders[string(mtx.Vin[j].AddrDesc)] = struct{}{}
+			}
+		}
+		own := addrIndexes[:0]
+		for _, ai := range addrIndexes {
+			if _, ok := senders[ai.addrDesc]; ok {
+				own = append(own, ai)
+			}
+		}
+		addrIndexes = own
 		// the notification goes exactly where the index does
 		mtx.Private = true
 		mtx.NotifyAddrDescs = make([]AddressDescriptor, 0, len(addrIndexes))
