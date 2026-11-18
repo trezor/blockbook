@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@redocly/cli": "2.51.2",
-    "@types/ws": "8.18.1",
+    "@types/ws": "8.18.2",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "https-proxy-agent": "7.0.6",
@@ -23,7 +23,7 @@
     "tsx": "4.22.4",
     "typescript": "5.9.3",
     "undici": "6.29.1",
-    "ws": "8.21.0",
+    "ws": "8.22.1",
     "yaml": "2.9.1"
   }
 }
