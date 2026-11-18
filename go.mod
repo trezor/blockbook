@@ -16,7 +16,7 @@ require (
 	github.com/ethereum/go-ethereum v1.17.0
 	github.com/golang/glog v1.2.5
 	github.com/gorilla/websocket v1.5.3
-	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
+	github.com/juju/errors v1.0.0
 	github.com/linxGnu/grocksdb v1.9.8
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
 	github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809
@@ -68,8 +68,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
-	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
-	github.com/juju/testing v0.0.0-20191001232224-ce9dec17d28b // indirect
 	github.com/kkdai/bstream v0.0.0-20171226095907-f71540b9dfdc // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -95,7 +93,6 @@ require (
 	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
-	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
