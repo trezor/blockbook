@@ -134,14 +134,19 @@ class RunnerSelectionTest(unittest.TestCase):
         self.assertEqual(selection.coins, ["base_archive", "dogecoin", "ethereum-classic"])
         self.assertEqual(selection.skipped_prod_only, ["polygon_archive"])
 
-    def test_deploy_all_lists_deployable_coins(self) -> None:
+    def test_deploy_all_selects_deployable_coins(self) -> None:
         context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
 
-        with self.assertRaisesRegex(
-            ValidationError,
-            "deploy does not support ALL; deployable coins: base_archive,dogecoin",
-        ):
-            resolve_deploy_selection(context, "ALL")
+        self.assertEqual(
+            resolve_deploy_selection(context, "all"),
+            ["base_archive", "dogecoin", "ethereum-classic"],
+        )
+
+    def test_deploy_all_must_be_used_alone(self) -> None:
+        context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
+
+        with self.assertRaisesRegex(ValidationError, "ALL must be used alone"):
+            resolve_deploy_selection(context, "ALL,dogecoin")
 
     def test_deploy_rejects_prod_only_coin_with_reason(self) -> None:
         context = load_coin_context(self.workspace, self.valid_vars_map, include_deployability=True)
