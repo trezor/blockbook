@@ -2968,6 +2968,31 @@ func Test_sanitizeAccountPagingParams(t *testing.T) {
 	}
 }
 
+func Test_getAddressQueryParams_voutFilter(t *testing.T) {
+	tests := []struct {
+		filter string
+		want   int
+	}{
+		{"", api.AddressFilterVoutOff},
+		{"inputs", api.AddressFilterVoutInputs},
+		{"outputs", api.AddressFilterVoutOutputs},
+		{"0", 0},
+		{"7", 7},
+		{"-3", api.AddressFilterVoutOff},
+		{"abc", api.AddressFilterVoutOff},
+	}
+	var s *PublicServer
+	for _, tt := range tests {
+		t.Run(tt.filter, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "/api/v2/address/x?filter="+tt.filter, nil)
+			_, _, _, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+			if filter.Vout != tt.want {
+				t.Errorf("filter=%q: Vout = %d, want %d", tt.filter, filter.Vout, tt.want)
+			}
+		})
+	}
+}
+
 func Test_validateIntValue_gapClamp(t *testing.T) {
 	// Mirrors the WS getAccountInfo gap clamp: validateIntValue(req.Gap, 0, 0, maxGapValue).
 	tests := []struct {
