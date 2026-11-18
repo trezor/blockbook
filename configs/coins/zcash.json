@@ -21,10 +21,10 @@
         "package_name": "backend-zcash",
         "package_revision": "satoshilabs-1",
         "system_user": "zcash",
-        "version": "6.2.2",
-        "docker_image": "zfnd/zebra:6.2.2",
+        "version": "7.0.0",
+        "docker_image": "zfnd/zebra:7.0.0",
         "verification_type": "docker",
-        "verification_source": "f464a4bf44c3402b2c9063c6df686b9177a4659ea61aecdc8aeb6947f2173197",
+        "verification_source": "a70d2be8ffef3a4b6e37355724e36a0e6c1838e46baa28bfb216739f00cf2d34",
         "extract_command": "mkdir backend/bin && docker cp extract:/usr/local/bin/zebrad backend/bin/zebrad",
         "exclude_files": [],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zebrad --config {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/zcash.conf start",
@@ -52,7 +52,7 @@
             "xpub_magic": 76067358,
             "slip44": 133,
             "additional_params": {
-                "averageBlockTimeMs": 75000,
+                "averageBlockTimeMs": 25000,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
                 "fiat_rates_params": "{\"coin\": \"zcash\", \"periodSeconds\": 900}"

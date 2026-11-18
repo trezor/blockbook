@@ -66,6 +66,7 @@ func httpTestsTron(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`"txid":"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"`,
+				`"fees":"3076500"`,
 				`"coinSpecificData":{"tx":{"nonce":"0x0"`,
 				`"hash":"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"`,
 				`"chainExtraData":{"contractType":"TriggerSmartContract","operation":"contractCall","assetIssueID":"1002001","totalFee":"3076500","energyUsage":"14650","energyUsageTotal":"14650","bandwidthUsage":"345","bandwidthFee":"0","result":"SUCCESS"}`,

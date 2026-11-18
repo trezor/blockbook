@@ -37,7 +37,7 @@ const maxWebsocketMessageBytes int64 = 4 * 1024 * 1024
 // defaultWsPendingRequestsLimit is the default per-connection cap on
 // concurrently executing requests; override with
 // <network>_WS_PENDING_REQUESTS_LIMIT (0 disables), see docs/env.md.
-const defaultWsPendingRequestsLimit = 48
+const defaultWsPendingRequestsLimit = 128
 
 // maxWebsocketMempoolFiltersResponses caps per-connection getMempoolFilters
 // requests over their whole lifecycle: the slot is acquired before the handler
@@ -56,10 +56,19 @@ const maxWebsocketEstimateFeeBlocks = 32
 // in-flight transactions; the cap keeps a malformed or hostile request from forcing unbounded work,
 // and it bounds how far the pending-nonce walk can advance in one request.
 const maxPrivatePendingNonces = 64
-const maxWebsocketSubscribeAddresses = 1000
+
+// Per-connection subscribeAddresses caps by chain family. A UTXO wallet subscribes
+// every derived address of every account (Trezor Suite: 40 per fresh account, all
+// wallets on one connection), an EVM account is a single address.
+const defaultWsMaxSubscribeAddressesUTXO = 5000
+const defaultWsMaxSubscribeAddressesEVM = 1000
 const maxWebsocketSubscribeAddressesWithNewBlockTxs = 100
 const maxWebsocketSubscribeFiatRatesTokens = 1000
 const websocketLogPreviewBytes = 256
+const websocketErrorTextBytes = 1024
+
+// websocketErrorLogsPerSecond caps client-triggered Error lines; glog exits the process on a full disk.
+const websocketErrorLogsPerSecond = 10
 
 // allRates is a special "currency" parameter that means all available currencies
 const allFiatRates = "!ALL!"
@@ -152,6 +161,9 @@ type WebsocketServer struct {
 	// pendingRequestsLimit caps how many requests a single connection may have
 	// executing concurrently before it is closed; 0 disables the cap.
 	pendingRequestsLimit int
+	// maxSubscribeAddresses caps the address list of one subscribeAddresses
+	// request; 0 disables the cap.
+	maxSubscribeAddresses int
 	// ipBlockEnabled gates the whole IP blocklist: true only when the rate limit can
 	// produce breaches (messageRateLimit > 0) and blocking is configured
 	// (ipBlockDuration > 0). When false, all block checks/sweeps are skipped.
@@ -164,6 +176,7 @@ type WebsocketServer struct {
 	activeChannels map[*websocketChannel]struct{}
 	activeRequests int
 	requestWg      sync.WaitGroup
+	errorLogBudget errorLogBudget
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -252,6 +265,9 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	if err := s.configurePendingRequestsLimit(is.GetNetwork()); err != nil {
 		return nil, err
 	}
+	if err := s.configureSubscribeAddressesLimit(is.GetNetwork(), s.chainParser.GetChainType()); err != nil {
+		return nil, err
+	}
 	if s.metrics != nil {
 		s.metrics.WebsocketNewBlockTxsSubscriptions.Set(0)
 		s.metrics.WebsocketUniqueIPs.Set(0)
@@ -327,6 +343,41 @@ func getWebsocketPayloadPreview(d []byte) string {
 		return string(d)
 	}
 	return string(d[:websocketLogPreviewBytes]) + "...(truncated)"
+}
+
+func truncateWebsocketText(s string) string {
+	if len(s) <= websocketErrorTextBytes {
+		return s
+	}
+	return s[:websocketErrorTextBytes] + "...(truncated)"
+}
+
+type errorLogBudget struct {
+	mu     sync.Mutex
+	second int64
+	count  int
+}
+
+// allow reports whether another error line fits into the current second's budget.
+// The window only moves forward, so a late, older timestamp cannot reset the count.
+func (b *errorLogBudget) allow(now time.Time) bool {
+	b.mu.Lock()
+	prevSecond, suppressed := b.second, 0
+	if sec := now.Unix(); sec > b.second {
+		suppressed = b.count - websocketErrorLogsPerSecond
+		b.second, b.count = sec, 0
+	}
+	b.count++
+	count := b.count
+	b.mu.Unlock()
+	// log outside the lock so a slow disk does not stall other failing requests
+	if suppressed > 0 {
+		glog.Warning("Suppressed ", suppressed, " websocket client error log lines in second ", time.Unix(prevSecond, 0).UTC().Format(time.RFC3339))
+	}
+	if count == websocketErrorLogsPerSecond+1 {
+		glog.Warning("Websocket client error log limit of ", websocketErrorLogsPerSecond, " lines per second reached, suppressing")
+	}
+	return count <= websocketErrorLogsPerSecond
 }
 
 // ServeHTTP sets up handler of websocket channel
@@ -1030,13 +1081,14 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "success"}).Inc()
 		} else {
-			if apiErr, ok := err.(*api.APIError); !ok || !apiErr.Public {
-				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data len ", len(req.Params), ", preview ", getWebsocketPayloadPreview(req.Params))
+			if apiErr, ok := err.(*api.APIError); (!ok || !apiErr.Public) && s.errorLogBudget.allow(time.Now()) {
+				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", truncateWebsocketText(errors.ErrorStack(err)), ", data len ", len(req.Params), ", preview ", getWebsocketPayloadPreview(req.Params))
 			}
 			s.metrics.WebsocketRequests.With(common.Labels{"method": methodLabel, "status": "failure"}).Inc()
 			e := resultError{}
 			// the ws protocol returns the message for every error, public or not, so redact here
-			e.Error.Message = common.RedactURLs(err.Error())
+			// redact before truncating so a cut URL cannot escape redaction
+			e.Error.Message = truncateWebsocketText(common.RedactURLs(err.Error()))
 			data = e
 		}
 	} else {
@@ -1501,11 +1553,11 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, bool, err
 	if err != nil {
 		return nil, false, api.NewAPIError("Invalid subscribeAddresses params", true)
 	}
-	limit := maxWebsocketSubscribeAddresses
+	limit := s.maxSubscribeAddresses
 	if r.NewBlockTxs {
 		limit = maxWebsocketSubscribeAddressesWithNewBlockTxs
 	}
-	if len(r.Addresses) > limit {
+	if limit > 0 && len(r.Addresses) > limit {
 		return nil, false, api.NewAPIError("addresses max "+strconv.Itoa(limit), true)
 	}
 	rv := make([]string, 0, len(r.Addresses))

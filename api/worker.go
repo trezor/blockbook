@@ -642,6 +642,14 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	if err != nil {
 		glog.Warningf("GetTxChainExtraData error %v, %v", err, bchainTx)
 	}
+	// Tron clears the gas fields, so the fee is the burned TRX from chainExtraData
+	if chainExtraData != nil && chainExtraData.PayloadType == bchain.ChainExtraPayloadTypeTron {
+		if fee, err := getTronFeesSat(chainExtraData.Payload); err != nil {
+			glog.Warningf("getTronFeesSat error %v, %v", err, bchainTx.Txid)
+		} else {
+			feesSat = *fee
+		}
+	}
 	bcashSpecific, err := w.bcashPostProcessApiTx(bchainTx.Txid, &vins, &vouts)
 	if err != nil {
 		return nil, errors.Annotatef(err, "bcashPostProcessApiTx %v", bchainTx.Txid)
@@ -3397,4 +3405,18 @@ func (w *Worker) EstimateFee(blocks int, conservative bool) (big.Int, error) {
 		return w.chain.EstimateSmartFee(blocks, conservative)
 	}
 	return w.cachedEstimateFee(blocks, conservative)
+}
+
+func getTronFeesSat(data json.RawMessage) (*big.Int, error) {
+	var extra bchain.TronChainExtraData
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return nil, err
+	}
+	fee := new(big.Int)
+	if extra.TotalFee != "" {
+		if _, ok := fee.SetString(extra.TotalFee, 10); !ok || fee.Sign() < 0 {
+			return nil, errors.Errorf("invalid Tron totalFee %q", extra.TotalFee)
+		}
+	}
+	return fee, nil
 }

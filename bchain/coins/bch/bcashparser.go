@@ -3,11 +3,13 @@ package bch
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/juju/errors"
 	"github.com/martinboehm/bchutil"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil"
@@ -111,6 +113,31 @@ func GetChainParams(chain string) *chaincfg.Params {
 	default:
 		return &MainNetParams
 	}
+}
+
+// ParseTxFromJson parses the backend JSON and restores the raw output scripts from the tx hex.
+// BCHN strips the CashToken prefix from scriptPubKey.hex, so backend-fetched transactions
+// disagreed with the index and the txcache, which parse the raw bytes (#1300).
+func (p *BCashParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
+	tx, err := p.BitcoinLikeParser.ParseTxFromJson(msg)
+	if err != nil || tx.Hex == "" {
+		return tx, err
+	}
+	raw, err := hex.DecodeString(tx.Hex)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", tx.Txid)
+	}
+	parsed, err := p.ParseTx(raw)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", tx.Txid)
+	}
+	if len(parsed.Vout) != len(tx.Vout) {
+		return nil, errors.Errorf("txid %v: %d outputs in hex, %d in json", tx.Txid, len(parsed.Vout), len(tx.Vout))
+	}
+	for i := range tx.Vout {
+		tx.Vout[i].ScriptPubKey = parsed.Vout[i].ScriptPubKey
+	}
+	return tx, nil
 }
 
 // GetAddrDescFromAddress returns internal address representation of given address

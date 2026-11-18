@@ -1119,14 +1119,67 @@ func TestEstimateFeeRejectsTooManyBlocks(t *testing.T) {
 	}
 }
 
+func TestConfigureSubscribeAddressesLimitDefaultsByChainFamily(t *testing.T) {
+	for _, tc := range []struct {
+		chainType bchain.ChainType
+		want      int
+	}{
+		{bchain.ChainBitcoinType, defaultWsMaxSubscribeAddressesUTXO},
+		{bchain.ChainEthereumType, defaultWsMaxSubscribeAddressesEVM},
+	} {
+		s := &WebsocketServer{}
+		if err := s.configureSubscribeAddressesLimit("fake", tc.chainType); err != nil {
+			t.Fatal(err)
+		}
+		if s.maxSubscribeAddresses != tc.want {
+			t.Fatalf("chain type %d: maxSubscribeAddresses = %d, want %d", tc.chainType, s.maxSubscribeAddresses, tc.want)
+		}
+	}
+	if defaultWsMaxSubscribeAddressesUTXO <= defaultWsMaxSubscribeAddressesEVM {
+		t.Fatal("UTXO default must exceed the EVM default: a UTXO wallet subscribes every derived address")
+	}
+}
+
+func TestConfigureSubscribeAddressesLimitEnvOverride(t *testing.T) {
+	t.Setenv("FAKE_WS_MAX_SUBSCRIBE_ADDRESSES", "7")
+	s := &WebsocketServer{}
+	if err := s.configureSubscribeAddressesLimit("fake", bchain.ChainBitcoinType); err != nil {
+		t.Fatal(err)
+	}
+	if s.maxSubscribeAddresses != 7 {
+		t.Fatalf("maxSubscribeAddresses = %d, want 7", s.maxSubscribeAddresses)
+	}
+
+	t.Setenv("FAKE_WS_MAX_SUBSCRIBE_ADDRESSES", "-1")
+	if err := s.configureSubscribeAddressesLimit("fake", bchain.ChainBitcoinType); err == nil {
+		t.Fatal("expected error for a negative value")
+	}
+}
+
+func TestUnmarshalAddressesZeroLimitDisablesCap(t *testing.T) {
+	addresses := make([]string, defaultWsMaxSubscribeAddressesUTXO+1)
+	for i := range addresses {
+		addresses[i] = dbtestdata.Addr1
+	}
+	params, err := json.Marshal(WsSubscribeAddressesReq{Addresses: addresses})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parser, _ := setupChain(t)
+	s := &WebsocketServer{chainParser: parser, maxSubscribeAddresses: 0}
+	if _, _, err := s.unmarshalAddresses(params); err != nil {
+		t.Fatalf("limit 0 must disable the cap, got %v", err)
+	}
+}
+
 func TestUnmarshalAddressesRejectsTooManyAddresses(t *testing.T) {
-	addresses := make([]string, maxWebsocketSubscribeAddresses+1)
+	addresses := make([]string, defaultWsMaxSubscribeAddressesEVM+1)
 	params, err := json.Marshal(WsSubscribeAddressesReq{Addresses: addresses})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	s := &WebsocketServer{}
+	s := &WebsocketServer{maxSubscribeAddresses: defaultWsMaxSubscribeAddressesEVM}
 	_, _, err = s.unmarshalAddresses(params)
 	if err == nil {
 		t.Fatal("expected error")

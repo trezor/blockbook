@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
+	"github.com/trezor/blockbook/bchain"
 )
 
 const defaultWsMaxConnectionAttemptsPerIP = 64
@@ -89,6 +90,27 @@ func (s *WebsocketServer) configurePendingRequestsLimit(network string) error {
 		glog.Infof("Websocket per-connection pending request limit: %d", s.pendingRequestsLimit)
 	} else {
 		glog.Info("Websocket per-connection pending request limit disabled")
+	}
+	return nil
+}
+
+// configureSubscribeAddressesLimit reads the per-request subscribeAddresses cap
+// from the environment; the default depends on the chain family because a UTXO
+// wallet subscribes hundreds of derived addresses where an EVM wallet sends one
+// per account. 0 disables the cap.
+func (s *WebsocketServer) configureSubscribeAddressesLimit(network string, chainType bchain.ChainType) error {
+	def := defaultWsMaxSubscribeAddressesEVM
+	if chainType == bchain.ChainBitcoinType {
+		def = defaultWsMaxSubscribeAddressesUTXO
+	}
+	var err error
+	if s.maxSubscribeAddresses, err = parseNonNegativeIntEnv(strings.ToUpper(network)+"_WS_MAX_SUBSCRIBE_ADDRESSES", def); err != nil {
+		return err
+	}
+	if s.maxSubscribeAddresses > 0 {
+		glog.Infof("Websocket subscribeAddresses limit: %d addresses per request", s.maxSubscribeAddresses)
+	} else {
+		glog.Info("Websocket subscribeAddresses limit disabled")
 	}
 	return nil
 }
