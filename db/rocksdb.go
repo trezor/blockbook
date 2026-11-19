@@ -322,6 +322,7 @@ type RocksDB struct {
 	// lastAddrContractsCacheStore is only read/written from the block-connect goroutine.
 	lastAddrContractsCacheStore time.Time
 	setBlockTimesWG             sync.WaitGroup
+	immatureCoinbase            immatureCoinbase
 }
 
 const (
@@ -680,6 +681,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		return err
 	}
 	addresses := make(addressesMap)
+	var coinbase *TxAddresses
 	if chainType == bchain.ChainBitcoinType {
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
@@ -692,6 +694,15 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		}
 		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances, gf); err != nil {
 			return err
+		}
+		// the coinbase is normally the first tx, test fixtures place it anywhere
+		for i := range block.Txs {
+			if len(block.Txs[i].Vin) == 1 && block.Txs[i].Vin[0].Coinbase != "" {
+				if btxID, err := d.chainParser.PackTxid(block.Txs[i].Txid); err == nil {
+					coinbase = txAddressesMap[string(btxID)]
+				}
+				break
+			}
 		}
 		if d.metrics != nil {
 			tipTxs = uint64(len(block.Txs))
@@ -750,6 +761,9 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	}
 	if err := d.WriteBatch(wb); err != nil {
 		return err
+	}
+	if chainType == bchain.ChainBitcoinType {
+		d.connectImmatureCoinbase(block.Height, coinbase)
 	}
 	if chainType == bchain.ChainEthereumType {
 		d.storeAddrContractsCacheIfDue()
@@ -2148,6 +2162,7 @@ func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) e
 		}
 	}
 	d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
+	d.invalidateImmatureCoinbase()
 	glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	return nil
 }
