@@ -345,7 +345,7 @@ const (
 	cfFunctionSignatures
 	cfBlockInternalDataErrors
 
-	// TODO move to common section
+	// cfAddressAliases is no longer written or read; kept so existing databases still open.
 	cfAddressAliases
 
 	// cfErcProtocols stores per-protocol detection records keyed by contract;
@@ -1895,41 +1895,6 @@ func (d *RocksDB) writeHeight(wb *grocksdb.WriteBatch, height uint32, bi *BlockI
 	case opDelete:
 		wb.DeleteCF(d.cfh[cfHeight], key)
 		d.is.UpdateBestHeight(height - 1)
-	}
-	return nil
-}
-
-// address alias support
-var cachedAddressAliasRecords = newAddressAliasLRU(cachedAddressAliasRecordsLRUMaxSize)
-
-func (d *RocksDB) GetAddressAlias(address string) string {
-	if formatted, ok := cachedAddressAliasRecords.get(address); ok {
-		return formatted
-	}
-	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressAliases], []byte(address))
-	if err != nil {
-		glog.Errorf("GetAddressAlias %v error %v", address, err)
-		return ""
-	}
-	defer val.Free()
-	name := val.Data()
-	if len(name) == 0 {
-		return ""
-	}
-	formatted := d.chainParser.FormatAddressAlias(address, string(name))
-	cachedAddressAliasRecords.add(address, formatted)
-	return formatted
-}
-
-func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
-	if d.chainParser.UseAddressAliases() {
-		for i := range records {
-			r := &records[i]
-			if len(r.Name) > 0 {
-				wb.PutCF(d.cfh[cfAddressAliases], []byte(r.Address), []byte(r.Name))
-				cachedAddressAliasRecords.add(r.Address, d.chainParser.FormatAddressAlias(r.Address, r.Name))
-			}
-		}
 	}
 	return nil
 }

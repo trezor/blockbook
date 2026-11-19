@@ -75,7 +75,3 @@ func (b *OptimismRPC) Initialize() error {
 
 	return nil
 }
-
-func (b *OptimismRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
-	return b.EthereumRPC.ResolveENS(name)
-}

@@ -1206,11 +1206,6 @@ func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *grocksdb.WriteBatch, bl
 				return err
 			}
 		}
-		if len(blockSpecificData.AddressAliasRecords) > 0 {
-			if err := d.storeAddressAliasRecords(wb, blockSpecificData.AddressAliasRecords); err != nil {
-				return err
-			}
-		}
 		// registry events of one block may create and destroy the same
 		// (ephemeral) contract - the in-batch map lets the destruction merge
 		// into the creation written a moment ago

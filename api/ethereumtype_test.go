@@ -84,8 +84,7 @@ func failedInternalDataBlock2(parser bchain.BlockChainParser) *bchain.Block {
 		block.Txs[i].CoinSpecificData = csd
 	}
 	block.CoinSpecificData = &bchain.EthereumBlockSpecificData{
-		InternalDataError:   dbtestdata.Block2SpecificData.InternalDataError,
-		AddressAliasRecords: dbtestdata.Block2SpecificData.AddressAliasRecords,
+		InternalDataError: dbtestdata.Block2SpecificData.InternalDataError,
 	}
 	return block
 }
@@ -94,8 +93,7 @@ func failedInternalDataBlock2(parser bchain.BlockChainParser) *bchain.Block {
 func healedInternalDataBlock2(parser bchain.BlockChainParser) *bchain.Block {
 	block := dbtestdata.GetTestEthereumTypeBlock2(parser)
 	block.CoinSpecificData = &bchain.EthereumBlockSpecificData{
-		AddressAliasRecords: dbtestdata.Block2SpecificData.AddressAliasRecords,
-		Contracts:           dbtestdata.Block2SpecificData.Contracts,
+		Contracts: dbtestdata.Block2SpecificData.Contracts,
 	}
 	return block
 }

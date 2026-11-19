@@ -98,7 +98,3 @@ func (b *HyperevmRPC) GetBlockHash(height uint32) (string, error) {
 	}
 	return h.Hash, nil
 }
-
-func (b *HyperevmRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
-	return b.EthereumRPC.ResolveENS(name)
-}
