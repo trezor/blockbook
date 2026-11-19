@@ -1,0 +1,186 @@
+[
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb00",
+    "error": "Invalid token prefix: must encode at least one token. Bitfield: 0b0"
+  },
+  {
+    "prefix": "ef",
+    "error": "Invalid token prefix: insufficient length. The minimum possible length is 34. Missing bytes: 33"
+  },
+  {
+    "prefix": "efbbbbbbbb1001",
+    "error": "Invalid token prefix: insufficient length. The minimum possible length is 34. Missing bytes: 27"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "error": "Invalid token prefix: insufficient length. The minimum possible length is 34. Missing bytes: 1"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb80",
+    "error": "Invalid token prefix: reserved bit is set. Bitfield: 0b10000000"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbba0",
+    "error": "Invalid token prefix: reserved bit is set. Bitfield: 0b10100000"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb9001",
+    "error": "Invalid token prefix: reserved bit is set. Bitfield: 0b10010000"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb23",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 3"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb24",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 4"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb25",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 5"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb26",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 6"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb27",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 7"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb28",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 8"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb29",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 9"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2a",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 10"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2b",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 11"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2c",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 12"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2d",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 13"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2e",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 14"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2f",
+    "error": "Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: 15"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1101",
+    "error": "Invalid token prefix: capability requires an NFT. Bitfield: 0b10001"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1201",
+    "error": "Invalid token prefix: capability requires an NFT. Bitfield: 0b10010"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb40",
+    "error": "Invalid token prefix: commitment requires an NFT. Bitfield: 0b01000000"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb5001",
+    "error": "Invalid token prefix: commitment requires an NFT. Bitfield: 0b01010000"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb60",
+    "error": "Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: invalid CompactSize. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb61",
+    "error": "Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: invalid CompactSize. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb62",
+    "error": "Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: invalid CompactSize. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb6000",
+    "error": "Invalid token prefix: if encoded, commitment length must be greater than 0."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb700001",
+    "error": "Invalid token prefix: if encoded, commitment length must be greater than 0."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb6001",
+    "error": "Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: insufficient bytes. Required bytes: 1, remaining bytes: 0"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb6101",
+    "error": "Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: insufficient bytes. Required bytes: 1, remaining bytes: 0"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb6102cc",
+    "error": "Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: insufficient bytes. Required bytes: 2, remaining bytes: 1"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb6202cc",
+    "error": "Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: insufficient bytes. Required bytes: 2, remaining bytes: 1"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb10",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb10fd00",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb10fe000000",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb10ff00000000000000",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb7001cc",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb7001ccfd00",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb7001ccfe000000",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb7001ccff00000000000000",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb30",
+    "error": "Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1000",
+    "error": "Invalid token prefix: if encoded, fungible token amount must be greater than 0."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb3000",
+    "error": "Invalid token prefix: if encoded, fungible token amount must be greater than 0."
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb10ff0000000000000080",
+    "error": "Invalid token prefix: exceeds maximum fungible token amount of 9223372036854775807. Encoded amount: 9223372036854775808"
+  },
+  {
+    "prefix": "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb30ff0000000000000080",
+    "error": "Invalid token prefix: exceeds maximum fungible token amount of 9223372036854775807. Encoded amount: 9223372036854775808"
+  }
+]

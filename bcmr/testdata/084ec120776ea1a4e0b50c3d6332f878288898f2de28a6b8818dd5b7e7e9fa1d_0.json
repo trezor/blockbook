@@ -1,0 +1,38 @@
+{
+  "$schema": "https://cashtokens.org/bcmr-v2.schema.json",
+  "license": "CC0-1.0",
+  "version": {
+    "major": 1,
+    "minor": 0,
+    "patch": 0
+  },
+  "identities": {
+    "270fc70ef4d352ff454bcc218e42b20f246f0691af07af9a069608f14f031c48": {
+      "2025-02-14T13:02:46.375Z": {
+        "name": "BCH PUMP",
+        "uris": {
+          "web": "https://tapswap.cash/pump",
+          "icon": "https://ipfs.tapswap.cash/ipfs/Qmaowt3SPUUTVdyDrHUdvj4XLd5zaW7LWUhP5UwNzp5zCb",
+          "twitter": "https://x.com/mainnet_pat",
+          "telegram": "https://t.me/TapSwapCash"
+        },
+        "token": {
+          "symbol": "PUMP",
+          "category": "270fc70ef4d352ff454bcc218e42b20f246f0691af07af9a069608f14f031c48",
+          "decimals": 2
+        },
+        "migrated": "2025-02-14T13:02:46.375Z",
+        "description": "A token to celebrate the launch of BCH PUMP App"
+      }
+    }
+  },
+  "latestRevision": "2025-02-14T13:02:46.375Z",
+  "registryIdentity": {
+    "name": "PUMP BCMR",
+    "uris": {
+      "web": "https://tapswap.cash/pump",
+      "icon": "https://ipfs.tapswap.cash/ipfs/Qmaowt3SPUUTVdyDrHUdvj4XLd5zaW7LWUhP5UwNzp5zCb"
+    },
+    "description": "BCH PUMP Bitcoin Cash Metadata Registry"
+  }
+}
