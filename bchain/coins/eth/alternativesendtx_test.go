@@ -100,7 +100,7 @@ type fakeWrappedMempool struct {
 	ops []string
 }
 
-func (f *fakeWrappedMempool) AddOrRefreshTransactionInMempool(txid string) bool {
+func (f *fakeWrappedMempool) AddOrRefreshPrivateTransactionInMempool(txid string) bool {
 	f.ops = append(f.ops, "addOrRefresh:"+txid)
 	return true
 }
@@ -109,7 +109,7 @@ func (f *fakeWrappedMempool) RemoveTransactionFromMempool(txid string) {
 	f.ops = append(f.ops, "remove:"+txid)
 }
 
-// Pins that every cache write reaches AddOrRefreshTransactionInMempool (restamp semantics tested in
+// Pins that every cache write reaches AddOrRefreshPrivateTransactionInMempool (restamp semantics tested in
 // bchain): the equal retentions shipped in the coin configs leave no margin for a missed restamp (#1573).
 func TestAlternativeSendTxProviderRecacheRestampsWrappedMempoolEntry(t *testing.T) {
 	provider := &AlternativeSendTxProvider{

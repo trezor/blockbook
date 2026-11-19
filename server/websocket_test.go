@@ -1701,3 +1701,69 @@ func TestWebsocketShutdownIsIdempotent(t *testing.T) {
 		t.Fatalf("second Shutdown() = %v, want nil", err)
 	}
 }
+
+// A private relay send is announced only to subscribers of the addresses the mempool indexed it
+// under - its NotifyAddrDescs - and never on the global new-transaction stream; the same transaction
+// seen publicly reaches every address it touches and the global stream.
+func TestNewTxRecipientsRestrictsPrivateSend(t *testing.T) {
+	parser, _ := setupChain(t)
+	senderDesc, err := parser.GetAddrDescFromAddress(dbtestdata.Addr1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routerDesc, err := parser.GetAddrDescFromAddress(dbtestdata.Addr2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub := func(id string) map[*websocketChannel]*addressDetails {
+		return map[*websocketChannel]*addressDetails{{}: {requestID: id}}
+	}
+	s := &WebsocketServer{
+		chainParser: parser,
+		addressSubscriptions: map[string]map[*websocketChannel]*addressDetails{
+			string(senderDesc): sub("sender"),
+			string(routerDesc): sub("router"),
+		},
+		newTransactionSubscriptions: map[*websocketChannel]string{{}: "global"},
+	}
+	tx := &bchain.MempoolTx{
+		Vin:  []bchain.MempoolVin{{AddrDesc: senderDesc}},
+		Vout: []bchain.Vout{{ScriptPubKey: bchain.ScriptPubKey{Hex: dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, parser)}}},
+	}
+
+	subscribed, global := s.newTxRecipients(tx)
+	if _, ok := subscribed[string(routerDesc)]; !ok || len(subscribed) != 2 || !global {
+		t.Fatalf("public tx: subscribed = %d addresses, global = %v, want both addresses and the global stream", len(subscribed), global)
+	}
+
+	tx.Private = true
+	tx.NotifyAddrDescs = []bchain.AddressDescriptor{senderDesc}
+	subscribed, global = s.newTxRecipients(tx)
+	if _, ok := subscribed[string(senderDesc)]; !ok || len(subscribed) != 1 {
+		t.Fatalf("private tx: subscribed = %v, want only the sender", subscribed)
+	}
+	if global {
+		t.Fatal("private tx: announced on the global new-transaction stream")
+	}
+}
+
+// newTxRecipients runs on the mempool goroutine while websocket clients subscribe concurrently.
+func TestNewTxRecipientsConcurrentWithSubscribe(t *testing.T) {
+	s := &WebsocketServer{
+		addressSubscriptions:        map[string]map[*websocketChannel]*addressDetails{},
+		newTransactionSubscriptions: map[*websocketChannel]string{},
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 1000; i++ {
+			s.newTransactionSubscriptionsLock.Lock()
+			s.newTransactionSubscriptions[&websocketChannel{}] = "id"
+			s.newTransactionSubscriptionsLock.Unlock()
+		}
+	}()
+	for i := 0; i < 1000; i++ {
+		s.newTxRecipients(&bchain.MempoolTx{})
+	}
+	<-done
+}
