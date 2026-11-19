@@ -79,11 +79,6 @@ func (p *BitcoinLikeParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDesc
 	return p.OutputScriptToAddressesFunc(addrDesc)
 }
 
-// GetScriptFromAddrDesc returns output script for given address descriptor
-func (p *BitcoinLikeParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
-	return addrDesc, nil
-}
-
 // IsAddrDescIndexable returns true if AddressDescriptor should be added to index
 // empty or OP_RETURN scripts are not indexed
 func (p *BitcoinLikeParser) IsAddrDescIndexable(addrDesc bchain.AddressDescriptor) bool {

@@ -293,7 +293,6 @@ type RocksDB struct {
 	is              *common.InternalState
 	metrics         *common.Metrics
 	cache           *grocksdb.Cache
-	maxOpenFiles    int
 	cbs             connectBlockStats
 	extendedIndex   bool
 	connectBlockMux sync.Mutex
@@ -414,7 +413,6 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		is:                             nil,
 		metrics:                        metrics,
 		cache:                          c,
-		maxOpenFiles:                   maxOpenFiles,
 		cbs:                            connectBlockStats{},
 		extendedIndex:                  extendedIndex,
 		connectBlockMux:                sync.Mutex{},
@@ -485,22 +483,6 @@ func (d *RocksDB) Close() error {
 		d.wo.Destroy()
 		d.ro.Destroy()
 	}
-	return nil
-}
-
-// Reopen reopens the database
-// It closes and reopens db, nobody can access the database during the operation!
-func (d *RocksDB) Reopen() error {
-	err := d.closeDB()
-	if err != nil {
-		return err
-	}
-	d.db = nil
-	db, cfh, err := openDB(d.path, d.cache, d.maxOpenFiles)
-	if err != nil {
-		return err
-	}
-	d.db, d.cfh = db, cfh
 	return nil
 }
 

@@ -127,17 +127,6 @@ type GetBlockChainInfoResult struct {
 	} `json:"result"`
 }
 
-type GetNetworkInfoResult struct {
-	Error  Error `json:"error"`
-	Result struct {
-		Version         int32   `json:"version"`
-		ProtocolVersion int32   `json:"protocolversion"`
-		TimeOffset      int64   `json:"timeoffset"`
-		Connections     int32   `json:"connections"`
-		RelayFee        float64 `json:"relayfee"`
-	} `json:"result"`
-}
-
 type GetInfoChainResult struct {
 	Error  Error `json:"error"`
 	Result struct {
@@ -306,19 +295,6 @@ type EstimateFeeResult struct {
 type SendRawTransactionResult struct {
 	Error  Error  `json:"error"`
 	Result string `json:"result"`
-}
-
-type DecodeRawTransactionResult struct {
-	Error  Error `json:"error"`
-	Result struct {
-		Txid     string `json:"txid"`
-		Version  int32  `json:"version"`
-		Locktime uint32 `json:"locktime"`
-		Expiry   uint32 `json:"expiry"`
-		Vin      []Vin  `json:"vin"`
-		Vout     []Vout `json:"vout"`
-		TxExtraInfo
-	} `json:"result"`
 }
 
 type TxExtraInfo struct {
@@ -593,35 +569,6 @@ func (d *DecredRPC) getBlock(hash string) (*GetBlockResult, error) {
 	}
 
 	return &block, nil
-}
-
-func (d *DecredRPC) decodeRawTransaction(txHex string) (*bchain.Tx, error) {
-	decodeRawTxRequest := GenericCmd{
-		ID:     1,
-		Method: "decoderawtransaction",
-		Params: []interface{}{txHex},
-	}
-
-	var decodeRawTxResult DecodeRawTransactionResult
-	if err := d.Call(decodeRawTxRequest, &decodeRawTxResult); err != nil {
-		return nil, err
-	}
-
-	if decodeRawTxResult.Error.Message != "" {
-		return nil, mapToStandardErr("Error decoding raw tx: %s", decodeRawTxResult.Error)
-	}
-
-	tx := &bchain.Tx{
-		Hex:      txHex,
-		Txid:     decodeRawTxResult.Result.Txid,
-		Version:  decodeRawTxResult.Result.Version,
-		LockTime: decodeRawTxResult.Result.Locktime,
-	}
-
-	// Add block height and block hash info
-	tx.CoinSpecificData = decodeRawTxResult.Result.TxExtraInfo
-
-	return tx, nil
 }
 
 func (d *DecredRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {

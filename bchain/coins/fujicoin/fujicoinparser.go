@@ -11,8 +11,6 @@ const (
 	MainnetMagic wire.BitcoinNet = 0x696a7566
 	// TestnetMagic is testnet network constant
 	TestnetMagic wire.BitcoinNet = 0x66756a69
-	// RegtestMagic is regtest network constant
-	RegtestMagic wire.BitcoinNet = 0x66756a69
 )
 
 var (

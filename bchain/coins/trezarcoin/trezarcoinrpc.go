@@ -102,8 +102,3 @@ func (f *TrezarcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, err
 func (f *TrezarcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return f.GetTransaction(txid)
 }
-
-func isErrBlockNotFound(err *bchain.RPCError) bool {
-	return err.Message == "Block not found" ||
-		err.Message == "Block height out of range"
-}

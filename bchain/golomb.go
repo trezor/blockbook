@@ -24,7 +24,6 @@ type GolombFilter struct {
 	UseZeroedKey      bool
 	p                 uint8
 	key               string
-	filterScripts     string
 	filterScriptsType FilterScriptsType
 	filterData        [][]byte
 	uniqueData        map[string]struct{}
@@ -44,7 +43,6 @@ func NewGolombFilter(p uint8, filterScripts string, key string, useZeroedKey boo
 		UseZeroedKey:      useZeroedKey,
 		p:                 p,
 		key:               key,
-		filterScripts:     filterScripts,
 		filterScriptsType: filterScriptsToScriptsType(filterScripts),
 		filterData:        make([][]byte, 0),
 		uniqueData:        make(map[string]struct{}),

@@ -166,21 +166,6 @@ type keyPair struct {
 	CompareFunc func(string) bool
 }
 
-func compareFuncBlockAddresses(t *testing.T, v string, expected []string) bool {
-	for _, e := range expected {
-		lb := len(v)
-		v = strings.Replace(v, e, "", 1)
-		if lb == len(v) {
-			t.Error(e, " not found in ", v)
-			return false
-		}
-	}
-	if len(v) != 0 {
-		t.Error("not expected content ", v)
-	}
-	return len(v) == 0
-}
-
 func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	sort.Slice(kp, func(i, j int) bool {
 		return kp[i].Key < kp[j].Key

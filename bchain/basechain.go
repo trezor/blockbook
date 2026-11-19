@@ -25,11 +25,6 @@ func (b *BaseChain) IsTestnet() bool {
 	return b.Testnet
 }
 
-// GetNetworkName returns network name
-func (b *BaseChain) GetNetworkName() string {
-	return b.Network
-}
-
 // GetBlockRaw is not supported by default
 func (b *BaseChain) GetBlockRaw(hash string) (string, error) {
 	return "", errors.New("GetBlockRaw: not supported")
@@ -101,11 +96,6 @@ func (b *BaseChain) EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) 
 // EthereumTypeRpcCall calls eth_call with given data and to address
 func (b *BaseChain) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return "", errors.New("not supported")
-}
-
-// EthereumTypeRpcCallBatch performs batch eth_call requests.
-func (b *BaseChain) EthereumTypeRpcCallBatch(calls []EthereumTypeRPCCall) ([]EthereumTypeRPCCallResult, error) {
-	return nil, errors.New("not supported")
 }
 
 // EthereumTypeMulticallAggregate3 issues a Multicall3 aggregate3 call.

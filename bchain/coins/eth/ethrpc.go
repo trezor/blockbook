@@ -72,14 +72,6 @@ const (
 	defaultAlternativeMissingTxTimeout = 2 * time.Minute
 )
 
-// Ethereum address constants
-const (
-	// EthereumZeroAddress is the zero address (0x0000...0000) used to check for unset addresses
-	EthereumZeroAddress = "0x0000000000000000000000000000000000000000"
-	// EthereumAddressHexLength represents the length of an Ethereum address in hex characters (20 bytes * 2)
-	EthereumAddressHexLength = 40
-)
-
 // Configuration represents json config file
 type Configuration struct {
 	CoinName                          string `json:"coin_name"`
@@ -1079,16 +1071,6 @@ func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	b.alternativeSendTxProvider.shutdown()
 	glog.Info("rpc: shutdown")
 	return nil
-}
-
-// GetCoinName returns coin name
-func (b *EthereumRPC) GetCoinName() string {
-	return b.ChainConfig.CoinName
-}
-
-// GetSubversion returns empty string, ethereum does not have subversion
-func (b *EthereumRPC) GetSubversion() string {
-	return ""
 }
 
 // GetChainInfo returns information about the connected backend

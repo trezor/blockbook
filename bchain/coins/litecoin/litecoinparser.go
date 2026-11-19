@@ -14,7 +14,6 @@ import (
 const (
 	MainnetMagic wire.BitcoinNet = 0xdbb6c0fb
 	TestnetMagic wire.BitcoinNet = 0xf1c8d2fd
-	RegtestMagic wire.BitcoinNet = 0xdab5bffa
 )
 
 // chain parameters

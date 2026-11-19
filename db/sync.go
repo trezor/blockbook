@@ -145,11 +145,6 @@ func (w *SyncWorker) sequentialFallBehindGap() uint32 {
 	return gap
 }
 
-// NewSyncWorker creates new SyncWorker and returns its handle
-func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState) (*SyncWorker, error) {
-	return NewSyncWorkerWithConfig(db, chain, syncWorkers, syncChunk, minStartHeight, dryRun, chanOsSignal, metrics, is, nil)
-}
-
 // NewSyncWorkerWithConfig allows tests or callers to override SyncWorker defaults.
 func NewSyncWorkerWithConfig(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState, cfg *SyncWorkerConfig) (*SyncWorker, error) {
 	if minStartHeight < 0 {

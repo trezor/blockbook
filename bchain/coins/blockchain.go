@@ -228,18 +228,6 @@ func (c *blockChainWithMetrics) IsTestnet() bool {
 	return c.b.IsTestnet()
 }
 
-func (c *blockChainWithMetrics) GetNetworkName() string {
-	return c.b.GetNetworkName()
-}
-
-func (c *blockChainWithMetrics) GetCoinName() string {
-	return c.b.GetCoinName()
-}
-
-func (c *blockChainWithMetrics) GetSubversion() string {
-	return c.b.GetSubversion()
-}
-
 func (c *blockChainWithMetrics) GetChainInfo() (v *bchain.ChainInfo, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetChainInfo", s, err) }(time.Now())
 	return c.b.GetChainInfo()
@@ -398,17 +386,6 @@ func (c *blockChainWithMetrics) EthereumTypeGetStakingPoolsData(addrDesc bchain.
 func (c *blockChainWithMetrics) EthereumTypeRpcCall(data, to, from string) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeRpcCall", s, err) }(time.Now())
 	return c.b.EthereumTypeRpcCall(data, to, from)
-}
-
-func (c *blockChainWithMetrics) EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) (v []bchain.EthereumTypeRPCCallResult, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeRpcCallBatch", s, err) }(time.Now())
-	batcher, ok := c.b.(interface {
-		EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error)
-	})
-	if !ok {
-		return nil, errors.New("EthereumTypeRpcCallBatch: not supported")
-	}
-	return batcher.EthereumTypeRpcCallBatch(calls)
 }
 
 func (c *blockChainWithMetrics) EthereumTypeMulticallAggregate3(calls []bchain.EthereumMulticallCall, blockNumber *big.Int) (v []bchain.EthereumMulticallResult, err error) {

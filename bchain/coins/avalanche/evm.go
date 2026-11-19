@@ -38,11 +38,6 @@ func (c *AvalancheClient) BalanceAt(ctx context.Context, addrDesc bchain.Address
 	return c.Client.BalanceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
 }
 
-// NonceAt returns the nonce for the given account at a specific block, or latest known block if no block number is provided
-func (c *AvalancheClient) NonceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (uint64, error) {
-	return c.Client.NonceAt(ctx, common.BytesToAddress(addrDesc), blockNumber)
-}
-
 // AvalancheRPCClient wraps an rpc client to implement the EVMRPCClient interface
 type AvalancheRPCClient struct {
 	*rpc.Client
