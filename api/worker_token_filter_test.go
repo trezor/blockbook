@@ -5,6 +5,8 @@ package api
 import (
 	"math/big"
 	"testing"
+
+	"github.com/trezor/blockbook/db"
 )
 
 func TestHasEthereumTokenHoldingsField(t *testing.T) {
@@ -52,5 +54,20 @@ func TestHasEthereumTokenHoldingsField(t *testing.T) {
 				t.Fatalf("hasEthereumTokenHoldingsField() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMultiTokenHoldingsSkipsZeroValues(t *testing.T) {
+	values := db.MultiTokenValues{
+		{Id: *big.NewInt(1), Value: *big.NewInt(0)},
+		{Id: *big.NewInt(2), Value: *big.NewInt(5)},
+	}
+	got := multiTokenHoldings(values)
+	if len(got) != 1 || (*big.Int)(got[0].Id).Cmp(big.NewInt(2)) != 0 || (*big.Int)(got[0].Value).Cmp(big.NewInt(5)) != 0 {
+		t.Fatalf("multiTokenHoldings() = %+v, want [{2 5}]", got)
+	}
+	// phantom-only holdings drop the field, so tokenBalances treats the collection as emptied
+	if got := multiTokenHoldings(db.MultiTokenValues{{Id: *big.NewInt(1)}}); got != nil {
+		t.Fatalf("multiTokenHoldings(phantoms) = %+v, want nil", got)
 	}
 }
