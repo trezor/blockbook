@@ -23,10 +23,10 @@
     "package_name": "backend-koto",
     "package_revision": "satoshilabs-1",
     "system_user": "koto",
-    "version": "4.5.1",
-    "binary_url": "https://github.com/KotoDevelopers/koto/releases/download/v4.5.1/koto-4.5.1-linux64.tar.gz",
-    "verification_type": "gpg",
-    "verification_source": "https://github.com/KotoDevelopers/koto/releases/download/v4.5.1/koto-4.5.1-linux64.tar.gz.asc",
+    "version": "4.5.8",
+    "binary_url": "https://github.com/KotoDevelopers/koto/releases/download/v4.5.8/koto-4.5.8-linux64.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "b6b6839685fb73b49306b2c81f89034d4ea0101ffa36cfdd79684c062cf8f938",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/koto-qt"
