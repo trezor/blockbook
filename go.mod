@@ -1,6 +1,6 @@
 module github.com/trezor/blockbook
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
@@ -29,7 +29,7 @@ require (
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
 	github.com/stretchr/testify v1.11.1
 	github.com/tkrajina/typescriptify-golang-structs v0.1.11
-	golang.org/x/crypto v0.52.0
+	golang.org/x/crypto v0.58.0
 	golang.org/x/sync v0.18.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
@@ -93,7 +93,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
