@@ -11,7 +11,7 @@ RUN apt-get update && \
                        libzstd-dev liblz4-dev graphviz && \
     apt-get clean
 ARG GOLANG_VERSION
-ENV GOLANG_VERSION=go1.25.4
+ENV GOLANG_VERSION=go1.26.11
 ENV ROCKSDB_VERSION=v9.10.0
 ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
@@ -34,10 +34,10 @@ fi
 
 # install and configure go
 ARG TARGETPLATFORM
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then ARCHITECTURE=amd64; GO_SHA256=9fa5ffeda4170de60f67f3aa0f824e426421ba724c21e133c1e35d6159ca1bec; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=arm64; GO_SHA256=a68e86d4b72c2c2fecf7dfed667680b6c2a071221bbdb6913cf83ce3f80d9ff0; \
-    elif [ "$TARGETPLATFORM" = "linux/aarch64" ]; then ARCHITECTURE=arm64; GO_SHA256=a68e86d4b72c2c2fecf7dfed667680b6c2a071221bbdb6913cf83ce3f80d9ff0; \
-    else ARCHITECTURE=amd64; GO_SHA256=9fa5ffeda4170de60f67f3aa0f824e426421ba724c21e133c1e35d6159ca1bec; fi \
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then ARCHITECTURE=amd64; GO_SHA256=9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then ARCHITECTURE=arm64; GO_SHA256=6c2f29b458b5add0835f18b776f69c8881a6d88428f1484a6da55755e620757e; \
+    elif [ "$TARGETPLATFORM" = "linux/aarch64" ]; then ARCHITECTURE=arm64; GO_SHA256=6c2f29b458b5add0835f18b776f69c8881a6d88428f1484a6da55755e620757e; \
+    else ARCHITECTURE=amd64; GO_SHA256=9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec; fi \
     && cd /opt && wget https://dl.google.com/go/$GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz \
     && echo "$GO_SHA256  $GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz" | sha256sum -c - \
     && tar xf $GOLANG_VERSION.linux-$ARCHITECTURE.tar.gz
