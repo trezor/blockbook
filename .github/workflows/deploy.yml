@@ -50,9 +50,16 @@ permissions:
   contents: read
 
 # Queue auto-deploys instead of overlapping them; a newer merge replaces the
-# pending one, and a running dpkg install is never cancelled.
+# pending one, and a running dpkg install is never cancelled. Only eligible
+# runs (same condition as prepare_deploy) join the queue, so a failed Testing
+# run cannot evict a pending deploy.
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && 'dev-auto-deploy' || format('deploy-{0}', github.run_id) }}
+  group: >-
+    ${{ (github.event_name == 'workflow_run' &&
+    github.event.workflow_run.conclusion == 'success' &&
+    github.event.workflow_run.event == 'push' &&
+    github.event.workflow_run.head_repository.full_name == github.repository) &&
+    'dev-auto-deploy' || format('deploy-{0}', github.run_id) }}
   cancel-in-progress: false
 
 env:
@@ -107,7 +114,27 @@ jobs:
       connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
+      stale: ${{ steps.stale.outputs.stale }}
     steps:
+      # A rerun of Testing for an older commit must not roll dev back;
+      # rollbacks go through manual dispatch.
+      - name: Skip stale Testing reruns
+        id: stale
+        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.run_attempt > 1 }}
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          tip="$(git ls-remote "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "refs/heads/${HEAD_BRANCH}" | cut -f1)"
+          if [ -z "$tip" ]; then
+            echo "::error::could not resolve the tip of ${HEAD_BRANCH}"
+            exit 1
+          fi
+          if [ "$tip" != "$HEAD_SHA" ]; then
+            echo "::notice::skipping auto-deploy: rerun of ${HEAD_SHA}, ${HEAD_BRANCH} is at ${tip}"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout workflow code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -125,6 +152,16 @@ jobs:
         with:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
+
+      # Older refs ignore BACKEND_MODE and would silently deploy as auto.
+      - name: Reject backend mode unsupported by the ref
+        env:
+          BACKEND_MODE: ${{ inputs.backend_mode || 'never' }}
+        run: |
+          if [ "$BACKEND_MODE" != "auto" ] && ! grep -q BACKEND_MODE ./.github/scripts/backend_decision.py; then
+            echo "::error::ref ${RESOLVED_BRANCH_OR_TAG} does not support backend_mode=${BACKEND_MODE}; rebase it or use backend_mode=auto"
+            exit 1
+          fi
 
       - name: Build deploy/e2e plan
         id: plan
@@ -172,6 +209,7 @@ jobs:
   deploy:
     name: Deploy (${{ matrix.coin }})
     needs: prepare_deploy
+    if: ${{ needs.prepare_deploy.outputs.stale != 'true' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
