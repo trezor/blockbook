@@ -119,6 +119,11 @@ type MempoolTx struct {
 	Blocktime        int64          `json:"blocktime,omitempty" ts_doc:"Timestamp for the block in which tx might eventually be mined, if known."`
 	TokenTransfers   TokenTransfers `json:"-" ts_doc:"Token transfers discovered in this mempool transaction (not exposed by default)."`
 	CoinSpecificData interface{}    `json:"-" ts_doc:"Additional chain-specific data (not exposed via JSON)."`
+	// Private marks a send accepted by the private relay; it must not reach the global new-tx stream.
+	Private bool `json:"-" ts_doc:"Internal flag for a private relay send (not exposed)."`
+	// NotifyAddrDescs, when set, restricts the address notification to these addresses - the same
+	// set the mempool indexed the transaction under - instead of every address the transaction touches.
+	NotifyAddrDescs []AddressDescriptor `json:"-" ts_doc:"Internal notification allow-list (not exposed)."`
 }
 
 // TokenStandard - standard of token

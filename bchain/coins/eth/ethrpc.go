@@ -201,7 +201,7 @@ func (c *Configuration) AlternativeMissingTxTimeoutDuration() (time.Duration, er
 // address index while the cache keeps serving its body as pending, and nothing reconciles the two. Only
 // an explicit mempoolTxTimeout can invert the pair, which is why that is rejected rather than warned
 // about. Equal timeouts are not inverted: every cache write restamps the wrapped mempool entry
-// (AddOrRefreshTransactionInMempool), so the cache entry is never the younger one.
+// (AddOrRefreshPrivateTransactionInMempool), so the cache entry is never the younger one.
 func mempoolRetentionInverted(alternativeTimeout, mempoolTimeout time.Duration) bool {
 	return alternativeTimeout > mempoolTimeout
 }
