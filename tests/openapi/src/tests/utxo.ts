@@ -1,11 +1,35 @@
+import assert from "node:assert/strict";
+
+import bcashFixtures from "../../../dbtestdata/bcash.json" with { type: "json" };
 import { blockFilterConfig } from "../config.js";
 import { SkipTest } from "../errors.js";
 import { assertGolombParams, assertUTXOList, encodePathSegment, stringValue } from "../support.js";
 
 import type { TestContext } from "../context.js";
-import type { UtxoResponse } from "../types.js";
+import type { TxResponse, UtxoResponse } from "../types.js";
 
 type TestFunction = (ctx: TestContext) => Promise<void>;
+
+async function testBcashTransactionVectors(ctx: TestContext) {
+  for (const fixture of bcashFixtures.filter(f => f.name.startsWith("chipnet-confirmed-"))) {
+    const transactions = [
+      await ctx.client.getJson("/api/v2/tx/{txid}", `/api/v2/tx/${fixture.txid}`),
+      await ctx.wsCall<TxResponse>("getTransaction", { txid: fixture.txid }, "#/components/schemas/Tx"),
+    ];
+    for (const tx of transactions) {
+      assert.equal(tx.txid, fixture.txid);
+      assert.equal(tx.vout.length, fixture.outputs.length);
+      fixture.outputs.forEach((want, i) => {
+        assert.deepEqual(tx.vout[i].addresses, [want.address]);
+        assert.equal(tx.vout[i].value, want.value);
+        assert.deepEqual(tx.vout[i].tokenData ?? null, want.tokenData ?? null);
+        assert.deepEqual(tx.bcashSpecific?.tokenVouts?.[i] ?? null, want.tokenData ?? null);
+      });
+    }
+    const raw = await ctx.client.getJson("/api/v2/tx-specific/{txid}", `/api/v2/tx-specific/${fixture.txid}`);
+    assert.equal((raw as { hex: string }).hex, fixture.hex);
+  }
+}
 
 async function testGetUtxo(ctx: TestContext) {
   const address = await ctx.sampleAddressOrSkip();
@@ -168,6 +192,7 @@ async function testGetBlockFiltersInvalidScriptType(ctx: TestContext) {
 }
 
 export const utxoOnlyTests: Record<string, TestFunction> = {
+  BcashTransactionVectors: testBcashTransactionVectors,
   GetUtxo: testGetUtxo,
   GetUtxoConfirmedFilter: testGetUtxoConfirmedFilter,
   GetBlockFilters: testGetBlockFilters,
