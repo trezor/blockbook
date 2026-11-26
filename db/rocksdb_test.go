@@ -793,6 +793,57 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 
 }
 
+func TestRocksDB_ImmatureCoinbase_BitcoinType(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: btc.NewBitcoinParser(btc.GetChainParams("test"), &btc.Configuration{BlockAddressesToKeep: 3, MinimumCoinbaseConfirmations: 2}),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+	addrA := addressToAddrDesc(dbtestdata.AddrA, d.chainParser)
+	check := func(step string, want *big.Int) {
+		t.Helper()
+		got, err := d.GetImmatureCoinbaseBalance(addrA)
+		if err != nil {
+			t.Fatal(step, err)
+		}
+		if got.Cmp(want) != 0 {
+			t.Fatalf("%s: immature %v, want %v", step, got, want)
+		}
+	}
+	block2 := dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser)
+	for _, b := range []*bchain.Block{dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), block2} {
+		if err := d.ConnectBlock(b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check("connect", dbtestdata.SatB2T4AA)
+	d.invalidateImmatureCoinbase()
+	check("rebuild", dbtestdata.SatB2T4AA)
+	if err := d.DisconnectBlockRangeBitcoinType(225494, 225494); err != nil {
+		t.Fatal(err)
+	}
+	check("disconnect", dbtestdata.SatZero)
+	if err := d.ConnectBlock(block2); err != nil {
+		t.Fatal(err)
+	}
+	check("reconnect", dbtestdata.SatB2T4AA)
+	block3 := &bchain.Block{
+		BlockHeader: bchain.BlockHeader{Height: 225495, Hash: "00000000000000000000000000000000000000000000000000000000000c0b03"},
+		Txs: []bchain.Tx{{
+			Txid: "00000000000000000000000000000000000000000000000000000000000c0b31",
+			Vout: []bchain.Vout{{N: 0, ValueSat: *big.NewInt(1), ScriptPubKey: bchain.ScriptPubKey{Hex: dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser)}}},
+		}},
+	}
+	if err := d.ConnectBlock(block3); err != nil {
+		t.Fatal(err)
+	}
+	check("matured", dbtestdata.SatZero)
+	if n := len(d.immatureCoinbase.byAddr); n != 0 {
+		t.Fatalf("matured outputs kept in the index: %d addresses", n)
+	}
+	d.invalidateImmatureCoinbase()
+	check("rebuild after maturity", dbtestdata.SatZero)
+}
+
 func Test_BulkConnect_BitcoinType(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),
