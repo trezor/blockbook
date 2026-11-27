@@ -16,6 +16,7 @@
 - **Accumulate address-hotness hits across blocks** ([#1529](https://github.com/trezor/blockbook/pull/1529)): makes the contract-index LRU promotion counter persist across blocks instead of resetting per block, so hot-address detection works on lower-throughput chains too.
 - **Websocket communication optimizations** ([#1550](https://github.com/trezor/blockbook/pull/1550)): reuses the xpub best-height within a request across derived addresses, adds a WebSocket write-buffer pool, reduces subscription lock hold time, and caches merged confirmed xpub txids for unfiltered paged requests.
 - **Resolve tx inputs without unpacking full prev-tx records** ([#1595](https://github.com/trezor/blockbook/pull/1595)): reads only the single needed output per input instead of unpacking the entire previous transaction, eliminating quadratic heap allocation on high-fan-in addresses.
+- **Cached EIP-55 address formatting on the EVM read path** ([#1812](https://github.com/trezor/blockbook/pull/1812)): serves repeated addresses from a lock-free direct-mapped cache and hashes misses without intermediate allocations, cutting about a third of the CPU and 15% of the allocations of transaction-bearing responses (address pages, blocks, transactions); Tron's base58 formatter uses the same cache.
 
 ### Reliability and Correctness
 
