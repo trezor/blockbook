@@ -9,7 +9,7 @@ import (
 // network constants
 const (
 	MainnetMagic wire.BitcoinNet = 0xdab6c3fa
-	TestnetMagic wire.BitcoinNet = 0xddbdc8fd
+	TestnetMagic wire.BitcoinNet = 0xe7b9c6fe
 )
 
 // parser parameters
