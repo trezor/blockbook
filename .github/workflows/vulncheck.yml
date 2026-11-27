@@ -1,0 +1,27 @@
+name: Vulnerability Check
+
+# New advisories appear without any code change, so this runs on a schedule
+# instead of gating pull requests.
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    # Needs the cgo headers and the pinned Go toolchain of the build image.
+    runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run govulncheck
+        run: make vulncheck
