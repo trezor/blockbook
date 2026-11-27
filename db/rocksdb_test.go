@@ -677,6 +677,9 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	// check that there is only the last tx in the cache
 	packedTx, err := d.chainParser.PackTx(&block2.Txs[1], block2.Height, block2.Txs[1].Blocktime)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := checkColumn(d, cfTransactions, []keyPair{
 		{block2.Txs[1].Txid, hex.EncodeToString(packedTx), nil},
 	}); err != nil {

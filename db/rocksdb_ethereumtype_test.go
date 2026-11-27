@@ -1063,6 +1063,9 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	}
 	// check that there is only the last tx in the cache
 	packedTx, err := d.chainParser.PackTx(&block2.Txs[1], block2.Height, block2.Txs[1].Blocktime)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := checkColumn(d, cfTransactions, []keyPair{
 		{dbtestdata.EthTxidB2T2, hex.EncodeToString(packedTx), nil},
 	}); err != nil {

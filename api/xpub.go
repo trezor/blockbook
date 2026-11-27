@@ -828,7 +828,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			txCount = len(txcMap)
 		}
 		var from, to, mempoolFrom, mempoolTo int
-		pg, mempoolFrom, mempoolTo, from, to, page = computeAccountPaging(len(mempoolEntries), len(txc), page, txsOnPage)
+		pg, mempoolFrom, mempoolTo, from, to, _ = computeAccountPaging(len(mempoolEntries), len(txc), page, txsOnPage)
 		// filtered txc is not the whole history, so an exact TotalPages cannot be computed
 		if filtered && len(txc) >= txsOnPage {
 			pg.TotalPages = -1
