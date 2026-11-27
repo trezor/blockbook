@@ -46,10 +46,11 @@ jobs:
   go-checks:
     name: Go Static Checks
     # gofmt, go mod tidy, go vet and staticcheck; needs the cgo headers of the
-    # build image, so it shares the self-hosted pool and its fork-PR guard.
+    # build image, so it shares the self-hosted pool and the fork-PR and
+    # Dependabot guards of unit-tests.
     runs-on: [self-hosted, bb-dev-selfhosted]
     timeout-minutes: 30
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.actor != 'dependabot[bot]' }}
 
     steps:
       - name: Checkout code
