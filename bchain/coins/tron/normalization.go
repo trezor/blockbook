@@ -144,15 +144,6 @@ func tronFirstAddress(values ...string) string {
 	return ""
 }
 
-func tronFirstInt64PtrToString(values ...*int64) string {
-	for _, v := range values {
-		if s := tronInt64PtrToString(v); s != "" {
-			return s
-		}
-	}
-	return ""
-}
-
 func tronNormalizeLogs(logs []*bchain.RpcLog) []*bchain.RpcLog {
 	for _, l := range logs {
 		if l == nil {

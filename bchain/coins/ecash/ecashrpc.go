@@ -75,13 +75,6 @@ type cmdGetBlock struct {
 
 // estimatesmartfee
 
-type cmdEstimateSmartFee struct {
-	Method string `json:"method"`
-	Params struct {
-		Blocks int `json:"nblocks"`
-	} `json:"params"`
-}
-
 // GetBlock returns block with given hash.
 func (b *ECashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
@@ -161,11 +154,6 @@ func (b *ECashRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return &res.Result, nil
-}
-
-// GetBlockFull returns block with given hash.
-func (b *ECashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
-	return nil, errors.New("Not implemented")
 }
 
 func isErrBlockNotFound(err *bchain.RPCError) bool {

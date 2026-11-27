@@ -58,7 +58,6 @@ type FiatRates struct {
 	periodSeconds          int64
 	db                     *db.RocksDB
 	metrics                *common.Metrics
-	timeFormat             string
 	callbackOnNewTicker    OnNewFiatRatesTicker
 	downloader             RatesDownloaderInterface
 	downloadTokens         bool
@@ -119,7 +118,6 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 	if rdParams.PeriodSeconds == 0 {
 		return nil, errors.New("missing parameters")
 	}
-	fr.timeFormat = "02-01-2006"              // Layout string for FiatRates date formatting (DD-MM-YYYY)
 	fr.periodSeconds = rdParams.PeriodSeconds // Time period for syncing the latest market data
 	if fr.periodSeconds < 60 {                // minimum is one minute
 		fr.periodSeconds = 60
@@ -168,7 +166,7 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 				return nil, coingeckoBootstrapPreconditionError()
 			}
 		}
-		fr.downloader = NewCoinGeckoDownloader(db, network, coinShortcut, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, rdParams.Plan, metrics, throttle)
+		fr.downloader = NewCoinGeckoDownloader(db, network, coinShortcut, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, rdParams.Plan, metrics, throttle)
 		if is != nil {
 			is.HasFiatRates = true
 			is.HasTokenFiatRates = fr.downloadTokens

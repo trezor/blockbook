@@ -305,9 +305,6 @@ type BlockChain interface {
 	Shutdown(ctx context.Context) error
 	// chain info
 	IsTestnet() bool
-	GetNetworkName() string
-	GetSubversion() string
-	GetCoinName() string
 	GetChainInfo() (*ChainInfo, error)
 	// requests
 	GetBestBlockHash() (string, error)
@@ -377,7 +374,6 @@ type BlockChainParser interface {
 	GetAddrDescFromVout(output *Vout) (AddressDescriptor, error)
 	GetAddrDescFromAddress(address string) (AddressDescriptor, error)
 	GetAddressesFromAddrDesc(addrDesc AddressDescriptor) ([]string, bool, error)
-	GetScriptFromAddrDesc(addrDesc AddressDescriptor) ([]byte, error)
 	IsAddrDescIndexable(addrDesc AddressDescriptor) bool
 	// transactions
 	PackedTxidLen() int

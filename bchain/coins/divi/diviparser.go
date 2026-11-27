@@ -3,7 +3,6 @@ package divi
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"io"
 	"math/big"
 
@@ -179,31 +178,6 @@ func (p *DivicoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.
 		// skip: Blocktime,
 	}
 	return tx
-}
-
-// ParseTxFromJSON parses JSON message containing transaction and returns Tx struct
-func (p *DivicoinParser) ParseTxFromJSON(msg json.RawMessage) (*bchain.Tx, error) {
-	var tx bchain.Tx
-	err := json.Unmarshal(msg, &tx)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range tx.Vout {
-		vout := &tx.Vout[i]
-		// convert vout.JsonValue to big.Int and clear it, it is only temporary value used for unmarshal
-		vout.ValueSat, err = p.AmountToBigInt(vout.JsonValue)
-		if err != nil {
-			return nil, err
-		}
-		vout.JsonValue = ""
-
-		if vout.ScriptPubKey.Addresses == nil {
-			vout.ScriptPubKey.Addresses = []string{}
-		}
-	}
-
-	return &tx, nil
 }
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses

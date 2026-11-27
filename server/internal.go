@@ -32,10 +32,7 @@ type InternalServer struct {
 	https       *http.Server
 	certFiles   string
 	db          *db.RocksDB
-	txCache     *db.TxCache
-	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
-	mempool     bchain.Mempool
 	is          *common.InternalState
 	api         *api.Worker
 	// Admin HTTP Basic-auth credentials for the /admin endpoints, derived from
@@ -78,15 +75,11 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 		https:           https,
 		certFiles:       certFiles,
 		db:              db,
-		txCache:         txCache,
-		chain:           chain,
 		chainParser:     chain.GetChainParser(),
-		mempool:         mempool,
 		is:              is,
 		api:             api,
 		runtimeSettings: db,
 	}
-	s.htmlTemplates.newTemplateData = s.newTemplateData
 	s.htmlTemplates.newTemplateDataWithError = s.newTemplateDataWithError
 	s.htmlTemplates.parseTemplates = s.parseTemplates
 	s.templates = s.parseTemplates()
@@ -317,8 +310,6 @@ type WsBlockedIPView struct {
 
 // InternalTemplateData is used to transfer data to the templates
 type InternalTemplateData struct {
-	CoinName              string
-	CoinShortcut          string
 	CoinLabel             string
 	ChainType             bchain.ChainType
 	Error                 *api.APIError
@@ -331,10 +322,8 @@ type InternalTemplateData struct {
 
 func (s *InternalServer) newTemplateData(r *http.Request) *InternalTemplateData {
 	t := &InternalTemplateData{
-		CoinName:     s.is.Coin,
-		CoinShortcut: s.is.CoinShortcut,
-		CoinLabel:    s.is.CoinLabel,
-		ChainType:    s.chainParser.GetChainType(),
+		CoinLabel: s.is.CoinLabel,
+		ChainType: s.chainParser.GetChainType(),
 	}
 	return t
 }

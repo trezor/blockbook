@@ -111,7 +111,6 @@ type xpubAddress struct {
 }
 
 type xpubData struct {
-	descriptor      *bchain.XpubDescriptor
 	gap             int
 	accessed        int64
 	basePath        string
@@ -699,10 +698,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	page--
 	if page < 0 {
 		page = 0
-	}
-	type mempoolMap struct {
-		tx          *Tx
-		inputOutput byte
 	}
 	var (
 		txc            xpubTxids

@@ -70,7 +70,6 @@ type htmlTemplates[TD any] struct {
 	metrics                  *common.Metrics
 	templates                []*template.Template
 	debug                    bool
-	newTemplateData          func(r *http.Request) *TD
 	newTemplateDataWithError func(error *api.APIError, r *http.Request) *TD
 	parseTemplates           func() []*template.Template
 	postHtmlTemplateHandler  func(data *TD, w http.ResponseWriter, r *http.Request)

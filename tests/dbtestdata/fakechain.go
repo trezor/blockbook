@@ -42,10 +42,6 @@ func (c *fakeBlockChain) GetNetworkName() string {
 	return "fakecoin"
 }
 
-func (c *fakeBlockChain) GetCoinName() string {
-	return "Fakecoin"
-}
-
 func (c *fakeBlockChain) GetSubversion() string {
 	return "/Fakecoin:0.0.1/"
 }

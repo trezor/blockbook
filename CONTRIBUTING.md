@@ -149,7 +149,7 @@ There are several groups of methods defined in *bchain.BlockChainParser*:
 
 * *GetAddrDescFromVout* and *GetAddrDescFromAddress* – Convert transaction addresses to *Address Descriptor* that is used as database ID.
   Most of coins use output script as *Address Descriptor*.
-* *GetAddressesFromAddrDesc* and *GetScriptFromAddrDesc*  – Convert *Address Descriptor* to addresses and output script. Note that
+* *GetAddressesFromAddrDesc* – Converts *Address Descriptor* to addresses. Note that
   *btc.BitcoinParser* uses pointer to function *OutputScriptToAddressesFunc* that is called from *GetAddressesFromAddrDesc*
   method in order to rewrite implementation by types embedding it.
 * *PackTxid* and *UnpackTxid* – Packs txid to store in database and vice versa.

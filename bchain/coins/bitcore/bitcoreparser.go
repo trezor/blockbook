@@ -10,7 +10,6 @@ import (
 const (
 	MainnetMagic wire.BitcoinNet = 0xf9beb4d9
 	TestnetMagic wire.BitcoinNet = 0xfdd2c8f1
-	RegtestMagic wire.BitcoinNet = 0xfabfb5da
 )
 
 var (

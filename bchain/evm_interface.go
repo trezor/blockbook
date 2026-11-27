@@ -16,7 +16,6 @@ type EVMClient interface {
 	SuggestGasPrice(ctx context.Context) (*big.Int, error)
 	EstimateGas(ctx context.Context, msg interface{}) (uint64, error)
 	BalanceAt(ctx context.Context, addrDesc AddressDescriptor, blockNumber *big.Int) (*big.Int, error)
-	NonceAt(ctx context.Context, addrDesc AddressDescriptor, blockNumber *big.Int) (uint64, error)
 }
 
 // EVMRPCClient provides the necessary rpc functionality for evm chain sync

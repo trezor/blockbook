@@ -9,15 +9,10 @@ import (
 
 // Addresses
 const (
-	TronAddrZero        = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
 	TronAddrTZ          = "TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt" // 0xff324071970b2b08822caa310c1bb458e63a5033
 	TronAddrTD          = "TDGSR64oU4QDpViKfdwawSiqwyqpUB6JUD" // 0x242aa579f130bf6fea5eac12aa6b846fb8b293ab
 	TronAddrContractTX1 = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf" // 0xeca9bc828a3005b9a3b909f2cc5c2a54794de05f
 	TronAddrContractTR  = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" // TRC20 (USDT)
-	TronAddrContractTV  = "TVj7RNVHy6thbM7BWdSe9G6gXwKhjhdNZS" // TRC20 (KLV)
-	TronAddrContractTU  = "TU2MJ5Veik1LRAgjeSzEdvmDYx7mefJZvd" // non TRC20
-	TronAddrContractTA  = "TQEepeTijBFcWjnwF7N6THWEYpxJjpwqdd" // TRC721
-	TronAddrContractTX2 = "TXWLT4N9vDcmNHDnSuKv2odhBtizYuEMKJ" // TRC1155
 )
 
 // Blocks

@@ -35,7 +35,6 @@ func (p *alternativeFeeProvider) observeRequest(status string) {
 }
 
 type alternativeFeeProviderInterface interface {
-	compareToDefault()
 	estimateFee(blocks int) (big.Int, error)
 }
 

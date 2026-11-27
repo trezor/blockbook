@@ -326,16 +326,6 @@ func (b *BitcoinRPC) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// GetCoinName returns the coin name
-func (b *BitcoinRPC) GetCoinName() string {
-	return b.ChainConfig.CoinName
-}
-
-// GetSubversion returns the backend subversion
-func (b *BitcoinRPC) GetSubversion() string {
-	return b.ChainConfig.Subversion
-}
-
 // getblockhash
 
 type CmdGetBlockHash struct {

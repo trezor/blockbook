@@ -985,22 +985,6 @@ func (t *Tx) getAddrVinValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	return &val
 }
 
-// GetUniqueTxids removes duplicate transactions
-func GetUniqueTxids(txids []string) []string {
-	ut := make([]string, len(txids))
-	txidsMap := make(map[string]struct{})
-	i := 0
-	for _, txid := range txids {
-		_, e := txidsMap[txid]
-		if !e {
-			ut[i] = txid
-			i++
-			txidsMap[txid] = struct{}{}
-		}
-	}
-	return ut[0:i]
-}
-
 func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockInfo, bestheight uint32, addresses map[string]struct{}) *Tx {
 	var err error
 	var valInSat, valOutSat, feesSat big.Int

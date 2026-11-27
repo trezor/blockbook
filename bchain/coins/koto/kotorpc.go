@@ -103,8 +103,3 @@ func (z *KotoRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 func (z *KotoRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return z.GetTransaction(txid)
 }
-
-func isErrBlockNotFound(err *bchain.RPCError) bool {
-	return err.Message == "Block not found" ||
-		err.Message == "Block height out of range"
-}
