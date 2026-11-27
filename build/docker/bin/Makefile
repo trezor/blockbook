@@ -6,6 +6,9 @@ LDFLAGS := -X github.com/trezor/blockbook/common.version=$(VERSION) -X github.co
 BLOCKBOOK_BASE := $(GOPATH)/src/github.com/trezor
 BLOCKBOOK_SRC := $(BLOCKBOOK_BASE)/blockbook
 ARGS ?=
+# staticcheck v0.8.x needs Go 1.26; on an older image go fetches that toolchain for the run.
+STATICCHECK_VERSION ?= v0.8.2
+GOVULNCHECK_VERSION ?= v1.10.0
 
 # JEMALLOC is set by the image build arg. The static archive goes in by path because cgo's linker-flag
 # allowlist rejects -l:libjemalloc_pic.a; gcc resolves the multiarch directory.
@@ -48,6 +51,17 @@ test-connectivity: prepare-sources
 
 test-all: prepare-sources
 	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` -timeout 30m $(ARGS)
+
+# staticcheck runs only the SA (bug) checks; deprecations, style and unused code are not gated yet.
+lint: prepare-sources
+	cd $(BLOCKBOOK_SRC) && unformatted="$$("$$(go env GOROOT)/bin/gofmt" -l .)" && [ -z "$$unformatted" ] || (echo "gofmt needed:" && echo "$$unformatted" && false)
+	cd $(BLOCKBOOK_SRC) && go mod tidy -diff
+	cd $(BLOCKBOOK_SRC) && go vet -tags 'unittest integration' ./...
+	cd $(BLOCKBOOK_SRC) && go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) -tags 'unittest integration' -checks 'SA*,-SA1019' ./...
+
+# Reports known vulnerabilities reachable from Blockbook code, including the image's Go toolchain.
+vulncheck: prepare-sources
+	cd $(BLOCKBOOK_SRC) && go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) -tags 'unittest' ./... $(ARGS)
 
 # Regenerates blockbook-api.ts from the Go structs and hands it back to the mounted checkout.
 typescriptify: prepare-sources

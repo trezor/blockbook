@@ -11,6 +11,8 @@ There are several ways to run tests:
 * `make test-integration` – run RPC and sync integration tests only
 * `make test-e2e` – run Blockbook API end-to-end tests only
 * `make test-all` – run all tests above
+* `make lint` – run Go static checks (gofmt, `go mod tidy`, `go vet`, staticcheck)
+* `make vulncheck` – run govulncheck against the code and the image's Go toolchain
 
 You can use Go's flag *-run* to filter which tests should be executed. Use *ARGS* variable, e.g.
 `make test-all ARGS="-run TestBitcoin"`.

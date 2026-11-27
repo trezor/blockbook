@@ -1840,16 +1840,19 @@ func runWebsocketTests(t *testing.T, ts *httptest.Server, tests []websocketTest)
 		for i := 0; i < len(tests); i++ {
 			_, message, err := s.ReadMessage()
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 			var resp websocketResp
 			err = json.Unmarshal(message, &resp)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 			id, err := strconv.Atoi(resp.ID)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 			got := strings.TrimSpace(string(message))
 			if got != tests[id].want {

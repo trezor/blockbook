@@ -88,11 +88,11 @@ func testHandleFork(t *testing.T, h *TestHandler) {
 			chain.returnFakes = false
 
 			upperHash := fakeBlocks[len(fakeBlocks)-1].Hash
-				db.HandleFork(sw, rng.Upper, upperHash, func(block *bchain.Block) {
-					if block != nil && block.Hash == upperHash {
-						close(ch)
-					}
-				}, true)
+			db.HandleFork(sw, rng.Upper, upperHash, func(block *bchain.Block) {
+				if block != nil && block.Hash == upperHash {
+					close(ch)
+				}
+			}, true)
 
 			realBlocks := getRealBlocks(h, rng)
 			realTxs, err := getTxs(h, d, rng, realBlocks)

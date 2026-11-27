@@ -43,6 +43,24 @@ jobs:
           BB_BUILD_ENV: dev
         run: make test
 
+  go-checks:
+    name: Go Static Checks
+    # gofmt, go mod tidy, go vet and staticcheck; needs the cgo headers of the
+    # build image, so it shares the self-hosted pool and the fork-PR and
+    # Dependabot guards of unit-tests.
+    runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 30
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.actor != 'dependabot[bot]' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Go static checks
+        run: make lint
+
   connectivity-tests:
     name: Connectivity Tests
     runs-on: [self-hosted, bb-dev-selfhosted]

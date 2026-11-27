@@ -319,7 +319,7 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 			}
 			for i := range got {
 				// the addresses could have different case
-				if strings.ToLower(fmt.Sprint(got[i])) != strings.ToLower(fmt.Sprint(tt.want[i])) {
+				if !strings.EqualFold(fmt.Sprint(got[i]), fmt.Sprint(tt.want[i])) {
 					t.Errorf("contractGetTransfersFromLog %d = %+v, want %+v", i, got[i], tt.want[i])
 				}
 
@@ -521,7 +521,7 @@ func Test_contractGetTransfersFromTx(t *testing.T) {
 			}
 			for i := range got {
 				// the addresses could have different case
-				if strings.ToLower(fmt.Sprint(got[i])) != strings.ToLower(fmt.Sprint(tt.want[i])) {
+				if !strings.EqualFold(fmt.Sprint(got[i]), fmt.Sprint(tt.want[i])) {
 					t.Errorf("contractGetTransfersFromTx %d = %+v, want %+v", i, got[i], tt.want[i])
 				}
 
