@@ -11,7 +11,8 @@ The split is deliberate: Blockbook supplies facts, the wallet decides policy.
 
 - base fee — the next-block projection, taken from the chain
 - priority-fee tiers (tips)
-- congestion and trend signals (via the configured alternative provider, when supported)
+- congestion and base-fee context (`networkCongestion`, `historicalBaseFeeRange`, `baseFeeTrend`, on
+  both paths); priority-fee ranges and trend (alternative provider only)
 - per-block gas — `baseFee`, `gasUsed`, `gasLimit`
 
 **Trezor Suite — owns the fee policy:**
@@ -68,6 +69,29 @@ How each source is built:
   tip that cleared the block. The former 4-block means of p20/p70/p90 landed 98.7% / 99.99% / 99.99%
   for 1.03× / 2.64× / 11.3×, and a plain floor ladder on a 4-block p20 median (1 / 1.5 / 2×) missed
   the High target 15% of the time.
+
+  `networkCongestion` ranks the base fee against a week of mined ones (`averageBlockTimeMs` sets
+  the block count: 50,400 on mainnet, capped at 604,800 for sub-second chains). For each of the last 8
+  blocks (the 7 newest mined ones and the projected next one), it takes the fraction of the preceding
+  week's base fees strictly below that block's base fee, and averages the 8 values. 0 means the
+  cheapest blocks of the window or a flat base fee (rollups at their floor), 1 the most expensive.
+  Clients should treat ≥ 0.95 as "fees noticeably higher than usual". Replayed over mainnet blocks
+  from 2025-11-24 to 2026-11-10, that held 5.4% of the time in 2.7 episodes a day, never while the
+  base fee was below its 7-day median, at a median ~10× the quiet-block fee. Shorter windows warn on
+  bumps that are large only against a quiet day: with 3 days, 29% of the episodes never passed 3× the
+  quiet fee (13% with 7 days). Longer windows absorb a new fee level more slowly, and 30 days kept one
+  day busy for 83% of it. Averaging over 8 blocks cuts threshold crossings from 13 to 4 a day at the
+  same busy time, because EIP-1559 swings the base fee every block. The window lives in memory: the
+  first quote starts a background fill (percentile-free `eth_feeHistory`, 1024 blocks per call, 50
+  calls on mainnet), and each later quote extends it from the tier window at no extra RPC. Until it
+  is full, or for a minute after a failed fill, the field is omitted. The same window gives
+  `historicalBaseFeeRange` (its lowest and highest base fee, wei), and `baseFeeTrend` is `up` or
+  `down` by the projected base fee against the oldest of the 8 tier-window blocks (~100 s), omitted
+  when equal; a one-block comparison would flip every block as EIP-1559 hunts its target.
+  `gasUsedRatio` is not
+  used: EIP-1559 steers block fullness to 0.5 on average at any price level (the 8-block mean sat at
+  0.45–0.56 through the 394 gwei base-fee spike of 2024-03-05 just as on a sub-gwei day), so it
+  measures where the base fee is heading next block, not where it stands.
 - **Alternative provider** (archive coins, served from an in-memory cache, no node RPC): blockbook
   returns the provider's `maxFeePerGas` **unchanged**. For Infura, this is `suggestedMaxFeePerGas`,
   padded well above the base fee (~2.5× for the high tier); for 1inch, it is the provider's own
