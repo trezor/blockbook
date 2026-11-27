@@ -376,3 +376,34 @@ jobs:
           BB_ADMIN_E2E_COIN: base_archive
           DEPLOYED_COINS: ${{ needs.prepare_deploy.outputs.coins_csv }}
         run: python3 ./.github/scripts/admin_api_e2e.py
+
+  report-status:
+    name: Report Dev Deploy Status
+    # Auto-deploy results are otherwise visible only in the Actions tab; put
+    # them on the deployed commit. Stale reruns that deployed nothing are skipped.
+    needs: [prepare_deploy, deploy, wait-for-sync, e2e-tests]
+    if: ${{ always() && github.event_name == 'workflow_run' && needs.prepare_deploy.result != 'skipped' && needs.prepare_deploy.outputs.stale != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Set commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          state=success
+          description="Dev deploy and e2e passed"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              state=failure
+              description="Dev deploy or e2e did not pass"
+            fi
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state="$state" \
+            -f context="dev-deploy" \
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
