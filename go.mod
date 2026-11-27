@@ -10,7 +10,7 @@ require (
 	github.com/decred/dcrd/chaincfg/v3 v3.3.0
 	github.com/decred/dcrd/dcrec v1.0.0
 	github.com/decred/dcrd/dcrjson/v3 v3.0.1
-	github.com/decred/dcrd/dcrutil/v3 v3.0.0
+	github.com/decred/dcrd/dcrutil/v3 v3.0.1
 	github.com/decred/dcrd/hdkeychain/v3 v3.0.0
 	github.com/decred/dcrd/txscript/v3 v3.0.0
 	github.com/ethereum/go-ethereum v1.17.0
