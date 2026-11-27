@@ -3,9 +3,14 @@ name: Build / Deploy
 # Surface what the run actually does in the run list; without this every
 # dispatch shows only the generic workflow name. env context is not
 # available in run-name, so the ref fallback is inlined.
-run-name: "${{ inputs.mode }} ${{ inputs.coins }} (${{ inputs.mode == 'build' && inputs.env || 'dev' }}) @ ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}"
+run-name: "${{ github.event_name == 'workflow_run' && format('auto-deploy ALL (dev) @ {0}', github.event.workflow_run.head_sha) || format('{0} {1} ({2}) @ {3}', inputs.mode, inputs.coins, inputs.mode == 'build' && inputs.env || 'dev', inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name) }}"
 
 on:
+  # Redeploy every dev instance (Blockbook only) once Testing passes on a master push.
+  workflow_run:
+    workflows: [Testing]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
     inputs:
       mode:
@@ -25,7 +30,7 @@ on:
         required: true
         default: dev
       backend_mode:
-        description: "Backend package build mode; in never mode, backend-only coins still build backend packages"
+        description: "Backend package mode; in build mode, never still builds backend-only coins; in deploy mode, never redeploys Blockbook only"
         type: choice
         options:
           - auto
@@ -34,7 +39,7 @@ on:
         required: true
         default: auto
       coins:
-        description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
+        description: "Comma-separated coin aliases from configs/coins, or ALL (deploy ALL skips coins that are not deployable in dev)"
         required: true
       branch_or_tag:
         description: "Branch or tag to check out and deploy (leave empty for current ref)"
@@ -44,8 +49,24 @@ on:
 permissions:
   contents: read
 
+# Queue auto-deploys instead of overlapping them; a newer merge replaces the
+# pending one, and a running dpkg install is never cancelled. Only eligible
+# runs (same condition as prepare_deploy) join the queue, so a failed Testing
+# run or a stale rerun cannot evict a pending deploy.
+concurrency:
+  group: >-
+    ${{ (github.event_name == 'workflow_run' &&
+    github.event.workflow_run.conclusion == 'success' &&
+    github.event.workflow_run.event == 'push' &&
+    github.event.workflow_run.head_repository.full_name == github.repository &&
+    (github.event.workflow_run.run_attempt == 1 ||
+    github.event.workflow_run.head_sha == github.sha)) &&
+    'dev-auto-deploy' || format('deploy-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 env:
-  RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+  # Auto-deploys pin the exact commit Testing passed, not whatever master is by now.
+  RESOLVED_BRANCH_OR_TAG: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || (inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name) }}
 
 jobs:
   prepare_build:
@@ -82,10 +103,22 @@ jobs:
   prepare_deploy:
     name: Prepare Deploy Plan
     runs-on: ubuntu-latest
-    if: ${{ inputs.mode == 'deploy' }}
+    # A fork PR whose head branch is named master also fires workflow_run, so
+    # accept only pushes to this repository. A rerun of Testing for a commit
+    # that is no longer the master tip (github.sha here) must not roll dev
+    # back; rollbacks go through manual dispatch.
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy') ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.run_attempt == 1 ||
+      github.event.workflow_run.head_sha == github.sha)) }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       connectivity_regex: ${{ steps.plan.outputs.connectivity_regex }}
+      coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout workflow code
@@ -93,7 +126,9 @@ jobs:
         with:
           persist-credentials: false
 
+      # Auto-deploys check out a SHA from the Testing run, which ls-remote cannot validate.
       - name: Validate branch or tag
+        if: ${{ github.event_name != 'workflow_run' }}
         env:
           REF_TO_VALIDATE: ${{ env.RESOLVED_BRANCH_OR_TAG }}
         run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "$GITHUB_REPOSITORY" --ref "$REF_TO_VALIDATE"
@@ -104,11 +139,21 @@ jobs:
           ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           persist-credentials: false
 
+      # Older refs ignore BACKEND_MODE and would silently deploy as auto.
+      - name: Reject backend mode unsupported by the ref
+        env:
+          BACKEND_MODE: ${{ inputs.backend_mode || 'never' }}
+        run: |
+          if [ "$BACKEND_MODE" != "auto" ] && ! grep -q BACKEND_MODE ./.github/scripts/backend_decision.py; then
+            echo "::error::ref ${RESOLVED_BRANCH_OR_TAG} does not support backend_mode=${BACKEND_MODE}; rebase it or use backend_mode=auto"
+            exit 1
+          fi
+
       - name: Build deploy/e2e plan
         id: plan
         env:
           VARS_JSON: ${{ toJSON(vars) }}
-          COINS_INPUT: ${{ inputs.coins }}
+          COINS_INPUT: ${{ inputs.coins || 'ALL' }}
         run: python3 ./.github/scripts/deploy_plan.py
 
   build:
@@ -150,7 +195,6 @@ jobs:
   deploy:
     name: Deploy (${{ matrix.coin }})
     needs: prepare_deploy
-    if: ${{ inputs.mode == 'deploy' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -158,6 +202,20 @@ jobs:
         include: ${{ fromJSON(needs.prepare_deploy.outputs.runner_matrix || '[]') }}
     runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
+      # A rerun replays the original event, so the checks in prepare_deploy
+      # cannot see that master has moved on; look at the live tip instead.
+      - name: Reject reruns of an outdated auto-deploy
+        if: ${{ github.event_name == 'workflow_run' && github.run_attempt > 1 }}
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          tip="$(git ls-remote "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "refs/heads/${HEAD_BRANCH}" | cut -f1)"
+          if [ "$tip" != "$HEAD_SHA" ]; then
+            echo "::error::rerun of auto-deploy ${HEAD_SHA}, but ${HEAD_BRANCH} is at ${tip:-<unresolved>}; dispatch a manual deploy to roll back"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -188,6 +246,8 @@ jobs:
         env:
           BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_BUILD_ENV: dev
+          # Auto-deploys leave backend nodes running; manual deploys default to auto.
+          BACKEND_MODE: ${{ inputs.backend_mode || 'never' }}
           DEPLOY_COIN: ${{ matrix.coin }}
         run: ./contrib/scripts/deploy-bb-and-backend.sh "$DEPLOY_COIN" --force-confnew
 
@@ -315,3 +375,34 @@ jobs:
           BB_ADMIN_E2E_COIN: base_archive
           DEPLOYED_COINS: ${{ needs.prepare_deploy.outputs.coins_csv }}
         run: python3 ./.github/scripts/admin_api_e2e.py
+
+  report-status:
+    name: Report Dev Deploy Status
+    # Auto-deploy results are otherwise visible only in the Actions tab; put
+    # them on the deployed commit. Runs that skipped prepare_deploy deployed nothing.
+    needs: [prepare_deploy, deploy, wait-for-sync, e2e-tests]
+    if: ${{ always() && github.event_name == 'workflow_run' && needs.prepare_deploy.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Set commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          state=success
+          description="Dev deploy and e2e passed"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              state=failure
+              description="Dev deploy or e2e did not pass"
+            fi
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state="$state" \
+            -f context="dev-deploy" \
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
