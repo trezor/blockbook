@@ -59,6 +59,7 @@ type EthereumParser struct {
 	// EnableEnsReverseAliases opts this chain into ENS reverse aliasing, off by default.
 	EnableEnsReverseAliases bool
 	ignoredContracts        []bchain.AddressDescriptor
+	ignoredSenders          []bchain.AddressDescriptor
 }
 
 // eip7708SystemAddress emits an ERC-20 shaped Transfer log for every ETH move since Glamsterdam.
@@ -66,6 +67,12 @@ type EthereumParser struct {
 const eip7708SystemAddress = "0xfffffffffffffffffffffffffffffffffffffffe"
 
 var eip7708SystemAddressDesc = mustAddrDescFromAddress(eip7708SystemAddress)
+
+// opStackSystemSender is the sender of the per-block L1 attributes and BaseTime deposits on
+// OP-stack chains. It has no key, so nothing else can send from it and it is ignored everywhere.
+const opStackSystemSender = "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"
+
+var opStackSystemSenderDesc = mustAddrDescFromAddress(opStackSystemSender)
 
 // NewEthereumParser returns new EthereumParser instance
 func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
@@ -85,6 +92,7 @@ func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 		FormatAddressFunc:              EIP55AddressFromAddress,
 		FromDescToAddressFunc:          EIP55Address,
 		ignoredContracts:               []bchain.AddressDescriptor{eip7708SystemAddressDesc},
+		ignoredSenders:                 []bchain.AddressDescriptor{opStackSystemSenderDesc},
 	}
 }
 
@@ -110,8 +118,29 @@ func (p *EthereumParser) IgnoreContract(address string) error {
 
 // EthereumTypeIsIgnoredContract reports a contract whose already indexed holdings must not be served as a token
 func (p *EthereumParser) EthereumTypeIsIgnoredContract(contract bchain.AddressDescriptor) bool {
-	for _, c := range p.ignoredContracts {
-		if bytes.Equal(c, contract) {
+	return containsAddrDesc(p.ignoredContracts, contract)
+}
+
+// IgnoreSender makes the sender's transactions index under no address, for protocol system
+// transactions that would otherwise add a row to the same few addresses in every block.
+// It must be called before the parser is in use.
+func (p *EthereumParser) IgnoreSender(address string) error {
+	desc, err := p.GetAddrDescFromAddress(address)
+	if err != nil {
+		return err
+	}
+	p.ignoredSenders = append(p.ignoredSenders, desc)
+	return nil
+}
+
+// EthereumTypeIsIgnoredSender reports a protocol sender whose transactions are indexed under no address
+func (p *EthereumParser) EthereumTypeIsIgnoredSender(sender bchain.AddressDescriptor) bool {
+	return containsAddrDesc(p.ignoredSenders, sender)
+}
+
+func containsAddrDesc(set []bchain.AddressDescriptor, desc bchain.AddressDescriptor) bool {
+	for _, d := range set {
+		if bytes.Equal(d, desc) {
 			return true
 		}
 	}

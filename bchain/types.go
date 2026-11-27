@@ -410,6 +410,8 @@ type BlockChainParser interface {
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
 	// EthereumTypeIsIgnoredContract reports a contract whose already indexed holdings must not be served as a token
 	EthereumTypeIsIgnoredContract(contract AddressDescriptor) bool
+	// EthereumTypeIsIgnoredSender reports a protocol sender whose transactions are indexed under no address
+	EthereumTypeIsIgnoredSender(sender AddressDescriptor) bool
 	GetEthereumTxData(tx *Tx) *EthereumTxData
 	GetChainExtraPayloadType() ChainExtraPayloadType
 	GetChainExtraData(tx *Tx) (json.RawMessage, error)
