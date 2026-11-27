@@ -5,7 +5,7 @@ on:
     branches: [ master, develop ]
   pull_request:
     branches: [ '**' ]
-  # Lets a maintainer run the RPC-dependent jobs on a Dependabot branch.
+  # Lets a maintainer run the self-hosted jobs on a Dependabot branch.
   workflow_dispatch:
 
 permissions:
@@ -28,8 +28,9 @@ jobs:
     # Defense-in-depth: never run untrusted fork-PR code on the self-hosted
     # runner. connectivity/integration already carry this guard; without it
     # here, unit-tests relied solely on the repo "require approval for fork
-    # PR workflows" setting.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    # PR workflows" setting. Dependabot branches are in-repo but carry
+    # unreviewed dependency code, so they are dispatched manually after review.
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.actor != 'dependabot[bot]' }}
 
     steps:
       - name: Checkout code
