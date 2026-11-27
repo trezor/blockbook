@@ -296,7 +296,7 @@ type RocksDB struct {
 	maxOpenFiles    int
 	cbs             connectBlockStats
 	extendedIndex   bool
-	connectBlockMux sync.Mutex
+	connectBlockMux sync.RWMutex
 	// reorgGen advances on every successful Ethereum-type disconnect; embed
 	// in cache keys so a same-height reorg invalidates them lazily.
 	reorgGen atomic.Uint64
@@ -316,12 +316,16 @@ type RocksDB struct {
 	bulkAddrContractsCacheMaxBytes int64
 	// addrContractsCacheMaxBytes is a soft cap; when exceeded we flush and clear the cache.
 	addrContractsCacheMaxBytes int64
-	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
+	// addrContractsCacheBytes is the estimated resident size of the cached records (see residentSize).
 	addrContractsCacheBytes int64
 	hotAddrTracker          *addressHotness
 	// lastAddrContractsCacheStore is only read/written from the block-connect goroutine.
 	lastAddrContractsCacheStore time.Time
 	setBlockTimesWG             sync.WaitGroup
+	// connectBlockMux serializes block connect, disconnect and reconnect, which mutate the records in
+	// addrContractsCache; GetAddrDescContracts copies cached records under its read side. Bulk connect mutates
+	// them without the lock, so bulkConnectActive stops readers from serving the cache while it runs.
+	bulkConnectActive atomic.Bool
 }
 
 const (
@@ -417,7 +421,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		maxOpenFiles:                   maxOpenFiles,
 		cbs:                            connectBlockStats{},
 		extendedIndex:                  extendedIndex,
-		connectBlockMux:                sync.Mutex{},
+		connectBlockMux:                sync.RWMutex{},
 		addrContractsCacheMux:          sync.Mutex{},
 		addrContractsCache:             make(map[string]*unpackedAddrContracts),
 		addrContractsCacheMinSize:      addrContractsCacheMinSize,
@@ -753,6 +757,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	}
 	if chainType == bchain.ChainEthereumType {
 		d.storeAddrContractsCacheIfDue()
+		d.flushAddrContractsCacheIfOverCap()
 	}
 	// Fractional seconds: the integer average truncates to 0 on sub-second chains, which
 	// silently excludes them from any rule gated on this gauge being > 0. SetBlockTime
