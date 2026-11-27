@@ -202,6 +202,20 @@ jobs:
         include: ${{ fromJSON(needs.prepare_deploy.outputs.runner_matrix || '[]') }}
     runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
+      # A rerun replays the original event, so the checks in prepare_deploy
+      # cannot see that master has moved on; look at the live tip instead.
+      - name: Reject reruns of an outdated auto-deploy
+        if: ${{ github.event_name == 'workflow_run' && github.run_attempt > 1 }}
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          tip="$(git ls-remote "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "refs/heads/${HEAD_BRANCH}" | cut -f1)"
+          if [ "$tip" != "$HEAD_SHA" ]; then
+            echo "::error::rerun of auto-deploy ${HEAD_SHA}, but ${HEAD_BRANCH} is at ${tip:-<unresolved>}; dispatch a manual deploy to roll back"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
