@@ -118,6 +118,8 @@ type AddrContract struct {
 	Value            big.Int          // single value of ERC20
 	Ids              Ids              // multiple ERC721 tokens
 	MultiTokenValues MultiTokenValues // multiple ERC1155 tokens
+	// HoldingsTotal is the stored count of Ids/MultiTokenValues, set only when a read cap truncated them.
+	HoldingsTotal uint
 }
 
 // AddrContracts contains number of transactions and contracts for an address
@@ -265,6 +267,12 @@ func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *
 }
 
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
+	return unpackAddrContractsLimited(buf, addrDesc, -1)
+}
+
+// unpackAddrContractsLimited decodes at most maxHoldings ids or id/value pairs per contract (negative = all).
+// Anyone can mint unlimited NFTs to any address, so readers must not allocate per stored id.
+func unpackAddrContractsLimited(buf []byte, addrDesc bchain.AddressDescriptor, maxHoldings int) (acs *AddrContracts, err error) {
 	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
@@ -293,18 +301,24 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			buf = buf[ll:]
 			ac.Value = b
 		} else {
-			len, ll := unpackVaruint(buf)
+			n, ll := unpackVaruint(buf)
 			buf = buf[ll:]
+			keep := n
+			if maxHoldings >= 0 && n > uint(maxHoldings) {
+				keep = uint(maxHoldings)
+				ac.HoldingsTotal = n
+			}
+			rest := n - keep
 			if standard == bchain.NonFungibleToken {
-				ac.Ids = make(Ids, len)
-				for i := uint(0); i < len; i++ {
+				ac.Ids = make(Ids, keep)
+				for i := uint(0); i < keep; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
 					ac.Ids[i] = b
 				}
 			} else {
-				ac.MultiTokenValues = make(MultiTokenValues, len)
-				for i := uint(0); i < len; i++ {
+				ac.MultiTokenValues = make(MultiTokenValues, keep)
+				for i := uint(0); i < keep; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
 					ac.MultiTokenValues[i].Id = b
@@ -312,6 +326,11 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 					buf = buf[ll:]
 					ac.MultiTokenValues[i].Value = b
 				}
+				rest *= 2
+			}
+			// skip the rest without allocating
+			for i := uint(0); i < rest; i++ {
+				buf = buf[packedBigintLen(buf):]
 			}
 		}
 		c = append(c, ac)
@@ -357,8 +376,10 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 }
 
 // GetAddrDescContracts returns AddrContracts for given addrDesc, nil for an absent record.
-// With headerOnly only the tx counters are decoded and Contracts stays nil.
-func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, headerOnly bool) (*AddrContracts, error) {
+// With headerOnly only the tx counters are decoded and Contracts stays nil. Otherwise at most
+// maxHoldings NFT holdings are decoded per contract (negative = all); a truncated result is
+// read-only, packing it back would drop holdings from the index.
+func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, headerOnly bool, maxHoldings int) (*AddrContracts, error) {
 	// a pinned read avoids copying the whole record out of the block cache; the decoders copy
 	// what they keep, so nothing references the pinned bytes after Destroy
 	val, err := d.db.GetPinnedCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
@@ -373,7 +394,7 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor, header
 	if headerOnly {
 		return unpackAddrContractsHeader(buf, addrDesc)
 	}
-	return unpackAddrContracts(buf, addrDesc)
+	return unpackAddrContractsLimited(buf, addrDesc, maxHoldings)
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []unpackedAddrContract) (int, bool) {

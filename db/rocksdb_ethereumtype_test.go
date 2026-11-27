@@ -1830,7 +1830,7 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 	addrDesc := bchain.AddressDescriptor(addressToAddrDesc(dbtestdata.EthAddr4b, parser))
 
 	for _, headerOnly := range []bool{false, true} {
-		got, err := d.GetAddrDescContracts(addrDesc, headerOnly)
+		got, err := d.GetAddrDescContracts(addrDesc, headerOnly, -1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1854,11 +1854,11 @@ func Test_GetAddrDescContracts_HeaderOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	full, err := d.GetAddrDescContracts(addrDesc, false)
+	full, err := d.GetAddrDescContracts(addrDesc, false, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := d.GetAddrDescContracts(addrDesc, true)
+	got, err := d.GetAddrDescContracts(addrDesc, true, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2503,6 +2503,37 @@ func Benchmark_contractIndexLookup(b *testing.B) {
 				acs.contractIndex = nil
 				acs.contractIndexDirty = false
 				_, _ = acs.findContractIndex(addrDesc, target, hot)
+			}
+		})
+	}
+}
+
+func Test_unpackAddrContractsLimited(t *testing.T) {
+	// ERC20, two ERC721 and one ERC1155 contract with 5 holdings each; the trailing contracts prove skipping keeps the buffer aligned
+	full := AddrContracts{TotalTxs: 30, NonContractTxs: 20, InternalTxs: 10, Contracts: generateAddrContracts(1, 2, 5, 1, 5)}
+	packed := packAddrContracts(&full)
+	for _, limit := range []int{-1, 0, 3, 5, 6} {
+		t.Run(fmt.Sprint(limit), func(t *testing.T) {
+			want := full
+			want.Contracts = make([]AddrContract, len(full.Contracts))
+			for i, c := range full.Contracts {
+				n := len(c.Ids) + len(c.MultiTokenValues)
+				if c.Standard != bchain.FungibleToken && limit >= 0 && n > limit {
+					c.HoldingsTotal = uint(n)
+					if c.Ids != nil {
+						c.Ids = c.Ids[:limit]
+					} else {
+						c.MultiTokenValues = c.MultiTokenValues[:limit]
+					}
+				}
+				want.Contracts[i] = c
+			}
+			got, err := unpackAddrContractsLimited(packed, nil, limit)
+			if err != nil {
+				t.Fatalf("unpackAddrContractsLimited() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, &want) {
+				t.Errorf("unpackAddrContractsLimited() = %+v, want %+v", got, want)
 			}
 		})
 	}
