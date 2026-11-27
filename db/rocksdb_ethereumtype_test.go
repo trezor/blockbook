@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"testing"
 
@@ -87,6 +88,89 @@ func TestIdsInsertDoesNotDuplicate(t *testing.T) {
 		if unpacked[i].get().Cmp(big.NewInt(id)) != 0 {
 			t.Fatalf("unpackedIds[%d] = %v, want %d", i, unpacked[i].get(), id)
 		}
+	}
+}
+
+func TestUpsertBatchMatchesSequentialUpsert(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	add := func(s, v *big.Int) { s.Add(s, v) }
+	sub := func(s, v *big.Int) {
+		s.Sub(s, v)
+		if s.Sign() < 0 {
+			s.SetUint64(0)
+		}
+	}
+	for iter := 0; iter < 20000; iter++ {
+		var sequential, batched unpackedMultiTokenValues
+		for id := int64(0); id < 30; id++ {
+			if r.Intn(2) == 0 {
+				v := int64(1 + r.Intn(3))
+				sequential = append(sequential, unpackedMultiTokenValue{Id: unpackedBigInt{Value: big.NewInt(id)}, Value: unpackedBigInt{Value: big.NewInt(v)}})
+				batched = append(batched, unpackedMultiTokenValue{Id: unpackedBigInt{Value: big.NewInt(id)}, Value: unpackedBigInt{Value: big.NewInt(v)}})
+			}
+		}
+		// repeated ids and zero values exercise the in-order aggregation and the clamp
+		batch := make([]bchain.MultiTokenValue, 1+r.Intn(40))
+		for i := range batch {
+			batch[i].Id.SetInt64(int64(r.Intn(35)))
+			batch[i].Value.SetInt64(int64(r.Intn(4)))
+		}
+		index, aggregate := int32(transferTo), AggregateFn(add)
+		if r.Intn(2) == 0 {
+			index, aggregate = transferFrom, sub
+		}
+		for _, m := range batch {
+			sequential.upsert(m, index, aggregate)
+		}
+		batched.upsertBatch(batch, index, aggregate)
+		if len(sequential) != len(batched) {
+			t.Fatalf("iter %d: len = %d, want %d", iter, len(batched), len(sequential))
+		}
+		for i := range sequential {
+			if sequential[i].Id.get().Cmp(batched[i].Id.get()) != 0 || sequential[i].Value.get().Cmp(batched[i].Value.get()) != 0 {
+				t.Fatalf("iter %d: [%d] = {%v, %v}, want {%v, %v}", iter, i, batched[i].Id.get(), batched[i].Value.get(), sequential[i].Id.get(), sequential[i].Value.get())
+			}
+		}
+	}
+}
+
+func TestERC1155ZeroValueReceiveLeavesNoPhantom(t *testing.T) {
+	contract := makeTestAddrDesc(0x1155)
+	for _, ids := range [][]int64{{7}, {9, 8, 7}} {
+		c := &unpackedAddrContract{Standard: bchain.MultiToken, Contract: contract}
+		transfer := &bchain.TokenTransfer{Standard: bchain.MultiToken}
+		for _, id := range ids {
+			transfer.MultiTokenValues = append(transfer.MultiTokenValues, bchain.MultiTokenValue{Id: *big.NewInt(id)})
+		}
+		addToContract(c, 0, transferTo, contract, transfer, false, true)
+		if len(c.MultiTokenValues) != 0 {
+			t.Fatalf("ids %v: holdings after zero-value receive = %d entries, want none", ids, len(c.MultiTokenValues))
+		}
+		// rollback replays the transfer reversed, the sender must not gain a phantom either
+		addToContract(c, 0, transferTo, contract, transfer, false, true)
+		addToContract(c, 0, transferFrom, contract, transfer, false, true)
+		if len(c.MultiTokenValues) != 0 {
+			t.Fatalf("ids %v: holdings after rollback = %d entries, want none", ids, len(c.MultiTokenValues))
+		}
+	}
+}
+
+func BenchmarkERC1155BatchIntoLargeHoldings(b *testing.B) {
+	const held, batchSize = 1_000_000, 16_000
+	contract := makeTestAddrDesc(0x1155)
+	transfer := &bchain.TokenTransfer{Standard: bchain.MultiToken, MultiTokenValues: make([]bchain.MultiTokenValue, batchSize)}
+	for i := range transfer.MultiTokenValues {
+		transfer.MultiTokenValues[i].Id.SetInt64(int64(i))
+		transfer.MultiTokenValues[i].Value.SetInt64(1)
+	}
+	for b.Loop() {
+		b.StopTimer()
+		c := &unpackedAddrContract{Standard: bchain.MultiToken, Contract: contract, MultiTokenValues: make(unpackedMultiTokenValues, held)}
+		for i := range c.MultiTokenValues {
+			c.MultiTokenValues[i] = unpackedMultiTokenValue{Id: unpackedBigInt{Value: big.NewInt(int64(batchSize + i))}, Value: unpackedBigInt{Value: big.NewInt(1)}}
+		}
+		b.StartTimer()
+		addToContract(c, 0, transferTo, contract, transfer, false, true)
 	}
 }
 
