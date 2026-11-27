@@ -514,24 +514,6 @@ func (c *mempoolWithMetrics) GetTxidFilterEntries(filterScripts string, fromTime
 	return c.mempool.GetTxidFilterEntries(filterScripts, fromTimestamp)
 }
 
-func (c *blockChainWithMetrics) ResolveENS(name string) (*bchain.ENSResolution, error) {
-	if ensResolver, ok := c.b.(interface {
-		ResolveENS(string) (*bchain.ENSResolution, error)
-	}); ok {
-		return ensResolver.ResolveENS(name)
-	}
-	return nil, errors.New("ENS resolution not supported by underlying chain")
-}
-
-func (c *blockChainWithMetrics) CheckENSExpiration(name string) (bool, error) {
-	if ensResolver, ok := c.b.(interface {
-		CheckENSExpiration(string) (bool, error)
-	}); ok {
-		return ensResolver.CheckENSExpiration(name)
-	}
-	return false, errors.New("ENS expiration check not supported by underlying chain")
-}
-
 // AverageBlockTimeDuration forwards the wrapped chain's configured block cadence
 // so blockbook.go's duck-typed lookup reaches it through the metrics wrapper.
 // Returns an error when the underlying chain doesn't expose one.

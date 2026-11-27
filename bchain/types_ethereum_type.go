@@ -231,17 +231,10 @@ type EthereumSpecificData struct {
 	ChainExtraData json.RawMessage `json:"chainExtraData,omitempty"`
 }
 
-// AddressAliasRecord maps address to ENS name
-type AddressAliasRecord struct {
-	Address string `ts_doc:"Address whose alias is being stored."`
-	Name    string `ts_doc:"The resolved name/alias (e.g. ENS domain)."`
-}
-
 // EthereumBlockSpecificData contain data specific for Ethereum block
 type EthereumBlockSpecificData struct {
-	InternalDataError   string               `ts_doc:"Error message for processing block internal data, if any."`
-	AddressAliasRecords []AddressAliasRecord `ts_doc:"List of address-to-alias mappings discovered in this block."`
-	Contracts           []ContractInfo       `ts_doc:"List of contracts created or updated in this block."`
+	InternalDataError string         `ts_doc:"Error message for processing block internal data, if any."`
+	Contracts         []ContractInfo `ts_doc:"List of contracts created or updated in this block."`
 	// GasUsed/GasLimit/BaseFeePerGas are transient block-level EIP-1559 figures used for the new-block
 	// notification; they are not persisted (storeBlockSpecificDataEthereumType ignores them).
 	GasUsed       *big.Int `json:"-"`

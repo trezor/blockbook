@@ -278,13 +278,6 @@ type MempoolTxidFilterEntries struct {
 	UsedZeroedKey bool              `json:"usedZeroedKey,omitempty" ts_doc:"Indicates if a zeroed key was used in filter calculation."`
 }
 
-// ENSResolution represents the result of resolving an ENS name to an Ethereum address.
-type ENSResolution struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Error   string `json:"error,omitempty"`
-}
-
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(block *Block)
 
@@ -371,8 +364,6 @@ type BlockChainParser interface {
 	AmountDecimals() int
 	// UseAddressAliases returns true if address aliases are enabled
 	UseAddressAliases() bool
-	// UseEnsReverseAliases returns true if ENS reverse labels (address->name) are recorded and served
-	UseEnsReverseAliases() bool
 	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
 	MinimumCoinbaseConfirmations() int
 	// SupportsVSize returns true if vsize of a transaction should be computed and returned by API
@@ -414,8 +405,6 @@ type BlockChainParser interface {
 	GetChainExtraPayloadType() ChainExtraPayloadType
 	GetChainExtraData(tx *Tx) (json.RawMessage, error)
 	ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData
-	// AddressAlias
-	FormatAddressAlias(address string, name string) string
 }
 
 // Mempool defines common interface to mempool

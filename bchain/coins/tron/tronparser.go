@@ -37,7 +37,6 @@ func NewTronParser(b int, addressAliases bool) *TronParser {
 	ethParser.AmountDecimalPoint = TronAmountDecimalPoint
 	ethParser.FormatAddressFunc = ToTronAddressFromAddress
 	ethParser.FromDescToAddressFunc = ToTronAddressFromDesc
-	ethParser.EnsSuffix = ".trx"
 	return &TronParser{
 		EthereumParser: ethParser,
 	}
